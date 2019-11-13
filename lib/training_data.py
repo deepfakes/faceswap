@@ -1,116 +1,191 @@
 #!/usr/bin/env python3
-""" Process training data for model training """
+""" Handles Data Augmentation for feeding Faceswap Models """
 
 import logging
 
 from hashlib import sha1
-from random import random, shuffle, choice
+from random import shuffle, choice
 
-import cv2
 import numpy as np
+import cv2
 from scipy.interpolate import griddata
 
+from lib.image import batch_convert_color, read_image_batch
 from lib.model import masks
-from lib.multithreading import FixedProducerDispatcher
-from lib.queue_manager import queue_manager
-from lib.umeyama import umeyama
-from lib.utils import cv2_read_img, FaceswapError
+from lib.multithreading import BackgroundGenerator
+from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class TrainingDataGenerator():
-    """ Generate training data for models """
-    def __init__(self, model_input_size, model_output_size, training_opts, config):
-        logger.debug("Initializing %s: (model_input_size: %s, model_output_shape: %s, "
+    """ A Training Data Generator for compiling data for feeding to a model.
+
+    This class is called from :mod:`plugins.train.trainer._base` and launches a background
+    iterator that compiles augmented data, target data and sample data.
+
+    Parameters
+    ----------
+    model_input_size: int
+        The expected input size for the model. It is assumed that the input to the model is always
+        a square image. This is the size, in pixels, of the `width` and the `height` of the input
+        to the model.
+    model_output_shapes: list
+        A list of tuples defining the output shapes from the model, in the order that the outputs
+        are returned. The tuples should be in (`height`, `width`, `channels`) format.
+    training_opts: dict
+        This is a dictionary of model training options as defined in
+        :mod:`plugins.train.model._base`. These options will be defined by the user from the
+        provided cli options or from the model ``config.ini``. At a minimum this ``dict`` should
+        contain the following keys:
+
+        * **coverage_ratio** (`float`) - The ratio of the training image to be trained on. \
+        Dictates how much of the image will be cropped out. Eg: a coverage ratio of 0.625 \
+        will result in cropping a 160px box from a 256px image (256 * 0.625 = 160).
+
+        * **augment_color** (`bool`) - ``True`` if color is to be augmented, otherwise ``False`` \
+
+        * **no_flip** (`bool`) - ``True`` if the image shouldn't be randomly flipped as part of \
+        augmentation, otherwise ``False``
+
+        * **mask_type** (`str`) - The mask type to be used (as defined in \
+        :mod:`lib.model.masks`). If not ``None`` then the additional key ``landmarks`` must be \
+        provided.
+
+        * **warp_to_landmarks** (`bool`) - ``True`` if the random warp method should warp to \
+        similar landmarks from the other side, ``False`` if the standard random warp method \
+        should be used. If ``True`` then the additional key ``landmarks`` must be provided.
+
+        * **landmarks** (`numpy.ndarray`, `optional`). Required if using a :attr:`mask_type` is \
+        not ``None`` or :attr:`warp_to_landmarks` is ``True``. The 68 point face landmarks from \
+        an alignments file.
+
+    config: dict
+        The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
+        plugin configuration options.
+    """
+    def __init__(self, model_input_size, model_output_shapes, training_opts, config):
+        logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
                      "training_opts: %s, landmarks: %s, config: %s)",
-                     self.__class__.__name__, model_input_size, model_output_size,
+                     self.__class__.__name__, model_input_size, model_output_shapes,
                      {key: val for key, val in training_opts.items() if key != "landmarks"},
                      bool(training_opts.get("landmarks", None)), config)
-        self.batchsize = 0
-        self.model_input_size = model_input_size
-        self.model_output_size = model_output_size
-        self.training_opts = training_opts
-        self.mask_class = self.set_mask_class()
-        self.landmarks = self.training_opts.get("landmarks", None)
-        self.fixed_producer_dispatcher = None  # Set by FPD when loading
-        self._nearest_landmarks = None
-        self.processing = ImageManipulation(model_input_size,
-                                            model_output_size,
-                                            training_opts.get("coverage_ratio", 0.625),
-                                            config)
-        logger.debug("Initialized %s", self.__class__.__name__)
+        self._config = config
+        self._model_input_size = model_input_size
+        self._model_output_shapes = model_output_shapes
+        self._training_opts = training_opts
+        self._mask_class = self._set__mask_class()
+        self._landmarks = self._training_opts.get("landmarks", None)
+        self._nearest_landmarks = {}
 
-    def set_mask_class(self):
-        """ Set the mask function to use if using mask """
-        mask_type = self.training_opts.get("mask_type", None)
-        if mask_type:
-            logger.debug("Mask type: '%s'", mask_type)
-            mask_class = getattr(masks, mask_type)
-        else:
-            mask_class = None
-        logger.debug("Mask class: %s", mask_class)
-        return mask_class
+        # Batchsize and processing class are set when this class is called by a batcher
+        # from lib.training_data
+        self._batchsize = 0
+        self._processing = None
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def minibatch_ab(self, images, batchsize, side,
                      do_shuffle=True, is_preview=False, is_timelapse=False):
-        """ Keep a queue filled to 8x Batch Size """
+        """ A Background iterator to return augmented images, samples and targets.
+
+        The exit point from this class and the sole attribute that should be referenced. Called
+        from :mod:`plugins.train.trainer._base`. Returns an iterator that yields images for
+        training, preview and timelapses.
+
+        Parameters
+        ----------
+        images: list
+            A list of image paths that will be used to compile the final augmented data from.
+        batchsize: int
+            The batchsize for this iterator. Images will be returned in ``numpy.ndarray`` s of
+            this size from the iterator.
+        side: {'a' or 'b'}
+            The side of the model that this iterator is for.
+        do_shuffle: bool, optional
+            Whether data should be shuffled prior to loading from disk. If true, each time the full
+            list of filenames are processed, the data will be reshuffled to make sure thay are not
+            returned in the same order. Default: ``True``
+        is_preview: bool, optional
+            Indicates whether this iterator is generating preview images. If ``True`` then certain
+            augmentations will not be performed. Default: ``False``
+        is_timelapse: bool optional
+            Indicates whether this iterator is generating Timelapse images. If ``True``, then
+            certain augmentations will not be performed. Default: ``False``
+
+        Yields
+        ------
+        dict
+            The following items are contained in each ``dict`` yielded from this iterator:
+
+            * **feed** (`numpy.ndarray`) - The feed for the model. The array returned is in the \
+            format (`batchsize`, `height`, `width`, `channels`). This is the :attr:`x` parameter \
+            for :func:`keras.models.model.train_on_batch`.
+
+            * **targets** (`list`) - A list of 4-dimensional ``numpy.ndarray`` s in the order \
+            and size of each output of the model as defined in :attr:`model_output_shapes`. the \
+            format of these arrays will be (`batchsize`, `height`, `width`, `3`). This is \
+            the :attr:`y` parameter for :func:`keras.models.model.train_on_batch` **NB:** \
+            masks are not included in the ``targets`` list. If required for feeding into the \
+            Keras model, they will need to be added to this list in \
+            :mod:`plugins.train.trainer._base` from the ``masks`` key.
+
+            * **masks** (`numpy.ndarray`) - A 4-dimensional array containing the target masks in \
+            the format (`batchsize`, `height`, `width`, `1`). **NB:** This item will only exist \
+            in the ``dict`` if the :attr:`mask_type` is not ``None``
+
+            * **samples** (`numpy.ndarray`) - A 4-dimensional array containg the samples for \
+            feeding to the model's predict function for generating preview and timelapse samples. \
+            The array will be in the format (`batchsize`, `height`, `width`, `channels`). **NB:** \
+            This item will only exist in the ``dict`` if :attr:`is_preview` or \
+            :attr:`is_timelapse` is ``True``
+        """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
                      "is_preview, %s, is_timelapse: %s)", len(images), batchsize, side, do_shuffle,
                      is_preview, is_timelapse)
-        self.batchsize = batchsize
-        is_display = is_preview or is_timelapse
-        queue_in, queue_out = self.make_queues(side, is_preview, is_timelapse)
-        training_size = self.training_opts.get("training_size", 256)
-        batch_shape = list((
-            (batchsize, training_size, training_size, 3),  # sample images
-            (batchsize, self.model_input_size, self.model_input_size, 3),
-            (batchsize, self.model_output_size, self.model_output_size, 3)))
-        if self.mask_class:
-            batch_shape.append((self.batchsize, self.model_output_size, self.model_output_size, 1))
+        self._batchsize = batchsize
+        self._processing = ImageAugmentation(batchsize,
+                                             is_preview or is_timelapse,
+                                             self._model_input_size,
+                                             self._model_output_shapes,
+                                             self._training_opts.get("coverage_ratio", 0.625),
+                                             self._config)
+        args = (images, side, do_shuffle, batchsize)
+        batcher = BackgroundGenerator(self._minibatch, thread_count=2, args=args)
+        return batcher.iterator()
 
-        self.fixed_producer_dispatcher = FixedProducerDispatcher(
-            method=self.load_batches,
-            shapes=batch_shape,
-            in_queue=queue_in,
-            out_queue=queue_out,
-            args=(images, side, is_display, do_shuffle, batchsize))
-        self.fixed_producer_dispatcher.start()
-        logger.debug("Batching to queue: (side: '%s', is_display: %s)", side, is_display)
-        return self.minibatch(side, is_display, self.fixed_producer_dispatcher)
-
-    def join_subprocess(self):
-        """ Join the FixedProduceerDispatcher subprocess from outside this module """
-        logger.debug("Joining FixedProducerDispatcher")
-        if self.fixed_producer_dispatcher is None:
-            logger.debug("FixedProducerDispatcher not yet initialized. Exiting")
-            return
-        self.fixed_producer_dispatcher.join()
-        logger.debug("Joined FixedProducerDispatcher")
-
-    @staticmethod
-    def make_queues(side, is_preview, is_timelapse):
-        """ Create the buffer token queues for Fixed Producer Dispatcher """
-        q_name = "_{}".format(side)
-        if is_preview:
-            q_name = "{}{}".format("preview", q_name)
-        elif is_timelapse:
-            q_name = "{}{}".format("timelapse", q_name)
+    # << INTERNAL METHODS >> #
+    def _set__mask_class(self):
+        """ Returns the correct mask class from :mod:`lib`.model.masks` as defined in the
+        :attr:`mask_type` parameter. """
+        mask_type = self._training_opts.get("mask_type", None)
+        if mask_type:
+            logger.debug("Mask type: '%s'", mask_type)
+            _mask_class = getattr(masks, mask_type)
         else:
-            q_name = "{}{}".format("train", q_name)
-        q_names = ["{}_{}".format(q_name, direction) for direction in ("in", "out")]
-        logger.debug(q_names)
-        queues = [queue_manager.get_queue(queue) for queue in q_names]
-        return queues
+            _mask_class = None
+        logger.debug("Mask class: %s", _mask_class)
+        return _mask_class
 
-    def load_batches(self, mem_gen, images, side, is_display,
-                     do_shuffle=True, batchsize=0):
-        """ Load the warped images and target images to queue """
-        logger.debug("Loading batch: (image_count: %s, side: '%s', is_display: %s, "
-                     "do_shuffle: %s)", len(images), side, is_display, do_shuffle)
-        self.validate_samples(images)
-        # Intialize this for each subprocess
-        self._nearest_landmarks = dict()
+    def _validate_samples(self, data):
+        """ Ensures that the total number of images within :attr:`images` is greater or equal to
+        the selected :attr:`batchsize`. Raises an exception if this is not the case. """
+        length = len(data)
+        msg = ("Number of images is lower than batch-size (Note that too few "
+               "images may lead to bad training). # images: {}, "
+               "batch-size: {}".format(length, self._batchsize))
+        try:
+            assert length >= self._batchsize, msg
+        except AssertionError as err:
+            msg += ("\nYou should increase the number of images in your training set or lower "
+                    "your batch-size.")
+            raise FaceswapError(msg) from err
+
+    def _minibatch(self, images, side, do_shuffle, batchsize):
+        """ A generator function that yields the augmented, target and sample images.
+        see :func:`minibatch_ab` for more details on the output. """
+        logger.debug("Loading minibatch generator: (image_count: %s, side: '%s', do_shuffle: %s)",
+                     len(images), side, do_shuffle)
+        self._validate_samples(images)
 
         def _img_iter(imgs):
             while True:
@@ -120,398 +195,532 @@ class TrainingDataGenerator():
                     yield img
 
         img_iter = _img_iter(images)
-        epoch = 0
-        for memory_wrapper in mem_gen:
-            memory = memory_wrapper.get()
-            logger.trace("Putting to batch queue: (side: '%s', is_display: %s)",
-                         side, is_display)
-            for i, img_path in enumerate(img_iter):
-                imgs = self.process_face(img_path, side, is_display)
-                for j, img in enumerate(imgs):
-                    memory[j][i][:] = img
-                epoch += 1
-                if i == batchsize - 1:
-                    break
-            memory_wrapper.ready()
-        logger.debug("Finished batching: (epoch: %s, side: '%s', is_display: %s)",
-                     epoch, side, is_display)
+        while True:
+            img_paths = [next(img_iter) for _ in range(batchsize)]
+            yield self._process_batch(img_paths, side)
 
-    def validate_samples(self, data):
-        """ Check the total number of images against batchsize and return
-            the total number of images """
-        length = len(data)
-        msg = ("Number of images is lower than batch-size (Note that too few "
-               "images may lead to bad training). # images: {}, "
-               "batch-size: {}".format(length, self.batchsize))
-        try:
-            assert length >= self.batchsize, msg
-        except AssertionError as err:
-            msg += ("\nYou should increase the number of images in your training set or lower "
-                    "your batch-size.")
-            raise FaceswapError(msg) from err
+        logger.debug("Finished minibatch generator: (side: '%s')", side)
 
-    @staticmethod
-    def minibatch(side, is_display, load_process):
-        """ A generator function that yields epoch, batchsize of warped_img
-            and batchsize of target_img from the load queue """
-        logger.debug("Launching minibatch generator for queue (side: '%s', is_display: %s)",
-                     side, is_display)
-        for batch_wrapper in load_process:
-            with batch_wrapper as batch:
-                logger.trace("Yielding batch: (size: %s, item shapes: %s, side:  '%s', "
-                             "is_display: %s)",
-                             len(batch), [item.shape for item in batch], side, is_display)
-                yield batch
-        load_process.stop()
-        logger.debug("Finished minibatch generator for queue: (side: '%s', is_display: %s)",
-                     side, is_display)
-        load_process.join()
+    def _process_batch(self, filenames, side):
+        """ Performs the augmentation and compiles target images and samples. See
+        :func:`minibatch_ab` for more details on the output. """
+        logger.trace("Process batch: (filenames: '%s', side: '%s')", filenames, side)
+        batch = read_image_batch(filenames)
+        processed = dict()
+        to_landmarks = self._training_opts["warp_to_landmarks"]
 
-    def process_face(self, filename, side, is_display):
-        """ Load an image and perform transformation and warping """
-        logger.trace("Process face: (filename: '%s', side: '%s', is_display: %s)",
-                     filename, side, is_display)
-        image = cv2_read_img(filename, raise_error=True)
-        if self.mask_class or self.training_opts["warp_to_landmarks"]:
-            src_pts = self.get_landmarks(filename, image, side)
-        if self.mask_class:
-            image = self.mask_class(src_pts, image, channels=4).mask
+        # Initialize processing training size on first image
+        if not self._processing.initialized:
+            self._processing.initialize(batch.shape[1])
 
-        image = self.processing.color_adjust(image,
-                                             self.training_opts["augment_color"],
-                                             is_display)
+        # Get Landmarks prior to manipulating the image
+        if self._mask_class or to_landmarks:
+            batch_src_pts = self._get_landmarks(filenames, batch, side)
 
-        if not is_display:
-            image = self.processing.random_transform(image)
-            if not self.training_opts["no_flip"]:
-                image = self.processing.do_random_flip(image)
-        sample = image.copy()[:, :, :3]
+        # Color augmentation before mask is added
+        if self._training_opts["augment_color"]:
+            batch = self._processing.color_adjust(batch)
 
-        if self.training_opts["warp_to_landmarks"]:
-            dst_pts = self.get_closest_match(filename, side, src_pts)
-            processed = self.processing.random_warp_landmarks(image, src_pts, dst_pts)
+        # Add mask to batch prior to transforms and warps
+        if self._mask_class:
+            batch = np.array([self._mask_class(src_pts, image, channels=4).mask
+                              for src_pts, image in zip(batch_src_pts, batch)])
+
+        # Random Transform and flip
+        batch = self._processing.transform(batch)
+        if not self._training_opts["no_flip"]:
+            batch = self._processing.random_flip(batch)
+
+        # Add samples to output if this is for display
+        if self._processing.is_display:
+            processed["samples"] = batch[..., :3].astype("float32") / 255.0
+
+        # Get Targets
+        processed.update(self._processing.get_targets(batch))
+
+        # Random Warp
+        if to_landmarks:
+            warp_kwargs = dict(batch_src_points=batch_src_pts,
+                               batch_dst_points=self._get_closest_match(filenames,
+                                                                        side,
+                                                                        batch_src_pts))
         else:
-            processed = self.processing.random_warp(image)
+            warp_kwargs = dict()
+        processed["feed"] = self._processing.warp(batch[..., :3], to_landmarks, **warp_kwargs)
 
-        processed.insert(0, sample)
-        logger.trace("Processed face: (filename: '%s', side: '%s', shapes: %s)",
-                     filename, side, [img.shape for img in processed])
+        logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
+                     filenames,
+                     side,
+                     {k: v.shape if isinstance(v, np.ndarray) else[i.shape for i in v]
+                      for k, v in processed.items()})
+
         return processed
 
-    def get_landmarks(self, filename, image, side):
-        """ Return the landmarks for this face """
-        logger.trace("Retrieving landmarks: (filename: '%s', side: '%s'", filename, side)
-        lm_key = sha1(image).hexdigest()
-        try:
-            src_points = self.landmarks[side][lm_key]
-        except KeyError as err:
-            msg = ("At least one of your images does not have a matching entry in your alignments "
-                   "file."
+    def _get_landmarks(self, filenames, batch, side):
+        """ Obtains the 68 Point Landmarks for the images in this batch. This is only called if
+        config item ``warp_to_landmarks`` is ``True`` or if :attr:`mask_type` is not ``None``. If
+        the landmarks for an image cannot be found, then an error is raised. """
+        logger.trace("Retrieving landmarks: (filenames: %s, side: '%s')", filenames, side)
+        src_points = [self._landmarks[side].get(sha1(face).hexdigest(), None) for face in batch]
+
+        # Raise error on missing alignments
+        if not all(isinstance(pts, np.ndarray) for pts in src_points):
+            indices = [idx for idx, hsh in enumerate(src_points) if hsh is None]
+            missing = [filenames[idx] for idx in indices]
+            msg = ("Files missing alignments for this batch: {}"
+                   "\nAt least one of your images does not have a matching entry in your "
+                   "alignments file."
                    "\nIf you are training with a mask or using 'warp to landmarks' then every "
                    "face you intend to train on must exist within the alignments file."
-                   "\nThe specific file that caused the failure was '{}' which has a hash of {}."
-                   "\nMost likely there will be more than just this file missing from the "
+                   "\nThe specific files that caused this failure are listed above."
+                   "\nMost likely there will be more than just these files missing from the "
                    "alignments file. You can use the Alignments Tool to help identify missing "
-                   "alignments".format(lm_key, filename))
-            raise FaceswapError(msg) from err
-        logger.trace("Returning: (src_points: %s)", src_points)
-        return src_points
+                   "alignments".format(missing))
+            raise FaceswapError(msg)
 
-    def get_closest_match(self, filename, side, src_points):
-        """ Return closest matched landmarks from opposite set """
-        logger.trace("Retrieving closest matched landmarks: (filename: '%s', src_points: '%s'",
-                     filename, src_points)
-        landmarks = self.landmarks["a"] if side == "b" else self.landmarks["b"]
-        closest_hashes = self._nearest_landmarks.get(filename)
-        if not closest_hashes:
-            dst_points_items = list(landmarks.items())
-            dst_points = list(x[1] for x in dst_points_items)
-            closest = (np.mean(np.square(src_points - dst_points),
-                               axis=(1, 2))).argsort()[:10]
-            closest_hashes = tuple(dst_points_items[i][0] for i in closest)
+        logger.trace("Returning: (src_points: %s)", [str(src) for src in src_points])
+        return np.array(src_points)
+
+    def _get_closest_match(self, filenames, side, batch_src_points):
+        """ Only called if the config item ``warp_to_landmarks`` is ``True``. Gets the closest
+        matched 68 point landmarks from the opposite training set. """
+        logger.trace("Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s'",
+                     filenames, batch_src_points)
+        landmarks = self._landmarks["a"] if side == "b" else self._landmarks["b"]
+        closest_hashes = [self._nearest_landmarks.get(filename) for filename in filenames]
+        if None in closest_hashes:
+            closest_hashes = self._cache_closest_hashes(filenames, batch_src_points, landmarks)
+
+        batch_dst_points = np.array([landmarks[choice(hsh)] for hsh in closest_hashes])
+        logger.trace("Returning: (batch_dst_points: %s)", batch_dst_points.shape)
+        return batch_dst_points
+
+    def _cache_closest_hashes(self, filenames, batch_src_points, landmarks):
+        """ Cache the nearest landmarks for this batch """
+        logger.trace("Caching closest hashes")
+        dst_landmarks = list(landmarks.items())
+        dst_points = np.array([lm[1] for lm in dst_landmarks])
+        batch_closest_hashes = list()
+
+        for filename, src_points in zip(filenames, batch_src_points):
+            closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
+            closest_hashes = tuple(dst_landmarks[i][0] for i in closest)
             self._nearest_landmarks[filename] = closest_hashes
-        dst_points = landmarks[choice(closest_hashes)]
-        logger.trace("Returning: (dst_points: %s)", dst_points)
-        return dst_points
+            batch_closest_hashes.append(closest_hashes)
+        logger.trace("Cached closest hashes")
+        return batch_closest_hashes
 
 
-class ImageManipulation():
-    """ Manipulations to be performed on training images """
-    def __init__(self, input_size, output_size, coverage_ratio, config):
-        """ input_size: Size of the face input into the model
-            output_size: Size of the face that comes out of the modell
-            coverage_ratio: Coverage ratio of full image. Eg: 256 * 0.625 = 160
-        """
-        logger.debug("Initializing %s: (input_size: %s, output_size: %s, coverage_ratio: %s, "
-                     "config: %s)", self.__class__.__name__, input_size, output_size,
+class ImageAugmentation():
+    """ Performs augmentation on batches of training images.
+
+    Parameters
+    ----------
+    batchsize: int
+        The number of images that will be fed through the augmentation functions at once.
+    is_display: bool
+        Whether the images being fed through will be used for Preview or Timelapse. Disables
+        the "warp" augmentation for these images.
+    input_size: int
+        The expected input size for the model. It is assumed that the input to the model is always
+        a square image. This is the size, in pixels, of the `width` and the `height` of the input
+        to the model.
+    output_shapes: list
+        A list of tuples defining the output shapes from the model, in the order that the outputs
+        are returned. The tuples should be in (`height`, `width`, `channels`) format.
+    coverage_ratio: float
+        The ratio of the training image to be trained on. Dictates how much of the image will be
+        cropped out. Eg: a coverage ratio of 0.625 will result in cropping a 160px box from a 256px
+        image (256 * 0.625 = 160).
+    config: dict
+        The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
+        plugin configuration options.
+
+    Attributes
+    ----------
+    initialized: bool
+        Flag to indicate whether :class:`ImageAugmentation` has been initialized with the training
+        image size in order to cache certain augmentation operations (see :func:`initialize`)
+    is_display: bool
+        Flag to indicate whether these augmentations are for timelapses/preview images (``True``)
+        or standard training data (``False)``
+    """
+    def __init__(self, batchsize, is_display, input_size, output_shapes, coverage_ratio, config):
+        logger.debug("Initializing %s: (batchsize: %s, is_display: %s, input_size: %s, "
+                     "output_shapes: %s, coverage_ratio: %s, config: %s)",
+                     self.__class__.__name__, batchsize, is_display, input_size, output_shapes,
                      coverage_ratio, config)
-        self.config = config
+
+        self.initialized = False
+        self.is_display = is_display
+
+        # Set on first image load from initialize
+        self._training_size = 0
+        self._constants = None
+
+        self._batchsize = batchsize
+        self._config = config
         # Transform and Warp args
-        self.input_size = input_size
-        self.output_size = output_size
+        self._input_size = input_size
+        self._output_sizes = [shape[1] for shape in output_shapes if shape[2] == 3]
+        logger.debug("Output sizes: %s", self._output_sizes)
         # Warp args
-        self.coverage_ratio = coverage_ratio  # Coverage ratio of full image. Eg: 256 * 0.625 = 160
-        self.scale = 5  # Normal random variable scale
+        self._coverage_ratio = coverage_ratio
+        self._scale = 5  # Normal random variable scale
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def color_adjust(self, img, augment_color, is_display):
-        """ Color adjust RGB image """
-        logger.trace("Color adjusting image")
-        if not is_display and augment_color:
-            logger.trace("Augmenting color")
-            face, _ = self.separate_mask(img)
-            face = face.astype("uint8")
-            face = self.random_clahe(face)
-            face = self.random_lab(face)
-            img[:, :, :3] = face
-        return img.astype('float32') / 255.0
+    def initialize(self, training_size):
+        """ Initializes the caching of constants for use in various image augmentations.
 
-    def random_clahe(self, image):
-        """ Randomly perform Contrast Limited Adaptive Histogram Equilization """
-        contrast_random = random()
-        if contrast_random > self.config.get("color_clahe_chance", 50) / 100:
-            return image
+        The training image size is not known prior to loading the images from disk and commencing
+        training, so it cannot be set in the ``__init__`` method. When the first training batch is
+        loaded this function should be called to initialize the class and perform various
+        calculations based on this input size to cache certain constants for image augmentation
+        calculations.
 
-        base_contrast = image.shape[0] // 128
-        grid_base = random() * self.config.get("color_clahe_max_size", 4)
-        contrast_adjustment = int(grid_base * (base_contrast / 2))
-        grid_size = base_contrast + contrast_adjustment
-        logger.trace("Adjusting Contrast. Grid Size: %s", grid_size)
+        Parameters
+        ----------
+        training_size: int
+             The size of the training images stored on disk that are to be fed into
+             :class:`ImageAugmentation`. The training images should always be square and of the
+             same size. This is the size, in pixels, of the `width` and the `height` of the
+             training images.
+         """
+        logger.debug("Initializing constants. training_size: %s", training_size)
+        self._training_size = training_size
+        coverage = int(self._training_size * self._coverage_ratio)
 
-        clahe = cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
-                                tileGridSize=(grid_size, grid_size))
-        for chan in range(3):
-            image[:, :, chan] = clahe.apply(image[:, :, chan])
-        return image
+        # Color Aug
+        clahe_base_contrast = training_size // 128
+        # Target Images
+        tgt_slices = slice(self._training_size // 2 - coverage // 2,
+                           self._training_size // 2 + coverage // 2)
 
-    def random_lab(self, image):
-        """ Perform random color/lightness adjustment in L*a*b* colorspace """
-        amount_l = self.config.get("color_lightness", 30) / 100
-        amount_ab = self.config.get("color_ab", 8) / 100
+        # Random Warp
+        warp_range_ = np.linspace(self._training_size // 2 - coverage // 2,
+                                  self._training_size // 2 + coverage // 2, 5, dtype='float32')
+        warp_mapx = np.broadcast_to(warp_range_, (self._batchsize, 5, 5)).astype("float32")
+        warp_mapy = np.broadcast_to(warp_mapx[0].T, (self._batchsize, 5, 5)).astype("float32")
 
-        randoms = [(random() * amount_l * 2) - amount_l,  # L adjust
-                   (random() * amount_ab * 2) - amount_ab,  # A adjust
-                   (random() * amount_ab * 2) - amount_ab]  # B adjust
+        warp_pad = int(1.25 * self._input_size)
+        warp_slices = slice(warp_pad // 10, -warp_pad // 10)
 
-        logger.trace("Random LAB adjustments: %s", randoms)
-        image = cv2.cvtColor(  # pylint:disable=no-member
-            image, cv2.COLOR_BGR2LAB).astype("float32") / 255.0  # pylint:disable=no-member
+        # Random Warp Landmarks
+        p_mx = self._training_size - 1
+        p_hf = (self._training_size // 2) - 1
+        edge_anchors = np.array([(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
+                                 (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]).astype("int32")
+        edge_anchors = np.broadcast_to(edge_anchors, (self._batchsize, 8, 2))
+        grids = np.mgrid[0:p_mx:complex(self._training_size), 0:p_mx:complex(self._training_size)]
 
-        for idx, adjustment in enumerate(randoms):
-            if adjustment >= 0:
-                image[:, :, idx] = ((1 - image[:, :, idx]) * adjustment) + image[:, :, idx]
-            else:
-                image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
-        image = cv2.cvtColor((image * 255.0).astype("uint8"),  # pylint:disable=no-member
-                             cv2.COLOR_LAB2BGR)  # pylint:disable=no-member
-        return image
+        self._constants = dict(clahe_base_contrast=clahe_base_contrast,
+                               tgt_slices=tgt_slices,
+                               warp_mapx=warp_mapx,
+                               warp_mapy=warp_mapy,
+                               warp_pad=warp_pad,
+                               warp_slices=warp_slices,
+                               warp_lm_edge_anchors=edge_anchors,
+                               warp_lm_grids=grids)
+        self.initialized = True
+        logger.debug("Initialized constants: %s", {k: str(v) if isinstance(v, np.ndarray) else v
+                                                   for k, v in self._constants.items()})
 
-    @staticmethod
-    def separate_mask(image):
-        """ Return the image and the mask from a 4 channel image """
-        mask = None
-        if image.shape[2] == 4:
-            logger.trace("Image contains mask")
-            mask = np.expand_dims(image[:, :, -1], axis=2)
-            image = image[:, :, :3]
-        else:
-            logger.trace("Image has no mask")
-        return image, mask
+    # <<< TARGET IMAGES >>> #
+    def get_targets(self, batch):
+        """ Returns the target images, and masks, if required.
 
-    def get_coverage(self, image):
-        """ Return coverage value for given image """
-        coverage = int(image.shape[0] * self.coverage_ratio)
-        logger.trace("Coverage: %s", coverage)
-        return coverage
+        Parameters
+        ----------
+        batch: numpy.ndarray
+            This should be a 4-dimensional array of training images in the format (`batchsize`,
+            `height`, `width`, `channels`). Targets should be requested after performing image
+            transformations but prior to performing warps.
 
-    def random_transform(self, image):
-        """ Randomly transform an image """
-        logger.trace("Randomly transforming image")
-        height, width = image.shape[0:2]
+        Returns
+        -------
+        dict
+            The following keys will be within the returned dictionary:
 
-        rotation_range = self.config.get("rotation_range", 10)
-        rotation = np.random.uniform(-rotation_range, rotation_range)
+            * **targets** (`list`) - A list of 4-dimensional ``numpy.ndarray`` s in the order \
+            and size of each output of the model as defined in :attr:`output_shapes`. The \
+            format of these arrays will be (`batchsize`, `height`, `width`, `3`). **NB:** \
+            masks are not included in the ``targets`` list. If masks are to be included in the \
+            output they will be returned as their own item from the ``masks`` key.
 
-        zoom_range = self.config.get("zoom_range", 5) / 100
-        scale = np.random.uniform(1 - zoom_range, 1 + zoom_range)
+            * **masks** (`numpy.ndarray`) - A 4-dimensional array containing the target masks in \
+            the format (`batchsize`, `height`, `width`, `1`). **NB:** This item will only exist \
+            in the ``dict`` if a batch of 4 channel images has been passed in :attr:`batch`
+        """
+        logger.trace("Compiling targets")
+        slices = self._constants["tgt_slices"]
+        target_batch = [np.array([cv2.resize(image[slices, slices, :],
+                                             (size, size),
+                                             cv2.INTER_AREA)
+                                  for image in batch])
+                        for size in self._output_sizes]
+        logger.trace("Target image shapes: %s",
+                     [tgt.shape for tgt_images in target_batch for tgt in tgt_images])
 
-        shift_range = self.config.get("shift_range", 5) / 100
-        tnx = np.random.uniform(-shift_range, shift_range) * width
-        tny = np.random.uniform(-shift_range, shift_range) * height
-
-        mat = cv2.getRotationMatrix2D(  # pylint:disable=no-member
-            (width // 2, height // 2), rotation, scale)
-        mat[:, 2] += (tnx, tny)
-        result = cv2.warpAffine(  # pylint:disable=no-member
-            image, mat, (width, height),
-            borderMode=cv2.BORDER_REPLICATE)  # pylint:disable=no-member
-
-        logger.trace("Randomly transformed image")
-        return result
-
-    def do_random_flip(self, image):
-        """ Perform flip on image if random number is within threshold """
-        logger.trace("Randomly flipping image")
-        random_flip = self.config.get("random_flip", 50) / 100
-        if np.random.random() < random_flip:
-            logger.trace("Flip within threshold. Flipping")
-            retval = image[:, ::-1]
-        else:
-            logger.trace("Flip outside threshold. Not Flipping")
-            retval = image
-        logger.trace("Randomly flipped image")
+        retval = self._separate_target_mask(target_batch)
+        logger.trace("Final targets: %s",
+                     {k: v.shape if isinstance(v, np.ndarray) else [img.shape for img in v]
+                      for k, v in retval.items()})
         return retval
 
-    def random_warp(self, image):
-        """ get pair of random warped images from aligned face image """
-        logger.trace("Randomly warping image")
-        height, width = image.shape[0:2]
-        coverage = self.get_coverage(image)
-        try:
-            assert height == width and height % 2 == 0
-        except AssertionError as err:
-            msg = ("Training images should be square with an even number of pixels across each "
-                   "side. An image was found with width: {}, height: {}."
-                   "\nMost likely this is a frame rather than a face within your training set. "
-                   "\nMake sure that the only images within your training set are faces generated "
-                   "from the Extract process.".format(width, height))
-            raise FaceswapError(msg) from err
+    @staticmethod
+    def _separate_target_mask(batch):
+        """ Return the batch and the batch of final masks
 
-        range_ = np.linspace(height // 2 - coverage // 2,
-                             height // 2 + coverage // 2,
-                             5, dtype='float32')
-        mapx = np.broadcast_to(range_, (5, 5)).copy()
-        mapy = mapx.T
-        # mapx, mapy = np.float32(np.meshgrid(range_,range_)) # instead of broadcast
-
-        pad = int(1.25 * self.input_size)
-        slices = slice(pad // 10, -pad // 10)
-        dst_slice = slice(0, (self.output_size + 1), (self.output_size // 4))
-        interp = np.empty((2, self.input_size, self.input_size), dtype='float32')
-        ####
-
-        for i, map_ in enumerate([mapx, mapy]):
-            map_ = map_ + np.random.normal(size=(5, 5), scale=self.scale)
-            interp[i] = cv2.resize(map_, (pad, pad))[slices, slices]  # pylint:disable=no-member
-
-        warped_image = cv2.remap(  # pylint:disable=no-member
-            image, interp[0], interp[1], cv2.INTER_LINEAR)  # pylint:disable=no-member
-        logger.trace("Warped image shape: %s", warped_image.shape)
-
-        src_points = np.stack([mapx.ravel(), mapy.ravel()], axis=-1)
-        dst_points = np.mgrid[dst_slice, dst_slice]
-        mat = umeyama(src_points, True, dst_points.T.reshape(-1, 2))[0:2]
-        target_image = cv2.warpAffine(  # pylint:disable=no-member
-            image, mat, (self.output_size, self.output_size))
-        logger.trace("Target image shape: %s", target_image.shape)
-
-        warped_image, warped_mask = self.separate_mask(warped_image)
-        target_image, target_mask = self.separate_mask(target_image)
-
-        if target_mask is None:
-            logger.trace("Randomly warped image")
-            return [warped_image, target_image]
-
-        logger.trace("Target mask shape: %s", target_mask.shape)
-        logger.trace("Randomly warped image and mask")
-        return [warped_image, target_image, target_mask]
-
-    def random_warp_landmarks(self, image, src_points=None, dst_points=None):
-        """ get warped image, target image and target mask
-            From DFAKER plugin """
-        logger.trace("Randomly warping landmarks")
-        size = image.shape[0]
-        coverage = self.get_coverage(image)
-
-        p_mx = size - 1
-        p_hf = (size // 2) - 1
-
-        edge_anchors = [(0, 0), (0, p_mx), (p_mx, p_mx), (p_mx, 0),
-                        (p_hf, 0), (p_hf, p_mx), (p_mx, p_hf), (0, p_hf)]
-        grid_x, grid_y = np.mgrid[0:p_mx:complex(size), 0:p_mx:complex(size)]
-
-        source = src_points
-        destination = (dst_points.copy().astype('float32') +
-                       np.random.normal(size=dst_points.shape, scale=2.0))
-        destination = destination.astype('uint8')
-
-        face_core = cv2.convexHull(np.concatenate(  # pylint:disable=no-member
-            [source[17:], destination[17:]], axis=0).astype(int))
-
-        source = [(pty, ptx) for ptx, pty in source] + edge_anchors
-        destination = [(pty, ptx) for ptx, pty in destination] + edge_anchors
-
-        indicies_to_remove = set()
-        for fpl in source, destination:
-            for idx, (pty, ptx) in enumerate(fpl):
-                if idx > 17:
-                    break
-                elif cv2.pointPolygonTest(face_core,  # pylint:disable=no-member
-                                          (pty, ptx),
-                                          False) >= 0:
-                    indicies_to_remove.add(idx)
-
-        for idx in sorted(indicies_to_remove, reverse=True):
-            source.pop(idx)
-            destination.pop(idx)
-
-        grid_z = griddata(destination, source, (grid_x, grid_y), method="linear")
-        map_x = np.append([], [ar[:, 1] for ar in grid_z]).reshape(size, size)
-        map_y = np.append([], [ar[:, 0] for ar in grid_z]).reshape(size, size)
-        map_x_32 = map_x.astype('float32')
-        map_y_32 = map_y.astype('float32')
-
-        warped_image = cv2.remap(image,  # pylint:disable=no-member
-                                 map_x_32,
-                                 map_y_32,
-                                 cv2.INTER_LINEAR,  # pylint:disable=no-member
-                                 cv2.BORDER_TRANSPARENT)  # pylint:disable=no-member
-        target_image = image
-
-        # TODO Make sure this replacement is correct
-        slices = slice(size // 2 - coverage // 2, size // 2 + coverage // 2)
-#        slices = slice(size // 32, size - size // 32)  # 8px on a 256px image
-        warped_image = cv2.resize(  # pylint:disable=no-member
-            warped_image[slices, slices, :], (self.input_size, self.input_size),
-            cv2.INTER_AREA)  # pylint:disable=no-member
-        logger.trace("Warped image shape: %s", warped_image.shape)
-        target_image = cv2.resize(  # pylint:disable=no-member
-            target_image[slices, slices, :], (self.output_size, self.output_size),
-            cv2.INTER_AREA)  # pylint:disable=no-member
-        logger.trace("Target image shape: %s", target_image.shape)
-
-        warped_image, warped_mask = self.separate_mask(warped_image)
-        target_image, target_mask = self.separate_mask(target_image)
-
-        if target_mask is None:
-            logger.trace("Randomly warped image")
-            return [warped_image, target_image]
-
-        logger.trace("Target mask shape: %s", target_mask.shape)
-        logger.trace("Randomly warped image and mask")
-        return [warped_image, target_image, target_mask]
-
-
-def stack_images(images):
-    """ Stack images """
-    logger.debug("Stack images")
-
-    def get_transpose_axes(num):
-        if num % 2 == 0:
-            logger.debug("Even number of images to stack")
-            y_axes = list(range(1, num - 1, 2))
-            x_axes = list(range(0, num - 1, 2))
+        Returns the targets as a list of 4-dimensional ``numpy.ndarray`` s of shape (`batchsize`,
+        `height`, `width`, 3). If the :attr:`batch` is 4 channels, then the masks will be split
+        from the batch, with the largest output masks being returned in their own item.
+        """
+        batch = [tgt.astype("float32") / 255.0 for tgt in batch]
+        if all(tgt.shape[-1] == 4 for tgt in batch):
+            logger.trace("Batch contains mask")
+            sizes = [item.shape[1] for item in batch]
+            mask_batch = np.expand_dims(batch[sizes.index(max(sizes))][..., -1], axis=-1)
+            batch = [item[..., :3] for item in batch]
+            logger.trace("batch shapes: %s, mask_batch shape: %s",
+                         [tgt.shape for tgt in batch], mask_batch.shape)
+            retval = dict(targets=batch, masks=mask_batch)
         else:
-            logger.debug("Odd number of images to stack")
-            y_axes = list(range(0, num - 1, 2))
-            x_axes = list(range(1, num - 1, 2))
-        return y_axes, x_axes, [num - 1]
+            logger.trace("Batch has no mask")
+            retval = dict(targets=batch)
+        return retval
 
-    images_shape = np.array(images.shape)
-    new_axes = get_transpose_axes(len(images_shape))
-    new_shape = [np.prod(images_shape[x]) for x in new_axes]
-    logger.debug("Stacked images")
-    return np.transpose(
-        images,
-        axes=np.concatenate(new_axes)
-        ).reshape(new_shape)
+    # <<< COLOR AUGMENTATION >>> #
+    def color_adjust(self, batch):
+        """ Perform color augmentation on the passed in batch.
+
+        The color adjustment parameters are set in :file:`config.train.ini`
+
+        Parameters
+        ----------
+        batch: numpy.ndarray
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `3`) and in `BGR` format.
+
+        Returns
+        ----------
+        numpy.ndarray
+            A 4-dimensional array of the same shape as :attr:`batch` with color augmentation
+            applied.
+        """
+        if not self.is_display:
+            logger.trace("Augmenting color")
+            batch = batch_convert_color(batch, "BGR2LAB")
+            batch = self._random_clahe(batch)
+            batch = self._random_lab(batch)
+            batch = batch_convert_color(batch, "LAB2BGR")
+        return batch
+
+    def _random_clahe(self, batch):
+        """ Randomly perform Contrast Limited Adaptive Histogram Equilization on
+        a batch of images """
+        base_contrast = self._constants["clahe_base_contrast"]
+
+        batch_random = np.random.rand(self._batchsize)
+        indices = np.where(batch_random > self._config.get("color_clahe_chance", 50) / 100)[0]
+
+        grid_bases = np.rint(np.random.uniform(0,
+                                               self._config.get("color_clahe_max_size", 4),
+                                               size=indices.shape[0])).astype("uint8")
+        contrast_adjustment = (grid_bases * (base_contrast // 2))
+        grid_sizes = contrast_adjustment + base_contrast
+        logger.trace("Adjusting Contrast. Grid Sizes: %s", grid_sizes)
+
+        clahes = [cv2.createCLAHE(clipLimit=2.0,  # pylint: disable=no-member
+                                  tileGridSize=(grid_size, grid_size))
+                  for grid_size in grid_sizes]
+
+        for idx, clahe in zip(indices, clahes):
+            batch[idx, :, :, 0] = clahe.apply(batch[idx, :, :, 0])
+        return batch
+
+    def _random_lab(self, batch):
+        """ Perform random color/lightness adjustment in L*a*b* colorspace on a batch of images """
+        amount_l = self._config.get("color_lightness", 30) / 100
+        amount_ab = self._config.get("color_ab", 8) / 100
+        adjust = np.array([amount_l, amount_ab, amount_ab], dtype="float32")
+        randoms = (
+            (np.random.rand(self._batchsize, 1, 1, 3).astype("float32") * (adjust * 2)) - adjust)
+        logger.trace("Random LAB adjustments: %s", randoms)
+
+        for image, rand in zip(batch, randoms):
+            for idx in range(rand.shape[-1]):
+                adjustment = rand[:, :, idx]
+                if adjustment >= 0:
+                    image[:, :, idx] = ((255 - image[:, :, idx]) * adjustment) + image[:, :, idx]
+                else:
+                    image[:, :, idx] = image[:, :, idx] * (1 + adjustment)
+        return batch
+
+    # <<< IMAGE AUGMENTATION >>> #
+    def transform(self, batch):
+        """ Perform random transformation on the passed in batch.
+
+        The transformation parameters are set in :file:`config.train.ini`
+
+        Parameters
+        ----------
+        batch: numpy.ndarray
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `channels`) and in `BGR` format.
+
+        Returns
+        ----------
+        numpy.ndarray
+            A 4-dimensional array of the same shape as :attr:`batch` with transformation applied.
+        """
+        if self.is_display:
+            return batch
+        logger.trace("Randomly transforming image")
+        rotation_range = self._config.get("rotation_range", 10)
+        zoom_range = self._config.get("zoom_range", 5) / 100
+        shift_range = self._config.get("shift_range", 5) / 100
+
+        rotation = np.random.uniform(-rotation_range,
+                                     rotation_range,
+                                     size=self._batchsize).astype("float32")
+        scale = np.random.uniform(1 - zoom_range,
+                                  1 + zoom_range,
+                                  size=self._batchsize).astype("float32")
+        tform = np.random.uniform(
+            -shift_range,
+            shift_range,
+            size=(self._batchsize, 2)).astype("float32") * self._training_size
+
+        mats = np.array(
+            [cv2.getRotationMatrix2D((self._training_size // 2, self._training_size // 2),
+                                     rot,
+                                     scl)
+             for rot, scl in zip(rotation, scale)]).astype("float32")
+        mats[..., 2] += tform
+
+        batch = np.array([cv2.warpAffine(image,
+                                         mat,
+                                         (self._training_size, self._training_size),
+                                         borderMode=cv2.BORDER_REPLICATE)
+                          for image, mat in zip(batch, mats)])
+
+        logger.trace("Randomly transformed image")
+        return batch
+
+    def random_flip(self, batch):
+        """ Perform random horizontal flipping on the passed in batch.
+
+        The probability of flipping an image is set in :file:`config.train.ini`
+
+        Parameters
+        ----------
+        batch: numpy.ndarray
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `channels`) and in `BGR` format.
+
+        Returns
+        ----------
+        numpy.ndarray
+            A 4-dimensional array of the same shape as :attr:`batch` with transformation applied.
+        """
+        if not self.is_display:
+            logger.trace("Randomly flipping image")
+            randoms = np.random.rand(self._batchsize)
+            indices = np.where(randoms > self._config.get("random_flip", 50) / 100)[0]
+            batch[indices] = batch[indices, :, ::-1]
+            logger.trace("Randomly flipped %s images of %s", len(indices), self._batchsize)
+        return batch
+
+    def warp(self, batch, to_landmarks=False, **kwargs):
+        """ Perform random warping on the passed in batch by one of two methods.
+
+        Parameters
+        ----------
+        batch: numpy.ndarray
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `3`) and in `BGR` format.
+        to_landmarks: bool, optional
+            If ``False`` perform standard random warping of the input image. If ``True`` perform
+            warping to semi-random similar corresponding landmarks from the other side. Default:
+            ``False``
+        kwargs: dict
+            If :attr:`to_landmarks` is ``True`` the following additional kwargs must be passed in:
+
+            * **batch_src_points** (`numpy.ndarray`) - A batch of 68 point landmarks for the \
+            source faces. This is a 3-dimensional array in the shape (`batchsize`, `68`, `2`).
+
+            * **batch_dst_points** (`numpy.ndarray`) - A batch of randomly chosen closest match \
+            destination faces landmarks. This is a 3-dimensional array in the shape (`batchsize`, \
+             `68`, `2`).
+        Returns
+        ----------
+        numpy.ndarray
+            A 4-dimensional array of the same shape as :attr:`batch` with warping applied.
+        """
+        if to_landmarks:
+            return self._random_warp_landmarks(batch, **kwargs).astype("float32") / 255.0
+        return self._random_warp(batch).astype("float32") / 255.0
+
+    def _random_warp(self, batch):
+        """ Randomly warp the input batch """
+        logger.trace("Randomly warping batch")
+        mapx = self._constants["warp_mapx"]
+        mapy = self._constants["warp_mapy"]
+        pad = self._constants["warp_pad"]
+        slices = self._constants["warp_slices"]
+
+        rands = np.random.normal(size=(self._batchsize, 2, 5, 5),
+                                 scale=self._scale).astype("float32")
+        batch_maps = np.stack((mapx, mapy), axis=1) + rands
+        batch_interp = np.array([[cv2.resize(map_, (pad, pad))[slices, slices] for map_ in maps]
+                                 for maps in batch_maps])
+        warped_batch = np.array([cv2.remap(image, interp[0], interp[1], cv2.INTER_LINEAR)
+                                 for image, interp in zip(batch, batch_interp)])
+
+        logger.trace("Warped image shape: %s", warped_batch.shape)
+        return warped_batch
+
+    def _random_warp_landmarks(self, batch, batch_src_points, batch_dst_points):
+        """ From dfaker. Warp the image to a similar set of landmarks from the opposite side """
+        logger.trace("Randomly warping landmarks")
+        edge_anchors = self._constants["warp_lm_edge_anchors"]
+        grids = self._constants["warp_lm_grids"]
+        slices = self._constants["tgt_slices"]
+
+        batch_dst = (batch_dst_points + np.random.normal(size=batch_dst_points.shape,
+                                                         scale=2.0)).astype("int32")
+
+        face_cores = [cv2.convexHull(np.concatenate([src[17:], dst[17:]], axis=0))
+                      for src, dst in zip(batch_src_points, batch_dst)]
+
+        batch_src = np.append(batch_src_points, edge_anchors, axis=1)
+        batch_dst = np.append(batch_dst, edge_anchors, axis=1)
+
+        rem_indices = [list(set(idx for fpl in (src, dst)
+                                for idx, (pty, ptx) in enumerate(fpl)
+                                if cv2.pointPolygonTest(face_core, (pty, ptx), False) >= 0))
+                       for src, dst, face_core in zip(batch_src[:, :18, :],
+                                                      batch_dst[:, :18, :],
+                                                      face_cores)]
+        batch_src = [np.delete(src, idxs, axis=0) for idxs, src in zip(rem_indices, batch_src)]
+        batch_dst = [np.delete(dst, idxs, axis=0) for idxs, dst in zip(rem_indices, batch_dst)]
+
+        grid_z = np.array([griddata(dst, src, (grids[0], grids[1]), method="linear")
+                           for src, dst in zip(batch_src, batch_dst)])
+        maps = grid_z.reshape(self._batchsize,
+                              self._training_size,
+                              self._training_size,
+                              2).astype("float32")
+        warped_batch = np.array([cv2.remap(image,
+                                           map_[..., 1],
+                                           map_[..., 0],
+                                           cv2.INTER_LINEAR,
+                                           cv2.BORDER_TRANSPARENT)
+                                 for image, map_ in zip(batch, maps)])
+        warped_batch = np.array([cv2.resize(image[slices, slices, :],
+                                            (self._input_size, self._input_size),
+                                            cv2.INTER_AREA)
+                                 for image in warped_batch])
+        logger.trace("Warped batch shape: %s", warped_batch.shape)
+        return warped_batch

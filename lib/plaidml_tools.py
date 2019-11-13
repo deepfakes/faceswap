@@ -70,8 +70,11 @@ class PlaidMLStats():
     @property
     def names(self):
         """ Return all PlaidML Device Names """
-        return ["{} - {}".format(device.get("vendor", "unknown"), device.get("name", "unknown"))
-                for device in self.device_details]
+        return ["{} - {} ({})".format(
+            device.get("vendor", "unknown"),
+            device.get("name", "unknown"),
+            "supported" if idx in self.supported_indices else "experimental")
+                for idx, device in enumerate(self.device_details)]
 
     @property
     def supported_indices(self):
@@ -181,6 +184,10 @@ class PlaidMLStats():
         if _LOGGER:
             _LOGGER.debug("Obtaining largest %s device", category)
         indices = getattr(self, "{}_indices".format(category))
+        if not indices:
+            _LOGGER.error("Failed to automatically detect your GPU.")
+            _LOGGER.error("Please run `plaidml-setup` to set up your GPU.")
+            exit()
         max_vram = max([self.vram[idx] for idx in indices])
         if _LOGGER:
             _LOGGER.debug("Max VRAM: %s", max_vram)

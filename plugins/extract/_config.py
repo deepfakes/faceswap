@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Config(FaceswapConfig):
-    """ Config File for Models """
+    """ Config File for Extraction """
 
     def set_defaults(self):
         """ Set the default values for config """
         logger.debug("Setting defaults")
+        self.set_globals()
         current_dir = os.path.dirname(__file__)
         for dirpath, _, filenames in os.walk(current_dir):
             default_files = [fname for fname in filenames if fname.endswith("_defaults.py")]
@@ -41,3 +42,17 @@ class Config(FaceswapConfig):
         for key, val in mod._DEFAULTS.items():  # pylint:disable=protected-access
             self.add_item(section=section, title=key, **val)
         logger.debug("Added defaults: %s", section)
+
+    def set_globals(self):
+        """
+        Set the global options for extract
+        """
+        logger.debug("Setting global config")
+        section = "global"
+        self.add_section(title=section, info="Options that apply to all extraction plugins")
+        self.add_item(
+            section=section, title="allow_growth", datatype=bool, default=False,
+            info="[Nvidia Only]. Enable the Tensorflow GPU `allow_growth` configuration option. "
+                 "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
+                 "but can lead to higher VRAM fragmentation and slower performance. Should only "
+                 "be enabled if you are having problems running extraction.")

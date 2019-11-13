@@ -33,7 +33,7 @@ from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.training_data import TrainingDataGenerator, stack_images
+from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 
@@ -148,17 +148,16 @@ class TrainerBase():
         logger.debug("Tensorflow version: %s", tf_version)
         if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 12):
             kwargs["update_freq"] = "batch"
+        if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 13):
+            kwargs["profile_batch"] = 0
         logger.debug(kwargs)
         return kwargs
 
     def print_loss(self, loss):
         """ Override for specific model loss formatting """
         logger.trace(loss)
-        output = [", ".join(["{}_{}: {:.5f}".format(self.model.state.loss_names[side][idx],
-                                                    side.capitalize(),
-                                                    this_loss)
-                             for idx, this_loss in enumerate(loss[side])])
-                  for side in sorted(list(loss.keys()))]
+        output = ["Loss {}: {:.5f}".format(side.capitalize(), loss[side][0])
+                  for side in sorted(loss.keys())]
         output = ", ".join(output)
         print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
 
@@ -171,6 +170,7 @@ class TrainerBase():
         do_snapshot = (snapshot_interval != 0 and
                        self.model.iterations >= snapshot_interval and
                        self.model.iterations % snapshot_interval == 0)
+
         loss = dict()
         try:
             for side, batcher in self.batchers.items():
@@ -208,9 +208,6 @@ class TrainerBase():
             if do_snapshot:
                 self.model.do_snapshot()
         except Exception as err:
-            #  Shutdown the FixedProducerDispatchers then continue to raise error
-            for batcher in self.batchers.values():
-                batcher.shutdown_feed()
             raise err
 
     def store_history(self, side, loss):
@@ -254,7 +251,6 @@ class Batcher():
 
         generator = self.load_generator()
         self.feed = generator.minibatch_ab(images, batch_size, self.side)
-        self.shutdown_feed = generator.join_subprocess
 
         self.preview_feed = None
         self.timelapse_feed = None
@@ -263,10 +259,10 @@ class Batcher():
         """ Pass arguments to TrainingDataGenerator and return object """
         logger.debug("Loading generator: %s", self.side)
         input_size = self.model.input_shape[0]
-        output_size = self.model.output_shape[0]
-        logger.debug("input_size: %s, output_size: %s", input_size, output_size)
+        output_shapes = self.model.output_shapes
+        logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
-                                          output_size,
+                                          output_shapes,
                                           self.model.training_opts,
                                           self.config)
         return generator
@@ -284,7 +280,8 @@ class Batcher():
                    "particularly bad for this)."
                    "\n2) Lower the batchsize (the amount of images fed into the model each "
                    "iteration)."
-                   "\n3) Try Memory Saving Gradients and/or Ping Pong Training."
+                   "\n3) Try 'Memory Saving Gradients' and/or 'Optimizer Savings' and/or 'Ping "
+                   "Pong Training'."
                    "\n4) Use a more lightweight model, or select the model's 'LowMem' option "
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
@@ -295,21 +292,12 @@ class Batcher():
         """ Return the next batch from the generator
             Items should come out as: (warped, target [, mask]) """
         batch = next(self.feed)
-        batch = batch[1:]   # Remove full size samples from batch
         if self.use_mask:
-            batch = self.compile_mask(batch)
+            batch = [[batch["feed"], batch["masks"]], batch["targets"] + [batch["masks"]]]
+        else:
+            batch = [batch["feed"], batch["targets"]]
         self.generate_preview(do_preview)
         return batch
-
-    def compile_mask(self, batch):
-        """ Compile the mask into training data """
-        logger.trace("Compiling Mask: (side: '%s')", self.side)
-        mask = batch[-1]
-        retval = list()
-        for idx in range(len(batch) - 1):
-            image = batch[idx]
-            retval.append([image, mask])
-        return retval
 
     def generate_preview(self, do_preview):
         """ Generate the preview if a preview iteration """
@@ -321,11 +309,10 @@ class Batcher():
         if self.preview_feed is None:
             self.set_preview_feed()
         batch = next(self.preview_feed)
-        self.samples = batch[0]
-        batch = batch[1:]   # Remove full size samples from batch
+        self.samples = batch["samples"]
+        self.target = [batch["targets"][self.model.largest_face_index]]
         if self.use_mask:
-            batch = self.compile_mask(batch)
-        self.target = batch[1]
+            self.target += [batch["masks"]]
 
     def set_preview_feed(self):
         """ Set the preview dictionary """
@@ -346,24 +333,21 @@ class Batcher():
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
         logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
         images = images if images is not None else self.target
-        samples = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
+        retval = [samples[0:num_images]] if samples is not None else [self.samples[0:num_images]]
         if self.use_mask:
-            retval = [tgt[0:num_images] for tgt in images]
+            retval.extend(tgt[0:num_images] for tgt in images)
         else:
-            retval = [images[0:num_images]]
-        retval = samples + retval
+            retval.extend(images[0:num_images])
         return retval
 
     def compile_timelapse_sample(self):
         """ Timelapse samples """
         batch = next(self.timelapse_feed)
-        samples = batch[0]
-        batch = batch[1:]   # Remove full size samples from batch
-        batchsize = len(samples)
+        batchsize = len(batch["samples"])
+        images = [batch["targets"][self.model.largest_face_index]]
         if self.use_mask:
-            batch = self.compile_mask(batch)
-        images = batch[1]
-        sample = self.compile_sample(batchsize, samples=samples, images=images)
+            images = images + [batch["masks"]]
+        sample = self.compile_sample(batchsize, samples=batch["samples"], images=images)
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
@@ -413,10 +397,10 @@ class Samples():
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            predictions = [preds["{}_{}".format(side, side)],
+            predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
             display = self.to_full_frame(side, samples, predictions)
-            headers[side] = self.get_headers(side, other_side, display[0].shape[1])
+            headers[side] = self.get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
                 figures[side] = np.concatenate([figures[side],
@@ -461,11 +445,10 @@ class Samples():
         preds["b_a"] = self.model.predictors["b"].predict(feed_a)
         preds["a_b"] = self.model.predictors["a"].predict(feed_b)
         preds["b_b"] = self.model.predictors["b"].predict(feed_b)
-
-        # Get the returned image from predictors that emit multiple items
+        # Get the returned largest image from predictors that emit multiple items
         if not isinstance(preds["a_a"], np.ndarray):
             for key, val in preds.items():
-                preds[key] = val[0]
+                preds[key] = val[self.model.largest_face_index]
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
@@ -556,22 +539,22 @@ class Samples():
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
         return retval
 
-    def get_headers(self, side, other_side, width):
+    def get_headers(self, side, width):
         """ Set headers for images """
-        logger.debug("side: '%s', other_side: '%s', width: %s",
-                     side, other_side, width)
+        logger.debug("side: '%s', width: %s",
+                     side, width)
+        titles = ("Original", "Swap") if side == "a" else ("Swap", "Original")
         side = side.upper()
-        other_side = other_side.upper()
         height = int(64 * self.scaling)
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
-        texts = ["Target {}".format(side),
-                 "{} > {}".format(side, side),
-                 "{} > {}".format(side, other_side)]
+        texts = ["{} ({})".format(titles[0], side),
+                 "{0} > {0}".format(titles[0]),
+                 "{} > {}".format(titles[0], titles[1])]
         text_sizes = [cv2.getTextSize(texts[idx],  # pylint: disable=no-member
                                       font,
-                                      self.scaling,
+                                      self.scaling * 0.8,
                                       1)[0]
                       for idx in range(len(texts))]
         text_y = int((height + text_sizes[0][1]) / 2)
@@ -585,7 +568,7 @@ class Samples():
                         text,
                         (text_x[idx], text_y),
                         font,
-                        self.scaling,
+                        self.scaling * 0.8,
                         (0, 0, 0),
                         1,
                         lineType=cv2.LINE_AA)  # pylint: disable=no-member
@@ -660,7 +643,7 @@ class PingPong():
         self.model = model
         self.sides = sides
         self.side = sorted(sides)[0]
-        self.loss = {side: dict() for side in sides}
+        self.loss = {side: [0] for side in sides}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def switch(self):
@@ -693,12 +676,7 @@ class Landmarks():
         landmarks = dict()
         for side, fullpath in self.paths.items():
             path, filename = os.path.split(fullpath)
-            filename, extension = os.path.splitext(filename)
-            serializer = extension[1:]
-            alignments = Alignments(
-                path,
-                filename=filename,
-                serializer=serializer)
+            alignments = Alignments(path, filename=filename)
             landmarks[side] = self.transform_landmarks(alignments)
         return landmarks
 
@@ -709,6 +687,28 @@ class Landmarks():
             for face in faces:
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
-                detected_face.load_aligned(None, size=self.size, align_eyes=False)
+                detected_face.load_aligned(None, size=self.size)
                 landmarks[detected_face.hash] = detected_face.aligned_landmarks
         return landmarks
+
+
+def stack_images(images):
+    """ Stack images """
+    logger.debug("Stack images")
+
+    def get_transpose_axes(num):
+        if num % 2 == 0:
+            logger.debug("Even number of images to stack")
+            y_axes = list(range(1, num - 1, 2))
+            x_axes = list(range(0, num - 1, 2))
+        else:
+            logger.debug("Odd number of images to stack")
+            y_axes = list(range(0, num - 1, 2))
+            x_axes = list(range(1, num - 1, 2))
+        return y_axes, x_axes, [num - 1]
+
+    images_shape = np.array(images.shape)
+    new_axes = get_transpose_axes(len(images_shape))
+    new_shape = [np.prod(images_shape[x]) for x in new_axes]
+    logger.debug("Stacked images")
+    return np.transpose(images, axes=np.concatenate(new_axes)).reshape(new_shape)

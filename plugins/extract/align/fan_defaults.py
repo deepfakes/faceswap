@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap Lightweight Model plugin.
+    The default options for the faceswap FAN Alignments plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -22,6 +22,8 @@
                    <class 'str'>, <class 'bool'>.
         default:   [required] The default value for this option.
         info:      [required] A string describing what this option does.
+        group:     [optional]. A group for grouping options together in the GUI. If not
+                   provided this will not group this option with any others.
         choices:   [optional] If this option's datatype is of <class 'str'> then valid
                    selections can be defined here. This validates the option and also enables
                    a combobox / radio option in the GUI.
@@ -42,26 +44,23 @@
 
 
 _HELPTEXT = (
-    "A lightweight version of the Original Faceswap Model, designed to run on lower end GPUs "
-    "(~2GB).\nDon't expect great results, but it allows users with lower end cards to play with "
-    "the software.\n"
-)
+    "FAN Aligner options.Fast on GPU, slow on CPU. Best aligner."
+    )
 
 
 _DEFAULTS = {
-    "coverage": {
-        "default": 62.5,
-        "info": "How much of the extracted image to train on. Generally the model is optimized\n"
-                "to the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.",
-        "datatype": float,
+    "batch-size": {
+        "default": 12,
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.\n"
+                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+                "accomodate then this will automatically be lowered."
+                "\n\tAMD users: A batchsize of 8 requires about 4 GB vram.",
+        "datatype": int,
         "rounding": 1,
-        "min_max": (62.5, 100.0),
+        "min_max": (1, 64),
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-    },
+    }
 }

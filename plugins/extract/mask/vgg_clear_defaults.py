@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap Dfaker Model plugin.
+    The default options for the faceswap VGG clear plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -22,6 +22,8 @@
                    <class 'str'>, <class 'bool'>.
         default:   [required] The default value for this option.
         info:      [required] A string describing what this option does.
+        group:     [optional]. A group for grouping options together in the GUI. If not
+                   provided this will not group this option with any others.
         choices:   [optional] If this option's datatype is of <class 'str'> then valid
                    selections can be defined here. This validates the option and also enables
                    a combobox / radio option in the GUI.
@@ -41,23 +43,24 @@
 """
 
 
-_HELPTEXT = "Dfaker Model (Adapted from https://github.com/dfaker/df)"
+_HELPTEXT = (
+    "VGG_Clear options. Mask designed to provide smart segmentation of mostly frontal faces clear "
+    "of obstructions.\nProfile faces and obstructions may result in sub-par performance."
+    )
 
 
 _DEFAULTS = {
-    "coverage": {
-        "default": 100.0,
-        "info": "How much of the extracted image to train on. Generally the model is optimized"
-                "\nto the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.",
-        "datatype": float,
+    "batch-size": {
+        "default": 6,
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.\n"
+                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+                "accomodate then this will automatically be lowered.",
+        "datatype": int,
         "rounding": 1,
-        "min_max": (62.5, 100.0),
+        "min_max": (1, 64),
         "choices": [],
         "gui_radio": False,
         "fixed": True,
-    },
+    }
 }

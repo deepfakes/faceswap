@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap Iae Model plugin.
+    The default options for the faceswap Dfl_SAE Model plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -41,26 +41,77 @@
 """
 
 
-_HELPTEXT = (
-    "Intermediate Auto Encoder. Based on Original Model, uses intermediate layers to try to "
-    "better get details"
-)
+_HELPTEXT = "DFL SAE Model (Adapted from https://github.com/iperov/DeepFaceLab)"
 
 
 _DEFAULTS = {
-    "coverage": {
-        "default": 62.5,
-        "info": "How much of the extracted image to train on. Generally the model is optimized"
-                "\nto the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.",
-        "datatype": float,
-        "rounding": 1,
-        "min_max": (62.5, 100.0),
-        "choices": [],
-        "gui_radio": False,
+    "input_size": {
+        "default": 128,
+        "info": "Resolution (in pixels) of the input image to train on.\n"
+                "BE AWARE Larger resolution will dramatically increase VRAM requirements.\n"
+                "\nMust be divisible by 16.",
+        "datatype": int,
+        "rounding": 16,
+        "min_max": (64, 256),
+        "group": "size",
         "fixed": True,
+    },
+    "clipnorm": {
+        "default": True,
+        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
+                "the expense of VRAM.",
+        "datatype": bool,
+        "fixed": False,
+        "group": "settings",
+    },
+    "architecture": {
+        "default": "df",
+        "info": "Model architecture:"
+                "\n\t'df': Keeps the faces more natural."
+                "\n\t'liae': Can help fix overly different face shapes.",
+        "datatype": str,
+        "choices": ["df", "liae"],
+        "gui_radio": True,
+        "fixed": True,
+        "group": "network",
+    },
+    "autoencoder_dims": {
+        "default": 0,
+        "info": "Face information is stored in AutoEncoder dimensions. If there are not enough "
+                "dimensions then certain facial features may not be recognized."
+                "\nHigher number of dimensions are better, but require more VRAM."
+                "\nSet to 0 to use the architecture defaults (256 for liae, 512 for df).",
+        "datatype": int,
+        "rounding": 32,
+        "min_max": (0, 1024),
+        "fixed": True,
+        "group": "network",
+    },
+    "encoder_dims": {
+        "default": 42,
+        "info": "Encoder dimensions per channel. Higher number of encoder dimensions will help "
+                "the model to recognize more facial features, but will require more VRAM.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (21, 85),
+        "fixed": True,
+        "group": "network",
+    },
+    "decoder_dims": {
+        "default": 21,
+        "info": "Decoder dimensions per channel. Higher number of decoder dimensions will help "
+                "the model to improve details, but will require more VRAM.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (10, 85),
+        "fixed": True,
+        "group": "network",
+    },
+    "multiscale_decoder": {
+        "default": False,
+        "info": "Multiscale decoder can help to obtain better details.",
+        "datatype": bool,
+        "fixed": True,
+        "group": "network",
     },
 }

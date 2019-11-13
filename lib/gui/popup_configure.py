@@ -1,14 +1,16 @@
 #!/usr/bin python3
 """ Configure Plugins popup of the Faceswap GUI """
 
+from collections import OrderedDict
 from configparser import ConfigParser
 import logging
 import tkinter as tk
 
 from tkinter import ttk
 
+from .control_helper import ControlPanel, ControlPanelOption
 from .tooltip import Tooltip
-from .utils import adjust_wraplength, get_config, get_images, ControlBuilder
+from .utils import get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 POPUP = dict()
@@ -40,7 +42,7 @@ class ConfigurePlugins(tk.Toplevel):
         self.page_frame.pack(fill=tk.BOTH, expand=True)
 
         self.plugin_info = dict()
-        self.config_dict_gui = self.get_config()
+        self.config_cpanel_dict = self.get_config()
         self.build()
         self.update()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -50,26 +52,36 @@ class ConfigurePlugins(tk.Toplevel):
         scaling_factor = get_config().scaling_factor
         pos_x = root.winfo_x() + 80
         pos_y = root.winfo_y() + 80
-        width = int(720 * scaling_factor)
+        width = int(600 * scaling_factor)
         height = int(400 * scaling_factor)
         logger.debug("Pop up Geometry: %sx%s, %s+%s", width, height, pos_x, pos_y)
         self.geometry("{}x{}+{}+{}".format(width, height, pos_x, pos_y))
 
     def get_config(self):
-        """ Format config into useful format for GUI and pull default value if a value has not
-            been supplied """
+        """ Format config into a dict of ControlPanelOptions """
         logger.debug("Formatting Config for GUI")
         conf = dict()
         for section in self.config.config.sections():
             self.config.section = section
             category = section.split(".")[0]
             options = self.config.defaults[section]
-            conf.setdefault(category, dict())[section] = options
-            for key in options.keys():
+            section = section.split(".")[-1]
+            conf.setdefault(category, dict())[section] = OrderedDict()
+            for key, val in options.items():
                 if key == "helptext":
-                    self.plugin_info[section] = options[key]
+                    self.plugin_info[section] = val
                     continue
-                options[key]["value"] = self.config.config_dict.get(key, options[key]["default"])
+                conf[category][section][key] = ControlPanelOption(
+                    title=key,
+                    dtype=val["type"],
+                    group=val["group"],
+                    default=val["default"],
+                    initial_value=self.config.config_dict.get(key, val["default"]),
+                    choices=val["choices"],
+                    is_radio=val["gui_radio"],
+                    rounding=val["rounding"],
+                    min_max=val["min_max"],
+                    helptext=val["helptext"])
         logger.debug("Formatted Config for GUI: %s", conf)
         return conf
 
@@ -78,7 +90,7 @@ class ConfigurePlugins(tk.Toplevel):
         logger.debug("Building plugin config popup")
         container = ttk.Notebook(self.page_frame)
         container.pack(fill=tk.BOTH, expand=True)
-        categories = sorted(list(key for key in self.config_dict_gui.keys()))
+        categories = sorted(list(self.config_cpanel_dict.keys()))
         if "global" in categories:  # Move global to first item
             categories.insert(0, categories.pop(categories.index("global")))
         for category in categories:
@@ -92,21 +104,26 @@ class ConfigurePlugins(tk.Toplevel):
     def build_page(self, container, category):
         """ Build a plugin config page """
         logger.debug("Building plugin config page: '%s'", category)
-        plugins = sorted(list(key for key in self.config_dict_gui[category].keys()))
+        plugins = sorted(list(key for key in self.config_cpanel_dict[category].keys()))
+        panel_kwargs = dict(columns=2, option_columns=2, blank_nones=False)
         if any(plugin != category for plugin in plugins):
             page = ttk.Notebook(container)
             page.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             for plugin in plugins:
-                frame = ConfigFrame(page,
-                                    self.config_dict_gui[category][plugin],
-                                    self.plugin_info[plugin])
+                cp_options = [opt for opt in self.config_cpanel_dict[category][plugin].values()]
+                frame = ControlPanel(page,
+                                     cp_options,
+                                     header_text=self.plugin_info[plugin],
+                                     **panel_kwargs)
                 title = plugin[plugin.rfind(".") + 1:]
                 title = title.replace("_", " ").title()
                 page.add(frame, text=title)
         else:
-            page = ConfigFrame(container,
-                               self.config_dict_gui[category][plugins[0]],
-                               self.plugin_info[plugins[0]])
+            cp_options = [opt for opt in self.config_cpanel_dict[category][plugins[0]].values()]
+            page = ControlPanel(container,
+                                cp_options,
+                                header_text=self.plugin_info[plugins[0]],
+                                **panel_kwargs)
 
         logger.debug("Built plugin config page: '%s'", category)
 
@@ -140,22 +157,20 @@ class ConfigurePlugins(tk.Toplevel):
         logger.debug("Resetting config")
         for section, items in self.config.defaults.items():
             logger.debug("Resetting section: '%s'", section)
-            lookup = [section.split(".")[0], section] if "." in section else [section, section]
+            lookup = [section.split(".")[0], section.split(".")[-1]]
             for item, def_opt in items.items():
                 if item == "helptext":
                     continue
                 default = def_opt["default"]
-                tk_var = self.config_dict_gui[lookup[0]][lookup[1]][item]["selected"]
                 logger.debug("Resetting: '%s' to '%s'", item, default)
-                tk_var.set(default)
+                self.config_cpanel_dict[lookup[0]][lookup[1]][item].set(default)
 
     def save_config(self):
         """ Save the config file """
         logger.debug("Saving config")
-        options = {sect: opts
-                   for value in self.config_dict_gui.values()
+        options = {".".join((key, sect)) if sect != key else key: opts
+                   for key, value in self.config_cpanel_dict.items()
                    for sect, opts in value.items()}
-
         new_config = ConfigParser(allow_no_value=True)
         for section, items in self.config.defaults.items():
             logger.debug("Adding section: '%s')", section)
@@ -163,90 +178,15 @@ class ConfigurePlugins(tk.Toplevel):
             for item, def_opt in items.items():
                 if item == "helptext":
                     continue
-                new_opt = options[section][item]
-                logger.debug("Adding option: (item: '%s', default: '%s' new: '%s'",
+                new_opt = options[section][item].get()
+                logger.debug("Adding option: (item: '%s', default: %s new: '%s'",
                              item, def_opt, new_opt)
                 helptext = def_opt["helptext"]
                 helptext = self.config.format_help(helptext, is_section=False)
                 new_config.set(section, helptext)
-                new_config.set(section, item, str(new_opt["selected"].get()))
+                new_config.set(section, item, str(new_opt))
         self.config.config = new_config
         self.config.save_config()
         print("Saved config: '{}'".format(self.config.configfile))
         self.destroy()
         logger.debug("Saved config")
-
-
-class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
-    """ Config Frame - Holds the Options for config """
-
-    def __init__(self, parent, options, plugin_info):
-        logger.debug("Initializing %s", self.__class__.__name__)
-        ttk.Frame.__init__(self, parent)
-        self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        self.options = options
-        self.plugin_info = plugin_info
-
-        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.optsframe = ttk.Frame(self.canvas)
-        self.optscanvas = self.canvas.create_window((0, 0), window=self.optsframe, anchor=tk.NW)
-
-        self.build_frame()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def build_frame(self):
-        """ Build the options frame for this command """
-        logger.debug("Add Config Frame")
-        self.add_scrollbar()
-        self.canvas.bind("<Configure>", self.resize_frame)
-
-        self.add_info()
-        for key, val in self.options.items():
-            if key == "helptext":
-                continue
-            ctl = ControlBuilder(self.optsframe,
-                                 key,
-                                 val["type"],
-                                 val["default"],
-                                 selected_value=val["value"],
-                                 choices=val["choices"],
-                                 is_radio=val["gui_radio"],
-                                 rounding=val["rounding"],
-                                 min_max=val["min_max"],
-                                 helptext=val["helptext"],
-                                 radio_columns=4)
-            val["selected"] = ctl.tk_var
-        logger.debug("Added Config Frame")
-
-    def add_scrollbar(self):
-        """ Add a scrollbar to the options frame """
-        logger.debug("Add Config Scrollbar")
-        scrollbar = ttk.Scrollbar(self, command=self.canvas.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.canvas.config(yscrollcommand=scrollbar.set)
-        self.optsframe.bind("<Configure>", self.update_scrollbar)
-        logger.debug("Added Config Scrollbar")
-
-    def update_scrollbar(self, event):  # pylint: disable=unused-argument
-        """ Update the options frame scrollbar """
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def resize_frame(self, event):
-        """ Resize the options frame to fit the canvas """
-        logger.debug("Resize Config Frame")
-        canvas_width = event.width
-        self.canvas.itemconfig(self.optscanvas, width=canvas_width)
-        logger.debug("Resized Config Frame")
-
-    def add_info(self):
-        """ Plugin information """
-        info_frame = ttk.Frame(self.optsframe)
-        info_frame.pack(fill=tk.X, expand=True)
-        lbl = ttk.Label(info_frame, text="About:", width=20, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-        info = ttk.Label(info_frame, text=self.plugin_info)
-        info.pack(padx=5, pady=5, fill=tk.X, expand=True)
-        info.bind("<Configure>", adjust_wraplength)

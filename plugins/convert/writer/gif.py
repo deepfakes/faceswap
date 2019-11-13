@@ -10,9 +10,10 @@ from ._base import Output, logger
 
 class Writer(Output):
     """ Video output writer using imageio """
-    def __init__(self, output_folder, total_count, **kwargs):
+    def __init__(self, output_folder, total_count, frame_ranges, **kwargs):
+        logger.debug("total_count: %s, frame_ranges: %s", total_count, frame_ranges)
         super().__init__(output_folder, **kwargs)
-        self.frame_order = list(range(1, total_count + 1))
+        self.frame_order = self.set_frame_order(total_count, frame_ranges)
         self.output_dimensions = None  # Fix dims of 1st frame in case of different sized images
         self.writer = None  # Need to know dimensions of first frame, so set writer then
         self.gif_file = None  # Set filename based on first file seen
@@ -23,6 +24,18 @@ class Writer(Output):
         kwargs = {key: int(val) for key, val in self.config.items()}
         logger.debug(kwargs)
         return kwargs
+
+    @staticmethod
+    def set_frame_order(total_count, frame_ranges):
+        """ Return the full list of frames to be converted in order """
+        if frame_ranges is None:
+            retval = list(range(1, total_count + 1))
+        else:
+            retval = list()
+            for rng in frame_ranges:
+                retval.extend(list(range(rng[0], rng[1] + 1)))
+        logger.debug("frame_order: %s", retval)
+        return retval
 
     def get_writer(self):
         """ Add the requested encoding options and return the writer """

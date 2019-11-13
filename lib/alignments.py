@@ -6,10 +6,8 @@ import logging
 import os
 from datetime import datetime
 
-import cv2
-
-from lib import Serializer
-from lib.utils import rotate_landmarks
+from lib.serializer import get_serializer, get_serializer_from_filename
+from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -18,22 +16,20 @@ class Alignments():
     """ Holds processes pertaining to the alignments file.
 
         folder:     folder alignments file is stored in
-        filename:   Filename of alignments file excluding extension. If a
+        filename:   Filename of alignments file. If a
                     valid extension is provided, then it will be used to
-                    decide the serializer, and the serializer argument will
-                    be ignored.
-        serializer: If provided, this will be the format that the data is
-                    saved in (if data is to be saved). Can be 'json', 'pickle'
-                    or 'yaml'
+                    decide the serializer otherwise compressed pickle is used.
     """
     # pylint: disable=too-many-public-methods
-    def __init__(self, folder, filename="alignments", serializer="json"):
-        logger.debug("Initializing %s: (folder: '%s', filename: '%s', serializer: '%s')",
-                     self.__class__.__name__, folder, filename, serializer)
-        self.serializer = self.get_serializer(filename, serializer)
+    def __init__(self, folder, filename="alignments"):
+        logger.debug("Initializing %s: (folder: '%s', filename: '%s')",
+                     self.__class__.__name__, folder, filename)
+        self.serializer = get_serializer("compressed")
         self.file = self.get_location(folder, filename)
 
         self.data = self.load()
+        self.update_legacy()
+        self._hashes_to_frame = dict()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # << PROPERTIES >> #
@@ -61,52 +57,39 @@ class Alignments():
 
     @property
     def hashes_to_frame(self):
-        """ Return a dict of each face_hash with their parent
-            frame name(s) and their index in the frame
-            """
-        hash_faces = dict()
-        for frame_name, faces in self.data.items():
-            for idx, face in enumerate(faces):
-                hash_faces.setdefault(face["hash"], dict())[frame_name] = idx
-        return hash_faces
+        """ Return :attr:`_hashes_to_frame`. Generate it if it does not exist.
+            The dict is of each face_hash with their parent frame name(s) and their index
+            in the frame
+        """
+        if not self._hashes_to_frame:
+            logger.debug("Generating hashes to frame")
+            for frame_name, faces in self.data.items():
+                for idx, face in enumerate(faces):
+                    self._hashes_to_frame.setdefault(face["hash"], dict())[frame_name] = idx
+        return self._hashes_to_frame
 
     # << INIT FUNCTIONS >> #
-
-    @staticmethod
-    def get_serializer(filename, serializer):
-        """ Set the serializer to be used for loading and
-            saving alignments
-
-            If a filename with a valid extension is passed in
-            this will be used as the serializer, otherwise the
-            specified serializer will be used """
-        logger.debug("Getting serializer: (filename: '%s', serializer: '%s')",
-                     filename, serializer)
-        extension = os.path.splitext(filename)[1]
-        if extension in (".json", ".p", ".yaml", ".yml"):
-            logger.debug("Serializer set from file extension: '%s'", extension)
-            retval = Serializer.get_serializer_from_ext(extension)
-        elif serializer not in ("json", "pickle", "yaml"):
-            raise ValueError("Error: {} is not a valid serializer. Use "
-                             "'json', 'pickle' or 'yaml'")
-        else:
-            logger.debug("Serializer set from argument: '%s'", serializer)
-            retval = Serializer.get_serializer(serializer)
-        logger.verbose("Using '%s' serializer for alignments", retval.ext)
-        return retval
 
     def get_location(self, folder, filename):
         """ Return the path to alignments file """
         logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
-        extension = os.path.splitext(filename)[1]
-        if extension in (".json", ".p", ".yaml", ".yml"):
-            logger.debug("File extension set from filename: '%s'", extension)
-            location = os.path.join(str(folder), filename)
+        noext_name, extension = os.path.splitext(filename)
+        if extension in (".json", ".p", ".pickle", ".yaml", ".yml"):
+            # Reformat legacy alignments file
+            filename = self.update_file_format(folder, filename)
+            logger.debug("Updated legacy alignments. New filename: '%s'", filename)
+        if extension[1:] == self.serializer.file_extension:
+            logger.debug("Valid Alignments filename provided: '%s'", filename)
         else:
-            location = os.path.join(str(folder),
-                                    "{}.{}".format(filename,
-                                                   self.serializer.ext))
-            logger.debug("File extension set from serializer: '%s'", self.serializer.ext)
+            filename = "{}.{}".format(noext_name, self.serializer.file_extension)
+            logger.debug("File extension set from serializer: '%s'",
+                         self.serializer.file_extension)
+        location = os.path.join(str(folder), filename)
+        if not os.path.exists(location):
+            # Test for old format alignments files and reformat if they exist
+            # This will be executed if an alignments file has not been explicitly provided
+            # therefore it will not have been picked up in the extension test
+            self.test_for_legacy(location)
         logger.verbose("Alignments filepath: '%s'", location)
         return location
 
@@ -117,16 +100,11 @@ class Alignments():
             Override for custom loading logic """
         logger.debug("Loading alignments")
         if not self.have_alignments_file:
-            raise ValueError("Error: Alignments file not found at "
-                             "{}".format(self.file))
+            raise FaceswapError("Error: Alignments file not found at "
+                                "{}".format(self.file))
 
-        try:
-            logger.info("Reading alignments from: '%s'", self.file)
-            with open(self.file, self.serializer.roptions) as align:
-                data = self.serializer.unmarshal(align.read())
-        except IOError as err:
-            logger.error("'%s' not read: %s", self.file, err.strerror)
-            exit(1)
+        logger.info("Reading alignments from: '%s'", self.file)
+        data = self.serializer.load(self.file)
         logger.debug("Loaded alignments")
         return data
 
@@ -139,13 +117,9 @@ class Alignments():
     def save(self):
         """ Write the serialized alignments file """
         logger.debug("Saving alignments")
-        try:
-            logger.info("Writing alignments to: '%s'", self.file)
-            with open(self.file, self.serializer.woptions) as align:
-                align.write(self.serializer.marshal(self.data))
-            logger.debug("Saved alignments")
-        except IOError as err:
-            logger.error("'%s' not written: %s", self.file, err.strerror)
+        logger.info("Writing alignments to: '%s'", self.file)
+        self.serializer.save(self.file, self.data)
+        logger.debug("Saved alignments")
 
     def backup(self):
         """ Backup copy of old alignments """
@@ -221,6 +195,8 @@ class Alignments():
     def add_face(self, frame, alignment):
         """ Add a new face for a frame and return it's index """
         logger.debug("Adding face to frame: '%s'", frame)
+        if frame not in self.data:
+            self.data[frame] = []
         self.data[frame].append(alignment)
         retval = self.count_faces_in_frame(frame) - 1
         logger.debug("Returning new face index: %s", retval)
@@ -232,10 +208,10 @@ class Alignments():
         self.data[frame][idx] = alignment
 
     def filter_hashes(self, hashlist, filter_out=False):
-        """ Filter in or out faces that match the hashlist
+        """ Filter in or out faces that match the hash list
 
-            filter_out=True: Remove faces that match in the hashlist
-            filter_out=False: Remove faces that are not in the hashlist
+            filter_out=True: Remove faces that match in the hash list
+            filter_out=False: Remove faces that are not in the hash list
         """
         hashset = set(hashlist)
         for filename, frame in self.data.items():
@@ -270,92 +246,62 @@ class Alignments():
 
     # << LEGACY FUNCTIONS >> #
 
-    # < Rotation > #
-    # The old rotation method would rotate the image to find a face, then
-    # store the rotated landmarks along with a rotation value to tell the
-    # convert process that it had to rotate the frame to find the landmarks.
-    # This is problematic for numerous reasons. The process now rotates the
-    # landmarks to correctly correspond with the original frame. The below are
-    # functions to convert legacy alignments to the currently supported
-    # infrastructure.
-    # This can eventually be removed
+    def update_legacy(self):
+        """ Update legacy alignments """
+        if self.has_legacy_landmarksxy():
+            logger.info("Updating legacy alignments")
+            self.update_legacy_landmarksxy()
 
-    def get_legacy_rotation(self):
-        """ Return a list of frames with legacy rotations
-            Looks for an 'r' value in the alignments file that
-            is not zero """
-        logger.debug("Getting alignments containing legacy rotations")
-        keys = list()
-        for key, val in self.data.items():
-            if any(alignment.get("r", None) for alignment in val):
-                keys.append(key)
-        logger.debug("Got alignments containing legacy rotations: %s", len(keys))
-        return keys
+    # <File Format> #
+    # Serializer is now a compressed pickle .fsa format. This used to be any number of serializers
+    def test_for_legacy(self, location):
+        """ For alignments filenames passed in with out an extension, test for legacy formats """
+        logger.debug("Checking for legacy alignments file formats: '%s'", location)
+        filename = os.path.splitext(location)[0]
+        for ext in (".json", ".p", ".pickle", ".yaml"):
+            legacy_filename = "{}{}".format(filename, ext)
+            if os.path.exists(legacy_filename):
+                logger.debug("Legacy alignments file exists: '%s'", legacy_filename)
+                _ = self.update_file_format(*os.path.split(legacy_filename))
+                break
+            logger.debug("Legacy alignments file does not exist: '%s'", legacy_filename)
 
-    def rotate_existing_landmarks(self, frame_name, frame):
-        """ Backwards compatability fix. Rotates the landmarks to
-            their correct position and deletes r
+    def update_file_format(self, folder, filename):
+        """ Convert old style alignments format to new style format """
+        logger.info("Reformatting legacy alignments file...")
+        old_location = os.path.join(str(folder), filename)
+        new_location = "{}.{}".format(os.path.splitext(old_location)[0],
+                                      self.serializer.file_extension)
+        if os.path.exists(old_location):
+            if os.path.exists(new_location):
+                logger.info("Using existing updated alignments file found at '%s'. If you do not "
+                            "wish to use this existing file then you should delete or rename it.",
+                            new_location)
+            else:
+                logger.info("Old location: '%s', New location: '%s'", old_location, new_location)
+                load_serializer = get_serializer_from_filename(old_location)
+                data = load_serializer.load(old_location)
+                self.serializer.save(new_location, data)
+        return os.path.basename(new_location)
 
-            NB: The original frame must be passed in otherwise
-            the transformation cannot be performed """
-        logger.trace("Rotating existing landmarks for frame: '%s'", frame_name)
-        dims = frame.shape[:2]
-        for face in self.get_faces_in_frame(frame_name):
-            angle = face.get("r", 0)
-            if not angle:
-                logger.trace("Landmarks do not require rotation: '%s'", frame_name)
-                return
-            logger.trace("Rotating landmarks: (frame: '%s', angle: %s)", frame_name, angle)
-            r_mat = self.get_original_rotation_matrix(dims, angle)
-            rotate_landmarks(face, r_mat)
-            del face["r"]
-        logger.trace("Rotatated existing landmarks for frame: '%s'", frame_name)
+    # <landmarks> #
+    # Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance
+    def has_legacy_landmarksxy(self):
+        """ check for legacy landmarksXY keys """
+        logger.debug("checking legacy landmarksXY")
+        retval = (any(key == "landmarksXY"
+                      for alignments in self.data.values()
+                      for alignment in alignments
+                      for key in alignment))
+        logger.debug("legacy landmarksXY: %s", retval)
+        return retval
 
-    @staticmethod
-    def get_original_rotation_matrix(dimensions, angle):
-        """ Calculate original rotation matrix and invert """
-        logger.trace("Getting original rotation matrix: (dimensions: %s, angle: %s)",
-                     dimensions, angle)
-        height, width = dimensions
-        center = (width/2, height/2)
-        r_mat = cv2.getRotationMatrix2D(  # pylint: disable=no-member
-            center, -1.0 * angle, 1.)
-
-        abs_cos = abs(r_mat[0, 0])
-        abs_sin = abs(r_mat[0, 1])
-        rotated_width = int(height*abs_sin + width*abs_cos)
-        rotated_height = int(height*abs_cos + width*abs_sin)
-        r_mat[0, 2] += rotated_width/2 - center[0]
-        r_mat[1, 2] += rotated_height/2 - center[1]
-        logger.trace("Returning rotation matrix: %s", r_mat)
-        return r_mat
-
-    # <Face Hashes> #
-    # The old index based method of face matching is problematic.
-    # The SHA1 Hash of the extracted face is now stored in the alignments file.
-    # This has it's own issues, but they are far reduced from the index/filename method
-    # This can eventually be removed
-    def get_legacy_no_hashes(self):
-        """ Get alignments without face hashes """
-        logger.debug("Getting alignments without face hashes")
-        keys = list()
-        for key, val in self.data.items():
-            for alignment in val:
-                if "hash" not in alignment.keys():
-                    keys.append(key)
-                    break
-        logger.debug("Got alignments without face hashes: %s", len(keys))
-        return keys
-
-    def add_face_hashes(self, frame_name, hashes):
-        """ Backward compatability fix. Add face hash to alignments """
-        logger.trace("Adding face hash: (frame: '%s', hashes: %s)", frame_name, hashes)
-        faces = self.get_faces_in_frame(frame_name)
-        count_match = len(faces) - len(hashes)
-        if count_match != 0:
-            msg = "more" if count_match > 0 else "fewer"
-            logger.warning("There are %s %s face(s) in the alignments file than exist in the "
-                           "faces folder. Check your sources for frame '%s'.",
-                           abs(count_match), msg, frame_name)
-        for idx, i_hash in hashes.items():
-            faces[idx]["hash"] = i_hash
+    def update_legacy_landmarksxy(self):
+        """ Update landmarksXY to landmarks_xy and save alignments """
+        update_count = 0
+        for alignments in self.data.values():
+            for alignment in alignments:
+                alignment["landmarks_xy"] = alignment.pop("landmarksXY")
+                update_count += 1
+        logger.debug("Updated landmarks_xy: %s", update_count)
+        self.save()

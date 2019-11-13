@@ -7,189 +7,244 @@ https://github.com/1adrianb/face-alignment
 """
 
 from scipy.special import logsumexp
-
 import numpy as np
+import keras
+import keras.backend as K
 
-from lib.multithreading import MultiThread
+from lib.model.session import KSession
 from ._base import Detector, logger
 
 
 class Detect(Detector):
     """ S3FD detector for face recognition """
     def __init__(self, **kwargs):
-        git_model_id = 3
-        model_filename = "s3fd_v1.pb"
+        git_model_id = 11
+        model_filename = "s3fd_keras_v1.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self.name = "s3fd"
-        self.target = (640, 640)  # Uses approx 4 GB of VRAM
-        self.vram = 4096
-        self.min_vram = 1024  # Will run at this with warnings
-        self.model = None
+        self.name = "S3FD"
+        self.input_size = 640
+        self.vram = 4112
+        self.vram_warnings = 1024  # Will run at this with warnings
+        self.vram_per_batch = 208
+        self.batchsize = self.config["batch-size"]
 
-    def initialize(self, *args, **kwargs):
-        """ Create the s3fd detector """
-        try:
-            super().initialize(*args, **kwargs)
-            logger.info("Initializing S3FD Detector...")
-            card_id, vram_free, vram_total = self.get_vram_free()
-            if vram_free <= self.vram:
-                tf_ratio = 1.0
-            else:
-                tf_ratio = self.vram / vram_total
+    def init_model(self):
+        """ Initialize S3FD Model"""
+        confidence = self.config["confidence"] / 100
+        model_kwargs = dict(custom_objects=dict(O2K_Add=O2K_Add,
+                                                O2K_Slice=O2K_Slice,
+                                                O2K_Sum=O2K_Sum,
+                                                O2K_Sqrt=O2K_Sqrt,
+                                                O2K_Pow=O2K_Pow,
+                                                O2K_ConstantLayer=O2K_ConstantLayer,
+                                                O2K_Div=O2K_Div))
+        self.model = S3fd(self.model_path, model_kwargs, self.config["allow_growth"], confidence)
 
-            logger.verbose("Reserving %s%% of total VRAM per s3fd thread",
-                           round(tf_ratio * 100, 2))
+    def process_input(self, batch):
+        """ Compile the detection image(s) for prediction """
+        batch["feed"] = self.model.prepare_batch(batch["scaled_image"])
+        return batch
 
-            confidence = self.config["confidence"] / 100
-            self.model = S3fd(self.model_path, self.target, tf_ratio, card_id, confidence)
+    def predict(self, batch):
+        """ Run model to get predictions """
+        predictions = self.model.predict(batch["feed"])
+        batch["prediction"] = self.model.finalize_predictions(predictions)
+        logger.trace("filename: %s, prediction: %s", batch["filename"], batch["prediction"])
+        return batch
 
-            if not self.model.is_gpu:
-                alloc = 2048
-                logger.warning("Using CPU")
-            else:
-                logger.debug("Using GPU")
-                alloc = vram_free
-            logger.debug("Allocated for Tensorflow: %sMB", alloc)
-
-            if self.min_vram < alloc < self.vram:
-                self.batch_size = 1
-                logger.warning("You are running s3fd with %sMB VRAM. The model is optimized for "
-                               "%sMB VRAM. Detection should still run but you may get "
-                               "warnings/errors", int(alloc), self.vram)
-            else:
-                self.batch_size = int(alloc / self.vram)
-            if self.batch_size < 1:
-                raise ValueError("Insufficient VRAM available to continue "
-                                 "({}MB)".format(int(alloc)))
-
-            logger.verbose("Processing in %s threads", self.batch_size)
-
-            self.init.set()
-            logger.info("Initialized S3FD Detector.")
-        except Exception as err:
-            self.error.set()
-            raise err
-
-    def detect_faces(self, *args, **kwargs):
-        """ Detect faces in Multiple Threads """
-        super().detect_faces(*args, **kwargs)
-        workers = MultiThread(target=self.detect_thread, thread_count=self.batch_size)
-        workers.start()
-        workers.join()
-        sentinel = self.queues["in"].get()
-        self.queues["out"].put(sentinel)
-        logger.debug("Detecting Faces complete")
-
-    def detect_thread(self):
-        """ Detect faces in rgb image """
-        logger.debug("Launching Detect")
-        while True:
-            item = self.get_item()
-            if item == "EOF":
-                break
-            logger.trace("Detecting faces: '%s'", item["filename"])
-            detect_image, scale = self.compile_detection_image(item["image"], is_square=True)
-            for angle in self.rotation:
-                current_image, rotmat = self.rotate_image(detect_image, angle)
-                faces = self.model.detect_face(current_image)
-                if angle != 0 and faces.any():
-                    logger.verbose("found face(s) by rotating image %s degrees", angle)
-                if faces.any():
-                    break
-
-            detected_faces = self.process_output(faces, rotmat, scale)
-            item["detected_faces"] = detected_faces
-            self.finalize(item)
-
-        logger.debug("Thread Completed Detect")
-
-    def process_output(self, faces, rotation_matrix, scale):
+    def process_output(self, batch):
         """ Compile found faces for output """
-        logger.trace("Processing Output: (faces: %s, rotation_matrix: %s)", faces, rotation_matrix)
-        faces = [self.to_bounding_box_dict(face[0], face[1], face[2], face[3]) for face in faces]
-        if isinstance(rotation_matrix, np.ndarray):
-            faces = [self.rotate_rect(face, rotation_matrix)
-                     for face in faces]
-        detected = [self.to_bounding_box_dict(face["left"] / scale, face["top"] / scale,
-                                              face["right"] / scale, face["bottom"] / scale)
-                    for face in faces]
-        logger.trace("Processed Output: %s", detected)
-        return detected
+        return batch
 
 
-class S3fd():
-    """ Tensorflow Network """
-    def __init__(self, model_path, target_size, vram_ratio, card_id, confidence):
-        logger.debug("Initializing: %s: (model_path: '%s', target_size: %s, vram_ratio: %s, "
-                     "card_id: %s)",
-                     self.__class__.__name__, model_path, target_size, vram_ratio, card_id)
-        # Must import tensorflow inside the spawned process for Windows machines
-        import tensorflow as tf
-        self.is_gpu = False
-        self.tf = tf  # pylint: disable=invalid-name
-        self.model_path = model_path
+################################################################################
+# CUSTOM KERAS LAYERS
+# generated by onnx2keras
+################################################################################
+class O2K_ElementwiseLayer(keras.engine.Layer):
+    def __init__(self, **kwargs):
+        super(O2K_ElementwiseLayer, self).__init__(**kwargs)
+
+    def call(self, *args):
+        raise NotImplementedError()
+
+    def compute_output_shape(self, input_shape):
+        # TODO: do this nicer
+        ldims = len(input_shape[0])
+        rdims = len(input_shape[1])
+        if ldims > rdims:
+            return input_shape[0]
+        if rdims > ldims:
+            return input_shape[1]
+        lprod = np.prod(list(filter(bool, input_shape[0])))
+        rprod = np.prod(list(filter(bool, input_shape[1])))
+        return input_shape[0 if lprod > rprod else 1]
+
+
+class O2K_Add(O2K_ElementwiseLayer):
+    def call(self, x, *args):
+        return x[0] + x[1]
+
+
+class O2K_Slice(keras.engine.Layer):
+    def __init__(self, starts, ends, axes=None, steps=None, **kwargs):
+        self._starts = starts
+        self._ends = ends
+        self._axes = axes
+        self._steps = steps
+        super(O2K_Slice, self).__init__(**kwargs)
+
+    def get_config(self):
+        config = super(O2K_Slice, self).get_config()
+        config.update({
+            'starts': self._starts, 'ends': self._ends,
+            'axes': self._axes, 'steps': self._steps
+        })
+        return config
+
+    def get_slices(self, ndims):
+        axes = self._axes
+        steps = self._steps
+        if axes is None:
+            axes = tuple(range(ndims))
+        if steps is None:
+            steps = (1,) * len(axes)
+        assert len(axes) == len(steps) == len(self._starts) == len(self._ends)
+        return list(zip(axes, self._starts, self._ends, steps))
+
+    def compute_output_shape(self, input_shape):
+        input_shape = list(input_shape)
+        for ax, start, end, steps in self.get_slices(len(input_shape)):
+            size = input_shape[ax]
+            if ax == 0:
+                raise AttributeError("Can not slice batch axis.")
+            if size is None:
+                if start < 0 or end < 0:
+                    raise AttributeError("Negative slices not supported on symbolic axes")
+                logger.warning("Slicing symbolic axis might lead to problems.")
+                input_shape[ax] = (end - start) // steps
+                continue
+            if start < 0:
+                start = size - start
+            if end < 0:
+                end = size - end
+            input_shape[ax] = (min(size, end) - start) // steps
+        return tuple(input_shape)
+
+    def call(self, x, *args):
+        ax_map = dict((x[0], slice(*x[1:])) for x in self.get_slices(K.ndim(x)))
+        shape = K.int_shape(x)
+        slices = [(ax_map[a] if a in ax_map else slice(None)) for a in range(len(shape))]
+        x = x[tuple(slices)]
+        return x
+
+
+class O2K_ReduceLayer(keras.engine.Layer):
+    def __init__(self, axes=None, keepdims=True, **kwargs):
+        self._axes = [axes] if isinstance(axes, int) else axes
+        self._keepdims = bool(keepdims)
+        super(O2K_ReduceLayer, self).__init__(**kwargs)
+
+    def get_config(self):
+        config = super(O2K_ReduceLayer, self).get_config()
+        config.update({
+            'axes': self._axes,
+            'keepdims': self._keepdims
+        })
+        return config
+
+    def compute_output_shape(self, input_shape):
+        if self._axes is None:
+            return (1,)*len(input_shape) if self._keepdims else tuple()
+        ret = list(input_shape)
+        for i in sorted(self._axes, reverse=True):
+            if self._keepdims:
+                ret[i] = 1
+            else:
+                ret.pop(i)
+        return tuple(ret)
+
+    def call(self, x, *args):
+        raise NotImplementedError()
+
+
+class O2K_Sum(O2K_ReduceLayer):
+    def call(self, x, *args):
+        return K.sum(x, self._axes, self._keepdims)
+
+
+class O2K_Sqrt(keras.engine.Layer):
+    def call(self, x, *args):
+        return K.sqrt(x)
+
+
+class O2K_Pow(keras.engine.Layer):
+    def call(self, x, *args):
+        return K.pow(*x)
+
+
+class O2K_ConstantLayer(keras.engine.Layer):
+    def __init__(self, constant_obj, dtype, **kwargs):
+        self._dtype = np.dtype(dtype).name
+        self._constant = np.array(constant_obj, dtype=self._dtype)
+        super(O2K_ConstantLayer, self).__init__(**kwargs)
+
+    def call(self, *args):
+        # pylint:disable=arguments-differ
+        data = K.constant(self._constant, dtype=self._dtype)
+        return data
+
+    def compute_output_shape(self, input_shape):
+        return self._constant.shape
+
+    def get_config(self):
+        config = super(O2K_ConstantLayer, self).get_config()
+        config.update({
+            'constant_obj': self._constant,
+            'dtype': self._dtype
+        })
+        return config
+
+
+class O2K_Div(O2K_ElementwiseLayer):
+    # pylint:disable=arguments-differ
+    def call(self, x, *args):
+        return x[0] / x[1]
+
+
+class S3fd(KSession):
+    """ Keras Network """
+    def __init__(self, model_path, model_kwargs, allow_growth, confidence):
+        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s)",
+                     self.__class__.__name__, model_path, allow_growth)
+        super().__init__("S3FD", model_path, model_kwargs=model_kwargs, allow_growth=allow_growth)
+        self.load_model()
         self.confidence = confidence
-        self.graph = self.load_graph()
-        self.input = self.graph.get_tensor_by_name("s3fd/input_1:0")
-        self.output = self.get_outputs()
-        self.session = self.set_session(target_size, vram_ratio, card_id)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def load_graph(self):
-        """ Load the tensorflow Model and weights """
-        # pylint: disable=not-context-manager
-        logger.verbose("Initializing S3FD Network model...")
-        with self.tf.gfile.GFile(self.model_path, "rb") as gfile:
-            graph_def = self.tf.GraphDef()
-            graph_def.ParseFromString(gfile.read())
-        fa_graph = self.tf.Graph()
-        with fa_graph.as_default():
-            self.tf.import_graph_def(graph_def, name="s3fd")
-        return fa_graph
+    @staticmethod
+    def prepare_batch(batch):
+        """ Prepare a batch for prediction """
+        batch = batch - np.array([104.0, 117.0, 123.0])
+        batch = batch.transpose(0, 3, 1, 2)
+        return batch
 
-    def get_outputs(self):
-        """ Return the output tensors """
-        tensor_names = ["concat_31", "transpose_72", "transpose_75", "transpose_78",
-                        "transpose_81", "transpose_84", "transpose_87", "transpose_90",
-                        "transpose_93", "transpose_96", "transpose_99", "transpose_102"]
-        logger.debug("tensor_names: %s", tensor_names)
-        tensors = [self.graph.get_tensor_by_name("s3fd/{}:0".format(t_name))
-                   for t_name in tensor_names]
-        logger.debug("tensors: %s", tensors)
-        return tensors
-
-    def set_session(self, target_size, vram_ratio, card_id):
-        """ Set the TF Session and initialize """
-        # pylint: disable=not-context-manager, no-member
-        placeholder = np.zeros((1, 3, target_size[0], target_size[1]))
-        config = self.tf.ConfigProto()
-        if card_id != -1:
-            config.gpu_options.visible_device_list = str(card_id)
-        if vram_ratio != 1.0:
-            config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
-
-        with self.graph.as_default():
-            session = self.tf.Session(config=config)
-            self.is_gpu = any("gpu" in str(device).lower() for device in session.list_devices())
-            session.run(self.output, feed_dict={self.input: placeholder})
-        return session
-
-    def detect_face(self, feed_item):
+    def finalize_predictions(self, bboxlists):
         """ Detect faces """
-        feed_item = feed_item - np.array([104.0, 117.0, 123.0])
-        feed_item = feed_item.transpose(2, 0, 1)
-        feed_item = feed_item.reshape((1,) + feed_item.shape).astype('float32')
-        bboxlist = self.session.run(self.output, feed_dict={self.input: feed_item})
-        bboxlist = self.post_process(bboxlist)
-
-        keep = self.nms(bboxlist, 0.3)
-        bboxlist = bboxlist[keep, :]
-        bboxlist = [x for x in bboxlist if x[-1] >= self.confidence]
-
-        return np.array(bboxlist)
+        ret = list()
+        for i in range(bboxlists[0].shape[0]):
+            bboxlist = [x[i:i+1, ...] for x in bboxlists]
+            bboxlist = self.post_process(bboxlist)
+            keep = self.nms(bboxlist, 0.3)
+            bboxlist = bboxlist[keep, :]
+            bboxlist = [x for x in bboxlist if x[-1] >= self.confidence]
+            ret.append(np.array(bboxlist))
+        return ret
 
     def post_process(self, bboxlist):
-        """ Perform post processing on output """
+        """ Perform post processing on output
+            TODO: do this on the batch.
+        """
         retval = list()
         for i in range(len(bboxlist) // 2):
             bboxlist[i * 2] = self.softmax(bboxlist[i * 2], axis=1)
@@ -238,6 +293,7 @@ class S3fd():
 
     @staticmethod
     def nms(dets, thresh):
+        # pylint:disable=too-many-locals
         """ Perform Non-Maximum Suppression """
         keep = list()
         if len(dets) == 0:

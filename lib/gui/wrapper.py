@@ -47,8 +47,6 @@ class ProcessWrapper():
         category, command = self.tk_vars["action"].get().split(",")
 
         if self.tk_vars["runningtask"].get():
-            if self.task.command == "train":
-                self.tk_vars["istraining"].set(False)
             self.task.terminate()
         else:
             self.command = command
@@ -126,6 +124,8 @@ class ProcessWrapper():
         """ Finalize wrapper when process has exited """
         logger.debug("Terminating Faceswap processes")
         self.tk_vars["runningtask"].set(False)
+        if self.task.command == "train":
+            self.tk_vars["istraining"].set(False)
         self.statusbar.progress_stop()
         self.statusbar.status_message.set(message)
         self.tk_vars["display"].set(None)
@@ -141,16 +141,17 @@ class FaceswapControl():
     def __init__(self, wrapper):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.wrapper = wrapper
-        self.statusbar = get_config().statusbar
+        self.config = get_config()
+        self.statusbar = self.config.statusbar
         self.command = None
         self.args = None
         self.process = None
         self.thread = None  # Thread for LongRunningTask termination
         self.train_stats = {"iterations": 0, "timestamp": None}
         self.consoleregex = {
-            "loss": re.compile(r"([a-zA-Z_]+):.*?(\d+\.\d+)"),
+            "loss": re.compile(r"[\W]+(\d+)?[\W]+([a-zA-Z\s]*)[\W]+?(\d+\.\d+)"),
             "tqdm": re.compile(r"(?P<dsc>.*?)(?P<pct>\d+%).*?(?P<itm>\S+/\S+)\W\["
-                               r"(?P<tme>\d+:\d+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
+                               r"(?P<tme>[\d+:]+<.*),\W(?P<rte>.*)[a-zA-Z/]*\]"),
             "ffmpeg": re.compile(r"([a-zA-Z]+)=\s*(-?[\d|N/A]\S+)")}
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -187,9 +188,19 @@ class FaceswapControl():
                         (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
                         (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
                     continue
-                if self.command == "train" and "[saved models]" in output.strip().lower():
-                    logger.debug("Trigger update preview")
+                if (self.command == "train" and
+                        self.wrapper.tk_vars["istraining"].get() and
+                        "[saved models]" in output.strip().lower()):
+                    logger.debug("Trigger GUI Training update")
+                    logger.trace("tk_vars: %s", {itm: var.get()
+                                                 for itm, var in self.wrapper.tk_vars.items()})
+                    if not self.config.session.initialized:
+                        # Don't initialize session until after the first save as state
+                        # file must exist first
+                        logger.debug("Initializing curret training session")
+                        self.config.session.initialize_session(is_training=True)
                     self.wrapper.tk_vars["updatepreview"].set(True)
+                    self.wrapper.tk_vars["refreshgraph"].set(True)
                 print(output.strip())
         returncode = self.process.poll()
         message = self.set_final_status(returncode)
@@ -241,13 +252,12 @@ class FaceswapControl():
             return False
 
         loss = self.consoleregex["loss"].findall(string)
-        if len(loss) < 2:
+        if len(loss) != 2 or not all(len(itm) == 3 for itm in loss):
             logger.trace("Not loss message. Returning False")
             return False
 
-        message = ""
-        for item in loss:
-            message += "{}: {}  ".format(item[0], item[1])
+        message = "Total Iterations: {} | ".format(int(loss[0][0]))
+        message += "  ".join(["{}: {}".format(itm[1], itm[2]) for itm in loss])
         if not message:
             logger.trace("Error creating loss message. Returning False")
             return False
@@ -255,23 +265,16 @@ class FaceswapControl():
         iterations = self.train_stats["iterations"]
 
         if iterations == 0:
-            # Initialize session stats and set initial timestamp
+            # Set initial timestamp
             self.train_stats["timestamp"] = time()
 
-        if not get_config().session.initialized and iterations > 0:
-            # Don't initialize session until after the first iteration as state
-            # file must exist first
-            get_config().session.initialize_session(is_training=True)
-            self.wrapper.tk_vars["refreshgraph"].set(True)
-
         iterations += 1
-        if iterations % 100 == 0:
-            self.wrapper.tk_vars["refreshgraph"].set(True)
         self.train_stats["iterations"] = iterations
 
         elapsed = self.calc_elapsed()
-        message = "Elapsed: {}  Iteration: {}  {}".format(elapsed,
-                                                          self.train_stats["iterations"], message)
+        message = "Elapsed: {} | Session Iterations: {}  {}".format(
+            elapsed,
+            self.train_stats["iterations"], message)
         self.statusbar.progress_update(message, 0, False)
         logger.trace("Succesfully captured loss: %s", message)
         return True
@@ -341,16 +344,17 @@ class FaceswapControl():
     def terminate(self):
         """ Terminate the running process in a LongRunningTask so we can still
             output to console """
-        root = get_config().root
         if self.thread is None:
             logger.debug("Terminating wrapper in LongRunningTask")
             self.thread = LongRunningTask(target=self.terminate_in_thread,
                                           args=(self.command, self.process))
+            if self.command == "train":
+                self.wrapper.tk_vars["istraining"].set(False)
             self.thread.start()
-            root.after(1000, self.terminate)
+            self.config.root.after(1000, self.terminate)
         elif not self.thread.complete.is_set():
             logger.debug("Not finished terminating")
-            root.after(1000, self.terminate)
+            self.config.root.after(1000, self.terminate)
         else:
             logger.debug("Termination Complete. Cleaning up")
             _ = self.thread.get_result()  # Terminate the LongRunningTask object
@@ -360,7 +364,7 @@ class FaceswapControl():
         """ Terminate the subprocess """
         logger.debug("Terminating wrapper")
         if command == "train":
-            timeout = get_config().tk_vars["traintimeout"].get()
+            timeout = self.config.tk_vars["traintimeout"].get()
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
             now = time()

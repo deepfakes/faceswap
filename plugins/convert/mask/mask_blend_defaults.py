@@ -70,6 +70,7 @@ _DEFAULTS = {
         "min_max": (0.1, 25.0),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "passes": {
@@ -83,6 +84,7 @@ _DEFAULTS = {
         "min_max": (1, 8),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
     "erosion": {
@@ -95,6 +97,7 @@ _DEFAULTS = {
         "min_max": (-100.0, 100.0),
         "choices": [],
         "gui_radio": False,
+        "group": "settings",
         "fixed": True,
     },
 }

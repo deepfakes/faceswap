@@ -2,22 +2,16 @@
 """ Logging Setup """
 import collections
 import logging
-from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
+from logging.handlers import RotatingFileHandler
 import os
-import re
 import sys
 import traceback
 
 from datetime import datetime
-from time import sleep
 from tqdm import tqdm
 
-from lib.queue_manager import queue_manager
 
-LOG_QUEUE = queue_manager._log_queue  # pylint: disable=protected-access
-
-
-class MultiProcessingLogger(logging.Logger):
+class FaceswapLogger(logging.Logger):
     """ Create custom logger  with custom levels """
     def __init__(self, name):
         for new_level in (("VERBOSE", 15), ("TRACE", 5)):
@@ -44,16 +38,31 @@ class MultiProcessingLogger(logging.Logger):
 
 
 class FaceswapFormatter(logging.Formatter):
-    """ Override formatter to strip newlines and multiple spaces from logger
-        Messages that begin with "R|" should be handled as is
-    """
+    """ Override formatter to strip newlines the final message """
+
     def format(self, record):
-        if record.msg.startswith("R|"):
-            record.msg = record.msg[2:]
-            record.strip_spaces = False
-        elif record.strip_spaces:
-            record.msg = re.sub(" +", " ", record.msg.replace("\n", "\\n").replace("\r", "\\r"))
-        return super().format(record)
+        record.message = record.getMessage()
+        # strip newlines
+        if "\n" in record.message or "\r" in record.message:
+            record.message = record.message.replace("\n", "\\n").replace("\r", "\\r")
+
+        if self.usesTime():
+            record.asctime = self.formatTime(record, self.datefmt)
+        msg = self.formatMessage(record)
+        if record.exc_info:
+            # Cache the traceback text to avoid converting it multiple times
+            # (it's constant anyway)
+            if not record.exc_text:
+                record.exc_text = self.formatException(record.exc_info)
+        if record.exc_text:
+            if msg[-1:] != "\n":
+                msg = msg + "\n"
+            msg = msg + record.exc_text
+        if record.stack_info:
+            if msg[-1:] != "\n":
+                msg = msg + "\n"
+            msg = msg + self.formatStack(record.stack_info)
+        return msg
 
 
 class RollingBuffer(collections.deque):
@@ -71,31 +80,27 @@ class TqdmHandler(logging.StreamHandler):
         tqdm.write(msg)
 
 
-def set_root_logger(loglevel=logging.INFO, queue=LOG_QUEUE):
-    """ Setup the root logger.
-        Loaded in main process and into any spawned processes
-        Automatically added in multithreading.py"""
+def set_root_logger(loglevel=logging.INFO):
+    """ Setup the root logger. """
     rootlogger = logging.getLogger()
-    q_handler = QueueHandler(queue)
-    rootlogger.addHandler(q_handler)
     rootlogger.setLevel(loglevel)
+    return rootlogger
 
 
 def log_setup(loglevel, logfile, command, is_gui=False):
     """ initial log set up. """
     numeric_loglevel = get_loglevel(loglevel)
     root_loglevel = min(logging.DEBUG, numeric_loglevel)
-    set_root_logger(loglevel=root_loglevel)
+    rootlogger = set_root_logger(loglevel=root_loglevel)
     log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
                                    "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
     f_handler = file_handler(numeric_loglevel, logfile, log_format, command)
     s_handler = stream_handler(numeric_loglevel, is_gui)
     c_handler = crash_handler(log_format)
-
-    q_listener = QueueListener(LOG_QUEUE, f_handler, s_handler, c_handler,
-                               respect_handler_level=True)
-    q_listener.start()
+    rootlogger.addHandler(f_handler)
+    rootlogger.addHandler(s_handler)
+    rootlogger.addHandler(c_handler)
     logging.info("Log level set to: %s", loglevel.upper())
 
 
@@ -136,7 +141,7 @@ def stream_handler(loglevel, is_gui):
 
 
 def crash_handler(log_format):
-    """ Add a handler that sores the last 50 debug lines to 'debug_buffer'
+    """ Add a handler that sores the last 100 debug lines to 'debug_buffer'
         for use in crash reports """
     log_crash = logging.StreamHandler(debug_buffer)
     log_crash.setFormatter(log_format)
@@ -156,12 +161,8 @@ def get_loglevel(loglevel):
 def crash_log():
     """ Write debug_buffer to a crash log on crash """
     from lib.sysinfo import sysinfo
-    path = os.getcwd()
+    path = os.path.dirname(os.path.realpath(sys.argv[0]))
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
-
-    # Wait until all log items have been processed
-    while not LOG_QUEUE.empty():
-        sleep(1)
 
     freeze_log = list(debug_buffer)
     with open(filename, "w") as outfile:
@@ -184,7 +185,7 @@ def faceswap_logrecord(*args, **kwargs):
 logging.setLogRecordFactory(faceswap_logrecord)
 
 # Set logger class to custom logger
-logging.setLoggerClass(MultiProcessingLogger)
+logging.setLoggerClass(FaceswapLogger)
 
-# Stores the last 50 debug messages
-debug_buffer = RollingBuffer(maxlen=50)  # pylint: disable=invalid-name
+# Stores the last 100 debug messages
+debug_buffer = RollingBuffer(maxlen=100)  # pylint: disable=invalid-name

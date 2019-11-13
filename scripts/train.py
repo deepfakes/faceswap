@@ -12,10 +12,11 @@ import cv2
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 
+from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.queue_manager import queue_manager
-from lib.utils import cv2_read_img, get_folder, get_image_paths, set_system_verbosity
+from lib.queue_manager import queue_manager  # noqa pylint:disable=unused-import
+from lib.utils import get_folder, get_image_paths, set_system_verbosity, deprecation_warning
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -37,7 +38,7 @@ class Train():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_timelapse(self):
-        """ Set timelapse paths if requested """
+        """ Set time-lapse paths if requested """
         if (not self.args.timelapse_input_a and
                 not self.args.timelapse_input_b and
                 not self.args.timelapse_output):
@@ -64,7 +65,7 @@ class Train():
         return kwargs
 
     def get_images(self):
-        """ Check the image dirs exist, contain images and return the image
+        """ Check the image folders exist, contain images and return the image
         objects """
         logger.debug("Getting image paths")
         images = dict()
@@ -89,6 +90,16 @@ class Train():
         """ Call the training process object """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self.args.model_dir)
+
+        # TODO Move these args to config and remove these deprecation warnings
+        if hasattr(self.args, "warp_to_landmarks") and self.args.warp_to_landmarks:
+            deprecation_warning("`-wl`, ``--warp-to-landmarks``",
+                                additional_info="This option will be available within training "
+                                                "config settings (/config/train.ini).")
+        if hasattr(self.args, "no_augment_color") and self.args.no_flip:
+            deprecation_warning("`-nac`, ``--no-augment-color``",
+                                additional_info="This option will be available within training "
+                                                "config settings (/config/train.ini).")
         set_system_verbosity(self.args.loglevel)
         thread = self.start_thread()
         # queue_manager.debug_monitor(1)
@@ -134,7 +145,6 @@ class Train():
 
             if self.args.allow_growth:
                 self.set_tf_allow_growth()
-
             model = self.load_model()
             trainer = self.load_trainer(model)
             self.run_training_cycle(model, trainer)
@@ -157,7 +167,7 @@ class Train():
         augment_color = not self.args.no_augment_color
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
-            self.args.gpus,
+            gpus=self.args.gpus,
             configfile=configfile,
             snapshot_interval=self.args.snapshot_interval,
             no_logs=self.args.no_logs,
@@ -169,6 +179,7 @@ class Train():
             preview_scale=self.args.preview_scale,
             pingpong=self.args.pingpong,
             memory_saving_gradients=self.args.memory_saving_gradients,
+            optimizer_savings=self.args.optimizer_savings,
             predict=False)
         logger.debug("Loaded Model")
         return model
@@ -176,20 +187,20 @@ class Train():
     @property
     def image_size(self):
         """ Get the training set image size for storing in model data """
-        image = cv2_read_img(self.images["a"][0], raise_error=True)
+        image = read_image(self.images["a"][0], raise_error=True)
         size = image.shape[0]
         logger.debug("Training image size: %s", size)
         return size
 
     @property
     def alignments_paths(self):
-        """ Set the alignments path to input dirs if not provided """
+        """ Set the alignments path to input folder if not provided """
         alignments_paths = dict()
         for side in ("a", "b"):
             alignments_path = getattr(self.args, "alignments_path_{}".format(side))
             if not alignments_path:
                 image_path = getattr(self.args, "input_{}".format(side))
-                alignments_path = os.path.join(image_path, "alignments.json")
+                alignments_path = os.path.join(image_path, "alignments.fsa")
             alignments_paths[side] = alignments_path
         logger.debug("Alignments paths: %s", alignments_paths)
         return alignments_paths
@@ -242,15 +253,15 @@ class Train():
         """ Monitor the console, and generate + monitor preview if requested """
         is_preview = self.args.preview
         logger.debug("Launching Monitor")
-        logger.info("R|===================================================")
-        logger.info("R|  Starting")
+        logger.info("===================================================")
+        logger.info("  Starting")
         if is_preview:
-            logger.info("R|  Using live preview")
-        logger.info("R|  Press '%s' to save and quit",
+            logger.info("  Using live preview")
+        logger.info("  Press '%s' to save and quit",
                     "Terminate" if self.args.redirect_gui else "ENTER")
         if not self.args.redirect_gui:
-            logger.info("R|  Press 'S' to save model weights immediately")
-        logger.info("R|===================================================")
+            logger.info("  Press 'S' to save model weights immediately")
+        logger.info("===================================================")
 
         keypress = KBHit(is_gui=self.args.redirect_gui)
         err = False
@@ -300,7 +311,7 @@ class Train():
 
     @staticmethod
     def keypress_monitor(keypress_queue):
-        """ Monitor stdin for keypress """
+        """ Monitor stdin for key press """
         while True:
             keypress_queue.put(sys.stdin.read(1))
 

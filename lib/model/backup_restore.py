@@ -5,9 +5,9 @@
 import logging
 import os
 from datetime import datetime
-from shutil import copyfile, copytree
+from shutil import copyfile, copytree, rmtree
 
-from lib import Serializer
+from lib.serializer import get_serializer
 from lib.utils import get_folder
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -58,7 +58,13 @@ class Backup():
     def snapshot_models(self, iterations):
         """ Take a snapshot of the model at current state and back up """
         logger.info("Saving snapshot")
-        dst = str(get_folder("{}_snapshot_{}_iters".format(self.model_dir, iterations)))
+        snapshot_dir = "{}_snapshot_{}_iters".format(self.model_dir, iterations)
+
+        if os.path.isdir(snapshot_dir):
+            logger.debug("Removing previously existing snapshot folder: '%s'", snapshot_dir)
+            rmtree(snapshot_dir)
+
+        dst = str(get_folder(snapshot_dir))
         for filename in os.listdir(self.model_dir):
             if not self.check_valid(filename, for_restore=False):
                 logger.debug("Not snapshotting file: '%s'", filename)
@@ -125,13 +131,12 @@ class Backup():
 
     def get_session_names(self):
         """ Get the existing session names from state file """
-        serializer = Serializer.get_serializer("json")
+        serializer = get_serializer("json")
         state_file = os.path.join(self.model_dir,
-                                  "{}_state.{}".format(self.model_name, serializer.ext))
-        with open(state_file, "rb") as inp:
-            state = serializer.unmarshal(inp.read().decode("utf-8"))
-            session_names = ["session_{}".format(key)
-                             for key in state["sessions"].keys()]
+                                  "{}_state.{}".format(self.model_name, serializer.file_extension))
+        state = serializer.load(state_file)
+        session_names = ["session_{}".format(key)
+                         for key in state["sessions"].keys()]
         logger.debug("Session to restore: %s", session_names)
         return session_names
 

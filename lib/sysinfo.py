@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Obtain information about the running system, environment and gpu """
 
+import json
 import locale
 import os
 import platform
@@ -19,7 +20,8 @@ class SysInfo():
 
     def __init__(self):
         gpu_stats = GPUStats(log=False)
-
+        self.state_file = State().state_file
+        self.configs = Configs().configs
         self.platform = platform.platform()
         self.system = platform.system()
         self.machine = platform.machine()
@@ -342,10 +344,12 @@ class SysInfo():
             retval += ("{0: <20} {1}\n".format(key + ":", sys_info[key]))
         retval += "\n=============== Pip Packages ===============\n"
         retval += self.installed_pip
-        if not self.is_conda:
-            return retval
-        retval += "\n\n============== Conda Packages ==============\n"
-        retval += self.installed_conda
+        if self.is_conda:
+            retval += "\n\n============== Conda Packages ==============\n"
+            retval += self.installed_conda
+        retval += self.state_file
+        retval += "\n\n================= Configs =================="
+        retval += self.configs
         return retval
 
     def format_ram(self):
@@ -365,6 +369,99 @@ def get_sysinfo():
     except Exception as err:  # pylint: disable=broad-except
         retval = "Exception occured trying to retrieve sysinfo: {}".format(err)
     return retval
+
+
+class Configs():
+    """ Parses the config files in /config and outputs the information """
+
+    def __init__(self):
+        self.config_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), "config")
+        self.configs = self.get_configs()
+
+    def get_configs(self):
+        """ Return the configs from the config dir """
+        config_files = [os.path.join(self.config_dir, cfile)
+                        for cfile in os.listdir(self.config_dir)
+                        if os.path.basename(cfile) == ".faceswap"
+                        or os.path.splitext(cfile)[1] == ".ini"]
+        return self.parse_configs(config_files)
+
+    def parse_configs(self, config_files):
+        """ Parse the config files into the output format """
+        formatted = ""
+        for cfile in config_files:
+            fname = os.path.basename(cfile)
+            ext = os.path.splitext(cfile)[1]
+            formatted += "\n--------- {} ---------\n".format(fname)
+            if ext == ".ini":
+                formatted += self.parse_ini(cfile)
+            elif fname == ".faceswap":
+                formatted += self.parse_json(cfile)
+        return formatted
+
+    def parse_ini(self, config_file):
+        """ Parse an INI file converting it to a dict """
+        formatted = ""
+        with open(config_file, "r") as cfile:
+            for line in cfile.readlines():
+                line = line.strip()
+                if line.startswith("#") or not line:
+                    continue
+                item = line.split("=")
+                if len(item) == 1:
+                    formatted += "\n{}\n".format(item[0].strip())
+                else:
+                    formatted += self.format_text(item[0], item[1])
+        return formatted
+
+    def parse_json(self, config_file):
+        """ Parse a Json File converting it to a dict """
+        formatted = ""
+        with open(config_file, "r") as cfile:
+            conf_dict = json.load(cfile)
+            for key in sorted(conf_dict.keys()):
+                formatted += self.format_text(key, conf_dict[key])
+        return formatted
+
+    @staticmethod
+    def format_text(key, val):
+        """Format the text for output """
+        return "{0: <25} {1}\n".format(key.strip() + ":", val.strip())
+
+
+class State():
+    """ State file for training command """
+    def __init__(self):
+        self.model_dir = self.get_arg("-m", "--model-dir")
+        self.trainer = self.get_arg("-t", "--trainer")
+        self.state_file = self.get_state_file()
+
+    @property
+    def is_training(self):
+        """ Return whether this has been called during training """
+        return len(sys.argv) > 1 and sys.argv[1].lower() == "train"
+
+    @staticmethod
+    def get_arg(*args):
+        """ Return the value for a given option from sys.argv. Returns None if not found """
+        cmd = sys.argv
+        for opt in args:
+            if opt in cmd:
+                return cmd[cmd.index(opt) + 1]
+        return None
+
+    def get_state_file(self):
+        """ Return the state file in a string """
+        if not self.is_training or self.model_dir is None or self.trainer is None:
+            return ""
+        fname = os.path.join(self.model_dir, "{}_state.json".format(self.trainer))
+        if not os.path.isfile(fname):
+            return ""
+
+        retval = "\n\n=============== State File =================\n"
+        with open(fname, "r") as sfile:
+            retval += sfile.read()
+        return retval
 
 
 sysinfo = get_sysinfo()  # pylint: disable=invalid-name

@@ -35,60 +35,58 @@ class Align(Aligner):
     def __init__(self, **kwargs):
         git_model_id = 1
         model_filename = "cnn-facial-landmark_v1.pb"
-        super().__init__(git_model_id=git_model_id,
-                         model_filename=model_filename,
-                         colorspace="RGB",
-                         input_size=128,
-                         **kwargs)
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+
+        self.name = "cv2-DNN Aligner"
+        self.input_size = 128
+        self.colorformat = "RGB"
         self.vram = 0  # Doesn't use GPU
-        self.model = None
+        self.vram_per_batch = 0
+        self.batchsize = 1
 
-    def initialize(self, *args, **kwargs):
-        """ Initialization tasks to run prior to alignments """
-        try:
-            super().initialize(*args, **kwargs)
-            logger.info("Initializing cv2 DNN Aligner...")
-            logger.debug("cv2 DNN initialize: (args: %s kwargs: %s)", args, kwargs)
-            logger.verbose("Using CPU for alignment")
+    def init_model(self):
+        """ Initialize CV2 DNN Detector Model"""
+        self.model = cv2.dnn.readNetFromTensorflow(self.model_path)  # pylint: disable=no-member
+        self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
 
-            self.model = cv2.dnn.readNetFromTensorflow(  # pylint: disable=no-member
-                self.model_path)
-            self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
-            self.init.set()
-            logger.info("Initialized cv2 DNN Aligner.")
-        except Exception as err:
-            self.error.set()
-            raise err
+    def process_input(self, batch):
+        """ Compile the detected faces for prediction """
+        faces, batch["roi"] = self.align_image(batch["detected_faces"])
+        faces = self._normalize_faces(faces)
+        batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2))
+        return batch
 
-    def align_image(self, detected_face, image):
+    def align_image(self, detected_faces):
         """ Align the incoming image for prediction """
         logger.trace("Aligning image around center")
+        rois = []
+        faces = []
+        for face in detected_faces:
+            box = (face.left,
+                   face.top,
+                   face.right,
+                   face.bottom)
+            diff_height_width = face.h - face.w
+            offset_y = int(abs(diff_height_width / 2))
+            box_moved = self.move_box(box, [0, offset_y])
 
-        box = (detected_face["left"],
-               detected_face["top"],
-               detected_face["right"],
-               detected_face["bottom"])
-        height = detected_face["bottom"] - detected_face["top"]
-        width = detected_face["right"] - detected_face["left"]
-        diff_height_width = height - width
-        offset_y = int(abs(diff_height_width / 2))
-        box_moved = self.move_box(box, [0, offset_y])
+            # Make box square.
+            roi = self.get_square_box(box_moved)
+            # Pad the image if face is outside of boundaries
+            image = self.pad_image(roi, face.image)
+            face = image[roi[1]: roi[3], roi[0]: roi[2]]
 
-        # Make box square.
-        roi = self.get_square_box(box_moved)
-        # Pad the image if face is outside of boundaries
-        image = self.pad_image(roi, image)
-        face = image[roi[1]: roi[3], roi[0]: roi[2]]
+            if face.shape[0] < self.input_size:
+                interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
+            else:
+                interpolation = cv2.INTER_AREA  # pylint:disable=no-member
 
-        if face.shape[0] < self.input_size:
-            interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
-        else:
-            interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
-        face = cv2.resize(face,  # pylint:disable=no-member
-                          dsize=(int(self.input_size), int(self.input_size)),
-                          interpolation=interpolation)
-        return dict(image=face, roi=roi)
+            face = cv2.resize(face,  # pylint:disable=no-member
+                              dsize=(int(self.input_size), int(self.input_size)),
+                              interpolation=interpolation)
+            faces.append(face)
+            rois.append(roi)
+        return faces, rois
 
     @staticmethod
     def move_box(box, offset):
@@ -142,7 +140,7 @@ class Align(Aligner):
 
     @staticmethod
     def pad_image(box, image):
-        """Pad image if facebox falls outside of boundaries """
+        """Pad image if face-box falls outside of boundaries """
         width, height = image.shape[:2]
         pad_l = 1 - box[0] if box[0] < 0 else 0
         pad_t = 1 - box[1] if box[1] < 0 else 0
@@ -159,24 +157,26 @@ class Align(Aligner):
         logger.trace("Padded shape: %s", retval.shape)
         return retval
 
-    def predict_landmarks(self, feed_dict):
+    def predict(self, batch):
         """ Predict the 68 point landmarks """
         logger.trace("Predicting Landmarks")
-        image = np.expand_dims(np.transpose(feed_dict["image"], (2, 0, 1)), 0).astype("float32")
-        self.model.setInput(image)
-        prediction = self.model.forward()
-        pts_img = self.get_pts_from_predict(prediction, feed_dict["roi"])
-        return pts_img
+        self.model.setInput(batch["feed"])
+        batch["prediction"] = self.model.forward()
+        return batch
+
+    def process_output(self, batch):
+        """ Process the output from the model """
+        self.get_pts_from_predict(batch)
+        return batch
 
     @staticmethod
-    def get_pts_from_predict(prediction, roi):
+    def get_pts_from_predict(batch):
         """ Get points from predictor """
-        logger.trace("Obtain points from prediction")
-        points = np.array(prediction).flatten()
-        points = np.reshape(points, (-1, 2))
-        points *= (roi[2] - roi[0])
-        points[:, 0] += roi[0]
-        points[:, 1] += roi[1]
-        retval = np.rint(points).astype("uint").tolist()
-        logger.trace("Predicted Landmarks: %s", retval)
-        return retval
+        for prediction, roi in zip(batch["prediction"], batch["roi"]):
+            points = np.array(prediction).flatten()
+            points = np.reshape(points, (-1, 2))
+            points *= (roi[2] - roi[0])
+            points[:, 0] += roi[0]
+            points[:, 1] += roi[1]
+            batch.setdefault("landmarks", []).append(points)
+        logger.trace("Predicted Landmarks: %s", batch["landmarks"])

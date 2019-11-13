@@ -10,7 +10,7 @@ from math import ceil, sqrt
 
 import numpy as np
 import tensorflow as tf
-from lib.Serializer import JSONSerializer
+from lib.serializer import get_serializer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -99,9 +99,9 @@ class TensorBoardLogs():
 class Session():
     """ The Loaded or current training session """
     def __init__(self, model_dir=None, model_name=None):
-        logger.debug("Initializing %s, model_dir: %s, model_name: %s)",
+        logger.debug("Initializing %s: (model_dir: %s, model_name: %s)",
                      self.__class__.__name__, model_dir, model_name)
-        self.serializer = JSONSerializer
+        self.serializer = get_serializer("json")
         self.state = None
         self.modeldir = model_dir  # Set and reset by wrapper for training sessions
         self.modelname = model_name  # Set and reset by wrapper for training sessions
@@ -192,8 +192,9 @@ class Session():
     def total_loss(self):
         """ Return collated loss for all session """
         loss_dict = dict()
-        for sess in self.tb_logs.get_loss().values():
-            for loss_key, side_loss in sess.items():
+        all_loss = self.tb_logs.get_loss()
+        for key in sorted(int(idx) for idx in all_loss.keys()):
+            for loss_key, side_loss in all_loss[key].items():
                 for side, loss in side_loss.items():
                     loss_dict.setdefault(loss_key, dict()).setdefault(side, list()).extend(loss)
         return loss_dict
@@ -224,19 +225,14 @@ class Session():
         else:
             self.session_id = session_id
         self.initialized = True
-        logger.debug("Initialized session")
+        logger.debug("Initialized session. Session_ID: %s", self.session_id)
 
     def load_state_file(self):
         """ Load the current state file """
         state_file = os.path.join(self.modeldir, "{}_state.json".format(self.modelname))
         logger.debug("Loading State: '%s'", state_file)
-        try:
-            with open(state_file, "rb") as inp:
-                state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-                self.state = state
-                logger.debug("Loaded state: %s", state)
-        except IOError as err:
-            logger.warning("Unable to load state file. Graphing disabled: %s", str(err))
+        self.state = self.serializer.load(state_file)
+        logger.debug("Loaded state: %s", self.state)
 
     def get_iterations_for_session(self, session_id):
         """ Return the number of iterations for the given session id """
@@ -270,6 +266,11 @@ class SessionsSummary():
         """ Return compiled stats """
         compiled = list()
         for sess_idx, ts_data in self.time_stats.items():
+            logger.debug("Compiling session ID: %s", sess_idx)
+            if self.session.state is None:
+                logger.debug("Session state dict doesn't exist. Most likely task has been "
+                             "terminated during compilation")
+                return None
             iterations = self.session.get_iterations_for_session(sess_idx)
             elapsed = ts_data["end_time"] - ts_data["start_time"]
             batchsize = self.session.total_batchsize.get(sess_idx, 0)
@@ -287,6 +288,8 @@ class SessionsSummary():
         """ Compile sessions stats with totals, format and return """
         logger.debug("Compiling sessions summary data")
         compiled_stats = self.sessions_stats
+        if compiled_stats is None:
+            return compiled_stats
         logger.debug("sessions_stats: %s", compiled_stats)
         total_stats = self.total_stats(compiled_stats)
         compiled_stats.append(total_stats)
@@ -299,9 +302,9 @@ class SessionsSummary():
         """ Return total stats """
         logger.debug("Compiling Totals")
         elapsed = 0
-        rate = 0
-        batchset = set()
+        examples = 0
         iterations = 0
+        batchset = set()
         total_summaries = len(sessions_stats)
         for idx, summary in enumerate(sessions_stats):
             if idx == 0:
@@ -309,7 +312,7 @@ class SessionsSummary():
             if idx == total_summaries - 1:
                 endtime = summary["end"]
             elapsed += summary["elapsed"]
-            rate += summary["rate"]
+            examples += (summary["batch"] * summary["iterations"])
             batchset.add(summary["batch"])
             iterations += summary["iterations"]
         batch = ",".join(str(bs) for bs in batchset)
@@ -317,7 +320,7 @@ class SessionsSummary():
                   "start": starttime,
                   "end": endtime,
                   "elapsed": elapsed,
-                  "rate": rate / total_summaries,
+                  "rate": examples / elapsed if elapsed != 0 else 0,
                   "batch": batch,
                   "iterations": iterations}
         logger.debug(totals)
@@ -329,8 +332,8 @@ class SessionsSummary():
         logger.debug("Formatting stats")
         for summary in compiled_stats:
             hrs, mins, secs = convert_time(summary["elapsed"])
-            summary["start"] = time.strftime("%x %X", time.gmtime(summary["start"]))
-            summary["end"] = time.strftime("%x %X", time.gmtime(summary["end"]))
+            summary["start"] = time.strftime("%x %X", time.localtime(summary["start"]))
+            summary["end"] = time.strftime("%x %X", time.localtime(summary["end"]))
             summary["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
             summary["rate"] = "{0:.1f}".format(summary["rate"])
         return compiled_stats

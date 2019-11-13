@@ -48,70 +48,6 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
-    "lowmem": {
-        "default": False,
-        "info": "Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
-                "NB: Models with a changed lowmem mode are not compatible with each other.\n"
-                "NB: lowmem will override cutom nodes and complexity settings.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "clipnorm": {
-        "default": True,
-        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
-                "the expense of VRAM.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "nodes": {
-        "default": 1024,
-        "info": "Number of nodes for decoder. Don't change this unless you know what you are "
-                "doing!",
-        "datatype": int,
-        "rounding": 64,
-        "min_max": (512, 4096),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "complexity_encoder": {
-        "default": 128,
-        "info": "Encoder Convolution Layer Complexity. sensible ranges: 128 to 160.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "complexity_decoder_a": {
-        "default": 384,
-        "info": "Decoder A Complexity.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "complexity_decoder_b": {
-        "default": 512,
-        "info": "Decoder B Complexity.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
     "input_size": {
         "default": 128,
         "info": "Resolution (in pixels) of the image to train on.\n"
@@ -124,21 +60,77 @@ _DEFAULTS = {
         "min_max": (64, 512),
         "choices": [],
         "gui_radio": False,
+        "group": "size",
         "fixed": True,
     },
-    "coverage": {
-        "default": 62.5,
-        "info": "How much of the extracted image to train on. Generally the model is optimized"
-                "\nto the default value. Sensible values to use are:"
-                "\n\t62.5%% spans from eyebrow to eyebrow."
-                "\n\t75.0%% spans from temple to temple."
-                "\n\t87.5%% spans from ear to ear."
-                "\n\t100.0%% is a mugshot.",
-        "datatype": float,
-        "rounding": 1,
-        "min_max": (62.5, 100.0),
+    "lowmem": {
+        "default": False,
+        "info": "Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
+                "NB: Models with a changed lowmem mode are not compatible with each other.\n"
+                "NB: lowmem will override cutom nodes and complexity settings.",
+        "datatype": bool,
+        "rounding": None,
+        "min_max": None,
+        "choices": [],
+        "gui_radio": False,
+        "group": "settings",
+        "fixed": True,
+    },
+    "clipnorm": {
+        "default": True,
+        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
+                "the expense of VRAM.",
+        "datatype": bool,
+        "rounding": None,
+        "min_max": None,
+        "choices": [],
+        "gui_radio": False,
+        "group": "settings",
+        "fixed": True,
+    },
+    "nodes": {
+        "default": 1024,
+        "info": "Number of nodes for decoder. Don't change this unless you know what you are "
+                "doing!",
+        "datatype": int,
+        "rounding": 64,
+        "min_max": (512, 4096),
         "choices": [],
         "gui_radio": False,
         "fixed": True,
+        "group": "network",
+    },
+    "complexity_encoder": {
+        "default": 128,
+        "info": "Encoder Convolution Layer Complexity. sensible ranges: 128 to 160.",
+        "datatype": int,
+        "rounding": 16,
+        "min_max": (64, 1024),
+        "choices": [],
+        "gui_radio": False,
+        "fixed": True,
+        "group": "network",
+    },
+    "complexity_decoder_a": {
+        "default": 384,
+        "info": "Decoder A Complexity.",
+        "datatype": int,
+        "rounding": 16,
+        "min_max": (64, 1024),
+        "choices": [],
+        "gui_radio": False,
+        "fixed": True,
+        "group": "network",
+    },
+    "complexity_decoder_b": {
+        "default": 512,
+        "info": "Decoder B Complexity.",
+        "datatype": int,
+        "rounding": 16,
+        "min_max": (64, 1024),
+        "choices": [],
+        "gui_radio": False,
+        "fixed": True,
+        "group": "network",
     },
 }
