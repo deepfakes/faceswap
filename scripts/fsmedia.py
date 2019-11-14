@@ -290,7 +290,7 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
         """ Override for specific post processing action """
         raise NotImplementedError
 
-        
+
 class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Draw debug landmarks on face
         Extract Only """
