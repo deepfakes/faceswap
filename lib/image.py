@@ -393,13 +393,15 @@ class ImageIO():
 
     def _set_thread(self):
         """ Set the load/save thread """
-        if self._thread is not None:
+        logger.debug("Setting thread")
+        if self._thread is not None and self._thread.is_alive():
+            logger.debug("Thread pre-exists and is alive: %s", self._thread)
             return
         self._thread = MultiThread(self._process,
                                    self._queue,
                                    name=self.__class__.__name__,
                                    thread_count=1)
-        logger.trace(self._thread)
+        logger.debug("Set thread: %s", self._thread)
         self._thread.start()
 
     def _process(self, queue):
@@ -578,7 +580,7 @@ class ImagesLoader(ImageIO):
         for retval in iterator():
             filename, image = retval[:2]
             if image is None or (not image.any() and image.ndim not in (2, 3)):
-                # All black frames will return not np.any() so check dims too
+                # All black frames will return not numpy.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
             logger.trace("Putting to queue: %s", [v.shape if isinstance(v, np.ndarray) else v
@@ -671,6 +673,7 @@ class ImagesLoader(ImageIO):
             initialized with :attr:`load_with_hash` set to ``True`` and the :attr:`location`
             is a folder of images.
         """
+        logger.debug("Initializing Load Generator")
         self._set_thread()
         while True:
             self._thread.check_and_raise_error()
@@ -684,6 +687,7 @@ class ImagesLoader(ImageIO):
             logger.trace("Yielding: %s", [v.shape if isinstance(v, np.ndarray) else v
                                           for v in retval])
             yield retval
+        logger.debug("Closing Load Generator")
         self._thread.join()
 
 

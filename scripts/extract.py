@@ -222,6 +222,8 @@ class Extract():
                         self._alignments.save()
                 else:
                     del faces["image"]
+                    # cache detected faces for next run
+                    detected_faces[faces["filename"]] = faces
                 status_bar.update(1)
 
             if not is_final:
