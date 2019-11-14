@@ -272,7 +272,7 @@ class Extract():
         faces: dict
             The output dictionary from :class:`plugins.extract.Pipeline.Extractor`
         """
-        logger.debug("Save Faces: Start")
+        logger.trace("Outputting faces for %s", faces["filename"])
         final_faces = list()
         filename, extension = os.path.splitext(os.path.basename(faces["filename"]))
         for idx, face in enumerate(faces["detected_faces"]):

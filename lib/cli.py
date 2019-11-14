@@ -668,18 +668,6 @@ class ExtractArgs(ExtractConvertArgs):
                     "significantly decrease extraction speed and its accuracy cannot be "
                     "guaranteed."})
         argument_list.append({
-            "opts": ("-bt", "--blur-threshold"),
-            "type": float,
-            "action": Slider,
-            "min_max": (0.0, 100.0),
-            "rounding": 1,
-            "dest": "blur_thresh",
-            "default": 0.0,
-            "group": "Face Processing",
-            "help": "Automatically discard images blurrier than the specified threshold. "
-                    "Discarded images are moved into a \"blurry\" sub-folder. Lower values allow "
-                    "more blur. Set to 0.0 to turn off."})
-        argument_list.append({
             "opts": ("-een", "--extract-every-n"),
             "type": int,
             "action": Slider,

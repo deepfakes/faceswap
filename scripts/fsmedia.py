@@ -11,14 +11,11 @@ from pathlib import Path
 
 import cv2
 import imageio
-import numpy as np
 
-from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
 from lib.image import count_frames, read_image
-from lib.utils import (camel_case_split, get_folder, get_image_paths, set_system_verbosity,
-                       _video_extensions)
+from lib.utils import (camel_case_split, get_image_paths, set_system_verbosity, _video_extensions)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -243,11 +240,6 @@ class PostProcess():
                 and self.args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
 
-        # Blurry Face
-        if hasattr(self.args, 'blur_thresh') and self.args.blur_thresh:
-            kwargs = {"blur_thresh": self.args.blur_thresh}
-            postprocess_items["BlurryFaceFilter"] = {"kwargs": kwargs}
-
         # Face Filter post processing
         if ((hasattr(self.args, "filter") and self.args.filter is not None) or
                 (hasattr(self.args, "nfilter") and
@@ -300,71 +292,15 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
         raise NotImplementedError
 
 
-class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-methods
-    """ Move blurry faces to a different folder
-        Extract Only """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.blur_thresh = kwargs["blur_thresh"]
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def process(self, output_item):
-        """ Detect and move blurry face """
-        extractor = AlignerExtract()
-
-        for idx, detected_face in enumerate(output_item["detected_faces"]):
-            frame_name = detected_face["file_location"].parts[-1]
-            face = detected_face.aligned_face
-            logger.trace("Checking for blurriness. Frame: '%s', Face: %s", frame_name, idx)
-            aligned_landmarks = face.aligned_landmarks
-            resized_face = face.aligned_face
-            size = face.aligned["size"]
-            padding = int(size * 0.1875)
-            feature_mask = extractor.get_feature_mask(
-                aligned_landmarks / size,
-                size, padding)
-            feature_mask = cv2.blur(feature_mask, (10, 10))
-            isolated_face = cv2.multiply(feature_mask, resized_face.astype(float)).astype(np.uint8)
-            blurry, focus_measure = self.is_blurry(isolated_face)
-
-            if blurry:
-                blur_folder = detected_face["file_location"].parts[:-1]
-                blur_folder = get_folder(Path(*blur_folder) / Path("blurry"))
-                detected_face["file_location"] = blur_folder / Path(frame_name)
-                logger.verbose("%s's focus measure of %s was below the blur threshold, "
-                               "moving to 'blurry'", frame_name, "{0:.2f}".format(focus_measure))
-
-    def is_blurry(self, image):
-        """ Convert to grayscale, and compute the focus measure of the image using the
-            Variance of Laplacian method """
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        focus_measure = self.variance_of_laplacian(gray)
-
-        # if the focus measure is less than the supplied threshold,
-        # then the image should be considered "blurry"
-        retval = (focus_measure < self.blur_thresh, focus_measure)
-        logger.trace("Returning: (is_blurry: %s, focus_measure %s)", retval[0], retval[1])
-        return retval
-
-    @staticmethod
-    def variance_of_laplacian(image):
-        """ Compute the Laplacian of the image and then return the focus
-            measure, which is simply the variance of the Laplacian """
-        retval = cv2.Laplacian(image, cv2.CV_64F).var()
-        logger.trace("Returning: %s", retval)
-        return retval
-
-
 class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Draw debug landmarks on face
         Extract Only """
 
     def process(self, output_item):
         """ Draw landmarks on image """
-        for idx, detected_face in enumerate(output_item["detected_faces"]):
-            face = detected_face.aligned_face
-            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
-                         detected_face["file_location"].parts[-1], idx)
+        frame = os.path.splitext(os.path.basename(output_item["filename"]))[0]
+        for idx, face in enumerate(output_item["detected_faces"]):
+            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)
             aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
                 cv2.circle(face.aligned_face, (pos_x, pos_y), 2, (0, 0, 255), -1)
