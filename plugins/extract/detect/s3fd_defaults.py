@@ -51,7 +51,7 @@ _HELPTEXT = (
 
 _DEFAULTS = {
     "confidence": {
-        "default": 50,
+        "default": 70,
         "info": "The confidence level at which the detector has succesfully found a face.\n"
                 "Higher levels will be more discriminating, lower levels will have more false "
                 "positives.",
