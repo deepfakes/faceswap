@@ -1,128 +1,179 @@
 #!/usr/bin python3
-""" The script to run the extract process of faceswap """
+""" Main entry point to the extract process of FaceSwap """
 
 import logging
 import os
 import sys
-from pathlib import Path
 
 from tqdm import tqdm
 
-from lib.image import encode_image_with_hash
+from lib.image import encode_image_with_hash, ImagesLoader, ImagesSaver
 from lib.multithreading import MultiThread
-from lib.queue_manager import queue_manager
 from lib.utils import get_folder
 from plugins.extract.pipeline import Extractor
-from scripts.fsmedia import Alignments, Images, PostProcess, Utils
+from scripts.fsmedia import Alignments, PostProcess, Utils
 
 tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Extract():
-    """ The extract process. """
+    """ The Faceswap Face Extraction Process.
+
+    The extraction process is responsible for detecting faces in a series of images/video, aligning
+    these faces and then generating a mask.
+
+    It leverages a series of user selected plugins, chained together using
+    :mod:`plugins.extract.pipeline`.
+
+    The extract process is self contained and should not be referenced by any other scripts, so it
+    contains no public properties.
+
+    Parameters
+    ----------
+    arguments: argparse.Namespace
+        The arguments to be passed to the extraction process as generated from Faceswap's command
+        line arguments
+    """
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
-        self.args = arguments
-        Utils.set_verbosity(self.args.loglevel)
-        self.output_dir = get_folder(self.args.output_dir)
-        logger.info("Output Directory: %s", self.args.output_dir)
-        self.images = Images(self.args)
-        self.alignments = Alignments(self.args, True, self.images.is_video)
-        self.post_process = PostProcess(arguments)
-        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
-        normalization = None if self.args.normalization == "none" else self.args.normalization
-        self.extractor = Extractor(self.args.detector,
-                                   self.args.aligner,
-                                   self.args.masker,
-                                   configfile=configfile,
-                                   multiprocess=not self.args.singleprocess,
-                                   rotate_images=self.args.rotate_images,
-                                   min_size=self.args.min_size,
-                                   normalize_method=normalization)
-        self.save_queue = queue_manager.get_queue("extract_save")
-        self.threads = list()
-        self.verify_output = False
-        self.save_interval = None
-        if hasattr(self.args, "save_interval"):
-            self.save_interval = self.args.save_interval
+        self._args = arguments
+        Utils.set_verbosity(self._args.loglevel)
+
+        self._output_dir = str(get_folder(self._args.output_dir))
+
+        logger.info("Output Directory: %s", self._args.output_dir)
+        self._images = ImagesLoader(self._args.input_dir, load_with_hash=False, fast_count=True)
+        self._alignments = Alignments(self._args, True, self._images.is_video)
+
+        self._existing_count = 0
+        self._set_skip_list()
+
+        self._post_process = PostProcess(arguments)
+        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
+        normalization = None if self._args.normalization == "none" else self._args.normalization
+        self._extractor = Extractor(self._args.detector,
+                                    self._args.aligner,
+                                    self._args.masker,
+                                    configfile=configfile,
+                                    multiprocess=not self._args.singleprocess,
+                                    rotate_images=self._args.rotate_images,
+                                    min_size=self._args.min_size,
+                                    normalize_method=normalization)
+        self._threads = list()
+        self._verify_output = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def skip_num(self):
-        """ Number of frames to skip if extract_every_n is passed """
-        return self.args.extract_every_n if hasattr(self.args, "extract_every_n") else 1
+    def _save_interval(self):
+        """ int: The number of frames to be processed between each saving of the alignments file if
+        it has been provided, otherwise ``None`` """
+        if hasattr(self._args, "save_interval"):
+            return self._args.save_interval
+        return None
+
+    @property
+    def _skip_num(self):
+        """ int: Number of frames to skip if extract_every_n has been provided """
+        return self._args.extract_every_n if hasattr(self._args, "extract_every_n") else 1
+
+    def _set_skip_list(self):
+        """ Add the skip list to the image loader
+
+        Checks against `extract_every_n` and the existence of alignments data (can exist if
+        `skip_existing` or `skip_existing_faces` has been provided) and compiles a list of frame
+        indices that should not be processed, providing these to :class:`lib.image.ImagesLoader`.
+        """
+        if self._skip_num == 1 and not self._alignments.data:
+            logger.debug("No frames to be skipped")
+            return
+        skip_list = []
+        for idx, filename in enumerate(self._images.file_list):
+            if idx % self._skip_num != 0:
+                logger.trace("Adding image '%s' to skip list due to extract_every_n = %s",
+                             filename, self._skip_num)
+                skip_list.append(idx)
+            # Items may be in the alignments file if skip-existing[-faces] is selected
+            elif os.path.basename(filename) in self._alignments.data:
+                self._existing_count += 1
+                logger.trace("Removing image: '%s' due to previously existing", filename)
+                skip_list.append(idx)
+        if self._existing_count != 0:
+            logger.info("Skipping %s frames due to skip_existing/skip_existing_faces.",
+                        self._existing_count)
+        logger.debug("Adding skip list: %s", skip_list)
+        self._images.add_skip_list(skip_list)
 
     def process(self):
-        """ Perform the extraction process """
-        logger.info('Starting, this may take a while...')
-        # queue_manager.debug_monitor(3)
-        self.threaded_io("load")
-        self.threaded_io("save")
-        self.run_extraction()
-        for thread in self.threads:
-            thread.join()
-        self.alignments.save()
-        Utils.finalize(self.images.images_found // self.skip_num,
-                       self.alignments.faces_count,
-                       self.verify_output)
+        """ The entry point for triggering the Extraction Process.
 
-    def threaded_io(self, task, io_args=None):
-        """ Perform I/O task in a background thread """
+        Should only be called from  :class:`lib.cli.ScriptExecutor`
+        """
+        logger.info('Starting, this may take a while...')
+        # from lib.queue_manager import queue_manager
+        # queue_manager.debug_monitor(3)
+        self._threaded_redirector("load")
+        self._run_extraction()
+        for thread in self._threads:
+            thread.join()
+        self._alignments.save()
+        Utils.finalize(self._images.process_count + self._existing_count,
+                       self._alignments.faces_count,
+                       self._verify_output)
+
+    def _threaded_redirector(self, task, io_args=None):
+        """ Redirect image input/output tasks to relevant queues in background thread
+
+        Parameters
+        ----------
+        task: str
+            The name of the task to be put into a background thread
+        io_args: tuple, optional
+            Any arguments that need to be provided to the background function
+        """
         logger.debug("Threading task: (Task: '%s')", task)
         io_args = tuple() if io_args is None else (io_args, )
-        if task == "load":
-            func = self.load_images
-        elif task == "save":
-            func = self.save_faces
-        elif task == "reload":
-            func = self.reload_images
+        func = getattr(self, "_{}".format(task))
         io_thread = MultiThread(func, *io_args, thread_count=1)
         io_thread.start()
-        self.threads.append(io_thread)
+        self._threads.append(io_thread)
 
-    def load_images(self):
-        """ Load the images """
+    def _load(self):
+        """ Load the images
+
+        Loads images from :class:`lib.image.ImagesLoader`, formats them into a dict compatible
+        with :class:`plugins.extract.Pipeline.Extractor` and passes them into the extraction queue.
+        """
         logger.debug("Load Images: Start")
-        load_queue = self.extractor.input_queue
-        idx = 0
-        for filename, image in self.images.load():
-            idx += 1
+        load_queue = self._extractor.input_queue
+        for filename, image in self._images.load():
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            if idx % self.skip_num != 0:
-                logger.trace("Skipping image '%s' due to extract_every_n = %s",
-                             filename, self.skip_num)
-                continue
-            if image is None or (not image.any() and image.ndim not in ((2, 3))):
-                # All black frames will return not np.any() so check dims too
-                logger.warning("Unable to open image. Skipping: '%s'", filename)
-                continue
-            imagename = os.path.basename(filename)
-            if imagename in self.alignments.data.keys():
-                logger.trace("Skipping image: '%s'", filename)
-                continue
             item = {"filename": filename,
                     "image": image[..., :3]}
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
 
-    def reload_images(self, detected_faces):
-        """ Reload the images and pair to detected face """
+    def _reload(self, detected_faces):
+        """ Reload the images and pair to detected face
+
+        When the extraction pipeline is running in serial mode, images are reloaded from disk,
+        paired with their extraction data and passed back into the extraction queue
+
+        Parameters
+        ----------
+        detected_faces: dict
+            Dictionary of detected_faces with the filename as its key and a list of
+            :class:`lib.faces_detect.DetectedFace` as the values for pairing with reloaded images.
+        """
         logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
-        load_queue = self.extractor.input_queue
-        idx = 0
-        for filename, image in self.images.load():
-            idx += 1
+        load_queue = self._extractor.input_queue
+        for filename, image in self._images.load():
             if load_queue.shutdown.is_set():
                 logger.debug("Reload Queue: Stop signal received. Terminating")
                 break
-            if idx % self.skip_num != 0:
-                logger.trace("Skipping image '%s' due to extract_every_n = %s",
-                             filename, self.skip_num)
-                continue
             logger.trace("Reloading image: '%s'", filename)
             detect_item = detected_faces.pop(filename, None)
             if not detect_item:
@@ -133,130 +184,103 @@ class Extract():
         load_queue.put("EOF")
         logger.debug("Reload Images: Complete")
 
-    def save_faces(self):
-        """ Save the generated faces """
-        logger.debug("Save Faces: Start")
-        while True:
-            if self.save_queue.shutdown.is_set():
-                logger.debug("Save Queue: Stop signal received. Terminating")
-                break
-            item = self.save_queue.get()
-            logger.trace(item)
-            if item == "EOF":
-                break
-            filename, face = item
+    def _run_extraction(self):
+        """ The main Faceswap Extraction process
 
-            logger.trace("Saving face: '%s'", filename)
-            try:
-                with open(filename, "wb") as out_file:
-                    out_file.write(face)
-            except Exception as err:  # pylint: disable=broad-except
-                logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
-                continue
-        logger.debug("Save Faces: Complete")
-
-    def process_item_count(self):
-        """ Return the number of items to be processedd """
-        processed = sum(os.path.basename(frame) in self.alignments.data.keys()
-                        for frame in self.images.input_images)
-        logger.debug("Items already processed: %s", processed)
-
-        if processed != 0 and self.args.skip_existing:
-            logger.info("Skipping previously extracted frames: %s", processed)
-        if processed != 0 and self.args.skip_faces:
-            logger.info("Skipping frames with detected faces: %s", processed)
-
-        to_process = (self.images.images_found - processed) // self.skip_num
-        logger.debug("Items to be Processed: %s", to_process)
-        if to_process == 0:
-            logger.error("No frames to process. Exiting")
-            queue_manager.terminate_queues()
-            exit(0)
-        return to_process
-
-    def run_extraction(self):
-        """ Run Face Detection """
-        to_process = self.process_item_count()
-        size = self.args.size if hasattr(self.args, "size") else 256
+        Receives items from :class:`plugins.extract.Pipeline.Extractor` and either saves out the
+        faces and data (if on the final pass) or reprocesses data through the pipeline for serial
+        processing.
+        """
+        size = self._args.size if hasattr(self._args, "size") else 256
+        saver = ImagesSaver(self._output_dir, as_bytes=True)
         exception = False
 
-        for phase in range(self.extractor.passes):
+        for phase in range(self._extractor.passes):
             if exception:
                 break
-            is_final = self.extractor.final_pass
+            is_final = self._extractor.final_pass
             detected_faces = dict()
-            self.extractor.launch()
-            self.check_thread_error()
+            self._extractor.launch()
+            self._check_thread_error()
             desc = "Running pass {} of {}: {}".format(phase + 1,
-                                                      self.extractor.passes,
-                                                      self.extractor.phase.title())
-            status_bar = tqdm(self.extractor.detected_faces(),
-                              total=to_process,
+                                                      self._extractor.passes,
+                                                      self._extractor.phase.title())
+            status_bar = tqdm(self._extractor.detected_faces(),
+                              total=self._images.process_count,
                               file=sys.stdout,
                               desc=desc)
             for idx, faces in enumerate(status_bar):
-                self.check_thread_error()
+                self._check_thread_error()
                 exception = faces.get("exception", False)
                 if exception:
                     break
-                filename = faces["filename"]
 
-                if self.extractor.final_pass:
-                    self.output_processing(faces, size, filename)
-                    self.output_faces(filename, faces)
-                    if self.save_interval and (idx + 1) % self.save_interval == 0:
-                        self.alignments.save()
+                if self._extractor.final_pass:
+                    self._output_processing(faces, size)
+                    self._output_faces(saver, faces)
+                    if self._save_interval and (idx + 1) % self._save_interval == 0:
+                        self._alignments.save()
                 else:
                     del faces["image"]
-                    detected_faces[filename] = faces
+                    # cache detected faces for next run
+                    detected_faces[faces["filename"]] = faces
                 status_bar.update(1)
 
-            if is_final:
-                logger.debug("Putting EOF to save")
-                self.save_queue.put("EOF")
-            else:
+            if not is_final:
                 logger.debug("Reloading images")
-                self.threaded_io("reload", detected_faces)
+                self._threaded_redirector("reload", detected_faces)
+        saver.close()
 
-    def check_thread_error(self):
-        """ Check and raise thread errors """
-        for thread in self.threads:
+    def _check_thread_error(self):
+        """ Check if any errors have occurred in the running threads and their errors """
+        for thread in self._threads:
             thread.check_and_raise_error()
 
-    def output_processing(self, faces, size, filename):
-        """ Prepare faces for output """
-        self.align_face(faces, size, filename)
-        self.post_process.do_actions(faces)
+    def _output_processing(self, faces, size):
+        """ Prepare faces for output
+
+        Loads the aligned face, perform any processing actions and verify the output.
+
+        Parameters:
+        faces: dict
+            Dictionary output from :class:`plugins.extract.Pipeline.Extractor`
+        size: int
+            The size that the aligned face should be created at
+        """
+        for face in faces["detected_faces"]:
+            face.load_aligned(faces["image"], size=size)
+
+        self._post_process.do_actions(faces)
 
         faces_count = len(faces["detected_faces"])
         if faces_count == 0:
-            logger.verbose("No faces were detected in image: %s", os.path.basename(filename))
+            logger.verbose("No faces were detected in image: %s",
+                           os.path.basename(faces["filename"]))
 
-        if not self.verify_output and faces_count > 1:
-            self.verify_output = True
+        if not self._verify_output and faces_count > 1:
+            self._verify_output = True
 
-    def align_face(self, faces, size, filename):
-        """ Align the detected face and add the destination file path """
+    def _output_faces(self, saver, faces):
+        """ Output faces to save thread
+
+        Set the face filename based on the frame name and put the face to the
+        :class:`lib.image.ImagesSaver` save queue and add the face information to the alignments
+        data.
+
+        Parameters
+        ----------
+        saver: lib.images.ImagesSaver
+            The background saver for saving the image
+        faces: dict
+            The output dictionary from :class:`plugins.extract.Pipeline.Extractor`
+        """
+        logger.trace("Outputting faces for %s", faces["filename"])
         final_faces = list()
-        image = faces["image"]
-        detected_faces = faces["detected_faces"]
-        for face in detected_faces:
-            face.load_aligned(image, size=size)
-            final_faces.append({"file_location": self.output_dir / Path(filename).stem,
-                                "face": face})
-        faces["detected_faces"] = final_faces
+        filename, extension = os.path.splitext(os.path.basename(faces["filename"]))
+        for idx, face in enumerate(faces["detected_faces"]):
+            output_filename = "{}_{}{}".format(filename, str(idx), extension)
+            face.hash, image = encode_image_with_hash(face.aligned_face, extension)
 
-    def output_faces(self, filename, faces):
-        """ Output faces to save thread """
-        final_faces = list()
-        for idx, detected_face in enumerate(faces["detected_faces"]):
-            output_file = detected_face["file_location"]
-            extension = Path(filename).suffix
-            out_filename = "{}_{}{}".format(str(output_file), str(idx), extension)
-
-            face = detected_face["face"]
-            resized_face = face.aligned_face
-            face.hash, img = encode_image_with_hash(resized_face, extension)
-            self.save_queue.put((out_filename, img))
+            saver.save(output_filename, image)
             final_faces.append(face.to_alignment())
-        self.alignments.data[os.path.basename(filename)] = final_faces
+        self._alignments.data[os.path.basename(faces["filename"])] = final_faces

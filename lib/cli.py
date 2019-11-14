@@ -668,18 +668,6 @@ class ExtractArgs(ExtractConvertArgs):
                     "significantly decrease extraction speed and its accuracy cannot be "
                     "guaranteed."})
         argument_list.append({
-            "opts": ("-bt", "--blur-threshold"),
-            "type": float,
-            "action": Slider,
-            "min_max": (0.0, 100.0),
-            "rounding": 1,
-            "dest": "blur_thresh",
-            "default": 0.0,
-            "group": "Face Processing",
-            "help": "Automatically discard images blurrier than the specified threshold. "
-                    "Discarded images are moved into a \"blurry\" sub-folder. Lower values allow "
-                    "more blur. Set to 0.0 to turn off."})
-        argument_list.append({
             "opts": ("-een", "--extract-every-n"),
             "type": int,
             "action": Slider,
@@ -963,6 +951,15 @@ class ConvertArgs(ExtractConvertArgs):
             "group": "settings",
             "help": "[LEGACY] This only needs to be selected if a legacy model is being loaded or "
                     "if there are multiple models in the model folder"})
+        argument_list.append({
+            "opts": ("-ag", "--allow-growth"),
+            "action": "store_true",
+            "dest": "allow_growth",
+            "group": "settings",
+            "default": False,
+            "backend": "nvidia",
+            "help": "Sets allow_growth option of Tensorflow to spare memory on some "
+                    "configurations."})
         argument_list.append({
             "opts": ("-k", "--keep-unchanged"),
             "action": "store_true",

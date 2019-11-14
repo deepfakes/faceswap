@@ -408,7 +408,7 @@ class FacesDisplay():
         self.build_faces_image()
         img = np.vstack((self.faces_source, self.faces_dest))
         size = self.get_scale_size(img)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # pylint:disable=no-member
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(img)
         img = img.resize(size, Image.ANTIALIAS)
         self.tk_image = ImageTk.PhotoImage(img)
@@ -488,9 +488,9 @@ class FacesDisplay():
         """ Create header text for output image """
         font_scale = self.size / 640
         height = self.size // 8
-        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
+        font = cv2.FONT_HERSHEY_SIMPLEX
         # Get size of placed text for positioning
-        text_sizes = [cv2.getTextSize(self.faces["filenames"][idx],  # pylint: disable=no-member
+        text_sizes = [cv2.getTextSize(self.faces["filenames"][idx],
                                       font,
                                       font_scale,
                                       1)[0]
@@ -503,24 +503,20 @@ class FacesDisplay():
                      self.faces["filenames"], text_sizes, text_x, text_y)
         header_box = np.ones((height, self.size * self.total_columns, 3), np.uint8) * 255
         for idx, text in enumerate(self.faces["filenames"]):
-            cv2.putText(header_box,  # pylint: disable=no-member
+            cv2.putText(header_box,
                         text,
                         (text_x[idx], text_y),
                         font,
                         font_scale,
                         (0, 0, 0),
                         1,
-                        lineType=cv2.LINE_AA)  # pylint: disable=no-member
+                        lineType=cv2.LINE_AA)
         logger.debug("header_box.shape: %s", header_box.shape)
         return header_box
 
     def draw_rect(self, image):
         """ draw border """
-        cv2.rectangle(image,    # pylint:disable=no-member
-                      (0, 0),
-                      (self.size - 1, self.size - 1),
-                      (255, 255, 255),
-                      1)
+        cv2.rectangle(image, (0, 0), (self.size - 1, self.size - 1), (255, 255, 255), 1)
         image = np.clip(image, 0.0, 255.0)
         return image.astype("uint8")
 

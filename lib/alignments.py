@@ -73,7 +73,7 @@ class Alignments():
     def get_location(self, folder, filename):
         """ Return the path to alignments file """
         logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
-        extension = os.path.splitext(filename)[1]
+        noext_name, extension = os.path.splitext(filename)
         if extension in (".json", ".p", ".pickle", ".yaml", ".yml"):
             # Reformat legacy alignments file
             filename = self.update_file_format(folder, filename)
@@ -81,7 +81,7 @@ class Alignments():
         if extension[1:] == self.serializer.file_extension:
             logger.debug("Valid Alignments filename provided: '%s'", filename)
         else:
-            filename = "{}.{}".format(filename, self.serializer.file_extension)
+            filename = "{}.{}".format(noext_name, self.serializer.file_extension)
             logger.debug("File extension set from serializer: '%s'",
                          self.serializer.file_extension)
         location = os.path.join(str(folder), filename)

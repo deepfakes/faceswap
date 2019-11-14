@@ -201,6 +201,13 @@ class PreviewArgs(FaceSwapArgs):
                               "default": False,
                               "help": "Swap the model. Instead of A -> B, "
                                       "swap B -> A"})
+        argument_list.append({"opts": ("-ag", "--allow-growth"),
+                              "action": "store_true",
+                              "dest": "allow_growth",
+                              "default": False,
+                              "backend": "nvidia",
+                              "help": "Sets allow_growth option of Tensorflow to spare memory "
+                              "on some configurations."})
 
         return argument_list
 
@@ -595,7 +602,8 @@ class SortArgs(FaceSwapArgs):
                               "action": Radio,
                               "type": str,
                               "choices": ("blur", "face", "face-cnn", "face-cnn-dissim",
-                                          "face-yaw", "hist", "hist-dissim"),
+                                          "face-yaw", "hist", "hist-dissim", "color-gray",
+                                          "color-luma", "color-green", "color-orange"),
                               "dest": 'sort_method',
                               "group": "sort settings",
                               "default": "face",
@@ -616,8 +624,18 @@ class SortArgs(FaceSwapArgs):
                                       "\nL|'hist': Sort faces by their color histogram. You can "
                                       "adjust the threshold with the '-t' (--ref_threshold) "
                                       "option."
-                                      "\nL|'hist-dissim': Like 'hist' but sorts by "
-                                      "dissimilarity."
+                                      "\nL|'hist-dissim': Like 'hist' but sorts by dissimilarity."
+                                      "\nL|'color-gray': Sort images by the average intensity of "
+                                      "the converted grayscale color channel."
+                                      "\nL|'color-luma': Sort images by the average intensity of "
+                                      "the converted Y color channel. Bright lighting and "
+                                      "oversaturated images will be ranked first."
+                                      "\nL|'color-green': Sort images by the average intensity of "
+                                      "the converted Cg color channel. Green images will be "
+                                      "ranked first and red images will be last."
+                                      "\nL|'color-orange': Sort images by the average intensity "
+                                      "of the converted Co color channel. Orange images will be "
+                                      "ranked first and blue images will be last."
                                       "\nDefault: hist"})
         argument_list.append({"opts": ('-k', '--keep'),
                               "action": 'store_true',

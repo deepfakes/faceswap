@@ -25,6 +25,7 @@ class Detect(Detector):
         self.vram_per_batch = 32
         self.batchsize = self.config["batch-size"]
         self.kwargs = self.validate_kwargs()
+        self.colorformat = "RGB"
 
     def validate_kwargs(self):
         """ Validate that config options are correct. If not reset to default """
@@ -246,8 +247,7 @@ class MTCNN():
             rwidth, rheight = int(width * scale), int(height * scale)
             batch = np.empty((batch_items, rheight, rwidth, 3), dtype="float32")
             for idx in range(batch_items):
-                batch[idx, ...] = cv2.resize(images[idx, ...],  # pylint:disable=no-member
-                                             (rwidth, rheight))
+                batch[idx, ...] = cv2.resize(images[idx, ...], (rwidth, rheight))
             output = self.pnet.predict(batch)
             cls_prob = output[0][..., 1]
             roi = output[1]
@@ -280,7 +280,7 @@ class MTCNN():
             predict_24_batch = []
             for rect in rectangles:
                 crop_img = image[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
-                scale_img = cv2.resize(crop_img, (24, 24))  # pylint:disable=no-member
+                scale_img = cv2.resize(crop_img, (24, 24))
                 predict_24_batch.append(scale_img)
                 crop_number += 1
             predict_24_batch = np.array(predict_24_batch)
@@ -307,7 +307,7 @@ class MTCNN():
             predict_batch = []
             for rect in rectangles:
                 crop_img = image[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
-                scale_img = cv2.resize(crop_img, (48, 48))  # pylint:disable=no-member
+                scale_img = cv2.resize(crop_img, (48, 48))
                 predict_batch.append(scale_img)
                 crop_number += 1
             predict_batch = np.array(predict_batch)

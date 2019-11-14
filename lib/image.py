@@ -338,142 +338,259 @@ def count_frames(filename, fast=False):
     return frames
 
 
-class BackgroundIO():
+class ImageIO():
     """ Perform disk IO for images or videos in a background thread.
 
-    Loads images or videos from a given location in a background thread.
-    Saves images to the given location in a background thread.
-    Images/Videos will be loaded or saved in deterministic order.
+    This is the parent thread for :class:`ImagesLoader` and :class:`ImagesSaver` and should not
+    be called directly.
 
     Parameters
     ----------
-    path: str
+    path: str or list
         The path to load or save images to/from. For loading this can be a folder which contains
-        images or a video file. For saving this must be an existing folder.
-    task: {'load', 'save'}
-        The task to be performed. ``'load'`` to load images/video frames, ``'save'`` to save
-        images.
-    load_with_hash: bool, optional
-        When loading images, set to ``True`` to return the sha1 hash of the image along with the
-        image. Default: ``False``.
-    queue_size: int, optional
-        The amount of images to hold in the internal buffer. Default: 16.
+        images, video file or a list of image files. For saving this must be an existing folder.
+    queue_size: int
+        The amount of images to hold in the internal buffer.
+    args: tuple, optional
+        The arguments to be passed to the loader or saver thread. Default: ``None``
 
-    Examples
+    See Also
     --------
-    Loading from a video file:
-
-    >>> loader = BackgroundIO('/path/to/video.mp4', 'load')
-    >>> for filename, image in loader.load():
-    >>>     <do processing>
-
-    Loading faces with their sha1 hash:
-
-    >>> loader = BackgroundIO('/path/to/faces/folder', 'load', load_with_hash=True)
-    >>> for filename, image, sha1_hash in loader.load():
-    >>>     <do processing>
-
-    Saving out images:
-
-    >>> saver = BackgroundIO('/path/to/save/folder', 'save')
-    >>> for filename, image in <image_iterator>:
-    >>>     saver.save(filename, image)
-    >>> saver.close()
+    lib.image.ImagesLoader : Background Image Loader inheriting from this class.
+    lib.image.ImagesSaver : Background Image Saver inheriting from this class.
     """
 
-    def __init__(self, path, task, load_with_hash=False, queue_size=16):
-        logger.debug("Initializing %s: (path: %s, task: %s, load_with_hash: %s, queue_size: %s)",
-                     self.__class__.__name__, path, task, load_with_hash, queue_size)
+    def __init__(self, path, queue_size, args=None):
+        logger.debug("Initializing %s: (path: %s, queue_size: %s, args: %s)",
+                     self.__class__.__name__, path, queue_size, args)
+
+        self._args = tuple() if args is None else args
+
         self._location = path
+        self._check_location_exists()
 
-        self._task = task.lower()
-        self._is_video = self._check_input()
-        self._input = self.location if self._is_video else get_image_paths(self.location)
-        self._count = count_frames(self._input) if self._is_video else len(self._input)
-        self._queue = queue_manager.get_queue(name="{}_{}".format(self.__class__.__name__,
-                                                                  self._task),
-                                              maxsize=queue_size)
-        self._thread = self._set_thread(io_args=(load_with_hash, ))
-        self._thread.start()
-
-    @property
-    def count(self):
-        """ int: The number of images or video frames to be processed """
-        return self._count
+        self._queue = queue_manager.get_queue(name=self.__class__.__name__, maxsize=queue_size)
+        self._thread = None
 
     @property
     def location(self):
         """ str: The folder or video that was passed in as the :attr:`path` parameter. """
         return self._location
 
-    def _check_input(self):
-        """ Check whether the input path is valid and return if it is a video.
+    def _check_location_exists(self):
+        """ Check whether the input location exists.
+
+        Raises
+        ------
+        FaceswapError
+            If the given location does not exist
+        """
+        if isinstance(self.location, str) and not os.path.exists(self.location):
+            raise FaceswapError("The location '{}' does not exist".format(self.location))
+        if isinstance(self.location, (list, tuple)) and not all(os.path.exists(location)
+                                                                for location in self.location):
+            raise FaceswapError("Not all locations in the input list exist")
+
+    def _set_thread(self):
+        """ Set the load/save thread """
+        logger.debug("Setting thread")
+        if self._thread is not None and self._thread.is_alive():
+            logger.debug("Thread pre-exists and is alive: %s", self._thread)
+            return
+        self._thread = MultiThread(self._process,
+                                   self._queue,
+                                   name=self.__class__.__name__,
+                                   thread_count=1)
+        logger.debug("Set thread: %s", self._thread)
+        self._thread.start()
+
+    def _process(self, queue):
+        """ Image IO process to be run in a thread. Override for loader/saver process.
+
+        Parameters
+        ----------
+        queue: queue.Queue()
+            The ImageIO Queue
+        """
+        raise NotImplementedError
+
+    def close(self):
+        """ Closes down and joins the internal threads """
+        logger.debug("Received Close")
+        if self._thread is not None:
+            self._thread.join()
+        logger.debug("Closed")
+
+
+class ImagesLoader(ImageIO):
+    """ Perform image loading from a folder of images or a video.
+
+    Images will be loaded and returned in the order that they appear in the folder, or in the video
+    to ensure deterministic ordering. Loading occurs in a background thread, caching 8 images at a
+    time so that other processes do not need to wait on disk reads.
+
+    See also :class:`ImageIO` for additional attributes.
+
+    Parameters
+    ----------
+    path: str or list
+        The path to load images from. This can be a folder which contains images a video file or a
+        list of image files.
+    queue_size: int, optional
+        The amount of images to hold in the internal buffer. Default: 8.
+    load_with_hash: bool, optional
+        Set to ``True`` to return the sha1 hash of the image along with the image.
+        Default: ``False``.
+    fast_count: bool, optional
+        When loading from video, the video needs to be parsed frame by frame to get an accurate
+        count. This can be done quite quickly without guaranteed accuracy, or slower with
+        guaranteed accuracy. Set to ``True`` to count quickly, or ``False`` to count slower
+        but accurately. Default: ``True``.
+    skip_list: list, optional
+        Optional list of frame/image indices to not load. Any indices provided here will be skipped
+        when reading images from the given location. Default: ``None``
+
+    Examples
+    --------
+    Loading from a video file:
+
+    >>> loader = ImagesLoader('/path/to/video.mp4')
+    >>> for filename, image in loader.load():
+    >>>     <do processing>
+
+    Loading faces with their sha1 hash:
+
+    >>> loader = ImagesLoader('/path/to/faces/folder', load_with_hash=True)
+    >>> for filename, image, sha1_hash in loader.load():
+    >>>     <do processing>
+    """
+
+    def __init__(self, path, queue_size=8, load_with_hash=False, fast_count=True, skip_list=None):
+        logger.debug("Initializing %s: (path: %s, queue_size: %s, load_with_hash: %s, "
+                     "fast_count: %s)", self.__class__.__name__, path, queue_size,
+                     load_with_hash, fast_count)
+
+        args = (load_with_hash, )
+        super().__init__(path, queue_size=queue_size, args=args)
+        self._skip_list = set() if skip_list is None else set(skip_list)
+
+        self._is_video = self._check_for_video()
+
+        self._count = None
+        self._file_list = None
+        self._get_count_and_filelist(fast_count)
+
+    @property
+    def count(self):
+        """ int: The number of images or video frames in the source location. This count includes
+        any files that will ultimately be skipped if a :attr:`skip_list` has been provided. See
+        also: :attr:`process_count`"""
+        return self._count
+
+    @property
+    def process_count(self):
+        """ int: The number of images or video frames to be processed (IE the total count less
+        items that are to be skipped from the :attr:`skip_list`)"""
+        return self._count - len(self._skip_list)
+
+    @property
+    def is_video(self):
+        """ bool: ``True`` if the input is a video, ``False`` if it is not """
+        return self._is_video
+
+    @property
+    def file_list(self):
+        """ list: A full list of files in the source location. This includes any files that will
+        ultimately be skipped if a :attr:`skip_list` has been provided. If the input is a video
+        then this is a list of dummy filenames as corresponding to an alignments file """
+        return self._file_list
+
+    def add_skip_list(self, skip_list):
+        """ Add a skip list to this :class:`ImagesLoader`
+
+        Parameters
+        ----------
+        skip_list: list
+            A list of indices corresponding to the frame indices that should be skipped
+        """
+        logger.debug(skip_list)
+        self._skip_list = set(skip_list)
+
+    def _check_for_video(self):
+        """ Check whether the input is a video
 
         Returns
         -------
         bool: 'True' if input is a video 'False' if it is a folder.
+
+        Raises
+        ------
+        FaceswapError
+            If the given location is a file and does not have a valid video extension.
+
         """
-        if not os.path.exists(self.location):
-            raise FaceswapError("The location '{}' does not exist".format(self.location))
-
-        if self._task == "save" and not os.path.isdir(self.location):
-            raise FaceswapError("The output location '{}' is not a folder".format(self.location))
-
-        is_video = (self._task == "load" and
-                    os.path.isfile(self.location) and
-                    os.path.splitext(self.location)[1].lower() in _video_extensions)
-        if is_video:
-            logger.debug("Input is video")
+        if os.path.isdir(self.location):
+            retval = False
+        elif os.path.splitext(self.location)[1].lower() in _video_extensions:
+            retval = True
         else:
-            logger.debug("Input is folder")
-        return is_video
+            raise FaceswapError("The input file '{}' is not a valid video".format(self.location))
+        logger.debug("Input '%s' is_video: %s", self.location, retval)
+        return retval
 
-    def _set_thread(self, io_args=None):
-        """ Set the load/save thread
+    def _get_count_and_filelist(self, fast_count):
+        """ Set the count of images to be processed and set the file list
+
+            If the input is a video, a dummy file list is created for checking against an
+            alignments file, otherwise it will be a list of full filenames.
 
         Parameters
         ----------
-        io_args: tuple, optional
-            The arguments to be passed to the load or save thread. Default: `None`.
-
-        Returns
-        -------
-        :class:`lib.multithreading.MultiThread`: Thread containing the load/save function.
+        fast_count: bool
+            When loading from video, the video needs to be parsed frame by frame to get an accurate
+            count. This can be done quite quickly without guaranteed accuracy, or slower with
+            guaranteed accuracy. Set to ``True`` to count quickly, or ``False`` to count slower
+            but accurately.
         """
-        io_args = (self._queue) if io_args is None else (self._queue, *io_args)
-        retval = MultiThread(getattr(self, "_{}".format(self._task)), *io_args, thread_count=1)
-        logger.trace(retval)
-        return retval
+        if self._is_video:
+            self._count = int(count_frames(self.location, fast=fast_count))
+            self._file_list = [self._dummy_video_framename(i + 1) for i in range(self.count)]
+        else:
+            if isinstance(self.location, (list, tuple)):
+                self._file_list = self.location
+            else:
+                self._file_list = get_image_paths(self.location)
+            self._count = len(self.file_list)
 
-    # LOADING #
-    def _load(self, *args):
+        logger.debug("count: %s", self.count)
+        logger.trace("filelist: %s", self.file_list)
+
+    def _process(self, queue):
         """ The load thread.
 
         Loads from a folder of images or from a video and puts to a queue
 
         Parameters
         ----------
-        args: tuple
-            The arguments to be passed to the load iterator
+        queue: queue.Queue()
+            The ImageIO Queue
         """
-        queue = args[0]
-        io_args = args[1:]
-        iterator = self._load_video if self._is_video else self._load_images
+        iterator = self._from_video if self._is_video else self._from_folder
         logger.debug("Load iterator: %s", iterator)
-        for retval in iterator(*io_args):
+        for retval in iterator():
+            filename, image = retval[:2]
+            if image is None or (not image.any() and image.ndim not in (2, 3)):
+                # All black frames will return not numpy.any() so check dims too
+                logger.warning("Unable to open image. Skipping: '%s'", filename)
+                continue
             logger.trace("Putting to queue: %s", [v.shape if isinstance(v, np.ndarray) else v
                                                   for v in retval])
             queue.put(retval)
         logger.trace("Putting EOF")
         queue.put("EOF")
 
-    def _load_video(self, *args):  # pylint:disable=unused-argument
+    def _from_video(self):
         """ Generator for loading frames from a video
-
-        Parameters
-        ----------
-        args: tuple
-            Unused
 
         Yields
         ------
@@ -482,24 +599,35 @@ class BackgroundIO():
         image: numpy.ndarray
             The loaded video frame.
         """
-        logger.debug("Loading frames from video: '%s'", self._input)
-        vidname = os.path.splitext(os.path.basename(self._input))[0]
-        reader = imageio.get_reader(self._input, "ffmpeg")
-        for i, frame in enumerate(reader):
+        logger.debug("Loading frames from video: '%s'", self.location)
+        reader = imageio.get_reader(self.location, "ffmpeg")
+        for idx, frame in enumerate(reader):
+            if idx in self._skip_list:
+                logger.trace("Skipping frame %s due to skip list")
+                continue
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
-            filename = "{}_{:06d}.png".format(vidname, i + 1)
+            filename = self._dummy_video_framename(idx + 1)
             logger.trace("Loading video frame: '%s'", filename)
             yield filename, frame
         reader.close()
 
-    def _load_images(self, with_hash):
-        """ Generator for loading images from a folder
+    def _dummy_video_framename(self, frame_no):
+        """ Return a dummy filename for video files
 
         Parameters
         ----------
-        with_hash: bool
-            If ``True`` adds the sha1 hash to the output tuple as the final item.
+        frame_no: int
+            The frame number for the video frame
+
+        Returns
+        -------
+        str: A dummied filename for a video frame """
+        vidname = os.path.splitext(os.path.basename(self.location))[0]
+        return "{}_{:06d}.png".format(vidname, frame_no + 1)
+
+    def _from_folder(self):
+        """ Generator for loading images from a folder
 
         Yields
         ------
@@ -508,12 +636,16 @@ class BackgroundIO():
         image: numpy.ndarray
             The loaded image.
         sha1_hash: str, optional
-            The sha1 hash of the loaded image. Only yielded if :class:`BackgroundIO` was
+            The sha1 hash of the loaded image. Only yielded if :class:`ImageIO` was
             initialized with :attr:`load_with_hash` set to ``True`` and the :attr:`location`
             is a folder of images.
         """
-        logger.debug("Loading images from folder: '%s'", self._input)
-        for filename in self._input:
+        with_hash = self._args[0]
+        logger.debug("Loading images from folder: '%s'. with_hash: %s", self.location, with_hash)
+        for idx, filename in enumerate(self.file_list):
+            if idx in self._skip_list:
+                logger.trace("Skipping frame %s due to skip list")
+                continue
             image_read = read_image(filename, raise_error=False, with_hash=with_hash)
             if with_hash:
                 retval = filename, *image_read
@@ -527,7 +659,7 @@ class BackgroundIO():
     def load(self):
         """ Generator for loading images from the given :attr:`location`
 
-        If :class:`BackgroundIO` was initialized with :attr:`load_with_hash` set to ``True`` then
+        If :class:`ImageIO` was initialized with :attr:`load_with_hash` set to ``True`` then
         the sha1 hash of the image is added as the final item in the output `tuple`.
 
         Yields
@@ -537,10 +669,12 @@ class BackgroundIO():
         image: numpy.ndarray
             The loaded image.
         sha1_hash: str, optional
-            The sha1 hash of the loaded image. Only yielded if :class:`BackgroundIO` was
+            The sha1 hash of the loaded image. Only yielded if :class:`ImageIO` was
             initialized with :attr:`load_with_hash` set to ``True`` and the :attr:`location`
             is a folder of images.
         """
+        logger.debug("Initializing Load Generator")
+        self._set_thread()
         while True:
             self._thread.check_and_raise_error()
             try:
@@ -553,27 +687,96 @@ class BackgroundIO():
             logger.trace("Yielding: %s", [v.shape if isinstance(v, np.ndarray) else v
                                           for v in retval])
             yield retval
+        logger.debug("Closing Load Generator")
         self._thread.join()
 
-    # SAVING #
-    @staticmethod
-    def _save(*args):
+
+class ImagesSaver(ImageIO):
+    """ Perform image saving to a destination folder.
+
+    Images are saved in a background ThreadPoolExecutor to allow for concurrent saving.
+    See also :class:`ImageIO` for additional attributes.
+
+    Parameters
+    ----------
+    path: str
+        The folder to save images to. This must be an existing folder.
+    queue_size: int, optional
+        The amount of images to hold in the internal buffer. Default: 8.
+    as_bytes: bool, optional
+        ``True`` if the image is already encoded to bytes, ``False`` if the image is a
+        :class:`numpy.ndarray`. Default: ``False``.
+
+    Examples
+    --------
+
+    >>> saver = ImagesSaver('/path/to/save/folder')
+    >>> for filename, image in <image_iterator>:
+    >>>     saver.save(filename, image)
+    >>> saver.close()
+    """
+
+    def __init__(self, path, queue_size=8, as_bytes=False):
+        logger.debug("Initializing %s: (path: %s, load_with_hash: %s, as_bytes: %s)",
+                     self.__class__.__name__, path, queue_size, as_bytes)
+
+        super().__init__(path, queue_size=queue_size)
+        self._as_bytes = as_bytes
+
+    def _check_location_exists(self):
+        """ Check whether the output location exists and is a folder
+
+        Raises
+        ------
+        FaceswapError
+            If the given location does not exist or the location is not a folder
+        """
+        if not isinstance(self.location, str):
+            raise FaceswapError("The output location must be a string not a "
+                                "{}".format(type(self.location)))
+        super()._check_location_exists()
+        if not os.path.isdir(self.location):
+            raise FaceswapError("The output location '{}' is not a folder".format(self.location))
+
+    def _process(self, queue):
         """ Saves images from the save queue to the given :attr:`location` inside a thread.
 
         Parameters
         ----------
-        args: tuple
-            The save arguments
+        queue: queue.Queue()
+            The ImageIO Queue
         """
-        queue = args[0]
+        executor = futures.ThreadPoolExecutor(thread_name_prefix=self.__class__.__name__)
         while True:
             item = queue.get()
             if item == "EOF":
                 logger.debug("EOF received")
                 break
-            filename, image = item
-            logger.trace("Saving image: '%s'", filename)
-            cv2.imwrite(filename, image)
+            logger.trace("Submitting: '%s'", item[0])
+            executor.submit(self._save, *item)
+        executor.shutdown()
+
+    def _save(self, filename, image):
+        """ Save a single image inside a ThreadPoolExecutor
+
+        Parameters
+        ----------
+        filename: str
+            The filename of the image to be saved. Can include or exclude the folder location.
+        image: numpy.ndarray
+            The image to be saved
+        """
+        if not os.path.commonprefix([self.location, filename]):
+            filename = os.path.join(self.location, filename)
+        try:
+            if self._as_bytes:
+                with open(filename, "wb") as out_file:
+                    out_file.write(image)
+            else:
+                cv2.imwrite(filename, image)
+            logger.trace("Saved image: '%s'", filename)
+        except Exception as err:  # pylint: disable=broad-except
+            logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
     def save(self, filename, image):
         """ Save the given image in the background thread
@@ -587,18 +790,13 @@ class BackgroundIO():
         image: numpy.ndarray
             The image to be saved
         """
+        self._set_thread()
         logger.trace("Putting to save queue: '%s'", filename)
         self._queue.put((filename, image))
 
     def close(self):
-        """ Closes down and joins the internal threads
-
-        Must be called after a :func:`save` operation to ensure all items are saved before the
-        parent process exits.
-        """
-        logger.debug("Received Close")
-        if self._task == "save":
-            logger.debug("Putting EOF to save queue")
-            self._queue.put("EOF")
-        self._thread.join()
-        logger.debug("Closed")
+        """ Signal to the Save Threads that they should be closed and cleanly shutdown
+        the saver """
+        logger.debug("Putting EOF to save queue")
+        self._queue.put("EOF")
+        super().close()

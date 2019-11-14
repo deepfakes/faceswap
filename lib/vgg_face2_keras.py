@@ -69,14 +69,9 @@ class VGGFace2():
 
     def resize_face(self, face):
         """ Resize incoming face to model_input_size """
-        if face.shape[0] < self.input_size:
-            interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
-        else:
-            interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
-        face = cv2.resize(face,  # pylint:disable=no-member
-                          dsize=(self.input_size, self.input_size),
-                          interpolation=interpolation)
+        sizes = (self.input_size, self.input_size)
+        interpolation = cv2.INTER_CUBIC if face.shape[0] < self.input_size else cv2.INTER_AREA
+        face = cv2.resize(face, dsize=sizes, interpolation=interpolation)
         return face
 
     @staticmethod

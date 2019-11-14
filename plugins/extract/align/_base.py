@@ -245,8 +245,7 @@ class Aligner(Extractor):
     @staticmethod
     def _normalize_clahe(face):
         """ Perform Contrast Limited Adaptive Histogram Equalization """
-        clahe = cv2.createCLAHE(clipLimit=2.0,
-                                tileGridSize=(4, 4))
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
         for chan in range(3):
             face[:, :, chan] = clahe.apply(face[:, :, chan])
         return face
