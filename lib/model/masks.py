@@ -41,7 +41,7 @@ class Mask():
     def __init__(self, landmarks, face, channels=4):
         logger.trace("Initializing %s: (face_shape: %s, channels: %s, landmarks: %s)",
                      self.__class__.__name__, face.shape, channels, landmarks)
-        self.landmarks = landmarks
+        self.landmarks = np.rint(landmarks).astype("int32")
         self.face = face
         self.dtype = face.dtype
         self.threshold = 255 if self.dtype == "uint8" else 255.0

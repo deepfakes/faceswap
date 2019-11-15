@@ -193,7 +193,7 @@ class DetectedFace():
         self.h = alignment["h"]
         landmarks = alignment["landmarks_xy"]
         if not isinstance(landmarks, np.ndarray):
-            landmarks = np.array(landmarks, dtype="int32")
+            landmarks = np.array(landmarks, dtype="float32")
         self.landmarks_xy = landmarks
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
@@ -580,7 +580,7 @@ class Mask():
         """
         logger.trace("mask shape: %s, mask dtype: %s, mask min: %s, mask max: %s, "
                      "affine_matrix: %s, interpolator: %s)", mask.shape, mask.dtype, mask.min(),
-                     mask.max(), interpolator)
+                     affine_matrix, mask.max(), interpolator)
         self._affine_matrix = self._adjust_affine_matrix(mask.shape[0], affine_matrix)
         self._interpolator = interpolator
         mask = (cv2.resize(mask,

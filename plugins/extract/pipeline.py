@@ -70,7 +70,9 @@ class Extractor():
                      multiprocess, rotate_images, min_size, normalize_method, image_is_aligned)
         self._flow = self._set_flow(detector, aligner, masker)
         self.phase = self._flow[0]
-        self._queue_size = 32
+        # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
+        # for queue) at each point. Adding more just stacks RAM with no speed benefit.
+        self._queue_size = 1
         self._vram_buffer = 256  # Leave a buffer for VRAM allocation
         self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
         self._align = self._load_align(aligner, configfile, normalize_method)
@@ -328,10 +330,6 @@ class Extractor():
         tasks.append("extract_{}_out".format(self._final_phase))
         for task in tasks:
             # Limit queue size to avoid stacking ram
-            self._queue_size = 32
-            if task == "extract_{}_in".format(self._flow[0]) or (not self._is_parallel
-                                                                 and not task.endswith("_out")):
-                self._queue_size = 64
             queue_manager.add_queue(task, maxsize=self._queue_size)
             queues[task] = queue_manager.get_queue(task)
         logger.debug("Queues: %s", queues)
@@ -443,12 +441,16 @@ class Extractor():
                 logger.debug("Plugin requirements within threshold: (plugin_required: %sMB, "
                              "vram_free: %sMB)", plugin_required, vram_free)
                 return
-            # Hacky split across 3 plugins
-            available_vram = (vram_free - self._total_vram_required) // 3
+            # Hacky split across plugins that use vram
+            gpu_plugin_count = sum([1 for plugin in self._all_plugins if plugin.vram != 0])
+            available_vram = (vram_free - self._total_vram_required) // gpu_plugin_count
             for plugin in self._all_plugins:
-                self._set_plugin_batchsize(plugin, available_vram)
+                if plugin.vram != 0:
+                    self._set_plugin_batchsize(plugin, available_vram)
         else:
             for plugin in self._all_plugins:
+                if plugin.vram == 0:
+                    continue
                 vram_required = plugin.vram + self._vram_buffer
                 batch_required = plugin.vram_per_batch * plugin.batchsize
                 plugin_required = vram_required + batch_required
@@ -461,9 +463,13 @@ class Extractor():
 
     @staticmethod
     def _set_plugin_batchsize(plugin, available_vram):
-        """ Set the batch size for the given plugin based on given available vram """
-        plugin.batchsize = int(max(1, available_vram // plugin.vram_per_batch))
-        logger.verbose("Reset batchsize for %s to %s", plugin.name, plugin.batchsize)
+        """ Set the batch size for the given plugin based on given available vram.
+        Do not update plugins which have a vram_per_batch of 0 (CPU plugins) due to
+        zero division error.
+        """
+        if plugin.vram_per_batch != 0:
+            plugin.batchsize = int(max(1, available_vram // plugin.vram_per_batch))
+            logger.verbose("Reset batchsize for %s to %s", plugin.name, plugin.batchsize)
 
     def _join_threads(self):
         """ Join threads for current pass """

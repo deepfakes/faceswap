@@ -76,6 +76,9 @@ class Sort():
         _sort = "sort_" + self.args.sort_method.lower()
         _group = "group_" + self.args.group_method.lower()
         _final = "final_process_" + self.args.final_process.lower()
+        if _sort.startswith('sort_color-'):
+            self.args.color_method = _sort.replace('sort_color-', '')
+            _sort = _sort[:10]
         self.args.sort_method = _sort.replace('-', '_')
         self.args.group_method = _group.replace('-', '_')
         self.args.final_process = _final.replace('-', '_')
@@ -285,6 +288,31 @@ class Sort():
         logger.info("Sorting...")
         img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
         return img_list
+
+    def sort_color(self):
+        """ Score by channel average intensity """
+        logger.info("Sorting by channel average intensity...")
+        desired_channel = {'gray': 0, 'luma': 0, 'orange': 1, 'green': 2}
+        method = self.args.color_method
+        channel_to_sort = next(v for (k, v) in desired_channel.items() if method.endswith(k))
+        filename_list, image_list = self._get_images()
+
+        logger.info("Converting to appropriate colorspace...")
+        same_size = all(img.size == image_list[0].size for img in image_list)
+        images = np.array(image_list, dtype='float32')[None, ...] if same_size else image_list
+        converted_images = self._convert_color(images, same_size, method)
+
+        logger.info("Scoring each image...")
+        if same_size:
+            scores = np.average(converted_images[0], axis=(1, 2))
+        else:
+            progress_bar = tqdm(converted_images, desc="Scoring", file=sys.stdout)
+            scores = np.array([np.average(image, axis=(0, 1)) for image in progress_bar])
+
+        logger.info("Sorting...")
+        matched_list = list(zip(filename_list, scores[:, channel_to_sort]))
+        sorted_file_img_list = sorted(matched_list, key=operator.itemgetter(1), reverse=True)
+        return sorted_file_img_list
 
     # Methods for grouping
     def group_blur(self, img_list):
@@ -535,6 +563,26 @@ class Sort():
             raise ValueError("{} group_method not found.".format(group_method))
 
         return self.splice_lists(img_list, temp_list)
+
+    def _convert_color(self, imgs, same_size, method):
+        """ Helper function to convert colorspaces """
+
+        if method.endswith('gray'):
+            conversion = np.array([[0.0722], [0.7152], [0.2126]])
+        else:
+            conversion = np.array([[0.25, 0.5, 0.25], [-0.5, 0.0, 0.5], [-0.25, 0.5, -0.25]])
+
+        if same_size:
+            path = 'greedy'
+            operation = 'bijk, kl -> bijl' if method.endswith('gray') else 'bijl, kl -> bijk'
+        else:
+            operation = 'ijk, kl -> ijl' if method.endswith('gray') else 'ijl, kl -> ijk'
+            path = np.einsum_path(operation, imgs[0][..., :3], conversion, optimize='optimal')[0]
+
+        progress_bar = tqdm(imgs, desc="Converting", file=sys.stdout)
+        images = [np.einsum(operation, img[..., :3], conversion, optimize=path).astype('float32')
+                  for img in progress_bar]
+        return images
 
     @staticmethod
     def splice_lists(sorted_list, new_vals_list):

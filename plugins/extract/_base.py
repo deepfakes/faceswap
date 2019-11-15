@@ -120,7 +120,7 @@ class Extractor():
         self.vram_per_batch = None
 
         # << THE FOLLOWING ARE SET IN self.initialize METHOD >> #
-        self.queue_size = 32
+        self.queue_size = 1
         """ int: Queue size for all internal queues. Set in :func:`initialize()` """
 
         self.model = None

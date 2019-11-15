@@ -186,7 +186,7 @@ class Aligner(Extractor):
         for face, landmarks in zip(batch["detected_faces"], batch["landmarks"]):
             if not isinstance(landmarks, np.ndarray):
                 landmarks = np.array(landmarks)
-            face.landmarks_xy = np.rint(landmarks).astype("int32")
+            face.landmarks_xy = landmarks
         self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         logger.trace("Item out: %s", {key: val
                                       for key, val in batch.items()
@@ -245,8 +245,7 @@ class Aligner(Extractor):
     @staticmethod
     def _normalize_clahe(face):
         """ Perform Contrast Limited Adaptive Histogram Equalization """
-        clahe = cv2.createCLAHE(clipLimit=2.0,
-                                tileGridSize=(4, 4))
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
         for chan in range(3):
             face[:, :, chan] = clahe.apply(face[:, :, chan])
         return face

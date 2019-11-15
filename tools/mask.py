@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.image import BackgroundIO
+from lib.image import ImagesLoader, ImagesSaver
 
 from lib.multithreading import MultiThread
 from lib.utils import set_system_verbosity, get_folder
@@ -45,10 +45,7 @@ class Mask():
 
         self._check_input(arguments.input)
         self._saver = self._set_saver(arguments)
-        self._loader = BackgroundIO(arguments.input,
-                                    "load",
-                                    load_with_hash=self._input_is_faces,
-                                    queue_size=16)
+        self._loader = ImagesLoader(arguments.input, load_with_hash=self._input_is_faces)
         self._alignments = Alignments(os.path.dirname(arguments.alignments),
                                       filename=os.path.basename(arguments.alignments))
 
@@ -84,9 +81,9 @@ class Mask():
 
         Returns
         -------
-        ``None`` or :class:`lib.image.BackgroundIO`:
-            If output is requested, returns a :class:`lib.image.BackgroundIO` in saver mode
-            otherwise returns ``None``
+        ``None`` or :class:`lib.image.ImagesSaver`:
+            If output is requested, returns a :class:`lib.image.ImagesSaver` otherwise
+            returns ``None``
         """
         if not hasattr(arguments, "output") or arguments.output is None or not arguments.output:
             if self._update_type == "output":
@@ -96,7 +93,7 @@ class Mask():
             return None
         output_dir = str(get_folder(arguments.output, make_folder=True))
         logger.info("Saving preview masks to: '%s'", output_dir)
-        saver = BackgroundIO(output_dir, "save", queue_size=16)
+        saver = ImagesSaver(output_dir)
         logger.debug(saver)
         return saver
 
@@ -330,7 +327,7 @@ class Mask():
                            self._mask_type, frame, idx)
             return
         image = self._create_image(detected_face)
-        logger.trace("filename: '%s', image_shape: %s", image.shape)
+        logger.trace("filename: '%s', image_shape: %s", filename, image.shape)
         self._saver.save(filename, image)
 
     def _create_image(self, detected_face):

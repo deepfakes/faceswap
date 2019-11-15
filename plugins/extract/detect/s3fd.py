@@ -220,28 +220,27 @@ class S3fd(KSession):
         super().__init__("S3FD", model_path, model_kwargs=model_kwargs, allow_growth=allow_growth)
         self.load_model()
         self.confidence = confidence
+        self.average_img = np.array([104.0, 117.0, 123.0])
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    @staticmethod
-    def prepare_batch(batch):
+    def prepare_batch(self, batch):
         """ Prepare a batch for prediction """
-        batch = batch - np.array([104.0, 117.0, 123.0])
+        batch = batch - self.average_img
         batch = batch.transpose(0, 3, 1, 2)
         return batch
 
-    def finalize_predictions(self, bboxlists):
+    def finalize_predictions(self, bounding_boxes_scales):
         """ Detect faces """
         ret = list()
-        for i in range(bboxlists[0].shape[0]):
-            bboxlist = [x[i:i+1, ...] for x in bboxlists]
-            bboxlist = self.post_process(bboxlist)
-            keep = self.nms(bboxlist, 0.3)
-            bboxlist = bboxlist[keep, :]
-            bboxlist = [x for x in bboxlist if x[-1] >= self.confidence]
-            ret.append(np.array(bboxlist))
+        batch_size = range(bounding_boxes_scales[0].shape[0])
+        for img in batch_size:
+            bboxlist = [scale[img:img+1] for scale in bounding_boxes_scales]
+            boxes = self._post_process(bboxlist)
+            bboxlist = self._nms(boxes, 0.5)
+            ret.append(bboxlist)
         return ret
 
-    def post_process(self, bboxlist):
+    def _post_process(self, bboxlist):
         """ Perform post processing on output
             TODO: do this on the batch.
         """
@@ -255,16 +254,14 @@ class S3fd(KSession):
             for _, hindex, windex in poss:
                 axc, ayc = stride / 2 + windex * stride, stride / 2 + hindex * stride
                 score = ocls[0, 1, hindex, windex]
-                loc = np.ascontiguousarray(oreg[0, :, hindex, windex]).reshape((1, 4))
-                priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
-                variances = [0.1, 0.2]
-                box = self.decode(loc, priors, variances)
-                x_1, y_1, x_2, y_2 = box[0] * 1.0
-                retval.append([x_1, y_1, x_2, y_2, score])
-        retval = np.array(retval)
-        if len(retval) == 0:
-            retval = np.zeros((1, 5))
-        return retval
+                if score >= self.confidence:
+                    loc = np.ascontiguousarray(oreg[0, :, hindex, windex]).reshape((1, 4))
+                    priors = np.array([[axc / 1.0, ayc / 1.0, stride * 4 / 1.0, stride * 4 / 1.0]])
+                    box = self.decode(loc, priors)
+                    x_1, y_1, x_2, y_2 = box[0] * 1.0
+                    retval.append([x_1, y_1, x_2, y_2, score])
+        return_numpy = np.array(retval) if len(retval) != 0 else np.zeros((1, 5))
+        return return_numpy
 
     @staticmethod
     def softmax(inp, axis):
@@ -272,7 +269,7 @@ class S3fd(KSession):
         return np.exp(inp - logsumexp(inp, axis=axis, keepdims=True))
 
     @staticmethod
-    def decode(loc, priors, variances):
+    def decode(loc, priors):
         """Decode locations from predictions using priors to undo
         the encoding we did for offset regression at train time.
         Args:
@@ -284,36 +281,36 @@ class S3fd(KSession):
         Return:
             decoded bounding box predictions
         """
+        variances = [0.1, 0.2]
         boxes = np.concatenate((priors[:, :2] + loc[:, :2] * variances[0] * priors[:, 2:],
-                                priors[:, 2:] * np.exp(loc[:, 2:] * variances[1])),
-                               1)
+                                priors[:, 2:] * np.exp(loc[:, 2:] * variances[1])), axis=1)
         boxes[:, :2] -= boxes[:, 2:] / 2
         boxes[:, 2:] += boxes[:, :2]
         return boxes
 
-    @staticmethod
-    def nms(dets, thresh):
-        # pylint:disable=too-many-locals
+    def _nms(self, boxes, threshold):
         """ Perform Non-Maximum Suppression """
-        keep = list()
-        if len(dets) == 0:
-            return keep
+        retained_box_indices = list()
 
-        x_1, y_1, x_2, y_2, scores = dets[:, 0], dets[:, 1], dets[:, 2], dets[:, 3], dets[:, 4]
-        areas = (x_2 - x_1 + 1) * (y_2 - y_1 + 1)
-        order = scores.argsort()[::-1]
+        areas = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
+        ranked_indices = boxes[:, 4].argsort()[::-1]
+        while ranked_indices.size > 0:
+            best = ranked_indices[0]
+            rest = ranked_indices[1:]
 
-        keep = []
-        while order.size > 0:
-            i = order[0]
-            keep.append(i)
-            xx_1, yy_1 = np.maximum(x_1[i], x_1[order[1:]]), np.maximum(y_1[i], y_1[order[1:]])
-            xx_2, yy_2 = np.minimum(x_2[i], x_2[order[1:]]), np.minimum(y_2[i], y_2[order[1:]])
+            max_of_xy = np.maximum(boxes[best, :2], boxes[rest, :2])
+            min_of_xy = np.minimum(boxes[best, 2:4], boxes[rest, 2:4])
+            width_height = np.maximum(0, min_of_xy - max_of_xy + 1)
+            intersection_areas = width_height[:, 0] * width_height[:, 1]
+            iou = intersection_areas / (areas[best] + areas[rest] - intersection_areas)
 
-            width, height = np.maximum(0.0, xx_2 - xx_1 + 1), np.maximum(0.0, yy_2 - yy_1 + 1)
-            ovr = width * height / (areas[i] + areas[order[1:]] - width * height)
+            overlapping_boxes = (iou > threshold).nonzero()[0]
+            if len(overlapping_boxes) != 0:
+                overlap_set = ranked_indices[overlapping_boxes + 1]
+                vote = np.average(boxes[overlap_set, :4], axis=0, weights=boxes[overlap_set, 4])
+                boxes[best, :4] = vote
+            retained_box_indices.append(best)
 
-            inds = np.where(ovr <= thresh)[0]
-            order = order[inds + 1]
-
-        return keep
+            non_overlapping_boxes = (iou <= threshold).nonzero()[0]
+            ranked_indices = ranked_indices[non_overlapping_boxes + 1]
+        return boxes[retained_box_indices]

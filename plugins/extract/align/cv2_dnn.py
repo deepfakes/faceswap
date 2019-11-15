@@ -59,6 +59,7 @@ class Align(Aligner):
     def align_image(self, detected_faces):
         """ Align the incoming image for prediction """
         logger.trace("Aligning image around center")
+        sizes = (self.input_size, self.input_size)
         rois = []
         faces = []
         for face in detected_faces:
@@ -76,14 +77,8 @@ class Align(Aligner):
             image = self.pad_image(roi, face.image)
             face = image[roi[1]: roi[3], roi[0]: roi[2]]
 
-            if face.shape[0] < self.input_size:
-                interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
-            else:
-                interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
-            face = cv2.resize(face,  # pylint:disable=no-member
-                              dsize=(int(self.input_size), int(self.input_size)),
-                              interpolation=interpolation)
+            interpolation = cv2.INTER_CUBIC if face.shape[0] < self.input_size else cv2.INTER_AREA
+            face = cv2.resize(face, dsize=sizes, interpolation=interpolation)
             faces.append(face)
             rois.append(roi)
         return faces, rois
@@ -127,11 +122,13 @@ class Align(Aligner):
 
         # Shift the box if any points fall below zero
         if left < 0:
-            right += abs(left)
-            left += abs(left)
+            shift_right = abs(left)
+            right += shift_right
+            left += shift_right
         if top < 0:
-            bottom += abs(top)
-            top += abs(top)
+            shift_down = abs(top)
+            bottom += shift_down
+            top += shift_down
 
         # Make sure box is always square.
         assert ((right - left) == (bottom - top)), 'Box is not square.'
@@ -147,12 +144,12 @@ class Align(Aligner):
         pad_r = box[2] - width if box[2] > width else 0
         pad_b = box[3] - height if box[3] > height else 0
         logger.trace("Padding: (l: %s, t: %s, r: %s, b: %s)", pad_l, pad_t, pad_r, pad_b)
-        retval = cv2.copyMakeBorder(image.copy(),  # pylint: disable=no-member
+        retval = cv2.copyMakeBorder(image.copy(),
                                     pad_t,
                                     pad_b,
                                     pad_l,
                                     pad_r,
-                                    cv2.BORDER_CONSTANT,  # pylint: disable=no-member
+                                    cv2.BORDER_CONSTANT,
                                     value=(0, 0, 0))
         logger.trace("Padded shape: %s", retval.shape)
         return retval
@@ -173,8 +170,7 @@ class Align(Aligner):
     def get_pts_from_predict(batch):
         """ Get points from predictor """
         for prediction, roi in zip(batch["prediction"], batch["roi"]):
-            points = np.array(prediction).flatten()
-            points = np.reshape(points, (-1, 2))
+            points = np.reshape(prediction, (-1, 2))
             points *= (roi[2] - roi[0])
             points[:, 0] += roi[0]
             points[:, 1] += roi[1]

@@ -254,13 +254,13 @@ class Detector(Extractor):
     @staticmethod
     def _scale_image(image, image_size, scale):
         """ Scale the image and optional pad to given size """
-        interpln = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA  # pylint:disable=no-member
+        interpln = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
         if scale != 1.0:
             dims = (int(image_size[1] * scale), int(image_size[0] * scale))
             logger.trace("Resizing detection image from %s to %s. Scale=%s",
                          "x".join(str(i) for i in reversed(image_size)),
                          "x".join(str(i) for i in dims), scale)
-            image = cv2.resize(image, dims, interpolation=interpln)  # pylint:disable=no-member
+            image = cv2.resize(image, dims, interpolation=interpln)
         logger.trace("Resized image shape: %s", image.shape)
         return image
 
@@ -272,12 +272,12 @@ class Detector(Extractor):
             pad_r = (self.input_size - width) - pad_l
             pad_t = (self.input_size - height) // 2
             pad_b = (self.input_size - height) - pad_t
-            image = cv2.copyMakeBorder(image,  # pylint:disable=no-member
+            image = cv2.copyMakeBorder(image,
                                        pad_t,
                                        pad_b,
                                        pad_l,
                                        pad_r,
-                                       cv2.BORDER_CONSTANT)  # pylint:disable=no-member
+                                       cv2.BORDER_CONSTANT)
         logger.trace("Padded image shape: %s", image.shape)
         return image
 
@@ -416,14 +416,11 @@ class Detector(Extractor):
 
         height, width = image.shape[:2]
         image_center = (width/2, height/2)
-        rotation_matrix = cv2.getRotationMatrix2D(  # pylint: disable=no-member
-            image_center, -1.*angle, 1.)
+        rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
         rotation_matrix[0, 2] += self.input_size / 2 - image_center[0]
         rotation_matrix[1, 2] += self.input_size / 2 - image_center[1]
         logger.trace("Rotated image: (rotation_matrix: %s", rotation_matrix)
-        image = cv2.warpAffine(image,  # pylint: disable=no-member
-                               rotation_matrix,
-                               (self.input_size, self.input_size))
+        image = cv2.warpAffine(image, rotation_matrix, (self.input_size, self.input_size))
         if channels_first:
             image = np.moveaxis(image, 2, 0)
 

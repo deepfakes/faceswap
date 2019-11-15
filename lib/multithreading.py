@@ -83,6 +83,10 @@ class MultiThread():
         error = self.errors[0]
         raise error[1].with_traceback(error[2])
 
+    def is_alive(self):
+        """ Return true if any thread is alive else false """
+        return any(thread.is_alive() for thread in self._threads)
+
     def start(self):
         """ Start a thread with the given method and args """
         logger.debug("Starting thread(s): '%s'", self._name)
@@ -98,6 +102,12 @@ class MultiThread():
             thread.start()
             self._threads.append(thread)
         logger.debug("Started all threads '%s': %s", self._name, len(self._threads))
+
+    def completed(self):
+        """ Return False if there are any alive threads else True """
+        retval = all(not thread.is_alive() for thread in self._threads)
+        logger.debug(retval)
+        return retval
 
     def join(self):
         """ Join the running threads, catching and re-raising any errors """

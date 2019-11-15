@@ -19,7 +19,7 @@ from ._base import Masker, logger
 
 
 class Mask(Masker):
-    """ Perform transformation to align and get landmarks """
+    """ Neural network to process face image into a segmentation mask of the face """
     def __init__(self, **kwargs):
         git_model_id = 6
         model_filename = "DFL_256_sigmoid_v1.h5"
