@@ -689,10 +689,11 @@ class ImageAugmentation():
         slices = self._constants["tgt_slices"]
 
         batch_dst = (batch_dst_points + np.random.normal(size=batch_dst_points.shape,
-                                                         scale=2.0)).astype("int32")
+                                                         scale=2.0))
 
         face_cores = [cv2.convexHull(np.concatenate([src[17:], dst[17:]], axis=0))
-                      for src, dst in zip(batch_src_points, batch_dst)]
+                      for src, dst in zip(batch_src_points.astype("int32"),
+                                          batch_dst.astype("int32"))]
 
         batch_src = np.append(batch_src_points, edge_anchors, axis=1)
         batch_dst = np.append(batch_dst, edge_anchors, axis=1)

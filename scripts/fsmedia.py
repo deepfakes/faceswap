@@ -236,8 +236,7 @@ class PostProcess():
         """ Set the post processing actions """
         postprocess_items = dict()
         # Debug Landmarks
-        if (hasattr(self.args, 'debug_landmarks')
-                and self.args.debug_landmarks):
+        if (hasattr(self.args, 'debug_landmarks') and self.args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
 
         # Face Filter post processing
