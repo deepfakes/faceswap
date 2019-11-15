@@ -154,7 +154,7 @@ Obtain git for your distribution from the [git website](https://git-scm.com/down
 The recommended install method is to use a Conda3 Environment as this will handle the installation of Nvidia's CUDA and cuDNN straight into your Conda Environment. This is by far the easiest and most reliable way to setup the project.
   - MiniConda3 is recommended: [MiniConda3](https://docs.conda.io/en/latest/miniconda.html)
   
-Alternatively you can install Python (>= 3.2-3.7 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install no higher than version 10.0 of CUDA and 7.5.x of CUDNN.
+Alternatively you can install Python (>= 3.6-3.7 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install no higher than version 10.0 of CUDA and 7.5.x of CUDNN.
   - Python distributions:
     - apt/yum install python3 (Linux)
     - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)
