@@ -5,9 +5,9 @@ import sys
 import lib.cli as cli
 
 if sys.version_info[0] < 3:
-    raise Exception("This program requires at least python3.2")
-if sys.version_info[0] == 3 and sys.version_info[1] < 2:
-    raise Exception("This program requires at least python3.2")
+    raise Exception("This program requires at least python3.6")
+if sys.version_info[0] == 3 and sys.version_info[1] < 6:
+    raise Exception("This program requires at least python3.6")
 
 
 def bad_args(args):

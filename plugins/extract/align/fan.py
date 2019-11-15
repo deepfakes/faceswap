@@ -62,7 +62,7 @@ class Align(Aligner):
             center_scale[index, :, 0] = np.full(68, x_center, dtype='float32')
             center_scale[index, :, 1] = np.full(68, y_center, dtype='float32')
             center_scale[index, :, 2] = np.full(68, scale, dtype='float32')
-        logger.trace("Calculated center and scale: %s, %s", center_scale)
+        logger.trace("Calculated center and scale: %s", center_scale)
         return center_scale
 
     def crop(self, batch):  # pylint:disable=too-many-locals
