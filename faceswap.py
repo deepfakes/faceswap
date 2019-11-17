@@ -28,6 +28,11 @@ if __name__ == "__main__":
     CONVERT = cli.ConvertArgs(SUBPARSER,
                               "convert",
                               "Convert a source image to a new one with the face swapped")
+
+    WEBCAM = cli.ConvertArgs(SUBPARSER,
+                              "webcam",
+                              "webcam a source image to a new one with the face swapped")
+
     GUI = cli.GuiArgs(SUBPARSER,
                       "gui",
                       "Launch the Faceswap Graphical User Interface")
