@@ -207,7 +207,7 @@ class PreviewArgs(FaceSwapArgs):
                               "default": False,
                               "backend": "nvidia",
                               "help": "Sets allow_growth option of Tensorflow to spare memory "
-                              "on some configurations."})
+                                      "on some configurations."})
 
         return argument_list
 
@@ -462,6 +462,7 @@ class MaskArgs(FaceSwapArgs):
             "action": DirOrFileFullPaths,
             "type": str,
             "group": "data",
+            "filetypes": "video",
             "required": True,
             "help": "Directory containing extracted faces, source frames, or a video file."})
         argument_list.append({
