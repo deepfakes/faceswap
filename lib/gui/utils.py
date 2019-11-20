@@ -13,10 +13,9 @@ import numpy as np
 
 from PIL import Image, ImageDraw, ImageTk
 
-from lib.serializer import get_serializer
-
 from ._config import Config as UserConfig
 from ._redirector import WidgetRedirector
+from .project import Project, Tasks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
@@ -54,7 +53,7 @@ def get_images():
 
 
 class FileHandler():
-    """ Raise a filedialog box and capture input """
+    """ Raise a file dialog box and capture input """
 
     def __init__(self, handletype, filetype, command=None, action=None,
                  variable=None):
@@ -94,7 +93,9 @@ class FileHandler():
         filetypes = {"default": (all_files,),
                      "alignments": [("Faceswap Alignments", "*.fsa *.json"),
                                     all_files],
-                     "config": [("Faceswap GUI config files", "*.fsw"), all_files],
+                     "config_project": [("Faceswap Project files", "*.fsw"), all_files],
+                     "config_task": [("Faceswap Task files", "*.fst"), all_files],
+                     "config_all": [("Faceswap Project and Task files", "*.fst *.fsw"), all_files],
                      "csv": [("Comma separated values", "*.csv"), all_files],
                      "image": [("Bitmap", "*.bmp"),
                                ("JPG", "*.jpeg *.jpg"),
@@ -123,8 +124,8 @@ class FileHandler():
         return filetypes
 
     def set_defaults(self):
-        """ Set the default filetype to be first in list of filetypes,
-            or set a custom filetype if the first is not correct """
+        """ Set the default file type to be first in list of file types,
+            or set a custom file type if the first is not correct """
         defaults = {key: val[0][1].replace("*", "")
                     for key, val in self.filetypes.items()}
         defaults["default"] = None
@@ -178,7 +179,7 @@ class FileHandler():
         return filedialog.askdirectory(**self.kwargs)
 
     def savedir(self):
-        """ Get a save dir location """
+        """ Get a save directory location """
         logger.debug("Popping SaveDir browser")
         return filedialog.askdirectory(**self.kwargs)
 
@@ -213,7 +214,6 @@ class Images():
     def __init__(self, pathcache=None):
         logger.debug("Initializing %s", self.__class__.__name__)
         pathcache = get_config().pathcache if pathcache is None else pathcache
-        self.pathicons = os.path.join(pathcache, "icons")
         self.pathpreview = os.path.join(pathcache, "preview")
         self.pathoutput = None
         self.previewoutput = None
@@ -223,23 +223,24 @@ class Images():
                                  filenames=list(),
                                  placeholder=None)
         self.errcount = 0
-        self.icons = dict()
-        self.icons["folder"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_folder.png"))
-        self.icons["load"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_file.png"))
-        self.icons["load_multi"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_file.png"))
-        self.icons["context"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_file.png"))
-        self.icons["save"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "save.png"))
-        self.icons["reset"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "reset.png"))
-        self.icons["clear"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "clear.png"))
-        self.icons["graph"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "graph.png"))
-        self.icons["zoom"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "zoom.png"))
-        self.icons["move"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "move.png"))
-        self.icons["favicon"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "logo.png"))
-        logger.debug("Initialized %s: (icons: %s)", self.__class__.__name__, self.icons)
+        self.icons = self._load_icons(pathcache)
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @staticmethod
+    def _load_icons(pathcache):
+        size = get_config().user_config_dict.get("icon_size", 16)
+        size = int(round(size * get_config().scaling_factor))
+        icons = dict()
+        pathicons = os.path.join(pathcache, "icons")
+        for fname in os.listdir(pathicons):
+            name, ext = os.path.splitext(fname)
+            if ext != ".png":
+                continue
+            img = Image.open(os.path.join(pathicons, fname))
+            img = ImageTk.PhotoImage(img.resize((size, size), resample=Image.HAMMING))
+            icons[name] = img
+        logger.debug(icons)
+        return icons
 
     def delete_preview(self):
         """ Delete the preview files """
@@ -285,25 +286,25 @@ class Images():
         """ Load the latest preview image for extract and convert """
         logger.debug("Loading preview image: (thumbnail_size: %s, frame_dims: %s)",
                      thumbnail_size, frame_dims)
-        imagefiles = self.get_images(self.pathoutput)
+        image_files = self.get_images(self.pathoutput)
         gui_preview = os.path.join(self.pathoutput, ".gui_preview.jpg")
-        if not imagefiles or (len(imagefiles) == 1 and gui_preview not in imagefiles):
+        if not image_files or (len(image_files) == 1 and gui_preview not in image_files):
             logger.debug("No preview to display")
             self.previewoutput = None
             return
         # Filter to just the gui_preview if it exists in folder output
-        imagefiles = [gui_preview] if gui_preview in imagefiles else imagefiles
-        logger.debug("Image Files: %s", len(imagefiles))
+        image_files = [gui_preview] if gui_preview in image_files else image_files
+        logger.debug("Image Files: %s", len(image_files))
 
-        imagefiles = self.get_newest_filenames(imagefiles)
-        if not imagefiles:
+        image_files = self.get_newest_filenames(image_files)
+        if not image_files:
             return
 
-        self.load_images_to_cache(imagefiles, frame_dims, thumbnail_size)
-        if imagefiles == [gui_preview]:
+        self.load_images_to_cache(image_files, frame_dims, thumbnail_size)
+        if image_files == [gui_preview]:
             # Delete the preview image so that the main scripts know to output another
             logger.debug("Deleting preview image")
-            os.remove(imagefiles[0])
+            os.remove(image_files[0])
         show_image = self.place_previews(frame_dims)
         if not show_image:
             self.previewoutput = None
@@ -311,12 +312,12 @@ class Images():
         logger.debug("Displaying preview: %s", self.previewcache["filenames"])
         self.previewoutput = (show_image, ImageTk.PhotoImage(show_image))
 
-    def get_newest_filenames(self, imagefiles):
+    def get_newest_filenames(self, image_files):
         """ Return image filenames that have been modified since the last check """
         if self.previewcache["modified"] is None:
-            retval = imagefiles
+            retval = image_files
         else:
-            retval = [fname for fname in imagefiles
+            retval = [fname for fname in image_files
                       if os.path.getmtime(fname) > self.previewcache["modified"]]
         if not retval:
             logger.debug("No new images in output folder")
@@ -326,17 +327,17 @@ class Images():
                          len(retval), self.previewcache["modified"])
         return retval
 
-    def load_images_to_cache(self, imagefiles, frame_dims, thumbnail_size):
+    def load_images_to_cache(self, image_files, frame_dims, thumbnail_size):
         """ Load new images and append to cache, filtering to the number of display images """
-        logger.debug("Number imagefiles: %s, frame_dims: %s, thumbnail_size: %s",
-                     len(imagefiles), frame_dims, thumbnail_size)
+        logger.debug("Number image_files: %s, frame_dims: %s, thumbnail_size: %s",
+                     len(image_files), frame_dims, thumbnail_size)
         num_images = (frame_dims[0] // thumbnail_size) * (frame_dims[1] // thumbnail_size)
         logger.debug("num_images: %s", num_images)
         if num_images == 0:
             return
         samples = list()
-        start_idx = len(imagefiles) - num_images if len(imagefiles) > num_images else 0
-        show_files = sorted(imagefiles, key=os.path.getctime)[start_idx:]
+        start_idx = len(image_files) - num_images if len(image_files) > num_images else 0
+        show_files = sorted(image_files, key=os.path.getctime)[start_idx:]
         for fname in show_files:
             img = Image.open(fname)
             width, height = img.size
@@ -366,15 +367,15 @@ class Images():
         logger.debug("Cache shape: %s", self.previewcache["images"].shape)
 
     @staticmethod
-    def get_preview_samples(imagefiles, num_images, thumbnail_size):
-        """ Return a subset of the imagefiles images
+    def get_preview_samples(image_files, num_images, thumbnail_size):
+        """ Return a subset of the ``image_files`` images
             Exclude final file so we don't accidentally load a file that is being saved """
         logger.debug("num_images: %s", num_images)
         samples = list()
-        start_idx = len(imagefiles) - (num_images + 1)
-        end_idx = len(imagefiles) - 1
+        start_idx = len(image_files) - (num_images + 1)
+        end_idx = len(image_files) - 1
         logger.debug("start_idx: %s, end_idx: %s", start_idx, end_idx)
-        show_files = sorted(imagefiles, key=os.path.getctime)[start_idx: end_idx]
+        show_files = sorted(image_files, key=os.path.getctime)[start_idx: end_idx]
         for fname in show_files:
             img = Image.open(fname)
             width, height = img.size
@@ -436,13 +437,13 @@ class Images():
     def load_training_preview(self):
         """ Load the training preview images """
         logger.debug("Loading Training preview images")
-        imagefiles = self.get_images(self.pathpreview)
+        image_files = self.get_images(self.pathpreview)
         modified = None
-        if not imagefiles:
+        if not image_files:
             logger.debug("No preview to display")
             self.previewtrain = dict()
             return
-        for img in imagefiles:
+        for img in image_files:
             modified = os.path.getmtime(img) if modified is None else modified
             name = os.path.basename(img)
             name = os.path.splitext(name)[0]
@@ -511,7 +512,7 @@ class Images():
 
 
 class ReadOnlyText(tk.Text):  # pylint: disable=too-many-ancestors
-    """ A read only text widget that redirects a standard tk.Text widget's insert and delete
+    """ A read only text widget that redirects a standard tkinter.Text widgets insert and delete
     attributes.
     Source: https://stackoverflow.com/questions/3842155
     """
@@ -636,38 +637,182 @@ class Config():
         logger.debug("Initializing %s: (root %s, cli_opts: %s, scaling_factor: %s, pathcache: %s, "
                      "statusbar: %s, session: %s)", self.__class__.__name__, root, cli_opts,
                      scaling_factor, pathcache, statusbar, session)
-        self.root = root
-        self.cli_opts = cli_opts
-        self.scaling_factor = scaling_factor
-        self.pathcache = pathcache
-        self.statusbar = statusbar
-        self.serializer = get_serializer("json")
-        self.tk_vars = self.set_tk_vars()
-        self.user_config = UserConfig(None)
-        self.user_config_dict = self.user_config.config_dict
-        self.command_notebook = None  # set in command.py
+        self._constants = dict(pathcache=pathcache,
+                               root=root,
+                               scaling_factor=scaling_factor,
+                               status_bar=statusbar)
+        self._cli_opts = cli_opts
+        self._statusbar = statusbar
+        self._tk_vars = self.set_tk_vars()
+        self._user_config = UserConfig(None)
+        self._project = Project(self, FileHandler)
+        self._tasks = Tasks(self, FileHandler)
+        self._command_notebook = None  # set in command.py
+        self.default_options = None
         self.session = session
+        self._default_font = tk.font.nametofont("TkDefaultFont").configure()["family"]
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    # Constants
+    @property
+    def pathcache(self):
+        """ str: The path to the GUI cache folder """
+        return self._constants["pathcache"]
+
+    @property
+    def root(self):
+        """ :class:`tkinter.Tk`: The root tkinter window """
+        return self._constants["root"]
+
+    @property
+    def scaling_factor(self):
+        """ float: The scaling factor for current display """
+        return self._constants["scaling_factor"]
+
+    @property
+    def statusbar(self):
+        """ :class:`lib.gui.statusbar.StatusBar`: The GUI StatusBar :class:`tkinter.ttk.Frame` """
+        return self._constants["scaling_factor"]
+
+    # GUI tkinter Objects
+    @property
+    def command_notebook(self):
+        """ :class:`lib.gui.command.CommandNoteboook`: The main Faceswap Command Notebook """
+        return self._command_notebook
+
+    @property
+    def tools_notebook(self):
+        """ :class:`lib.gui.command.ToolsNotebook`: The Faceswap Tools sub-Notebook """
+        return self._command_notebook.tools_notebook
+
+    @property
+    def tk_vars(self):
+        """ dict: The global tkinter variables """
+        return self._tk_vars
+
+    @property
+    def modified_vars(self):
+        """ dict: The command tab modified tkinter variables """
+        return self._command_notebook.modified_vars
+
+    @property
+    def command_tabs(self):
+        """ dict: Command tab titles with their IDs """
+        return self._command_notebook.tab_names
+
+    @property
+    def tools_tabs(self):
+        """ dict: Tools command tab titles with their IDs """
+        return self._command_notebook.tools_tab_names
+
+    # Config
+    @property
+    def user_config(self):
+        """ dict: The GUI config in dict form """
+        return self._user_config
+
+    @property
+    def user_config_dict(self):
+        """ dict: The GUI config in dict form """
+        return self._user_config.config_dict
 
     @property
     def default_font(self):
         """ Return the selected font """
         font = self.user_config_dict["font"]
-        if font == "default":
-            font = tk.font.nametofont("TkDefaultFont").configure()["family"]
+        font = self._default_font if font == "default" else font
         return (font, self.user_config_dict["font_size"])
 
+    # GUI Properties
     @property
-    def command_tabs(self):
-        """ Return dict of command tab titles with their IDs """
-        return {self.command_notebook.tab(tab_id, "text").lower(): tab_id
-                for tab_id in range(0, self.command_notebook.index("end"))}
+    def cli_opts(self):
+        """ :class:`lib.gui.options.CliOptions`: The command line options for this GUI Session """
+        return self._cli_opts
 
     @property
-    def tools_command_tabs(self):
-        """ Return dict of tools command tab titles with their IDs """
-        return {self.command_notebook.tools_notebook.tab(tab_id, "text").lower(): tab_id
-                for tab_id in range(0, self.command_notebook.tools_notebook.index("end"))}
+    def project(self):
+        """ :class:`lib.gui.project.Project`: The project session handler """
+        return self._project
+
+    @property
+    def tasks(self):
+        """ :class:`lib.gui.project.Tasks`: The session tasks handler """
+        return self._tasks
+
+    def set_command_notebook(self, notebook):
+        """ Set the command notebook to the :attr:`command_notebook` attribute "
+
+        Parameters
+        ----------
+        notebook: :class:`lib.gui.command.CommandNotebook`
+            The main command notebook for the Faceswap GUI
+        """
+        self._command_notebook = notebook
+        self._project.set_modified_callback()
+        self._tasks.set_modified_callback()
+
+    def get_active_tab_name(self):
+        """ Return the active tab from :attr:`command_notebook`
+
+        Returns
+        -------
+        str:
+            The name of the currently active :class:`lib.gui.command.CommandNotebook` tab
+        """
+        command = self._command_notebook.tab(self._command_notebook.select(), "text").lower()
+        if command == "tools":
+            command = self.tools_notebook.tab(self.tools_notebook.select(), "text").lower()
+        logger.debug("Active tab: %s", command)
+        return command
+
+    def set_active_tab_by_name(self, name):
+        """ Sets the :attr:`command_notebook` or :attr:`tools_notebook` to active based on given
+        name
+
+        Parameters
+        ----------
+        name: str
+            The name of the tab to set active
+        """
+        name = name.lower()
+        if name in self.command_tabs:
+            tab_id = self.command_tabs[name]
+            logger.debug("Setting active tab to: (name: %s, id: %s)", name, tab_id)
+            self._command_notebook.select(tab_id)
+        elif name in self.tools_tabs:
+            self._command_notebook.select(self.command_tabs["tools"])
+            tab_id = self.tools_tabs[name]
+            logger.debug("Setting active Tools tab to: (name: %s, id: %s)", name, tab_id)
+            self.tools_notebook.select()
+        else:
+            logger.debug("Name couldn't be found. Setting to id 0: %s", name)
+            self._command_notebook.select(0)
+
+    def set_modified_true(self, command):
+        """ Set the modified variable to True for the given command """
+        tkvar = self.modified_vars.get(command, None)
+        if tkvar is None:
+            logger.debug("No tkvar for command: '%s'", command)
+            return
+        if tkvar.get():
+            logger.trace("not setting var. Already True: '%s'", command)
+        else:
+            tkvar.set(True)
+            logger.debug("Set modified var to True for: '%s'", command)
+
+    def reset_modified_vars(self):
+        """ Set the modified variable to True for the given command """
+        for command, var in self.modified_vars.items():
+            var.set(False)
+            logger.debug("Set modified var to False for `%s`", command)
+
+    def refresh_config(self):
+        """ Reload the user config """
+        self._user_config = UserConfig(None)
+
+    def set_default_options(self):
+        """ Store the default options """
+        self.default_options = self.cli_opts.get_option_values()
 
     def set_cursor_busy(self, widget=None):
         """ Set the root or widget cursor to busy """
@@ -685,7 +830,7 @@ class Config():
 
     @staticmethod
     def set_tk_vars():
-        """ TK Variables to be triggered by to indicate
+        """ tkinter variables to be triggered by to indicate
             what state various parts of the GUI should be in """
         display = tk.StringVar()
         display.set(None)
@@ -714,9 +859,6 @@ class Config():
         updatepreview = tk.BooleanVar()
         updatepreview.set(False)
 
-        traintimeout = tk.IntVar()
-        traintimeout.set(120)
-
         tk_vars = {"display": display,
                    "runningtask": runningtask,
                    "istraining": istraining,
@@ -725,100 +867,15 @@ class Config():
                    "consoleclear": consoleclear,
                    "refreshgraph": refreshgraph,
                    "smoothgraph": smoothgraph,
-                   "updatepreview": updatepreview,
-                   "traintimeout": traintimeout}
+                   "updatepreview": updatepreview}
         logger.debug(tk_vars)
         return tk_vars
 
-    def load(self, command=None, filename=None):
-        """ Pop up load dialog for a saved config file """
-        logger.debug("Loading config: (command: '%s')", command)
-        if filename:
-            if not os.path.isfile(filename):
-                msg = "File does not exist: '{}'".format(filename)
-                logger.error(msg)
-                return
-            cfg = self.serializer.load(filename)
-        else:
-            cfgfile = FileHandler("open", "config").retfile
-            if not cfgfile:
-                return
-            filename = cfgfile.name
-            cfgfile.close()
-            cfg = self.serializer.load(filename)
-
-        if not command and len(cfg.keys()) == 1:
-            command = list(cfg.keys())[0]
-
-        opts = self.get_command_options(cfg, command) if command else cfg
-        if not opts:
-            return
-
-        for cmd, opts in opts.items():
-            self.set_command_args(cmd, opts)
-
-        if command:
-            if command in self.command_tabs:
-                self.command_notebook.select(self.command_tabs[command])
-            else:
-                self.command_notebook.select(self.command_tabs["tools"])
-                self.command_notebook.tools_notebook.select(self.tools_command_tabs[command])
-        self.add_to_recent(filename, command)
-        logger.debug("Loaded config: (command: '%s', filename: '%s')", command, filename)
-
-    def get_command_options(self, cfg, command):
-        """ return the saved options for the requested
-            command, if not loading global options """
-        opts = cfg.get(command, None)
-        retval = {command: opts}
-        if not opts:
-            self.tk_vars["consoleclear"].set(True)
-            print("No {} section found in file".format(command))
-            logger.info("No  %s section found in file", command)
-            retval = None
-        logger.debug(retval)
-        return retval
-
-    def set_command_args(self, command, options):
-        """ Pass the saved config items back to the CliOptions """
-        if not options:
-            return
-        for srcopt, srcval in options.items():
-            optvar = self.cli_opts.get_one_option_variable(command, srcopt)
-            if not optvar:
-                continue
-            optvar.set(srcval)
-
-    def save(self, command=None):
-        """ Save the current GUI state to a config file in json format """
-        logger.debug("Saving config: (command: '%s')", command)
-        cfgfile = FileHandler("save", "config").retfile
-        if not cfgfile:
-            return
-        filename = cfgfile.name
-        cfgfile.close()
-        cfg = self.cli_opts.get_option_values(command)
-        self.serializer.save(filename, cfg)
-        self.add_to_recent(filename, command)
-        logger.debug("Saved config: (command: '%s', filename: '%s')", command, filename)
-
-    def add_to_recent(self, filename, command):
-        """ Add to recent files """
-        recent_filename = os.path.join(self.pathcache, ".recent.json")
-        logger.debug("Adding to recent files '%s': (%s, %s)", recent_filename, filename, command)
-        if not os.path.exists(recent_filename) or os.path.getsize(recent_filename) == 0:
-            recent_files = list()
-        else:
-            recent_files = self.serializer.load(recent_filename)
-        logger.debug("Initial recent files: %s", recent_files)
-        filenames = [recent[0] for recent in recent_files]
-        if filename in filenames:
-            idx = filenames.index(filename)
-            del recent_files[idx]
-        recent_files.insert(0, (filename, command))
-        recent_files = recent_files[:20]
-        logger.debug("Final recent files: %s", recent_files)
-        self.serializer.save(recent_filename, recent_files)
+    def set_root_title(self, text=None):
+        """ Set the main title text for Faceswap """
+        title = "Faceswap.py"
+        title += " - {}".format(text) if text is not None and text else ""
+        self.root.title(title)
 
 
 class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
@@ -840,7 +897,7 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         self.add_command(label="Select all", command=self.select_all)
 
     def cm_bind(self):
-        """ Bind the menu to the widget's Right Click event """
+        """ Bind the menu to the widgets Right Click event """
         button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         logger.debug("Binding '%s' to '%s'", button, self.widget.winfo_class())
         scaling_factor = get_config().scaling_factor if get_config() is not None else 1.0
@@ -889,7 +946,7 @@ class LongRunningTask(Thread):
                          self.err[1].with_traceback(self.err[2]))
         finally:
             self.complete.set()
-            # Avoid a refcycle if the thread is running a function with
+            # Avoid a ref-cycle if the thread is running a function with
             # an argument that has a member that points to the thread.
             del self._target, self._args, self._kwargs
 
