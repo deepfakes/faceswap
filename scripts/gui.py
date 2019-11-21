@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, Session, DisplayNotebook,
-                     get_config, get_images, initialize_images, initialize_config, LastSession,
+                     get_images, initialize_images, initialize_config, LastSession,
                      MainMenuBar, ProcessWrapper, StatusBar)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -22,7 +22,7 @@ class FaceswapGui(tk.Tk):
         super().__init__()
 
         self._init_args = dict(pathscript=pathscript, debug=debug)
-        self.initialize_globals()
+        self._config = self.initialize_globals()
         self.set_fonts()
         self.set_styles()
         self.set_geometry()
@@ -33,7 +33,7 @@ class FaceswapGui(tk.Tk):
         get_images().delete_preview()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.build_gui()
-        self._last_session = LastSession(get_config())
+        self._last_session = LastSession(self._config)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def initialize_globals(self):
@@ -43,16 +43,16 @@ class FaceswapGui(tk.Tk):
         pathcache = os.path.join(self._init_args["pathscript"], "lib", "gui", ".cache")
         statusbar = StatusBar(self)
         session = Session()
-        initialize_config(self, cliopts, scaling_factor, pathcache, statusbar, session)
+        config = initialize_config(self, cliopts, scaling_factor, pathcache, statusbar, session)
         initialize_images()
+        return config
 
-    @staticmethod
-    def set_fonts():
+    def set_fonts(self):
         """ Set global default font """
-        tk.font.nametofont("TkFixedFont").configure(size=get_config().default_font[1])
+        tk.font.nametofont("TkFixedFont").configure(size=self._config.default_font[1])
         for font in ("TkDefaultFont", "TkHeadingFont", "TkMenuFont"):
-            tk.font.nametofont(font).configure(family=get_config().default_font[0],
-                                               size=get_config().default_font[1])
+            tk.font.nametofont(font).configure(family=self._config.default_font[0],
+                                               size=self._config.default_font[1])
 
     @staticmethod
     def set_styles():
@@ -69,8 +69,8 @@ class FaceswapGui(tk.Tk):
 
     def set_geometry(self):
         """ Set GUI geometry """
-        fullscreen = get_config().user_config_dict["fullscreen"]
-        scaling_factor = get_config().scaling_factor
+        fullscreen = self._config.user_config_dict["fullscreen"]
+        scaling_factor = self._config.scaling_factor
 
         if fullscreen:
             initial_dimensions = (self.winfo_screenwidth(), self.winfo_screenheight())
@@ -108,8 +108,8 @@ class FaceswapGui(tk.Tk):
                                              self._init_args["debug"])
         self.set_initial_focus()
         self.set_layout()
-        get_config().set_default_options()
-        get_config().project.set_default_opts()
+        self._config.set_default_options()
+        self._config.project.set_default_opts()
         logger.debug("Built GUI")
 
     def add_containers(self):
@@ -140,24 +140,21 @@ class FaceswapGui(tk.Tk):
 
         logger.debug("Added containers")
 
-    @staticmethod
-    def set_initial_focus():
+    def set_initial_focus(self):
         """ Set the tab focus from settings """
-        config = get_config()
-        tab = config.user_config_dict["tab"]
+        tab = self._config.user_config_dict["tab"]
         logger.debug("Setting focus for tab: %s", tab)
-        config.set_active_tab_by_name(tab)
+        self._config.set_active_tab_by_name(tab)
         logger.debug("Focus set to: %s", tab)
 
     def set_layout(self):
         """ Set initial layout """
         self.update_idletasks()
-        root = get_config().root
-        config = get_config().user_config_dict
-        r_width = root.winfo_width()
-        r_height = root.winfo_height()
-        w_ratio = config["options_panel_width"] / 100.0
-        h_ratio = 1 - (config["console_panel_height"] / 100.0)
+        config_opts = self._config.user_config_dict
+        r_width = self.winfo_width()
+        r_height = self.winfo_height()
+        w_ratio = config_opts["options_panel_width"] / 100.0
+        h_ratio = 1 - (config_opts["console_panel_height"] / 100.0)
         width = round(r_width * w_ratio)
         height = round(r_height * h_ratio)
         logger.debug("Setting Initial Layout: (root_width: %s, root_height: %s, width_ratio: %s, "
@@ -170,13 +167,13 @@ class FaceswapGui(tk.Tk):
     def rebuild(self):
         """ Rebuild the GUI on config change """
         logger.debug("Redrawing GUI")
-        session_state = self._last_session.collect_options()
-        get_config().refresh_config()
+        session_state = self._last_session.to_dict()
+        self._config.refresh_config()
         get_images().__init__()
         self.set_fonts()
         self.build_gui(rebuild=True)
         if session_state is not None:
-            self._last_session.set_options(session_state)
+            self._last_session.from_dict(session_state)
         logger.debug("GUI Redrawn")
 
     def close_app(self, *args):  # pylint: disable=unused-argument
@@ -184,20 +181,38 @@ class FaceswapGui(tk.Tk):
             animation function continues to run even when
             tkinter has gone away """
         logger.debug("Close Requested")
-        confirm = messagebox.askokcancel
-        confirmtxt = "Processes are still running. Are you sure...?"
-        tk_vars = get_config().tk_vars
-        if (tk_vars["runningtask"].get()
-                and not confirm("Close", confirmtxt)):
-            logger.debug("Close Cancelled")
+
+        if not self._confirm_close_on_running_task():
             return
-        if tk_vars["runningtask"].get():
+        if not self._config.project.confirm_close():
+            return
+
+        if self._config.tk_vars["runningtask"].get():
             self.wrapper.task.terminate()
+
         self._last_session.save()
         get_images().delete_preview()
         self.quit()
         logger.debug("Closed GUI")
         exit()
+
+    def _confirm_close_on_running_task(self):
+        """ Pop a confirmation box to close the GUI if a task is running
+
+        Returns
+        -------
+        bool: ``True`` if user confirms close, ``False`` if user cancels close
+        """
+        if not self._config.tk_vars["runningtask"].get():
+            logger.debug("No tasks currently running")
+            return True
+
+        confirmtxt = "Processes are still running.\n\nAre you sure you want to exit?"
+        if not messagebox.askokcancel("Close", confirmtxt, default="cancel", icon="warning"):
+            logger.debug("Close Cancelled")
+            return True
+        logger.debug("Close confirmed")
+        return False
 
 
 class Gui():  # pylint: disable=too-few-public-methods

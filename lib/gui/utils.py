@@ -31,6 +31,7 @@ def initialize_config(root, cli_opts, scaling_factor, pathcache, statusbar, sess
                  "statusbar: %s, session: %s)", root, cli_opts, scaling_factor, pathcache,
                  statusbar, session)
     _CONFIG = Config(root, cli_opts, scaling_factor, pathcache, statusbar, session)
+    return _CONFIG
 
 
 def get_config():
@@ -55,10 +56,11 @@ def get_images():
 class FileHandler():
     """ Raise a file dialog box and capture input """
 
-    def __init__(self, handletype, filetype, command=None, action=None,
-                 variable=None):
-        logger.debug("Initializing %s: (Handletype: '%s', filetype: '%s', command: '%s', action: "
-                     "'%s', variable: %s)", self.__class__.__name__, handletype, filetype, command,
+    def __init__(self, handletype, filetype, title=None, initialdir=None, command=None,
+                 action=None, variable=None):
+        logger.debug("Initializing %s: (Handletype: '%s', filetype: '%s', title: '%s', "
+                     "initialdir: '%s, 'command: '%s', action: '%s', variable: %s)",
+                     self.__class__.__name__, handletype, filetype, title, initialdir, command,
                      action, variable)
         self.handletype = handletype
         self.contexts = {
@@ -82,7 +84,7 @@ class FileHandler():
             }
         }
         self.defaults = self.set_defaults()
-        self.kwargs = self.set_kwargs(filetype, command, action, variable)
+        self.kwargs = self.set_kwargs(title, initialdir, filetype, command, action, variable)
         self.retfile = getattr(self, self.handletype.lower())()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -134,13 +136,20 @@ class FileHandler():
         logger.debug(defaults)
         return defaults
 
-    def set_kwargs(self, filetype, command, action, variable=None):
+    def set_kwargs(self, title, initialdir, filetype, command, action, variable=None):
         """ Generate the required kwargs for the requested browser """
-        logger.debug("Setting Kwargs: (filetype: '%s', command: '%s': action: '%s', "
-                     "variable: '%s')", filetype, command, action, variable)
+        logger.debug("Setting Kwargs: (title: %s, initialdir: %s, filetype: '%s', "
+                     "command: '%s': action: '%s', variable: '%s')",
+                     title, initialdir, filetype, command, action, variable)
         kwargs = dict()
         if self.handletype.lower() == "context":
             self.set_context_handletype(command, action, variable)
+
+        if title is not None:
+            kwargs["title"] = title
+
+        if initialdir is not None:
+            kwargs["initialdir"] = initialdir
 
         if self.handletype.lower() in (
                 "open", "save", "filename", "filename_multi", "savefilename"):
@@ -749,7 +758,6 @@ class Config():
         """
         self._command_notebook = notebook
         self._project.set_modified_callback()
-        self._tasks.set_modified_callback()
 
     def get_active_tab_name(self):
         """ Return the active tab from :attr:`command_notebook`
@@ -794,11 +802,8 @@ class Config():
         if tkvar is None:
             logger.debug("No tkvar for command: '%s'", command)
             return
-        if tkvar.get():
-            logger.trace("not setting var. Already True: '%s'", command)
-        else:
-            tkvar.set(True)
-            logger.debug("Set modified var to True for: '%s'", command)
+        tkvar.set(True)
+        logger.debug("Set modified var to True for: '%s'", command)
 
     def reset_modified_vars(self):
         """ Set the modified variable to True for the given command """

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _RECREATE_OBJECTS = dict(tooltips=dict(), commands=dict(), contextmenus=dict())
 
 
-def get_tooltip(widget, text, wraplength=600):
+def _get_tooltip(widget, text, wraplength=600):
     """ Store the tooltip layout and widget id in _TOOLTIPS and return a tooltip """
     _RECREATE_OBJECTS["tooltips"][str(widget)] = {"text": text,
                                                   "wraplength": wraplength}
@@ -30,7 +30,7 @@ def get_tooltip(widget, text, wraplength=600):
     return Tooltip(widget, text=text, wraplength=wraplength)
 
 
-def get_contextmenu(widget):
+def _get_contextmenu(widget):
     """ Create a context menu, store its mapping and return """
     rc_menu = ContextMenu(widget)
     _RECREATE_OBJECTS["contextmenus"][str(widget)] = rc_menu
@@ -39,7 +39,7 @@ def get_contextmenu(widget):
     return rc_menu
 
 
-def add_command(name, func):
+def _add_command(name, func):
     """ For controls that execute commands, the command must be added to the _COMMAND list so that
         it can be added back to the widget during cloning """
     logger.debug("Adding to commands: %s - %s", name, func)
@@ -47,19 +47,28 @@ def add_command(name, func):
 
 
 def set_slider_rounding(value, var, d_type, round_to, min_max):
-    """ Set the underlying variable to correct number based on slider rounding """
+    """ Set the value of sliders underlying variable based on their datatype,
+    rounding value and min/max.
+
+    Parameters
+    ----------
+    var: tkinter.Var
+        The variable to set the value for
+    d_type: [:class:`int`, :class:`float`]
+        The type of value that is stored in :attr:`var`
+    round_to: int
+        If :attr:`dtype` is :class:`float` then this is the decimal place rounding for :attr:`var`.
+        If :attr:`dtype` is :class:`int` then this is the number of steps between each increment
+        for :attr:`var`
+    min_max: tuple (`int`, `int`)
+        The (``min``, ``max``) values that this slider accepts
+    """
     if d_type == float:
         var.set(round(float(value), round_to))
     else:
         steps = range(min_max[0], min_max[1] + round_to, round_to)
         value = min(steps, key=lambda x: abs(x - int(float(value))))
         var.set(value)
-
-
-def adjust_wraplength(event):
-    """ dynamically adjust the wrap length of a label on event """
-    label = event.widget
-    label.configure(wraplength=event.width - 1)
 
 
 class ControlPanelOption():
@@ -111,7 +120,7 @@ class ControlPanelOption():
                      self.__class__.__name__, title, dtype, group, default, initial_value, choices,
                      is_radio, rounding, min_max, sysbrowser, helptext, track_modified, command)
 
-        self.dtype = dtype
+        self._dtype = dtype
         self.sysbrowser = sysbrowser
         self._options = dict(title=title,
                              group=group,
@@ -205,9 +214,9 @@ class ControlPanelOption():
             control = ttk.Radiobutton
         elif self.choices:
             control = ttk.Combobox
-        elif self.dtype == bool:
+        elif self._dtype == bool:
             control = ttk.Checkbutton
-        elif self.dtype in (int, float):
+        elif self._dtype in (int, float):
             control = ttk.Scale
         else:
             control = ttk.Entry
@@ -216,19 +225,19 @@ class ControlPanelOption():
 
     def get_tk_var(self, track_modified, command):
         """ Correct variable type for control """
-        if self.dtype == bool:
+        if self._dtype == bool:
             var = tk.BooleanVar()
-        elif self.dtype == int:
+        elif self._dtype == int:
             var = tk.IntVar()
-        elif self.dtype == float:
+        elif self._dtype == float:
             var = tk.DoubleVar()
         else:
             var = tk.StringVar()
         logger.debug("Setting tk variable: (name: '%s', dtype: %s, tk_var: %s)",
-                     self.name, self.dtype, var)
+                     self.name, self._dtype, var)
         if track_modified and command is not None:
             logger.debug("Tracking variable modification: %s", self.name)
-            var.trace("w", lambda name, index, mode, command=command: self.callback(command))
+            var.trace("w", lambda name, index, mode, cmd=command: self.callback(cmd))
         return var
 
     @staticmethod
@@ -273,8 +282,8 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         If provided, will place an information box at the top of the control
         panel with these contents.
     blank_nones: bool, optional
-        How the control panel should handle Nones. If set to True then Nones
-        will be converted to empty strings. Default: False
+        How the control panel should handle None values. If set to True then None values will be
+        converted to empty strings. Default: False
     """
 
     def __init__(self, parent, options,  # pylint:disable=too-many-arguments
@@ -306,6 +315,12 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @staticmethod
+    def _adjust_wraplength(event):
+        """ dynamically adjust the wrap length of a label on event """
+        label = event.widget
+        label.configure(wraplength=event.width - 1)
+
     def get_opts_frame(self):
         """ Return an auto-fill container for the options inside a main frame """
         mainframe = ttk.Frame(self.canvas)
@@ -336,7 +351,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
                 continue
             style = "Header.TLabel" if idx == 0 else "Body.TLabel"
             info = ttk.Label(label_frame, text=line, style=style, anchor=tk.W)
-            info.bind("<Configure>", adjust_wraplength)
+            info.bind("<Configure>", self._adjust_wraplength)
             info.pack(fill=tk.X, padx=0, pady=0, expand=True, side=tk.TOP)
 
     def build_panel(self, blank_nones):
@@ -681,7 +696,7 @@ class ControlBuilder():
         lbl = ttk.Label(self.frame, text=self.option.title, width=self.label_width, anchor=tk.W)
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         if self.option.helptext is not None:
-            get_tooltip(lbl, text=self.option.helptext, wraplength=600)
+            _get_tooltip(lbl, text=self.option.helptext, wraplength=600)
         logger.debug("Built control label: (widget: '%s', title: '%s'",
                      self.option.name, self.option.title)
 
@@ -699,7 +714,7 @@ class ControlBuilder():
         if self.option.control != ttk.Checkbutton:
             ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
             if self.option.helptext is not None and not self.helpset:
-                get_tooltip(ctl, text=self.option.helptext, wraplength=600)
+                _get_tooltip(ctl, text=self.option.helptext, wraplength=600)
 
         logger.debug("Built control: '%s'", self.option.name)
 
@@ -728,7 +743,7 @@ class ControlBuilder():
                 helptext = "{}\n\n - {}".format(
                     '. '.join(item.capitalize() for item in helptext.split('. ')),
                     intro)
-                get_tooltip(radio, text=helptext, wraplength=600)
+                _get_tooltip(radio, text=helptext, wraplength=600)
             radio.pack(anchor=tk.W)
             logger.debug("Added radio option %s", choice)
         return radio_holder.parent
@@ -750,8 +765,8 @@ class ControlBuilder():
                       round_to=self.option.rounding,
                       min_max=self.option.min_max)
         ctl = self.option.control(self.frame, variable=self.option.tk_var, command=cmd)
-        add_command(ctl.cget("command"), cmd)
-        rc_menu = get_contextmenu(tbox)
+        _add_command(ctl.cget("command"), cmd)
+        rc_menu = _get_contextmenu(tbox)
         rc_menu.cm_bind()
         ctl["from_"] = self.option.min_max[0]
         ctl["to"] = self.option.min_max[1]
@@ -773,7 +788,7 @@ class ControlBuilder():
             ctl = self.option.control(self.frame,
                                       textvariable=self.option.tk_var,
                                       font=get_config().default_font)
-            rc_menu = get_contextmenu(ctl)
+            rc_menu = _get_contextmenu(ctl)
             rc_menu.cm_bind()
         if self.option.choices:
             logger.debug("Adding combo choices: %s", self.option.choices)
@@ -789,7 +804,7 @@ class ControlBuilder():
                                   variable=self.option.tk_var,
                                   text=self.option.title,
                                   name=self.option.name)
-        get_tooltip(ctl, text=self.option.helptext, wraplength=600)
+        _get_tooltip(ctl, text=self.option.helptext, wraplength=600)
         ctl.pack(side=tk.TOP, anchor=tk.W)
         logger.debug("Added control checkframe: '%s'", self.option.name)
         return ctl
@@ -860,9 +875,9 @@ class FileBrowser():
             action = getattr(self, "ask_" + browser)
             cmd = partial(action, filepath=self.tk_var, filetypes=self.filetypes)
             fileopn = ttk.Button(frame, image=img, command=cmd)
-            add_command(fileopn.cget("command"), cmd)
+            _add_command(fileopn.cget("command"), cmd)
             fileopn.pack(padx=0, side=tk.RIGHT)
-            get_tooltip(fileopn, text=self.helptext[lbl], wraplength=600)
+            _get_tooltip(fileopn, text=self.helptext[lbl], wraplength=600)
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",
                          action, self.filetypes)
 

@@ -403,12 +403,13 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
             logger.debug("Adding button: '%s'", btntype)
 
             loader, kwargs = self._loader_and_kwargs(loadtype)
+            if loadtype == "load":
+                kwargs["current_tab"] = True
             cmd = getattr(self._config.tasks, loader)
             btn = ttk.Button(
                 frame,
                 image=get_images().icons[btntype],
-                command=lambda fn=cmd, kw=kwargs: fn(command=self._config.get_active_tab_name(),
-                                                     **kw))
+                command=lambda fn=cmd, kw=kwargs: fn(**kw))
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = self.set_help(btntype)
             Tooltip(btn, text=hlp, wraplength=200)
