@@ -38,6 +38,9 @@ class Mask():
         self._input_is_faces = arguments.input_type == "faces"
         self._mask_type = arguments.masker
         self._output_opts = dict(blur_kernel=arguments.blur_kernel, threshold=arguments.threshold)
+        self._output_type = arguments.output_type
+        self._output_full_frame = arguments.full_frame
+        self._output_suffix = self._get_output_suffix()
 
         self._face_count = 0
         self._skip_count = 0
@@ -229,6 +232,19 @@ class Mask():
             logger.debug("Not updating existing mask for face: '%s' - %s", frame, idx)
         return retval
 
+    def _get_output_suffix(self):
+        """ The filename suffix, based on selected output options
+
+        Returns
+        -------
+        str:
+            The suffix to be appended to the output filename
+        """
+        sfx = "{}_mask_preview_".format(self._mask_type)
+        sfx += "face_" if not self._output_full_frame or self._input_is_faces else "frame_"
+        sfx += "{}.png".format(self._output_type)
+        return sfx
+
     @staticmethod
     def _get_detected_face(alignment):
         """ Convert an alignment dict item to a detected_face object
@@ -318,10 +334,12 @@ class Mask():
         detected_face: `lib.FacesDetect.detected_face`
             A detected_face object for a face
         """
-        filename = os.path.join(self._saver.location,
-                                "{}_{}_{}_mask_preview.png".format(os.path.splitext(frame)[0],
-                                                                   idx,
-                                                                   self._mask_type))
+        filename = os.path.join(self._saver.location, "{}_{}_{}".format(
+            os.path.splitext(frame)[0],
+            idx,
+            self._output_suffix)
+        )
+
         if detected_face.mask is None or detected_face.mask.get(self._mask_type, None) is None:
             logger.warning("Mask type '%s' does not exist for frame '%s' index %s. Skipping",
                            self._mask_type, frame, idx)
@@ -340,24 +358,36 @@ class Mask():
 
         Returns
         numpy.ndarray:
-            A preview image, containing 3 sub images: The original face, the masked face and
-            the mask.
+            A preview image depending on the output type in one of the following forms:
+              - Containing 3 sub images: The original face, the masked face and the mask
+              - The mask only
+              - The masked face
         """
-        if self._input_is_faces:
-            face = detected_face.image
+        mask = detected_face.mask[self._mask_type]
+        mask.set_blur_kernel_and_threshold(**self._output_opts)
+        if not self._output_full_frame or self._input_is_faces:
+            if self._input_is_faces:
+                face = detected_face.image
+            else:
+                detected_face.load_aligned(detected_face.image)
+                face = detected_face.aligned_face
+            mask = cv2.resize(detected_face.mask[self._mask_type].mask,
+                              (face.shape[1], face.shape[0]),
+                              interpolation=cv2.INTER_CUBIC)[..., None]
         else:
-            detected_face.load_aligned(detected_face.image)
-            face = detected_face.aligned_face
-        size = face.shape[0]
-        detected_face.mask[self._mask_type].set_blur_kernel_and_threshold(**self._output_opts)
-        mask = cv2.resize(detected_face.mask[self._mask_type].mask,
-                          (size, size),
-                          interpolation=cv2.INTER_CUBIC)[..., None]
-        masked = (face.astype("float32") * mask.astype("float32") / 255.).astype("uint8")
-        mask = np.tile(mask, 3)
+            face = detected_face.image
+            mask = mask.get_full_frame_mask(face.shape[1], face.shape[0])
+            mask = np.expand_dims(mask, -1)
 
-        for img in (face, masked, mask):
-            cv2.rectangle(img, (0, 0), (size - 1, size - 1), (255, 255, 255), 1)
-
-        out_image = np.concatenate((face, masked, mask), axis=1)
+        h, w = face.shape[:2]
+        if self._output_type == "combined":
+            masked = (face.astype("float32") * mask.astype("float32") / 255.).astype("uint8")
+            mask = np.tile(mask, 3)
+            for img in (face, masked, mask):
+                cv2.rectangle(img, (0, 0), (w - 1, h - 1), (255, 255, 255), 1)
+                out_image = np.concatenate((face, masked, mask), axis=1)
+        elif self._output_type == "mask":
+            out_image = mask
+        elif self._output_type == "masked":
+            out_image = np.concatenate([face, mask], axis=-1)
         return out_image
