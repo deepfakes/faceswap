@@ -260,7 +260,7 @@ class CliOptions():
             optval = str(option["cpanel_option"].get())
             opt = option["opts"][0]
             if command in ("extract", "convert") and opt == "-o":
-                get_images().pathoutput = optval
+                get_images().set_faceswap_output_path(optval)
             if optval in ("False", ""):
                 continue
             elif optval == "True":

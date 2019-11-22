@@ -17,7 +17,7 @@ from matplotlib.figure import Figure  # noqa
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)  # noqa
 
-from .tooltip import Tooltip  # noqa
+from .custom_widgets import Tooltip  # noqa
 from .utils import get_config, get_images, LongRunningTask  # noqa
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name

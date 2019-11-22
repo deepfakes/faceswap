@@ -17,7 +17,7 @@ from lib.serializer import get_serializer
 import update_deps
 
 from .popup_configure import popup_config
-from .tooltip import Tooltip
+from .custom_widgets import Tooltip
 from .utils import get_config, get_images
 
 _RESOURCES = [("faceswap.dev - Guides and Forum", "https://www.faceswap.dev"),

@@ -10,8 +10,9 @@ from functools import partial
 
 from _tkinter import Tcl_Obj
 
-from .tooltip import Tooltip
-from .utils import ContextMenu, FileHandler, get_config, get_images
+from .custom_widgets import ContextMenu
+from .custom_widgets import Tooltip
+from .utils import FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -263,9 +264,6 @@ class ControlPanelOption():
         """ Set a callback to load model stats for existing models when a model
         folder is selected """
         folder = var.get()
-        if not folder:
-            logger.debug("Model Dir selection empty")
-            return
         if get_config().tk_vars["runningtask"].get():
             logger.debug("Task running. Not updating session")
             return

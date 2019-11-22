@@ -16,7 +16,8 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
-from lib.gui.utils import get_images, initialize_images, ContextMenu
+from lib.gui.custom_widgets import ContextMenu
+from lib.gui.utils import get_images, initialize_images
 from lib.gui.tooltip import Tooltip
 from lib.gui.control_helper import set_slider_rounding
 from lib.convert import Converter
@@ -782,7 +783,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.busy_indicator.start()
 
     def add_actions(self, parent):
-        """ Add Actio Buttons """
+        """ Add Action Buttons """
         logger.debug("Adding util buttons")
         frame = ttk.Frame(parent)
         frame.pack(padx=5, pady=(5, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
@@ -940,7 +941,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         return sep
 
     def add_actions(self, parent, config_key):
-        """ Add Actio Buttons """
+        """ Add Action Buttons """
         logger.debug("Adding util buttons")
 
         title = config_key.split(".")[1].replace("_", " ").title()

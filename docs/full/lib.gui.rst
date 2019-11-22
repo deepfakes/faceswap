@@ -6,9 +6,6 @@ Submodules
 
 .. toctree::
 
+   lib.gui.custom_widgets
    lib.gui.project
-
-.. automodule:: lib.gui
-   :members:
-   :undoc-members:
-   :show-inheritance:
+   lib.gui.utils

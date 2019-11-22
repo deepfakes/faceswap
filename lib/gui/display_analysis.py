@@ -11,7 +11,7 @@ from .control_helper import ControlBuilder, ControlPanelOption
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, Session
-from .tooltip import Tooltip
+from .custom_widgets import Tooltip
 from .utils import FileHandler, get_config, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -81,7 +81,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Resetting session info")
         self.set_info("No session data loaded")
 
-    def populate_from_folder(self, *args):  # pylint:disable=unused-arguments
+    def populate_from_folder(self, *args):  # pylint:disable=unused-argument
         """ Populate the Analysis tab from just a model folder. Triggered
         when tkinter variable ``analysis_folder`` is set.
         """

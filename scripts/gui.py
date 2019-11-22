@@ -99,8 +99,7 @@ class FaceswapGui(tk.Tk):
                                              self._init_args["debug"])
         self.set_initial_focus()
         self.set_layout()
-        self._config.set_default_options()
-        self._config.project.set_default_opts()
+        self._config.project.initialize_default_options()
         logger.debug("Built GUI")
 
     def add_containers(self):

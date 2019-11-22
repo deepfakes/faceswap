@@ -29,6 +29,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         self._serializer = get_serializer("json")
         self._config = config
 
+        self._default_opts = None
         self._options = None
         self._file_handler = file_handler
         self._filename = None
@@ -38,8 +39,15 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
 
     @property
     def _active_tab(self):
-        """str: The name of the currently selected tab. """
-        return self._config.get_active_tab_name()
+        """ str: The name of the currently selected :class:`lib.gui.command.CommandNotebook`
+        tab. """
+        notebook = self._config.command_notebook
+        toolsbook = self._config.tools_notebook
+        command = notebook.tab(notebook.select(), "text").lower()
+        if command == "tools":
+            command = toolsbook.tab(toolsbook.select(), "text").lower()
+        logger.debug("Active tab: %s", command)
+        return command
 
     @property
     def _modified_vars(self):
@@ -50,11 +58,6 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
     def _file_exists(self):
         """ bool: ``True`` if :attr:`_filename` exists otherwise ``False``. """
         return self._filename is not None and os.path.isfile(self._filename)
-
-    @property
-    def _default_opts(self):
-        """ dict: The default options for all tabs. """
-        return self._config.default_options
 
     @property
     def _cli_options(self):
@@ -634,7 +637,18 @@ class Project(_GuiSession):
         """ :class:`Tasks`: The current session's :class:``Tasks``. """
         return self._config.tasks
 
-    def set_default_opts(self):
+    def initialize_default_options(self):
+        """ Collect the default options. and store locally.
+
+        The Default GUI options are stored on Faceswap startup.
+
+        Exposed as the :attr:`_default_opts` for a project cannot be set until after the main
+        Command Tabs have been loaded.
+        """
+        self._default_opts = self._current_gui_state()
+        self._set_default_options()
+
+    def _set_default_options(self):
         """ Set the default options. The Default GUI options are stored on Faceswap startup.
 
         Exposed as the :attr:`_default_opts` for a project cannot be set until after the main
@@ -714,7 +728,7 @@ class Project(_GuiSession):
         logger.debug("Updating legacy task '%s", self._filename)
         filename = self._filename
         self._filename = None
-        self.set_default_opts()
+        self._set_default_options()
         self._tasks.clear_tasks()
         self._tasks.load(filename=filename, current_tab=False)
         logger.debug("Updated legacy task and reset project")
@@ -800,7 +814,7 @@ class Project(_GuiSession):
         self._filename = cfgfile.name
         cfgfile.close()
 
-        self.set_default_opts()
+        self._set_default_options()
         self._config.cli_opts.reset()
         self._save()
         self._update_root_title()
@@ -819,7 +833,7 @@ class Project(_GuiSession):
             return
         self._config.cli_opts.reset()
         self._filename = None
-        self.set_default_opts()
+        self._set_default_options()
         self._reset_modified_var()
         self._update_root_title()
         self._config.set_active_tab_by_name(self._config.user_config_dict["tab"])

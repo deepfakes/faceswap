@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .control_helper import ControlPanel, ControlPanelOption
-from .tooltip import Tooltip
+from .custom_widgets import Tooltip
 from .utils import get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
