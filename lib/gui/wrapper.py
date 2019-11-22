@@ -24,18 +24,18 @@ class ProcessWrapper():
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, pathscript=None):
-        logger.debug("Initializing %s: (pathscript: %s)", self.__class__.__name__, pathscript)
+    def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.tk_vars = get_config().tk_vars
         self.set_callbacks()
-        self.pathscript = pathscript
+        self.pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
         self.command = None
         self.statusbar = get_config().statusbar
         self.task = FaceswapControl(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_callbacks(self):
-        """ Set the tk variable callbacks """
+        """ Set the tkinter variable callbacks """
         logger.debug("Setting tk variable traces")
         self.tk_vars["action"].trace("w", self.action_command)
         self.tk_vars["generate"].trace("w", self.generate_command)
@@ -364,7 +364,7 @@ class FaceswapControl():
         """ Terminate the subprocess """
         logger.debug("Terminating wrapper")
         if command == "train":
-            timeout = self.config.tk_vars["traintimeout"].get()
+            timeout = self.config.user_config_dict.get("timeout", 120)
             logger.debug("Sending Exit Signal")
             print("Sending Exit Signal", flush=True)
             now = time()
@@ -390,7 +390,7 @@ class FaceswapControl():
 
     @staticmethod
     def generate_windows_keypress(character):
-        """ Generate an 'Enter' keypress to terminate Windows training """
+        """ Generate an 'Enter' key press to terminate Windows training """
         buf = win32console.PyINPUT_RECORDType(  # pylint:disable=c-extension-no-member
             win32console.KEY_EVENT)  # pylint:disable=c-extension-no-member
         buf.KeyDown = 1

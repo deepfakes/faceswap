@@ -2,99 +2,149 @@
 """ Utility functions for the GUI """
 import logging
 import os
-import platform
-import re
 import sys
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog
 from threading import Event, Thread
 from queue import Queue
 import numpy as np
 
 from PIL import Image, ImageDraw, ImageTk
 
-from lib.serializer import get_serializer
-
 from ._config import Config as UserConfig
-from ._redirector import WidgetRedirector
+from .project import Project, Tasks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 _IMAGES = None
+PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
 
 
-def initialize_config(root, cli_opts, scaling_factor, pathcache, statusbar, session):
-    """ Initialize the config and add to global constant """
+def initialize_config(root, cli_opts, statusbar, session):
+    """ Initialize the GUI Master :class:`Config` and add to global constant.
+
+    This should only be called once on first GUI startup. Future access to :class:`Config`
+    should only be executed through :func:`get_config`.
+
+    Parameters
+    ----------
+    root: :class:`tkinter.Tk`
+        The root Tkinter object
+    cli_opts: :class:`lib.gui.options.CliOpts`
+        The command line options object
+    statusbar: :class:`lib.gui.custom_widgets.StatusBar`
+        The GUI Status bar
+    session: :class:`lib.gui.stats.Session`
+        The current training Session
+    """
     global _CONFIG  # pylint: disable=global-statement
     if _CONFIG is not None:
-        return
-    logger.debug("Initializing config: (root: %s, cli_opts: %s, tk_vars: %s, pathcache: %s, "
-                 "statusbar: %s, session: %s)", root, cli_opts, scaling_factor, pathcache,
-                 statusbar, session)
-    _CONFIG = Config(root, cli_opts, scaling_factor, pathcache, statusbar, session)
-
-
-def get_config():
-    """ return the _CONFIG constant """
+        return None
+    logger.debug("Initializing config: (root: %s, cli_opts: %s, "
+                 "statusbar: %s, session: %s)", root, cli_opts, statusbar, session)
+    _CONFIG = Config(root, cli_opts, statusbar, session)
     return _CONFIG
 
 
-def initialize_images(pathcache=None):
-    """ Initialize the images and add to global constant """
+def get_config():
+    """ Get the Master GUI configuration.
+
+    Returns
+    -------
+    :class:`Config`
+        The Master GUI Config
+    """
+    return _CONFIG
+
+
+def initialize_images():
+    """ Initialize the :class:`Images` handler  and add to global constant.
+
+    This should only be called once on first GUI startup. Future access to :class:`Images`
+    handler should only be executed through :func:`get_images`.
+    """
     global _IMAGES  # pylint: disable=global-statement
     if _IMAGES is not None:
         return
     logger.debug("Initializing images")
-    _IMAGES = Images(pathcache)
+    _IMAGES = Images()
 
 
 def get_images():
-    """ return the _CONFIG constant """
+    """ Get the Master GUI Images handler.
+
+    Returns
+    -------
+    :class:`Images`
+        The Master GUI Images handler
+    """
     return _IMAGES
 
 
-class FileHandler():
-    """ Raise a filedialog box and capture input """
+class FileHandler():  # pylint:disable=too-few-public-methods
+    """ Handles all GUI File Dialog actions and tasks.
 
-    def __init__(self, handletype, filetype, command=None, action=None,
-                 variable=None):
-        logger.debug("Initializing %s: (Handletype: '%s', filetype: '%s', command: '%s', action: "
-                     "'%s', variable: %s)", self.__class__.__name__, handletype, filetype, command,
+    Parameters
+    ----------
+    handletype: ['open', 'save', 'filename', 'filename_multi', 'savefilename', 'context']
+        The type of file dialog to return. `open` and `save` will perform the open and save actions
+        and return the file. `filename` returns the filename from an `open` dialog.
+        `filename_multi` allows for multi-selection of files and returns a list of files selected.
+        `savefilename` returns the filename from a `save as` dialog. `context` is a context
+        sensitive parameter that returns a certain dialog based on the current options
+    filetype: ['default', 'alignments', 'config_project', 'config_task', 'config_all', 'csv', \
+               'image', 'ini', 'state', 'log', 'video']
+        The type of file that this dialog is for. `default` allows selection of any files. Other
+        options limit the file type selection
+    title: str, optional
+        The title to display on the file dialog. If `None` then the default title will be used.
+        Default: ``None``
+    initialdir: str, optional
+        The folder to initially open with the file dialog. If `None` then tkinter will decide.
+        Default: ``None``
+    command: str, optional
+        Required for context handling file dialog, otherwise unused. Default: ``None``
+    action: str, optional
+        Required for context handling file dialog, otherwise unused. Default: ``None``
+    variable: :class:`tkinter.StringVar`, optional
+        Required for context handling file dialog, otherwise unused. The variable to associate
+        with this file dialog. Default: ``None``
+
+    Attributes
+    ----------
+    retfile: str or object
+        The return value from the file dialog
+
+    Example
+    -------
+    >>> handler = FileHandler('filename', 'video', title='Select a video...')
+    >>> video_file = handler.retfile
+    >>> print(video_file)
+    '/path/to/selected/video.mp4'
+    """
+
+    def __init__(self, handletype, filetype, title=None, initialdir=None, command=None,
+                 action=None, variable=None):
+        logger.debug("Initializing %s: (Handletype: '%s', filetype: '%s', title: '%s', "
+                     "initialdir: '%s, 'command: '%s', action: '%s', variable: %s)",
+                     self.__class__.__name__, handletype, filetype, title, initialdir, command,
                      action, variable)
-        self.handletype = handletype
-        self.contexts = {
-            "effmpeg": {
-                "input": {"extract": "filename",
-                          "gen-vid": "dir",
-                          "get-fps": "filename",
-                          "get-info": "filename",
-                          "mux-audio": "filename",
-                          "rescale": "filename",
-                          "rotate": "filename",
-                          "slice": "filename"},
-                "output": {"extract": "dir",
-                           "gen-vid": "savefilename",
-                           "get-fps": "nothing",
-                           "get-info": "nothing",
-                           "mux-audio": "savefilename",
-                           "rescale": "savefilename",
-                           "rotate": "savefilename",
-                           "slice": "savefilename"}
-            }
-        }
-        self.defaults = self.set_defaults()
-        self.kwargs = self.set_kwargs(filetype, command, action, variable)
-        self.retfile = getattr(self, self.handletype.lower())()
+        self._handletype = handletype
+        self._defaults = self._set_defaults()
+        self._kwargs = self._set_kwargs(title, initialdir, filetype, command, action, variable)
+        self.retfile = getattr(self, "_{}".format(self._handletype.lower()))()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def filetypes(self):
-        """ Set the filetypes for opening/saving """
+    def _filetypes(self):
+        """ dict: The accepted extensions for each file type for opening/saving """
         all_files = ("All files", "*.*")
         filetypes = {"default": (all_files,),
                      "alignments": [("Faceswap Alignments", "*.fsa *.json"),
                                     all_files],
-                     "config": [("Faceswap GUI config files", "*.fsw"), all_files],
+                     "config_project": [("Faceswap Project files", "*.fsw"), all_files],
+                     "config_task": [("Faceswap Task files", "*.fst"), all_files],
+                     "config_all": [("Faceswap Project and Task files", "*.fst *.fsw"), all_files],
                      "csv": [("Comma separated values", "*.csv"), all_files],
                      "image": [("Bitmap", "*.bmp"),
                                ("JPG", "*.jpeg *.jpg"),
@@ -122,221 +172,386 @@ class FileHandler():
             val.insert(0, tuple(multi))
         return filetypes
 
-    def set_defaults(self):
-        """ Set the default filetype to be first in list of filetypes,
-            or set a custom filetype if the first is not correct """
+    @property
+    def _contexts(self):
+        """dict: Mapping of commands, actions and their corresponding file dialog for context
+        handle types. """
+        return {
+            "effmpeg": {
+                "input": {
+                    "extract": "filename",
+                    "gen-vid": "dir",
+                    "get-fps": "filename",
+                    "get-info": "filename",
+                    "mux-audio": "filename",
+                    "rescale": "filename",
+                    "rotate": "filename",
+                    "slice": "filename"},
+                "output": {
+                    "extract": "dir",
+                    "gen-vid": "savefilename",
+                    "get-fps": "nothing",
+                    "get-info": "nothing",
+                    "mux-audio": "savefilename",
+                    "rescale": "savefilename",
+                    "rotate": "savefilename",
+                    "slice": "savefilename"}
+                }
+            }
+
+    def _set_defaults(self):
+        """ Set the default file type for the file dialog. Generally the first found file type
+        will be used, but this is overridden if it is not appropriate.
+
+        Returns
+        -------
+        dict:
+            The default file extension for each file type
+        """
         defaults = {key: val[0][1].replace("*", "")
-                    for key, val in self.filetypes.items()}
+                    for key, val in self._filetypes.items()}
         defaults["default"] = None
         defaults["video"] = ".mp4"
         defaults["image"] = ".png"
         logger.debug(defaults)
         return defaults
 
-    def set_kwargs(self, filetype, command, action, variable=None):
-        """ Generate the required kwargs for the requested browser """
-        logger.debug("Setting Kwargs: (filetype: '%s', command: '%s': action: '%s', "
-                     "variable: '%s')", filetype, command, action, variable)
-        kwargs = dict()
-        if self.handletype.lower() == "context":
-            self.set_context_handletype(command, action, variable)
+    def _set_kwargs(self, title, initialdir, filetype, command, action, variable=None):
+        """ Generate the required kwargs for the requested file dialog browser.
 
-        if self.handletype.lower() in (
+        Returns
+        -------
+        dict:
+            The key word arguments for the file dialog to be launched
+        """
+        logger.debug("Setting Kwargs: (title: %s, initialdir: %s, filetype: '%s', "
+                     "command: '%s': action: '%s', variable: '%s')",
+                     title, initialdir, filetype, command, action, variable)
+        kwargs = dict()
+        if self._handletype.lower() == "context":
+            self._set_context_handletype(command, action, variable)
+
+        if title is not None:
+            kwargs["title"] = title
+
+        if initialdir is not None:
+            kwargs["initialdir"] = initialdir
+
+        if self._handletype.lower() in (
                 "open", "save", "filename", "filename_multi", "savefilename"):
-            kwargs["filetypes"] = self.filetypes[filetype]
-            if self.defaults.get(filetype, None):
-                kwargs['defaultextension'] = self.defaults[filetype]
-        if self.handletype.lower() == "save":
+            kwargs["filetypes"] = self._filetypes[filetype]
+            if self._defaults.get(filetype, None):
+                kwargs['defaultextension'] = self._defaults[filetype]
+        if self._handletype.lower() == "save":
             kwargs["mode"] = "w"
-        if self.handletype.lower() == "open":
+        if self._handletype.lower() == "open":
             kwargs["mode"] = "r"
         logger.debug("Set Kwargs: %s", kwargs)
         return kwargs
 
-    def set_context_handletype(self, command, action, variable):
-        """ Choose the correct file browser action based on context """
-        if self.contexts[command].get(variable, None) is not None:
-            handletype = self.contexts[command][variable][action]
+    def _set_context_handletype(self, command, action, variable):
+        """ Sets the correct handle type  based on context.
+
+        Parameters
+        ----------
+        command: str
+            The command that is being executed. Used to look up the context actions
+        action: str
+            The action that is being performed. Used to look up the correct file dialog
+        variable: :class:`tkinter.StringVar`
+            The variable associated with this file dialog
+        """
+        if self._contexts[command].get(variable, None) is not None:
+            handletype = self._contexts[command][variable][action]
         else:
-            handletype = self.contexts[command][action]
+            handletype = self._contexts[command][action]
         logger.debug(handletype)
-        self.handletype = handletype
+        self._handletype = handletype
 
-    def open(self):
-        """ Open a file """
+    def _open(self):
+        """ Open a file. """
         logger.debug("Popping Open browser")
-        return filedialog.askopenfile(**self.kwargs)
+        return filedialog.askopenfile(**self._kwargs)
 
-    def save(self):
-        """ Save a file """
+    def _save(self):
+        """ Save a file. """
         logger.debug("Popping Save browser")
-        return filedialog.asksaveasfile(**self.kwargs)
+        return filedialog.asksaveasfile(**self._kwargs)
 
-    def dir(self):
-        """ Get a directory location """
+    def _dir(self):
+        """ Get a directory location. """
         logger.debug("Popping Dir browser")
-        return filedialog.askdirectory(**self.kwargs)
+        return filedialog.askdirectory(**self._kwargs)
 
-    def savedir(self):
-        """ Get a save dir location """
+    def _savedir(self):
+        """ Get a save directory location. """
         logger.debug("Popping SaveDir browser")
-        return filedialog.askdirectory(**self.kwargs)
+        return filedialog.askdirectory(**self._kwargs)
 
-    def filename(self):
-        """ Get an existing file location """
+    def _filename(self):
+        """ Get an existing file location. """
         logger.debug("Popping Filename browser")
-        return filedialog.askopenfilename(**self.kwargs)
+        return filedialog.askopenfilename(**self._kwargs)
 
-    def filename_multi(self):
-        """ Get multiple existing file locations """
+    def _filename_multi(self):
+        """ Get multiple existing file locations. """
         logger.debug("Popping Filename browser")
-        return filedialog.askopenfilenames(**self.kwargs)
+        return filedialog.askopenfilenames(**self._kwargs)
 
-    def savefilename(self):
-        """ Get a save file location """
+    def _savefilename(self):
+        """ Get a save file location. """
         logger.debug("Popping SaveFilename browser")
-        return filedialog.asksaveasfilename(**self.kwargs)
+        return filedialog.asksaveasfilename(**self._kwargs)
 
     @staticmethod
-    def nothing():  # pylint: disable=useless-return
-        """ Method that does nothing, used for disabling open/save pop up  """
+    def _nothing():  # pylint: disable=useless-return
+        """ Method that does nothing, used for disabling open/save pop up.  """
         logger.debug("Popping Nothing browser")
         return
 
 
 class Images():
-    """ Holds locations of images and actual images
+    """ The centralized image repository for holding all icons and images required by the GUI.
 
-        Don't call directly. Call get_images()
+    This class should be initialized on GUI startup through :func:`initialize_images`. Any further
+    access to this class should be through :func:`get_images`.
     """
-
-    def __init__(self, pathcache=None):
+    def __init__(self):
         logger.debug("Initializing %s", self.__class__.__name__)
-        pathcache = get_config().pathcache if pathcache is None else pathcache
-        self.pathicons = os.path.join(pathcache, "icons")
-        self.pathpreview = os.path.join(pathcache, "preview")
-        self.pathoutput = None
-        self.previewoutput = None
-        self.previewtrain = dict()
-        self.previewcache = dict(modified=None,  # cache for extract and convert
-                                 images=None,
-                                 filenames=list(),
-                                 placeholder=None)
-        self.errcount = 0
-        self.icons = dict()
-        self.icons["folder"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_folder.png"))
-        self.icons["load"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_file.png"))
-        self.icons["load_multi"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_file.png"))
-        self.icons["context"] = ImageTk.PhotoImage(file=os.path.join(
-            self.pathicons, "open_file.png"))
-        self.icons["save"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "save.png"))
-        self.icons["reset"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "reset.png"))
-        self.icons["clear"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "clear.png"))
-        self.icons["graph"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "graph.png"))
-        self.icons["zoom"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "zoom.png"))
-        self.icons["move"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "move.png"))
-        self.icons["favicon"] = ImageTk.PhotoImage(file=os.path.join(self.pathicons, "logo.png"))
-        logger.debug("Initialized %s: (icons: %s)", self.__class__.__name__, self.icons)
+        self._pathpreview = os.path.join(PATHCACHE, "preview")
+        self._pathoutput = None
+        self._previewoutput = None
+        self._previewtrain = dict()
+        self._previewcache = dict(modified=None,  # cache for extract and convert
+                                  images=None,
+                                  filenames=list(),
+                                  placeholder=None)
+        self._errcount = 0
+        self._icons = self._load_icons()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def previewoutput(self):
+        """ Tuple or ``None``: First item in the tuple is the extract or convert preview image
+        (:class:`PIL.Image`), the second item is the image in a format that tkinter can display
+        (:class:`PIL.ImageTK.PhotoImage`).
+
+        The value of the property is ``None`` if no extract or convert task is running or there are
+        no files available in the output folder. """
+        return self._previewoutput
+
+    @property
+    def previewtrain(self):
+        """ dict or ``None``: The training preview images. Dictionary key is the image name
+        (`str`). Dictionary values are a `list` of the training image (:class:`PIL.Image`), the
+        image formatted for tkinter display (:class:`PIL.ImageTK.PhotoImage`), the last
+        modification time of the image (`float`).
+
+        The value of this property is ``None`` if training is not running or there are no preview
+        images available.
+        """
+        return self._previewtrain
+
+    @property
+    def icons(self):
+        """ dict: The faceswap icons for all parts of the GUI. The dictionary key is the icon
+        name (`str`) the value is the icon sized and formatted for display
+        (:class:`PIL.ImageTK.PhotoImage`).
+
+        Example
+        -------
+        >>> icons = get_images().icons
+        >>> save = icons["save"]
+        >>> button = ttk.Button(parent, image=save)
+        >>> button.pack()
+        """
+        return self._icons
+
+    @staticmethod
+    def _load_icons():
+        """ Scan the icons cache folder and load the icons into :attr:`icons` for retrieval
+        throughout the GUI.
+
+        Returns
+        -------
+        dict:
+            The icons formatted as described in :attr:`icons`
+
+        """
+        size = get_config().user_config_dict.get("icon_size", 16)
+        size = int(round(size * get_config().scaling_factor))
+        icons = dict()
+        pathicons = os.path.join(PATHCACHE, "icons")
+        for fname in os.listdir(pathicons):
+            name, ext = os.path.splitext(fname)
+            if ext != ".png":
+                continue
+            img = Image.open(os.path.join(pathicons, fname))
+            img = ImageTk.PhotoImage(img.resize((size, size), resample=Image.HAMMING))
+            icons[name] = img
+        logger.debug(icons)
+        return icons
+
+    def set_faceswap_output_path(self, location):
+        """ Set the path that will contain the output from an Extract or Convert task.
+
+        Required so that the GUI can fetch output images to display for return in
+        :attr:`previewoutput`.
+
+        Parameters
+        ----------
+        location: str
+            The output location that has been specified for an Extract or Convert task
+        """
+        self._pathoutput = location
 
     def delete_preview(self):
-        """ Delete the preview files """
+        """ Delete the preview files in the cache folder and reset the image cache.
+
+        Should be called when terminating tasks, or when Faceswap starts up or shuts down.
+        """
         logger.debug("Deleting previews")
-        for item in os.listdir(self.pathpreview):
+        for item in os.listdir(self._pathpreview):
             if item.startswith(".gui_training_preview") and item.endswith(".jpg"):
-                fullitem = os.path.join(self.pathpreview, item)
+                fullitem = os.path.join(self._pathpreview, item)
                 logger.debug("Deleting: '%s'", fullitem)
                 os.remove(fullitem)
-        for fname in self.previewcache["filenames"]:
+        for fname in self._previewcache["filenames"]:
             if os.path.basename(fname) == ".gui_preview.jpg":
                 logger.debug("Deleting: '%s'", fname)
                 try:
                     os.remove(fname)
                 except FileNotFoundError:
                     logger.debug("File does not exist: %s", fname)
-        self.clear_image_cache()
+        self._clear_image_cache()
 
-    def clear_image_cache(self):
-        """ Clear all cached images """
+    def _clear_image_cache(self):
+        """ Clear all cached images. """
         logger.debug("Clearing image cache")
-        self.pathoutput = None
-        self.previewoutput = None
-        self.previewtrain = dict()
-        self.previewcache = dict(modified=None,  # cache for extract and convert
-                                 images=None,
-                                 filenames=list(),
-                                 placeholder=None)
+        self._pathoutput = None
+        self._previewoutput = None
+        self._previewtrain = dict()
+        self._previewcache = dict(modified=None,  # cache for extract and convert
+                                  images=None,
+                                  filenames=list(),
+                                  placeholder=None)
 
     @staticmethod
-    def get_images(imgpath):
-        """ Get the images stored within the given directory """
-        logger.debug("Getting images: '%s'", imgpath)
-        if not os.path.isdir(imgpath):
+    def _get_images(image_path):
+        """ Get the images stored within the given directory.
+
+        Parameters
+        ----------
+        image_path: str
+            The folder containing images to be scanned
+
+        Returns
+        -------
+        list:
+            The image filenames stored within the given folder
+
+        """
+        logger.debug("Getting images: '%s'", image_path)
+        if not os.path.isdir(image_path):
             logger.debug("Folder does not exist")
             return None
-        files = [os.path.join(imgpath, f)
-                 for f in os.listdir(imgpath) if f.lower().endswith((".png", ".jpg"))]
+        files = [os.path.join(image_path, f)
+                 for f in os.listdir(image_path) if f.lower().endswith((".png", ".jpg"))]
         logger.debug("Image files: %s", files)
         return files
 
     def load_latest_preview(self, thumbnail_size, frame_dims):
-        """ Load the latest preview image for extract and convert """
+        """ Load the latest preview image for extract and convert.
+
+        Retrieves the latest preview images from the faceswap output folder, resizes to thumbnails
+        and lays out for display. Places the images into :attr:`previewoutput` for loading into
+        the display panel.
+
+        Parameters
+        ----------
+        thumbnail_size: int
+            The size of each thumbnail that should be created
+        frame_dims: tuple
+            The (width (`int`), height (`int`)) of the display panel that will display the preview
+        """
         logger.debug("Loading preview image: (thumbnail_size: %s, frame_dims: %s)",
                      thumbnail_size, frame_dims)
-        imagefiles = self.get_images(self.pathoutput)
-        gui_preview = os.path.join(self.pathoutput, ".gui_preview.jpg")
-        if not imagefiles or (len(imagefiles) == 1 and gui_preview not in imagefiles):
+        image_files = self._get_images(self._pathoutput)
+        gui_preview = os.path.join(self._pathoutput, ".gui_preview.jpg")
+        if not image_files or (len(image_files) == 1 and gui_preview not in image_files):
             logger.debug("No preview to display")
-            self.previewoutput = None
+            self._previewoutput = None
             return
         # Filter to just the gui_preview if it exists in folder output
-        imagefiles = [gui_preview] if gui_preview in imagefiles else imagefiles
-        logger.debug("Image Files: %s", len(imagefiles))
+        image_files = [gui_preview] if gui_preview in image_files else image_files
+        logger.debug("Image Files: %s", len(image_files))
 
-        imagefiles = self.get_newest_filenames(imagefiles)
-        if not imagefiles:
+        image_files = self._get_newest_filenames(image_files)
+        if not image_files:
             return
 
-        self.load_images_to_cache(imagefiles, frame_dims, thumbnail_size)
-        if imagefiles == [gui_preview]:
+        self._load_images_to_cache(image_files, frame_dims, thumbnail_size)
+        if image_files == [gui_preview]:
             # Delete the preview image so that the main scripts know to output another
             logger.debug("Deleting preview image")
-            os.remove(imagefiles[0])
-        show_image = self.place_previews(frame_dims)
+            os.remove(image_files[0])
+        show_image = self._place_previews(frame_dims)
         if not show_image:
-            self.previewoutput = None
+            self._previewoutput = None
             return
-        logger.debug("Displaying preview: %s", self.previewcache["filenames"])
-        self.previewoutput = (show_image, ImageTk.PhotoImage(show_image))
+        logger.debug("Displaying preview: %s", self._previewcache["filenames"])
+        self._previewoutput = (show_image, ImageTk.PhotoImage(show_image))
 
-    def get_newest_filenames(self, imagefiles):
-        """ Return image filenames that have been modified since the last check """
-        if self.previewcache["modified"] is None:
-            retval = imagefiles
+    def _get_newest_filenames(self, image_files):
+        """ Return image filenames that have been modified since the last check.
+
+        Parameters
+        ----------
+        image_files: list
+            The list of image files to check the modification date for
+
+        Returns
+        -------
+        list:
+            A list of images that have been modified since the last check
+        """
+        if self._previewcache["modified"] is None:
+            retval = image_files
         else:
-            retval = [fname for fname in imagefiles
-                      if os.path.getmtime(fname) > self.previewcache["modified"]]
+            retval = [fname for fname in image_files
+                      if os.path.getmtime(fname) > self._previewcache["modified"]]
         if not retval:
             logger.debug("No new images in output folder")
         else:
-            self.previewcache["modified"] = max([os.path.getmtime(img) for img in retval])
+            self._previewcache["modified"] = max([os.path.getmtime(img) for img in retval])
             logger.debug("Number new images: %s, Last Modified: %s",
-                         len(retval), self.previewcache["modified"])
+                         len(retval), self._previewcache["modified"])
         return retval
 
-    def load_images_to_cache(self, imagefiles, frame_dims, thumbnail_size):
-        """ Load new images and append to cache, filtering to the number of display images """
-        logger.debug("Number imagefiles: %s, frame_dims: %s, thumbnail_size: %s",
-                     len(imagefiles), frame_dims, thumbnail_size)
+    def _load_images_to_cache(self, image_files, frame_dims, thumbnail_size):
+        """ Load preview images to the image cache.
+
+        Load new images and append to cache, filtering the cache the number of thumbnails that will
+        fit  inside the display panel.
+
+        Parameters
+        ----------
+        image_files: list
+            A list of new image files that have been modified since the last check
+        frame_dims: tuple
+            The (width (`int`), height (`int`)) of the display panel that will display the preview
+        thumbnail_size: int
+            The size of each thumbnail that should be created
+        """
+        logger.debug("Number image_files: %s, frame_dims: %s, thumbnail_size: %s",
+                     len(image_files), frame_dims, thumbnail_size)
         num_images = (frame_dims[0] // thumbnail_size) * (frame_dims[1] // thumbnail_size)
         logger.debug("num_images: %s", num_images)
         if num_images == 0:
             return
         samples = list()
-        start_idx = len(imagefiles) - num_images if len(imagefiles) > num_images else 0
-        show_files = sorted(imagefiles, key=os.path.getctime)[start_idx:]
+        start_idx = len(image_files) - num_images if len(image_files) > num_images else 0
+        show_files = sorted(image_files, key=os.path.getctime)[start_idx:]
         for fname in show_files:
             img = Image.open(fname)
             width, height = img.size
@@ -353,56 +568,38 @@ class Images():
             draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
             samples.append(np.array(img))
         samples = np.array(samples)
-        self.previewcache["filenames"] = (self.previewcache["filenames"] +
-                                          show_files)[-num_images:]
-        cache = self.previewcache["images"]
+        self._previewcache["filenames"] = (self._previewcache["filenames"] +
+                                           show_files)[-num_images:]
+        cache = self._previewcache["images"]
         if cache is None:
             logger.debug("Creating new cache")
             cache = samples[-num_images:]
         else:
             logger.debug("Appending to existing cache")
             cache = np.concatenate((cache, samples))[-num_images:]
-        self.previewcache["images"] = cache
-        logger.debug("Cache shape: %s", self.previewcache["images"].shape)
+        self._previewcache["images"] = cache
+        logger.debug("Cache shape: %s", self._previewcache["images"].shape)
 
-    @staticmethod
-    def get_preview_samples(imagefiles, num_images, thumbnail_size):
-        """ Return a subset of the imagefiles images
-            Exclude final file so we don't accidentally load a file that is being saved """
-        logger.debug("num_images: %s", num_images)
-        samples = list()
-        start_idx = len(imagefiles) - (num_images + 1)
-        end_idx = len(imagefiles) - 1
-        logger.debug("start_idx: %s, end_idx: %s", start_idx, end_idx)
-        show_files = sorted(imagefiles, key=os.path.getctime)[start_idx: end_idx]
-        for fname in show_files:
-            img = Image.open(fname)
-            width, height = img.size
-            scaling = thumbnail_size / max(width, height)
-            logger.debug("image width: %s, height: %s, scaling: %s", width, height, scaling)
-            img = img.resize((int(width * scaling), int(height * scaling)))
-            if img.size[0] != img.size[1]:
-                # Pad to square
-                new_img = Image.new("RGB", (thumbnail_size, thumbnail_size))
-                new_img.paste(img, ((thumbnail_size - img.size[0])//2,
-                                    (thumbnail_size - img.size[1])//2))
-                img = new_img
-            draw = ImageDraw.Draw(img)
-            draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
-            samples.append(np.array(img))
-        samples = np.array(samples)
-        logger.debug("Samples shape: %s", samples.shape)
-        return show_files, samples
+    def _place_previews(self, frame_dims):
+        """ Format the preview thumbnails stored in the cache into a grid fitting the display
+        panel.
 
-    def place_previews(self, frame_dims):
-        """ Stack the preview images to fit display """
-        if self.previewcache.get("images", None) is None:
+        Parameters
+        ----------
+        frame_dims: tuple
+            The (width (`int`), height (`int`)) of the display panel that will display the preview
+
+        Returns
+        :class:`PIL.Image`:
+            The final preview display image
+        """
+        if self._previewcache.get("images", None) is None:
             logger.debug("No images in cache. Returning None")
             return None
-        samples = self.previewcache["images"].copy()
+        samples = self._previewcache["images"].copy()
         num_images, thumbnail_size = samples.shape[:2]
-        if self.previewcache["placeholder"] is None:
-            self.create_placeholder(thumbnail_size)
+        if self._previewcache["placeholder"] is None:
+            self._create_placeholder(thumbnail_size)
 
         logger.debug("num_images: %s, thumbnail_size: %s", num_images, thumbnail_size)
         cols, rows = frame_dims[0] // thumbnail_size, frame_dims[1] // thumbnail_size
@@ -413,7 +610,7 @@ class Images():
         remainder = (cols * rows) - num_images
         if remainder != 0:
             logger.debug("Padding sample display. Remainder: %s", remainder)
-            placeholder = np.concatenate([np.expand_dims(self.previewcache["placeholder"],
+            placeholder = np.concatenate([np.expand_dims(self._previewcache["placeholder"],
                                                          0)] * remainder)
             samples = np.concatenate((samples, placeholder))
 
@@ -422,77 +619,110 @@ class Images():
         logger.debug("display shape: %s", display.shape)
         return Image.fromarray(display)
 
-    def create_placeholder(self, thumbnail_size):
-        """ Create a placeholder image for when there are fewer samples available
-            then columns to display them """
+    def _create_placeholder(self, thumbnail_size):
+        """ Create a placeholder image for when there are fewer thumbnails available
+        than columns to display them.
+
+        Parameters
+        ----------
+        thumbnail_size: int
+            The size of the thumbnail that the placeholder should replicate
+        """
         logger.debug("Creating placeholder. thumbnail_size: %s", thumbnail_size)
         placeholder = Image.new("RGB", (thumbnail_size, thumbnail_size))
         draw = ImageDraw.Draw(placeholder)
         draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
         placeholder = np.array(placeholder)
-        self.previewcache["placeholder"] = placeholder
+        self._previewcache["placeholder"] = placeholder
         logger.debug("Created placeholder. shape: %s", placeholder.shape)
 
     def load_training_preview(self):
-        """ Load the training preview images """
+        """ Load the training preview images.
+
+        Reads the training image currently stored in the cache folder and loads them to
+        :attr:`previewtrain` for retrieval in the GUI.
+        """
         logger.debug("Loading Training preview images")
-        imagefiles = self.get_images(self.pathpreview)
+        image_files = self._get_images(self._pathpreview)
         modified = None
-        if not imagefiles:
+        if not image_files:
             logger.debug("No preview to display")
-            self.previewtrain = dict()
+            self._previewtrain = dict()
             return
-        for img in imagefiles:
+        for img in image_files:
             modified = os.path.getmtime(img) if modified is None else modified
             name = os.path.basename(img)
             name = os.path.splitext(name)[0]
             name = name[name.rfind("_") + 1:].title()
             try:
                 logger.debug("Displaying preview: '%s'", img)
-                size = self.get_current_size(name)
-                self.previewtrain[name] = [Image.open(img), None, modified]
+                size = self._get_current_size(name)
+                self._previewtrain[name] = [Image.open(img), None, modified]
                 self.resize_image(name, size)
-                self.errcount = 0
+                self._errcount = 0
             except ValueError:
                 # This is probably an error reading the file whilst it's
                 # being saved  so ignore it for now and only pick up if
                 # there have been multiple consecutive fails
                 logger.warning("Unable to display preview: (image: '%s', attempt: %s)",
-                               img, self.errcount)
-                if self.errcount < 10:
-                    self.errcount += 1
+                               img, self._errcount)
+                if self._errcount < 10:
+                    self._errcount += 1
                 else:
                     logger.error("Error reading the preview file for '%s'", img)
                     print("Error reading the preview file for {}".format(name))
-                    self.previewtrain[name] = None
+                    self._previewtrain[name] = None
 
-    def get_current_size(self, name):
-        """ Return the size of the currently displayed image """
+    def _get_current_size(self, name):
+        """ Return the size of the currently displayed training preview image.
+
+        Parameters
+        ----------
+        name: str
+            The name of the training image to get the size for
+
+        Returns
+        -------
+        width: int
+            The width of the training image
+        height: int
+            The height of the training image
+        """
         logger.debug("Getting size: '%s'", name)
-        if not self.previewtrain.get(name, None):
+        if not self._previewtrain.get(name, None):
             return None
-        img = self.previewtrain[name][1]
+        img = self._previewtrain[name][1]
         if not img:
             return None
         logger.debug("Got size: (name: '%s', width: '%s', height: '%s')",
                      name, img.width(), img.height())
         return img.width(), img.height()
 
-    def resize_image(self, name, framesize):
-        """ Resize the training preview image
-            based on the passed in frame size """
-        logger.debug("Resizing image: (name: '%s', framesize: %s", name, framesize)
-        displayimg = self.previewtrain[name][0]
-        if framesize:
-            frameratio = float(framesize[0]) / float(framesize[1])
+    def resize_image(self, name, frame_dims):
+        """ Resize the training preview image based on the passed in frame size.
+
+        If the canvas that holds the preview image changes, update the image size
+        to fit the new canvas and refresh :attr:`previewtrain`.
+
+        Parameters
+        ----------
+        name: str
+            The name of the training image to be resized
+        frame_dims: tuple
+            The (width (`int`), height (`int`)) of the display panel that will display the preview
+        """
+        logger.debug("Resizing image: (name: '%s', frame_dims: %s", name, frame_dims)
+        displayimg = self._previewtrain[name][0]
+        if frame_dims:
+            frameratio = float(frame_dims[0]) / float(frame_dims[1])
             imgratio = float(displayimg.size[0]) / float(displayimg.size[1])
 
             if frameratio <= imgratio:
-                scale = framesize[0] / float(displayimg.size[0])
-                size = (framesize[0], int(displayimg.size[1] * scale))
+                scale = frame_dims[0] / float(displayimg.size[0])
+                size = (frame_dims[0], int(displayimg.size[1] * scale))
             else:
-                scale = framesize[1] / float(displayimg.size[1])
-                size = (int(displayimg.size[0] * scale), framesize[1])
+                scale = frame_dims[1] / float(displayimg.size[1])
+                size = (int(displayimg.size[0] * scale), frame_dims[1])
             logger.debug("Scaling: (scale: %s, size: %s", scale, size)
 
             # Hacky fix to force a reload if it happens to find corrupted
@@ -506,187 +736,238 @@ class Images():
                         raise
                     continue
                 break
-
-        self.previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
-
-
-class ReadOnlyText(tk.Text):  # pylint: disable=too-many-ancestors
-    """ A read only text widget that redirects a standard tk.Text widget's insert and delete
-    attributes.
-    Source: https://stackoverflow.com/questions/3842155
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.redirector = WidgetRedirector(self)
-        self.insert = self.redirector.register("insert", lambda *args, **kw: "break")
-        self.delete = self.redirector.register("delete", lambda *args, **kw: "break")
-
-
-class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
-    """ The Console out section of the GUI """
-
-    def __init__(self, parent, debug):
-        logger.debug("Initializing %s: (parent: %s, debug: %s)",
-                     self.__class__.__name__, parent, debug)
-        ttk.Frame.__init__(self, parent)
-        self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
-                  fill=tk.BOTH, expand=True)
-        self.console = ReadOnlyText(self)
-        rc_menu = ContextMenu(self.console)
-        rc_menu.cm_bind()
-        self.console_clear = get_config().tk_vars['consoleclear']
-        self.set_console_clear_var_trace()
-        self.debug = debug
-        self.build_console()
-        self.add_tags()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def set_console_clear_var_trace(self):
-        """ Set the trigger actions for the clear console var
-            when it has been triggered from elsewhere """
-        logger.debug("Set clear trace")
-        self.console_clear.trace("w", self.clear)
-
-    def build_console(self):
-        """ Build and place the console """
-        logger.debug("Build console")
-        self.console.config(width=100, height=6, bg="gray90", fg="black")
-        self.console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
-
-        scrollbar = ttk.Scrollbar(self, command=self.console.yview)
-        scrollbar.pack(side=tk.LEFT, fill="y")
-        self.console.configure(yscrollcommand=scrollbar.set)
-
-        self.redirect_console()
-        logger.debug("Built console")
-
-    def add_tags(self):
-        """ Add tags to text widget to color based on output """
-        logger.debug("Adding text color tags")
-        self.console.tag_config("default", foreground="#1E1E1E")
-        self.console.tag_config("stderr", foreground="#E25056")
-        self.console.tag_config("info", foreground="#2B445E")
-        self.console.tag_config("verbose", foreground="#008140")
-        self.console.tag_config("warning", foreground="#F77B00")
-        self.console.tag_config("critical", foreground="red")
-        self.console.tag_config("error", foreground="red")
-
-    def redirect_console(self):
-        """ Redirect stdout/stderr to console frame """
-        logger.debug("Redirect console")
-        if self.debug:
-            logger.info("Console debug activated. Outputting to main terminal")
-        else:
-            sys.stdout = SysOutRouter(console=self.console, out_type="stdout")
-            sys.stderr = SysOutRouter(console=self.console, out_type="stderr")
-        logger.debug("Redirected console")
-
-    def clear(self, *args):  # pylint: disable=unused-argument
-        """ Clear the console output screen """
-        logger.debug("Clear console")
-        if not self.console_clear.get():
-            logger.debug("Console not set for clearing. Skipping")
-            return
-        self.console.delete(1.0, tk.END)
-        self.console_clear.set(False)
-        logger.debug("Cleared console")
-
-
-class SysOutRouter():
-    """ Route stdout/stderr to the console window """
-
-    def __init__(self, console=None, out_type=None):
-        logger.debug("Initializing %s: (console: %s, out_type: '%s')",
-                     self.__class__.__name__, console, out_type)
-        self.console = console
-        self.out_type = out_type
-        self.recolor = re.compile(r".+?(\s\d+:\d+:\d+\s)(?P<lvl>[A-Z]+)\s")
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def get_tag(self, string):
-        """ Set the tag based on regex of log output """
-        if self.out_type == "stderr":
-            # Output all stderr in red
-            return self.out_type
-
-        output = self.recolor.match(string)
-        if not output:
-            return "default"
-        tag = output.groupdict()["lvl"].strip().lower()
-        return tag
-
-    def write(self, string):
-        """ Capture stdout/stderr """
-        self.console.insert(tk.END, string, self.get_tag(string))
-        self.console.see(tk.END)
-
-    @staticmethod
-    def flush():
-        """ If flush is forced, send it to normal terminal """
-        sys.__stdout__.flush()
+        self._previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
 
 
 class Config():
-    """ Global configuration settings
+    """ The centralized configuration class for holding items that should be made available to all
+    parts of the GUI.
 
-        Don't call directly. Call get_config()
+    This class should be initialized on GUI startup through :func:`initialize_config`. Any further
+    access to this class should be through :func:`get_config`.
+
+    Parameters
+    ----------
+    root: :class:`tkinter.Tk`
+        The root Tkinter object
+    cli_opts: :class:`lib.gui.options.CliOpts`
+        The command line options object
+    statusbar: :class:`lib.gui.custom_widgets.StatusBar`
+        The GUI Status bar
+    session: :class:`lib.gui.stats.Session`
+        The current training Session
     """
-
-    def __init__(self, root, cli_opts, scaling_factor, pathcache, statusbar, session):
-        logger.debug("Initializing %s: (root %s, cli_opts: %s, scaling_factor: %s, pathcache: %s, "
-                     "statusbar: %s, session: %s)", self.__class__.__name__, root, cli_opts,
-                     scaling_factor, pathcache, statusbar, session)
-        self.root = root
-        self.cli_opts = cli_opts
-        self.scaling_factor = scaling_factor
-        self.pathcache = pathcache
-        self.statusbar = statusbar
-        self.serializer = get_serializer("json")
-        self.tk_vars = self.set_tk_vars()
-        self.user_config = UserConfig(None)
-        self.user_config_dict = self.user_config.config_dict
-        self.command_notebook = None  # set in command.py
+    def __init__(self, root, cli_opts, statusbar, session):
+        logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s, session: %s)",
+                     self.__class__.__name__, root, cli_opts, statusbar, session)
+        self._constants = dict(
+            root=root,
+            scaling_factor=self._get_scaling(root),
+            default_font=tk.font.nametofont("TkDefaultFont").configure()["family"])
+        self._gui_objects = dict(
+            cli_opts=cli_opts,
+            tk_vars=self._set_tk_vars(),
+            project=Project(self, FileHandler),
+            tasks=Tasks(self, FileHandler),
+            status_bar=statusbar,
+            command_notebook=None)  # set in command.py
+        self._user_config = UserConfig(None)
         self.session = session
+        self._default_font = tk.font.nametofont("TkDefaultFont").configure()["family"]
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    # Constants
+    @property
+    def root(self):
+        """ :class:`tkinter.Tk`: The root tkinter window. """
+        return self._constants["root"]
+
+    @property
+    def scaling_factor(self):
+        """ float: The scaling factor for current display. """
+        return self._constants["scaling_factor"]
+
+    @property
+    def pathcache(self):
+        """ str: The path to the GUI cache folder """
+        return PATHCACHE
+
+    # GUI Objects
+    @property
+    def cli_opts(self):
+        """ :class:`lib.gui.options.CliOptions`: The command line options for this GUI Session. """
+        return self._gui_objects["cli_opts"]
+
+    @property
+    def tk_vars(self):
+        """ dict: The global tkinter variables. """
+        return self._gui_objects["tk_vars"]
+
+    @property
+    def project(self):
+        """ :class:`lib.gui.project.Project`: The project session handler. """
+        return self._gui_objects["project"]
+
+    @property
+    def tasks(self):
+        """ :class:`lib.gui.project.Tasks`: The session tasks handler. """
+        return self._gui_objects["tasks"]
+
+    @property
+    def statusbar(self):
+        """ :class:`lib.gui.custom_widgets.StatusBar`: The GUI StatusBar
+        :class:`tkinter.ttk.Frame`. """
+        return self._gui_objects["status_bar"]
+
+    @property
+    def command_notebook(self):
+        """ :class:`lib.gui.command.CommandNoteboook`: The main Faceswap Command Notebook. """
+        return self._gui_objects["command_notebook"]
+
+    # Convenience GUI Objects
+    @property
+    def tools_notebook(self):
+        """ :class:`lib.gui.command.ToolsNotebook`: The Faceswap Tools sub-Notebook. """
+        return self.command_notebook.tools_notebook
+
+    @property
+    def modified_vars(self):
+        """ dict: The command notebook modified tkinter variables. """
+        return self.command_notebook.modified_vars
+
+    @property
+    def _command_tabs(self):
+        """ dict: Command tab titles with their IDs. """
+        return self.command_notebook.tab_names
+
+    @property
+    def _tools_tabs(self):
+        """ dict: Tools command tab titles with their IDs. """
+        return self.command_notebook.tools_tab_names
+
+    # Config
+    @property
+    def user_config(self):
+        """ dict: The GUI config in dict form. """
+        return self._user_config
+
+    @property
+    def user_config_dict(self):
+        """ dict: The GUI config in dict form. """
+        return self._user_config.config_dict
 
     @property
     def default_font(self):
-        """ Return the selected font """
+        """ tuple: The selected font as configured in user settings. First item is the font (`str`)
+        second item the font size (`int`). """
         font = self.user_config_dict["font"]
-        if font == "default":
-            font = tk.font.nametofont("TkDefaultFont").configure()["family"]
+        font = self._default_font if font == "default" else font
         return (font, self.user_config_dict["font_size"])
 
-    @property
-    def command_tabs(self):
-        """ Return dict of command tab titles with their IDs """
-        return {self.command_notebook.tab(tab_id, "text").lower(): tab_id
-                for tab_id in range(0, self.command_notebook.index("end"))}
+    @staticmethod
+    def _get_scaling(root):
+        """ Get the display DPI.
 
-    @property
-    def tools_command_tabs(self):
-        """ Return dict of tools command tab titles with their IDs """
-        return {self.command_notebook.tools_notebook.tab(tab_id, "text").lower(): tab_id
-                for tab_id in range(0, self.command_notebook.tools_notebook.index("end"))}
+        Returns
+        -------
+        float:
+            The scaling factor
+        """
+        dpi = root.winfo_fpixels("1i")
+        scaling = dpi / 72.0
+        logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
+        return scaling
+
+    def set_command_notebook(self, notebook):
+        """ Set the command notebook to the :attr:`command_notebook` attribute
+        and enable the modified callback for :attr:`project`.
+
+        Parameters
+        ----------
+        notebook: :class:`lib.gui.command.CommandNotebook`
+            The main command notebook for the Faceswap GUI
+        """
+        logger.debug("Setting commane notebook: %s", notebook)
+        self._gui_objects["command_notebook"] = notebook
+        self.project.set_modified_callback()
+
+    def set_active_tab_by_name(self, name):
+        """ Sets the :attr:`command_notebook` or :attr:`tools_notebook` to active based on given
+        name.
+
+        Parameters
+        ----------
+        name: str
+            The name of the tab to set active
+        """
+        name = name.lower()
+        if name in self._command_tabs:
+            tab_id = self._command_tabs[name]
+            logger.debug("Setting active tab to: (name: %s, id: %s)", name, tab_id)
+            self.command_notebook.select(tab_id)
+        elif name in self._tools_tabs:
+            self.command_notebook.select(self._command_tabs["tools"])
+            tab_id = self._tools_tabs[name]
+            logger.debug("Setting active Tools tab to: (name: %s, id: %s)", name, tab_id)
+            self.tools_notebook.select()
+        else:
+            logger.debug("Name couldn't be found. Setting to id 0: %s", name)
+            self.command_notebook.select(0)
+
+    def set_modified_true(self, command):
+        """ Set the modified variable to ``True`` for the given command in :attr:`modified_vars`.
+
+        Parameters
+        ----------
+        command: str
+            The command to set the modified state to ``True``
+
+        """
+        tkvar = self.modified_vars.get(command, None)
+        if tkvar is None:
+            logger.debug("No tkvar for command: '%s'", command)
+            return
+        tkvar.set(True)
+        logger.debug("Set modified var to True for: '%s'", command)
+
+    def refresh_config(self):
+        """ Reload the user config from file. """
+        self._user_config = UserConfig(None)
 
     def set_cursor_busy(self, widget=None):
-        """ Set the root or widget cursor to busy """
+        """ Set the root or widget cursor to busy.
+
+        Parameters
+        ----------
+        widget: tkinter object, optional
+            The widget to set busy cursor for. If the provided value is ``None`` then sets the
+            cursor busy for the whole of the GUI. Default: ``None``.
+        """
         logger.debug("Setting cursor to busy. widget: %s", widget)
         widget = self.root if widget is None else widget
         widget.config(cursor="watch")
         widget.update_idletasks()
 
     def set_cursor_default(self, widget=None):
-        """ Set the root or widget cursor to default """
+        """ Set the root or widget cursor to default.
+
+        Parameters
+        ----------
+        widget: tkinter object, optional
+            The widget to set default cursor for. If the provided value is ``None`` then sets the
+            cursor busy for the whole of the GUI. Default: ``None``
+        """
         logger.debug("Setting cursor to default. widget: %s", widget)
         widget = self.root if widget is None else widget
         widget.config(cursor="")
         widget.update_idletasks()
 
     @staticmethod
-    def set_tk_vars():
-        """ TK Variables to be triggered by to indicate
-            what state various parts of the GUI should be in """
+    def _set_tk_vars():
+        """ Set the global tkinter variables stored for easy access in :class:`Config`.
+
+        The variables are available through :attr:`tk_vars`.
+        """
         display = tk.StringVar()
         display.set(None)
 
@@ -714,8 +995,8 @@ class Config():
         updatepreview = tk.BooleanVar()
         updatepreview.set(False)
 
-        traintimeout = tk.IntVar()
-        traintimeout.set(120)
+        analysis_folder = tk.StringVar()
+        analysis_folder.set(None)
 
         tk_vars = {"display": display,
                    "runningtask": runningtask,
@@ -726,142 +1007,38 @@ class Config():
                    "refreshgraph": refreshgraph,
                    "smoothgraph": smoothgraph,
                    "updatepreview": updatepreview,
-                   "traintimeout": traintimeout}
+                   "analysis_folder": analysis_folder}
         logger.debug(tk_vars)
         return tk_vars
 
-    def load(self, command=None, filename=None):
-        """ Pop up load dialog for a saved config file """
-        logger.debug("Loading config: (command: '%s')", command)
-        if filename:
-            if not os.path.isfile(filename):
-                msg = "File does not exist: '{}'".format(filename)
-                logger.error(msg)
-                return
-            cfg = self.serializer.load(filename)
-        else:
-            cfgfile = FileHandler("open", "config").retfile
-            if not cfgfile:
-                return
-            filename = cfgfile.name
-            cfgfile.close()
-            cfg = self.serializer.load(filename)
+    def set_root_title(self, text=None):
+        """ Set the main title text for Faceswap.
 
-        if not command and len(cfg.keys()) == 1:
-            command = list(cfg.keys())[0]
+        The title will always begin with 'Faceswap.py'. Additional text can be appended.
 
-        opts = self.get_command_options(cfg, command) if command else cfg
-        if not opts:
-            return
-
-        for cmd, opts in opts.items():
-            self.set_command_args(cmd, opts)
-
-        if command:
-            if command in self.command_tabs:
-                self.command_notebook.select(self.command_tabs[command])
-            else:
-                self.command_notebook.select(self.command_tabs["tools"])
-                self.command_notebook.tools_notebook.select(self.tools_command_tabs[command])
-        self.add_to_recent(filename, command)
-        logger.debug("Loaded config: (command: '%s', filename: '%s')", command, filename)
-
-    def get_command_options(self, cfg, command):
-        """ return the saved options for the requested
-            command, if not loading global options """
-        opts = cfg.get(command, None)
-        retval = {command: opts}
-        if not opts:
-            self.tk_vars["consoleclear"].set(True)
-            print("No {} section found in file".format(command))
-            logger.info("No  %s section found in file", command)
-            retval = None
-        logger.debug(retval)
-        return retval
-
-    def set_command_args(self, command, options):
-        """ Pass the saved config items back to the CliOptions """
-        if not options:
-            return
-        for srcopt, srcval in options.items():
-            optvar = self.cli_opts.get_one_option_variable(command, srcopt)
-            if not optvar:
-                continue
-            optvar.set(srcval)
-
-    def save(self, command=None):
-        """ Save the current GUI state to a config file in json format """
-        logger.debug("Saving config: (command: '%s')", command)
-        cfgfile = FileHandler("save", "config").retfile
-        if not cfgfile:
-            return
-        filename = cfgfile.name
-        cfgfile.close()
-        cfg = self.cli_opts.get_option_values(command)
-        self.serializer.save(filename, cfg)
-        self.add_to_recent(filename, command)
-        logger.debug("Saved config: (command: '%s', filename: '%s')", command, filename)
-
-    def add_to_recent(self, filename, command):
-        """ Add to recent files """
-        recent_filename = os.path.join(self.pathcache, ".recent.json")
-        logger.debug("Adding to recent files '%s': (%s, %s)", recent_filename, filename, command)
-        if not os.path.exists(recent_filename) or os.path.getsize(recent_filename) == 0:
-            recent_files = list()
-        else:
-            recent_files = self.serializer.load(recent_filename)
-        logger.debug("Initial recent files: %s", recent_files)
-        filenames = [recent[0] for recent in recent_files]
-        if filename in filenames:
-            idx = filenames.index(filename)
-            del recent_files[idx]
-        recent_files.insert(0, (filename, command))
-        recent_files = recent_files[:20]
-        logger.debug("Final recent files: %s", recent_files)
-        self.serializer.save(recent_filename, recent_files)
-
-
-class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
-    """ Pop up menu """
-    def __init__(self, widget):
-        logger.debug("Initializing %s: (widget_class: '%s')",
-                     self.__class__.__name__, widget.winfo_class())
-        super().__init__(tearoff=0)
-        self.widget = widget
-        self.standard_actions()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def standard_actions(self):
-        """ Standard menu actions """
-        self.add_command(label="Cut", command=lambda: self.widget.event_generate("<<Cut>>"))
-        self.add_command(label="Copy", command=lambda: self.widget.event_generate("<<Copy>>"))
-        self.add_command(label="Paste", command=lambda: self.widget.event_generate("<<Paste>>"))
-        self.add_separator()
-        self.add_command(label="Select all", command=self.select_all)
-
-    def cm_bind(self):
-        """ Bind the menu to the widget's Right Click event """
-        button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
-        logger.debug("Binding '%s' to '%s'", button, self.widget.winfo_class())
-        scaling_factor = get_config().scaling_factor if get_config() is not None else 1.0
-        x_offset = int(34 * scaling_factor)
-        self.widget.bind(button,
-                         lambda event: self.tk_popup(event.x_root + x_offset, event.y_root, 0))
-
-    def select_all(self):
-        """ Select all for Text or Entry widgets """
-        logger.debug("Selecting all for '%s'", self.widget.winfo_class())
-        if self.widget.winfo_class() == "Text":
-            self.widget.focus_force()
-            self.widget.tag_add("sel", "1.0", "end")
-        else:
-            self.widget.focus_force()
-            self.widget.select_range(0, tk.END)
+        Parameters
+        ----------
+        text: str, optional
+            Additional text to be appended to the GUI title bar. Default: ``None``
+        """
+        title = "Faceswap.py"
+        title += " - {}".format(text) if text is not None and text else ""
+        self.root.title(title)
 
 
 class LongRunningTask(Thread):
-    """ For long running tasks, to stop the GUI becoming unresponsive
-        Run in a thread and handle cursor events """
+    """ Runs long running tasks in a background thread to prevent the GUI from becoming
+    unresponsive.
+
+    This is sub-classed from :class:`Threading.Thread` so check documentation there for base
+    parameters. Additional parameters listed below.
+
+    Parameters
+    ----------
+    widget: tkinter object, optional
+        The widget that this :class:`LongRunningTask` is associated with. Used for setting the busy
+        cursor in the correct location. Default: ``None``.
+    """
     def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, *, daemon=True,
                  widget=None):
         logger.debug("Initializing %s: (group: %s, target: %s, name: %s, args: %s, kwargs: %s, "
@@ -870,15 +1047,22 @@ class LongRunningTask(Thread):
         super().__init__(group=group, target=target, name=name, args=args, kwargs=kwargs,
                          daemon=daemon)
         self.err = None
-        self.widget = widget
+        self._widget = widget
         self._config = get_config()
-        self._config.set_cursor_busy(widget=self.widget)
-        self.complete = Event()
+        self._config.set_cursor_busy(widget=self._widget)
+        self._complete = Event()
         self._queue = Queue()
         logger.debug("Initialized %s", self.__class__.__name__,)
 
+    @property
+    def complete(self):
+        """ :class:`threading.Event`:  Event is set if the thread has completed its task,
+        otherwise it is unset.
+        """
+        return self._complete
+
     def run(self):
-        """ Run the target in a thread """
+        """ Commence the given task in a background thread. """
         try:
             if self._target:
                 retval = self._target(*self._args, **self._kwargs)
@@ -888,24 +1072,32 @@ class LongRunningTask(Thread):
             logger.debug("Error in thread (%s): %s", self._name,
                          self.err[1].with_traceback(self.err[2]))
         finally:
-            self.complete.set()
-            # Avoid a refcycle if the thread is running a function with
+            self._complete.set()
+            # Avoid a ref-cycle if the thread is running a function with
             # an argument that has a member that points to the thread.
             del self._target, self._args, self._kwargs
 
     def get_result(self):
-        """ Return the result from the queue """
-        if not self.complete.is_set():
+        """ Return the result from the given task.
+
+        Returns
+        -------
+        varies:
+            The result of the thread will depend on the given task. If a call is made to
+            :func:`get_result` prior to the thread completing its task then ``None`` will be
+            returned
+        """
+        if not self._complete.is_set():
             logger.warning("Aborting attempt to retrieve result from a LongRunningTask that is "
                            "still running")
             return None
         if self.err:
             logger.debug("Error caught in thread")
-            self._config.set_cursor_default(widget=self.widget)
+            self._config.set_cursor_default(widget=self._widget)
             raise self.err[1].with_traceback(self.err[2])
 
         logger.debug("Getting result from thread")
         retval = self._queue.get()
         logger.debug("Got result from thread")
-        self._config.set_cursor_default(widget=self.widget)
+        self._config.set_cursor_default(widget=self._widget)
         return retval

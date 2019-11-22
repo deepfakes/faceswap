@@ -6,23 +6,27 @@ import logging
 import os
 import sys
 import tkinter as tk
+from tkinter import ttk
 import webbrowser
-
 
 from importlib import import_module
 from subprocess import Popen, PIPE, STDOUT
 
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer
-
 import update_deps
-from .utils import get_config
+
 from .popup_configure import popup_config
+from .custom_widgets import Tooltip
+from .utils import get_config, get_images
 
 _RESOURCES = [("faceswap.dev - Guides and Forum", "https://www.faceswap.dev"),
               ("Patreon - Support this project", "https://www.patreon.com/faceswap"),
               ("Discord - The FaceSwap Discord server", "https://discord.gg/VasFUAy"),
               ("Github - Our Source Code", "https://github.com/deepfakes/faceswap")]
+
+_CONFIG_FILES = []
+_CONFIGS = dict()
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -56,6 +60,7 @@ class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
     def scan_for_plugin_configs(self):
         """ Scan for config.ini file locations """
+        global _CONFIGS, _CONFIG_FILES  # pylint:disable=global-statement
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
         plugins_path = os.path.join(root_path, "plugins")
         logger.debug("Scanning path: '%s'", plugins_path)
@@ -66,6 +71,12 @@ class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
                 config = self.load_config(plugin_type)
                 configs[plugin_type] = config
         logger.debug("Configs loaded: %s", sorted(list(configs.keys())))
+        keys = list(configs.keys())
+        for key in ("extract", "train", "convert"):
+            if key in keys:
+                _CONFIG_FILES.append(keys.pop(keys.index(key)))
+        _CONFIG_FILES.extend([key for key in sorted(keys)])
+        _CONFIGS = configs
         return configs
 
     @staticmethod
@@ -80,8 +91,9 @@ class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
     def build(self):
         """ Add the settings menu to the menu bar """
+        # pylint: disable=cell-var-from-loop
         logger.debug("Building settings menu")
-        for name in sorted(list(self.configs.keys())):
+        for name in _CONFIG_FILES:
             label = "Configure {} Plugins...".format(name.title())
             config = self.configs[name]
             self.add_command(
@@ -103,7 +115,7 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent, tearoff=0)
         self.root = parent.root
-        self.config = get_config()
+        self._config = get_config()
         self.recent_menu = tk.Menu(self, tearoff=0, postcommand=self.refresh_recent_menu)
         self.build()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -111,35 +123,78 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     def build(self):
         """ Add the file menu to the menu bar """
         logger.debug("Building File menu")
-        self.add_command(label="Load full config...", underline=0, command=self.config.load)
-        self.add_command(label="Save full config...", underline=0, command=self.config.save)
+        self.add_command(label="New Project...",
+                         underline=0,
+                         accelerator="Ctrl+N",
+                         command=self._config.project.new)
+        self.root.bind_all("<Control-n>", self._config.project.new)
+        self.add_command(label="Open Project...",
+                         underline=0,
+                         accelerator="Ctrl+O",
+                         command=self._config.project.load)
+        self.root.bind_all("<Control-o>", self._config.project.load)
+        self.add_command(label="Save Project",
+                         underline=0,
+                         accelerator="Ctrl+S",
+                         command=lambda: self._config.project.save(save_as=False))
+        self.root.bind_all("<Control-s>", lambda e: self._config.project.save(e, save_as=False))
+        self.add_command(label="Save Project as...",
+                         underline=13,
+                         accelerator="Ctrl+Alt+S",
+                         command=lambda: self._config.project.save(save_as=True))
+        self.root.bind_all("<Control-Alt-s>", lambda e: self._config.project.save(e, save_as=True))
+        self.add_command(label="Reload Project from Disk",
+                         underline=0,
+                         accelerator="F5",
+                         command=self._config.project.reload)
+        self.root.bind_all("<F5>", self._config.project.reload)
+        self.add_command(label="Close Project",
+                         underline=0,
+                         accelerator="Ctrl+W",
+                         command=self._config.project.close)
+        self.root.bind_all("<Control-w>", self._config.project.close)
+        self.add_separator()
+        self.add_command(label="Open Task...",
+                         underline=5,
+                         accelerator="Ctrl+Alt+T",
+                         command=lambda: self._config.tasks.load(current_tab=False))
+        self.root.bind_all("<Control-Alt-t>",
+                           lambda e: self._config.tasks.load(e, current_tab=False))
         self.add_separator()
         self.add_cascade(label="Open recent", underline=6, menu=self.recent_menu)
         self.add_separator()
-        self.add_command(label="Reset all to default",
+        self.add_command(label="Quit",
                          underline=0,
-                         command=self.config.cli_opts.reset)
-        self.add_command(label="Clear all", underline=0, command=self.config.cli_opts.clear)
-        self.add_separator()
-        self.add_command(label="Quit", underline=0, command=self.root.close_app)
+                         accelerator="Alt+F4",
+                         command=self.root.close_app)
+        self.root.bind_all("<Alt-F4>", self.root.close_app)
         logger.debug("Built File menu")
 
     def build_recent_menu(self):
         """ Load recent files into menu bar """
         logger.debug("Building Recent Files menu")
         serializer = get_serializer("json")
-        menu_file = os.path.join(self.config.pathcache, ".recent.json")
+        menu_file = os.path.join(self._config.pathcache, ".recent.json")
         if not os.path.isfile(menu_file) or os.path.getsize(menu_file) == 0:
             self.clear_recent_files(serializer, menu_file)
         recent_files = serializer.load(menu_file)
         logger.debug("Loaded recent files: %s", recent_files)
         for recent_item in recent_files:
             filename, command = recent_item
+            # Legacy project files didn't have a command stored
+            command = command if command else "project"
             logger.debug("processing: ('%s', %s)", filename, command)
-            lbl_command = command if command else "All"
+            if command.lower() == "project":
+                load_func = self._config.project.load
+                lbl = command
+                kwargs = dict(filename=filename)
+            else:
+                load_func = self._config.tasks.load
+                lbl = "{} Task".format(command)
+                kwargs = dict(filename=filename, current_tab=False)
             self.recent_menu.add_command(
-                label="{} ({})".format(filename, lbl_command.title()),
-                command=lambda fnm=filename, cmd=command: self.config.load(cmd, fnm))
+                label="{} ({})".format(filename, lbl.title()),
+                command=lambda kw=kwargs, fn=load_func: fn(**kw))
         self.recent_menu.add_separator()
         self.recent_menu.add_command(
             label="Clear recent files",
@@ -191,6 +246,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
     def build_recources_menu(self):
         """ Build resources menu """
+        # pylint: disable=cell-var-from-loop
         logger.debug("Building Resources Files menu")
         for resource in _RESOURCES:
             self.recources_menu.add_command(
@@ -215,7 +271,6 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         logger.debug("Obtaining system information")
         self.root.config(cursor="watch")
         self.clear_console()
-        print("Obtaining system information...")
         try:
             from lib.sysinfo import sysinfo
             info = sysinfo
@@ -227,7 +282,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="")
 
     def check(self):
-        """ Check for updates and clone repo """
+        """ Check for updates and clone repository """
         logger.debug("Checking for updates...")
         self.root.config(cursor="watch")
         encoding = locale.getpreferredencoding()
@@ -236,7 +291,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="")
 
     def update(self):
-        """ Check for updates and clone repo """
+        """ Check for updates and clone repository """
         logger.debug("Updating Faceswap...")
         self.root.config(cursor="watch")
         encoding = locale.getpreferredencoding()
@@ -305,3 +360,121 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         else:
             retval = True
         return retval
+
+
+class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
+    """ Task bar buttons """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._config = get_config()
+        self.pack(side=tk.TOP, anchor=tk.W, fill=tk.X, expand=False)
+        self._btn_frame = ttk.Frame(self)
+        self._btn_frame.pack(side=tk.TOP, pady=2, anchor=tk.W, fill=tk.X, expand=False)
+
+        self._project_btns()
+        self._group_separator()
+        self._task_btns()
+        self._group_separator()
+        self._settings_btns()
+        self._section_separator()
+
+    def _project_btns(self):
+        frame = ttk.Frame(self._btn_frame)
+        frame.pack(side=tk.LEFT, anchor=tk.W, expand=False, padx=2)
+
+        for btntype in ("new", "load", "save", "save_as", "reload"):
+            logger.debug("Adding button: '%s'", btntype)
+
+            loader, kwargs = self._loader_and_kwargs(btntype)
+            cmd = getattr(self._config.project, loader)
+            btn = ttk.Button(frame,
+                             image=get_images().icons[btntype],
+                             command=lambda fn=cmd, kw=kwargs: fn(**kw))
+            btn.pack(side=tk.LEFT, anchor=tk.W)
+            hlp = self.set_help(btntype)
+            Tooltip(btn, text=hlp, wraplength=200)
+
+    def _task_btns(self):
+        frame = ttk.Frame(self._btn_frame)
+        frame.pack(side=tk.LEFT, anchor=tk.W, expand=False, padx=2)
+
+        for loadtype in ("load", "save", "save_as", "clear", "reload"):
+            btntype = "{}2".format(loadtype)
+            logger.debug("Adding button: '%s'", btntype)
+
+            loader, kwargs = self._loader_and_kwargs(loadtype)
+            if loadtype == "load":
+                kwargs["current_tab"] = True
+            cmd = getattr(self._config.tasks, loader)
+            btn = ttk.Button(
+                frame,
+                image=get_images().icons[btntype],
+                command=lambda fn=cmd, kw=kwargs: fn(**kw))
+            btn.pack(side=tk.LEFT, anchor=tk.W)
+            hlp = self.set_help(btntype)
+            Tooltip(btn, text=hlp, wraplength=200)
+
+    @staticmethod
+    def _loader_and_kwargs(btntype):
+        if btntype == "save":
+            loader = btntype
+            kwargs = dict(save_as=False)
+        elif btntype == "save_as":
+            loader = "save"
+            kwargs = dict(save_as=True)
+        else:
+            loader = btntype
+            kwargs = dict()
+        logger.debug("btntype: %s, loader: %s, kwargs: %s", btntype, loader, kwargs)
+        return loader, kwargs
+
+    def _settings_btns(self):
+        # pylint: disable=cell-var-from-loop
+        frame = ttk.Frame(self._btn_frame)
+        frame.pack(side=tk.LEFT, anchor=tk.W, expand=False, padx=2)
+        root = get_config().root
+        for name in _CONFIG_FILES:
+            config = _CONFIGS[name]
+            btntype = "settings_{}".format(name)
+            btntype = btntype if btntype in get_images().icons else "settings"
+            logger.debug("Adding button: '%s'", btntype)
+            btn = ttk.Button(
+                frame,
+                image=get_images().icons[btntype],
+                command=lambda conf=(name, config), root=root: popup_config(conf, root))
+            btn.pack(side=tk.LEFT, anchor=tk.W)
+            hlp = "Configure {} settings...".format(name.title())
+            Tooltip(btn, text=hlp, wraplength=200)
+
+    @staticmethod
+    def set_help(btntype):
+        """ Set the helptext for option buttons """
+        logger.debug("Setting help")
+        hlp = ""
+        task = "currently selected Task" if btntype[-1] == "2" else "Project"
+        if btntype.startswith("reload"):
+            hlp = "Reload {} from disk".format(task)
+        if btntype == "new":
+            hlp = "Crate a new {}...".format(task)
+        if btntype.startswith("clear"):
+            hlp = "Reset {} to default".format(task)
+        elif btntype.startswith("save") and "_" not in btntype:
+            hlp = "Save {}".format(task)
+        elif btntype.startswith("save_as"):
+            hlp = "Save {} as...".format(task)
+        elif btntype.startswith("load"):
+            msg = task
+            if msg.endswith("Task"):
+                msg += " from a task or project file"
+            hlp = "Load {}...".format(msg)
+        return hlp
+
+    def _group_separator(self):
+        separator = ttk.Separator(self._btn_frame, orient="vertical")
+        separator.pack(padx=(2, 1), fill=tk.Y, side=tk.LEFT)
+
+    def _section_separator(self):
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.BOTTOM, fill=tk.X)
+        separator = ttk.Separator(frame, orient="horizontal")
+        separator.pack(fill=tk.X, side=tk.LEFT, expand=True)
