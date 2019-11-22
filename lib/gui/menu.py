@@ -312,7 +312,8 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         update = False
         msg = ""
         gitcmd = "git remote update && git status -uno"
-        cmd = Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT)
+        working_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
+        cmd = Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=working_dir)
         stdout, _ = cmd.communicate()
         retcode = cmd.poll()
         if retcode != 0:
@@ -344,7 +345,8 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         """ Update Faceswap """
         logger.info("A new version is available. Updating...")
         gitcmd = "git pull"
-        cmd = Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, bufsize=1)
+        working_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
+        cmd = Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, bufsize=1, cwd=working_dir)
         while True:
             output = cmd.stdout.readline().decode(encoding)
             if output == "" and cmd.poll() is not None:
