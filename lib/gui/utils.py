@@ -159,7 +159,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                                ("Matroska", "*.mkv"),
                                ("MOV", "*.mov"),
                                ("MP4", "*.mp4"),
-                               ("MPEG", "*.mpeg *.mpg"),
+                               ("MPEG", "*.mpeg *.mpg *.ts *.vob"),
                                ("WebM", "*.webm"),
                                ("Windows Media Video", "*.wmv"),
                                all_files]}
