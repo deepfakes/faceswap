@@ -263,10 +263,14 @@ class ControlPanelOption():
     def _model_callback(var):
         """ Set a callback to load model stats for existing models when a model
         folder is selected """
-        folder = var.get()
-        if get_config().tk_vars["runningtask"].get():
+        config = get_config()
+        if not config.user_config_dict["auto_load_model_stats"]:
+            logger.debug("Session updating disabled by user config")
+            return
+        if config.tk_vars["runningtask"].get():
             logger.debug("Task running. Not updating session")
             return
+        folder = var.get()
         logger.debug("Setting analysis model folder callback: '%s'", folder)
         get_config().tk_vars["analysis_folder"].set(folder)
 

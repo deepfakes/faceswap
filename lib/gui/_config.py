@@ -67,6 +67,11 @@ class Config(FaceswapConfig):
             min_max=(10, 600), rounding=10, group="behaviour",
             info="Training can take some time to save and shutdown. Set the timeout in seconds "
                  "before giving up and force quitting.")
+        self.add_item(
+            section=section, title="auto_load_model_stats", datatype=bool, default=True,
+            group="behaviour",
+            info="Auto load model statistics into the Analysis tab when selecting a model "
+                 "in Train or Convert tabs.")
 
 
 def get_commands():
