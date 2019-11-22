@@ -29,13 +29,15 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         self.add_options()
         self.add_main_frame()
         self.thread = None  # Thread for compiling stats data in background
-        self.set_training_callback()
+        self.set_callbacks()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def set_training_callback(self):
+    def set_callbacks(self):
         """ Add a callback to update analysis when the training graph is updated """
-        get_config().tk_vars["refreshgraph"].trace("w", self.update_current_session)
-        get_config().tk_vars["istraining"].trace("w", self.remove_current_session)
+        tkv = get_config().tk_vars
+        tkv["refreshgraph"].trace("w", self.update_current_session)
+        tkv["istraining"].trace("w", self.remove_current_session)
+        tkv["analysis_folder"].trace("w", self.populate_from_folder)
 
     def update_current_session(self, *args):  # pylint:disable=unused-argument
         """ Update the current session data on a graph update callback """
@@ -79,12 +81,38 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Resetting session info")
         self.set_info("No session data loaded")
 
-    def load_session(self):
+    def populate_from_folder(self, *args):  # pylint:disable=unused-arguments
+        """ Populate the Analysis tab from just a model folder. Triggered
+        when tkinter variable ``analysis_folder`` is set.
+        """
+        folder = get_config().tk_vars["analysis_folder"].get()
+        if not folder or not os.path.isdir(folder):
+            logger.debug("Not a valid folder")
+            self.clear_session()
+            return
+
+        state_files = [fname
+                       for fname in os.listdir(folder)
+                       if fname.endswith("_state.json")]
+        if not state_files:
+            logger.debug("No state files found in folder: '%s'", folder)
+            self.clear_session()
+            return
+
+        state_file = state_files[0]
+        if len(state_files) > 1:
+            logger.debug("Multiple models found. Selecting: '%s'", state_file)
+
+        if self.thread is None:
+            self.load_session(fullpath=os.path.join(folder, state_file))
+
+    def load_session(self, fullpath=None):
         """ Load previously saved sessions """
         logger.debug("Loading session")
-        fullpath = FileHandler("filename", "state").retfile
-        if not fullpath:
-            return
+        if fullpath is None:
+            fullpath = FileHandler("filename", "state").retfile
+            if not fullpath:
+                return
         self.clear_session()
         logger.debug("state_file: '%s'", fullpath)
         model_dir, state_file = os.path.split(fullpath)

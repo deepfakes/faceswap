@@ -120,8 +120,9 @@ class ControlPanelOption():
                      self.__class__.__name__, title, dtype, group, default, initial_value, choices,
                      is_radio, rounding, min_max, sysbrowser, helptext, track_modified, command)
 
-        self._dtype = dtype
+        self.dtype = dtype
         self.sysbrowser = sysbrowser
+        self._command = command
         self._options = dict(title=title,
                              group=group,
                              default=default,
@@ -132,7 +133,7 @@ class ControlPanelOption():
                              min_max=min_max,
                              helptext=helptext)
         self.control = self.get_control()
-        self.tk_var = self.get_tk_var(track_modified, command)
+        self.tk_var = self.get_tk_var(track_modified)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -214,34 +215,39 @@ class ControlPanelOption():
             control = ttk.Radiobutton
         elif self.choices:
             control = ttk.Combobox
-        elif self._dtype == bool:
+        elif self.dtype == bool:
             control = ttk.Checkbutton
-        elif self._dtype in (int, float):
+        elif self.dtype in (int, float):
             control = ttk.Scale
         else:
             control = ttk.Entry
         logger.debug("Setting control '%s' to %s", self.title, control)
         return control
 
-    def get_tk_var(self, track_modified, command):
+    def get_tk_var(self, track_modified):
         """ Correct variable type for control """
-        if self._dtype == bool:
+        if self.dtype == bool:
             var = tk.BooleanVar()
-        elif self._dtype == int:
+        elif self.dtype == int:
             var = tk.IntVar()
-        elif self._dtype == float:
+        elif self.dtype == float:
             var = tk.DoubleVar()
         else:
             var = tk.StringVar()
         logger.debug("Setting tk variable: (name: '%s', dtype: %s, tk_var: %s)",
-                     self.name, self._dtype, var)
-        if track_modified and command is not None:
+                     self.name, self.dtype, var)
+        if track_modified and self._command is not None:
             logger.debug("Tracking variable modification: %s", self.name)
-            var.trace("w", lambda name, index, mode, cmd=command: self.callback(cmd))
+            var.trace("w",
+                      lambda name, index, mode, cmd=self._command: self._modified_callback(cmd))
+
+        if track_modified and self._command in ("train", "convert") and self.title == "Model Dir":
+            var.trace("w", lambda name, index, mode, v=var: self._model_callback(v))
+
         return var
 
     @staticmethod
-    def callback(command):
+    def _modified_callback(command):
         """ Set the modified variable for this tab to TRUE
 
         On initial setup the notebook won't yet exist, and we don't want to track the changes
@@ -251,6 +257,20 @@ class ControlPanelOption():
         if config.command_notebook is None:
             return
         config.set_modified_true(command)
+
+    @staticmethod
+    def _model_callback(var):
+        """ Set a callback to load model stats for existing models when a model
+        folder is selected """
+        folder = var.get()
+        if not folder:
+            logger.debug("Model Dir selection empty")
+            return
+        if get_config().tk_vars["runningtask"].get():
+            logger.debug("Task running. Not updating session")
+            return
+        logger.debug("Setting analysis model folder callback: '%s'", folder)
+        get_config().tk_vars["analysis_folder"].set(folder)
 
 
 class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors

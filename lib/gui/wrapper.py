@@ -24,11 +24,11 @@ class ProcessWrapper():
     """ Builds command, launches and terminates the underlying
         faceswap process. Updates GUI display depending on state """
 
-    def __init__(self, pathscript=None):
-        logger.debug("Initializing %s: (pathscript: %s)", self.__class__.__name__, pathscript)
+    def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self.tk_vars = get_config().tk_vars
         self.set_callbacks()
-        self.pathscript = pathscript
+        self.pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
         self.command = None
         self.statusbar = get_config().statusbar
         self.task = FaceswapControl(self)

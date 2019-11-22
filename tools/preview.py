@@ -6,7 +6,7 @@ import random
 import tkinter as tk
 from tkinter import ttk
 import os
-import sys
+
 from configparser import ConfigParser
 from threading import Event, Lock
 
@@ -71,9 +71,7 @@ class Preview():
     def initialize_tkinter(self):
         """ Initialize tkinter for standalone or GUI """
         logger.debug("Initializing tkinter")
-        pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
-        pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        initialize_images(pathcache=pathcache)
+        initialize_images()
         self.set_geometry()
         self.root.title("Faceswap.py - Convert Settings")
         self.root.tk.call(
@@ -968,7 +966,6 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 
 class ControlBuilder():
-    # TODO Expand out for cli options
     """
     Builds and returns a frame containing a tkinter control with label
 

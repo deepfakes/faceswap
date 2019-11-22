@@ -20,41 +20,111 @@ from .project import Project, Tasks
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 _IMAGES = None
+PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
 
 
-def initialize_config(root, cli_opts, scaling_factor, pathcache, statusbar, session):
-    """ Initialize the config and add to global constant """
+def initialize_config(root, cli_opts, statusbar, session):
+    """ Initialize the GUI Master :class:`Config` and add to global constant.
+
+    This should only be called once on first GUI startup. Future access to :class:`Config`
+    should only be executed through :func:`get_config`.
+
+    Parameters
+    ----------
+    root: :class:`tkinter.Tk`
+        The root Tkinter object
+    cli_opts: :class:`lib.gui.options.CliOpts`
+        The command line options object
+    statusbar: :class:`lib.gui.statusbar.StatusBar`
+        The GUI Status bar
+    session: :class:`lib.gui.stats.Session`
+        The current training Session
+    """
     global _CONFIG  # pylint: disable=global-statement
     if _CONFIG is not None:
-        return
-    logger.debug("Initializing config: (root: %s, cli_opts: %s, tk_vars: %s, pathcache: %s, "
-                 "statusbar: %s, session: %s)", root, cli_opts, scaling_factor, pathcache,
-                 statusbar, session)
-    _CONFIG = Config(root, cli_opts, scaling_factor, pathcache, statusbar, session)
+        return None
+    logger.debug("Initializing config: (root: %s, cli_opts: %s, "
+                 "statusbar: %s, session: %s)", root, cli_opts, statusbar, session)
+    _CONFIG = Config(root, cli_opts, statusbar, session)
     return _CONFIG
 
 
 def get_config():
-    """ return the _CONFIG constant """
+    """ Get the Master GUI configuration.
+
+    Returns
+    -------
+    :class:`Config`
+        The Master GUI Config
+    """
     return _CONFIG
 
 
-def initialize_images(pathcache=None):
-    """ Initialize the images and add to global constant """
+def initialize_images():
+    """ Initialize the :class:`Images` handler  and add to global constant.
+
+    This should only be called once on first GUI startup. Future access to :class:`Images`
+    handler should only be executed through :func:`get_images`.
+    """
     global _IMAGES  # pylint: disable=global-statement
     if _IMAGES is not None:
         return
     logger.debug("Initializing images")
-    _IMAGES = Images(pathcache)
+    _IMAGES = Images()
 
 
 def get_images():
-    """ return the _CONFIG constant """
+    """ Get the Master GUI Images handler.
+
+    Returns
+    -------
+    :class:`Images`
+        The Master GUI Images handler
+    """
     return _IMAGES
 
 
-class FileHandler():
-    """ Raise a file dialog box and capture input """
+class FileHandler():  # pylint:disable=too-few-public-methods
+    """ Handles all GUI File Dialog actions and tasks.
+
+    Parameters
+    ----------
+    handletype: ['open', 'save', 'filename', 'filename_multi', 'savefilename', 'context']
+        The type of file dialog to return. `open` and `save` will perform the open and save actions
+        and return the file. `filename` returns the filename from an `open` dialog.
+        `filename_multi` allows for multi-selection of files and returns a list of files selected.
+        `savefilename` returns the filename from a `save as` dialog. `context` is a context
+        sensitive parameter that returns a certain dialog based on the current options
+    filetype: ['default', 'alignments', 'config_project', 'config_task', 'config_all', 'csv', \
+               'image', 'ini', 'state', 'log', 'video']
+        The type of file that this dialog is for. `default` allows selection of any files. Other
+        options limit the file type selection
+    title: str, optional
+        The title to display on the file dialog. If `None` then the default title will be used.
+        Default: ``None``
+    initialdir: str, optional
+        The folder to initially open with the file dialog. If `None` then tkinter will decide.
+        Default: ``None``
+    command: str, optional
+        Required for context handling file dialog, otherwise unused. Default: ``None``
+    action: str, optional
+        Required for context handling file dialog, otherwise unused. Default: ``None``
+    variable: :class:`tkinter.StringVar`, optional
+        Required for context handling file dialog, otherwise unused. The variable to associate
+        with this file dialog. Default: ``None``
+
+    Attributes
+    ----------
+    retfile: str or object
+        The return value from the file dialog
+
+    Example
+    -------
+    >>> handler = FileHandler('filename', 'video', title='Select a video...')
+    >>> video_file = handler.retfile
+    >>> print(video_file)
+    '/path/to/selected/video.mp4'
+    """
 
     def __init__(self, handletype, filetype, title=None, initialdir=None, command=None,
                  action=None, variable=None):
@@ -62,35 +132,15 @@ class FileHandler():
                      "initialdir: '%s, 'command: '%s', action: '%s', variable: %s)",
                      self.__class__.__name__, handletype, filetype, title, initialdir, command,
                      action, variable)
-        self.handletype = handletype
-        self.contexts = {
-            "effmpeg": {
-                "input": {"extract": "filename",
-                          "gen-vid": "dir",
-                          "get-fps": "filename",
-                          "get-info": "filename",
-                          "mux-audio": "filename",
-                          "rescale": "filename",
-                          "rotate": "filename",
-                          "slice": "filename"},
-                "output": {"extract": "dir",
-                           "gen-vid": "savefilename",
-                           "get-fps": "nothing",
-                           "get-info": "nothing",
-                           "mux-audio": "savefilename",
-                           "rescale": "savefilename",
-                           "rotate": "savefilename",
-                           "slice": "savefilename"}
-            }
-        }
-        self.defaults = self.set_defaults()
-        self.kwargs = self.set_kwargs(title, initialdir, filetype, command, action, variable)
-        self.retfile = getattr(self, self.handletype.lower())()
+        self._handletype = handletype
+        self._defaults = self._set_defaults()
+        self._kwargs = self._set_kwargs(title, initialdir, filetype, command, action, variable)
+        self.retfile = getattr(self, "_{}".format(self._handletype.lower()))()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def filetypes(self):
-        """ Set the filetypes for opening/saving """
+    def _filetypes(self):
+        """ dict: The accepted extensions for each file type for opening/saving """
         all_files = ("All files", "*.*")
         filetypes = {"default": (all_files,),
                      "alignments": [("Faceswap Alignments", "*.fsa *.json"),
@@ -125,25 +175,64 @@ class FileHandler():
             val.insert(0, tuple(multi))
         return filetypes
 
-    def set_defaults(self):
-        """ Set the default file type to be first in list of file types,
-            or set a custom file type if the first is not correct """
+    @property
+    def _contexts(self):
+        """dict: Mapping of commands, actions and their corresponding file dialog for context
+        handle types """
+        return {
+            "effmpeg": {
+                "input": {
+                    "extract": "filename",
+                    "gen-vid": "dir",
+                    "get-fps": "filename",
+                    "get-info": "filename",
+                    "mux-audio": "filename",
+                    "rescale": "filename",
+                    "rotate": "filename",
+                    "slice": "filename"},
+                "output": {
+                    "extract": "dir",
+                    "gen-vid": "savefilename",
+                    "get-fps": "nothing",
+                    "get-info": "nothing",
+                    "mux-audio": "savefilename",
+                    "rescale": "savefilename",
+                    "rotate": "savefilename",
+                    "slice": "savefilename"}
+                }
+            }
+
+    def _set_defaults(self):
+        """ Set the default file type for the file dialog. Generally the first found file type
+        will be used, but this is overridden if it is not appropriate
+
+        Returns
+        -------
+        dict:
+            The default file extension for each file type
+        """
         defaults = {key: val[0][1].replace("*", "")
-                    for key, val in self.filetypes.items()}
+                    for key, val in self._filetypes.items()}
         defaults["default"] = None
         defaults["video"] = ".mp4"
         defaults["image"] = ".png"
         logger.debug(defaults)
         return defaults
 
-    def set_kwargs(self, title, initialdir, filetype, command, action, variable=None):
-        """ Generate the required kwargs for the requested browser """
+    def _set_kwargs(self, title, initialdir, filetype, command, action, variable=None):
+        """ Generate the required kwargs for the requested file dialog browser
+
+        Returns
+        -------
+        dict:
+            The key word arguments for the file dialog to be launched
+        """
         logger.debug("Setting Kwargs: (title: %s, initialdir: %s, filetype: '%s', "
                      "command: '%s': action: '%s', variable: '%s')",
                      title, initialdir, filetype, command, action, variable)
         kwargs = dict()
-        if self.handletype.lower() == "context":
-            self.set_context_handletype(command, action, variable)
+        if self._handletype.lower() == "context":
+            self._set_context_handletype(command, action, variable)
 
         if title is not None:
             kwargs["title"] = title
@@ -151,64 +240,74 @@ class FileHandler():
         if initialdir is not None:
             kwargs["initialdir"] = initialdir
 
-        if self.handletype.lower() in (
+        if self._handletype.lower() in (
                 "open", "save", "filename", "filename_multi", "savefilename"):
-            kwargs["filetypes"] = self.filetypes[filetype]
-            if self.defaults.get(filetype, None):
-                kwargs['defaultextension'] = self.defaults[filetype]
-        if self.handletype.lower() == "save":
+            kwargs["filetypes"] = self._filetypes[filetype]
+            if self._defaults.get(filetype, None):
+                kwargs['defaultextension'] = self._defaults[filetype]
+        if self._handletype.lower() == "save":
             kwargs["mode"] = "w"
-        if self.handletype.lower() == "open":
+        if self._handletype.lower() == "open":
             kwargs["mode"] = "r"
         logger.debug("Set Kwargs: %s", kwargs)
         return kwargs
 
-    def set_context_handletype(self, command, action, variable):
-        """ Choose the correct file browser action based on context """
-        if self.contexts[command].get(variable, None) is not None:
-            handletype = self.contexts[command][variable][action]
-        else:
-            handletype = self.contexts[command][action]
-        logger.debug(handletype)
-        self.handletype = handletype
+    def _set_context_handletype(self, command, action, variable):
+        """ Sets the correct handle type  based on context
 
-    def open(self):
+        Parameters
+        ----------
+        command: str
+            The command that is being executed. Used to look up the context actions
+        action: str
+            The action that is being performed. Used to look up the correct file dialog
+        variable: :class:`tkinter.StringVar`
+            The variable associated with this file dialog
+        """
+        if self._contexts[command].get(variable, None) is not None:
+            handletype = self._contexts[command][variable][action]
+        else:
+            handletype = self._contexts[command][action]
+        logger.debug(handletype)
+        self._handletype = handletype
+
+    def _open(self):
         """ Open a file """
         logger.debug("Popping Open browser")
-        return filedialog.askopenfile(**self.kwargs)
+        return filedialog.askopenfile(**self._kwargs)
 
-    def save(self):
+    def _save(self):
         """ Save a file """
         logger.debug("Popping Save browser")
-        return filedialog.asksaveasfile(**self.kwargs)
+        return filedialog.asksaveasfile(**self._kwargs)
 
-    def dir(self):
+    def _dir(self):
         """ Get a directory location """
         logger.debug("Popping Dir browser")
-        return filedialog.askdirectory(**self.kwargs)
+        return filedialog.askdirectory(**self._kwargs)
 
-    def savedir(self):
+    def _savedir(self):
         """ Get a save directory location """
         logger.debug("Popping SaveDir browser")
-        return filedialog.askdirectory(**self.kwargs)
+        return filedialog.askdirectory(**self._kwargs)
 
-    def filename(self):
+    def _filename(self):
         """ Get an existing file location """
         logger.debug("Popping Filename browser")
-        return filedialog.askopenfilename(**self.kwargs)
+        return filedialog.askopenfilename(**self._kwargs)
 
-    def filename_multi(self):
+    def _filename_multi(self):
         """ Get multiple existing file locations """
         logger.debug("Popping Filename browser")
-        return filedialog.askopenfilenames(**self.kwargs)
+        return filedialog.askopenfilenames(**self._kwargs)
 
-    def savefilename(self):
+    def _savefilename(self):
         """ Get a save file location """
         logger.debug("Popping SaveFilename browser")
-        return filedialog.asksaveasfilename(**self.kwargs)
+        return filedialog.asksaveasfilename(**self._kwargs)
 
     @staticmethod
-    def nothing():  # pylint: disable=useless-return
+    def _nothing():  # pylint: disable=useless-return
         """ Method that does nothing, used for disabling open/save pop up  """
         logger.debug("Popping Nothing browser")
         return
@@ -220,10 +319,9 @@ class Images():
         Don't call directly. Call get_images()
     """
 
-    def __init__(self, pathcache=None):
+    def __init__(self):
         logger.debug("Initializing %s", self.__class__.__name__)
-        pathcache = get_config().pathcache if pathcache is None else pathcache
-        self.pathpreview = os.path.join(pathcache, "preview")
+        self.pathpreview = os.path.join(PATHCACHE, "preview")
         self.pathoutput = None
         self.previewoutput = None
         self.previewtrain = dict()
@@ -232,15 +330,15 @@ class Images():
                                  filenames=list(),
                                  placeholder=None)
         self.errcount = 0
-        self.icons = self._load_icons(pathcache)
+        self.icons = self._load_icons()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
-    def _load_icons(pathcache):
+    def _load_icons():
         size = get_config().user_config_dict.get("icon_size", 16)
         size = int(round(size * get_config().scaling_factor))
         icons = dict()
-        pathicons = os.path.join(pathcache, "icons")
+        pathicons = os.path.join(PATHCACHE, "icons")
         for fname in os.listdir(pathicons):
             name, ext = os.path.splitext(fname)
             if ext != ".png":
@@ -642,13 +740,11 @@ class Config():
         Don't call directly. Call get_config()
     """
 
-    def __init__(self, root, cli_opts, scaling_factor, pathcache, statusbar, session):
-        logger.debug("Initializing %s: (root %s, cli_opts: %s, scaling_factor: %s, pathcache: %s, "
-                     "statusbar: %s, session: %s)", self.__class__.__name__, root, cli_opts,
-                     scaling_factor, pathcache, statusbar, session)
-        self._constants = dict(pathcache=pathcache,
-                               root=root,
-                               scaling_factor=scaling_factor,
+    def __init__(self, root, cli_opts, statusbar, session):
+        logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s, session: %s)",
+                     self.__class__.__name__, root, cli_opts, statusbar, session)
+        self._constants = dict(root=root,
+                               scaling_factor=self.get_scaling(root),
                                status_bar=statusbar)
         self._cli_opts = cli_opts
         self._statusbar = statusbar
@@ -664,11 +760,6 @@ class Config():
 
     # Constants
     @property
-    def pathcache(self):
-        """ str: The path to the GUI cache folder """
-        return self._constants["pathcache"]
-
-    @property
     def root(self):
         """ :class:`tkinter.Tk`: The root tkinter window """
         return self._constants["root"]
@@ -682,6 +773,11 @@ class Config():
     def statusbar(self):
         """ :class:`lib.gui.statusbar.StatusBar`: The GUI StatusBar :class:`tkinter.ttk.Frame` """
         return self._constants["scaling_factor"]
+
+    @property
+    def pathcache(self):
+        """ str: The path to the GUI cache folder """
+        return PATHCACHE
 
     # GUI tkinter Objects
     @property
@@ -747,6 +843,14 @@ class Config():
     def tasks(self):
         """ :class:`lib.gui.project.Tasks`: The session tasks handler """
         return self._tasks
+
+    @staticmethod
+    def get_scaling(root):
+        """ Get the display DPI """
+        dpi = root.winfo_fpixels("1i")
+        scaling = dpi / 72.0
+        logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
+        return scaling
 
     def set_command_notebook(self, notebook):
         """ Set the command notebook to the :attr:`command_notebook` attribute "
@@ -864,6 +968,9 @@ class Config():
         updatepreview = tk.BooleanVar()
         updatepreview.set(False)
 
+        analysis_folder = tk.StringVar()
+        analysis_folder.set(None)
+
         tk_vars = {"display": display,
                    "runningtask": runningtask,
                    "istraining": istraining,
@@ -872,7 +979,8 @@ class Config():
                    "consoleclear": consoleclear,
                    "refreshgraph": refreshgraph,
                    "smoothgraph": smoothgraph,
-                   "updatepreview": updatepreview}
+                   "updatepreview": updatepreview,
+                   "analysis_folder": analysis_folder}
         logger.debug(tk_vars)
         return tk_vars
 

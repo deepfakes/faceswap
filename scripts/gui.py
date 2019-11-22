@@ -2,7 +2,6 @@
 """ The optional GUI for faceswap """
 
 import logging
-import os
 import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -10,6 +9,7 @@ from tkinter import messagebox, ttk
 from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, Session, DisplayNotebook,
                      get_images, initialize_images, initialize_config, LastSession,
                      MainMenuBar, ProcessWrapper, StatusBar)
+from lib.utils import set_system_verbosity
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -17,17 +17,17 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class FaceswapGui(tk.Tk):
     """ The Graphical User Interface """
 
-    def __init__(self, pathscript, debug):
+    def __init__(self, debug):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__()
 
-        self._init_args = dict(pathscript=pathscript, debug=debug)
+        self._init_args = dict(debug=debug)
         self._config = self.initialize_globals()
         self.set_fonts()
         self.set_styles()
         self.set_geometry()
 
-        self.wrapper = ProcessWrapper(pathscript)
+        self.wrapper = ProcessWrapper()
         self.objects = dict()
 
         get_images().delete_preview()
@@ -39,11 +39,9 @@ class FaceswapGui(tk.Tk):
     def initialize_globals(self):
         """ Initialize config and images global constants """
         cliopts = CliOptions()
-        scaling_factor = self.get_scaling()
-        pathcache = os.path.join(self._init_args["pathscript"], "lib", "gui", ".cache")
         statusbar = StatusBar(self)
         session = Session()
-        config = initialize_config(self, cliopts, scaling_factor, pathcache, statusbar, session)
+        config = initialize_config(self, cliopts, statusbar, session)
         initialize_images()
         return config
 
@@ -59,13 +57,6 @@ class FaceswapGui(tk.Tk):
         """ Set global custom styles """
         gui_style = ttk.Style()
         gui_style.configure('TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
-
-    def get_scaling(self):
-        """ Get the display DPI """
-        dpi = self.winfo_fpixels("1i")
-        scaling = dpi / 72.0
-        logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
-        return scaling
 
     def set_geometry(self):
         """ Set GUI geometry """
@@ -218,9 +209,8 @@ class FaceswapGui(tk.Tk):
 class Gui():  # pylint: disable=too-few-public-methods
     """ The GUI process. """
     def __init__(self, arguments):
-        cmd = sys.argv[0]
-        pathscript = os.path.realpath(os.path.dirname(cmd))
-        self.root = FaceswapGui(pathscript, arguments.debug)
+        set_system_verbosity(arguments.loglevel)
+        self.root = FaceswapGui(arguments.debug)
 
     def process(self):
         """ Builds the GUI """
