@@ -75,11 +75,11 @@ class Train():
                 logger.error("Error: '%s' does not exist", image_dir)
                 exit(1)
 
-            if not os.listdir(image_dir):
+            images[side] = get_image_paths(image_dir)
+            if not images[side]:
                 logger.error("Error: '%s' contains no images", image_dir)
                 exit(1)
 
-            images[side] = get_image_paths(image_dir)
         logger.info("Model A Directory: %s", self.args.input_a)
         logger.info("Model B Directory: %s", self.args.input_b)
         logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
