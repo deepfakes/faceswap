@@ -79,6 +79,13 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         """ str: The base name of :attr:`_filename`. Returns ``None`` if filename is ``None``. """
         return os.path.basename(self._filename) if self._filename is not None else None
 
+    @property
+    def _stored_tab_name(self):
+        """str: The tab_name stored in :attr:`_options` or ``None`` if it does not exist """
+        if self._options is None:
+            return None
+        return self._options.get("tab_name", None)
+
     def _current_gui_state(self, command=None):
         """ The current state of the GUI.
 
@@ -435,6 +442,7 @@ class Tasks(_GuiSession):
                      filename is not None and sess_type == "task" and
                      os.path.splitext(filename)[1] == ".fsw")
         if is_legacy:
+            logger.debug("Legacy task found: '%s'", filename)
             filename = self._update_legacy_task(filename)
 
         filename_set = self._set_filename(filename, sess_type=sess_type)
@@ -444,7 +452,8 @@ class Tasks(_GuiSession):
         if not loaded:
             return
 
-        command = self._active_tab if current_tab else self._get_lone_task()
+        command = self._active_tab if current_tab else self._stored_tab_name
+        command = self._get_lone_task() if command is None else command
         if command is None:
             logger.error("Unable to determine task from the given file: '%s'", filename)
             return
@@ -453,12 +462,13 @@ class Tasks(_GuiSession):
             return
 
         self._set_options(command)
+        self._add_to_recent(command)
+
         if self._is_project:
             self._filename = self._project_filename
         elif self._filename.endswith(".fsw"):
             self._filename = None
 
-        self._add_to_recent(command)
         self._add_task(command)
         if is_legacy:
             self.save()
