@@ -788,7 +788,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         frame = ttk.Frame(parent)
         frame.pack(padx=5, pady=(5, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
 
-        for utl in ("save", "clear", "reset"):
+        for utl in ("save", "clear", "refresh"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
@@ -797,7 +797,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             elif utl == "clear":
                 text = "Reset full config to default values"
                 action = self.config_tools.reset_config_default
-            elif utl == "reset":
+            elif utl == "refresh":
                 text = "Reset full config to saved values"
                 action = self.config_tools.reset_config_saved
 
@@ -945,7 +945,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Adding util buttons")
 
         title = config_key.split(".")[1].replace("_", " ").title()
-        for utl in ("save", "clear", "reset"):
+        for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
@@ -954,7 +954,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             elif utl == "clear":
                 text = "Reset {} config to default values".format(title)
                 action = parent.config_tools.reset_config_default
-            elif utl == "reset":
+            elif utl == "reload":
                 text = "Reset {} config to saved values".format(title)
                 action = parent.config_tools.reset_config_saved
 

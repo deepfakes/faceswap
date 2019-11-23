@@ -188,7 +188,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         logger.debug("Adding refresh option")
         tk_var = get_config().tk_vars["refreshgraph"]
         btnrefresh = ttk.Button(self.optsframe,
-                                image=get_images().icons["reset"],
+                                image=get_images().icons["reload"],
                                 command=lambda: tk_var.set(True))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
