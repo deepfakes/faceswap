@@ -769,6 +769,7 @@ class Config():
             tk_vars=self._set_tk_vars(),
             project=Project(self, FileHandler),
             tasks=Tasks(self, FileHandler),
+            default_options=None,
             status_bar=statusbar,
             command_notebook=None)  # set in command.py
         self._user_config = UserConfig(None)
@@ -812,6 +813,11 @@ class Config():
     def tasks(self):
         """ :class:`lib.gui.project.Tasks`: The session tasks handler. """
         return self._gui_objects["tasks"]
+
+    @property
+    def default_options(self):
+        """ dict: The default options for all tabs """
+        return self._gui_objects["default_options"]
 
     @property
     def statusbar(self):
@@ -877,6 +883,19 @@ class Config():
         scaling = dpi / 72.0
         logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
         return scaling
+
+    def set_default_options(self):
+        """ Set the default options for :mod:`lib.gui.projects`
+
+        The Default GUI options are stored on Faceswap startup.
+
+        Exposed as the :attr:`_default_opts` for a project cannot be set until after the main
+        Command Tabs have been loaded.
+        """
+        default = self.cli_opts.get_option_values()
+        logger.debug(default)
+        self._gui_objects["default_options"] = default
+        self.project.set_default_options()
 
     def set_command_notebook(self, notebook):
         """ Set the command notebook to the :attr:`command_notebook` attribute
