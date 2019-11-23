@@ -179,8 +179,13 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             self.clear_recent_files(serializer, menu_file)
         recent_files = serializer.load(menu_file)
         logger.debug("Loaded recent files: %s", recent_files)
+        removed_files = []
         for recent_item in recent_files:
             filename, command = recent_item
+            if not os.path.isfile(filename):
+                logger.debug("File does not exist. Flagging for removal: '%s'", filename)
+                removed_files.append(recent_item)
+                continue
             # Legacy project files didn't have a command stored
             command = command if command else "project"
             logger.debug("processing: ('%s', %s)", filename, command)
@@ -195,6 +200,11 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             self.recent_menu.add_command(
                 label="{} ({})".format(filename, lbl.title()),
                 command=lambda kw=kwargs, fn=load_func: fn(**kw))
+        if removed_files:
+            for recent_item in removed_files:
+                logger.debug("Removing from recent files: `%s`", recent_item[0])
+                recent_files.remove(recent_item)
+            serializer.save(menu_file, recent_files)
         self.recent_menu.add_separator()
         self.recent_menu.add_command(
             label="Clear recent files",
