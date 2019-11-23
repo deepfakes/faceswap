@@ -788,7 +788,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         frame = ttk.Frame(parent)
         frame.pack(padx=5, pady=(5, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
 
-        for utl in ("save", "clear", "refresh"):
+        for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
@@ -797,7 +797,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             elif utl == "clear":
                 text = "Reset full config to default values"
                 action = self.config_tools.reset_config_default
-            elif utl == "refresh":
+            elif utl == "reload":
                 text = "Reset full config to saved values"
                 action = self.config_tools.reset_config_saved
 
