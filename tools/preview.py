@@ -18,7 +18,7 @@ from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
 from lib.gui.custom_widgets import ContextMenu
 from lib.gui.utils import get_images, initialize_images
-from lib.gui.tooltip import Tooltip
+from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import set_slider_rounding
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
