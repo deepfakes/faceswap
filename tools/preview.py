@@ -17,7 +17,7 @@ from PIL import Image, ImageTk
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
 from lib.gui.custom_widgets import ContextMenu
-from lib.gui.utils import get_images, initialize_images
+from lib.gui.utils import get_images, initialize_config, initialize_images
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import set_slider_rounding
 from lib.convert import Converter
@@ -72,6 +72,7 @@ class Preview():
     def initialize_tkinter(self):
         """ Initialize tkinter for standalone or GUI """
         logger.debug("Initializing tkinter")
+        initialize_config(self.root, None, None, None)
         initialize_images()
         self.set_geometry()
         self.root.title("Faceswap.py - Convert Settings")

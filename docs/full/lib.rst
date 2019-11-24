@@ -12,6 +12,7 @@ Subpackages
    lib.model
    lib.serializer
    lib.training_data
+   lib.vgg_face2_keras
 
 Module contents
 ---------------
