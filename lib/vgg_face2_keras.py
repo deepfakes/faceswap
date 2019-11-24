@@ -10,11 +10,12 @@ https://creativecommons.org/licenses/by-nc/4.0/
 import logging
 import sys
 import os
+import psutil
 
 import cv2
 import numpy as np
-from fastcluster import linkage
-from lib.utils import GetModel, set_system_verbosity
+from fastcluster import linkage, linkage_vector
+from lib.utils import GetModel, set_system_verbosity, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -38,7 +39,8 @@ class VGGFace2():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<< GET MODEL >>> #
-    def get_model(self, git_model_id, model_filename, backend):
+    @staticmethod
+    def get_model(git_model_id, model_filename, backend):
         """ Check if model is available, if not, download and unzip it """
         root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
         cache_path = os.path.join(root_path, "plugins", "extract", "recognition", ".cache")
@@ -95,13 +97,73 @@ class VGGFace2():
         the order implied by the hierarchical tree (dendrogram)
         """
         logger.info("Sorting face distances. Depending on your dataset this may take some time...")
-        num_predictions = predictions.shape[0]
-        result_linkage = linkage(predictions, method=method, preserve_input=False)
+        num_predictions, dims = predictions.shape
+
+        clustering_method = self._get_clustering_method(num_predictions, dims)
+
+        kwargs = dict(method=method)
+        if clustering_method == "linkage":
+            kwargs["preserve_input"] = False
+            func = linkage
+        else:
+            func = linkage_vector
+
+        result_linkage = func(predictions, **kwargs)
+        print(result_linkage.shape)
+        exit(0)
         result_order = self.seriation(result_linkage,
                                       num_predictions,
                                       num_predictions + num_predictions - 2)
 
         return result_order
+
+    @staticmethod
+    def _get_clustering_method(item_count, dims):
+        """ Calculate the RAM that will be required to sort these images and select the appropriate
+        clustering method.
+
+        From fastcluster documentation:
+            "While the linkage method requires Θ(N:sup:`2`) memory for clustering of N points, this
+            [vector] method needs Θ(N D)for N points in RD, which is usually much smaller."
+            also:
+            "half the memory can be saved by specifying :attr:`preserve_input`=``False``"
+
+        To avoid undercalculating we divide the memory calculation by 1.7 instead of 2
+
+        Parameters
+        ----------
+        item_count: int
+            The number of images that are to be processed
+        dims: int
+            The number of dimensions in the vgg_face output
+
+        Returns
+        -------
+            str: 'linkage' or 'vector'
+        """
+        np_float = 24  # bytes size of a numpy float
+        divider = 1024 * 1024  # bytes to MB
+
+        free_ram = psutil.virtual_memory().free / divider
+        linkage_required = (((item_count ** 2) * np_float) / 1.7) / divider
+        vector_required = ((item_count * dims) * np_float) / divider
+        logger.debug("free_ram: %sMB, linkage_required: %sMB, vector_required: %sMB",
+                     int(free_ram), int(linkage_required), int(vector_required))
+
+        if linkage_required < free_ram:
+            logger.verbose("Using linkage method")
+            retval = "linkage"
+        elif vector_required < free_ram:
+            logger.warning("Not enough RAM to perform linkage clustering. Using vector "
+                           "clustering. This will be significantly slower. Free RAM: %sMB. "
+                           "Required for linkage method: %sMB",
+                           int(free_ram), int(linkage_required))
+            retval = "vector"
+        else:
+            raise FaceswapError("Not enough RAM available to sort faces. Try reducing "
+                                "the size of  your dataset. Free RAM: {}MB. "
+                                "Required RAM: {}MB".format(int(free_ram), int(vector_required)))
+        return retval
 
     def seriation(self, tree, points, current_index):
         """ Seriation method for sorted similarity
