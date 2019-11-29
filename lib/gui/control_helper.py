@@ -8,7 +8,7 @@ from tkinter import ttk
 from itertools import zip_longest
 from functools import partial
 
-from _tkinter import Tcl_Obj
+from _tkinter import Tcl_Obj, TclError
 
 from .custom_widgets import ContextMenu
 from .custom_widgets import Tooltip
@@ -203,8 +203,25 @@ class ControlPanelOption():
         return helptext
 
     def get(self):
-        """ Return the value from the tk_var """
-        return self.tk_var.get()
+        """ Return the value from the tk_var
+
+        Notes
+        -----
+        tk variables don't like empty values if it's not a stringVar. This seems to be pretty
+        much the only reason that a get() call would fail, so replace any numerical variable
+        with it's numerical zero equivalent on a TCL Error. Only impacts variables linked
+        to Entry widgets.
+        """
+        try:
+            val = self.tk_var.get()
+        except TclError:
+            if isinstance(self.tk_var, tk.IntVar):
+                val = 0
+            elif isinstance(self.tk_var, tk.DoubleVar):
+                val = 0.0
+            else:
+                raise
+        return val
 
     def set(self, value):
         """ Set the tk_var to a new value """
