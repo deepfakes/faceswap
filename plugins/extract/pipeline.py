@@ -487,14 +487,17 @@ class ExtractMedia():
         The base name of the original frame's filename
     image: :class:`numpy.ndarray`
         The original frame
+    detected_faces: list, optional
+        A list of :class:`~lib.faces_detect.DetectedFace` objects. Detected faces can be added
+        later with :func:`add_detected_faces`. Default: None
     """
 
-    def __init__(self, filename, image):
-        logger.trace("Initializing %s: (filename: '%s', image shape: %s)",
-                     self.__class__.__name__, filename, image.shape)
+    def __init__(self, filename, image, detected_faces=None):
+        logger.trace("Initializing %s: (filename: '%s', image shape: %s, detected_faces: %s)",
+                     self.__class__.__name__, filename, image.shape, detected_faces)
         self._filename = filename
         self._image = image
-        self._detected_faces = None
+        self._detected_faces = detected_faces
 
     @property
     def filename(self):

@@ -122,8 +122,10 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 if idx == self.batchsize:
                     frame_faces = len(item.detected_faces)
                     if f_idx + 1 != frame_faces:
-                        self._rollover = ExtractMedia(item.filename, item.image)
-                        self._rollover.add_detected_faces(item.detected_faces[f_idx + 1:])
+                        self._rollover = ExtractMedia(
+                            item.filename,
+                            item.image,
+                            detected_faces=item.detected_faces[f_idx + 1:])
                         logger.trace("Rolled over %s faces of %s to next batch for '%s'",
                                      len(self._rollover.detected_faces), frame_faces,
                                      item.filename)

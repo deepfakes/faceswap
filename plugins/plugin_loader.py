@@ -185,8 +185,7 @@ class PluginLoader():
                             for item in os.scandir(extractpath)
                             if not item.name.startswith("_")
                             and not item.name.endswith("defaults.py")
-                            and item.name.endswith(".py")
-                            and item.name != "manual.py")
+                            and item.name.endswith(".py"))
         if add_none:
             extractors.insert(0, "none")
         return extractors
