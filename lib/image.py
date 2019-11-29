@@ -467,8 +467,8 @@ class ImagesLoader(ImageIO):
 
     def __init__(self, path, queue_size=8, load_with_hash=False, fast_count=True, skip_list=None):
         logger.debug("Initializing %s: (path: %s, queue_size: %s, load_with_hash: %s, "
-                     "fast_count: %s)", self.__class__.__name__, path, queue_size,
-                     load_with_hash, fast_count)
+                     "fast_count: %s, skip_list: %s)", self.__class__.__name__, path, queue_size,
+                     load_with_hash, fast_count, skip_list)
 
         args = (load_with_hash, )
         super().__init__(path, queue_size=queue_size, args=args)
@@ -603,7 +603,7 @@ class ImagesLoader(ImageIO):
         reader = imageio.get_reader(self.location, "ffmpeg")
         for idx, frame in enumerate(reader):
             if idx in self._skip_list:
-                logger.trace("Skipping frame %s due to skip list")
+                logger.trace("Skipping frame %s due to skip list", idx)
                 continue
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
@@ -717,7 +717,7 @@ class ImagesSaver(ImageIO):
     """
 
     def __init__(self, path, queue_size=8, as_bytes=False):
-        logger.debug("Initializing %s: (path: %s, load_with_hash: %s, as_bytes: %s)",
+        logger.debug("Initializing %s: (path: %s, queue_size: %s, as_bytes: %s)",
                      self.__class__.__name__, path, queue_size, as_bytes)
 
         super().__init__(path, queue_size=queue_size)
@@ -762,12 +762,12 @@ class ImagesSaver(ImageIO):
         Parameters
         ----------
         filename: str
-            The filename of the image to be saved. Can include or exclude the folder location.
+            The filename of the image to be saved. NB: Any folders passed in with the filename
+            will be stripped and replaced with :attr:`location`.
         image: numpy.ndarray
             The image to be saved
         """
-        if not os.path.commonprefix([self.location, filename]):
-            filename = os.path.join(self.location, filename)
+        filename = os.path.join(self.location, os.path.basename(filename))
         try:
             if self._as_bytes:
                 with open(filename, "wb") as out_file:
