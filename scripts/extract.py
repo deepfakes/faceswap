@@ -10,7 +10,7 @@ from tqdm import tqdm
 from lib.image import encode_image_with_hash, ImagesLoader, ImagesSaver
 from lib.multithreading import MultiThread
 from lib.utils import get_folder
-from plugins.extract.pipeline import Extractor
+from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, Utils
 
 tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
@@ -110,8 +110,7 @@ class Extract():
         Should only be called from  :class:`lib.cli.ScriptExecutor`
         """
         logger.info('Starting, this may take a while...')
-        # from lib.queue_manager import queue_manager
-        # queue_manager.debug_monitor(3)
+        # from lib.queue_manager import queue_manager ; queue_manager.debug_monitor(3)
         self._threaded_redirector("load")
         self._run_extraction()
         for thread in self._threads:
@@ -150,8 +149,7 @@ class Extract():
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            item = {"filename": filename,
-                    "image": image[..., :3]}
+            item = ExtractMedia(filename, image[..., :3])
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
@@ -165,8 +163,8 @@ class Extract():
         Parameters
         ----------
         detected_faces: dict
-            Dictionary of detected_faces with the filename as its key and a list of
-            :class:`lib.faces_detect.DetectedFace` as the values for pairing with reloaded images.
+            Dictionary of :class:`plugins.extract.pipeline.ExtractMedia` with the filename as the
+            key for repopulating the image attribute.
         """
         logger.debug("Reload Images: Start. Detected Faces Count: %s", len(detected_faces))
         load_queue = self._extractor.input_queue
@@ -175,12 +173,12 @@ class Extract():
                 logger.debug("Reload Queue: Stop signal received. Terminating")
                 break
             logger.trace("Reloading image: '%s'", filename)
-            detect_item = detected_faces.pop(filename, None)
-            if not detect_item:
+            extract_media = detected_faces.pop(filename, None)
+            if not extract_media:
                 logger.warning("Couldn't find faces for: %s", filename)
                 continue
-            detect_item["image"] = image
-            load_queue.put(detect_item)
+            extract_media.set_image(image)
+            load_queue.put(extract_media)
         load_queue.put("EOF")
         logger.debug("Reload Images: Complete")
 
@@ -209,21 +207,17 @@ class Extract():
                               total=self._images.process_count,
                               file=sys.stdout,
                               desc=desc)
-            for idx, faces in enumerate(status_bar):
+            for idx, extract_media in enumerate(status_bar):
                 self._check_thread_error()
-                exception = faces.get("exception", False)
-                if exception:
-                    break
-
-                if self._extractor.final_pass:
-                    self._output_processing(faces, size)
-                    self._output_faces(saver, faces)
+                if is_final:
+                    self._output_processing(extract_media, size)
+                    self._output_faces(saver, extract_media)
                     if self._save_interval and (idx + 1) % self._save_interval == 0:
                         self._alignments.save()
                 else:
-                    del faces["image"]
-                    # cache detected faces for next run
-                    detected_faces[faces["filename"]] = faces
+                    extract_media.remove_image()
+                    # cache extract_media for next run
+                    detected_faces[extract_media.filename] = extract_media
                 status_bar.update(1)
 
             if not is_final:
@@ -236,51 +230,53 @@ class Extract():
         for thread in self._threads:
             thread.check_and_raise_error()
 
-    def _output_processing(self, faces, size):
+    def _output_processing(self, extract_media, size):
         """ Prepare faces for output
 
         Loads the aligned face, perform any processing actions and verify the output.
 
         Parameters:
-        faces: dict
-            Dictionary output from :class:`plugins.extract.Pipeline.Extractor`
+        extract_media: :class:`plugins.extract.pipeline.ExtractMedia`
+            Output from :class:`plugins.extract.pipeline.Extractor`
         size: int
             The size that the aligned face should be created at
         """
-        for face in faces["detected_faces"]:
-            face.load_aligned(faces["image"], size=size)
+        for face in extract_media.detected_faces:
+            face.load_aligned(extract_media.image, size=size)
 
-        self._post_process.do_actions(faces)
+        self._post_process.do_actions(extract_media)
+        extract_media.remove_image()
 
-        faces_count = len(faces["detected_faces"])
+        faces_count = len(extract_media.detected_faces)
         if faces_count == 0:
             logger.verbose("No faces were detected in image: %s",
-                           os.path.basename(faces["filename"]))
+                           os.path.basename(extract_media.filename))
 
         if not self._verify_output and faces_count > 1:
             self._verify_output = True
 
-    def _output_faces(self, saver, faces):
+    def _output_faces(self, saver, extract_media):
         """ Output faces to save thread
 
         Set the face filename based on the frame name and put the face to the
-        :class:`lib.image.ImagesSaver` save queue and add the face information to the alignments
+        :class:`~lib.image.ImagesSaver` save queue and add the face information to the alignments
         data.
 
         Parameters
         ----------
         saver: lib.images.ImagesSaver
             The background saver for saving the image
-        faces: dict
-            The output dictionary from :class:`plugins.extract.Pipeline.Extractor`
+        extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
+            The output from :class:`~plugins.extract.Pipeline.Extractor`
         """
-        logger.trace("Outputting faces for %s", faces["filename"])
+        logger.trace("Outputting faces for %s", extract_media.filename)
         final_faces = list()
-        filename, extension = os.path.splitext(os.path.basename(faces["filename"]))
-        for idx, face in enumerate(faces["detected_faces"]):
+        filename, extension = os.path.splitext(os.path.basename(extract_media.filename))
+        for idx, face in enumerate(extract_media.detected_faces):
             output_filename = "{}_{}{}".format(filename, str(idx), extension)
             face.hash, image = encode_image_with_hash(face.aligned_face, extension)
 
             saver.save(output_filename, image)
             final_faces.append(face.to_alignment())
-        self._alignments.data[os.path.basename(faces["filename"])] = final_faces
+        self._alignments.data[os.path.basename(extract_media.filename)] = final_faces
+        del extract_media

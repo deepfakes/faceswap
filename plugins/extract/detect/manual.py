@@ -26,7 +26,7 @@ class Detect(Detector):
 
     def process_input(self, batch):
         """ No pre-processing for Manual. Just set a dummy feed """
-        batch["feed"] = batch["scaled_image"]
+        batch["feed"] = batch["image"]
         return batch
 
     def predict(self, batch):
