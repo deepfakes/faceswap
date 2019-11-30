@@ -34,7 +34,6 @@ class Sort():
         self.changes = None
         self.serializer = None
         self.vgg_face = None
-        self.extractor_in_queue = None
 
     def process(self):
         """ Main processing function of the sort tool """
