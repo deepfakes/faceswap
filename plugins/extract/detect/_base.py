@@ -161,6 +161,9 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                             for face in faces]
                            for faces, rotmat in zip(batch_faces, batch["rotmat"])]
 
+        # Remove zero sized faces
+        batch_faces = self._remove_zero_sized_faces(batch_faces)
+
         # Scale back out to original frame
         batch["detected_faces"] = [[self.to_detected_face((face.left - pad[0]) / scale,
                                                           (face.top - pad[1]) / scale,
@@ -171,8 +174,6 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                                                                 batch["pad"],
                                                                 batch_faces)]
 
-        # Remove zero sized faces
-        self._remove_zero_sized_faces(batch)
         if self.min_size > 0 and batch.get("detected_faces", None):
             batch["detected_faces"] = self._filter_small_faces(batch["detected_faces"])
 
@@ -280,17 +281,17 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         return image
 
     # <<< FINALIZE METHODS >>> #
-    @staticmethod
-    def _remove_zero_sized_faces(batch):
-        """ Remove items from dict where detected face is of zero size
+    def _remove_zero_sized_faces(self, batch_faces):
+        """ Remove items from batch_faces where detected face is of zero size
             or face falls entirely outside of image """
-        dims = [img.shape[:2] for img in batch["image"]]
-        logger.trace("image dims: %s", dims)
-        batch["detected_faces"] = [[face
-                                    for face in faces
-                                    if face.right > 0 and face.left < dim[1]
-                                    and face.bottom > 0 and face.top < dim[0]]
-                                   for dim, faces in zip(dims, batch.get("detected_faces", []))]
+        logger.trace("Input sizes: %s", [len(face) for face in batch_faces])
+        retval = [[face
+                   for face in faces
+                   if face.right > 0 and face.left < self.input_size
+                   and face.bottom > 0 and face.top < self.input_size]
+                  for faces in batch_faces]
+        logger.trace("Output sizes: %s", [len(face) for face in retval])
+        return retval
 
     def _filter_small_faces(self, detected_faces):
         """ Filter out any faces smaller than the min size threshold """
