@@ -6,21 +6,20 @@ import logging
 import os
 import sys
 import operator
+from concurrent import futures
 from shutil import copyfile
 
 import numpy as np
 import cv2
 from tqdm import tqdm
-from concurrent import futures
 
 # faceswap imports
 from lib.cli import FullHelpArgumentParser
 from lib.serializer import get_serializer_from_filename
 from lib.faces_detect import DetectedFace
 from lib.image import read_image
-from lib.queue_manager import queue_manager
 from lib.vgg_face2_keras import VGGFace2 as VGGFace
-from plugins.plugin_loader import PluginLoader
+from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from . import cli
 
@@ -35,6 +34,7 @@ class Sort():
         self.changes = None
         self.serializer = None
         self.vgg_face = None
+        self.extractor_in_queue = None
 
     def process(self):
         """ Main processing function of the sort tool """
@@ -88,36 +88,31 @@ class Sort():
     @staticmethod
     def launch_aligner():
         """ Load the aligner plugin to retrieve landmarks """
-        kwargs = dict(in_queue=queue_manager.get_queue("in"),
-                      out_queue=queue_manager.get_queue("out"),
-                      queue_size=8)
-        aligner = PluginLoader.get_aligner("fan")(normalize_method="hist")
-        aligner.batchsize = 1  # TODO Put batches at a time or load from alignment file
-        aligner.initialize(**kwargs)
-        aligner.start()
+        extractor = Extractor(None, "fan", None, normalize_method="hist")
+        extractor.set_batchsize("align", 1)
+        extractor.launch()
+        return extractor
 
     @staticmethod
     def alignment_dict(filename, image):
-        """ Set the image to a dict for alignment """
+        """ Set the image to an ExtractMedia object for alignment """
         height, width = image.shape[:2]
         face = DetectedFace(x=0, w=width, y=0, h=height)
-        return {"image": image,
-                "filename": filename,
-                "detected_faces": [face]}
+        return ExtractMedia(filename, image, detected_faces=[face])
 
     def _get_landmarks(self):
         """ Multi-threaded, parallel and sequentially ordered landmark loader """
-        self.launch_aligner()
+        extractor = self.launch_aligner()
         filename_list, image_list = self._get_images()
         feed_list = list(map(Sort.alignment_dict, filename_list, image_list))
         landmarks = np.zeros((len(feed_list), 68, 2), dtype='float32')
 
         logger.info("Finding landmarks in images...")
-        for feed in tqdm(feed_list, desc="Putting...", file=sys.stdout):
-            queue_manager.get_queue("in").put(feed)
-        for index, _ in enumerate(tqdm(landmarks, desc="Aligning...", file=sys.stdout)):
-            face = queue_manager.get_queue("out").get()
-            landmarks[index] = np.array(face["detected_faces"][0].landmarks_xy)
+        # TODO thread the put to queue so we don't have to put and get at the same time
+        # Or even better, set up a proper background loader from disk (i.e. use lib.image.ImageIO)
+        for idx, feed in enumerate(tqdm(feed_list, desc="Aligning...", file=sys.stdout)):
+            extractor.input_queue.put(feed)
+            landmarks[idx] = next(extractor.detected_faces()).detected_faces[0].landmarks_xy
 
         return filename_list, image_list, landmarks
 
@@ -187,7 +182,7 @@ class Sort():
     def sort_face_cnn(self):
         """ Sort by landmark similarity """
         logger.info("Sorting by landmark similarity...")
-        filename_list, image_list, landmarks = self._get_landmarks()
+        filename_list, _, landmarks = self._get_landmarks()
         img_list = list(zip(filename_list, landmarks))
 
         logger.info("Comparing landmarks and sorting...")
@@ -208,7 +203,7 @@ class Sort():
     def sort_face_cnn_dissim(self):
         """ Sort by landmark dissimilarity """
         logger.info("Sorting by landmark dissimilarity...")
-        filename_list, image_list, landmarks = self._get_landmarks()
+        filename_list, _, landmarks = self._get_landmarks()
         scores = np.zeros(len(filename_list), dtype='float32')
         img_list = list(list(items) for items in zip(filename_list, landmarks, scores))
 
@@ -231,7 +226,7 @@ class Sort():
     def sort_face_yaw(self):
         """ Sort by estimated face yaw angle """
         logger.info("Sorting by estimated face yaw angle..")
-        filename_list, image_list, landmarks = self._get_landmarks()
+        filename_list, _, landmarks = self._get_landmarks()
 
         logger.info("Estimating yaw...")
         yaws = [self.calc_landmarks_face_yaw(mark) for mark in landmarks]
@@ -542,7 +537,6 @@ class Sort():
         :return: img_list but with the comparative values that the chosen
         grouping method expects.
         """
-        input_dir = self.args.input_dir
         logger.info("Preparing to group...")
         if group_method == 'group_blur':
             filename_list, image_list = self._get_images()
@@ -564,7 +558,8 @@ class Sort():
 
         return self.splice_lists(img_list, temp_list)
 
-    def _convert_color(self, imgs, same_size, method):
+    @staticmethod
+    def _convert_color(imgs, same_size, method):
         """ Helper function to convert colorspaces """
 
         if method.endswith('gray'):
