@@ -378,17 +378,20 @@ setup_faceswap() {
     python "$DIR_FACESWAP/setup.py" --installer $args
 }
 
+create_gui_launcher () {
+    # Create a shortcut to launch into the GUI
+    launcher="$DIR_FACESWAP/faceswap_gui_launcher.sh"
+    launch_script="source \"$DIR_CONDA/etc/profile.d/conda.sh\" activate &&\n"
+    launch_script+="conda activate '$ENV_NAME' &&\n"
+    launch_script+="python \"$DIR_FACESWAP/faceswap.py\" gui\n"
+    echo -e "$launch_script" > "$launcher"
+    chmod +x "$launcher"
+}
+
 create_desktop_shortcut () {
     # Create a shell script to launch the GUI and add a desktop shortcut
     if $DESKTOP ; then
-        launcher="$DIR_FACESWAP/faceswap_gui_launcher.sh"
         desktop_icon="$HOME/Desktop/faceswap.desktop"
-        launch_script="source \"$DIR_CONDA/etc/profile.d/conda.sh\" activate &&\n"
-        launch_script+="conda activate '$ENV_NAME' &&\n"
-        launch_script+="python \"$DIR_FACESWAP/faceswap.py\" gui\n"
-        echo -e "$launch_script" > "$launcher"
-        chmod +x "$launcher"
-
         desktop_file="[Desktop Entry]\n"
         desktop_file+="Version=1.0\n"
         desktop_file+="Type=Application\n"
@@ -413,6 +416,7 @@ activate_env
 install_git
 clone_faceswap
 setup_faceswap
+create_gui_launcher
 create_desktop_shortcut
 info "Faceswap installation is complete!"
 if $DESKTOP ; then info "You can launch Faceswap from the icon on your desktop" ; exit ; fi
