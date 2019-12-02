@@ -207,7 +207,7 @@ class PreviewArgs(FaceSwapArgs):
                               "default": False,
                               "backend": "nvidia",
                               "help": "Sets allow_growth option of Tensorflow to spare memory "
-                              "on some configurations."})
+                                      "on some configurations."})
 
         return argument_list
 
@@ -462,6 +462,7 @@ class MaskArgs(FaceSwapArgs):
             "action": DirOrFileFullPaths,
             "type": str,
             "group": "data",
+            "filetypes": "video",
             "required": True,
             "help": "Directory containing extracted faces, source frames, or a video file."})
         argument_list.append({
@@ -547,6 +548,24 @@ class MaskArgs(FaceSwapArgs):
             "help": "Helps reduce 'blotchiness' on some masks by making light shades white "
                     "and dark shades black. Higher values will impact more of the mask. NB: "
                     "Only effects the output preview. Set to 0 for off"})
+        argument_list.append({
+            "opts": ("-ot", "--output-type"),
+            "action": Radio,
+            "type": str.lower,
+            "choices": ("combined", "masked", "mask"),
+            "default": "combined",
+            "group": "output",
+            "help": "R|How to format the output when processing is set to 'output'."
+                    "\nL|combined: The image contains the face/frame, face mask and masked face."
+                    "\nL|masked: Output the face/frame as rgba image with the face masked."
+                    "\nL|mask: Only output the mask as a single channel image."})
+        argument_list.append({
+            "opts": ("-f", "--full-frame"),
+            "action": "store_true",
+            "default": False,
+            "group": "output",
+            "help": "R|Whether to output the whole frame or only the face box when using "
+                    "output processing. Only has an effect when using frames as input."})
 
         return argument_list
 

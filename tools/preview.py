@@ -6,7 +6,7 @@ import random
 import tkinter as tk
 from tkinter import ttk
 import os
-import sys
+
 from configparser import ConfigParser
 from threading import Event, Lock
 
@@ -16,8 +16,9 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
-from lib.gui.utils import get_images, initialize_images, ContextMenu
-from lib.gui.tooltip import Tooltip
+from lib.gui.custom_widgets import ContextMenu
+from lib.gui.utils import get_images, initialize_config, initialize_images
+from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import set_slider_rounding
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
@@ -71,9 +72,8 @@ class Preview():
     def initialize_tkinter(self):
         """ Initialize tkinter for standalone or GUI """
         logger.debug("Initializing tkinter")
-        pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
-        pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        initialize_images(pathcache=pathcache)
+        initialize_config(self.root, None, None, None)
+        initialize_images()
         self.set_geometry()
         self.root.title("Faceswap.py - Convert Settings")
         self.root.tk.call(
@@ -784,12 +784,12 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.busy_indicator.start()
 
     def add_actions(self, parent):
-        """ Add Actio Buttons """
+        """ Add Action Buttons """
         logger.debug("Adding util buttons")
         frame = ttk.Frame(parent)
         frame.pack(padx=5, pady=(5, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
 
-        for utl in ("save", "clear", "reset"):
+        for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
@@ -798,7 +798,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             elif utl == "clear":
                 text = "Reset full config to default values"
                 action = self.config_tools.reset_config_default
-            elif utl == "reset":
+            elif utl == "reload":
                 text = "Reset full config to saved values"
                 action = self.config_tools.reset_config_saved
 
@@ -942,11 +942,11 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         return sep
 
     def add_actions(self, parent, config_key):
-        """ Add Actio Buttons """
+        """ Add Action Buttons """
         logger.debug("Adding util buttons")
 
         title = config_key.split(".")[1].replace("_", " ").title()
-        for utl in ("save", "clear", "reset"):
+        for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
@@ -955,7 +955,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             elif utl == "clear":
                 text = "Reset {} config to default values".format(title)
                 action = parent.config_tools.reset_config_default
-            elif utl == "reset":
+            elif utl == "reload":
                 text = "Reset {} config to saved values".format(title)
                 action = parent.config_tools.reset_config_saved
 
@@ -968,7 +968,6 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 
 class ControlBuilder():
-    # TODO Expand out for cli options
     """
     Builds and returns a frame containing a tkinter control with label
 

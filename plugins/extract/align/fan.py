@@ -54,7 +54,6 @@ class Align(Aligner):
         """ Get the center and set scale of bounding box """
         logger.debug("Calculating center and scale")
         center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
-        # TODO modify detected face to hold this data as a matrix
         for index, face in enumerate(detected_faces):
             x_center = (face.left + face.right) / 2.0
             y_center = (face.top + face.bottom) / 2.0 - face.h * 0.12
@@ -62,7 +61,7 @@ class Align(Aligner):
             center_scale[index, :, 0] = np.full(68, x_center, dtype='float32')
             center_scale[index, :, 1] = np.full(68, y_center, dtype='float32')
             center_scale[index, :, 2] = np.full(68, scale, dtype='float32')
-        logger.trace("Calculated center and scale: %s, %s", center_scale)
+        logger.trace("Calculated center and scale: %s", center_scale)
         return center_scale
 
     def crop(self, batch):  # pylint:disable=too-many-locals
@@ -79,19 +78,22 @@ class Align(Aligner):
 
         # TODO second pass .. convert to matrix
         new_images = []
-        for face, ul, br in zip(batch["detected_faces"], upper_left, bot_right):
-            height, width = face.image.shape[:2]
-            channels = 3 if face.image.ndim > 2 else 1
-            br_width, br_height = br[0].astype('int32')
-            ul_width, ul_height = ul[0].astype('int32')
-            new_dim = (br_height - ul_height, br_width - ul_width, channels)
+        for image, top_left, bottom_right in zip(batch["image"], upper_left, bot_right):
+            height, width = image.shape[:2]
+            channels = 3 if image.ndim > 2 else 1
+            bottom_right_width, bottom_right_height = bottom_right[0].astype('int32')
+            top_left_width, top_left_height = top_left[0].astype('int32')
+            new_dim = (bottom_right_height - top_left_height,
+                       bottom_right_width - top_left_width,
+                       channels)
             new_img = np.empty(new_dim, dtype=np.uint8)
 
-            new_x = slice(max(0, -ul_width), min(br_width, width) - ul_width)
-            new_y = slice(max(0, -ul_height), min(br_height, height) - ul_height)
-            old_x = slice(max(0, ul_width), min(br_width, width))
-            old_y = slice(max(0, ul_height), min(br_height, height))
-            new_img[new_y, new_x] = face.image[old_y, old_x]
+            new_x = slice(max(0, -top_left_width), min(bottom_right_width, width) - top_left_width)
+            new_y = slice(max(0, -top_left_height),
+                          min(bottom_right_height, height) - top_left_height)
+            old_x = slice(max(0, top_left_width), min(bottom_right_width, width))
+            old_y = slice(max(0, top_left_height), min(bottom_right_height, height))
+            new_img[new_y, new_x] = image[old_y, old_x]
 
             interp = cv2.INTER_CUBIC if new_dim[0] < self.input_size else cv2.INTER_AREA
             new_images.append(cv2.resize(new_img, dsize=sizes, interpolation=interp))
@@ -140,13 +142,15 @@ class Align(Aligner):
 
         flat_indices = batch["prediction"].reshape(num_images, num_landmarks, -1).argmax(-1)
         indices = np.array(np.unravel_index(flat_indices, (height, width)))
-        offsets = [(image_slice, landmark_slice, indices[0], indices[1] + 1),
-                   (image_slice, landmark_slice, indices[0], indices[1] - 1),
-                   (image_slice, landmark_slice, indices[0] + 1, indices[1]),
-                   (image_slice, landmark_slice, indices[0] - 1, indices[1])]
+        min_clipped = np.minimum(indices + 1, height - 1)
+        max_clipped = np.maximum(indices - 1, 0)
+        offsets = [(image_slice, landmark_slice, indices[0], min_clipped[1]),
+                   (image_slice, landmark_slice, indices[0], max_clipped[1]),
+                   (image_slice, landmark_slice, min_clipped[0], indices[1]),
+                   (image_slice, landmark_slice, max_clipped[0], indices[1])]
         x_subpixel_shift = batch["prediction"][offsets[0]] - batch["prediction"][offsets[1]]
         y_subpixel_shift = batch["prediction"][offsets[2]] - batch["prediction"][offsets[3]]
-        # TODO improve rudimentary subpixel logic to centroid of 3x3 window algorithm
+        # TODO improve rudimentary sub-pixel logic to centroid of 3x3 window algorithm
         subpixel_landmarks[:, :, 0] = indices[1] + np.sign(x_subpixel_shift) * 0.25 + 0.5
         subpixel_landmarks[:, :, 1] = indices[0] + np.sign(y_subpixel_shift) * 0.25 + 0.5
 

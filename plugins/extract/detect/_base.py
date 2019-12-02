@@ -4,10 +4,11 @@
 All Detector Plugins should inherit from this class.
 See the override methods for which methods are required.
 
+The plugin will receive a :class:`~plugins.extract.pipeline.ExtractMedia` object.
+
 For each source frame, the plugin must pass a dict to finalize containing:
 
 >>> {'filename': <filename of source frame>,
->>>  'image':  <source image>,
 >>>  'detected_faces': <list of DetectedFace objects containing bounding box points}}
 
 To get a :class:`~lib.faces_detect.DetectedFace` object use the function:
@@ -22,7 +23,7 @@ from lib.faces_detect import DetectedFace
 from plugins.extract._base import Extractor, logger
 
 
-class Detector(Extractor):
+class Detector(Extractor):  # pylint:disable=abstract-method
     """ Detector Object
 
     Parent class for all Detector plugins
@@ -74,6 +75,9 @@ class Detector(Extractor):
     def get_batch(self, queue):
         """ Get items for inputting to the detector plugin in batches
 
+        Items are received as :class:`~plugins.extract.pipeline.ExtractMedia` objects and converted
+        to ``dict`` for internal processing.
+
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
@@ -84,8 +88,7 @@ class Detector(Extractor):
         :attr:`~plugins.extract._base.Extractor.batchsize`:
 
         >>> {'filename': [<filenames of source frames>],
-        >>>  'image': [<source images>],
-        >>>  'scaled_image': <numpy.ndarray of images standardized for prediction>,
+        >>>  'image': <numpy.ndarray of images standardized for prediction>,
         >>>  'scale': [<scaling factors for each image>],
         >>>  'pad': [<padding for each image>],
         >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
@@ -110,16 +113,16 @@ class Detector(Extractor):
             if item == "EOF":
                 exhausted = True
                 break
-            for key, val in item.items():
-                batch.setdefault(key, []).append(val)
-            scaled_image, scale, pad = self._compile_detection_image(item["image"])
-            batch.setdefault("scaled_image", []).append(scaled_image)
+            batch.setdefault("filename", []).append(item.filename)
+            image, scale, pad = self._compile_detection_image(item)
+            batch.setdefault("image", []).append(image)
             batch.setdefault("scale", []).append(scale)
             batch.setdefault("pad", []).append(pad)
+
         if batch:
-            batch["scaled_image"] = np.array(batch["scaled_image"], dtype="float32")
+            batch["image"] = np.array(batch["image"], dtype="float32")
             logger.trace("Returning batch: %s", {k: v.shape if isinstance(v, np.ndarray) else v
-                                                 for k, v in batch.items() if k != "image"})
+                                                 for k, v in batch.items()})
         else:
             logger.trace(item)
         return exhausted, batch
@@ -130,27 +133,17 @@ class Detector(Extractor):
 
         This should be called as the final task of each ``plugin``.
 
-        It strips unneeded items from the :attr:`batch` ``dict`` and performs standard final
-        processing on each item
-
-        Outputs items in the format:
-
-        >>> {'image': [<original frame>],
-        >>>  'filename': [<frame filename>),
-        >>>  'detected_faces': [<lib.faces_detect.DetectedFace objects>]}
-
-
         Parameters
         ----------
         batch : dict
-            The final ``dict`` from the `plugin` process. It must contain the keys ``image``,
-            ``filename``, ``faces``
+            The final ``dict`` from the `plugin` process. It must contain the keys  ``filename``,
+            ``faces``
 
         Yields
         ------
-        dict
-            A ``dict`` for each frame containing the ``image``, ``filename`` and ``list`` of
-            ``detected_faces``
+        :class:`~plugins.extract.pipeline.ExtractMedia`
+            The :attr:`DetectedFaces` list will be populated for this class with the bounding boxes
+            for the detected faces found in the frame.
         """
         if not isinstance(batch, dict):
             logger.trace("Item out: %s", batch)
@@ -168,6 +161,9 @@ class Detector(Extractor):
                             for face in faces]
                            for faces, rotmat in zip(batch_faces, batch["rotmat"])]
 
+        # Remove zero sized faces
+        batch_faces = self._remove_zero_sized_faces(batch_faces)
+
         # Scale back out to original frame
         batch["detected_faces"] = [[self.to_detected_face((face.left - pad[0]) / scale,
                                                           (face.top - pad[1]) / scale,
@@ -178,18 +174,17 @@ class Detector(Extractor):
                                                                 batch["pad"],
                                                                 batch_faces)]
 
-        # Remove zero sized faces
-        self._remove_zero_sized_faces(batch)
         if self.min_size > 0 and batch.get("detected_faces", None):
             batch["detected_faces"] = self._filter_small_faces(batch["detected_faces"])
 
-        self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
         batch = self._dict_lists_to_list_dicts(batch)
-
         for item in batch:
-            logger.trace("final output: %s", {k: v.shape if isinstance(v, np.ndarray) else v
-                                              for k, v in item.items()})
-            yield item
+            output = self._extract_media.pop(item["filename"])
+            output.add_detected_faces(item["detected_faces"])
+            logger.trace("final output: (filename: '%s', image shape: %s, detected_faces: %s, "
+                         "item: %s", output.filename, output.image_shape, output.detected_faces,
+                         output)
+            yield output
 
     @staticmethod
     def to_detected_face(left, top, right, bottom):
@@ -226,15 +221,19 @@ class Detector(Extractor):
         return batch
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
-    def _compile_detection_image(self, input_image):
-        """ Compile the detection image for feeding into the model"""
-        image = self._convert_color(input_image)
+    def _compile_detection_image(self, item):
+        """ Compile the detection image for feeding into the model
 
-        image_size = image.shape[:2]
-        scale = self._set_scale(image_size)
-        pad = self._set_padding(image_size, scale)
+        Parameters
+        ----------
+        item: :class:`plugins.extract.pipeline.ExtractMedia`
+            The input item from the pipeline
+        """
+        image = item.get_image_copy(self.colorformat)
+        scale = self._set_scale(item.image_size)
+        pad = self._set_padding(item.image_size, scale)
 
-        image = self._scale_image(image, image_size, scale)
+        image = self._scale_image(image, item.image_size, scale)
         image = self._pad_image(image)
         logger.trace("compiled: (images shape: %s, scale: %s, pad: %s)", image.shape, scale, pad)
         return image, scale, pad
@@ -282,17 +281,17 @@ class Detector(Extractor):
         return image
 
     # <<< FINALIZE METHODS >>> #
-    @staticmethod
-    def _remove_zero_sized_faces(batch):
-        """ Remove items from dict where detected face is of zero size
+    def _remove_zero_sized_faces(self, batch_faces):
+        """ Remove items from batch_faces where detected face is of zero size
             or face falls entirely outside of image """
-        dims = [img.shape[:2] for img in batch["image"]]
-        logger.trace("image dims: %s", dims)
-        batch["detected_faces"] = [[face
-                                    for face in faces
-                                    if face.right > 0 and face.left < dim[1]
-                                    and face.bottom > 0 and face.top < dim[0]]
-                                   for dim, faces in zip(dims, batch.get("detected_faces", []))]
+        logger.trace("Input sizes: %s", [len(face) for face in batch_faces])
+        retval = [[face
+                   for face in faces
+                   if face.right > 0 and face.left < self.input_size
+                   and face.bottom > 0 and face.top < self.input_size]
+                  for faces in batch_faces]
+        logger.trace("Output sizes: %s", [len(face) for face in retval])
+        return retval
 
     def _filter_small_faces(self, detected_faces):
         """ Filter out any faces smaller than the min size threshold """

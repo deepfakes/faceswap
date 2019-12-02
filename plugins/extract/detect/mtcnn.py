@@ -58,7 +58,7 @@ class Detect(Detector):
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
-        batch["feed"] = (batch["scaled_image"] - 127.5) / 127.5
+        batch["feed"] = (batch["image"] - 127.5) / 127.5
         return batch
 
     def predict(self, batch):
@@ -197,7 +197,7 @@ class MTCNN():
     def __init__(self, model_path, allow_growth, minsize, threshold, factor):
         """
         minsize: minimum faces' size
-        threshold: threshold=[th1, th2, th3], th1-3 are three steps's threshold
+        threshold: threshold=[th1, th2, th3], th1-3 are three steps threshold
         factor: the factor used to create a scaling pyramid of face sizes to
                 detect in the image.
         pnet, rnet, onet: caffemodel
@@ -256,7 +256,7 @@ class MTCNN():
             cls_prob = np.swapaxes(cls_prob, 1, 2)
             roi = np.swapaxes(roi, 1, 3)
             for idx in range(batch_items):
-                # first index 0 = cls score, 1 = one hot repr
+                # first index 0 = class score, 1 = one hot repr
                 rectangle = detect_face_12net(cls_prob[idx, ...],
                                               roi[idx, ...],
                                               out_side,
@@ -492,7 +492,7 @@ def nms(rectangles, threshold, method):
     s_sort = np.array(var_s.argsort())
     pick = []
     while len(s_sort) > 0:
-        # s_sort[-1] have hightest prob score, s_sort[0:-1]->others
+        # s_sort[-1] have highest prob score, s_sort[0:-1]->others
         xx_1 = np.maximum(x_1[s_sort[-1]], x_1[s_sort[0:-1]])
         yy_1 = np.maximum(y_1[s_sort[-1]], y_1[s_sort[0:-1]])
         xx_2 = np.minimum(x_2[s_sort[-1]], x_2[s_sort[0:-1]])

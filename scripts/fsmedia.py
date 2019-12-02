@@ -99,7 +99,7 @@ class Alignments(AlignmentsBase):
         data = self.serializer.load(self.file)
 
         if skip_faces:
-            # Remove items from algnments that have no faces so they will
+            # Remove items from alignments that have no faces so they will
             # be re-detected
             del_keys = [key for key, val in data.items() if not val]
             logger.debug("Frames with no faces selected for redetection: %s", len(del_keys))
@@ -269,24 +269,23 @@ class PostProcess():
         logger.debug("Postprocess Items: %s", postprocess_items)
         return postprocess_items
 
-    def do_actions(self, output_item):
+    def do_actions(self, extract_media):
         """ Perform the requested post-processing actions """
         for action in self.actions:
             logger.debug("Performing postprocess action: '%s'", action.__class__.__name__)
-            action.process(output_item)
+            action.process(extract_media)
 
 
 class PostProcessAction():  # pylint: disable=too-few-public-methods
-    """ Parent class for Post Processing Actions
-        Usuable in Extract or Convert or both
+    """ Parent class for Post Processing Actions. Usable in Extract or Convert or both
         depending on context """
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        self.valid = True  # Set to False if invalid params passed in to disable
+        self.valid = True  # Set to False if invalid parameters passed in to disable
         logger.debug("Initialized base class %s", self.__class__.__name__)
 
-    def process(self, output_item):
+    def process(self, extract_media):
         """ Override for specific post processing action """
         raise NotImplementedError
 
@@ -295,10 +294,10 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
     """ Draw debug landmarks on face
         Extract Only """
 
-    def process(self, output_item):
+    def process(self, extract_media):
         """ Draw landmarks on image """
-        frame = os.path.splitext(os.path.basename(output_item["filename"]))[0]
-        for idx, face in enumerate(output_item["detected_faces"]):
+        frame = os.path.splitext(os.path.basename(extract_media.filename))[0]
+        for idx, face in enumerate(extract_media.detected_faces):
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)
             aligned_landmarks = face.aligned_landmarks
             for (pos_x, pos_y) in aligned_landmarks:
@@ -352,19 +351,19 @@ class FaceFilter(PostProcessAction):
         logger.debug("Face Filter files: %s", filter_files)
         return filter_files
 
-    def process(self, output_item):
+    def process(self, extract_media):
         """ Filter in/out wanted/unwanted faces """
         if not self.filter:
             return
         ret_faces = list()
-        for idx, detect_face in enumerate(output_item["detected_faces"]):
+        for idx, detect_face in enumerate(extract_media.detected_faces):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
-            check_item.load_aligned(output_item["image"])
+            check_item.load_aligned(extract_media.image)
             if not self.filter.check(check_item):
                 logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",
-                               output_item["filename"], idx)
+                               extract_media.filename, idx)
                 continue
             logger.trace("Accepting recognised face. Frame: %s. Face: %s",
-                         output_item["filename"], idx)
+                         extract_media.filename, idx)
             ret_faces.append(detect_face)
-        output_item["detected_faces"] = ret_faces
+        extract_media.detected_faces = ret_faces

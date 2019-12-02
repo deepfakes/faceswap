@@ -158,7 +158,7 @@ class Writer(Output):
 
         exe = im_ffm.get_ffmpeg_exe()
         inputs = OrderedDict([(self.video_tmp_file, None), (self.source_video, None)])
-        outputs = {self.video_file: "-map 0:0 -map 1:1 -c: copy"}
+        outputs = {self.video_file: "-map 0:v:0 -map 1:a:0 -c: copy"}
         ffm = FFmpeg(executable=exe,
                      global_options="-hide_banner -nostats -v 0 -y",
                      inputs=inputs,

@@ -11,7 +11,7 @@ from .control_helper import ControlBuilder, ControlPanelOption
 from .display_graph import SessionGraph
 from .display_page import DisplayPage
 from .stats import Calculations, Session
-from .tooltip import Tooltip
+from .custom_widgets import Tooltip
 from .utils import FileHandler, get_config, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -29,13 +29,15 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         self.add_options()
         self.add_main_frame()
         self.thread = None  # Thread for compiling stats data in background
-        self.set_training_callback()
+        self.set_callbacks()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def set_training_callback(self):
+    def set_callbacks(self):
         """ Add a callback to update analysis when the training graph is updated """
-        get_config().tk_vars["refreshgraph"].trace("w", self.update_current_session)
-        get_config().tk_vars["istraining"].trace("w", self.remove_current_session)
+        tkv = get_config().tk_vars
+        tkv["refreshgraph"].trace("w", self.update_current_session)
+        tkv["istraining"].trace("w", self.remove_current_session)
+        tkv["analysis_folder"].trace("w", self.populate_from_folder)
 
     def update_current_session(self, *args):  # pylint:disable=unused-argument
         """ Update the current session data on a graph update callback """
@@ -57,7 +59,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         return {"selected_id": selected_id}
 
     def add_main_frame(self):
-        """ Add the main frame to the subnotebook
+        """ Add the main frame to the sub-notebook
             to hold stats and session data """
         logger.debug("Adding main frame")
         mainframe = self.subnotebook_add_page("stats")
@@ -79,12 +81,38 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Resetting session info")
         self.set_info("No session data loaded")
 
-    def load_session(self):
+    def populate_from_folder(self, *args):  # pylint:disable=unused-argument
+        """ Populate the Analysis tab from just a model folder. Triggered
+        when tkinter variable ``analysis_folder`` is set.
+        """
+        folder = get_config().tk_vars["analysis_folder"].get()
+        if not folder or not os.path.isdir(folder):
+            logger.debug("Not a valid folder")
+            self.clear_session()
+            return
+
+        state_files = [fname
+                       for fname in os.listdir(folder)
+                       if fname.endswith("_state.json")]
+        if not state_files:
+            logger.debug("No state files found in folder: '%s'", folder)
+            self.clear_session()
+            return
+
+        state_file = state_files[0]
+        if len(state_files) > 1:
+            logger.debug("Multiple models found. Selecting: '%s'", state_file)
+
+        if self.thread is None:
+            self.load_session(fullpath=os.path.join(folder, state_file))
+
+    def load_session(self, fullpath=None):
         """ Load previously saved sessions """
         logger.debug("Loading session")
-        fullpath = FileHandler("filename", "state").retfile
-        if not fullpath:
-            return
+        if fullpath is None:
+            fullpath = FileHandler("filename", "state").retfile
+            if not fullpath:
+                return
         self.clear_session()
         logger.debug("state_file: '%s'", fullpath)
         model_dir, state_file = os.path.split(fullpath)
@@ -155,7 +183,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
 
     @staticmethod
     def summarise_data(session):
-        """ Summarise data in a LongRunningThread as it can take a while """
+        """ Summarize data in a LongRunningThread as it can take a while """
         return session.full_summary
 
     def clear_session(self):
@@ -217,10 +245,10 @@ class Options():
 
     @staticmethod
     def set_help(btntype):
-        """ Set the helptext for option buttons """
+        """ Set the help text for option buttons """
         logger.debug("Setting help")
         hlp = ""
-        if btntype == "reset":
+        if btntype == "reload":
             hlp = "Load/Refresh stats for the currently training session"
         elif btntype == "clear":
             hlp = "Clear currently displayed session stats"
@@ -261,7 +289,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def add_label(self):
-        """ Add Treeview Title """
+        """ Add tree-view Title """
         logger.debug("Adding Treeview title")
         lbl = ttk.Label(self.sub_frame, text="Session Stats", anchor=tk.CENTER)
         lbl.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
@@ -275,7 +303,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Resized Analysis Frame")
 
     def tree_configure(self, helptext):
-        """ Build a treeview widget to hold the sessions stats """
+        """ Build a tree-view widget to hold the sessions stats """
         logger.debug("Configuring Treeview")
         self.tree.configure(yscrollcommand=self.scrollbar.set)
         self.tree.tag_configure("total", background="black", foreground="white")
@@ -285,7 +313,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         return self.tree_columns()
 
     def tree_columns(self):
-        """ Add the columns to the totals treeview """
+        """ Add the columns to the totals tree-view """
         logger.debug("Adding Treeview columns")
         columns = (("session", 40, "#"),
                    ("start", 130, None),
@@ -307,7 +335,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         return [column[0] for column in columns]
 
     def tree_insert_data(self, sessions_summary):
-        """ Insert the data into the totals treeview """
+        """ Insert the data into the totals tree-view """
         logger.debug("Inserting treeview data")
         self.tree.configure(height=len(sessions_summary))
 
@@ -461,7 +489,7 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Built popup")
 
     def set_callback(self):
-        """ Set a tk boolean var to callback when graph is ready to build """
+        """ Set a tkinter Boolean var to callback when graph is ready to build """
         logger.debug("Setting tk graph build variable")
         var = tk.BooleanVar()
         var.set(False)
@@ -517,7 +545,7 @@ class SessionPopUp(tk.Toplevel):
             cmb.current(0)
             cmb.pack(fill=tk.X, side=tk.RIGHT)
 
-            cmd = self.optbtn_reset if item == "Display" else self.graph_scale
+            cmd = self.optbtn_reload if item == "Display" else self.graph_scale
             var.trace("w", cmd)
             self.vars[item.lower().strip()] = var
 
@@ -527,7 +555,7 @@ class SessionPopUp(tk.Toplevel):
 
     @staticmethod
     def add_section(frame, title):
-        """ Add a seperator and section title """
+        """ Add a separator and section title """
         sep = ttk.Frame(frame, height=2, relief=tk.SOLID)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
         lbl = ttk.Label(frame, text=title)
@@ -629,7 +657,7 @@ class SessionPopUp(tk.Toplevel):
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
 
-        for btntype in ("reset", "save"):
+        for btntype in ("reload", "save"):
             cmd = getattr(self, "optbtn_{}".format(btntype))
             btn = ttk.Button(btnframe,
                              image=get_images().icons[btntype],
@@ -655,7 +683,7 @@ class SessionPopUp(tk.Toplevel):
             csvout.writerow(fieldnames)
             csvout.writerows(zip(*[save_data[key] for key in fieldnames]))
 
-    def optbtn_reset(self, *args):  # pylint: disable=unused-argument
+    def optbtn_reload(self, *args):  # pylint: disable=unused-argument
         """ Action for reset button press and checkbox changes"""
         logger.debug("Refreshing Graph")
         if not self.graph_initialised:
@@ -677,10 +705,10 @@ class SessionPopUp(tk.Toplevel):
 
     @staticmethod
     def set_help(control):
-        """ Set the helptext for option buttons """
+        """ Set the help text for option buttons """
         hlp = ""
         control = control.lower()
-        if control == "reset":
+        if control == "reload":
             hlp = "Refresh graph"
         elif control == "save":
             hlp = "Save display data to csv"

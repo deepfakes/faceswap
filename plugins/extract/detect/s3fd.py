@@ -42,7 +42,7 @@ class Detect(Detector):
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
-        batch["feed"] = self.model.prepare_batch(batch["scaled_image"])
+        batch["feed"] = self.model.prepare_batch(batch["image"])
         return batch
 
     def predict(self, batch):
@@ -277,7 +277,7 @@ class S3fd(KSession):
                 Shape: [num_priors,4]
             priors (tensor): Prior boxes in center-offset form.
                 Shape: [num_priors,4].
-            variances: (list[float]) Variances of priorboxes
+            variances: (list[float]) Variances of prior boxes
         Return:
             decoded bounding box predictions
         """
@@ -288,7 +288,8 @@ class S3fd(KSession):
         boxes[:, 2:] += boxes[:, :2]
         return boxes
 
-    def _nms(self, boxes, threshold):
+    @staticmethod
+    def _nms(boxes, threshold):
         """ Perform Non-Maximum Suppression """
         retained_box_indices = list()
 

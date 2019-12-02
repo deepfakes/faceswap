@@ -17,7 +17,7 @@ from matplotlib.figure import Figure  # noqa
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
                                                NavigationToolbar2Tk)  # noqa
 
-from .tooltip import Tooltip  # noqa
+from .custom_widgets import Tooltip  # noqa
 from .utils import get_config, get_images, LongRunningTask  # noqa
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -34,7 +34,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
     def _Button(frame, text, file, command, extension=".gif"):  # pylint: disable=arguments-differ
         """ Map Buttons to their own frame.
             Use custom button icons, Use ttk buttons pack to the right """
-        iconmapping = {"home": "reset",
+        iconmapping = {"home": "reload",
                        "filesave": "save",
                        "zoom_to_rect": "zoom"}
         icon = iconmapping[file] if iconmapping.get(file, None) else file
@@ -44,7 +44,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
         return btn
 
     def _init_toolbar(self):
-        """ Same as original but ttk widgets and standard tooltips used. Separator added and
+        """ Same as original but ttk widgets and standard tool-tips used. Separator added and
             message label packed to the left """
         xmin, xmax = self.canvas.figure.bbox.intervalx
         height, width = 50, xmax-xmin
@@ -308,7 +308,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
         """ Resize the figure back to the canvas """
         class Event():  # pylint: disable=too-few-public-methods
             """ Event class that needs to be passed to plotcanvas.resize """
-            pass
+            pass  # pylint: disable=unnecessary-pass
         Event.width = self.winfo_width()
         Event.height = self.winfo_height()
         self.plotcanvas.resize(Event)  # pylint: disable=no-value-for-parameter

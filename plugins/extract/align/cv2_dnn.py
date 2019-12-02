@@ -51,18 +51,18 @@ class Align(Aligner):
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        faces, batch["roi"] = self.align_image(batch["detected_faces"])
+        faces, batch["roi"] = self.align_image(batch)
         faces = self._normalize_faces(faces)
         batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2))
         return batch
 
-    def align_image(self, detected_faces):
+    def align_image(self, batch):
         """ Align the incoming image for prediction """
         logger.trace("Aligning image around center")
         sizes = (self.input_size, self.input_size)
         rois = []
         faces = []
-        for face in detected_faces:
+        for face, image in zip(batch["detected_faces"], batch["image"]):
             box = (face.left,
                    face.top,
                    face.right,
@@ -74,7 +74,7 @@ class Align(Aligner):
             # Make box square.
             roi = self.get_square_box(box_moved)
             # Pad the image if face is outside of boundaries
-            image = self.pad_image(roi, face.image)
+            image = self.pad_image(roi, image)
             face = image[roi[1]: roi[3], roi[0]: roi[2]]
 
             interpolation = cv2.INTER_CUBIC if face.shape[0] < self.input_size else cv2.INTER_AREA

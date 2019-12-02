@@ -27,7 +27,7 @@ class Detect(Detector):
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
-        batch["feed"] = cv2.dnn.blobFromImages(batch["scaled_image"],  # pylint: disable=no-member
+        batch["feed"] = cv2.dnn.blobFromImages(batch["image"],  # pylint: disable=no-member
                                                scalefactor=1.0,
                                                size=(self.input_size, self.input_size),
                                                mean=[104, 117, 123],

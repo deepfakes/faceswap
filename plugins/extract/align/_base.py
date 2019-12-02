@@ -4,16 +4,11 @@
 All Aligner Plugins should inherit from this class.
 See the override methods for which methods are required.
 
-The plugin will receive a dict containing:
-
->>> {"filename": [<filename of source frame>],
->>>  "image": [<source image>],
->>>  "detected_faces": [<list of DetectedFace objects]}
+The plugin will receive a :class:`~plugins.extract.pipeline.ExtractMedia` object.
 
 For each source item, the plugin must pass a dict to finalize containing:
 
 >>> {"filename": [<filename of source frame>],
->>>  "image": [<source image>],
 >>>  "landmarks": [list of 68 point face landmarks]
 >>>  "detected_faces": [<list of DetectedFace objects>]}
 """
@@ -22,10 +17,10 @@ For each source item, the plugin must pass a dict to finalize containing:
 import cv2
 import numpy as np
 
-from plugins.extract._base import Extractor, logger
+from plugins.extract._base import Extractor, logger, ExtractMedia
 
 
-class Aligner(Extractor):
+class Aligner(Extractor):  # pylint:disable=abstract-method
     """ Aligner plugin _base Object
 
     All Aligner plugins must inherit from this class
@@ -47,6 +42,7 @@ class Aligner(Extractor):
 
     See Also
     --------
+    plugins.extract.pipeline : The extraction pipeline for calling plugins
     plugins.extract.align : Aligner plugins
     plugins.extract._base : Parent class for all extraction plugins
     plugins.extract.detect._base : Detector parent class for extraction plugins.
@@ -64,7 +60,7 @@ class Aligner(Extractor):
 
         self._plugin_type = "align"
         self._faces_per_filename = dict()  # Tracking for recompiling face batches
-        self._rollover = []  # Items that are rolled over from the previous batch in get_batch
+        self._rollover = None  # Items that are rolled over from the previous batch in get_batch
         self._output_faces = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -75,8 +71,11 @@ class Aligner(Extractor):
         Items are returned from the ``queue`` in batches of
         :attr:`~plugins.extract._base.Extractor.batchsize`
 
+        Items are received as :class:`~plugins.extract.pipeline.ExtractMedia` objects and converted
+        to ``dict`` for internal processing.
+
         To ensure consistent batch sizes for aligner the items are split into separate items for
-        each :class:`lib.faces_detect.DetectedFace` object.
+        each :class:`~lib.faces_detect.DetectedFace` object.
 
         Remember to put ``'EOF'`` to the out queue after processing
         the final batch
@@ -109,26 +108,27 @@ class Aligner(Extractor):
                 logger.trace("EOF received")
                 exhausted = True
                 break
-
             # Put frames with no faces into the out queue to keep TQDM consistent
-            if not item["detected_faces"]:
+            if not item.detected_faces:
                 self._queues["out"].put(item)
                 continue
 
-            for f_idx, face in enumerate(item["detected_faces"]):
-                face.image = self._convert_color(item["image"])
+            converted_image = item.get_image_copy(self.colorformat)
+            for f_idx, face in enumerate(item.detected_faces):
+                batch.setdefault("image", []).append(converted_image)
                 batch.setdefault("detected_faces", []).append(face)
-                batch.setdefault("filename", []).append(item["filename"])
-                batch.setdefault("image", []).append(item["image"])
+                batch.setdefault("filename", []).append(item.filename)
                 idx += 1
                 if idx == self.batchsize:
-                    frame_faces = len(item["detected_faces"])
+                    frame_faces = len(item.detected_faces)
                     if f_idx + 1 != frame_faces:
-                        self._rollover = {k: v[f_idx + 1:] if k == "detected_faces" else v
-                                          for k, v in item.items()}
+                        self._rollover = ExtractMedia(
+                            item.filename,
+                            item.image,
+                            detected_faces=item.detected_faces[f_idx + 1:])
                         logger.trace("Rolled over %s faces of %s to next batch for '%s'",
-                                     len(self._rollover["detected_faces"]),
-                                     frame_faces, item["filename"])
+                                     len(self._rollover.detected_faces), frame_faces,
+                                     item.filename)
                     break
         if batch:
             logger.trace("Returning batch: %s", {k: v.shape if isinstance(v, np.ndarray) else v
@@ -138,20 +138,20 @@ class Aligner(Extractor):
         return exhausted, batch
 
     def _collect_item(self, queue):
-        """ Collect the item from the _rollover dict or from the queue
+        """ Collect the item from the :attr:`_rollover` dict or from the queue
             Add face count per frame to self._faces_per_filename for joining
             batches back up in finalize """
-        if self._rollover:
+        if self._rollover is not None:
             logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",
-                         self._rollover["filename"], len(self._rollover["detected_faces"]))
+                         self._rollover.filename, len(self._rollover.detected_faces))
             item = self._rollover
-            self._rollover = dict()
+            self._rollover = None
         else:
             item = self._get_item(queue)
             if item != "EOF":
                 logger.trace("Getting from queue: (filename: %s, faces: %s)",
-                             item["filename"], len(item["detected_faces"]))
-                self._faces_per_filename[item["filename"]] = len(item["detected_faces"])
+                             item.filename, len(item.detected_faces))
+                self._faces_per_filename[item.filename] = len(item.detected_faces)
         return item
 
     # <<< FINALIZE METHODS >>> #
@@ -160,49 +160,42 @@ class Aligner(Extractor):
 
         This should be called as the final task of each `plugin`.
 
-        It strips unneeded items from the :attr:`batch` ``dict`` and pairs the detected faces back
-        up with their original frame before yielding each frame.
-
-        Outputs items in the format:
-
-        >>> {'image': [<original frame>],
-        >>>  'filename': [<frame filename>),
-        >>>  'detected_faces': [<lib.faces_detect.DetectedFace objects>]}
+        Pairs the detected faces back up with their original frame before yielding each frame.
 
         Parameters
         ----------
         batch : dict
             The final ``dict`` from the `plugin` process. It must contain the `keys`:
-            ``detected_faces``, ``landmarks``, ``filename``, ``image``
+            ``detected_faces``, ``landmarks``, ``filename``
 
         Yields
         ------
-        dict
-            A ``dict`` for each frame containing the ``image``, ``filename`` and list of
-            :class:`lib.faces_detect.DetectedFace` objects.
-
+        :class:`~plugins.extract.pipeline.ExtractMedia`
+            The :attr:`DetectedFaces` list will be populated for this class with the bounding boxes
+            and landmarks for the detected faces found in the frame.
         """
 
         for face, landmarks in zip(batch["detected_faces"], batch["landmarks"]):
             if not isinstance(landmarks, np.ndarray):
                 landmarks = np.array(landmarks)
             face.landmarks_xy = landmarks
-        self._remove_invalid_keys(batch, ("detected_faces", "filename", "image"))
-        logger.trace("Item out: %s", {key: val
-                                      for key, val in batch.items()
-                                      if key != "image"})
-        for filename, image, face in zip(batch["filename"],
-                                         batch["image"],
-                                         batch["detected_faces"]):
+
+        logger.trace("Item out: %s", {key: val.shape if isinstance(val, np.ndarray) else val
+                                      for key, val in batch.items()})
+
+        for filename, face in zip(batch["filename"], batch["detected_faces"]):
             self._output_faces.append(face)
             if len(self._output_faces) != self._faces_per_filename[filename]:
                 continue
-            retval = dict(filename=filename, image=image, detected_faces=self._output_faces)
 
+            output = self._extract_media.pop(filename)
+            output.add_detected_faces(self._output_faces)
             self._output_faces = []
-            logger.trace("Yielding: (filename: '%s', image: %s, detected_faces: %s)",
-                         retval["filename"], retval["image"].shape, len(retval["detected_faces"]))
-            yield retval
+
+            logger.trace("Final Output: (filename: '%s', image shape: %s, detected_faces: %s, "
+                         "item: %s)",
+                         output.filename, output.image_shape, output.detected_faces, output)
+            yield output
 
     # <<< PROTECTED METHODS >>> #
     # <<< PREDICT WRAPPER >>> #
@@ -214,8 +207,7 @@ class Aligner(Extractor):
     def _normalize_faces(self, faces):
         """ Normalizes the face for feeding into model
 
-        The normalization method is dictated by the command line argument:
-            -nh (--normalization)
+        The normalization method is dictated by the command line argument `-nh (--normalization)`
         """
         if self.normalize_method is None:
             return faces

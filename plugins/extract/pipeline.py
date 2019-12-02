@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Return a requested detector/aligner pipeline
+Return a requested detector/aligner/masker pipeline
 
 Tensorflow does not like to release GPU VRAM, so parallel plugins need to be managed to work
 together.
@@ -12,6 +12,8 @@ plugins either in parallel or in series, giving easy access to input and output.
 
 import logging
 
+import cv2
+
 from lib.gpu_stats import GPUStats
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_backend
@@ -21,8 +23,9 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class Extractor():
-    """ Creates a :mod:`~plugins.extract.detect`/:mod:`~plugins.extract.align` pipeline and yields
-    results frame by frame from the :attr:`detected_faces` generator
+    """ Creates a :mod:`~plugins.extract.detect`/:mod:`~plugins.extract.align``/\
+    :mod:`~plugins.extract.mask` pipeline and yields results frame by frame from the
+    :attr:`detected_faces` generator
 
     :attr:`input_queue` is dynamically set depending on the current :attr:`phase` of extraction
 
@@ -32,6 +35,8 @@ class Extractor():
         The name of a detector plugin as exists in :mod:`plugins.extract.detect`
     aligner: str
         The name of an aligner plugin as exists in :mod:`plugins.extract.align`
+    masker: str
+        The name of a masker plugin as exists in :mod:`plugins.extract.mask`
     configfile: str, optional
         The path to a custom ``extract.ini`` configfile. If ``None`` then the system
         :file:`config/extract.ini` file will be used.
@@ -39,19 +44,19 @@ class Extractor():
         Whether to attempt processing the plugins in parallel. This may get overridden
         internally depending on the plugin combination. Default: ``False``
     rotate_images: str, optional
-        Used to set the :attr:`~plugins.extract.detect.rotation` attribute. Pass in a single number
+        Used to set the :attr:`plugins.extract.detect.rotation` attribute. Pass in a single number
         to use increments of that size up to 360, or pass in a ``list`` of ``ints`` to enumerate
         exactly what angles to check. Can also pass in ``'on'`` to increment at 90 degree
         intervals. Default: ``None``
     min_size: int, optional
-        Used to set the :attr:`~plugins.extract.detect.min_size` attribute Filters out faces
+        Used to set the :attr:`plugins.extract.detect.min_size` attribute Filters out faces
         detected below this size. Length, in pixels across the diagonal of the bounding box. Set
         to ``0`` for off. Default: ``0``
     normalize_method: {`None`, 'clahe', 'hist', 'mean'}, optional
-        Used to set the :attr:`~plugins.extract.align.normalize_method` attribute. Normalize the
+        Used to set the :attr:`plugins.extract.align.normalize_method` attribute. Normalize the
         images fed to the aligner.Default: ``None``
     image_is_aligned: bool, optional
-        Used to set the :attr:`~plugins.extract.mask.image_is_aligned` attribute. Indicates to the
+        Used to set the :attr:`plugins.extract.mask.image_is_aligned` attribute. Indicates to the
         masker that the fed in image is an aligned face rather than a frame.Default: ``False``
 
     Attributes
@@ -86,20 +91,14 @@ class Extractor():
     def input_queue(self):
         """ queue: Return the correct input queue depending on the current phase
 
-        The input queue is the entry point into the extraction pipeline. A ``dict`` should
-        be put to the queue in the following format(s):
+        The input queue is the entry point into the extraction pipeline. An :class:`ExtractMedia`
+        object should be put to the queue.
 
-        For detect/single phase operations:
+        For detect/single phase operations the :attr:`ExtractMedia.filename` and
+        :attr:`~ExtractMedia.image` attributes should be populated.
 
-        >>> {'filename': <path to the source image that is to be extracted from>,
-        >>>  'image': <the source image as a numpy.ndarray in BGR color format>}
-
-        For align (2nd pass operations):
-
-        >>> {'filename': <path to the source image that is to be extracted from>,
-        >>>  'image': <the source image as a numpy.ndarray in BGR color format>,
-        >>>  'detected_faces: [<list of DetectedFace objects as generated from detect>]}
-
+        For align/mask (2nd/3rd pass operations) the :attr:`ExtractMedia.detected_faces` should
+        also be populated by calling :func:`ExtractMedia.set_detected_faces`.
         """
         qname = "extract_{}_in".format(self.phase)
         retval = self._queues[qname]
@@ -118,12 +117,11 @@ class Extractor():
         -------
         >>> for phase in extractor.passes:
         >>>     if phase == 1:
-        >>>         extractor.input_queue.put({"filename": "path/to/image/file",
-        >>>                                    "image": numpy.array(image)})
+        >>>         extract_media = ExtractMedia("path/to/image/file", image)
+        >>>         extractor.input_queue.put(extract_media)
         >>>     else:
-        >>>         extractor.input_queue.put({"filename": "path/to/image/file",
-        >>>                                    "image": numpy.array(image),
-        >>>                                    "detected_faces": [<DetectedFace objects]})
+        >>>         extract_media.set_image(image)
+        >>>         extractor.input_queue.put(extract_media)
         """
         retval = 1 if self._is_parallel else len(self._flow)
         logger.trace(retval)
@@ -142,10 +140,9 @@ class Extractor():
         >>>     if extractor.final_pass:
         >>>         <do final processing>
         >>>     else:
+        >>>         extract_media.set_image(image)
         >>>         <do intermediate processing>
-        >>>         extractor.input_queue.put({"filename": "path/to/image/file",
-        >>>                                    "image": numpy.array(image),
-        >>>                                    "detected_faces": [<DetectedFace objects]})
+        >>>         extractor.input_queue.put(extract_media)
         """
         retval = self._is_parallel or self.phase == self._final_phase
         logger.trace(retval)
@@ -195,18 +192,15 @@ class Extractor():
 
         Yields
         ------
-        faces: dict
-            regardless of phase, the returned dictionary will contain, exclusively, ``filename``:
-            the filename of the source image, ``image``: the ``numpy.array`` of the source image
-            in BGR color format, ``detected_faces``: a list of
-            :class:`~lib.faces_detect.Detected_Face` objects.
+        faces: :class:`ExtractMedia`
+            The populated extracted media object.
 
         Example
         -------
-        >>> for face in extractor.detected_faces():
-        >>>     filename = face["filename"]
-        >>>     image = face["image"]
-        >>>     detected_faces = face["detected_faces"]
+        >>> for extract_media in extractor.detected_faces():
+        >>>     filename = extract_media.filename
+        >>>     image = extract_media.image
+        >>>     detected_faces = extract_media.detected_faces
         """
         logger.debug("Running Detection. Phase: '%s'", self.phase)
         # If not multiprocessing, intercept the align in queue for
@@ -482,3 +476,131 @@ class Extractor():
             if plugin.check_and_raise_error():
                 return True
         return False
+
+
+class ExtractMedia():
+    """ An object that passes through the :class:`~plugins.extract.pipeline.Extractor` pipeline.
+
+    Parameters
+    ----------
+    filename: str
+        The base name of the original frame's filename
+    image: :class:`numpy.ndarray`
+        The original frame
+    detected_faces: list, optional
+        A list of :class:`~lib.faces_detect.DetectedFace` objects. Detected faces can be added
+        later with :func:`add_detected_faces`. Default: None
+    """
+
+    def __init__(self, filename, image, detected_faces=None):
+        logger.trace("Initializing %s: (filename: '%s', image shape: %s, detected_faces: %s)",
+                     self.__class__.__name__, filename, image.shape, detected_faces)
+        self._filename = filename
+        self._image = image
+        self._detected_faces = detected_faces
+
+    @property
+    def filename(self):
+        """ str: The base name of the :attr:`image` filename. """
+        return self._filename
+
+    @property
+    def image(self):
+        """ :class:`numpy.ndarray`: The source frame for this object. """
+        return self._image
+
+    @property
+    def image_shape(self):
+        """ tuple: The shape of the stored :attr:`image`. """
+        return self._image.shape
+
+    @property
+    def image_size(self):
+        """ tuple: The (`height`, `width`) of the stored :attr:`image`. """
+        return self._image.shape[:2]
+
+    @property
+    def detected_faces(self):
+        """list: A list of :class:`~lib.faces_detect.DetectedFace` objects in the
+        :attr:`image`. """
+        return self._detected_faces
+
+    def get_image_copy(self, colorformat):
+        """ Get a copy of the image in the requested color format.
+
+        Parameters
+        ----------
+        colorformat: ['BGR', 'RGB', 'GRAY']
+            The requested color format of :attr:`image`
+
+        Returns
+        -------
+        :class:`numpy.ndarray`:
+            A copy of :attr:`image` in the requested :attr:`colorformat`
+        """
+        logger.trace("Requested color format '%s' for frame '%s'", colorformat, self._filename)
+        image = getattr(self, "_image_as_{}".format(colorformat.lower()))()
+        return image
+
+    def add_detected_faces(self, faces):
+        """ Add detected faces to the object. Called at the end of each extraction phase.
+
+        Parameters
+        ----------
+        faces: list
+            A list of :class:`~lib.faces_detect.DetectedFace` objects
+        """
+        logger.trace("Adding detected faces for filename: '%s'. (faces: %s, lrtb: %s)",
+                     self._filename, faces,
+                     [(face.left, face.right, face.top, face.bottom) for face in faces])
+        self._detected_faces = faces
+
+    def remove_image(self):
+        """ Delete the image and reset :attr:`image` to ``None``.
+
+        Required for multi-phase extraction to avoid the frames stacking RAM.
+        """
+        logger.trace("Removing image for filename: '%s'", self._filename)
+        del self._image
+        self._image = None
+
+    def set_image(self, image):
+        """ Add the image back into :attr:`image`
+
+        Required for multi-phase extraction adds the image back to this object.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarry`
+            The original frame to be re-applied to for this :attr:`filename`
+        """
+        logger.trace("Reapplying image: (filename: `%s`, image shape: %s)",
+                     self._filename, image.shape)
+        self._image = image
+
+    def _image_as_bgr(self):
+        """ Get a copy of the source frame in BGR format.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`:
+            A copy of :attr:`image` in BGR color format """
+        return self._image[..., :3].copy()
+
+    def _image_as_rgb(self):
+        """ Get a copy of the source frame in RGB format.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`:
+            A copy of :attr:`image` in RGB color format """
+        return self._image[..., 2::-1].copy()
+
+    def _image_as_gray(self):
+        """ Get a copy of the source frame in gray-scale format.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`:
+            A copy of :attr:`image` in gray-scale color format """
+        return cv2.cvtColor(self._image.copy(), cv2.COLOR_BGR2GRAY)
