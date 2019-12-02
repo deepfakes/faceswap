@@ -23,7 +23,7 @@ from lib.image import read_image_hash
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
 from lib.utils import FaceswapError, get_folder, get_image_paths
-from plugins.extract.pipeline import Extractor
+from plugins.extract.pipeline import Extractor, ExtractMedia
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -380,12 +380,10 @@ class DiskIO():
 
     def detect_faces(self, filename, image):
         """ Extract the face from a frame (If alignments file not found) """
-        inp = {"filename": filename,
-               "image": image}
-        self.extractor.input_queue.put(inp)
+        self.extractor.input_queue.put(ExtractMedia(filename, image))
         faces = next(self.extractor.detected_faces())
 
-        final_faces = [face for face in faces["detected_faces"]]
+        final_faces = [face for face in faces.detected_faces]
         return final_faces
 
     # Saving tasks
