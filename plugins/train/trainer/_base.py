@@ -21,10 +21,7 @@
         warp_to_landmarks:      Use random_warp_landmarks instead of random_warp
         augment_color:          Perform random shifting of L*a*b* colors
         no_flip:                Don't perform a random flip on the image
-        pingpong:               Train each side seperately per save iteration rather than together
-
-
-
+        pingpong:               Train each side separately per save iteration rather than together
 """
 
 import logging
@@ -91,7 +88,7 @@ class TrainerBase():
 
     @property
     def timestamp(self):
-        """ Standardised timestamp for loss reporting """
+        """ Standardized timestamp for loss reporting """
         return time.strftime("%H:%M:%S")
 
     @property
@@ -155,7 +152,8 @@ class TrainerBase():
 
     @property
     def tensorboard_kwargs(self):
-        """ TF 1.13 + needs an additional kwarg which is not valid for earlier versions """
+        """ Tensorflow 1.13 + needs an additional keyword argument which is not valid for earlier
+        versions """
         kwargs = dict(histogram_freq=0,  # Must be 0 or hangs
                       batch_size=64,
                       write_graph=True,
@@ -356,7 +354,7 @@ class Batcher():
         return retval
 
     def compile_timelapse_sample(self):
-        """ Timelapse samples """
+        """ Time-lapse samples """
         batch = next(self.timelapse_feed)
         batchsize = len(batch["samples"])
         images = batch["targets"][self.model.largest_face_index]
@@ -368,18 +366,18 @@ class Batcher():
         return sample
 
     def set_timelapse_feed(self, images, batchsize):
-        """ Set the timelapse dictionary """
-        logger.debug("Setting timelapse feed: (side: '%s', input_images: '%s', batchsize: %s)",
+        """ Set the time-lapse dictionary """
+        logger.debug("Setting time-lapse feed: (side: '%s', input_images: '%s', batchsize: %s)",
                      self.side, images, batchsize)
         self.timelapse_feed = self.load_generator().minibatch_ab(images[:batchsize],
                                                                  batchsize, self.side,
                                                                  do_shuffle=False,
                                                                  is_timelapse=True)
-        logger.debug("Set timelapse feed")
+        logger.debug("Set time-lapse feed")
 
 
 class Samples():
-    """ Display samples for preview and timelapse """
+    """ Display samples for preview and time-lapse """
     def __init__(self, model, use_mask, coverage_ratio, scaling=1.0):
         logger.debug("Initializing %s: model: '%s', use_mask: %s, coverage_ratio: %s)",
                      self.__class__.__name__, model, use_mask, coverage_ratio)
@@ -490,7 +488,7 @@ class Samples():
 
     @staticmethod
     def frame_overlay(images, target_size, color):
-        """ Add roi frame to a backfround image """
+        """ Add roi frame to a background image """
         logger.debug("full_size: %s, target_size: %s, color: %s",
                      images.shape[1], target_size, color)
         new_images = list()
@@ -579,7 +577,7 @@ class Samples():
 
 
 class Timelapse():
-    """ Create the timelapse """
+    """ Create the time-lapse """
     def __init__(self, model, use_mask, coverage_ratio, preview_images, batchers):
         logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
                      "preview_images: %s, batchers: '%s')", self.__class__.__name__, model,
@@ -592,21 +590,21 @@ class Timelapse():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def get_sample(self, side, timelapse_kwargs):
-        """ Perform timelapse """
-        logger.debug("Getting timelapse samples: '%s'", side)
+        """ Perform time-lapse """
+        logger.debug("Getting time-lapse samples: '%s'", side)
         if not self.output_file:
             self.setup(**timelapse_kwargs)
         self.samples.images[side] = self.batchers[side].compile_timelapse_sample()
-        logger.debug("Got timelapse samples: '%s' - %s", side, len(self.samples.images[side]))
+        logger.debug("Got time-lapse samples: '%s' - %s", side, len(self.samples.images[side]))
 
     def setup(self, input_a=None, input_b=None, output=None):
-        """ Set the timelapse output folder """
-        logger.debug("Setting up timelapse")
+        """ Set the time-lapse output folder """
+        logger.debug("Setting up time-lapse")
         if output is None:
             output = str(get_folder(os.path.join(str(self.model.model_dir),
                                                  "{}_timelapse".format(self.model.name))))
         self.output_file = str(output)
-        logger.debug("Timelapse output set to '%s'", self.output_file)
+        logger.debug("Time-lapse output set to '%s'", self.output_file)
 
         images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}
         batchsize = min(len(images["a"]),
@@ -614,10 +612,10 @@ class Timelapse():
                         self.preview_images)
         for side, image_files in images.items():
             self.batchers[side].set_timelapse_feed(image_files, batchsize)
-        logger.debug("Set up timelapse")
+        logger.debug("Set up time-lapse")
 
     def output_timelapse(self):
-        """ Set the timelapse dictionary """
+        """ Set the time-lapse dictionary """
         logger.debug("Ouputting time-lapse")
         image = self.samples.show_sample()
         if image is None:
@@ -625,7 +623,7 @@ class Timelapse():
         filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
 
         cv2.imwrite(filename, image)
-        logger.debug("Created timelapse: '%s'", filename)
+        logger.debug("Created time-lapse: '%s'", filename)
 
 
 class PingPong():
@@ -720,12 +718,10 @@ class TrainingAlignments():
         skip_count = 0
         side_hashes = set(self._hashes[side]["hashes"])
         detected_faces = []
-        for frame_name, faces, _, _ in alignments.yield_faces():
+        for _, faces, _, filename in alignments.yield_faces():
             for idx, face in enumerate(faces):
-                if face["hash"] not in side_hashes:
+                if not self._validate_face(face, filename, idx, side, side_hashes):
                     skip_count += 1
-                    logger.verbose("Skipping alignment for non-existant face in frame '%s' idx: "
-                                   "%s", frame_name, idx)
                     continue
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
@@ -738,6 +734,59 @@ class TrainingAlignments():
                            "wish to see which alignments have been excluded.",
                            skip_count, side.upper())
         return detected_faces
+
+    def _validate_face(self, face, filename, idx, side, side_hashes):
+        """ Validate that the currently processing face has a corresponding hash entry and the
+        requested mask exists
+
+        Parameters
+        ----------
+        face: dict
+            A face retrieved from an alignments file
+        filename: str
+            The original frame filename that the given face comes from
+        idx: int
+            The index of the face in the frame
+        side: {'A', 'B'}
+            The side that this face belongs to
+        side_hashes: set
+            A set of hashes that exist in the alignments folder for these faces
+
+        Returns
+        -------
+        bool
+            ``True`` if the face is valid otherwise ``False``
+
+        Raises
+        ------
+        FaceswapError
+            If the current face doesn't pass validation
+        """
+        mask_type = self._training_opts["mask_type"]
+        if mask_type is not None and "mask" not in face:
+            msg = ("You have selected a Mask Type in your training configuration options but at "
+                   "least one face has no mask stored for it.\nYou should generate the required "
+                   "masks with the Mask Tool or set the Mask Type configuration option to `none`."
+                   "\nThe face that caused this failure was side: `{}`, frame: `{}`, index: {}. "
+                   "However there are probably more faces without masks".format(
+                       side.upper(), filename, idx))
+            raise FaceswapError(msg)
+
+        if mask_type is not None and mask_type not in face["mask"]:
+            msg = ("At least one of your faces does not have the mask `{}` stored for it.\nYou "
+                   "should run the Mask Tool to generate this mask for your faceset or "
+                   "select a different mask in the training configuration options.\n"
+                   "The face that caused this failure was side: `{}`, frame: `{}`, index: {}. The "
+                   "masks that exist for this face are: {}.\nBe aware that there are probably "
+                   "more faces without this Mask Type".format(
+                       mask_type, side.upper(), filename, idx, list(face["mask"].keys())))
+            raise FaceswapError(msg)
+
+        if face["hash"] not in side_hashes:
+            logger.verbose("Skipping alignment for non-existant face in frame '%s' index: %s",
+                           filename, idx)
+            return False
+        return True
 
     def _check_all_faces(self):
         """ Ensure that all faces in the training folder exist in the alignments file.
