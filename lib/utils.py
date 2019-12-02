@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+from sys import exit
 import urllib
 import warnings
 import zipfile
