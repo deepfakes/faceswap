@@ -7,6 +7,7 @@ Subpackages
 .. toctree::
 
    scripts.extract
+   scripts.train
 
 Module contents
 ---------------
