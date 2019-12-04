@@ -1,27 +1,45 @@
 #!/usr/bin/env python3
+""" Base Class for Faceswap Trainer plugins. All Trainer plugins should be inherited from
+this class.
 
+At present there is only the :class:`~plugins.train.trainer.original` plugin, so that entirely
+inherits from this class.
 
-""" Base Trainer Class for Faceswap
+This class heavily references the :attr:`plugins.train.model._base.ModelBase.training_opts`
+``dict``. The following keys are expected from this ``dict``:
 
-    Trainers should be inherited from this class.
+    * **alignments** (`dict`, `optional`) - If training with a mask or the warp to landmarks \
+    command line option is selected then this is required, otherwise it can be ``None``. The \
+    dictionary should contain 2 keys ("a" and "b") with the values being the path to the \
+    alignments file for the corresponding side.
 
-    A training_opts dictionary can be set in the corresponding model.
-    Accepted values:
-        alignments:             dict containing paths to alignments files for keys 'a' and 'b'
-        preview_scaling:        How much to scale the preview out by
-        training_size:          Size of the training images
-        coverage_ratio:         Ratio of face to be cropped out for training
-        mask_type:              The type of mask to select from the alignments file
-        mask_blur_kernel:       The size of the kernel to use for gaussian blurring the mask
-        mask_threshold:         The threshold for min/maxing mask to 0/100
-        learn_mask:             Whether the mask should be trained in the model
-        penalized_mask_loss:    Whether the mask should be penalized from loss
-        no_logs:                Disable tensorboard logging
-        snapshot_interval:      Interval for saving model snapshots
-        warp_to_landmarks:      Use random_warp_landmarks instead of random_warp
-        augment_color:          Perform random shifting of L*a*b* colors
-        no_flip:                Don't perform a random flip on the image
-        pingpong:               Train each side separately per save iteration rather than together
+    * **preview_scaling** (`int`) - How much to scale displayed preview image by.
+
+    * **training_size** ('int') - Size of the training images in pixels.
+
+    * **coverage_ratio** ('float') - Ratio of face to be cropped out of the training image.
+
+    * **mask_type** ('str') - The type of mask to select from the alignments file.
+
+    * **mask_blur_kernel** ('int') - The size of the kernel to use for gaussian blurring the mask.
+
+    * **mask_threshold** ('int') - The threshold for min/maxing mask to 0/100.
+
+    * **learn_mask** ('bool') - Whether the mask should be trained in the model.
+
+    * **penalized_mask_loss** ('bool') - Whether the mask should be penalized from loss.
+
+    * **no_logs** ('bool') - Whether Tensorboard logging should be disabled.
+
+    * **snapshot_interval** ('int') - How many iterations between model snapshot saves.
+
+    * **warp_to_landmarks** ('bool') - Whether to use random_warp_landmarks instead of random_warp.
+
+    * **augment_color** ('bool') - Whether to use color augmentation.
+
+    * **no_flip** ('bool') - Whether to turn off random horizontal flipping.
+
+    * **pingpong** ('bool') - Train each side separately per save iteration rather than together.
 """
 
 import logging
@@ -45,88 +63,133 @@ from plugins.train._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def get_config(plugin_name, configfile=None):
-    """ Return the config for the requested model """
+def _get_config(plugin_name, configfile=None):
+    """ Return the configuration for the requested trainer.
+
+    Parameters
+    ----------
+    plugin_name: str
+        The name of the plugin to load the configuration for
+    configfile: str, optional
+        A custom configuration file. If ``None`` then configuration is loaded from the default
+        :file:`.config.train.ini` file. Default: ``None``
+
+    Returns
+    -------
+    :class:`lib.config.FaceswapConfig`
+        The configuration file for the requested plugin
+    """
     return Config(plugin_name, configfile=configfile).config_dict
 
 
 class TrainerBase():
-    """ Base Trainer """
+    """ Trainer plugin base Object.
+
+    All Trainer plugins must inherit from this class.
+
+    Parameters
+    ----------
+    model: plugin from :mod:`plugins.train.model`
+        The model that will be running this trainer
+    images: dict
+        The file paths for the images to be trained on for each side. The dictionary should contain
+        2 keys ("a" and "b") with the values being a list of full paths corresponding to each side.
+    batch_size: int
+        The requested batch size for iteration to be trained through the model.
+    configfile: str
+        The path to a custom configuration file. If ``None`` is passed then configuration is loaded
+        from the default :file:`.config.train.ini` file.
+    """
 
     def __init__(self, model, images, batch_size, configfile):
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
-        self.config = get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
-        self.batch_size = batch_size
-        self.model = model
-        self.model.state.add_session_batchsize(batch_size)
-        self.images = images
-        self.sides = sorted(key for key in self.images.keys())
+        self._config = _get_config(".".join(self.__module__.split(".")[-2:]),
+                                   configfile=configfile)
+        self._model = model
+        self._model.state.add_session_batchsize(batch_size)
+        self._images = images
+        self._sides = sorted(key for key in self._images.keys())
 
-        self.process_training_opts()
-        self.pingpong = PingPong(model, self.sides)
+        self._process_training_opts()
+        self._pingpong = PingPong(model, self._sides)
 
-        self.batchers = {side: Batcher(side,
-                                       images[side],
-                                       self.model,
-                                       self.use_mask,
-                                       batch_size,
-                                       self.config)
-                         for side in self.sides}
+        self._batchers = {side: Batcher(side,
+                                        images[side],
+                                        self._model,
+                                        self._use_mask,
+                                        batch_size,
+                                        self._config)
+                          for side in self._sides}
 
-        self.tensorboard = self.set_tensorboard()
-        self.samples = Samples(self.model,
-                               self.use_mask,
-                               self.model.training_opts["coverage_ratio"],
-                               self.model.training_opts["preview_scaling"])
-        self.timelapse = Timelapse(self.model,
-                                   self.use_mask,
-                                   self.model.training_opts["coverage_ratio"],
-                                   self.config.get("preview_images", 14),
-                                   self.batchers)
+        self._tensorboard = self._set_tensorboard()
+        self._samples = Samples(self._model,
+                                self._use_mask,
+                                self._model.training_opts["coverage_ratio"],
+                                self._model.training_opts["preview_scaling"])
+        self._timelapse = Timelapse(self._model,
+                                    self._use_mask,
+                                    self._model.training_opts["coverage_ratio"],
+                                    self._config.get("preview_images", 14),
+                                    self._batchers)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def timestamp(self):
-        """ Standardized timestamp for loss reporting """
+    def pingpong(self):
+        """ :class:`pingpong`: Ping-pong object for ping-pong memory saving training. """
+        return self._pingpong
+
+    @property
+    def _timestamp(self):
+        """ str: Current time formatted as HOURS:MINUTES:SECONDS """
         return time.strftime("%H:%M:%S")
 
     @property
-    def landmarks_required(self):
-        """ Return True if Landmarks are required """
-        retval = self.model.training_opts["warp_to_landmarks"]
+    def _landmarks_required(self):
+        """ bool: ``True`` if Landmarks are required otherwise ``False ``"""
+        retval = self._model.training_opts["warp_to_landmarks"]
         logger.debug(retval)
         return retval
 
     @property
-    def use_mask(self):
-        """ Return True if a mask is requested """
-        retval = (self.model.training_opts["learn_mask"] or
-                  self.model.training_opts["penalized_mask_loss"])
+    def _use_mask(self):
+        """ bool: ``True`` if a mask is required otherwise ``False`` """
+        retval = (self._model.training_opts["learn_mask"] or
+                  self._model.training_opts["penalized_mask_loss"])
         logger.debug(retval)
         return retval
 
-    def process_training_opts(self):
-        """ Override for processing model specific training options """
-        logger.debug(self.model.training_opts)
-        if not self.landmarks_required and not self.use_mask:
+    def _process_training_opts(self):
+        """ Extrapolate alignments and masks from the alignments file into
+        :attr:`_model.training_opts`."""
+        logger.debug(self._model.training_opts)
+        if not self._landmarks_required and not self._use_mask:
             return
 
-        alignments = TrainingAlignments(self.model.training_opts, self.images)
-        if self.landmarks_required:
+        alignments = TrainingAlignments(self._model.training_opts, self._images)
+        if self._landmarks_required:
             logger.debug("Adding landmarks to training opts dict")
-            self.model.training_opts["landmarks"] = alignments.landmarks
+            self._model.training_opts["landmarks"] = alignments.landmarks
 
-        if self.use_mask:
+        if self._use_mask:
             logger.debug("Adding masks to training opts dict")
-            self.model.training_opts["masks"] = alignments.masks
+            self._model.training_opts["masks"] = alignments.masks
 
-    def set_tensorboard(self):
-        """ Set up tensorboard callback """
-        if self.model.training_opts["no_logs"]:
+    def _set_tensorboard(self):
+        """ Set up Tensorboard callback for logging loss.
+
+        Bypassed if command line option "no-logs" has been selected.
+
+        Returns
+        -------
+        dict:
+            2 Dictionary keys of "a" and "b" the values of which are the
+        :class:`tf.keras.callbacks.TensorBoard` objects for the respective sides.
+        """
+        if self._model.training_opts["no_logs"]:
             logger.verbose("TensorBoard logging disabled")
             return None
-        if self.pingpong.active:
+        if self._pingpong.active:
             # Currently TensorBoard uses the tf.session, meaning that VRAM does not
             # get cleared when model switching
             # TODO find a fix for this
@@ -138,21 +201,22 @@ class TrainerBase():
         logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
 
-        for side in self.sides:
+        for side in self._sides:
             logger.debug("Setting up TensorBoard Logging. Side: %s", side)
-            log_dir = os.path.join(str(self.model.model_dir),
-                                   "{}_logs".format(self.model.name),
+            log_dir = os.path.join(str(self._model.model_dir),
+                                   "{}_logs".format(self._model.name),
                                    side,
-                                   "session_{}".format(self.model.state.session_id))
-            tbs = tf.keras.callbacks.TensorBoard(log_dir=log_dir, **self.tensorboard_kwargs)
-            tbs.set_model(self.model.predictors[side])
+                                   "session_{}".format(self._model.state.session_id))
+            tbs = tf.keras.callbacks.TensorBoard(log_dir=log_dir, **self._tensorboard_kwargs)
+            tbs.set_model(self._model.predictors[side])
             tensorboard[side] = tbs
         logger.info("Enabled TensorBoard Logging")
         return tensorboard
 
     @property
-    def tensorboard_kwargs(self):
-        """ Tensorflow 1.13 + needs an additional keyword argument which is not valid for earlier
+    def _tensorboard_kwargs(self):
+        """ dict: The keyword arguments to be passed to :class:`tf.keras.callbacks.TensorBoard`.
+        NB: Tensorflow 1.13 + needs an additional keyword argument which is not valid for earlier
         versions """
         kwargs = dict(histogram_freq=0,  # Must be 0 or hangs
                       batch_size=64,
@@ -167,128 +231,198 @@ class TrainerBase():
         logger.debug(kwargs)
         return kwargs
 
-    def print_loss(self, loss):
-        """ Override for specific model loss formatting """
+    def __print_loss(self, loss):
+        """ Outputs the loss for the current iteration to the console.
+
+        Parameters
+        ----------
+        loss: dict
+            The loss for each side. The dictionary should contain 2 keys ("a" and "b") with the
+            values being a list of loss values for the current iteration corresponding to
+            each side.
+         """
         logger.trace(loss)
         output = ["Loss {}: {:.5f}".format(side.capitalize(), loss[side][0])
                   for side in sorted(loss.keys())]
         output = ", ".join(output)
-        print("[{}] [#{:05d}] {}".format(self.timestamp, self.model.iterations, output), end='\r')
+        print("[{}] [#{:05d}] {}".format(self._timestamp,
+                                         self._model.iterations,
+                                         output), end='\r')
 
     def train_one_step(self, viewer, timelapse_kwargs):
-        """ Train a batch """
-        logger.trace("Training one step: (iteration: %s)", self.model.iterations)
+        """ Running training on a batch of images for each side.
+
+        Triggered from the training cycle in :class:`scripts.train.Train`.
+
+        Notes
+        -----
+        As every iteration is called explicitly, the Parameters defined should always be ``None``
+        except on save iterations.
+
+        Parameters
+        ----------
+        viewer: :func:`scripts.train.Train._show`
+            The function that will display the preview image
+        timelapse_kwargs: dict
+            The keyword arguments for generating time-lapse previews. If a time-lapse preview is
+            not required then this should be ``None``. Otherwise all values should be full paths
+            the keys being `input_a`, `input_b`, `output`.
+        """
+        logger.trace("Training one step: (iteration: %s)", self._model.iterations)
         do_preview = viewer is not None
         do_timelapse = timelapse_kwargs is not None
-        snapshot_interval = self.model.training_opts.get("snapshot_interval", 0)
+        snapshot_interval = self._model.training_opts.get("snapshot_interval", 0)
         do_snapshot = (snapshot_interval != 0 and
-                       self.model.iterations >= snapshot_interval and
-                       self.model.iterations % snapshot_interval == 0)
+                       self._model.iterations >= snapshot_interval and
+                       self._model.iterations % snapshot_interval == 0)
 
         loss = dict()
         try:
-            for side, batcher in self.batchers.items():
-                if self.pingpong.active and side != self.pingpong.side:
+            for side, batcher in self._batchers.items():
+                if self._pingpong.active and side != self._pingpong.side:
                     continue
                 loss[side] = batcher.train_one_batch()
                 if not do_preview and not do_timelapse:
                     continue
                 if do_preview:
                     batcher.generate_preview(do_preview)
-                    self.samples.images[side] = batcher.compile_sample(None)
+                    self._samples.images[side] = batcher.compile_sample(None)
                 if do_timelapse:
-                    self.timelapse.get_sample(side, timelapse_kwargs)
+                    self._timelapse.get_sample(side, timelapse_kwargs)
 
-            self.model.state.increment_iterations()
+            self._model.state.increment_iterations()
 
             for side, side_loss in loss.items():
-                self.store_history(side, side_loss)
-                self.log_tensorboard(side, side_loss)
+                self._store_history(side, side_loss)
+                self._log_tensorboard(side, side_loss)
 
-            if not self.pingpong.active:
-                self.print_loss(loss)
+            if not self._pingpong.active:
+                self.__print_loss(loss)
             else:
                 for key, val in loss.items():
-                    self.pingpong.loss[key] = val
-                self.print_loss(self.pingpong.loss)
+                    self._pingpong.loss[key] = val
+                self.__print_loss(self._pingpong.loss)
 
             if do_preview:
-                samples = self.samples.show_sample()
+                samples = self._samples.show_sample()
                 if samples is not None:
                     viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
             if do_timelapse:
-                self.timelapse.output_timelapse()
+                self._timelapse.output_timelapse()
 
             if do_snapshot:
-                self.model.do_snapshot()
+                self._model.do_snapshot()
         except Exception as err:
             raise err
 
-    def store_history(self, side, loss):
-        """ Store the history of this step """
+    def _store_history(self, side, loss):
+        """ Store the loss for this step into :attr:`model.history`.
+
+        Parameters
+        ----------
+        side: {"a", "b"}
+            The side to store the loss for
+        loss: list
+            The list of loss ``floats`` for this side
+        """
         logger.trace("Updating loss history: '%s'", side)
-        self.model.history[side].append(loss[0])  # Either only loss or total loss
+        self._model.history[side].append(loss[0])  # Either only loss or total loss
         logger.trace("Updated loss history: '%s'", side)
 
-    def log_tensorboard(self, side, loss):
-        """ Log loss to TensorBoard log """
-        if not self.tensorboard:
+    def _log_tensorboard(self, side, loss):
+        """ Log current loss to Tensorboard log files
+
+        Parameters
+        ----------
+        side: {"a", "b"}
+            The side to store the loss for
+        loss: list
+            The list of loss ``floats`` for this side
+        """
+        if not self._tensorboard:
             return
         logger.trace("Updating TensorBoard log: '%s'", side)
         logs = {log[0]: log[1]
-                for log in zip(self.model.state.loss_names[side], loss)}
-        self.tensorboard[side].on_batch_end(self.model.state.iterations, logs)
+                for log in zip(self._model.state.loss_names[side], loss)}
+        self._tensorboard[side].on_batch_end(self._model.state.iterations, logs)
         logger.trace("Updated TensorBoard log: '%s'", side)
 
     def clear_tensorboard(self):
-        """ Indicate training end to Tensorboard """
-        if not self.tensorboard:
+        """ Stop Tensorboard logging.
+
+        Tensorboard logging needs to be explicitly shutdown on training termination. Called from
+        :class:`scripts.train.Train` when training is stopped.
+         """
+        if not self._tensorboard:
             return
-        for side, tensorboard in self.tensorboard.items():
+        for side, tensorboard in self._tensorboard.items():
             logger.debug("Ending Tensorboard. Side: '%s'", side)
             tensorboard.on_train_end(None)
 
 
 class Batcher():
-    """ Batch images from a single side """
+    """ Handles the processing of a Batch for a single side.
+
+    Parameters
+    ----------
+    side: {"a" or "b"}
+        The side that this :class:`Batcher` belongs to
+    images: list
+        The list of full paths to the training images for this :class:`Batcher`
+    model: plugin from :mod:`plugins.train.model`
+        The selected model that will be running this trainer
+    use_mask: bool
+        ``True`` if a mask is required for training otherwise ``False``
+    batch_size: int
+        The size of the batch to be processed at each iteration
+    config: :class:`lib.config.FaceswapConfig`
+        The configuration for this trainer
+    """
     def __init__(self, side, images, model, use_mask, batch_size, config):
-        logger.debug("Initializing %s: side: '%s', num_images: %s, batch_size: %s, config: %s)",
-                     self.__class__.__name__, side, len(images), batch_size, config)
-        self.model = model
-        self.use_mask = use_mask
-        self.side = side
-        self.images = images
-        self.config = config
-        self.target = None
-        self.samples = None
-        self.masks = None
+        logger.debug("Initializing %s: side: '%s', num_images: %s, use_mask: %s, batch_size: %s, "
+                     "config: %s)",
+                     self.__class__.__name__, side, len(images), use_mask, batch_size, config)
+        self._model = model
+        self._use_mask = use_mask
+        self._side = side
+        self._images = images
+        self._config = config
+        self._target = None
+        self._samples = None
+        self._masks = None
 
-        generator = self.load_generator()
-        self.feed = generator.minibatch_ab(images, batch_size, self.side)
+        generator = self._load_generator()
+        self._feed = generator.minibatch_ab(images, batch_size, self._side)
 
-        self.preview_feed = None
-        self.timelapse_feed = None
-        self.set_preview_feed()
+        self._preview_feed = None
+        self._timelapse_feed = None
+        self._set_preview_feed()
 
-    def load_generator(self):
-        """ Pass arguments to TrainingDataGenerator and return object """
-        logger.debug("Loading generator: %s", self.side)
-        input_size = self.model.input_shape[0]
-        output_shapes = self.model.output_shapes
+    def _load_generator(self):
+        """ Load the :class:`lib.training_data.TrainingDataGenerator` for this batcher """
+        logger.debug("Loading generator: %s", self._side)
+        input_size = self._model.input_shape[0]
+        output_shapes = self._model.output_shapes
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
                                           output_shapes,
-                                          self.model.training_opts,
-                                          self.config)
+                                          self._model.training_opts,
+                                          self._config)
         return generator
 
     def train_one_batch(self):
-        """ Train a batch """
-        logger.trace("Training one step: (side: %s)", self.side)
-        model_inputs, model_targets = self.get_next()
+        """ Train on a single batch of images for this :class:`Batcher`
+
+        Returns
+        -------
+        list
+            The list of loss values (as ``float``) for this batch
+        """
+        logger.trace("Training one step: (side: %s)", self._side)
+        model_inputs, model_targets = self._get_next()
         try:
-            loss = self.model.predictors[self.side].train_on_batch(model_inputs, model_targets)
+            loss = self._model.predictors[self._side].train_on_batch(model_inputs, model_targets)
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -304,60 +438,109 @@ class Batcher():
         loss = loss if isinstance(loss, list) else [loss]
         return loss
 
-    def get_next(self):
-        """ Return the next batch from the generator
-            Items should be returned as as: ([model_inputs], [model_targets]) """
+    def _get_next(self):
+        """ Return the next batch from the :class:`lib.training_data.TrainingDataGenerator` for
+        this batcher ready for feeding into the model.
+
+        Returns
+        -------
+        model_inputs: list
+            A list of :class:`numpy.ndarray` for feeding into the model
+        model_targets: list
+            A list of :class:`numpy.ndarray` for comparing the output of the model
+        """
         logger.trace("Generating targets")
-        batch = next(self.feed)
+        batch = next(self._feed)
         # TODO Move this to model or property
-        targets_use_mask = self.model.training_opts["learn_mask"]
-        # TODO Check if this migration of 2 lists to 1 list is correct
-        model_inputs = batch["feed"] + batch["masks"] if self.use_mask else batch["feed"]
+        targets_use_mask = self._model.training_opts["learn_mask"]
+        model_inputs = batch["feed"] + batch["masks"] if self._use_mask else batch["feed"]
         model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
         return model_inputs, model_targets
 
     def generate_preview(self, do_preview):
-        """ Generate the preview if a preview iteration """
+        """ Generate the preview images.
+
+        Parameters
+        ----------
+        do_preview: bool
+            Whether the previews should be generated. ``True`` if they should ``False`` if they
+            should not be generated, in which case currently stored previews should be deleted.
+        """
         if not do_preview:
-            self.samples = None
-            self.target = None
-            self.masks = None
+            self._samples = None
+            self._target = None
+            self._masks = None
             return
         logger.debug("Generating preview")
-        batch = next(self.preview_feed)
-        self.samples = batch["samples"]
-        self.target = batch["targets"][self.model.largest_face_index]
-        self.masks = batch["masks"][0]
+        batch = next(self._preview_feed)
+        self._samples = batch["samples"]
+        self._target = batch["targets"][self._model.largest_face_index]
+        self._masks = batch["masks"][0]
 
-    def set_preview_feed(self):
-        """ Set the preview dictionary """
-        logger.debug("Setting preview feed: (side: '%s')", self.side)
-        preview_images = self.config.get("preview_images", 14)
+    def _set_preview_feed(self):
+        """ Set the preview feed for this batcher.
+
+        Creates a generator from :class:`lib.training_data.TrainingDataGenerator` specifically
+        for previews for the batcher.
+        """
+        logger.debug("Setting preview feed: (side: '%s')", self._side)
+        preview_images = self._config.get("preview_images", 14)
         preview_images = min(max(preview_images, 2), 16)
-        batchsize = min(len(self.images), preview_images)
-        self.preview_feed = self.load_generator().minibatch_ab(self.images,
-                                                               batchsize,
-                                                               self.side,
-                                                               do_shuffle=True,
-                                                               is_preview=True)
+        batchsize = min(len(self._images), preview_images)
+        self._preview_feed = self._load_generator().minibatch_ab(self._images,
+                                                                 batchsize,
+                                                                 self._side,
+                                                                 do_shuffle=True,
+                                                                 is_preview=True)
         logger.debug("Set preview feed. Batchsize: %s", batchsize)
 
     def compile_sample(self, batch_size, samples=None, images=None, masks=None):
-        """ Training samples to display in the viewer """
-        num_images = self.config.get("preview_images", 14)
+        """ Compile the preview samples for display.
+
+        Parameters
+        ----------
+        batch_size: int
+            The requested batch size for each training iterations
+        samples: :class:`numpy.ndarray`, optional
+            The sample images that should be used for creating the preview. If ``None`` then the
+            samples will be generated from the internal random image generator.
+            Default: ``None``
+        images:  :class:`numpy.ndarray`, optional
+            The target images that should be used for creating the preview. If ``None`` then the
+            targets will be generated from the internal random image generator.
+            Default: ``None``
+        masks:  :class:`numpy.ndarray`, optional
+            The masks that should be used for creating the preview. If ``None`` then the
+            masks will be generated from the internal random image generator.
+            Default: ``None``
+
+        Returns
+        -------
+        list
+            The list of samples, targets and masks as :class:`numpy.ndarrays` for creating a
+            preview image
+         """
+        num_images = self._config.get("preview_images", 14)
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
-        logger.debug("Compiling samples: (side: '%s', samples: %s)", self.side, num_images)
-        images = images if images is not None else self.target
-        masks = masks if masks is not None else self.masks
-        samples = samples if samples is not None else self.samples
+        logger.debug("Compiling samples: (side: '%s', samples: %s)", self._side, num_images)
+        images = images if images is not None else self._target
+        masks = masks if masks is not None else self._masks
+        samples = samples if samples is not None else self._samples
         retval = [samples[0:num_images], images[0:num_images], masks[0:num_images]]
         return retval
 
     def compile_timelapse_sample(self):
-        """ Time-lapse samples """
-        batch = next(self.timelapse_feed)
+        """ Compile the sample images for creating a time-lapse frame.
+
+        Returns
+        -------
+        list
+            The list of samples, targets and masks as :class:`numpy.ndarrays` for creating a
+            time-lapse frame
+        """
+        batch = next(self._timelapse_feed)
         batchsize = len(batch["samples"])
-        images = batch["targets"][self.model.largest_face_index]
+        images = batch["targets"][self._model.largest_face_index]
         masks = batch["masks"][0]
         sample = self.compile_sample(batchsize,
                                      samples=batch["samples"],
@@ -365,31 +548,68 @@ class Batcher():
                                      masks=masks)
         return sample
 
-    def set_timelapse_feed(self, images, batchsize):
-        """ Set the time-lapse dictionary """
-        logger.debug("Setting time-lapse feed: (side: '%s', input_images: '%s', batchsize: %s)",
-                     self.side, images, batchsize)
-        self.timelapse_feed = self.load_generator().minibatch_ab(images[:batchsize],
-                                                                 batchsize, self.side,
-                                                                 do_shuffle=False,
-                                                                 is_timelapse=True)
+    def set_timelapse_feed(self, images, batch_size):
+        """ Set the time-lapse feed for this batcher.
+
+        Creates a generator from :class:`lib.training_data.TrainingDataGenerator` specifically
+        for generating time-lapse previews for the batcher.
+
+        Parameters
+        ----------
+        images: list
+            The list of full paths to the images for creating the time-lapse for this
+            :class:`Batcher`
+        batch_size: int
+            The number of images to be used to create the time-lapse preview.
+        """
+        logger.debug("Setting time-lapse feed: (side: '%s', input_images: '%s', batch_size: %s)",
+                     self._side, images, batch_size)
+        self._timelapse_feed = self._load_generator().minibatch_ab(images[:batch_size],
+                                                                   batch_size, self._side,
+                                                                   do_shuffle=False,
+                                                                   is_timelapse=True)
         logger.debug("Set time-lapse feed")
 
 
 class Samples():
-    """ Display samples for preview and time-lapse """
+    """ Compile samples for display for preview and time-lapse
+
+    Parameters
+    ----------
+    model: plugin from :mod:`plugins.train.model`
+        The selected model that will be running this trainer
+    use_mask: bool
+        ``True`` if a mask should be displayed otherwise ``False``
+    coverage_ratio: float
+        Ratio of face to be cropped out of the training image.
+    scaling: float, optional
+        The amount to scale the final preview image by. Default: `1.0`
+
+    Attributes
+    ----------
+    images: dict
+        The :class:`numpy.ndarray` training images for generating previews on each side. The
+        dictionary should contain 2 keys ("a" and "b") with the values being the training images
+        for generating samples corresponding to each side.
+    """
     def __init__(self, model, use_mask, coverage_ratio, scaling=1.0):
         logger.debug("Initializing %s: model: '%s', use_mask: %s, coverage_ratio: %s)",
                      self.__class__.__name__, model, use_mask, coverage_ratio)
-        self.model = model
-        self.use_mask = use_mask
+        self._model = model
+        self._use_mask = use_mask
         self.images = dict()
-        self.coverage_ratio = coverage_ratio
-        self.scaling = scaling
+        self._coverage_ratio = coverage_ratio
+        self._scaling = scaling
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def show_sample(self):
-        """ Display preview data """
+        """ Compile a preview image.
+
+        Returns
+        -------
+        :class:`numpy.ndarry`
+            A compiled preview image ready for display or saving
+        """
         if len(self.images) != 2:
             logger.debug("Ping Pong training - Only one side trained. Aborting preview")
             return None
@@ -399,23 +619,23 @@ class Samples():
         headers = dict()
         for side, samples in self.images.items():
             faces = samples[1]
-            if self.model.input_shape[0] / faces.shape[1] != 1.0:
-                feeds[side] = self.resize_sample(side, faces, self.model.input_shape[0])
-                feeds[side] = feeds[side].reshape((-1, ) + self.model.input_shape)
+            if self._model.input_shape[0] / faces.shape[1] != 1.0:
+                feeds[side] = self._resize_sample(side, faces, self._model.input_shape[0])
+                feeds[side] = feeds[side].reshape((-1, ) + self._model.input_shape)
             else:
                 feeds[side] = faces
-            if self.use_mask:
+            if self._use_mask:
                 mask = samples[-1]
                 feeds[side] = [feeds[side], mask]
 
-        preds = self.get_predictions(feeds["a"], feeds["b"])
+        preds = self._get_predictions(feeds["a"], feeds["b"])
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
             predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
-            display = self.to_full_frame(side, samples, predictions)
-            headers[side] = self.get_headers(side, display[0].shape[1])
+            display = self._to_full_frame(side, samples, predictions)
+            headers[side] = self._get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
                 figures[side] = np.concatenate([figures[side],
@@ -424,21 +644,34 @@ class Samples():
         width = 4
         side_cols = width // 2
         if side_cols != 1:
-            headers = self.duplicate_headers(headers, side_cols)
+            headers = self._duplicate_headers(headers, side_cols)
 
         header = np.concatenate([headers["a"], headers["b"]], axis=1)
         figure = np.concatenate([figures["a"], figures["b"]], axis=0)
         height = int(figure.shape[0] / width)
         figure = figure.reshape((width, height) + figure.shape[1:])
-        figure = stack_images(figure)
+        figure = _stack_images(figure)
         figure = np.concatenate((header, figure), axis=0)
 
         logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')
 
     @staticmethod
-    def resize_sample(side, sample, target_size):
-        """ Resize samples where predictor expects different shape from processed image """
+    def _resize_sample(side, sample, target_size):
+        """ Resize a given image to the target size.
+
+        Parameters
+        ----------
+        sample: :class:`numpy.ndarray`
+            The sample to be resized
+        target_size: int
+            The size that the sample should be resized to
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The sample resized to the target size
+        """
         scale = target_size / sample.shape[1]
         if scale == 1.0:
             return sample
@@ -450,45 +683,84 @@ class Samples():
         logger.debug("Resized sample: (side: '%s' shape: %s)", side, retval.shape)
         return retval
 
-    def get_predictions(self, feed_a, feed_b):
-        """ Return the sample predictions from the model """
+    def _get_predictions(self, feed_a, feed_b):
+        """ Feed the samples to the model and return predictions
+
+        Parameters
+        ----------
+        feed_a: list
+            List of :class:`numpy.ndarray` of feed images for the "a" side
+        feed_a: list
+            List of :class:`numpy.ndarray` of feed images for the "b" side
+
+        Returns
+        list:
+            List of :class:`numpy.ndarray` of predictions received from the model
+        """
         logger.debug("Getting Predictions")
         preds = dict()
-        preds["a_a"] = self.model.predictors["a"].predict(feed_a)
-        preds["b_a"] = self.model.predictors["b"].predict(feed_a)
-        preds["a_b"] = self.model.predictors["a"].predict(feed_b)
-        preds["b_b"] = self.model.predictors["b"].predict(feed_b)
+        preds["a_a"] = self._model.predictors["a"].predict(feed_a)
+        preds["b_a"] = self._model.predictors["b"].predict(feed_a)
+        preds["a_b"] = self._model.predictors["a"].predict(feed_b)
+        preds["b_b"] = self._model.predictors["b"].predict(feed_b)
         # Get the returned largest image from predictors that emit multiple items
         if not isinstance(preds["a_a"], np.ndarray):
             for key, val in preds.items():
-                preds[key] = val[self.model.largest_face_index]
+                preds[key] = val[self._model.largest_face_index]
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
-    def to_full_frame(self, side, samples, predictions):
-        """ Patch the images into the full frame """
+    def _to_full_frame(self, side, samples, predictions):
+        """ Patch targets and prediction images into images of training image size.
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side that these samples are for
+        samples: list
+            List of :class:`numpy.ndarray` of target images and feed images
+        predictions: list
+            List of :class: `numpy.ndarray` of predictions from the model
+        """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
         full, faces = samples[:2]
         images = [faces] + predictions
         full_size = full.shape[1]
-        target_size = int(full_size * self.coverage_ratio)
+        target_size = int(full_size * self._coverage_ratio)
         if target_size != full_size:
-            frame = self.frame_overlay(full, target_size, (0, 0, 255))
+            frame = self._frame_overlay(full, target_size, (0, 0, 255))
 
-        if self.use_mask:
-            images = self.compile_masked(images, samples[-1])
-        images = [self.resize_sample(side, image, target_size) for image in images]
+        if self._use_mask:
+            images = self._compile_masked(images, samples[-1])
+        images = [self._resize_sample(side, image, target_size) for image in images]
         if target_size != full_size:
-            images = [self.overlay_foreground(frame, image) for image in images]
-        if self.scaling != 1.0:
-            new_size = int(full_size * self.scaling)
-            images = [self.resize_sample(side, image, new_size) for image in images]
+            images = [self._overlay_foreground(frame, image) for image in images]
+        if self._scaling != 1.0:
+            new_size = int(full_size * self._scaling)
+            images = [self._resize_sample(side, image, new_size) for image in images]
         return images
 
     @staticmethod
-    def frame_overlay(images, target_size, color):
-        """ Add roi frame to a background image """
+    def _frame_overlay(images, target_size, color):
+        """ Add a frame overlay to preview images indicating the region of interest.
+
+        This is the red border that appears in the preview images.
+
+        Parameters
+        ----------
+        images: :class:`numpy.ndarray`
+            The samples to apply the frame to
+        target_size: int
+            The size of the sample within the full size frame
+        color: tuple
+            The (Blue, Green, Red) color to use for the frame
+
+        Returns
+        -------
+        :class:`numpy,ndarray`
+            The samples with the frame overlay applied
+        """
         logger.debug("full_size: %s, target_size: %s, color: %s",
                      images.shape[1], target_size, color)
         new_images = list()
@@ -507,8 +779,23 @@ class Samples():
         return retval
 
     @staticmethod
-    def compile_masked(faces, masks):
-        """ Add the mask to the faces for masked preview """
+    def _compile_masked(faces, masks):
+        """ Add the mask to the faces for masked preview.
+
+        Places an opaque red layer over areas of the face that are masked out.
+
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The sample faces that are to have the mask applied
+        masks: :class:`numpy.ndarray`
+            The masks that are to be applied to the faces
+
+        Returns
+        -------
+        list
+            List of :class:`numpy.ndarray` faces with the opaque mask layer applied
+        """
         retval = list()
         masks3 = np.tile(1 - np.rint(masks), 3)
         for mask in masks3:
@@ -521,8 +808,21 @@ class Samples():
         return retval
 
     @staticmethod
-    def overlay_foreground(backgrounds, foregrounds):
-        """ Overlay the training images into the center of the background """
+    def _overlay_foreground(backgrounds, foregrounds):
+        """ Overlay the preview images into the center of the background images
+
+        Parameters
+        ----------
+        backgrounds: list
+            List of :class:`numpy.ndarray` background images for placing the preview images onto
+        backgrounds: list
+            List of :class:`numpy.ndarray` preview images for placing onto the background images
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The preview images compiled into the full frame size for each preview
+        """
         offset = (backgrounds.shape[1] - foregrounds.shape[1]) // 2
         new_images = list()
         for idx, img in enumerate(backgrounds):
@@ -533,20 +833,33 @@ class Samples():
         logger.debug("Overlayed foreground. Shape: %s", retval.shape)
         return retval
 
-    def get_headers(self, side, width):
-        """ Set headers for images """
+    def _get_headers(self, side, width):
+        """ Set header row for the final preview frame
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side that the headers should be generated for
+        width: int
+            The width of each column in the preview frame
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The column headings for the given side
+        """
         logger.debug("side: '%s', width: %s",
                      side, width)
         titles = ("Original", "Swap") if side == "a" else ("Swap", "Original")
         side = side.upper()
-        height = int(64 * self.scaling)
+        height = int(64 * self._scaling)
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX
         texts = ["{} ({})".format(titles[0], side),
                  "{0} > {0}".format(titles[0]),
                  "{} > {}".format(titles[0], titles[1])]
-        text_sizes = [cv2.getTextSize(texts[idx], font, self.scaling * 0.8, 1)[0]
+        text_sizes = [cv2.getTextSize(texts[idx], font, self._scaling * 0.8, 1)[0]
                       for idx in range(len(texts))]
         text_y = int((height + text_sizes[0][1]) / 2)
         text_x = [int((width - text_sizes[idx][0]) / 2) + width * idx
@@ -559,7 +872,7 @@ class Samples():
                         text,
                         (text_x[idx], text_y),
                         font,
-                        self.scaling * 0.8,
+                        self._scaling * 0.8,
                         (0, 0, 0),
                         1,
                         lineType=cv2.LINE_AA)
@@ -567,8 +880,21 @@ class Samples():
         return header_box
 
     @staticmethod
-    def duplicate_headers(headers, columns):
-        """ Duplicate headers for the number of columns displayed """
+    def _duplicate_headers(headers, columns):
+        """ Duplicate headers for the number of columns displayed for each side.
+
+        Parameters
+        ----------
+        headers: :class:`numpy.ndarray`
+            The header to be duplicated
+        columns: int
+            The number of columns that the header needs to be duplicated for
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The original headers duplicated by the number of columns
+        """
         for side, header in headers.items():
             duped = tuple([header for _ in range(columns)])
             headers[side] = np.concatenate(duped, axis=1)
@@ -577,83 +903,150 @@ class Samples():
 
 
 class Timelapse():
-    """ Create the time-lapse """
-    def __init__(self, model, use_mask, coverage_ratio, preview_images, batchers):
+    """ Create a time-lapse preview image.
+
+    Parameters
+    ----------
+    model: plugin from :mod:`plugins.train.model`
+        The selected model that will be running this trainer
+    use_mask: bool
+        ``True`` if a mask should be displayed otherwise ``False``
+    coverage_ratio: float
+        Ratio of face to be cropped out of the training image.
+    scaling: float, optional
+        The amount to scale the final preview image by. Default: `1.0`
+    image_count: int
+        The number of preview images to be displayed in the time-lapse
+    batchers: dict
+        The dictionary should contain 2 keys ("a" and "b") with the values being the
+        :class:`Batcher` for each side.
+    """
+    def __init__(self, model, use_mask, coverage_ratio, image_count, batchers):
         logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
-                     "preview_images: %s, batchers: '%s')", self.__class__.__name__, model,
-                     use_mask, coverage_ratio, preview_images, batchers)
-        self.preview_images = preview_images
-        self.samples = Samples(model, use_mask, coverage_ratio)
-        self.model = model
-        self.batchers = batchers
-        self.output_file = None
+                     "image_count: %s, batchers: '%s')", self.__class__.__name__, model,
+                     use_mask, coverage_ratio, image_count, batchers)
+        self._num_images = image_count
+        self._samples = Samples(model, use_mask, coverage_ratio)
+        self._model = model
+        self._batchers = batchers
+        self._output_file = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def get_sample(self, side, timelapse_kwargs):
-        """ Perform time-lapse """
-        logger.debug("Getting time-lapse samples: '%s'", side)
-        if not self.output_file:
-            self.setup(**timelapse_kwargs)
-        self.samples.images[side] = self.batchers[side].compile_timelapse_sample()
-        logger.debug("Got time-lapse samples: '%s' - %s", side, len(self.samples.images[side]))
+        """ Compile the time-lapse preview
 
-    def setup(self, input_a=None, input_b=None, output=None):
-        """ Set the time-lapse output folder """
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side that the time-lapse is being generated for
+        timelapse_kwargs: dict
+            The keyword arguments for setting up the time-lapse. All values should be full paths
+            the keys being `input_a`, `input_b`, `output`
+        """
+        logger.debug("Getting time-lapse samples: '%s'", side)
+        if not self._output_file:
+            self._setup(**timelapse_kwargs)
+        self._samples.images[side] = self._batchers[side].compile_timelapse_sample()
+        logger.debug("Got time-lapse samples: '%s' - %s", side, len(self._samples.images[side]))
+
+    def _setup(self, input_a=None, input_b=None, output=None):
+        """ Setup the time-lapse folder locations and the time-lapse feed.
+
+        Parameters
+        ----------
+        input_a: str
+            The full path to the time-lapse input folder containing faces for the "a" side
+        input_b: str
+            The full path to the time-lapse input folder containing faces for the "b" side
+        output: str, optional
+            The full path to the time-lapse output folder. If ``None`` is provided this will
+            default to the model folder
+        """
         logger.debug("Setting up time-lapse")
         if output is None:
-            output = str(get_folder(os.path.join(str(self.model.model_dir),
-                                                 "{}_timelapse".format(self.model.name))))
-        self.output_file = str(output)
-        logger.debug("Time-lapse output set to '%s'", self.output_file)
+            output = str(get_folder(os.path.join(str(self._model.model_dir),
+                                                 "{}_timelapse".format(self._model.name))))
+        self._output_file = str(output)
+        logger.debug("Time-lapse output set to '%s'", self._output_file)
 
         images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}
         batchsize = min(len(images["a"]),
                         len(images["b"]),
-                        self.preview_images)
+                        self._num_images)
         for side, image_files in images.items():
-            self.batchers[side].set_timelapse_feed(image_files, batchsize)
+            self._batchers[side].set_timelapse_feed(image_files, batchsize)
         logger.debug("Set up time-lapse")
 
     def output_timelapse(self):
-        """ Set the time-lapse dictionary """
+        """ Write the created time-lapse to the specified output folder. """
         logger.debug("Ouputting time-lapse")
-        image = self.samples.show_sample()
+        image = self._samples.show_sample()
         if image is None:
             return
-        filename = os.path.join(self.output_file, str(int(time.time())) + ".jpg")
+        filename = os.path.join(self._output_file, str(int(time.time())) + ".jpg")
 
         cv2.imwrite(filename, image)
         logger.debug("Created time-lapse: '%s'", filename)
 
 
 class PingPong():
-    """ Side switcher for ping-pong training """
+    """ Side switcher for ping-pong training (memory saving feature)
+
+    Parameters
+    ----------
+    model: plugin from :mod:`plugins.train.model`
+        The selected model that will be running this trainer
+    sides: list
+        The sorted sides that are to be trained. Generally ["a", "b"]
+
+    Attributes
+    ----------
+    side: str
+        The side that is currently being trained
+    loss: dict
+        The loss for each side for ping pong training for the current ping pong session
+    """
     def __init__(self, model, sides):
         logger.debug("Initializing %s: (model: '%s')", self.__class__.__name__, model)
-        self.active = model.training_opts.get("pingpong", False)
-        self.model = model
-        self.sides = sides
+        self._model = model
+        self._sides = sides
         self.side = sorted(sides)[0]
         self.loss = {side: [0] for side in sides}
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def active(self):
+        """ bool: ``True`` if Ping Pong training is active otherwise ``False``. """
+        return self._model.training_opts.get("pingpong", False)
+
     def switch(self):
-        """ Switch ping-pong side """
+        """ Switch ping-pong training from one side of the model to the other """
         if not self.active:
             return
-        retval = [side for side in self.sides if side != self.side][0]
+        retval = [side for side in self._sides if side != self.side][0]
         logger.info("Switching training to side %s", retval.title())
         self.side = retval
-        self.reload_model()
+        self._reload_model()
 
-    def reload_model(self):
-        """ Load the model for just the current side """
+    def _reload_model(self):
+        """ Clear out the model from VRAM and reload for the next side to be trained with ping-pong
+        training """
         logger.verbose("Ping-Pong re-loading model")
-        self.model.reset_pingpong()
+        self._model.reset_pingpong()
 
 
 class TrainingAlignments():
-    """ Get Landmarks and required mask from alignments file """
+    """ Obtain Landmarks and required mask from alignments file.
+
+    Parameters
+    ----------
+    training_opts: dict
+        The dictionary of model training options (see module doc-string for information about
+        contents)
+    image_list: dict
+        The file paths for the images to be trained on for each side. The dictionary should contain
+        2 keys ("a" and "b") with the values being a list of full paths corresponding to each side.
+    """
     def __init__(self, training_opts, image_list):
         logger.debug("Initializing %s: (training_opts: '%s', image counts: %s)",
                      self.__class__.__name__, training_opts,
@@ -666,7 +1059,7 @@ class TrainingAlignments():
 
     @property
     def landmarks(self):
-        """dict: The transformed landmarks for each face set """
+        """ dict: The :class:`numpy.ndarray` aligned landmarks for keys "a" and "b" """
         retval = {side: self._transform_landmarks(side, detected_faces)
                   for side, detected_faces in self._detected_faces.items()}
         logger.trace(retval)
@@ -674,7 +1067,9 @@ class TrainingAlignments():
 
     @property
     def masks(self):
-        """dict: The mask objects of requested mask_type for each face set """
+        """ dict: The :class:`lib.faces_detect.Mask` objects of requested mask type for
+        keys a" and "b"
+        """
         retval = {side: self._get_masks(side, detected_faces)
                   for side, detected_faces in self._detected_faces.items()}
         logger.trace(retval)
@@ -683,7 +1078,22 @@ class TrainingAlignments():
     # Load alignments
     @staticmethod
     def _get_image_hashes(image_list):
-        """ Return the hashes for all images used for training """
+        """ Return the hashes for all images used for training.
+
+        Parameters
+        ----------
+        image_list: dict
+            The file paths for the images to be trained on for each side. The dictionary should
+            contain 2 keys ("a" and "b") with the values being a list of full paths corresponding
+            to each side.
+
+        Returns
+        -------
+        dict
+            For keys "a" and "b" the values are a ``dict`` containing keys "hashes" and "filenames"
+            with their values being a list of hashes and filenames that exist within the training
+            data folder
+        """
         hashes = {key: dict(hashes=[], filenames=[]) for key in image_list}
         pbar = tqdm(desc="Reading training images",
                     total=sum(len(val) for val in image_list.values()))
@@ -698,7 +1108,14 @@ class TrainingAlignments():
         return hashes
 
     def _load_alignments(self):
-        """ Load the alignments as list of detected faces for each side in a dict """
+        """ Load the alignments and convert to :class:`lib.faces_detect.DetectedFace` objects.
+
+        Returns
+        -------
+        dict
+            For keys "a" and "b" values are a list of :class:`lib.faces_detect.DetectedFace`
+            objects.
+        """
         logger.debug("Loading alignments")
         retval = dict()
         for side, fullpath in self._training_opts["alignments"].items():
@@ -710,10 +1127,21 @@ class TrainingAlignments():
         return retval
 
     def _to_detected_faces(self, alignments, side):
-        """ Return a list of :class:`lib.faces_detect.DetectedFace` objects from a
-        :class:'lib.alignments.Alignments' object
+        """ Convert alignments to DetectedFace objects.
 
-        Filter the detected faces to only those that exist in the training folders
+        Filter the detected faces to only those that exist in the training folders.
+
+        Parameters
+        ----------
+        alignments: :class:`lib.alignments.Alignments`
+            The alignments for the current faces
+        side: {"a" or "b"}
+            The side being processed
+
+        Returns
+        -------
+        list
+            List of :class:`lib.faces_detect.DetectedFace` objects
         """
         skip_count = 0
         side_hashes = set(self._hashes[side]["hashes"])
@@ -790,7 +1218,13 @@ class TrainingAlignments():
 
     def _check_all_faces(self):
         """ Ensure that all faces in the training folder exist in the alignments file.
-            If not, output missing filenames """
+        If not, output missing filenames
+
+        Raises
+        ------
+        FaceswapError
+            If there are faces in the training folder which do not exist in the alignments file
+        """
         logger.debug("Checking faces exist in alignments")
         missing_alignments = dict()
         for side, train_hashes in self._hashes.items():
@@ -811,7 +1245,20 @@ class TrainingAlignments():
 
     # Get landmarks
     def _transform_landmarks(self, side, detected_faces):
-        """ For each face transform landmarks and return """
+        """ Transform frame landmarks to their aligned face variant.
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side currently being processed
+        detected_faces: list
+            A list of :class:`lib.faces_detect.DetectedFace` objects
+
+        Returns
+        -------
+        dict
+            The face filenames as keys with the aligned landmarks as value.
+        """
         landmarks = dict()
         for face in detected_faces:
             face.load_aligned(None, size=self._training_opts["training_size"])
@@ -821,7 +1268,21 @@ class TrainingAlignments():
 
     # Get masks
     def _get_masks(self, side, detected_faces):
-        """ For each face, get the mask and set the requested blurring and threshold level """
+        """ For each face, obtain the mask and set the requested blurring and threshold level.
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side currently being processed
+        detected_faces: list
+            A list of :class:`lib.faces_detect.DetectedFace` objects
+
+        Returns
+        -------
+        dict
+            The face filenames as keys with the :class:`lib.faces_detect.Mask` as value.
+        """
+
         masks = dict()
         for face in detected_faces:
             mask = face.mask[self._training_opts["mask_type"]]
@@ -832,9 +1293,24 @@ class TrainingAlignments():
         return masks
 
     def _hash_to_filenames(self, side, face_hash):
-        """ For a given hash return all the filenames that match for the given side
-        NB: Multiple faces can have the same hash, so make sure filenames are updated
-            for all instances of a hash
+        """ For a given hash return all the filenames that match for the given side.
+
+        Notes
+        -----
+        Multiple faces can have the same hash, so this makes sure that all filenames are updated
+        for all instances of a hash.
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side currently being processed
+        face_hash: str
+            The sha1 hash of the face to obtain the filename for
+
+        Returns
+        -------
+        list
+            The filenames that exist for the given hash
         """
         side_hashes = self._hashes[side]
         hash_indices = [idx for idx, hsh in enumerate(side_hashes["hashes"]) if hsh == face_hash]
@@ -843,8 +1319,19 @@ class TrainingAlignments():
         return retval
 
 
-def stack_images(images):
-    """ Stack images """
+def _stack_images(images):
+    """ Stack images evenly for preview.
+
+    Parameters
+    ----------
+    images: :class:`numpy.ndarray`
+        The preview images to be stacked
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        The stacked preview images
+    """
     logger.debug("Stack images")
 
     def get_transpose_axes(num):
