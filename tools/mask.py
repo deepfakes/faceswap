@@ -13,7 +13,7 @@ from lib.image import ImagesLoader, ImagesSaver
 
 from lib.multithreading import MultiThread
 from lib.utils import set_system_verbosity, get_folder
-from plugins.extract.pipeline import Extractor
+from plugins.extract.pipeline import Extractor, ExtractMedia
 
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -154,7 +154,19 @@ class Mask():
                 self._skip_count += 1
                 logger.warning("Skipping face not in alignments file: '%s'", filename)
                 continue
-            for frame, idx in self._alignments.hashes_to_frame[hsh].items():
+
+            frames = self._alignments.hashes_to_frame[hsh]
+            if len(frames) > 1:
+                # Filter the output by filename in case of multiple frames with the same face
+                logger.debug("Filtering multiple hashes to current filename: (filename: '%s', "
+                             "frames: %s", filename, frames)
+                lookup = os.path.splitext(os.path.basename(filename))[0]
+                frames = {k: v
+                          for k, v in frames.items()
+                          if lookup.startswith(os.path.splitext(k)[0])}
+                logger.debug("Filtered: (filename: '%s', frame: '%s')", filename, frames)
+
+            for frame, idx in frames.items():
                 self._face_count += 1
                 alignment = self._alignments.get_faces_in_frame(frame)[idx]
                 if self._check_for_missing(frame, idx, alignment):
@@ -164,7 +176,7 @@ class Mask():
                     detected_face.image = image
                     self._save(frame, idx, detected_face)
                 else:
-                    queue.put(dict(filename=filename, image=image, detected_faces=[detected_face]))
+                    queue.put(ExtractMedia(filename, image, detected_faces=[detected_face]))
                     self._update_count += 1
         if self._update_type != "output":
             queue.put("EOF")
@@ -203,7 +215,7 @@ class Mask():
                     detected_faces.append(detected_face)
                     self._update_count += 1
             if self._update_type != "output":
-                queue.put(dict(filename=filename, image=image, detected_faces=detected_faces))
+                queue.put(ExtractMedia(filename, image, detected_faces=[detected_face]))
         if self._update_type != "output":
             queue.put("EOF")
 
@@ -300,7 +312,7 @@ class Mask():
         extractor_output: dict
             The output from the :class:`plugins.extract.pipeline.Extractor` object
         """
-        for face in extractor_output["detected_faces"]:
+        for face in extractor_output.detected_faces:
             for frame, idx in self._alignments.hashes_to_frame[face.hash].items():
                 self._alignments.update_face(frame, idx, face.to_alignment())
                 if self._saver is not None:
@@ -316,8 +328,8 @@ class Mask():
         extractor_output: dict
             The output from the :class:`plugins.extract.pipeline.Extractor` object
         """
-        frame = os.path.basename(extractor_output["filename"])
-        for idx, face in enumerate(extractor_output["detected_faces"]):
+        frame = os.path.basename(extractor_output.filename)
+        for idx, face in enumerate(extractor_output.detected_faces):
             self._alignments.update_face(frame, idx, face.to_alignment())
             if self._saver is not None:
                 self._save(frame, idx, face)
@@ -337,8 +349,7 @@ class Mask():
         filename = os.path.join(self._saver.location, "{}_{}_{}".format(
             os.path.splitext(frame)[0],
             idx,
-            self._output_suffix)
-        )
+            self._output_suffix))
 
         if detected_face.mask is None or detected_face.mask.get(self._mask_type, None) is None:
             logger.warning("Mask type '%s' does not exist for frame '%s' index %s. Skipping",
@@ -379,12 +390,12 @@ class Mask():
             mask = mask.get_full_frame_mask(face.shape[1], face.shape[0])
             mask = np.expand_dims(mask, -1)
 
-        h, w = face.shape[:2]
+        height, width = face.shape[:2]
         if self._output_type == "combined":
             masked = (face.astype("float32") * mask.astype("float32") / 255.).astype("uint8")
             mask = np.tile(mask, 3)
             for img in (face, masked, mask):
-                cv2.rectangle(img, (0, 0), (w - 1, h - 1), (255, 255, 255), 1)
+                cv2.rectangle(img, (0, 0), (width - 1, height - 1), (255, 255, 255), 1)
                 out_image = np.concatenate((face, masked, mask), axis=1)
         elif self._output_type == "mask":
             out_image = mask

@@ -12,7 +12,7 @@ from tqdm import tqdm
 # import imageio
 
 from lib.aligner import Extract as AlignerExtract
-from lib.alignments import Alignments
+from lib.alignments import Alignments, get_serializer
 from lib.faces_detect import DetectedFace
 from lib.image import (count_frames, encode_image_with_hash, read_image,
                        read_image_hash_batch)
@@ -30,7 +30,8 @@ class AlignmentData(Alignments):
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
         if filename.lower() == "dfl":
-            self.file = filename
+            self.serializer = get_serializer("compressed")
+            self.file = "{}.{}".format(filename.lower(), self.serializer.file_extension)
             return
         super().__init__(folder, filename=filename)
         logger.verbose("%s items loaded", self.frames_count)
@@ -170,7 +171,7 @@ class Faces(MediaLoader):
     """ Object to hold the faces that are to be swapped out """
 
     def process_folder(self):
-        """ Iterate through the faces dir pulling out various information """
+        """ Iterate through the faces folder pulling out various information """
         logger.info("Loading file list from %s", self.folder)
 
         filelist = [os.path.join(self.folder, face)
@@ -209,7 +210,7 @@ class Frames(MediaLoader):
     """ Object to hold the frames that are to be checked against """
 
     def process_folder(self):
-        """ Iterate through the frames dir pulling the base filename """
+        """ Iterate through the frames folder pulling the base filename """
         iterator = self.process_video if self.is_video else self.process_frames
         for item in iterator():
             yield item
