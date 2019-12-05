@@ -134,7 +134,7 @@ class Model(ModelBase):
 
         outputs = [var_x]
 
-        if self.config.get("mask_type", None) is not None:
+        if self.config.get("learn_mask", False):
             var_y = var_xy
             mask_b_complexity = 384
             for idx in range(self.upscalers_no-2):
@@ -184,7 +184,7 @@ class Model(ModelBase):
 
         outputs = [var_x]
 
-        if self.config.get("mask_type", None) is not None:
+        if self.config.get("learn_mask", False):
             var_y = var_xy
             mask_a_complexity = 384
             for idx in range(self.upscalers_no-2):

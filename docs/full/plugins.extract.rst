@@ -6,9 +6,9 @@ Subpackages
 
 .. toctree::
 
-   plugins.extract.align
-   plugins.extract.detect
-   plugins.extract.mask
+   plugins.extract.align._base
+   plugins.extract.detect._base
+   plugins.extract.mask._base
 
 Submodules
 ----------
@@ -17,11 +17,3 @@ Submodules
 
    plugins.extract._base
    plugins.extract.pipeline
-
-Module contents
----------------
-
-.. automodule:: plugins.extract
-   :members:
-   :undoc-members:
-   :show-inheritance:

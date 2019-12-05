@@ -235,7 +235,8 @@ class Extract():
 
         Loads the aligned face, perform any processing actions and verify the output.
 
-        Parameters:
+        Parameters
+        ----------
         extract_media: :class:`plugins.extract.pipeline.ExtractMedia`
             Output from :class:`plugins.extract.pipeline.Extractor`
         size: int

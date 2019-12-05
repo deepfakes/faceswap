@@ -1,5 +1,5 @@
 scripts.extract
-=======================
+===============
 
 .. automodule:: scripts.extract
    :members:
