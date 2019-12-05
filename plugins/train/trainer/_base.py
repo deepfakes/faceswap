@@ -451,7 +451,6 @@ class Batcher():
         """
         logger.trace("Generating targets")
         batch = next(self._feed)
-        # TODO Move this to model or property
         targets_use_mask = self._model.training_opts["learn_mask"]
         model_inputs = batch["feed"] + batch["masks"] if self._use_mask else batch["feed"]
         model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
@@ -1204,8 +1203,8 @@ class TrainingAlignments():
             msg = ("At least one of your faces does not have the mask `{}` stored for it.\nYou "
                    "should run the Mask Tool to generate this mask for your faceset or "
                    "select a different mask in the training configuration options.\n"
-                   "The face that caused this failure was side: `{}`, frame: `{}`, index: {}. The "
-                   "masks that exist for this face are: {}.\nBe aware that there are probably "
+                   "The face that caused this failure was [side: `{}`, frame: `{}`, index: {}]. "
+                   "The masks that exist for this face are: {}.\nBe aware that there are probably "
                    "more faces without this Mask Type".format(
                        mask_type, side.upper(), filename, idx, list(face["mask"].keys())))
             raise FaceswapError(msg)

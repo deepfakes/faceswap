@@ -216,6 +216,12 @@ class ModelBase():
         logger.debug(retval)
         return retval
 
+    @property
+    def feed_mask(self):
+        """ bool: ``True`` if the model expects a mask to be fed into input otherwise ``False`` """
+        return self.config["mask_type"] is not None and (self.config["learn_mask"] or
+                                                         self.config["penalized_mask_loss"])
+
     def load_config(self):
         """ Load the global config for reference in self.config """
         global _CONFIG  # pylint: disable=global-statement
@@ -258,9 +264,8 @@ class ModelBase():
         logger.debug("Getting inputs")
         inputs = [Input(shape=self.input_shape, name="face_in")]
         output_network = [network for network in self.networks.values() if network.is_output][0]
-        if self.config["mask_type"] is not None and (self.config["learn_mask"] or
-                                                     self.config["penalized_mask_loss"]):
-            # TODO penalized mask doesn't have a mask ouput, so we can't use output shapes
+        if self.feed_mask:
+            # TODO penalized mask doesn't have a mask output, so we can't use output shapes
             # mask should always be last output..this needs to be a rule
             mask_shape = output_network.output_shapes[-1]
             inputs.append(Input(shape=(mask_shape[1:-1] + (1,)), name="mask_in"))
@@ -372,7 +377,7 @@ class ModelBase():
         opt_kwargs = dict(lr=lr, beta_1=beta_1, beta_2=beta_2)
         if (self.config.get("clipnorm", False) and
                 keras.backend.backend() != "plaidml.keras.backend"):
-            # NB: Clipnorm is ballooning VRAM useage, which is not expected behaviour
+            # NB: Clipnorm is ballooning VRAM usage, which is not expected behavior
             # and may be a bug in Keras/TF.
             # PlaidML has a bug regarding the clipnorm parameter
             # See: https://github.com/plaidml/plaidml/issues/228
@@ -625,7 +630,7 @@ class VRAMSavings():
         return optimizer_savings
 
     def set_gradient_type(self, memory_saving_gradients):
-        """ Monkeypatch Memory Saving Gradients if requested """
+        """ Monkey-patch Memory Saving Gradients if requested """
         if memory_saving_gradients and self.is_plaidml:
             logger.warning("Memory Saving Gradients not supported on plaidML. Disabling")
             memory_saving_gradients = False
@@ -981,12 +986,12 @@ class State():
             Check for any fixed=False parameters changes and log info changes
         """
         global _CONFIG  # pylint: disable=global-statement
+        legacy_update = self._update_legacy_config()
         # Add any new items to state config for legacy purposes
         for key, val in _CONFIG.items():
             if key not in self.config.keys():
                 logger.info("Adding new config item to state file: '%s': '%s'", key, val)
                 self.config[key] = val
-        legacy_update = self.update_legacy_config()
         self.update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self.config
@@ -995,18 +1000,52 @@ class State():
         logger.debug("Replaced config. New config: %s", _CONFIG)
         logger.info("Using configuration saved in state file")
 
-    def update_legacy_config(self):
-        """ Update legacy state config files with the new loss formating
+    def _update_legacy_config(self):
+        """ Legacy updates for new config additions.
+
+        When new config items are added to the Faceswap code, existing model state files need to be
+        updated to handle these new items.
+
+        Current existing legacy update items:
+
+            * loss - If old `dssim_loss` is ``true`` set new `loss_function` to `ssim` otherwise
+            set it to `mae`. Remove old `dssim_loss` item
+
+            * masks - If `penalized_mask_loss` exists but `learn_mask` does not, then add the
+            latter and set to the same value as `penalized_mask_loss`.
+
+        Returns
+        -------
+        bool
+            ``True`` if legacy items exist and state file has been updated, otherwise ``False``
         """
-        prior = "dssim_loss"
-        new = "loss_function"
-        if prior not in self.config:
-            return False
-        self.config[new] = "ssim" if self.config[prior] else "mae"
-        del self.config[prior]
-        logger.info("Updated config from older dssim format. New config loss function: %s",
-                    self.config[new])
-        return True
+        logger.debug("Checking for legacy state file update")
+        priors = ["dssim_loss", "penalized_mask_loss"]
+        new_items = ["loss_function", "learn_mask"]
+        updated = False
+        for old, new in zip(priors, new_items):
+            if old not in self.config:
+                logger.debug("Legacy item '%s' not in config. Skipping update", old)
+                continue
+
+            # dssim_loss > loss_function
+            if old == "dssim_loss":
+                self.config[new] = "ssim" if self.config[old] else "mae"
+                del self.config[old]
+                updated = True
+                logger.info("Updated config from legacy dssim format. New config loss "
+                            "function: '%s'", self.config[new])
+                continue
+
+            # Add learn mask option and set to True if model has "penalized_mask_loss" specified
+            if old == "penalized_mask_loss" and new not in self.config:
+                self.config[new] = self.config["penalized_mask_loss"]
+                updated = True
+                logger.info("Added new 'learn_mask' config item for this model. Value set to: %s",
+                            self.config[new])
+                continue
+        logger.debug("State file updated for legacy config: %s", updated)
+        return updated
 
     def update_changed_config_items(self, config_changeable_items):
         """ Update any parameters which are not fixed and have been changed """

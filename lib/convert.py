@@ -99,11 +99,8 @@ class Converter():
                                  item["filename"], str(err))
                     image = item["image"]
                     # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
-                    # import sys
-                    # import traceback
-                    # exc_info = sys.exc_info()
-                    # traceback.print_exception(*exc_info)
-
+                    # import sys ; import traceback
+                    # exc_info = sys.exc_info() ; traceback.print_exception(*exc_info)
                 logger.trace("Out queue put: %s", item["filename"])
                 out_queue.put((item["filename"], image))
         logger.debug("Completed convert process")

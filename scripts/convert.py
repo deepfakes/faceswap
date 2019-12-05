@@ -59,7 +59,7 @@ class Convert():
 
     @property
     def queue_size(self):
-        """ Set 16 for singleprocess otherwise 32 """
+        """ Set 16 for single process otherwise 32 """
         if self.args.singleprocess:
             retval = 16
         else:
@@ -204,7 +204,7 @@ class DiskIO():
         logger.debug(retval)
         return retval
 
-    # Initalization
+    # Initialization
     def get_writer(self):
         """ Return the writer plugin """
         args = [self.args.output_dir]
@@ -311,7 +311,7 @@ class DiskIO():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
             if image is None or (not image.any() and image.ndim not in (2, 3)):
-                # All black frames will return not np.any() so check dims too
+                # All black frames will return not numpy.any() so check dims too
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
             if self.check_skipframe(filename):
@@ -462,7 +462,7 @@ class Predict():
     @property
     def has_predicted_mask(self):
         """ Return whether this model has a predicted mask """
-        return bool(self.model.state.mask_shapes)
+        return bool(self.model.state.config.get("learn_mask", False))
 
     @staticmethod
     def get_batchsize(queue_size):
@@ -613,7 +613,7 @@ class Predict():
         """ Perform inference on the feed """
         logger.trace("Predicting: Batchsize: %s", len(feed_faces))
         feed = [feed_faces]
-        if self.has_predicted_mask:
+        if self.model.feed_mask:
             feed.append(np.repeat(self.input_mask, feed_faces.shape[0], axis=0))
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
 

@@ -569,7 +569,9 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("mask", add_none=True),
             "default": "extended",
             "group": "Plugins",
-            "help": "R|Masker to use."
+            "help": "R|Masker to use. NB - masks generated here can be used for training, and "
+                    "converting with the 'predicted' mask. Availability of all masks specified "
+                    "here for convert is coming soon."
                     "\nL|none: Don't use a mask."
                     "\nL|components: Mask designed to provide facial segmentation based on the "
                     "positioning of landmark locations. A convex hull is constructed around the "
