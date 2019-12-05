@@ -1014,14 +1014,16 @@ class State():
             * masks - If `penalized_mask_loss` exists but `learn_mask` does not, then add the
             latter and set to the same value as `penalized_mask_loss`.
 
+            * masks type - Replace removed masks 'dfl_full' and 'facehull' with `components` mask
+
         Returns
         -------
         bool
             ``True`` if legacy items exist and state file has been updated, otherwise ``False``
         """
         logger.debug("Checking for legacy state file update")
-        priors = ["dssim_loss", "penalized_mask_loss"]
-        new_items = ["loss_function", "learn_mask"]
+        priors = ["dssim_loss", "penalized_mask_loss", "mask_type"]
+        new_items = ["loss_function", "learn_mask", "mask_type"]
         updated = False
         for old, new in zip(priors, new_items):
             if old not in self.config:
@@ -1044,6 +1046,15 @@ class State():
                 logger.info("Added new 'learn_mask' config item for this model. Value set to: %s",
                             self.config[new])
                 continue
+
+            # Replace removed masks with most similar equivalent
+            if old == "mask_type" and self.config[old] in ("facehull", "dfl_full"):
+                old_mask = self.config[old]
+                self.config[new] = "components"
+                updated = True
+                logger.info("Updated 'mask_type' from '%s' to '%s' for this model",
+                            old_mask, self.config[new])
+
         logger.debug("State file updated for legacy config: %s", updated)
         return updated
 
