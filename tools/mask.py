@@ -316,6 +316,7 @@ class Mask():
             for frame, idx in self._alignments.hashes_to_frame[face.hash].items():
                 self._alignments.update_face(frame, idx, face.to_alignment())
                 if self._saver is not None:
+                    face.image = extractor_output.image
                     self._save(frame, idx, face)
 
     def _update_frames(self, extractor_output):

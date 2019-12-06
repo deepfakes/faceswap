@@ -219,7 +219,7 @@ class Check():
             f_output.write(output_message)
 
     def move_file(self, items_output):
-        """ Move the identified frames to a new subfolder """
+        """ Move the identified frames to a new sub folder """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = "{}{}_{}".format(self.get_filename_prefix(),
                                        self.output_message.replace(" ", "_").lower(), now)
@@ -232,7 +232,7 @@ class Check():
         move(output_folder, items_output)
 
     def move_frames(self, output_folder, items_output):
-        """ Move frames into single subfolder """
+        """ Move frames into single sub folder """
         logger.info("Moving %s frame(s) to '%s'", len(items_output), output_folder)
         for frame in items_output:
             src = os.path.join(self.source_dir, frame)
@@ -241,7 +241,7 @@ class Check():
             os.rename(src, dst)
 
     def move_faces(self, output_folder, items_output):
-        """ Make additional subfolders for each face that appears
+        """ Make additional sub folders for each face that appears
             Enables easier manual sorting """
         logger.info("Moving %s faces(s) to '%s'", len(items_output), output_folder)
         for frame, idx in items_output:
@@ -668,89 +668,189 @@ class RemoveAlignments():
 
 
 class Rename():
-    """ Rename faces to match their source frame and position index """
+    """ Rename faces in a folder to match their filename as stored in an alignments file.
+
+    Parameters
+    ----------
+    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+        The alignments data loaded from an alignments file for this rename job
+    arguments: :class:`argparse.Namespace`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+    faces: :class:`tools.lib_alignments.media.Faces`, Optional
+        An optional faces object, if the rename task is being called by another job.
+        Default: ``None``
+    """
     def __init__(self, alignments, arguments, faces=None):
         logger.debug("Initializing %s: (arguments: %s, faces: %s)",
                      self.__class__.__name__, arguments, faces)
         self.alignments = alignments
         self.faces = faces if faces else Faces(arguments.faces_dir)
-        self.seen_multihash = set()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
         """ Process the face renaming """
         logger.info("[RENAME FACES]")  # Tidy up cli output
-        rename_count = 0
-        for frame, details, _, frame_fullname in tqdm(self.alignments.yield_faces(),
-                                                      desc="Renaming Faces",
-                                                      total=self.alignments.frames_count):
-            rename_count += self.rename_faces(frame, frame_fullname, details)
+        rename_mappings = self._build_rename_list()
+        rename_count = self._rename_faces(rename_mappings)
         logger.info("%s faces renamed", rename_count)
 
-    def rename_faces(self, frame, frame_fullname, details):
-        """ Rename faces
-            Done in 2 iterations as two files cannot share the same name """
-        logger.trace("Renaming faces for frame: '%s'", frame_fullname)
-        temp_ext = ".temp_move"
-        frame_faces = [(x["hash"], idx) for idx, x in enumerate(details)]
-        rename_count = 0
-        rename_files = list()
-        for f_hash, idx in frame_faces:
-            faces = self.faces.items[f_hash]
-            if len(faces) == 1:
-                face_name, face_ext = faces[0]
-            else:
-                face_name, face_ext = self.check_multi_hashes(faces, frame, idx)
-            old = face_name + face_ext
-            new = "{}_{}{}".format(frame, idx, face_ext)
-            if old == new:
-                logger.trace("Face does not require renaming: '%s'", old)
-                continue
-            rename_files.append((old, new))
-        for action in ("temp", "final"):
-            for files in rename_files:
-                old, new = files
-                old_file = old if action == "temp" else old + temp_ext
-                new_file = old + temp_ext if action == "temp" else new
-                src = os.path.join(self.faces.folder, old_file)
-                dst = os.path.join(self.faces.folder, new_file)
-                logger.trace("Renaming: '%s' to '%s'", old_file, new_file)
-                os.rename(src, dst)
-                if action == "final":
-                    rename_count += 1
-                    logger.verbose("Renamed '%s' to '%s'", old, new)
-        return rename_count
+    def _build_rename_list(self):
+        """ Build a list of source and destination filenames for renaming.
 
-    def check_multi_hashes(self, faces, frame, idx):
-        """ Check filenames for where multiple faces have the
-            same hash (e.g. for freeze frames) """
-        logger.debug("Multiple hashes: (frame: faces: %s, frame: '%s', idx: %s", faces, frame, idx)
-        frame_idx = "{}_{}".format(frame, idx)
-        retval = None
-        for face_name, extension in faces:
-            if (face_name, extension) in self.seen_multihash:
-                # Don't return a filename that has already been processed
-                logger.debug("Already seen: %s", (face_name, extension))
+        Validates that all files in the faces folder have a corresponding match in the alignments
+        file. Orders the rename list by destination filename to avoid potential for filename clash.
+
+        Returns
+        -------
+        list
+            List of tuples of (`source filename`, `destination filename`) ordered by destination
+            filename
+        """
+        source_filenames = []
+        dest_filenames = []
+        errors = []
+        pbar = tqdm(desc="Building Rename Lists", total=self.faces.count)
+        for disk_hash, disk_faces in self.faces.items.items():
+            align_faces = self.alignments.hashes_to_frame.get(disk_hash, None)
+            face_error = self._validate_hash_match(disk_faces, align_faces)
+            if face_error is not None:
+                errors.extend(face_error)
+                pbar.update(len(disk_faces))
                 continue
-            if face_name == frame_idx:
-                # If a matching filename already exists return that
-                retval = (face_name, extension)
-                logger.debug("Matching filename found: %s", retval)
-                self.seen_multihash.add(retval)
-                break
-            if face_name.startswith(frame):
-                # If a matching framename already exists return that
-                retval = (face_name, extension)
-                logger.debug("Matching freamename found: %s", retval)
-                self.seen_multihash.add(retval)
-                break
-        if not retval:
-            # If no matches, just pop the first filename
-            retval = [face for face in faces if face not in self.seen_multihash][0]
-            logger.debug("No matches found. Choosing: %s", retval)
-            self.seen_multihash.add(retval)
-        logger.debug("Returning: %s", retval)
-        return retval
+            src_faces, dst_faces = self._get_filename_mapping(disk_faces, align_faces)
+            source_filenames.extend(src_faces)
+            dest_filenames.extend(dst_faces)
+            pbar.update(len(src_faces))
+        pbar.close()
+        if errors:
+            logger.error("There are faces in the given folder that do not correspond to entries "
+                         "in the alignments file. Please check your data, and if neccesarry run "
+                         "the `remove-faces` job. To get a list of faces missing alignments "
+                         "entries, run with VERBOSE logging")
+            logger.verbose("Files in faces folder not in alignments file: %s", errors)
+            exit(1)
+        return self._sort_mappings(source_filenames, dest_filenames)
+
+    @staticmethod
+    def _validate_hash_match(disk_faces, align_faces):
+        """ Validate that the hash has returned corresponding faces from disk and alignments file.
+
+        Parameters
+        ----------
+        disk_faces: list
+            List of tuples of (`file name`, `file extension`) for all faces that exist for the
+            current hash
+        align_faces: dict
+            `frame filename`: `index` for all faces that exist in the alignments file for the
+            current hash
+
+        Returns
+        -------
+        list
+            List of disk_faces that do not correspond to a matching entry in the alignments file.
+            Returns `None` if there is a valid match
+        """
+        if align_faces is None:
+            logger.debug("No matching hash found for faces: %s", disk_faces)
+            return [face[0] + face[1] for face in disk_faces]
+        if len(disk_faces) != len(align_faces):
+            logger.debug("Number of faces mismatch for hash: (disk_faces: %s, align_faces: %s)",
+                         disk_faces, align_faces)
+            return [face[0] + face[1] for face in disk_faces[: len(align_faces)]]
+        return None
+
+    @staticmethod
+    def _get_filename_mapping(disk_faces, align_faces):
+        """ Map the source filenames for this hash to the destination filenames.
+
+        Parameters
+        ----------
+        disk_faces: list
+            List of tuples of (`file name`, `file extension`) for all faces that exist for the
+            current hash
+        align_faces: dict
+            `frame filename`: `index` for all faces that exist in the alignments file for the
+            current hash
+
+        Returns
+        -------
+        source_filenames: list
+            List of source filenames to be renamed for this hash
+        dest_filenames: list
+            List of destination filenames that faces for this hash are to be renamed to
+            List of disk_faces that do not correspond to a matching entry in the alignments file.
+            Returns `None` if there is a valid match
+        """
+        source_filenames = []
+        dest_filenames = []
+        # Force deterministic order on alignments dict for multi hash faces
+        sorted_aligned = sorted([(frame, idx) for frame, idx in align_faces.items()])
+        for disk_face, align_face in zip(disk_faces, sorted_aligned):
+            extension = disk_face[1]
+            src_fname = disk_face[0] + extension
+
+            dst_frame = os.path.splitext(align_face[0])[0]
+            dst_fname = "{}_{}{}".format(dst_frame, align_face[1], extension)
+            logger.debug("Mapping rename from '%s' to '%s'", src_fname, dst_fname)
+            source_filenames.append(src_fname)
+            dest_filenames.append(dst_fname)
+        return source_filenames, dest_filenames
+
+    @staticmethod
+    def _sort_mappings(sources, destinations):
+        """ Sort the mapping lists by destinations to avoid filename clash.
+
+        Parameters
+        ----------
+        sources: list
+            List of source filenames in the same order as :attr:`destinations`
+        destinations: dict
+            List of destination filenames in the same order as :attr:`sources`
+
+        Returns
+        -------
+        list
+            List of tuples of (`source filename`, `destination filename`) ordered by destination
+            filename
+        """
+        sorted_indices = [idx for idx, _ in sorted(enumerate(destinations), key=lambda x: x[1])]
+        mappings = [(sources[idx], destinations[idx]) for idx in sorted_indices]
+        logger.trace("filename mappings: %s", mappings)
+        return mappings
+
+    def _rename_faces(self, filename_mappings):
+        """ Rename faces back to their original name as exists in the alignments file.
+
+        If the source and destination filename are the same then skip that file.
+
+        Parameters
+        ----------
+        filename_mappings: list
+            List of tuples of (`source filename`, `destination filename`) ordered by destination
+            filename
+
+        Returns
+        -------
+        int
+            The number of faces that have been renamed
+        """
+        rename_count = 0
+        for src, dst in tqdm(filename_mappings, desc="Renaming Faces"):
+            if src == dst:
+                logger.debug("Skipping rename of '%s' as destination name is same as souce", src)
+                continue
+            old = os.path.join(self.faces.folder, src)
+            new = os.path.join(self.faces.folder, dst)
+            if os.path.exists(new):
+                # This should never happen, but is a safety measure to prevent deletion of faces
+                # when multiple files have the same hash.
+                logger.debug("Skipping renaming to an existing file: (src: '%s', dst: '%s'",
+                             src, dst)
+                continue
+            logger.verbose("Renaming '%s' to '%s'", old, new)
+            os.rename(old, new)
+            rename_count += 1
+        return rename_count
 
 
 class Sort():
@@ -922,7 +1022,7 @@ class Spatial():
         # Convert back to shapes (numKeypoint, num_dims, numFrames)
         landmarks_norm_rec = np.reshape(landmarks_norm_table_rec.T,
                                         [68, 2, landmarks_norm.shape[2]])
-        # Transform back to image coords
+        # Transform back to image co-ordinates
         retval = self.normalized_to_original(landmarks_norm_rec,
                                              self.normalized["scale_factors"],
                                              self.normalized["mean_coords"])
