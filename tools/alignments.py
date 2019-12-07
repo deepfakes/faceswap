@@ -4,7 +4,7 @@ import logging
 
 from lib.utils import set_system_verbosity
 from .lib_alignments import (AlignmentData, Check, Dfl, Draw, # noqa pylint: disable=unused-import
-                             Extract, Manual, Merge, Rename,
+                             Extract, Fix, Manual, Merge, Rename,
                              RemoveAlignments, Sort, Spatial, UpdateHashes)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
