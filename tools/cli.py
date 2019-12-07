@@ -32,7 +32,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "opts": ("-j", "--job"),
             "action": Radio,
             "type": str,
-            "choices": ("dfl", "draw", "extract", "manual", "merge", "missing-alignments",
+            "choices": ("dfl", "draw", "extract", "fix", "manual", "merge", "missing-alignments",
                         "missing-frames", "leftover-faces", "multi-faces", "no-faces",
                         "remove-faces", "remove-frames", "rename", "sort", "spatial",
                         "update-hashes"),
@@ -49,6 +49,11 @@ class AlignmentsArgs(FaceSwapArgs):
                     "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
                     "the '-een' (--extract-every-n) parameter to only extract every nth frame." +
                     frames_and_faces_dir + align_eyes +
+                    # TODO - Remove the fix job after a period of time. Implemented 2019/12/07
+                    "\nL|'fix': There was a bug when extracting from video which would shift all "
+                    "the faces out by 1 frame. This was a shortlived bug, but this job will fix "
+                    "alignments files that have this issue. NB: Only run this on alignments files "
+                    "that you know need fixing."
                     "\nL|'manual': Manually view and edit landmarks." + frames_dir +
                     "\nL|'merge': Merge multiple alignment files into one. Specify a space "
                     "separated list of alignments files with the -a flag. Optionally specify a "
