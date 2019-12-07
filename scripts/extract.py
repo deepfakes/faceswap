@@ -200,9 +200,13 @@ class Extract():
             detected_faces = dict()
             self._extractor.launch()
             self._check_thread_error()
+            if self._args.singleprocess:
+                phase_desc = self._extractor.phase.title()
+            else:
+                phase_desc = ' & '.join(self._extractor._flow).title()
             desc = "Running pass {} of {}: {}".format(phase + 1,
                                                       self._extractor.passes,
-                                                      self._extractor.phase.title())
+                                                      phase_desc)
             status_bar = tqdm(self._extractor.detected_faces(),
                               total=self._images.process_count,
                               file=sys.stdout,
