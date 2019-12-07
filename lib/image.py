@@ -554,7 +554,7 @@ class ImagesLoader(ImageIO):
         """
         if self._is_video:
             self._count = int(count_frames(self.location, fast=fast_count))
-            self._file_list = [self._dummy_video_framename(i + 1) for i in range(self.count)]
+            self._file_list = [self._dummy_video_framename(i) for i in range(self.count)]
         else:
             if isinstance(self.location, (list, tuple)):
                 self._file_list = self.location
