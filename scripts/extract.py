@@ -192,6 +192,7 @@ class Extract():
         size = self._args.size if hasattr(self._args, "size") else 256
         saver = ImagesSaver(self._output_dir, as_bytes=True)
         exception = False
+        phase_desc = "Extraction"
 
         for phase in range(self._extractor.passes):
             if exception:
@@ -202,8 +203,6 @@ class Extract():
             self._check_thread_error()
             if self._args.singleprocess:
                 phase_desc = self._extractor.phase.title()
-            else:
-                phase_desc = ' & '.join(self._extractor._flow).title()
             desc = "Running pass {} of {}: {}".format(phase + 1,
                                                       self._extractor.passes,
                                                       phase_desc)
