@@ -452,10 +452,11 @@ class Extract():  # pylint:disable=too-few-public-methods
         count = self._frames.count if skip_list is None else self._frames.count - len(skip_list)
         for filename, image in tqdm(self._frames.stream(skip_list=skip_list),
                                     total=count, desc="Saving extracted faces"):
-            if not self._alignments.frame_exists(filename):
-                logger.verbose("Skipping '%s' - Alignments not found", filename)
+            frame_name = os.path.basename(filename)
+            if not self._alignments.frame_exists(frame_name):
+                logger.verbose("Skipping '%s' - Alignments not found", frame_name)
                 continue
-            extracted_faces += self._output_faces(filename, image)
+            extracted_faces += self._output_faces(frame_name, image)
         if extracted_faces != 0 and not self._arguments.large:
             self._alignments.save()
         logger.info("%s face(s) extracted", extracted_faces)
