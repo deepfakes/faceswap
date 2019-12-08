@@ -479,18 +479,21 @@ class Manual():
 
         frame, faces = self.get_frame()
         press = self.get_keys()
+        self.interface.set_redraw(True)
 
         while True:
-            self.help.render()
-            cv2.imshow("Frame", frame)
-            cv2.imshow("Faces", faces)
-            key = cv2.waitKey(1)
+            if self.interface.redraw():
+                self.help.render()
+                cv2.imshow("Frame", frame)
+                cv2.imshow("Faces", faces)
+                self.interface.set_redraw(False)
+            key = cv2.waitKey(1000)
 
             if self.window_closed(is_windows, is_conda, key):
                 queue_manager.terminate_queues()
                 break
 
-            if key:
+            if key and key != -1:
                 logger.trace("Keypress received: '%s'", key)
             if key in press.keys():
                 action = press[key]["action"]
@@ -509,7 +512,6 @@ class Manual():
 
             logger.trace("Redraw requested")
             frame, faces = self.get_frame()
-            self.interface.set_redraw(False)
 
         cv2.destroyAllWindows()
 
@@ -584,23 +586,18 @@ class Manual():
         while True:
             if navigation["last_request"] == 0:
                 break
-            elif navigation["frame_idx"] in (0, navigation["max_frame"]):
+            if navigation["frame_idx"] in (0, navigation["max_frame"]):
                 break
-            elif skip_mode == "standard":
+            if skip_mode == "standard":
                 break
-            elif (skip_mode == "no faces"
-                  and not self.alignments.frame_has_faces(frame)):
+            if skip_mode == "no faces" and not self.alignments.frame_has_faces(frame):
                 break
-            elif (skip_mode == "multi-faces"
-                  and self.alignments.frame_has_multiple_faces(frame)):
+            if skip_mode == "multi-faces" and self.alignments.frame_has_multiple_faces(frame):
                 break
-            elif (skip_mode == "has faces"
-                  and self.alignments.frame_has_faces(frame)):
+            if skip_mode == "has faces" and self.alignments.frame_has_faces(frame):
                 break
-            else:
-                self.interface.iterate_frame("navigation",
-                                             navigation["last_request"])
-                frame = frame_list[navigation["frame_idx"]]["frame_fullname"]
+            self.interface.iterate_frame("navigation", navigation["last_request"])
+            frame = frame_list[navigation["frame_idx"]]["frame_fullname"]
 
         image = self.frames.load_image(frame)
         navigation["last_request"] = 0

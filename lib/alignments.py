@@ -6,6 +6,8 @@ import logging
 import os
 from datetime import datetime
 
+import numpy as np
+
 from lib.serializer import get_serializer, get_serializer_from_filename
 from lib.utils import FaceswapError
 
@@ -248,9 +250,17 @@ class Alignments():
 
     def update_legacy(self):
         """ Update legacy alignments """
+        updated = False
         if self.has_legacy_landmarksxy():
-            logger.info("Updating legacy alignments")
+            logger.info("Updating legacy landmarksXY to landmarks_xy")
             self.update_legacy_landmarksxy()
+            updated = True
+        if self.has_legacy_landmarks_list():
+            logger.info("Updating legacy landmarks from list to numpy array")
+            self.update_legacy_landmarks_list()
+            updated = True
+        if updated:
+            self.save()
 
     # <File Format> #
     # Serializer is now a compressed pickle .fsa format. This used to be any number of serializers
@@ -304,4 +314,23 @@ class Alignments():
                 alignment["landmarks_xy"] = alignment.pop("landmarksXY")
                 update_count += 1
         logger.debug("Updated landmarks_xy: %s", update_count)
-        self.save()
+
+    # Landmarks stored as list instead of numpy array
+    def has_legacy_landmarks_list(self):
+        """ check for legacy landmarks stored as list """
+        logger.debug("checking legacy landmarks as list")
+        retval = not all(isinstance(face["landmarks_xy"], np.ndarray)
+                         for faces in self.data.values()
+                         for face in faces)
+        return retval
+
+    def update_legacy_landmarks_list(self):
+        """ Update landmarksXY to landmarks_xy and save alignments """
+        update_count = 0
+        for alignments in self.data.values():
+            for alignment in alignments:
+                test = alignment["landmarks_xy"]
+                if not isinstance(test, np.ndarray):
+                    alignment["landmarks_xy"] = np.array(test, dtype="float32")
+                    update_count += 1
+        logger.debug("Updated landmarks_xy: %s", update_count)
