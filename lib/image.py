@@ -334,7 +334,7 @@ def count_frames(filename, fast=False):
             logger.debug("frame line: %s", output)
             if not init_tqdm:
                 logger.debug("Initializing tqdm")
-                pbar = tqdm(desc="Counting Video Frames", total=duration, unit="secs")
+                pbar = tqdm(desc="Counting Video Frames", leave=False, total=duration, unit="secs")
                 init_tqdm = True
             time_idx = output.find("time=") + len("time=")
             frame_idx = output.find("frame=") + len("frame=")
