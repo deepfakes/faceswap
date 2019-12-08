@@ -401,97 +401,143 @@ class Draw():
         self.frames.save_image(self.output_folder, frame, image)
 
 
-class Extract():
-    """ Re-extract faces from source frames based on
-        Alignment data """
+class Extract():  # pylint:disable=too-few-public-methods
+    """ Re-extract faces from source frames based on Alignment data
+
+    Parameters
+    ----------
+    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+        The alignments data loaded from an alignments file for this rename job
+    arguments: :class:`argparse.Namespace`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+    """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.arguments = arguments
-        self.alignments = alignments
-        self.faces_dir = arguments.faces_dir
-        self.frames = Frames(arguments.frames_dir)
-        self.extracted_faces = ExtractedFaces(self.frames,
-                                              self.alignments,
-                                              size=arguments.size,
-                                              align_eyes=arguments.align_eyes)
+        self._arguments = arguments
+        self._alignments = alignments
+        self._faces_dir = arguments.faces_dir
+        self._frames = Frames(arguments.frames_dir)
+        self._extracted_faces = ExtractedFaces(self._frames,
+                                               self._alignments,
+                                               size=arguments.size,
+                                               align_eyes=arguments.align_eyes)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
-        """ Run extraction """
+        """ Run the re-extraction from Alignments file process"""
         logger.info("[EXTRACT FACES]")  # Tidy up cli output
-        self.check_folder()
-        self.export_faces()
+        self._check_folder()
+        self._export_faces()
 
-    def check_folder(self):
-        """ Check that the faces folder doesn't pre-exist
-            and create """
+    def _check_folder(self):
+        """ Check that the faces folder doesn't pre-exist and create. """
         err = None
-        if not self.faces_dir:
+        if not self._faces_dir:
             err = "ERROR: Output faces folder not provided."
-        elif not os.path.isdir(self.faces_dir):
-            logger.debug("Creating folder: '%s'", self.faces_dir)
-            os.makedirs(self.faces_dir)
-        elif os.listdir(self.faces_dir):
-            err = "ERROR: Output faces folder should be empty: '{}'".format(self.faces_dir)
+        elif not os.path.isdir(self._faces_dir):
+            logger.debug("Creating folder: '%s'", self._faces_dir)
+            os.makedirs(self._faces_dir)
+        elif os.listdir(self._faces_dir):
+            err = "ERROR: Output faces folder should be empty: '{}'".format(self._faces_dir)
         if err:
             logger.error(err)
             exit(0)
-        logger.verbose("Creating output folder at '%s'", self.faces_dir)
+        logger.verbose("Creating output folder at '%s'", self._faces_dir)
 
-    def export_faces(self):
-        """ Export the faces """
+    def _export_faces(self):
+        """ Export the faces to the output folder and update the alignments file with
+        new hashes. """
         extracted_faces = 0
-        skip_num = self.arguments.extract_every_n
-        if skip_num != 1:
-            logger.info("Skipping every %s frames", skip_num)
-        for idx, frame in enumerate(tqdm(self.frames.file_list_sorted,
-                                         desc="Saving extracted faces")):
-            frame_name = frame["frame_fullname"]
-            if idx % skip_num != 0:
-                logger.trace("Skipping '%s' due to extract_every_n = %s", frame_name, skip_num)
+        skip_list = self._set_skip_list()
+        count = self._frames.count if skip_list is None else self._frames.count - len(skip_list)
+        for filename, image in tqdm(self._frames.stream(skip_list=skip_list),
+                                    total=count, desc="Saving extracted faces"):
+            if not self._alignments.frame_exists(filename):
+                logger.verbose("Skipping '%s' - Alignments not found", filename)
                 continue
-
-            if not self.alignments.frame_exists(frame_name):
-                logger.verbose("Skipping '%s' - Alignments not found", frame_name)
-                continue
-
-            extracted_faces += self.output_faces(frame)
-
-        if extracted_faces != 0 and not self.arguments.large:
-            self.alignments.save()
+            extracted_faces += self._output_faces(filename, image)
+        if extracted_faces != 0 and not self._arguments.large:
+            self._alignments.save()
         logger.info("%s face(s) extracted", extracted_faces)
 
-    def output_faces(self, frame):
-        """ Output the frame's faces to file """
-        logger.trace("Outputting frame: %s", frame)
+    def _set_skip_list(self):
+        """ Set the indices for frames that should be skipped based on the `extract_every_n`
+        command line option.
+
+        Returns
+        -------
+        list or ``None``
+            A list of indices to be skipped if extract_every_n is not `1` otherwise
+            returns ``None``
+        """
+        skip_num = self._arguments.extract_every_n
+        if skip_num == 1:
+            logger.debug("Not skipping any frames")
+            return None
+        skip_list = []
+        for idx, item in enumerate(self._frames.file_list_sorted):
+            if idx % skip_num != 0:
+                logger.trace("Adding image '%s' to skip list due to extract_every_n = %s",
+                             item["frame_fullname"], skip_num)
+                skip_list.append(idx)
+        logger.debug("Adding skip list: %s", skip_list)
+        return skip_list
+
+    def _output_faces(self, filename, image):
+        """ For each frame save out the faces and update the face hash back to alignments
+
+        Parameters
+        ----------
+        filename: str
+            The filename (without the full path) of the current frame
+        image: :class:`numpy.ndarray`
+            The full frame that faces are to be extracted from
+
+        Returns
+        -------
+        int
+            The total number of faces that have been extracted
+        """
+        logger.trace("Outputting frame: %s", filename)
         face_count = 0
-        frame_fullname = frame["frame_fullname"]
-        frame_name = frame["frame_name"]
-        extension = os.path.splitext(frame_fullname)[1]
-        faces = self.select_valid_faces(frame_fullname)
+        frame_name, extension = os.path.splitext(filename)
+        faces = self._select_valid_faces(filename, image)
 
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), extension)
-            if self.arguments.large:
-                self.frames.save_image(self.faces_dir, output, face.aligned_face)
+            if self._arguments.large:
+                self._frames.save_image(self._faces_dir, output, face.aligned_face)
             else:
-                output = os.path.join(self.faces_dir, output)
-                f_hash = self.extracted_faces.save_face_with_hash(output,
-                                                                  extension,
-                                                                  face.aligned_face)
-                self.alignments.data[frame_fullname][idx]["hash"] = f_hash
+                output = os.path.join(self._faces_dir, output)
+                f_hash = self._extracted_faces.save_face_with_hash(output,
+                                                                   extension,
+                                                                   face.aligned_face)
+                self._alignments.data[filename][idx]["hash"] = f_hash
             face_count += 1
         return face_count
 
-    def select_valid_faces(self, frame):
-        """ Return valid faces for extraction """
-        faces = self.extracted_faces.get_faces_in_frame(frame)
-        if not self.arguments.large:
+    def _select_valid_faces(self, frame, image):
+        """ Return the aligned faces from a frame that meet the selection criteria,
+
+        Parameters
+        ----------
+        frame: str
+            The filename (without the full path) of the current frame
+        image: :class:`numpy.ndarray`
+            The full frame that faces are to be extracted from
+
+        Returns
+        -------
+        list:
+            List of valid :class:`lib,faces_detect.DetectedFace` objects
+        """
+        faces = self._extracted_faces.get_faces_in_frame(frame, image=image)
+        if not self._arguments.large:
             valid_faces = faces
         else:
-            sizes = self.extracted_faces.get_roi_size_for_frame(frame)
+            sizes = self._extracted_faces.get_roi_size_for_frame(frame)
             valid_faces = [faces[idx] for idx, size in enumerate(sizes)
-                           if size >= self.extracted_faces.size]
+                           if size >= self._extracted_faces.size]
         logger.trace("frame: '%s', total_faces: %s, valid_faces: %s",
                      frame, len(faces), len(valid_faces))
         return valid_faces

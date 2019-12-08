@@ -14,7 +14,7 @@ from tqdm import tqdm
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments, get_serializer
 from lib.faces_detect import DetectedFace
-from lib.image import (count_frames, encode_image_with_hash, read_image,
+from lib.image import (count_frames, encode_image_with_hash, ImagesLoader, read_image,
                        read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions
 
@@ -158,6 +158,29 @@ class MediaLoader():
         # image = self.vid_reader.get_next_data()[:, :, ::-1]
         return image
 
+    def stream(self, skip_list=None):
+        """ Load the images in :attr:`folder` in the order they are received from
+        :class:`lib.image.ImagesLoader` in a background thread.
+
+        Parameters
+        ----------
+        skip_list: list, optional
+            A list of frame indices that should not be loaded. Pass ``None`` if all images should
+            be loaded. Default: ``None``
+
+        Yields
+        ------
+        str
+            The filename of the image that is being returned
+        numpy.ndarray
+            The image that has been loaded from disk
+        """
+        loader = ImagesLoader(self.folder, queue_size=32)
+        if skip_list is not None:
+            loader.add_skip_list(skip_list)
+        for filename, image in loader.load():
+            yield filename, image
+
     @staticmethod
     def save_image(output_folder, filename, image):
         """ Save an image """
@@ -275,7 +298,7 @@ class ExtractedFaces():
         self.faces = list()
         logger.trace("Initialized %s", self.__class__.__name__)
 
-    def get_faces(self, frame):
+    def get_faces(self, frame, image=None):
         """ Return faces and transformed landmarks
             for each face in a given frame with it's alignments"""
         logger.trace("Getting faces for frame: '%s'", frame)
@@ -285,8 +308,8 @@ class ExtractedFaces():
         if not alignments:
             self.faces = list()
             return
-        image = self.frames.load_image(frame)
-        self.faces = [self.extract_one_face(alignment, image.copy()) for alignment in alignments]
+        image = self.frames.load_image(frame) if image is None else image
+        self.faces = [self.extract_one_face(alignment, image) for alignment in alignments]
         self.current_frame = frame
 
     def extract_one_face(self, alignment, image):
@@ -299,11 +322,11 @@ class ExtractedFaces():
         face = self.align_eyes(face, image) if self.align_eyes_bool else face
         return face
 
-    def get_faces_in_frame(self, frame, update=False):
+    def get_faces_in_frame(self, frame, update=False, image=None):
         """ Return the faces for the selected frame """
         logger.trace("frame: '%s', update: %s", frame, update)
         if self.current_frame != frame or update:
-            self.get_faces(frame)
+            self.get_faces(frame, image=image)
         return self.faces
 
     def get_roi_size_for_frame(self, frame):
