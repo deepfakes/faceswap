@@ -44,7 +44,8 @@ class SysInfo():
     @property
     def is_conda(self):
         """ Boolean for whether in a conda environment """
-        return "conda" in sys.version.lower()
+        return ("conda" in sys.version.lower() or
+                os.path.exists(os.path.join(sys.prefix, 'conda-meta')))
 
     @property
     def is_linux(self):

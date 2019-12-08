@@ -24,7 +24,7 @@ from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.model.masks import get_available_masks
 from lib.multithreading import MultiThread
-from lib.utils import FaceswapError, set_system_verbosity
+from lib.utils import FaceswapError
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict
@@ -42,7 +42,6 @@ class Preview():
 
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
-        set_system_verbosity(arguments.loglevel)
         self.config_tools = ConfigTools()
         self.lock = Lock()
         self.trigger_patch = Event()

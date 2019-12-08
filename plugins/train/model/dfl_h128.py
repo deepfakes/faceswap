@@ -50,8 +50,8 @@ class Model(OriginalModel):
                                    activation="sigmoid",
                                    name="face_out")
         outputs = [var_x]
-        # Mask
-        if self.config.get("mask_type", None):
+
+        if self.config.get("learn_mask", False):
             var_y = input_
             var_y = self.blocks.upscale(var_y, self.encoder_dim)
             var_y = self.blocks.upscale(var_y, self.encoder_dim // 2)

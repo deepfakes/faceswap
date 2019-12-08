@@ -7,6 +7,7 @@ import logging
 
 from keras import backend as K
 from keras.optimizers import Adam as KerasAdam
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -20,7 +21,13 @@ class Adam(KerasAdam):
 
     def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999,
                  epsilon=None, decay=0., amsgrad=False, cpu_mode=0, **kwargs):
-        super().__init__(lr, beta_1, beta_2, epsilon, decay, **kwargs)
+        epsilon = 1e-8 if epsilon is None else epsilon
+        super().__init__(learning_rate=lr,
+                         beta_1=beta_1,
+                         beta_2=beta_2,
+                         epsilon=epsilon,
+                         decay=decay,
+                         **kwargs)
         self.cpu_mode = self.set_cpu_mode(cpu_mode)
 
     @staticmethod
@@ -34,7 +41,7 @@ class Adam(KerasAdam):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
-        lr = self.lr
+        lr = self.learning_rate
         if self.initial_decay > 0:
             lr = lr * (1. / (1. + self.decay * K.cast(self.iterations,
                                                       K.dtype(self.decay))))
@@ -45,7 +52,7 @@ class Adam(KerasAdam):
 
         # Pass off to CPU if requested
         if self.cpu_mode:
-            with K.tf.device("/cpu:0"):
+            with tf.device("/cpu:0"):
                 ms, vs, vhats = self.update_1(params)
         else:
             ms, vs, vhats = self.update_1(params)

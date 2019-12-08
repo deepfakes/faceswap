@@ -47,7 +47,7 @@ class Model(OriginalModel):
                                    name="face_out")
         outputs = [var_x]
 
-        if self.config.get("mask_type", None):
+        if self.config.get("learn_mask", False):
             var_y = input_
             var_y = self.blocks.upscale(var_y, 512)
             var_y = self.blocks.upscale(var_y, 256)

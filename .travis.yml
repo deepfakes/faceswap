@@ -4,7 +4,7 @@ language: shell
 
 env:
   global:
-    - CONDA_PYTHON=3.6
+    - CONDA_PYTHON=3.7
     - CONDA_BLD_PATH=${HOME}/conda-bld
 
 os:

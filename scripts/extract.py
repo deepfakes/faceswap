@@ -38,7 +38,6 @@ class Extract():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self._args = arguments
-        Utils.set_verbosity(self._args.loglevel)
 
         self._output_dir = str(get_folder(self._args.output_dir))
 
@@ -235,7 +234,8 @@ class Extract():
 
         Loads the aligned face, perform any processing actions and verify the output.
 
-        Parameters:
+        Parameters
+        ----------
         extract_media: :class:`plugins.extract.pipeline.ExtractMedia`
             Output from :class:`plugins.extract.pipeline.Extractor`
         size: int

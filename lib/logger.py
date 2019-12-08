@@ -42,6 +42,7 @@ class FaceswapFormatter(logging.Formatter):
 
     def format(self, record):
         record.message = record.getMessage()
+        record = self.rewrite_tf_deprecation(record)
         # strip newlines
         if "\n" in record.message or "\r" in record.message:
             record.message = record.message.replace("\n", "\\n").replace("\r", "\\r")
@@ -63,6 +64,16 @@ class FaceswapFormatter(logging.Formatter):
                 msg = msg + "\n"
             msg = msg + self.formatStack(record.stack_info)
         return msg
+
+    @staticmethod
+    def rewrite_tf_deprecation(record):
+        """ Change TF deprecation messages from WARNING to DEBUG """
+        if record.levelno != 30 or not ("tf." in record.message and
+                                        "deprecated" in record.message):
+            return record
+        record.levelno = 10
+        record.levelname = "DEBUG"
+        return record
 
 
 class RollingBuffer(collections.deque):

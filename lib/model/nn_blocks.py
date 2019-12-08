@@ -9,7 +9,8 @@ import logging
 import tensorflow as tf
 import keras.backend as K
 
-from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, regularizers,
+from keras import regularizers
+from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda,
                           Permute, Reshape, SeparableConv2D, Softmax, UpSampling2D)
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D

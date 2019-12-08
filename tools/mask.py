@@ -12,7 +12,7 @@ from lib.faces_detect import DetectedFace
 from lib.image import ImagesLoader, ImagesSaver
 
 from lib.multithreading import MultiThread
-from lib.utils import set_system_verbosity, get_folder
+from lib.utils import get_folder
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 
@@ -33,7 +33,6 @@ class Mask():
     """
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: %s", self.__class__.__name__, arguments)
-        set_system_verbosity(arguments.loglevel)
         self._update_type = arguments.processing
         self._input_is_faces = arguments.input_type == "faces"
         self._mask_type = arguments.masker

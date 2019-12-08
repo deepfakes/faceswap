@@ -96,6 +96,12 @@ def read_image_batch(filenames):
     Leverages multi-threading to load multiple images from disk at the same time
     leading to vastly reduced image read times.
 
+    Notes
+    -----
+    Images are loaded concurrently, so the order of the returned batch will likely not be the same
+    as the order of the input filenames. Filenames are returned with the batch in the correct order
+    corresponding to the returned batch.
+
     Parameters
     ----------
     filenames: list
@@ -103,6 +109,8 @@ def read_image_batch(filenames):
 
     Returns
     -------
+    list
+        Filenames in the correct order as they are returned
     numpy.ndarray
         The batch of images in `BGR` channel order.
 
@@ -113,16 +121,21 @@ def read_image_batch(filenames):
     Example
     -------
     >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
-    >>> images = read_image_batch(image_filenames)
+    >>> filenames, images = read_image_batch(image_filenames)
     """
     logger.trace("Requested batch: '%s'", filenames)
     executor = futures.ThreadPoolExecutor()
     with executor:
-        images = [executor.submit(read_image, filename, raise_error=True)
-                  for filename in filenames]
-        batch = np.array([future.result() for future in futures.as_completed(images)])
-    logger.trace("Returning images: %s", batch.shape)
-    return batch
+        images = {executor.submit(read_image, filename, raise_error=True): filename
+                  for filename in filenames}
+        batch = []
+        filenames = []
+        for future in futures.as_completed(images):
+            batch.append(future.result())
+            filenames.append(images[future])
+        batch = np.array(batch)
+    logger.trace("Returning images: (filenames: %s, batch shape: %s)", filenames, batch.shape)
+    return filenames, batch
 
 
 def read_image_hash(filename):

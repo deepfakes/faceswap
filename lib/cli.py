@@ -15,7 +15,7 @@ from importlib import import_module
 
 from lib.logger import crash_log, log_setup
 from lib.model.masks import get_available_masks, get_default_mask
-from lib.utils import FaceswapError, get_backend, safe_shutdown
+from lib.utils import FaceswapError, get_backend, safe_shutdown, set_system_verbosity
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -46,7 +46,7 @@ class ScriptExecutor():
     def test_for_tf_version():
         """ Check that the minimum required Tensorflow version is installed """
         min_ver = 1.12
-        max_ver = 1.14
+        max_ver = 1.15
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using tf-mkl
             os.environ["KMP_AFFINITY"] = "disabled"
@@ -113,6 +113,7 @@ class ScriptExecutor():
 
     def execute_script(self, arguments):
         """ Run the script for called command """
+        set_system_verbosity(arguments.loglevel)
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self.command, is_gui)
         logger.debug("Executing: %s. PID: %s", self.command, os.getpid())
@@ -569,9 +570,9 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("mask", add_none=True),
             "default": "extended",
             "group": "Plugins",
-            "help": "R|Masker to use. NB: Masker is not currently used by the rest of the process "
-                    "but this will store a mask in the alignments file for use when it has been "
-                    "implemented."
+            "help": "R|Masker to use. NB - masks generated here can be used for training, and "
+                    "converting with the 'predicted' mask. Availability of all masks specified "
+                    "here for convert is coming soon."
                     "\nL|none: Don't use a mask."
                     "\nL|components: Mask designed to provide facial segmentation based on the "
                     "positioning of landmark locations. A convex hull is constructed around the "

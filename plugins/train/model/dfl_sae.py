@@ -31,7 +31,7 @@ class Model(ModelBase):
     @property
     def use_mask(self):
         """ Return True if a mask has been set else false """
-        return self.config.get("mask_type", None) is not None
+        return self.config.get("learn_mask", False)
 
     @property
     def ae_dims(self):

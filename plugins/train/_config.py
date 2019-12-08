@@ -8,8 +8,8 @@ import sys
 from importlib import import_module
 
 from lib.config import FaceswapConfig
-from lib.model.masks import get_available_masks
 from lib.utils import full_path_split
+from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -70,19 +70,49 @@ class Config(FaceswapConfig):
                  "\n\t100.0%% is a mugshot.")
         self.add_item(
             section=section, title="mask_type", datatype=str, default="none",
-            choices=get_available_masks(), group="mask",
-            info="The mask to be used for training:"
-                 "\n\t none: Doesn't use any mask."
-                 "\n\t components: An improved face hull mask using a facehull of 8 facial parts"
-                 "\n\t dfl_full: An improved face hull mask using a facehull of 3 facial parts"
-                 "\n\t extended: Based on components mask. Extends the eyebrow points to further "
-                 "up the forehead. May perform badly on difficult angles."
-                 "\n\t facehull: Face cutout based on landmarks")
+            choices=PluginLoader.get_available_extractors("mask", add_none=True), group="mask",
+            gui_radio=True,
+            info="The mask to be used for training. If you have selected 'Learn Mask' or "
+                 "'Penalized Mask Loss' you must select a value other than 'none'. The required "
+                 "mask should have been selected as part of the Extract process. If it does not "
+                 "exist in the alignments file then it will be generated prior to training "
+                 "commencing."
+                 "\n\tnone: Don't use a mask."
+                 "\n\tcomponents: Mask designed to provide facial segmentation based on the "
+                 "positioning of landmark locations. A convex hull is constructed around the "
+                 "exterior of the landmarks to create a mask."
+                 "\n\textended: Mask designed to provide facial segmentation based on the "
+                 "positioning of landmark locations. A convex hull is constructed around the "
+                 "exterior of the landmarks and the mask is extended upwards onto the forehead."
+                 "\n\tvgg-clear: Mask designed to provide smart segmentation of mostly frontal "
+                 "faces clear of obstructions. Profile faces and obstructions may result in "
+                 "sub-par performance."
+                 "\n\tvgg-obstructed: Mask designed to provide smart segmentation of mostly "
+                 "frontal faces. The mask model has been specifically trained to recognize "
+                 "some facial obstructions (hands and eyeglasses). Profile faces may result in "
+                 "sub-par performance."
+                 "\n\tunet-dfl: Mask designed to provide smart segmentation of mostly frontal "
+                 "faces. The mask model has been trained by community members and will need "
+                 "testing for further description. Profile faces may result in sub-par "
+                 "performance.")
         self.add_item(
-            section=section, title="mask_blur", datatype=bool, default=False, group="mask",
+            section=section, title="mask_blur_kernel", datatype=int, min_max=(0, 9),
+            rounding=1, default=3, group="mask",
             info="Apply gaussian blur to the mask input. This has the effect of smoothing the "
-                 "edges of the mask, which can help with poorly calculated masks, and give less "
-                 "of a hard edge to the predicted mask.")
+                 "edges of the mask, which can help with poorly calculated masks and give less "
+                 "of a hard edge to the predicted mask. The size is in pixels (calculated from "
+                 "a 128px mask). Set to 0 to not apply gaussian blur. This value should be odd, "
+                 "if an even number is passed in then it will be rounded to the next odd number.")
+        self.add_item(
+            section=section, title="mask_threshold", datatype=int, default=4,
+            min_max=(0, 50), rounding=1, group="mask",
+            info="Sets pixels that are near white to white and near black to black. Set to 0 for "
+                 "off.")
+        self.add_item(
+            section=section, title="learn_mask", datatype=bool, default=False, group="mask",
+            info="Dedicate a portion of the model to learning how to duplicate the input "
+                 "mask. Increases VRAM usage in exchange for learning a quick ability to try "
+                 "to replicate more complex mask models.")
         self.add_item(
             section=section, title="icnr_init", datatype=bool,
             default=False, group="initialization",

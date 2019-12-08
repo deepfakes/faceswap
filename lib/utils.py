@@ -413,6 +413,7 @@ class GetModel():
                     break
                 pbar.update(len(buffer))
                 out_file.write(buffer)
+            pbar.close()
 
     def unzip_model(self):
         """ Unzip the model file to the cachedir """
@@ -446,3 +447,4 @@ class GetModel():
                     pbar.update(len(buffer))
                     out_file.write(buffer)
         zip_file.close()
+        pbar.close()
