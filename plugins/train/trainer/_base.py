@@ -1042,16 +1042,16 @@ class TrainingAlignments():
     training_opts: dict
         The dictionary of model training options (see module doc-string for information about
         contents)
-    image_list: dict
+    dict_of_image_lists: dict
         The file paths for the images to be trained on for each side. The dictionary should contain
         2 keys ("a" and "b") with the values being a list of full paths corresponding to each side.
     """
-    def __init__(self, training_opts, image_list):
+    def __init__(self, training_opts, dict_of_image_lists):
         logger.debug("Initializing %s: (training_opts: '%s', image counts: %s)",
                      self.__class__.__name__, training_opts,
-                     {k: len(v) for k, v in image_list.items()})
+                     {k: len(v) for k, v in dict_of_image_lists.items()})
         self._training_opts = training_opts
-        self._hashes = self._get_image_hashes(image_list)
+        self._hashes = self._get_image_hashes(dict_of_image_lists)
         self._detected_faces = self._load_alignments()
         self._check_all_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -1076,12 +1076,12 @@ class TrainingAlignments():
 
     # Load alignments
     @staticmethod
-    def _get_image_hashes(image_list):
+    def _get_image_hashes(dict_of_image_lists):
         """ Return the hashes for all images used for training.
 
         Parameters
         ----------
-        image_list: dict
+        dict_of_image_lists: dict
             The file paths for the images to be trained on for each side. The dictionary should
             contain 2 keys ("a" and "b") with the values being a list of full paths corresponding
             to each side.
@@ -1093,15 +1093,22 @@ class TrainingAlignments():
             with their values being a list of hashes and filenames that exist within the training
             data folder
         """
-        hashes = {key: dict(hashes=[], filenames=[]) for key in image_list}
-        pbar = tqdm(desc="Reading training images",
-                    total=sum(len(val) for val in image_list.values()))
-        for side, filelist in image_list.items():
-            logger.debug("side: %s, file count: %s", side, len(filelist))
-            for filename, hsh in read_image_hash_batch(filelist):
-                hashes[side]["hashes"].append(hsh)
-                hashes[side]["filenames"].append(filename)
+        logger.info("Loading images and computing hashes")
+        hashes = {side: dict(hashes=None, filenames=None) for side in dict_of_image_lists.keys()}
+        pbar = tqdm(dict_of_image_lists.items(),
+                    desc="Reading training images",
+                    total=sum(len(val) for val in dict_of_image_lists.values()))
+        for side, filelist in pbar:
+            file_number = len(filelist)
+            logger.debug("side: %s, file count: %s", side, file_number)
+            hash_array = np.empty(file_number, dtype='U40')
+            file_array = np.empty(file_number, dtype=object)
+            for index, (filename, hsh) in enumerate(read_image_hash_batch(filelist)):
+                file_array[index] = filename
+                hash_array[index] = hsh
                 pbar.update(1)
+            hashes[side]["filenames"] = file_array
+            hashes[side]["hashes"] = hash_array
         pbar.close()
         logger.trace(hashes)
         return hashes
@@ -1115,7 +1122,7 @@ class TrainingAlignments():
             For keys "a" and "b" values are a list of :class:`lib.faces_detect.DetectedFace`
             objects.
         """
-        logger.debug("Loading alignments")
+        logger.info("Loading alignments")
         retval = dict()
         for side, fullpath in self._training_opts["alignments"].items():
             logger.debug("side: '%s', path: '%s'", side, fullpath)
@@ -1224,15 +1231,15 @@ class TrainingAlignments():
         FaceswapError
             If there are faces in the training folder which do not exist in the alignments file
         """
-        logger.debug("Checking faces exist in alignments")
+        logger.debug("Checking if faces exist in alignment file")
         missing_alignments = dict()
         for side, train_hashes in self._hashes.items():
             align_hashes = set(face.hash for face in self._detected_faces[side])
             if not align_hashes.issuperset(train_hashes["hashes"]):
-                missing_alignments[side] = [
-                    os.path.basename(filename)
-                    for hsh, filename in zip(train_hashes["hashes"], train_hashes["filenames"])
-                    if hsh not in align_hashes]
+                hashes_filenames = zip(train_hashes["hashes"], train_hashes["filenames"])
+                missing_alignments[side] = [os.path.basename(filename)
+                                            for hsh, filename in hashes_filenames
+                                            if hsh not in align_hashes]
         if missing_alignments:
             msg = ("There are faces in your training folder(s) which do not exist in your "
                    "alignments file. Training cannot continue. See above for a full list of "
@@ -1283,7 +1290,8 @@ class TrainingAlignments():
         """
 
         masks = dict()
-        for face in detected_faces:
+        #for face in tqdm(detected_faces, desc="Loading masks in side %s" % side.title()):
+        for face in tqdm(detected_faces, desc="Loading masks"):
             mask = face.mask[self._training_opts["mask_type"]]
             mask.set_blur_kernel_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
                                                threshold=self._training_opts["mask_threshold"])
@@ -1311,9 +1319,9 @@ class TrainingAlignments():
         list
             The filenames that exist for the given hash
         """
-        side_hashes = self._hashes[side]
-        hash_indices = [idx for idx, hsh in enumerate(side_hashes["hashes"]) if hsh == face_hash]
-        retval = [side_hashes["filenames"][idx] for idx in hash_indices]
+
+        indices = np.where(self._hashes[side]["hashes"] == face_hash)
+        retval = self._hashes[side]["filenames"][indices]
         logger.trace("side: %s, hash: %s, filenames: %s", side, face_hash, retval)
         return retval
 
