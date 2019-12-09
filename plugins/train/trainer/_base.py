@@ -1082,7 +1082,7 @@ class TrainingAlignments():
             The face filenames as keys with the aligned landmarks as value.
         """
         landmarks = dict()
-        for face in detected_faces:
+        for face in detected_faces.values():
             face.load_aligned(None, size=self._training_opts["training_size"])
             for filename in self._hash_to_filenames(side, face.hash):
                 landmarks[filename] = face.aligned_landmarks
