@@ -1051,11 +1051,13 @@ class TrainingAlignments():
                      self.__class__.__name__, training_opts,
                      {k: len(v) for k, v in image_list.items()})
         self._training_opts = training_opts
+        self._check_alignments_exist()
         self._hashes = self._get_image_hashes(image_list)
         self._detected_faces = self._load_alignments()
         self._check_all_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    # Get landmarks
     @property
     def landmarks(self):
         """ dict: The :class:`numpy.ndarray` aligned landmarks for keys "a" and "b" """
@@ -1064,6 +1066,29 @@ class TrainingAlignments():
         logger.trace(retval)
         return retval
 
+    def _transform_landmarks(self, side, detected_faces):
+        """ Transform frame landmarks to their aligned face variant.
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side currently being processed
+        detected_faces: list
+            A list of :class:`lib.faces_detect.DetectedFace` objects
+
+        Returns
+        -------
+        dict
+            The face filenames as keys with the aligned landmarks as value.
+        """
+        landmarks = dict()
+        for face in detected_faces:
+            face.load_aligned(None, size=self._training_opts["training_size"])
+            for filename in self._hash_to_filenames(side, face.hash):
+                landmarks[filename] = face.aligned_landmarks
+        return landmarks
+
+    # Get masks
     @property
     def masks(self):
         """ dict: The :class:`lib.faces_detect.Mask` objects of requested mask type for
@@ -1074,7 +1099,46 @@ class TrainingAlignments():
         logger.trace(retval)
         return retval
 
-    # Load alignments
+    def _get_masks(self, side, detected_faces):
+        """ For each face, obtain the mask and set the requested blurring and threshold level.
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side currently being processed
+        detected_faces: dict
+            Key is the hash of the face, value is the corresponding
+            :class:`lib.faces_detect.DetectedFace` object
+
+        Returns
+        -------
+        dict
+            The face filenames as keys with the :class:`lib.faces_detect.Mask` as value.
+        """
+
+        masks = dict()
+        for fhash, face in detected_faces.items():
+            mask = face.mask[self._training_opts["mask_type"]]
+            mask.set_blur_kernel_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
+                                               threshold=self._training_opts["mask_threshold"])
+            for filename in self._hash_to_filenames(side, fhash):
+                masks[filename] = mask
+        return masks
+
+    # Pre flight checks
+    def _check_alignments_exist(self):
+        """ Ensure the alignments files exist prior to running any longer running tasks.
+
+        Raises
+        ------
+        FaceswapError
+            If at least one alignments file does not exist
+        """
+        for fullpath in self._training_opts["alignments"].values():
+            if not os.path.exists(fullpath):
+                raise FaceswapError("Alignments file does not exist: `{}`".format(fullpath))
+
+    # Hashes for image folders
     @staticmethod
     def _get_image_hashes(image_list):
         """ Return the hashes for all images used for training.
@@ -1089,31 +1153,30 @@ class TrainingAlignments():
         Returns
         -------
         dict
-            For keys "a" and "b" the values are a ``dict`` containing keys "hashes" and "filenames"
-            with their values being a list of hashes and filenames that exist within the training
-            data folder
+            For keys "a" and "b" the values are a ``dict`` with the key being the sha1 hash and
+            the value being a list of filenames that correspond to the hash for images that exist
+            within the training data folder
         """
-        hashes = {key: dict(hashes=[], filenames=[]) for key in image_list}
-        pbar = tqdm(desc="Reading training images",
-                    total=sum(len(val) for val in image_list.values()))
+        hashes = {key: dict() for key in image_list}
         for side, filelist in image_list.items():
             logger.debug("side: %s, file count: %s", side, len(filelist))
-            for filename, hsh in read_image_hash_batch(filelist):
-                hashes[side]["hashes"].append(hsh)
-                hashes[side]["filenames"].append(filename)
-                pbar.update(1)
-        pbar.close()
+            for filename, hsh in tqdm(read_image_hash_batch(filelist),
+                                      desc="Reading training images ({})".format(side.upper()),
+                                      total=len(filelist),
+                                      leave=False):
+                hashes[side].setdefault(hsh, list()).append(filename)
         logger.trace(hashes)
         return hashes
 
+    # Hashes for Detected Faces
     def _load_alignments(self):
         """ Load the alignments and convert to :class:`lib.faces_detect.DetectedFace` objects.
 
         Returns
         -------
         dict
-            For keys "a" and "b" values are a list of :class:`lib.faces_detect.DetectedFace`
-            objects.
+            For keys "a" and "b" values are a dict with the key being the sha1 hash of the face
+            and the value being the corresponding :class:`lib.faces_detect.DetectedFace` object.
         """
         logger.debug("Loading alignments")
         retval = dict()
@@ -1139,22 +1202,27 @@ class TrainingAlignments():
 
         Returns
         -------
-        list
-            List of :class:`lib.faces_detect.DetectedFace` objects
+        dict
+            key is sha1 hash of face, value is the corresponding
+            :class:`lib.faces_detect.DetectedFace` object
         """
         skip_count = 0
-        side_hashes = set(self._hashes[side]["hashes"])
-        detected_faces = []
+        dupe_count = 0
+        side_hashes = set(self._hashes[side])
+        detected_faces = dict()
         for _, faces, _, filename in alignments.yield_faces():
             for idx, face in enumerate(faces):
+                if face["hash"] in detected_faces:
+                    dupe_count += 1
+                    logger.debug("Face already exists, skipping: '%s'", filename)
                 if not self._validate_face(face, filename, idx, side, side_hashes):
                     skip_count += 1
                     continue
                 detected_face = DetectedFace()
                 detected_face.from_alignment(face)
-                detected_faces.append(detected_face)
-        logger.debug("Detected Faces count: %s, Skipped faces count: %s",
-                     len(detected_faces), skip_count)
+                detected_faces[face["hash"]] = detected_face
+        logger.debug("Detected Faces count: %s, Skipped faces count: %s, duplicate faces "
+                     "count: %s", len(detected_faces), skip_count, dupe_count)
         if skip_count != 0:
             logger.warning("%s alignments have been removed as their corresponding faces do not "
                            "exist in the input folder for side %s. Run in verbose mode if you "
@@ -1162,6 +1230,7 @@ class TrainingAlignments():
                            skip_count, side.upper())
         return detected_faces
 
+    # Validation
     def _validate_face(self, face, filename, idx, side, side_hashes):
         """ Validate that the currently processing face has a corresponding hash entry and the
         requested mask exists
@@ -1227,11 +1296,12 @@ class TrainingAlignments():
         logger.debug("Checking faces exist in alignments")
         missing_alignments = dict()
         for side, train_hashes in self._hashes.items():
-            align_hashes = set(face.hash for face in self._detected_faces[side])
-            if not align_hashes.issuperset(train_hashes["hashes"]):
+            align_hashes = set(self._detected_faces[side])
+            if not align_hashes.issuperset(set(train_hashes)):
                 missing_alignments[side] = [
                     os.path.basename(filename)
-                    for hsh, filename in zip(train_hashes["hashes"], train_hashes["filenames"])
+                    for hsh, filenames in train_hashes.items()
+                    for filename in filenames
                     if hsh not in align_hashes]
         if missing_alignments:
             msg = ("There are faces in your training folder(s) which do not exist in your "
@@ -1242,55 +1312,7 @@ class TrainingAlignments():
                              side.capitalize(), filelist)
             raise FaceswapError(msg)
 
-    # Get landmarks
-    def _transform_landmarks(self, side, detected_faces):
-        """ Transform frame landmarks to their aligned face variant.
-
-        Parameters
-        ----------
-        side: {"a" or "b"}
-            The side currently being processed
-        detected_faces: list
-            A list of :class:`lib.faces_detect.DetectedFace` objects
-
-        Returns
-        -------
-        dict
-            The face filenames as keys with the aligned landmarks as value.
-        """
-        landmarks = dict()
-        for face in detected_faces:
-            face.load_aligned(None, size=self._training_opts["training_size"])
-            for filename in self._hash_to_filenames(side, face.hash):
-                landmarks[filename] = face.aligned_landmarks
-        return landmarks
-
-    # Get masks
-    def _get_masks(self, side, detected_faces):
-        """ For each face, obtain the mask and set the requested blurring and threshold level.
-
-        Parameters
-        ----------
-        side: {"a" or "b"}
-            The side currently being processed
-        detected_faces: list
-            A list of :class:`lib.faces_detect.DetectedFace` objects
-
-        Returns
-        -------
-        dict
-            The face filenames as keys with the :class:`lib.faces_detect.Mask` as value.
-        """
-
-        masks = dict()
-        for face in detected_faces:
-            mask = face.mask[self._training_opts["mask_type"]]
-            mask.set_blur_kernel_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
-                                               threshold=self._training_opts["mask_threshold"])
-            for filename in self._hash_to_filenames(side, face.hash):
-                masks[filename] = mask
-        return masks
-
+    # Utils
     def _hash_to_filenames(self, side, face_hash):
         """ For a given hash return all the filenames that match for the given side.
 
@@ -1311,9 +1333,7 @@ class TrainingAlignments():
         list
             The filenames that exist for the given hash
         """
-        side_hashes = self._hashes[side]
-        hash_indices = [idx for idx, hsh in enumerate(side_hashes["hashes"]) if hsh == face_hash]
-        retval = [side_hashes["filenames"][idx] for idx in hash_indices]
+        retval = self._hashes[side][face_hash]
         logger.trace("side: %s, hash: %s, filenames: %s", side, face_hash, retval)
         return retval
 

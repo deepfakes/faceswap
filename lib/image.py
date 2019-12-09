@@ -177,8 +177,6 @@ def read_image_hash_batch(filenames):
     ----------
     filenames: list
         A list of ``str`` full paths to the images to be loaded.
-    show_progress: bool, optional
-        Display a progress bar. Default: False
 
     Yields
     -------
@@ -192,8 +190,10 @@ def read_image_hash_batch(filenames):
     logger.trace("Requested batch: '%s'", filenames)
     executor = futures.ThreadPoolExecutor()
     with executor:
+        logger.debug("Submitting %s items to executor", len(filenames))
         read_hashes = {executor.submit(read_image_hash, filename): filename
                        for filename in filenames}
+        logger.debug("Succesfully submitted %s items to executor", len(filenames))
         for future in futures.as_completed(read_hashes):
             retval = (read_hashes[future], future.result())
             logger.trace("Yielding: %s", retval)
