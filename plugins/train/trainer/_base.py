@@ -1290,8 +1290,9 @@ class TrainingAlignments():
         """
 
         masks = dict()
-        #for face in tqdm(detected_faces, desc="Loading masks in side %s" % side.title()):
-        for face in tqdm(detected_faces, desc="Loading masks"):
+        for face in tqdm(detected_faces,
+                         desc="Loading masks in side %s" % side.title(),
+                         mininterval=1):
             mask = face.mask[self._training_opts["mask_type"]]
             mask.set_blur_kernel_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
                                                threshold=self._training_opts["mask_threshold"])
