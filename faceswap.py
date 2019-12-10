@@ -3,6 +3,7 @@
 import sys
 
 import lib.cli as cli
+from lib.config import generate_configs
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.6")
@@ -13,10 +14,11 @@ if sys.version_info[0] == 3 and sys.version_info[1] < 6:
 def bad_args(args):
     """ Print help on bad arguments """
     PARSER.print_help()
-    exit(0)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
+    generate_configs()
     PARSER = cli.FullHelpArgumentParser()
     SUBPARSER = PARSER.add_subparsers()
     EXTRACT = cli.ExtractArgs(SUBPARSER,
