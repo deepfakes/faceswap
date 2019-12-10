@@ -68,11 +68,10 @@ class FaceswapFormatter(logging.Formatter):
     @staticmethod
     def rewrite_tf_deprecation(record):
         """ Change TF deprecation messages from WARNING to DEBUG """
-        if record.levelno != 30 or not ("tf." in record.message and
-                                        "deprecated" in record.message):
-            return record
-        record.levelno = 10
-        record.levelname = "DEBUG"
+        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
+                                     record.module == "deprecation"):
+            record.levelno = 10
+            record.levelname = "DEBUG"
         return record
 
 

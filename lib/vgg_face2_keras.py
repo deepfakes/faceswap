@@ -79,10 +79,9 @@ class VGGFace2():
                 logger.info("Switching to tensorflow backend.")
                 os.environ["KERAS_BACKEND"] = "tensorflow"
         import keras
-        import tensorflow as tf
         from lib.model.layers import L2_normalize
         if backend == "CPU":
-            with tf.device("/cpu:0"):
+            with keras.backend.tf.device("/cpu:0"):
                 return keras.models.load_model(model, {
                     "L2_normalize":  L2_normalize
                 })
