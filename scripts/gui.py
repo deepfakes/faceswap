@@ -9,7 +9,6 @@ from tkinter import messagebox, ttk
 from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, Session, DisplayNotebook,
                      get_images, initialize_images, initialize_config, LastSession,
                      MainMenuBar, ProcessWrapper, StatusBar)
-from lib.utils import set_system_verbosity
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -208,7 +207,6 @@ class FaceswapGui(tk.Tk):
 class Gui():  # pylint: disable=too-few-public-methods
     """ The GUI process. """
     def __init__(self, arguments):
-        set_system_verbosity(arguments.loglevel)
         self.root = FaceswapGui(arguments.debug)
 
     def process(self):

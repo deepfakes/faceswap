@@ -34,7 +34,6 @@ class Convert():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
         self.args = arguments
-        Utils.set_verbosity(self.args.loglevel)
 
         self.patch_threads = None
         self.images = Images(self.args)

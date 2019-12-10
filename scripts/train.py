@@ -15,7 +15,7 @@ from keras.backend.tensorflow_backend import set_session
 from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, get_image_paths, set_system_verbosity, deprecation_warning
+from lib.utils import get_folder, get_image_paths, deprecation_warning
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -151,7 +151,6 @@ class Train():
             deprecation_warning("`-nac`, ``--no-augment-color``",
                                 additional_info="This option will be available within training "
                                                 "config settings (/config/train.ini).")
-        set_system_verbosity(self._args.loglevel)
         thread = self._start_thread()
         # from lib.queue_manager import queue_manager; queue_manager.debug_monitor(1)
 

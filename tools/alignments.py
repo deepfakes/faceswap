@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments seralized file """
 import logging
-
-from lib.utils import set_system_verbosity
 from .lib_alignments import (AlignmentData, Check, Dfl, Draw, # noqa pylint: disable=unused-import
                              Extract, Fix, Manual, Merge, Rename,
                              RemoveAlignments, Sort, Spatial, UpdateHashes)
@@ -15,7 +13,6 @@ class Alignments():
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         self.args = arguments
-        set_system_verbosity(self.args.loglevel)
         self.alignments = self.load_alignments()
         logger.debug("Initialized %s", self.__class__.__name__)
 

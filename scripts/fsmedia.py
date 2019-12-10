@@ -15,7 +15,7 @@ import imageio
 from lib.alignments import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
 from lib.image import count_frames, read_image
-from lib.utils import (camel_case_split, get_image_paths, set_system_verbosity, _video_extensions)
+from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -23,11 +23,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class Utils():
     """ Holds utility functions that are required by more than one media
         object """
-
-    @staticmethod
-    def set_verbosity(loglevel):
-        """ Set the system output verbosity """
-        set_system_verbosity(loglevel)
 
     @staticmethod
     def finalize(images_found, num_faces_detected, verify_output):
