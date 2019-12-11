@@ -214,7 +214,7 @@ class Mask():
                     detected_faces.append(detected_face)
                     self._update_count += 1
             if self._update_type != "output":
-                queue.put(ExtractMedia(filename, image, detected_faces=[detected_face]))
+                queue.put(ExtractMedia(filename, image, detected_faces=detected_faces))
         if self._update_type != "output":
             queue.put("EOF")
 
