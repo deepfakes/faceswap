@@ -121,12 +121,12 @@ class Train():
             image_dir = getattr(self._args, "input_{}".format(side))
             if not os.path.isdir(image_dir):
                 logger.error("Error: '%s' does not exist", image_dir)
-                exit(1)
+                sys.exit(1)
 
             images[side] = get_image_paths(image_dir)
             if not images[side]:
                 logger.error("Error: '%s' contains no images", image_dir)
-                exit(1)
+                sys.exit(1)
 
         logger.info("Model A Directory: %s", self._args.input_a)
         logger.info("Model B Directory: %s", self._args.input_b)
@@ -219,7 +219,7 @@ class Train():
                 trainer.clear_tensorboard()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
-            exit(0)
+            sys.exit(0)
         except Exception as err:
             raise err
 
@@ -300,7 +300,7 @@ class Train():
             save_iteration = iteration % self._args.save_interval == 0
             viewer = display_func if save_iteration or self._save_now else None
             timelapse = self._timelapse if save_iteration else None
-            trainer.train_one_step(viewer, timelapse)
+            trainer.train_one_step(viewer, timelapse, self._args.colab)
             if self._stop:
                 logger.debug("Stop received. Terminating")
                 break
@@ -335,8 +335,8 @@ class Train():
         if is_preview:
             logger.info("  Using live preview")
         logger.info("  Press '%s' to save and quit",
-                    "Terminate" if self._args.redirect_gui else "ENTER")
-        if not self._args.redirect_gui:
+                    "Stop" if self._args.redirect_gui or self._args.colab else "ENTER")
+        if not self._args.redirect_gui and not self._args.colab:
             logger.info("  Press 'S' to save model weights immediately")
         logger.info("===================================================")
 
