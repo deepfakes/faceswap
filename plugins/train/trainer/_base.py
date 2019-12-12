@@ -231,7 +231,7 @@ class TrainerBase():
         logger.debug(kwargs)
         return kwargs
 
-    def __print_loss(self, loss, is_colab):
+    def __print_loss(self, loss):
         """ Outputs the loss for the current iteration to the console.
 
         Parameters
@@ -240,21 +240,15 @@ class TrainerBase():
             The loss for each side. The dictionary should contain 2 keys ("a" and "b") with the
             values being a list of loss values for the current iteration corresponding to
             each side.
-        is_colab: bool
-            ``True`` if FaceSwap is executing in a Google Colab session, otherwise ``False``
          """
         logger.trace(loss)
         output = ["Loss {}: {:.5f}".format(side.capitalize(), loss[side][0])
                   for side in sorted(loss.keys())]
         output = ", ".join(output)
         output = "[{}] [#{:05d}] {}".format(self._timestamp, self._model.iterations, output)
-        if not is_colab:
-            print(output, end='\r')
-        else:
-            # Colab doesn't output unless we spam it into the log
-            logger.info(output)
+        print("\r{}".format(output), end="")
 
-    def train_one_step(self, viewer, timelapse_kwargs, is_colab):
+    def train_one_step(self, viewer, timelapse_kwargs):
         """ Running training on a batch of images for each side.
 
         Triggered from the training cycle in :class:`scripts.train.Train`.
@@ -272,8 +266,6 @@ class TrainerBase():
             The keyword arguments for generating time-lapse previews. If a time-lapse preview is
             not required then this should be ``None``. Otherwise all values should be full paths
             the keys being `input_a`, `input_b`, `output`.
-        is_colab: bool
-            ``True`` if FaceSwap is executing in a Google Colab session, otherwise ``False``
         """
         logger.trace("Training one step: (iteration: %s)", self._model.iterations)
         do_preview = viewer is not None
@@ -304,11 +296,11 @@ class TrainerBase():
                 self._log_tensorboard(side, side_loss)
 
             if not self._pingpong.active:
-                self.__print_loss(loss, is_colab)
+                self.__print_loss(loss)
             else:
                 for key, val in loss.items():
                     self._pingpong.loss[key] = val
-                self.__print_loss(self._pingpong.loss, is_colab)
+                self.__print_loss(self._pingpong.loss)
 
             if do_preview:
                 samples = self._samples.show_sample()

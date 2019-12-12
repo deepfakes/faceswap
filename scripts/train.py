@@ -300,7 +300,7 @@ class Train():
             save_iteration = iteration % self._args.save_interval == 0
             viewer = display_func if save_iteration or self._save_now else None
             timelapse = self._timelapse if save_iteration else None
-            trainer.train_one_step(viewer, timelapse, self._args.colab)
+            trainer.train_one_step(viewer, timelapse)
             if self._stop:
                 logger.debug("Stop received. Terminating")
                 break

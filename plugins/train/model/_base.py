@@ -464,6 +464,8 @@ class ModelBase():
     def save_models(self):
         """ Backup and save the models """
         logger.debug("Backing up and saving models")
+        # Insert a new line to avoid spamming the same row as loss output
+        print("")
         save_averages = self.get_save_averages()
         backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
         if backup_func:
