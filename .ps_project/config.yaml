@@ -8,7 +8,7 @@ type: "single" #[single|multi-grpc|multi-mpi]
 ports: "5000" #[optional, default:5000]
 
 paths: #[optional]
-  workdir: "/home/playgroung"
+  workdir: "/home/playgroung2"
   artifacts: "/artifacts"
 model: #[optional, but required for model parsing and model deployments]
   type: "Tensorflow" #[required for model, one of: Tensorflow|ONNX|Custom]
