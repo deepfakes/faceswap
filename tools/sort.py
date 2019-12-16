@@ -17,7 +17,7 @@ from tqdm import tqdm
 from lib.cli import FullHelpArgumentParser
 from lib.serializer import get_serializer_from_filename
 from lib.faces_detect import DetectedFace
-from lib.image import read_image
+from lib.image import ImagesLoader, read_image
 from lib.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
@@ -34,6 +34,8 @@ class Sort():
         self.changes = None
         self.serializer = None
         self.vgg_face = None
+        # TODO set this as ImagesLoader in init. Need to move all processes to use it
+        self._loader = None
 
     def process(self):
         """ Main processing function of the sort tool """
@@ -167,15 +169,22 @@ class Sort():
     def sort_face(self):
         """ Sort by identity similarity """
         logger.info("Sorting by identity similarity...")
-        filename_list, image_list = self._get_images()
 
-        logger.info("Calculating face identifiers...")
-        preds = np.array([self.vgg_face.predict(img)
-                          for img in tqdm(image_list, desc="Calculating...", file=sys.stdout)])
+        # TODO This should be set in init
+        self._loader = ImagesLoader(self.args.input_dir)
+
+        filenames = []
+        preds = np.empty((self._loader.count, 512), dtype="float32")
+        for idx, (filename, image) in enumerate(tqdm(self._loader.load(),
+                                                     desc="Classifying Faces...",
+                                                     total=self._loader.count)):
+            filenames.append(filename)
+            preds[idx] = self.vgg_face.predict(image)
 
         logger.info("Sorting by ward linkage...")
+
         indices = self.vgg_face.sorted_similarity(preds, method="ward")
-        img_list = np.array(filename_list)[indices]
+        img_list = np.array(filenames)[indices]
         return img_list
 
     def sort_face_cnn(self):
@@ -736,7 +745,7 @@ class Sort():
 def bad_args(args):  # pylint: disable=unused-argument
     """ Print help on bad arguments """
     PARSER.print_help()
-    exit(0)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

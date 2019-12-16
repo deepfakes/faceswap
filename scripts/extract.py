@@ -191,6 +191,7 @@ class Extract():
         size = self._args.size if hasattr(self._args, "size") else 256
         saver = ImagesSaver(self._output_dir, as_bytes=True)
         exception = False
+        phase_desc = "Extraction"
 
         for phase in range(self._extractor.passes):
             if exception:
@@ -199,9 +200,11 @@ class Extract():
             detected_faces = dict()
             self._extractor.launch()
             self._check_thread_error()
+            if self._args.singleprocess:
+                phase_desc = self._extractor.phase.title()
             desc = "Running pass {} of {}: {}".format(phase + 1,
                                                       self._extractor.passes,
-                                                      self._extractor.phase.title())
+                                                      phase_desc)
             status_bar = tqdm(self._extractor.detected_faces(),
                               total=self._images.process_count,
                               file=sys.stdout,
