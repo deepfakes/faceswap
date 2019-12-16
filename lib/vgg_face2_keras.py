@@ -159,7 +159,7 @@ class VGGFace2():
         predictions: numpy.ndarray
             A stacked matrix of vgg_face2 predictions of the shape (`N`, `D`) where `N` is the
             number of observations and `D` are the number of dimensions.  NB: The given
-            :attr:`predictions` will be overwritten to save memory. If you still require the 
+            :attr:`predictions` will be overwritten to save memory. If you still require the
             original values you should take a copy prior to running this method
         method: ['single','centroid','median','ward']
             The clustering method to use.
@@ -213,7 +213,7 @@ class VGGFace2():
         np_float = 24  # bytes size of a numpy float
         divider = 1024 * 1024  # bytes to MB
 
-        free_ram = psutil.virtual_memory().free / divider
+        free_ram = psutil.virtual_memory().available / divider
         linkage_required = (((item_count ** 2) * np_float) / 1.8) / divider
         vector_required = ((item_count * dims) * np_float) / divider
         logger.debug("free_ram: %sMB, linkage_required: %sMB, vector_required: %sMB",
