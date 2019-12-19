@@ -1013,8 +1013,8 @@ class State():
             * loss - If old `dssim_loss` is ``true`` set new `loss_function` to `ssim` otherwise
             set it to `mae`. Remove old `dssim_loss` item
 
-            * masks - If `penalized_mask_loss` exists but `learn_mask` does not, then add the
-            latter and set to the same value as `penalized_mask_loss`.
+            * masks - If `learn_mask` does not exist then it is set to ``True`` if `mask_type` is
+            not ``None`` otherwised it is set to ``False``.
 
             * masks type - Replace removed masks 'dfl_full' and 'facehull' with `components` mask
 
@@ -1024,7 +1024,7 @@ class State():
             ``True`` if legacy items exist and state file has been updated, otherwise ``False``
         """
         logger.debug("Checking for legacy state file update")
-        priors = ["dssim_loss", "penalized_mask_loss", "mask_type"]
+        priors = ["dssim_loss", "mask_type", "mask_type"]
         new_items = ["loss_function", "learn_mask", "mask_type"]
         updated = False
         for old, new in zip(priors, new_items):
@@ -1042,15 +1042,16 @@ class State():
                 continue
 
             # Add learn mask option and set to True if model has "penalized_mask_loss" specified
-            if old == "penalized_mask_loss" and new not in self.config:
-                self.config[new] = self.config["penalized_mask_loss"]
+            if old == "mask_type" and new == "learn_mask" and new not in self.config:
+                self.config[new] = self.config["mask_type"] is not None
                 updated = True
                 logger.info("Added new 'learn_mask' config item for this model. Value set to: %s",
                             self.config[new])
                 continue
 
             # Replace removed masks with most similar equivalent
-            if old == "mask_type" and self.config[old] in ("facehull", "dfl_full"):
+            if old == "mask_type" and new == "mask_type" and self.config[old] in ("facehull",
+                                                                                  "dfl_full"):
                 old_mask = self.config[old]
                 self.config[new] = "components"
                 updated = True
