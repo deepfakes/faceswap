@@ -4,16 +4,15 @@
 import cv2
 import numpy as np
 
-from lib.model import masks as model_masks
-from ._base import Adjustment, BlurMask, logger
+from ._base import Adjustment, logger
 
 
 class Mask(Adjustment):
     """ Return the requested mask """
-    def __init__(self, mask_type, output_size, predicted_available, **kwargs):
-        super().__init__(mask_type, output_size, predicted_available, **kwargs)
+    def __init__(self, mask_type, output_size, coverage_ratio, **kwargs):
+        super().__init__(mask_type, output_size, **kwargs)
         self.do_erode = self.config.get("erosion", 0) != 0
-        self.do_blend = self.config.get("type", None) is not None
+        self._coverage_ratio = coverage_ratio
 
     def process(self, detected_face, predicted_mask=None):
         """ Return mask and perform processing """
@@ -21,8 +20,6 @@ class Mask(Adjustment):
         raw_mask = mask.copy()
         if not self.skip and self.do_erode:
             mask = self.erode(mask)
-        if not self.skip and self.do_blend:
-            mask = self.blend(mask)
         raw_mask = np.expand_dims(raw_mask, axis=-1) if raw_mask.ndim != 3 else raw_mask
         mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
         logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
@@ -36,10 +33,44 @@ class Mask(Adjustment):
         elif self.mask_type == "predicted":
             mask = predicted_mask
         else:
-            landmarks = detected_face.reference_landmarks
-            mask = getattr(model_masks, self.mask_type)(landmarks, self.dummy, channels=1).mask
-        np.nan_to_num(mask, copy=False)
-        np.clip(mask, 0.0, 1.0, out=mask)
+            mask = detected_face.mask[self.mask_type]
+            mask.set_blur_and_threshold(blur_kernel=self.config["kernel_size"],
+                                        blur_type=self.config["type"],
+                                        blur_passes=self.config["passes"],
+                                        threshold=self.config["threshold"])
+            mask = self._crop_to_coverage(mask.mask)
+
+            mask_size = mask.shape[0]
+            face_size = self.dummy.shape[0]
+            if mask_size != face_size:
+                interp = cv2.INTER_CUBIC if mask_size < face_size else cv2.INTER_AREA
+                mask = cv2.resize(mask,
+                                  self.dummy.shape[:2],
+                                  interpolation=interp)[..., None]
+        logger.trace(mask.shape)
+        return mask
+
+    def _crop_to_coverage(self, mask):
+        """ Crap the mask to the correct dimensions based on coverage ratio.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The original mask to be cropped
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The cropped mask
+        """
+        if self._coverage_ratio == 1.0:
+            return mask
+        mask_size = mask.shape[0]
+        padding = round((mask_size * (1 - self._coverage_ratio)) / 2)
+        mask_slice = slice(padding, mask_size - padding)
+        mask = mask[mask_slice, mask_slice, :]
+        logger.trace("mask_size: %s, coverage: %s, padding: %s, final shape: %s",
+                     mask_size, self._coverage_ratio, padding, mask.shape)
         return mask
 
     # MASK MANIPULATIONS
@@ -64,12 +95,3 @@ class Mask(Adjustment):
             (kernel_size, kernel_size))
         logger.trace("erosion_kernel shape: %s", erosion_kernel.shape)
         return erosion_kernel
-
-    def blend(self, mask):
-        """ Blur mask if requested """
-        logger.trace("Blending mask")
-        mask = BlurMask(self.config["type"],
-                        mask,
-                        self.config["radius"],
-                        self.config["passes"]).blurred
-        return mask

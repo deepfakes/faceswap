@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Converter():
     """ Swap a source face with a target """
-    def __init__(self, output_dir, output_size, output_has_mask,
-                 draw_transparent, pre_encode, arguments, configfile=None):
-        logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  output_has_mask: %s, "
+    def __init__(self, output_dir, output_size, coverage_ratio, draw_transparent, pre_encode,
+                 arguments, configfile=None):
+        logger.debug("Initializing %s: (output_dir: '%s', output_size: %s,  coverage_ratio: %s, "
                      "draw_transparent: %s, pre_encode: %s, arguments: %s, configfile: %s)",
-                     self.__class__.__name__, output_dir, output_size, output_has_mask,
+                     self.__class__.__name__, output_dir, output_size, coverage_ratio,
                      draw_transparent, pre_encode, arguments, configfile)
         self.output_dir = output_dir
         self.draw_transparent = draw_transparent
         self.writer_pre_encode = pre_encode
         self.scale = arguments.output_scale / 100
+        self._coverage_ratio = coverage_ratio
         self.output_size = output_size
-        self.output_has_mask = output_has_mask
         self.args = arguments
         self.configfile = configfile
         self.adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
@@ -56,7 +56,7 @@ class Converter():
             "mask_blend",
             disable_logging=disable_logging)(self.args.mask_type,
                                              self.output_size,
-                                             self.output_has_mask,
+                                             self._coverage_ratio,
                                              configfile=self.configfile,
                                              config=config)
 
@@ -183,7 +183,6 @@ class Converter():
         else:
             logger.trace("Adding mask to alpha channel")
             new_face = np.concatenate((new_face, mask), -1)
-        np.clip(new_face, 0.0, 1.0, out=new_face)
         logger.trace("Got mask. Image shape: %s", new_face.shape)
         return new_face, raw_mask
 

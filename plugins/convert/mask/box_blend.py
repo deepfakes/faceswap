@@ -3,7 +3,8 @@
 
 import numpy as np
 
-from ._base import Adjustment, BlurMask, logger
+from lib.faces_detect import BlurMask
+from ._base import Adjustment, logger
 
 
 class Mask(Adjustment):
@@ -13,8 +14,8 @@ class Mask(Adjustment):
         For actions that occur identically for each frame (e.g. blend_box), constants can
         be placed into self.func_constants to be compiled at launch, then referenced for
         each face. """
-    def __init__(self, mask_type, output_size, predicted_available=False, **kwargs):
-        super().__init__(mask_type, output_size, predicted_available, **kwargs)
+    def __init__(self, mask_type, output_size, **kwargs):
+        super().__init__(mask_type, output_size, **kwargs)
         self.mask = self.get_mask() if not self.skip else None
 
     def get_mask(self):
@@ -31,7 +32,8 @@ class Mask(Adjustment):
         mask = BlurMask(self.config["type"],
                         mask,
                         self.config["radius"],
-                        self.config["passes"]).blurred
+                        is_ratio=True,
+                        passes=self.config["passes"]).blurred
         logger.debug("Built box mask. Shape: %s", mask.shape)
         return mask
 
@@ -42,7 +44,6 @@ class Mask(Adjustment):
             return new_face
 
         logger.trace("Blending box")
-        mask = np.expand_dims(self.mask, axis=-1)
-        new_face = np.clip(np.concatenate((new_face, mask), axis=-1), 0.0, 1.0)
+        new_face = np.concatenate((new_face, self.mask), axis=-1)
         logger.trace("Blended box")
         return new_face

@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" The script to run the convert process of faceswap """
+""" Main entry point to the convert process of FaceSwap """
 
 import logging
 import re
@@ -30,25 +30,42 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Convert():
-    """ The convert process. """
+    """ The Faceswap Face Conversion Process.
+
+    The conversion process is responsible for swapping the faces on source frames with the output
+    from a trained model.
+
+    It leverages a series of user selected post-processing plugins, executed from
+    :class:`lib.convert.Converter`.
+
+    The convert process is self contained and should not be referenced by any other scripts, so it
+    contains no public properties.
+
+    Parameters
+    ----------
+    arguments: argparse.Namespace
+        The arguments to be passed to the extraction process as generated from Faceswap's command
+        line arguments
+    """
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
-        self.args = arguments
+        self._args = arguments
 
         self.patch_threads = None
-        self.images = Images(self.args)
-        self.validate()
-        self.alignments = Alignments(self.args, False, self.images.is_video)
-        self.opts = OptionalActions(self.args, self.images.input_images, self.alignments)
+        self.images = Images(self._args)
+        self._alignments = Alignments(self._args, False, self.images.is_video)
+
+        self.opts = OptionalActions(self._args, self.images.input_images, self._alignments)
 
         self.add_queues()
-        self.disk_io = DiskIO(self.alignments, self.images, arguments)
+        self.disk_io = DiskIO(self._alignments, self.images, arguments)
         self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
+        self._validate()
 
-        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
-        self.converter = Converter(get_folder(self.args.output_dir),
+        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
+        self.converter = Converter(get_folder(self._args.output_dir),
                                    self.predictor.output_size,
-                                   self.predictor.has_predicted_mask,
+                                   self.predictor.coverage_ratio,
                                    self.disk_io.draw_transparent,
                                    self.disk_io.pre_encode,
                                    arguments,
@@ -59,7 +76,7 @@ class Convert():
     @property
     def queue_size(self):
         """ Set 16 for single process otherwise 32 """
-        if self.args.singleprocess:
+        if self._args.singleprocess:
             retval = 16
         else:
             retval = 32
@@ -69,26 +86,59 @@ class Convert():
     @property
     def pool_processes(self):
         """ return the maximum number of pooled processes to use """
-        if self.args.singleprocess:
+        if self._args.singleprocess:
             retval = 1
-        elif self.args.jobs > 0:
-            retval = min(self.args.jobs, total_cpus(), self.images.images_found)
+        elif self._args.jobs > 0:
+            retval = min(self._args.jobs, total_cpus(), self.images.images_found)
         else:
             retval = min(total_cpus(), self.images.images_found)
         retval = 1 if retval == 0 else retval
         logger.debug(retval)
         return retval
 
-    def validate(self):
-        """ Make the output folder if it doesn't exist and check that video flag is
-            a valid choice """
-        if (self.args.writer == "ffmpeg" and
+    def _validate(self):
+        """ Validate the Command Line Options.
+
+        Ensure that selections are valid and won't result in an error. Checks:
+
+        * If frames have been passed in with video output, ensure user supplies reference video.
+        * If a mask-type is selected, ensure it exists in the alignments file.
+        * If a predicted mask-type is selected, ensure model has been trained with a mask
+          otherwise attempt to select first available masks, otherwise raise error.
+
+        Raises
+        ------
+        FaceswapError
+            If an invalid selection has been found.
+
+        """
+        if (self._args.writer == "ffmpeg" and
                 not self.images.is_video and
-                self.args.reference_video is None):
+                self._args.reference_video is None):
             raise FaceswapError("Output as video selected, but using frames as input. You must "
                                 "provide a reference video ('-ref', '--reference-video').")
-        output_dir = get_folder(self.args.output_dir)
-        logger.info("Output Directory: %s", output_dir)
+        if (self._args.mask_type not in ("none", "predicted") and
+                not self._alignments.mask_is_valid(self._args.mask_type)):
+            msg = ("You have selected the Mask Type `{}` but at least one face does not have this "
+                   "mask stored in the Alignments File.\nYou should generate the required masks "
+                   "with the Mask Tool or set the Mask Type option to an existing Mask Type.\nA "
+                   "summary of existing masks is as follows:\nTotal faces: {}, Masks: "
+                   "{}".format(self._args.mask_type, self._alignments.faces_count,
+                               self._alignments.mask_summary))
+            raise FaceswapError(msg)
+        if self._args.mask_type == "predicted" and not self.predictor.has_predicted_mask:
+            available_masks = [k for k, v in self._alignments.mask_summary.items()
+                               if k != "none" and v == self._alignments.faces_count]
+            if not available_masks:
+                msg = ("Predicted Mask selected, but the model was not trained with a mask and no "
+                       "masks are stored in the Alignments File.\nYou should generate the "
+                       "required masks with the Mask Tool or set the Mask Type to `none`.")
+                raise FaceswapError(msg)
+            else:
+                mask_type = available_masks[0]
+                logger.warning("Predicted Mask selected, but the model was not trained with a "
+                               "mask. Selecting first available mask: '%s'", mask_type)
+                self._args.mask_type = mask_type
 
     def add_queues(self):
         """ Add the queues for convert """
@@ -157,9 +207,9 @@ class DiskIO():
     def __init__(self, alignments, images, arguments):
         logger.debug("Initializing %s: (alignments: %s, images: %s, arguments: %s)",
                      self.__class__.__name__, alignments, images, arguments)
-        self.alignments = alignments
+        self._alignments = alignments
         self.images = images
-        self.args = arguments
+        self._args = arguments
         self.pre_process = PostProcess(arguments)
         self.completion_event = Event()
 
@@ -196,7 +246,7 @@ class DiskIO():
     @property
     def total_count(self):
         """ Return the total number of frames to be converted """
-        if self.frame_ranges and not self.args.keep_unchanged:
+        if self.frame_ranges and not self._args.keep_unchanged:
             retval = sum([fr[1] - fr[0] + 1 for fr in self.frame_ranges])
         else:
             retval = self.images.images_found
@@ -206,21 +256,22 @@ class DiskIO():
     # Initialization
     def get_writer(self):
         """ Return the writer plugin """
-        args = [self.args.output_dir]
-        if self.args.writer in ("ffmpeg", "gif"):
+        args = [self._args.output_dir]
+        if self._args.writer in ("ffmpeg", "gif"):
             args.extend([self.total_count, self.frame_ranges])
-        if self.args.writer == "ffmpeg":
+        if self._args.writer == "ffmpeg":
             if self.images.is_video:
-                args.append(self.args.input_dir)
+                args.append(self._args.input_dir)
             else:
-                args.append(self.args.reference_video)
+                args.append(self._args.reference_video)
         logger.debug("Writer args: %s", args)
-        configfile = self.args.configfile if hasattr(self.args, "configfile") else None
-        return PluginLoader.get_converter("writer", self.args.writer)(*args, configfile=configfile)
+        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
+        return PluginLoader.get_converter("writer", self._args.writer)(*args,
+                                                                       configfile=configfile)
 
     def get_frame_ranges(self):
         """ split out the frame ranges and parse out 'min' and 'max' values """
-        if not self.args.frame_ranges:
+        if not self._args.frame_ranges:
             logger.debug("No frame range set")
             return None
 
@@ -239,7 +290,7 @@ class DiskIO():
                                 "from filenames")
 
         retval = list()
-        for rng in self.args.frame_ranges:
+        for rng in self._args.frame_ranges:
             if "-" not in rng:
                 raise FaceswapError("Frame Ranges not specified in the correct format")
             start, end = rng.split("-")
@@ -249,7 +300,7 @@ class DiskIO():
 
     def load_extractor(self):
         """ Set on the fly extraction """
-        if self.alignments.have_alignments_file:
+        if self._alignments.have_alignments_file:
             return None
 
         logger.debug("Loading extractor")
@@ -314,9 +365,9 @@ class DiskIO():
                 logger.warning("Unable to open image. Skipping: '%s'", filename)
                 continue
             if self.check_skipframe(filename):
-                if self.args.keep_unchanged:
+                if self._args.keep_unchanged:
                     logger.trace("Saving unchanged frame: %s", filename)
-                    out_file = os.path.join(self.args.output_dir, os.path.basename(filename))
+                    out_file = os.path.join(self._args.output_dir, os.path.basename(filename))
                     self.save_queue.put((out_file, image))
                 else:
                     logger.trace("Discarding frame: '%s'", filename)
@@ -360,7 +411,7 @@ class DiskIO():
         if not self.check_alignments(frame):
             return list()
 
-        faces = self.alignments.get_faces_in_frame(frame)
+        faces = self._alignments.get_faces_in_frame(frame)
         detected_faces = list()
 
         for rawface in faces:
@@ -371,7 +422,7 @@ class DiskIO():
 
     def check_alignments(self, frame):
         """ If we have no alignments for this image, skip it """
-        have_alignments = self.alignments.frame_exists(frame)
+        have_alignments = self._alignments.frame_exists(frame)
         if not have_alignments:
             tqdm.write("No alignment found for {}, "
                        "skipping".format(frame))
@@ -389,7 +440,7 @@ class DiskIO():
     def save(self, completion_event):
         """ Save the converted images """
         logger.debug("Save Images: Start")
-        write_preview = self.args.redirect_gui and self.writer.is_stream
+        write_preview = self._args.redirect_gui and self.writer.is_stream
         preview_image = os.path.join(self.writer.output_folder, ".gui_preview.jpg")
         logger.debug("Write preview for gui: %s", write_preview)
         for idx in tqdm(range(self.total_count), desc="Converting", file=sys.stdout):
@@ -417,7 +468,7 @@ class Predict():
         logger.debug("Initializing %s: (args: %s, queue_size: %s, in_queue: %s)",
                      self.__class__.__name__, arguments, queue_size, in_queue)
         self.batchsize = self.get_batchsize(queue_size)
-        self.args = arguments
+        self._args = arguments
         self.in_queue = in_queue
         self.out_queue = queue_manager.get_queue("patch")
         self.serializer = get_serializer("json")
@@ -430,7 +481,7 @@ class Predict():
         self.model = self.load_model()
         self.output_indices = {"face": self.model.largest_face_index,
                                "mask": self.model.largest_mask_index}
-        self.predictor = self.model.converter(self.args.swap_model)
+        self.predictor = self.model.converter(self._args.swap_model)
         self.queues = dict()
 
         self.thread = MultiThread(self.predict_faces, thread_count=1)
@@ -489,20 +540,20 @@ class Predict():
     def load_model(self):
         """ Load the model requested for conversion """
         logger.debug("Loading Model")
-        model_dir = get_folder(self.args.model_dir, make_folder=False)
+        model_dir = get_folder(self._args.model_dir, make_folder=False)
         if not model_dir:
-            raise FaceswapError("{} does not exist.".format(self.args.model_dir))
+            raise FaceswapError("{} does not exist.".format(self._args.model_dir))
         trainer = self.get_trainer(model_dir)
-        gpus = 1 if not hasattr(self.args, "gpus") else self.args.gpus
+        gpus = 1 if not hasattr(self._args, "gpus") else self._args.gpus
         model = PluginLoader.get_model(trainer)(model_dir, gpus, predict=True)
         logger.debug("Loaded Model")
         return model
 
     def get_trainer(self, model_dir):
         """ Return the trainer name if provided, or read from state file """
-        if hasattr(self.args, "trainer") and self.args.trainer:
-            logger.debug("Trainer name provided: '%s'", self.args.trainer)
-            return self.args.trainer
+        if hasattr(self._args, "trainer") and self._args.trainer:
+            logger.debug("Trainer name provided: '%s'", self._args.trainer)
+            return self._args.trainer
 
         statefile = [fname for fname in os.listdir(str(model_dir))
                      if fname.endswith("_state.json")]
@@ -664,9 +715,9 @@ class OptionalActions():
 
     def __init__(self, args, input_images, alignments):
         logger.debug("Initializing %s", self.__class__.__name__)
-        self.args = args
+        self._args = args
         self.input_images = input_images
-        self.alignments = alignments
+        self._alignments = alignments
 
         self.remove_skipped_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -679,16 +730,16 @@ class OptionalActions():
         if not face_hashes:
             logger.debug("No face hashes. Not skipping any faces")
             return
-        pre_face_count = self.alignments.faces_count
-        self.alignments.filter_hashes(face_hashes, filter_out=False)
-        logger.info("Faces filtered out: %s", pre_face_count - self.alignments.faces_count)
+        pre_face_count = self._alignments.faces_count
+        self._alignments.filter_hashes(face_hashes, filter_out=False)
+        logger.info("Faces filtered out: %s", pre_face_count - self._alignments.faces_count)
 
     def get_face_hashes(self):
         """ Check for the existence of an aligned directory for identifying
             which faces in the target frames should be swapped.
             If it exists, obtain the hashes of the faces in the folder """
         face_hashes = list()
-        input_aligned_dir = self.args.input_aligned_dir
+        input_aligned_dir = self._args.input_aligned_dir
 
         if input_aligned_dir is None:
             logger.verbose("Aligned directory not specified. All faces listed in the "

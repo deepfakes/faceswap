@@ -6,7 +6,6 @@ import logging
 import cv2
 import numpy as np
 
-from lib.model import masks as model_masks
 from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -19,14 +18,13 @@ def get_config(plugin_name, configfile=None):
 
 class Adjustment():
     """ Parent class for adjustments """
-    def __init__(self, mask_type, output_size, predicted_available, configfile=None, config=None):
+    def __init__(self, mask_type, output_size, configfile=None, config=None):
         logger.debug("Initializing %s: (arguments: '%s', output_size: %s, "
-                     "predicted_available: %s, configfile: %s, config: %s)",
-                     self.__class__.__name__, mask_type, output_size, predicted_available,
-                     configfile, config)
+                     "configfile: %s, config: %s)", self.__class__.__name__, mask_type,
+                     output_size, configfile, config)
         self.config = self.set_config(configfile, config)
         logger.debug("config: %s", self.config)
-        self.mask_type = self.get_mask_type(mask_type, predicted_available)
+        self.mask_type = mask_type
         self.dummy = np.zeros((output_size, output_size, 3), dtype='float32')
 
         self.skip = self.config.get("type", None) is None
@@ -43,18 +41,6 @@ class Adjustment():
             config.section = None
         logger.debug("Config: %s", retval)
         return retval
-
-    @staticmethod
-    def get_mask_type(mask_type, predicted_available):
-        """ Return the requested mask type. Return default mask if
-            predicted requested but not available """
-        logger.debug("Requested mask_type: %s", mask_type)
-        if mask_type == "predicted" and not predicted_available:
-            mask_type = model_masks.get_default_mask()
-            logger.warning("Predicted selected, but the model was not trained with a mask. "
-                           "Switching to '%s'", mask_type)
-        logger.debug("Returning mask_type: %s", mask_type)
-        return mask_type
 
     def process(self, *args, **kwargs):
         """ Override for specific color adjustment process """

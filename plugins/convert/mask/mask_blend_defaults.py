@@ -59,15 +59,15 @@ _DEFAULTS = {
         "gui_radio": True,
         "fixed": True,
     },
-    "radius": {
-        "default": 3.0,
-        "info": "Radius dictates how much blending should occur.\nThis figure is set as a "
-                "percentage of the mask diameter to give the radius in pixels. Eg: for a mask "
-                "with diameter 200px, a percentage of 6% would give a final radius of 3px.\n"
-                "Higher percentage means more blending.",
-        "datatype": float,
+    "kernel_size": {
+        "default": 3,
+        "info": "The kernel size dictates how much blending should occur.\n"
+                "The size is the diameter of the kernel in pixels (calculated from a 128px mask). "
+                " This value should be odd, if an even number is passed in then it will be "
+                "rounded to the next odd number. Higher sizes means more blending.",
+        "datatype": int,
         "rounding": 1,
-        "min_max": (0.1, 25.0),
+        "min_max": (1, 9),
         "choices": [],
         "gui_radio": False,
         "group": "settings",
@@ -82,6 +82,18 @@ _DEFAULTS = {
         "datatype": int,
         "rounding": 1,
         "min_max": (1, 8),
+        "choices": [],
+        "gui_radio": False,
+        "group": "settings",
+        "fixed": True,
+    },
+    "threshold": {
+        "default": 4,
+        "info": "Sets pixels that are near white to white and near black to black. Set to 0 for "
+                "off.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (0, 50),
         "choices": [],
         "gui_radio": False,
         "group": "settings",
