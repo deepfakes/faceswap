@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Adjustments for the mask for faceswap.py converter """
+""" Plugin to blend the edges of the face between the swap and the original face. """
 
 import cv2
 import numpy as np
@@ -8,25 +8,68 @@ from ._base import Adjustment, logger
 
 
 class Mask(Adjustment):
-    """ Return the requested mask """
+    """ Manipulations to perform to the mask that is to be applied to the output of the Faceswap
+    model.
+
+    Parameters
+    ----------
+    mask_type: str
+        The mask type to use for this plugin
+    output_size: int
+        The size of the output from the Faceswap model.
+    coverage_ratio: float
+        The coverage ratio that the Faceswap model was trained at.
+    **kwargs: dict, optional
+        See the parent :class:`~plugins.convert.mask._base` for additional keyword arguments.
+    """
     def __init__(self, mask_type, output_size, coverage_ratio, **kwargs):
         super().__init__(mask_type, output_size, **kwargs)
-        self.do_erode = self.config.get("erosion", 0) != 0
+        self._do_erode = self.config.get("erosion", 0) != 0
         self._coverage_ratio = coverage_ratio
 
-    def process(self, detected_face, predicted_mask=None):
-        """ Return mask and perform processing """
-        mask = self.get_mask(detected_face, predicted_mask)
+    def process(self, detected_face, predicted_mask=None):  # pylint:disable=arguments-differ
+        """ Obtain the requested mask type and perform any defined mask manipulations.
+
+        Parameters
+        ----------
+        detected_face: :class:`lib.faces_detect.DetectedFace`
+            The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
+        predicted_mask: :class:`numpy.ndarray`, optional
+            The predicted mask as output from the Faceswap Model, if the model was trained
+            with a mask, otherwise ``None``. Default: ``None``.
+
+        Returns
+        -------
+        mask: :class:`numpy.ndarray`
+            The mask with all requested manipulations applied
+        raw_mask: :class:`numpy.ndarray`
+            The mask with no erosion/dilation applied
+        """
+        mask = self._get_mask(detected_face, predicted_mask)
         raw_mask = mask.copy()
-        if not self.skip and self.do_erode:
-            mask = self.erode(mask)
+        if not self.skip and self._do_erode:
+            mask = self._erode(mask)
         raw_mask = np.expand_dims(raw_mask, axis=-1) if raw_mask.ndim != 3 else raw_mask
         mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
         logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
         return mask, raw_mask
 
-    def get_mask(self, detected_face, predicted_mask):
-        """ Return the mask from lib/model/masks and intersect with box """
+    def _get_mask(self, detected_face, predicted_mask):
+        """ Return the requested mask with any requested blurring applied.
+
+        Parameters
+        ----------
+        detected_face: :class:`lib.faces_detect.DetectedFace`
+            The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
+        predicted_mask: :class:`numpy.ndarray`
+            The predicted mask as output from the Faceswap Model if the model was trained
+            with a mask, otherwise ``None``
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The mask sized to Faceswap model output with any requested blurring applied.
+        """
         if self.mask_type == "none":
             # Return a dummy mask if not using a mask
             mask = np.ones_like(self.dummy[:, :, 1])
@@ -51,7 +94,7 @@ class Mask(Adjustment):
         return mask
 
     def _crop_to_coverage(self, mask):
-        """ Crap the mask to the correct dimensions based on coverage ratio.
+        """ Crop the mask to the correct dimensions based on coverage ratio.
 
         Parameters
         ----------
@@ -74,24 +117,44 @@ class Mask(Adjustment):
         return mask
 
     # MASK MANIPULATIONS
-    def erode(self, mask):
-        """ Erode/dilate mask if requested """
-        kernel = self.get_erosion_kernel(mask)
+    def _erode(self, mask):
+        """ Erode or dilate mask the mask based on configuration options.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The mask to be eroded or dilated
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The mask with erosion/dilation applied
+        """
+        kernel = self._get_erosion_kernel(mask)
         if self.config["erosion"] > 0:
             logger.trace("Eroding mask")
-            mask = cv2.erode(mask, kernel, iterations=1)  # pylint: disable=no-member
+            mask = cv2.erode(mask, kernel, iterations=1)
         else:
             logger.trace("Dilating mask")
-            mask = cv2.dilate(mask, kernel, iterations=1)  # pylint: disable=no-member
+            mask = cv2.dilate(mask, kernel, iterations=1)
         return mask
 
-    def get_erosion_kernel(self, mask):
-        """ Get the erosion kernel """
+    def _get_erosion_kernel(self, mask):
+        """ Get the erosion kernel.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The mask to be eroded or dilated
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The erosion kernel to be used for erosion/dilation
+        """
         erosion_ratio = self.config["erosion"] / 100
         mask_radius = np.sqrt(np.sum(mask)) / 2
         kernel_size = max(1, int(abs(erosion_ratio * mask_radius)))
-        erosion_kernel = cv2.getStructuringElement(  # pylint: disable=no-member
-            cv2.MORPH_ELLIPSE,  # pylint: disable=no-member
-            (kernel_size, kernel_size))
+        erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
         logger.trace("erosion_kernel shape: %s", erosion_kernel.shape)
         return erosion_kernel

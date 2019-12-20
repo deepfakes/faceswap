@@ -46,8 +46,7 @@ class Converter():
         self.adjustments["box"] = PluginLoader.get_converter(
             "mask",
             "box_blend",
-            disable_logging=disable_logging)("none",
-                                             self.output_size,
+            disable_logging=disable_logging)(self.output_size,
                                              configfile=self.configfile,
                                              config=config)
 

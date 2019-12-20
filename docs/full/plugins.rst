@@ -9,3 +9,4 @@ Subpackages
    plugins.extract
    plugins.plugin_loader
    plugins.train
+   plugins.convert
