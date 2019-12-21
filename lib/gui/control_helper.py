@@ -602,7 +602,9 @@ class AutoFillContainer():
             if key == "class":
                 continue
             val = widget.cget(key)
-            if key in ("anchor", "justify") and val == "":
+            # Some keys default to "" but tkinter doesn't like to set config to this value
+            # so skip them to use default value.
+            if key in ("anchor", "justify", "compound") and val == "":
                 continue
             val = str(val) if isinstance(val, Tcl_Obj) else val
             # Return correct command from master command dict
