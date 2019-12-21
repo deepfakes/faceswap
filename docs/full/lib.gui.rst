@@ -1,9 +1,6 @@
 lib.gui package
 ===============
 
-Submodules
-----------
-
 .. toctree::
 
    lib.gui.custom_widgets

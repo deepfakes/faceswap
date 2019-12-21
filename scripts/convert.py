@@ -43,8 +43,8 @@ class Convert():
 
     Parameters
     ----------
-    arguments: argparse.Namespace
-        The arguments to be passed to the extraction process as generated from Faceswap's command
+    arguments: :class:`argparse.Namespace`
+        The arguments to be passed to the convert process as generated from Faceswap's command
         line arguments
     """
     def __init__(self, arguments):
@@ -61,10 +61,10 @@ class Convert():
         self.disk_io = DiskIO(self._alignments, self.images, arguments)
         self.predictor = Predict(self.disk_io.load_queue, self.queue_size, arguments)
         self._validate()
+        get_folder(self._args.output_dir)
 
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
-        self.converter = Converter(get_folder(self._args.output_dir),
-                                   self.predictor.output_size,
+        self.converter = Converter(self.predictor.output_size,
                                    self.predictor.coverage_ratio,
                                    self.disk_io.draw_transparent,
                                    self.disk_io.pre_encode,

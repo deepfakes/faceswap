@@ -1,6 +1,10 @@
 plugins package
 ===============
 
+.. toctree::
+
+   plugins.plugin_loader
+
 Subpackages
 -----------
 
