@@ -11,13 +11,13 @@ from lib.image import encode_image_with_hash, ImagesLoader, ImagesSaver
 from lib.multithreading import MultiThread
 from lib.utils import get_folder
 from plugins.extract.pipeline import Extractor, ExtractMedia
-from scripts.fsmedia import Alignments, PostProcess, Utils
+from scripts.fsmedia import Alignments, PostProcess, finalize
 
 tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Extract():
+class Extract():  # pylint:disable=too-few-public-methods
     """ The Faceswap Face Extraction Process.
 
     The extraction process is responsible for detecting faces in a series of images/video, aligning
@@ -115,9 +115,9 @@ class Extract():
         for thread in self._threads:
             thread.join()
         self._alignments.save()
-        Utils.finalize(self._images.process_count + self._existing_count,
-                       self._alignments.faces_count,
-                       self._verify_output)
+        finalize(self._images.process_count + self._existing_count,
+                 self._alignments.faces_count,
+                 self._verify_output)
 
     def _threaded_redirector(self, task, io_args=None):
         """ Redirect image input/output tasks to relevant queues in background thread

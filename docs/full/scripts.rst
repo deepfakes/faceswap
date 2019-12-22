@@ -21,3 +21,10 @@ scripts.convert module
    :members:
    :undoc-members:
    :show-inheritance:
+
+scripts.fsmedia module
+----------------------
+.. automodule:: scripts.fsmedia
+   :members:
+   :undoc-members:
+   :show-inheritance:

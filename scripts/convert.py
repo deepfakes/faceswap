@@ -14,7 +14,7 @@ import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 from tqdm import tqdm
 
-from scripts.fsmedia import Alignments, Images, PostProcess, Utils
+from scripts.fsmedia import Alignments, Images, PostProcess, finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
@@ -29,7 +29,7 @@ from plugins.plugin_loader import PluginLoader
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Convert():
+class Convert():  # pylint:disable=too-few-public-methods
     """ The Faceswap Face Conversion Process.
 
     The conversion process is responsible for swapping the faces on source frames with the output
@@ -158,9 +158,9 @@ class Convert():
             self._disk_io.save_thread.join()
             queue_manager.terminate_queues()
 
-            Utils.finalize(self._images.images_found,
-                           self._predictor.faces_count,
-                           self._predictor.verify_output)
+            finalize(self._images.images_found,
+                     self._predictor.faces_count,
+                     self._predictor.verify_output)
             logger.debug("Completed Conversion")
         except MemoryError as err:
             msg = ("Faceswap ran out of RAM running convert. Conversion is very system RAM "
@@ -1005,7 +1005,7 @@ class Predict():
         logger.trace("Queued out batch. Batchsize: %s", len(batch))
 
 
-class OptionalActions():
+class OptionalActions():  # pylint:disable=too-few-public-methods
     """ Process specific optional actions for Convert.
 
     Currently only handles skip faces. This class should probably be (re)moved.
