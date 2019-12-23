@@ -805,6 +805,7 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({
             "opts": ("-M", "--mask-type"),
             "action": Radio,
+            "dest": "mask_type",
             "type": str.lower,
             "choices": PluginLoader.get_available_extractors("mask",
                                                              add_none=True) + ["predicted"],

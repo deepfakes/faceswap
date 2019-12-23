@@ -54,6 +54,12 @@ class Converter():
         self._load_plugins()
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def cli_arguments(self):
+        """:class:`argparse.Namespace`: The command line arguments passed to the convert
+        process """
+        return self._args
+
     def reinitialize(self, config):
         """ Reinitialize this :class:`Converter`.
 

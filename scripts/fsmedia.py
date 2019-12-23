@@ -182,7 +182,7 @@ class Images():
     @property
     def images_found(self):
         """int: The number of frames that exist in the video file, or the folder of images. """
-        return self._input_images
+        return self._images_found
 
     def _count_images(self):
         """ Get the number of Frames from a video file or folder of images.

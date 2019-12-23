@@ -664,6 +664,16 @@ class Predict():
         return self._thread
 
     @property
+    def in_queue(self):
+        """ :class:`queue.Queue`: The input queue to the predictor. """
+        return self._in_queue
+
+    @property
+    def out_queue(self):
+        """ :class:`queue.Queue`: The output queue from the predictor. """
+        return self._out_queue
+
+    @property
     def faces_count(self):
         """ int: The total number of faces seen by the Predictor. """
         return self._faces_count

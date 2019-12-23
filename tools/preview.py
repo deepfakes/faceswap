@@ -22,7 +22,6 @@ from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import set_slider_rounding
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
-from lib.model.masks import get_available_masks
 from lib.multithreading import MultiThread
 from lib.utils import FaceswapError
 from lib.queue_manager import queue_manager
@@ -125,14 +124,17 @@ class Preview():
         container.add(self.image_canvas, height=400 * self.scaling)
 
         options_frame = ttk.Frame(container)
-        self.cli_frame = ActionFrame(options_frame,
-                                     self.patch.converter.args.color_adjustment.replace("-", "_"),
-                                     self.patch.converter.args.mask_type.replace("-", "_"),
-                                     self.patch.converter.args.scaling.replace("-", "_"),
-                                     self.config_tools,
-                                     self.refresh,
-                                     self.samples.generate,
-                                     self.tk_vars)
+        self.cli_frame = ActionFrame(
+            options_frame,
+            list(self.samples.alignments.mask_summary.keys()),
+            self.samples.predictor.has_predicted_mask,
+            self.patch.converter.cli_arguments.color_adjustment.replace("-", "_"),
+            self.patch.converter.cli_arguments.mask_type.replace("-", "_"),
+            self.patch.converter.cli_arguments.scaling.replace("-", "_"),
+            self.config_tools,
+            self.refresh,
+            self.samples.generate,
+            self.tk_vars)
         self.opts_book = OptionsBook(options_frame, self.config_tools, self.refresh, self.scaling)
         container.add(options_frame)
 
@@ -275,14 +277,12 @@ class Patch():
         self.converter_arguments = None  # Updated converter arguments dict
 
         configfile = arguments.configfile if hasattr(arguments, "configfile") else None
-        self.converter = Converter(output_dir=None,
-                                   output_size=self.samples.predictor.output_size,
-                                   output_has_mask=self.samples.predictor.has_predicted_mask,
+        self.converter = Converter(output_size=self.samples.predictor.output_size,
+                                   coverage_ratio=self.samples.predictor.coverage_ratio,
                                    draw_transparent=False,
                                    pre_encode=None,
-                                   configfile=configfile,
-                                   arguments=self.generate_converter_arguments(arguments))
-
+                                   arguments=self.generate_converter_arguments(arguments),
+                                   configfile=configfile)
         self.shutdown = Event()
 
         self.thread = MultiThread(self.process,
@@ -345,7 +345,7 @@ class Patch():
             return
         for key, val in self.converter_arguments.items():
             logger.debug("Updating %s to %s", key, val)
-            setattr(self.converter.args, key, val)
+            setattr(self.converter.cli_arguments, key, val)
         logger.debug("Updated Converter cli arguments")
 
     @staticmethod
@@ -671,11 +671,13 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Frame that holds the left hand side options panel """
-    def __init__(self, parent, selected_color, selected_mask_type, selected_scaling,
-                 config_tools, patch_callback, refresh_callback, tk_vars):
-        logger.debug("Initializing %s: (selected_color: %s, selected_mask_type: %s, "
-                     "selected_scaling: %s, config_tools, patch_callback: %s, "
-                     "refresh_callback: %s, tk_vars: %s)", self.__class__.__name__, selected_color,
+    def __init__(self, parent, available_masks, has_predicted_mask, selected_color,
+                 selected_mask_type, selected_scaling, config_tools, patch_callback,
+                 refresh_callback, tk_vars):
+        logger.debug("Initializing %s: (available_masks: %s, has_predicted_mask: %s, "
+                     "selected_color: %s, selected_mask_type: %s, selected_scaling: %s, "
+                     "patch_callback: %s, refresh_callback: %s, tk_vars: %s)",
+                     self.__class__.__name__, available_masks, has_predicted_mask, selected_color,
                      selected_mask_type, selected_scaling, patch_callback, refresh_callback,
                      tk_vars)
         self.config_tools = config_tools
@@ -689,7 +691,11 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         d_locals = locals()
         defaults = {opt: self.format_to_display(d_locals["selected_{}".format(opt)])
                     for opt in self.options}
-        self.busy_indicator = self.build_frame(defaults, refresh_callback, patch_callback)
+        self.busy_indicator = self.build_frame(defaults,
+                                               refresh_callback,
+                                               patch_callback,
+                                               available_masks,
+                                               has_predicted_mask)
 
     @property
     def convert_args(self):
@@ -708,7 +714,8 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Format a variable from display version """
         return var.replace("_", " ").replace("-", " ").title()
 
-    def build_frame(self, defaults, refresh_callback, patch_callback):
+    def build_frame(self, defaults, refresh_callback, patch_callback,
+                    available_masks, has_predicted_mask):
         """ Build the action frame """
         logger.debug("Building Action frame")
         top_frame = ttk.Frame(self)
@@ -716,7 +723,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         bottom_frame = ttk.Frame(self)
         bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
 
-        self.add_comboboxes(top_frame, defaults)
+        self.add_comboboxes(top_frame, defaults, available_masks, has_predicted_mask)
         busy_indicator = self.add_busy_indicator(top_frame)
         self.add_refresh_button(top_frame, refresh_callback)
         self.add_patch_callback(patch_callback)
@@ -724,11 +731,11 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Built Action frame")
         return busy_indicator
 
-    def add_comboboxes(self, parent, defaults):
+    def add_comboboxes(self, parent, defaults, available_masks, has_predicted_mask):
         """ Add the comboboxes to the Action Frame """
         for opt in self.options:
             if opt == "mask_type":
-                choices = get_available_masks() + ["predicted"]
+                choices = self._create_mask_choices(defaults, available_masks, has_predicted_mask)
             else:
                 choices = PluginLoader.get_available_convert_plugins(opt, True)
             choices = [self.format_to_display(choice) for choice in choices]
@@ -741,6 +748,20 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                  label_width=10,
                                  control_width=12)
             self.tk_vars[opt] = ctl.tk_var
+
+    @staticmethod
+    def _create_mask_choices(defaults, available_masks, has_predicted_mask):
+        """ Set the mask choices and default mask based on available masks """
+        logger.debug("Initial mask choices: %s", available_masks)
+        if has_predicted_mask:
+            available_masks += ["predicted"]
+        if "none" not in available_masks:
+            available_masks += ["none"]
+        if defaults["mask_type"] not in available_masks:
+            logger.debug("Setting default mask to first available: %s", available_masks[0])
+            defaults["mask_type"] = available_masks[0]
+        logger.debug("Final mask choices: %s", available_masks)
+        return available_masks
 
     @staticmethod
     def add_refresh_button(parent, refresh_callback):
