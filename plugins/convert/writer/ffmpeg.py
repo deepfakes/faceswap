@@ -51,7 +51,7 @@ class Writer(Output):
     @property
     def video_fps(self):
         """ Return the fps of source video """
-        reader = imageio.get_reader(self.source_video)
+        reader = imageio.get_reader(self.source_video, "ffmpeg")
         retval = reader.get_meta_data()["fps"]
         reader.close()
         logger.debug(retval)
@@ -158,7 +158,7 @@ class Writer(Output):
 
         exe = im_ffm.get_ffmpeg_exe()
         inputs = OrderedDict([(self.video_tmp_file, None), (self.source_video, None)])
-        outputs = {self.video_file: "-map 0:0 -map 1:1 -c: copy"}
+        outputs = {self.video_file: "-map 0:v:0 -map 1:a:0 -c: copy"}
         ffm = FFmpeg(executable=exe,
                      global_options="-hide_banner -nostats -v 0 -y",
                      inputs=inputs,

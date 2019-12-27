@@ -10,7 +10,7 @@ from tkinter import ttk
 
 from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
-from .tooltip import Tooltip
+from .custom_widgets import Tooltip
 from .stats import Calculations
 from .control_helper import set_slider_rounding
 from .utils import FileHandler, get_config, get_images
@@ -188,7 +188,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         logger.debug("Adding refresh option")
         tk_var = get_config().tk_vars["refreshgraph"]
         btnrefresh = ttk.Button(self.optsframe,
-                                image=get_images().icons["reset"],
+                                image=get_images().icons["reload"],
                                 command=lambda: tk_var.set(True))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,

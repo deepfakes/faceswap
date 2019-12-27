@@ -360,7 +360,7 @@ class Effmpeg():
         logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
         input_ = input_ if isinstance(input_, str) else input_.path
         logger.debug("input: %s", input_)
-        reader = imageio.get_reader(input_)
+        reader = imageio.get_reader(input_, "ffmpeg")
         _fps = reader.get_meta_data()["fps"]
         logger.debug(_fps)
         reader.close()
@@ -374,7 +374,7 @@ class Effmpeg():
         logger.debug("input_: %s, print_: %s, kwargs: %s", input_, print_, kwargs)
         input_ = input_ if isinstance(input_, str) else input_.path
         logger.debug("input: %s", input_)
-        reader = imageio.get_reader(input_)
+        reader = imageio.get_reader(input_, "ffmpeg")
         out = reader.get_meta_data()
         logger.debug(out)
         reader.close()

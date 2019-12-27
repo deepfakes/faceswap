@@ -8,6 +8,7 @@ import os
 import sys
 from collections import OrderedDict
 from configparser import ConfigParser
+from importlib import import_module
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -339,3 +340,22 @@ class FaceswapConfig():
         self.load_config()
         self.validate_config()
         logger.debug("Handled config")
+
+
+def generate_configs():
+    """ Generate config files if they don't exist.
+
+    This script is run prior to anything being set up, so don't use logging
+    Generates the default config files for plugins in the faceswap config folder
+    """
+
+    base_path = os.path.realpath(os.path.dirname(sys.argv[0]))
+    plugins_path = os.path.join(base_path, "plugins")
+    configs_path = os.path.join(base_path, "config")
+    for dirpath, _, filenames in os.walk(plugins_path):
+        if "_config.py" in filenames:
+            section = os.path.split(dirpath)[-1]
+            config_file = os.path.join(configs_path, "{}.ini".format(section))
+            if not os.path.exists(config_file):
+                mod = import_module("plugins.{}.{}".format(section, "_config"))
+                mod.Config(None)

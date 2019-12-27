@@ -36,7 +36,7 @@ class CliOptions():
 
     @staticmethod
     def get_cli_classes(cli_source):
-        """ Parse the cli scripts for the arg classes """
+        """ Parse the cli scripts for the argument classes """
         mod_classes = list()
         for name, obj in inspect.getmembers(cli_source):
             if inspect.isclass(obj) and name.lower().endswith("args") \
@@ -105,7 +105,9 @@ class CliOptions():
                 rounding=self.get_rounding(opt),
                 min_max=opt.get("min_max", None),
                 sysbrowser=self.get_sysbrowser(opt, command_options, command),
-                helptext=opt["help"])
+                helptext=opt["help"],
+                track_modified=True,
+                command=command)
             gui_options[title] = dict(cpanel_option=cpanel_option,
                                       opts=opt["opts"],
                                       nargs=opt.get("nargs", None))
@@ -163,7 +165,7 @@ class CliOptions():
         if action == cli.FileFullPaths:
             retval["browser"] = ["load"]
         elif action == cli.FilesFullPaths:
-            retval["browser"] = ["load_multi"]
+            retval["browser"] = ["multi_load"]
         elif action == cli.SaveFileFullPaths:
             retval["browser"] = ["save"]
         elif action == cli.DirOrFileFullPaths:
@@ -241,7 +243,7 @@ class CliOptions():
                     continue
                 cmd_dict[key] = val["cpanel_option"].get()
             ctl_dict[cmd] = cmd_dict
-        logger.debug("command: '%s', ctl_dict: '%s'", command, ctl_dict)
+        logger.debug("command: '%s', ctl_dict: %s", command, ctl_dict)
         return ctl_dict
 
     def get_one_option_variable(self, command, title):
@@ -258,7 +260,7 @@ class CliOptions():
             optval = str(option["cpanel_option"].get())
             opt = option["opts"][0]
             if command in ("extract", "convert") and opt == "-o":
-                get_images().pathoutput = optval
+                get_images().set_faceswap_output_path(optval)
             if optval in ("False", ""):
                 continue
             elif optval == "True":

@@ -47,6 +47,7 @@ class Writer(Output):
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
     def pre_encode(self, image):
+        """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker """
         logger.trace("Pre-encoding image")
         image = cv2.imencode(self.extension, image, self.args)[1]  # pylint: disable=no-member
         return image

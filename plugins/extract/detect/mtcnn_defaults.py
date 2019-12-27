@@ -22,6 +22,8 @@
                    <class 'str'>, <class 'bool'>.
         default:   [required] The default value for this option.
         info:      [required] A string describing what this option does.
+        group:     [optional]. A group for grouping options together in the GUI. If not
+                   provided this will not group this option with any others.
         choices:   [optional] If this option's datatype is of <class 'str'> then valid
                    selections can be defined here. This validates the option and also enables
                    a combobox / radio option in the GUI.
@@ -104,4 +106,17 @@ _DEFAULTS = {
         "gui_radio": False,
         "fixed": True,
     },
+    "batch-size": {
+        "default": 8,
+        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
+                "but setting it too high can harm performance.\n"
+                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+                "accomodate then this will automatically be lowered.",
+        "datatype": int,
+        "rounding": 1,
+        "min_max": (1, 64),
+        "choices": [],
+        "gui_radio": False,
+        "fixed": True,
+    }
 }

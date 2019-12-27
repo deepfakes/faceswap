@@ -10,9 +10,6 @@ OutFile "faceswap_setup_x64.exe"
 Name "Faceswap"
 InstallDir $PROFILE\faceswap
 
-# Download sites
-!define wwwGit "https://github.com/git-for-windows/git/releases/download/v2.20.1.windows.1/Git-2.20.1-64-bit.exe"
-
 # Sometimes miniconda breaks. Uncomment/comment the following 2 lines to pin
 !define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
 #!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
@@ -24,9 +21,8 @@ InstallDir $PROFILE\faceswap
 
 # Install cli flags
 !define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$PROFILE\MiniConda3"
-!define flagsGit "/SILENT /NORESTART /NOCANCEL /SP /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
 !define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
-!define flagsEnv "-y python=3.6"
+!define flagsEnv "-y python=3.7"
 
 # Folders
 Var ProgramData
@@ -38,11 +34,9 @@ Var dirAnacondaAll
 Var dirConda
 
 # Items to Install
-Var InstallGit
 Var InstallConda
 
 # Misc
-Var gitInf
 Var InstallFailed
 Var lblPos
 Var hasAVX
@@ -89,10 +83,8 @@ Function .onInit
     StrCpy $dirAnaconda "$PROFILE\Anaconda3"
     StrCpy $dirMinicondaAll "$ProgramData\Miniconda3"
     StrCpy $dirAnacondaAll "$ProgramData\Anaconda3"
-    StrCpy $gitInf "$dirTemp\git_install.inf"
     StrCpy $envName "faceswap"
     SetOutPath "$dirTemp"
-    File git_install.inf
     Call CheckPrerequisites
 FunctionEnd
 
@@ -128,12 +120,6 @@ Function pgPrereqCreate
     # Info Installing applications
     ${NSD_CreateGroupBox} 5% 5% 90% 35% "The following applications will be installed"
     Pop $0
-
-        ${If} $InstallGit == 1
-            ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Git for Windows"
-            Pop $0
-            intOp $lblPos $lblPos + 7
-        ${EndIf}
 
         ${If} $InstallConda == 1
             ${NSD_CreateLabel} 10% $lblPos% 80% 14u "MiniConda 3"
@@ -238,16 +224,6 @@ Function CheckCustomCondaPath
 FunctionEnd
 
 Function CheckPrerequisites
-    #Git
-        nsExec::ExecToStack "git --version"
-        pop $0
-        pop $1
-        ${If} $0 == 0
-            StrCpy $Log "$log(check) Git installed: $1"
-        ${Else}
-            StrCpy $InstallGit 1
-        ${EndIf}
-
     # Conda
         # miniconda
         nsExec::ExecToStack "$\"$dirMiniconda\Scripts\conda.exe$\" -V"
@@ -301,86 +277,45 @@ FunctionEnd
 Section Install
     Push $Log
     Call MultiDetailPrint
-    Call InstallPrerequisites
-    Call CloneRepo
+    Call InstallConda
     Call SetEnvironment
+    Call InstallGit
+    Call CloneRepo
     Call SetupFaceSwap
+    Call AddGuiLauncher
     Call DesktopShortcut
     ExecShell "open" "${wwwFaceswap}"
     DetailPrint "Visit ${wwwFaceswap} for help and support."
 SectionEnd
 
-Function InstallPrerequisites
-    # GIT
-        ${If} $InstallGit == 1
-            DetailPrint "Downloading Git..."
-            inetc::get /caption "Downloading Git..." /canceltext "Cancel" ${wwwGit} "git_installer.exe" /end
-            Pop $0 # return value = exit code, "OK" means OK
-            ${If} $0 == "OK"
-                DetailPrint "Installing Git..."
-                SetDetailsPrint listonly
-                ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\git_installer.exe$\" ${flagsGit} /LOADINF=$\"$gitInf$\""
-                pop $0
-                ExecDos::wait $0
-                pop $0
-                SetDetailsPrint both
-                ${If} $0 != 0
-                    DetailPrint "Error Installing Git"
-                    StrCpy $InstallFailed 1
-                ${EndIf}
-            ${Else}
-                DetailPrint "Error Downloading Git"
+Function InstallConda
+    ${If} $InstallConda == 1
+        DetailPrint "Downloading Miniconda3..."
+        inetc::get /caption "Downloading Miniconda3." /canceltext "Cancel" ${wwwConda} "Miniconda3.exe" /end
+        Pop $0
+        ${If} $0 == "OK"
+            DetailPrint "Installing Miniconda3. This will take a few minutes..."
+            SetDetailsPrint listonly
+            ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\Miniconda3.exe$\" ${flagsConda}"
+            pop $0
+            ExecDos::wait $0
+            pop $0
+            StrCpy $dirConda "$dirMiniconda"
+            SetDetailsPrint both
+            ${If} $0 != 0
+                DetailPrint "Error Installing Miniconda3"
                 StrCpy $InstallFailed 1
             ${EndIf}
+        ${Else}
+            DetailPrint "Error Downloading Miniconda3"
+            StrCpy $InstallFailed 1
         ${EndIf}
-
-    # CONDA
-        ${If} $InstallConda == 1
-            DetailPrint "Downloading Miniconda3..."
-            inetc::get /caption "Downloading Miniconda3." /canceltext "Cancel" ${wwwConda} "Miniconda3.exe" /end
-            Pop $0
-            ${If} $0 == "OK"
-                DetailPrint "Installing Miniconda3. This will take a few minutes..."
-                SetDetailsPrint listonly
-                ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\Miniconda3.exe$\" ${flagsConda}"
-                pop $0
-                ExecDos::wait $0
-                pop $0
-                StrCpy $dirConda "$dirMiniconda"
-                SetDetailsPrint both
-                ${If} $0 != 0
-                    DetailPrint "Error Installing Miniconda3"
-                    StrCpy $InstallFailed 1
-                ${EndIf}
-            ${Else}
-                DetailPrint "Error Downloading Miniconda3"
-                StrCpy $InstallFailed 1
-            ${EndIf}
-        ${EndIf}
+    ${EndIf}
 
     ${If} $InstallFailed == 1
         Call Abort
     ${Else}
-        DetailPrint "All Prerequisites installed."
-    ${EndIf}
-FunctionEnd
-
-Function CloneRepo
-    DetailPrint "Downloading Faceswap..."
-    SetDetailsPrint listonly
-    ${If} $InstallGit == 1
-        StrCpy $9 "$\"$PROGRAMFILES64\git\bin\git.exe$\""
-    ${Else}
-        StrCpy $9 "git"
-    ${EndIf}
-    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$9 clone ${flagsRepo} $\"$INSTDIR$\""
-    pop $0
-    ExecDos::wait $0
-    pop $0
-    SetDetailsPrint both
-    ${If} $0 != 0
-        DetailPrint "Error Downloading Faceswap"
-        Call Abort
+        DetailPrint "Miniconda3 installed."
     ${EndIf}
 FunctionEnd
 
@@ -420,24 +355,42 @@ Function SetEnvironment
         ${EndIf}
 FunctionEnd
 
+Function InstallGit
+    DetailPrint "Installing Git..."
+    SetDetailsPrint listonly
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && conda install git -y -q && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
+    SetDetailsPrint both
+    ${If} $0 != 0
+        DetailPrint "Error Installing Git"
+        StrCpy $InstallFailed 1
+    ${EndIf}
+FunctionEnd
+
+Function CloneRepo
+    DetailPrint "Downloading Faceswap..."
+    SetDetailsPrint listonly
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && git clone ${flagsRepo} $\"$INSTDIR$\" && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
+    SetDetailsPrint both
+    ${If} $0 != 0
+        DetailPrint "Error Downloading Faceswap"
+        Call Abort
+    ${EndIf}
+FunctionEnd
+
 Function SetupFaceSwap
     DetailPrint "Setting up FaceSwap Environment... This may take a while"
     StrCpy $0 "${flagsSetup}"
     ${If} $setupType != "cpu"
         StrCpy $0 "$0 --$setupType"
     ${EndIf}
-
     SetDetailsPrint listonly
-    ; Create a temporary .bat file for setting up faceswap so the path can be set for Git
-    ; Required for installing pynvml from github
-    FileOpen $9 "$dirTemp\_install_faceswap.bat" w
-    ${If} $InstallGit == 1
-        FileWrite $9 "SET PATH=%PATH%;$PROGRAMFILES64\git\cmd$\r$\n"
-    ${EndIf}
-    FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate$\r$\n"
-    FileClose $9
-
-    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\_install_faceswap.bat$\""
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate"
     pop $0
     ExecDos::wait $0
     pop $0
@@ -448,12 +401,16 @@ Function SetupFaceSwap
     ${EndIf}
 FunctionEnd
 
-Function DesktopShortcut
-    DetailPrint "Creating Desktop Shortcut"
+Function AddGuiLauncher
+    DetailPrint "Creating GUI Launcher"
     SetOutPath "$INSTDIR"
     StrCpy $0 "faceswap_win_launcher.bat"
     FileOpen $9 "$INSTDIR\$0" w
     FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
+FunctionEnd
+
+Function DesktopShortcut
+    DetailPrint "Creating Desktop Shortcut"
     CreateShortCut "$DESKTOP\FaceSwap.lnk" "$\"$INSTDIR\$0$\"" "" "$INSTDIR\.install\windows\fs_logo.ico"
 FunctionEnd

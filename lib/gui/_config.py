@@ -26,8 +26,8 @@ class Config(FaceswapConfig):
         logger.debug("Setting global config")
         section = "global"
         self.add_section(title=section,
-                         info="Faceswap GUI Options.\nNB: Faceswap will need to be restarted for "
-                              "any changes to take effect.")
+                         info="Faceswap GUI Options.\nConfigure the appearance and behaviour of "
+                              "the GUI")
         self.add_item(
             section=section, title="fullscreen", datatype=bool, default=False, group="startup",
             info="Start Faceswap maximized.")
@@ -44,6 +44,10 @@ class Config(FaceswapConfig):
             min_max=(10, 90), rounding=1, group="layout",
             info="How tall the bottom console panel is as a percentage of GUI height at startup.")
         self.add_item(
+            section=section, title="icon_size", datatype=int, default=14,
+            min_max=(10, 20), rounding=1, group="layout",
+            info="Pixel size for icons. NB: Size is scaled by DPI.")
+        self.add_item(
             section=section, title="font", datatype=str,
             choices=get_clean_fonts(),
             default="default", group="font", info="Global font")
@@ -51,6 +55,23 @@ class Config(FaceswapConfig):
             section=section, title="font_size", datatype=int, default=9,
             min_max=(6, 12), rounding=1, group="font",
             info="Global font size.")
+        self.add_item(
+            section=section, title="autosave_last_session", datatype=str, default="prompt",
+            choices=["never", "prompt", "always"], group="startup", gui_radio=True,
+            info="Automatically save the current settings on close and reload on startup"
+                 "\n\tnever - Don't autosave session"
+                 "\n\tprompt - Prompt to reload last session on launch"
+                 "\n\talways - Always load last session on launch")
+        self.add_item(
+            section=section, title="timeout", datatype=int, default=120,
+            min_max=(10, 600), rounding=10, group="behaviour",
+            info="Training can take some time to save and shutdown. Set the timeout in seconds "
+                 "before giving up and force quitting.")
+        self.add_item(
+            section=section, title="auto_load_model_stats", datatype=bool, default=True,
+            group="behaviour",
+            info="Auto load model statistics into the Analysis tab when selecting a model "
+                 "in Train or Convert tabs.")
 
 
 def get_commands():
@@ -70,7 +91,7 @@ def get_commands():
 
 
 def get_clean_fonts():
-    """ Return the font list with any @prefixed or non-unicode characters stripped
+    """ Return the font list with any @prefixed or non-Unicode characters stripped
         and default prefixed """
     cleaned_fonts = sorted([fnt for fnt in font.families()
                             if not fnt.startswith("@") and not any([ord(c) > 127 for c in fnt])])

@@ -44,7 +44,8 @@ class SysInfo():
     @property
     def is_conda(self):
         """ Boolean for whether in a conda environment """
-        return "conda" in sys.version.lower()
+        return ("conda" in sys.version.lower() or
+                os.path.exists(os.path.join(sys.prefix, 'conda-meta')))
 
     @property
     def is_linux(self):
@@ -344,10 +345,9 @@ class SysInfo():
             retval += ("{0: <20} {1}\n".format(key + ":", sys_info[key]))
         retval += "\n=============== Pip Packages ===============\n"
         retval += self.installed_pip
-        if not self.is_conda:
-            return retval
-        retval += "\n\n============== Conda Packages ==============\n"
-        retval += self.installed_conda
+        if self.is_conda:
+            retval += "\n\n============== Conda Packages ==============\n"
+            retval += self.installed_conda
         retval += self.state_file
         retval += "\n\n================= Configs =================="
         retval += self.configs

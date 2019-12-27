@@ -53,6 +53,9 @@ class NNBlocks():
             to conv_aware or he_uniform().
             if a specific initializer has been passed in then the specified initializer
             will be used rather than the default """
+        if "kernel_initializer" in kwargs:
+            logger.debug("Using model specified initializer: %s", kwargs["kernel_initializer"])
+            return kwargs
         if self.use_convaware_init:
             default = ConvolutionAware()
             if self.first_run:
@@ -78,6 +81,8 @@ class NNBlocks():
         """ A standard conv2D layer with correct initialization """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, padding: %s, "
                      "kwargs: %s)", inp, filters, kernel_size, strides, padding, kwargs)
+        if kwargs.get("name", None) is None:
+            kwargs["name"] = self.get_name("conv2d_{}".format(inp.shape[1]))
         kwargs = self.set_default_initializer(kwargs)
         var_x = Conv2D(filters, kernel_size,
                        strides=strides,
@@ -91,7 +96,7 @@ class NNBlocks():
         """ Convolution Layer"""
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, use_instance_norm: %s, "
                      "kwargs: %s)", inp, filters, kernel_size, strides, use_instance_norm, kwargs)
-        name = self.get_name("conv")
+        name = self.get_name("conv_{}".format(inp.shape[1]))
         if self.use_reflect_padding:
             inp = ReflectionPadding2D(stride=strides,
                                       kernel_size=kernel_size,
@@ -110,11 +115,11 @@ class NNBlocks():
         return var_x
 
     def upscale(self, inp, filters, kernel_size=3, padding="same",
-                use_instance_norm=False, res_block_follows=False, **kwargs):
+                use_instance_norm=False, res_block_follows=False, scale_factor=2, **kwargs):
         """ Upscale Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, kwargs: %s)",
                      inp, filters, kernel_size, use_instance_norm, kwargs)
-        name = self.get_name("upscale")
+        name = self.get_name("upscale_{}".format(inp.shape[1]))
         if self.use_reflect_padding:
             inp = ReflectionPadding2D(stride=1,
                                       kernel_size=kernel_size,
@@ -125,7 +130,7 @@ class NNBlocks():
             original_init = self.switch_kernel_initializer(
                 kwargs,
                 ICNR(initializer=kwargs["kernel_initializer"]))
-        var_x = self.conv2d(inp, filters * 4,
+        var_x = self.conv2d(inp, filters * scale_factor * scale_factor,
                             kernel_size=kernel_size,
                             padding=padding,
                             name="{}_conv2d".format(name),
@@ -137,9 +142,10 @@ class NNBlocks():
         if not res_block_follows:
             var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
         if self.use_subpixel:
-            var_x = SubPixelUpscaling(name="{}_subpixel".format(name))(var_x)
+            var_x = SubPixelUpscaling(name="{}_subpixel".format(name),
+                                      scale_factor=scale_factor)(var_x)
         else:
-            var_x = PixelShuffler(name="{}_pixelshuffler".format(name))(var_x)
+            var_x = PixelShuffler(name="{}_pixelshuffler".format(name), size=scale_factor)(var_x)
         return var_x
 
     # <<< DFaker Model Blocks >>> #
@@ -147,7 +153,7 @@ class NNBlocks():
         """ Residual block """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, kwargs: %s)",
                      inp, filters, kernel_size, kwargs)
-        name = self.get_name("residual")
+        name = self.get_name("residual_{}".format(inp.shape[1]))
         var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_0".format(name))(inp)
         if self.use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
@@ -185,7 +191,7 @@ class NNBlocks():
         """ Seperable Convolution Layer """
         logger.debug("inp: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      inp, filters, kernel_size, strides, kwargs)
-        name = self.get_name("separableconv2d")
+        name = self.get_name("separableconv2d_{}".format(inp.shape[1]))
         kwargs = self.set_default_initializer(kwargs)
         var_x = SeparableConv2D(filters,
                                 kernel_size=kernel_size,

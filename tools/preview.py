@@ -6,7 +6,7 @@ import random
 import tkinter as tk
 from tkinter import ttk
 import os
-import sys
+
 from configparser import ConfigParser
 from threading import Event, Lock
 
@@ -16,14 +16,15 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
-from lib.gui.utils import get_images, initialize_images, ContextMenu
-from lib.gui.tooltip import Tooltip
+from lib.gui.custom_widgets import ContextMenu
+from lib.gui.utils import get_images, initialize_config, initialize_images
+from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import set_slider_rounding
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.model.masks import get_available_masks
 from lib.multithreading import MultiThread
-from lib.utils import FaceswapError, set_system_verbosity
+from lib.utils import FaceswapError
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
 from scripts.convert import Predict
@@ -41,7 +42,6 @@ class Preview():
 
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
-        set_system_verbosity(arguments.loglevel)
         self.config_tools = ConfigTools()
         self.lock = Lock()
         self.trigger_patch = Event()
@@ -71,9 +71,8 @@ class Preview():
     def initialize_tkinter(self):
         """ Initialize tkinter for standalone or GUI """
         logger.debug("Initializing tkinter")
-        pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
-        pathcache = os.path.join(pathscript, "lib", "gui", ".cache")
-        initialize_images(pathcache=pathcache)
+        initialize_config(self.root, None, None, None)
+        initialize_images()
         self.set_geometry()
         self.root.title("Faceswap.py - Convert Settings")
         self.root.tk.call(
@@ -408,7 +407,7 @@ class FacesDisplay():
         self.build_faces_image()
         img = np.vstack((self.faces_source, self.faces_dest))
         size = self.get_scale_size(img)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # pylint:disable=no-member
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(img)
         img = img.resize(size, Image.ANTIALIAS)
         self.tk_image = ImageTk.PhotoImage(img)
@@ -457,7 +456,7 @@ class FacesDisplay():
         for image in self.source:
             detected_face = image["detected_faces"][0]
             src_img = image["image"]
-            detected_face.load_aligned(src_img, self.size, align_eyes=False)
+            detected_face.load_aligned(src_img, self.size)
             matrix = detected_face.aligned["matrix"]
             self.faces.setdefault("filenames",
                                   list()).append(os.path.splitext(image["filename"])[0])
@@ -488,9 +487,9 @@ class FacesDisplay():
         """ Create header text for output image """
         font_scale = self.size / 640
         height = self.size // 8
-        font = cv2.FONT_HERSHEY_SIMPLEX  # pylint: disable=no-member
+        font = cv2.FONT_HERSHEY_SIMPLEX
         # Get size of placed text for positioning
-        text_sizes = [cv2.getTextSize(self.faces["filenames"][idx],  # pylint: disable=no-member
+        text_sizes = [cv2.getTextSize(self.faces["filenames"][idx],
                                       font,
                                       font_scale,
                                       1)[0]
@@ -503,24 +502,20 @@ class FacesDisplay():
                      self.faces["filenames"], text_sizes, text_x, text_y)
         header_box = np.ones((height, self.size * self.total_columns, 3), np.uint8) * 255
         for idx, text in enumerate(self.faces["filenames"]):
-            cv2.putText(header_box,  # pylint: disable=no-member
+            cv2.putText(header_box,
                         text,
                         (text_x[idx], text_y),
                         font,
                         font_scale,
                         (0, 0, 0),
                         1,
-                        lineType=cv2.LINE_AA)  # pylint: disable=no-member
+                        lineType=cv2.LINE_AA)
         logger.debug("header_box.shape: %s", header_box.shape)
         return header_box
 
     def draw_rect(self, image):
         """ draw border """
-        cv2.rectangle(image,    # pylint:disable=no-member
-                      (0, 0),
-                      (self.size - 1, self.size - 1),
-                      (255, 255, 255),
-                      1)
+        cv2.rectangle(image, (0, 0), (self.size - 1, self.size - 1), (255, 255, 255), 1)
         image = np.clip(image, 0.0, 255.0)
         return image.astype("uint8")
 
@@ -788,12 +783,12 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.busy_indicator.start()
 
     def add_actions(self, parent):
-        """ Add Actio Buttons """
+        """ Add Action Buttons """
         logger.debug("Adding util buttons")
         frame = ttk.Frame(parent)
         frame.pack(padx=5, pady=(5, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
 
-        for utl in ("save", "clear", "reset"):
+        for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
@@ -802,7 +797,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             elif utl == "clear":
                 text = "Reset full config to default values"
                 action = self.config_tools.reset_config_default
-            elif utl == "reset":
+            elif utl == "reload":
                 text = "Reset full config to saved values"
                 action = self.config_tools.reset_config_saved
 
@@ -946,11 +941,11 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         return sep
 
     def add_actions(self, parent, config_key):
-        """ Add Actio Buttons """
+        """ Add Action Buttons """
         logger.debug("Adding util buttons")
 
         title = config_key.split(".")[1].replace("_", " ").title()
-        for utl in ("save", "clear", "reset"):
+        for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
@@ -959,7 +954,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             elif utl == "clear":
                 text = "Reset {} config to default values".format(title)
                 action = parent.config_tools.reset_config_default
-            elif utl == "reset":
+            elif utl == "reload":
                 text = "Reset {} config to saved values".format(title)
                 action = parent.config_tools.reset_config_saved
 
@@ -972,7 +967,6 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 
 class ControlBuilder():
-    # TODO Expand out for cli options
     """
     Builds and returns a frame containing a tkinter control with label
 

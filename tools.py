@@ -37,6 +37,9 @@ if __name__ == "__main__":
     EFFMPEG = cli.EffmpegArgs(SUBPARSER,
                               "effmpeg",
                               "This command allows you to easily execute common ffmpeg tasks.")
+    MASK = cli.MaskArgs(SUBPARSER,
+                        "mask",
+                        "This command lets you generate masks for existing alignments.")
     RESTORE = cli.RestoreArgs(SUBPARSER,
                               "restore",
                               "This command lets you restore models from backup.")

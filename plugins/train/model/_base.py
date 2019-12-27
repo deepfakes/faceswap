@@ -9,7 +9,7 @@ import os
 import sys
 import time
 
-from json import JSONDecodeError
+from concurrent import futures
 
 import keras
 from keras import losses
@@ -18,13 +18,12 @@ from keras.layers import Input
 from keras.models import load_model, Model
 from keras.utils import get_custom_objects, multi_gpu_model
 
-from lib import Serializer
+from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
 from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask_loss_wrapper,
                               generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
-from lib.multithreading import MultiThread
 from lib.utils import deprecation_warning, FaceswapError
 from plugins.train._config import Config
 
@@ -106,7 +105,18 @@ class ModelBase():
                               "augment_color": augment_color,
                               "no_flip": no_flip,
                               "pingpong": self.vram_savings.pingpong,
-                              "snapshot_interval": snapshot_interval}
+                              "snapshot_interval": snapshot_interval,
+                              "training_size": self.state.training_size,
+                              "no_logs": self.state.current_session["no_logs"],
+                              "coverage_ratio": self.calculate_coverage_ratio(),
+                              "mask_type": self.config["mask_type"],
+                              "mask_blur_kernel": self.config["mask_blur_kernel"],
+                              "mask_threshold": self.config["mask_threshold"],
+                              "learn_mask": (self.config["learn_mask"] and
+                                             self.config["mask_type"] is not None),
+                              "penalized_mask_loss": (self.config["penalized_mask_loss"] and
+                                                      self.config["mask_type"] is not None)}
+        logger.debug("training_opts: %s", self.training_opts)
 
         if self.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
@@ -114,7 +124,6 @@ class ModelBase():
                                                 "avoid issues in future.")
 
         self.build()
-        self.set_training_data()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
@@ -207,6 +216,12 @@ class ModelBase():
         logger.debug(retval)
         return retval
 
+    @property
+    def feed_mask(self):
+        """ bool: ``True`` if the model expects a mask to be fed into input otherwise ``False`` """
+        return self.config["mask_type"] is not None and (self.config["learn_mask"] or
+                                                         self.config["penalized_mask_loss"])
+
     def load_config(self):
         """ Load the global config for reference in self.config """
         global _CONFIG  # pylint: disable=global-statement
@@ -214,18 +229,6 @@ class ModelBase():
             model_name = self.config_section
             logger.debug("Loading config for: %s", model_name)
             _CONFIG = Config(model_name, configfile=self.configfile).config_dict
-
-    def set_training_data(self):
-        """ Override to set model specific training data.
-
-            super() this method for defaults otherwise be sure to add """
-        logger.debug("Setting training data")
-        # Force number of preview images to between 2 and 16
-        self.training_opts["training_size"] = self.state.training_size
-        self.training_opts["no_logs"] = self.state.current_session["no_logs"]
-        self.training_opts["mask_type"] = self.config.get("mask_type", None)
-        self.training_opts["coverage_ratio"] = self.calculate_coverage_ratio()
-        logger.debug("Set training data: %s", self.training_opts)
 
     def calculate_coverage_ratio(self):
         """ Coverage must be a ratio, leading to a cropped shape divisible by 2 """
@@ -261,12 +264,11 @@ class ModelBase():
         logger.debug("Getting inputs")
         inputs = [Input(shape=self.input_shape, name="face_in")]
         output_network = [network for network in self.networks.values() if network.is_output][0]
-        mask_idx = [idx for idx, name in enumerate(output_network.output_names)
-                    if name.startswith("mask")]
-        if mask_idx:
-            # Add the final mask shape as input
-            mask_shape = output_network.output_shapes[mask_idx[0]]
-            inputs.append(Input(shape=mask_shape[1:], name="mask_in"))
+        if self.feed_mask:
+            # TODO penalized mask doesn't have a mask output, so we can't use output shapes
+            # mask should always be last output..this needs to be a rule
+            mask_shape = output_network.output_shapes[-1]
+            inputs.append(Input(shape=(mask_shape[1:-1] + (1,)), name="mask_in"))
         logger.debug("Got inputs: %s", inputs)
         return inputs
 
@@ -375,7 +377,7 @@ class ModelBase():
         opt_kwargs = dict(lr=lr, beta_1=beta_1, beta_2=beta_2)
         if (self.config.get("clipnorm", False) and
                 keras.backend.backend() != "plaidml.keras.backend"):
-            # NB: Clipnorm is ballooning VRAM useage, which is not expected behaviour
+            # NB: Clipnorm is ballooning VRAM usage, which is not expected behavior
             # and may be a bug in Keras/TF.
             # PlaidML has a bug regarding the clipnorm parameter
             # See: https://github.com/plaidml/plaidml/issues/228
@@ -421,12 +423,12 @@ class ModelBase():
             return
         for side in sorted(list(self.predictors.keys())):
             logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
-            self.predictors[side].summary(print_fn=lambda x: logger.verbose("R|%s", x))
+            self.predictors[side].summary(print_fn=lambda x: logger.verbose("%s", x))
             for name, nnmeta in self.networks.items():
                 if nnmeta.side is not None and nnmeta.side != side:
                     continue
                 logger.verbose("%s:", name.title())
-                nnmeta.network.summary(print_fn=lambda x: logger.verbose("R|%s", x))
+                nnmeta.network.summary(print_fn=lambda x: logger.verbose("%s", x))
 
     def do_snapshot(self):
         """ Perform a model snapshot """
@@ -445,7 +447,7 @@ class ModelBase():
             logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
             exit(0)
 
-        if not self.is_legacy:
+        if not self.is_legacy or not self.predict:
             K.clear_session()
         model_mapping = self.map_models(swapped)
         for network in self.networks.values():
@@ -462,25 +464,19 @@ class ModelBase():
     def save_models(self):
         """ Backup and save the models """
         logger.debug("Backing up and saving models")
+        # Insert a new line to avoid spamming the same row as loss output
+        print("")
         save_averages = self.get_save_averages()
         backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
         if backup_func:
             logger.info("Backing up models...")
-        save_threads = list()
-        for network in self.networks.values():
-            name = "save_{}".format(network.name)
-            save_threads.append(MultiThread(network.save,
-                                            name=name,
-                                            backup_func=backup_func))
-        save_threads.append(MultiThread(self.state.save,
-                                        name="save_state",
-                                        backup_func=backup_func))
-        for thread in save_threads:
-            thread.start()
-        for thread in save_threads:
-            if thread.has_error:
-                logger.error(thread.errors[0])
-            thread.join()
+        executor = futures.ThreadPoolExecutor()
+        save_threads = [executor.submit(network.save, backup_func=backup_func)
+                        for network in self.networks.values()]
+        save_threads.append(executor.submit(self.state.save, backup_func=backup_func))
+        futures.wait(save_threads)
+        # call result() to capture errors
+        _ = [thread.result() for thread in save_threads]
         msg = "[Saved models]"
         if save_averages:
             lossmsg = ["{}_{}: {:.5f}".format(self.state.loss_names[side][0],
@@ -588,6 +584,9 @@ class ModelBase():
         self.state.config["subpixel_upscaling"] = False
         self.state.config["reflect_padding"] = False
         self.state.config["mask_type"] = None
+        self.state.config["mask_blur_kernel"] = 3
+        self.state.config["mask_threshold"] = 4
+        self.state.config["learn_mask"] = False
         self.state.config["lowmem"] = False
         self.encoder_dim = 1024
 
@@ -633,7 +632,7 @@ class VRAMSavings():
         return optimizer_savings
 
     def set_gradient_type(self, memory_saving_gradients):
-        """ Monkeypatch Memory Saving Gradients if requested """
+        """ Monkey-patch Memory Saving Gradients if requested """
         if memory_saving_gradients and self.is_plaidml:
             logger.warning("Memory Saving Gradients not supported on plaidML. Disabling")
             memory_saving_gradients = False
@@ -664,7 +663,7 @@ class Loss():
         loss_dict = dict(mae=losses.mean_absolute_error,
                          mse=losses.mean_squared_error,
                          logcosh=losses.logcosh,
-                         smooth_l=generalized_loss,
+                         smooth_loss=generalized_loss,
                          l_inf_norm=l_inf_norm,
                          ssim=DSSIMObjective(),
                          gmsd=gmsd_loss,
@@ -752,7 +751,7 @@ class Loss():
         for idx, loss_name in enumerate(self.names):
             if loss_name.startswith("mask"):
                 loss_funcs.append(self.selected_mask_loss)
-            elif self.mask_input is not None and self.config.get("penalized_mask_loss", False):
+            elif self.config["penalized_mask_loss"] and self.config["mask_type"] is not None:
                 face_size = self.output_shapes[idx][1]
                 mask_size = self.mask_shape[1]
                 scaling = face_size / mask_size
@@ -876,8 +875,8 @@ class State():
                      "config_changeable_items: '%s', no_logs: %s, pingpong: %s, "
                      "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
                      config_changeable_items, no_logs, pingpong, training_image_size)
-        self.serializer = Serializer.get_serializer("json")
-        filename = "{}_state.{}".format(model_name, self.serializer.ext)
+        self.serializer = get_serializer("json")
+        filename = "{}_state.{}".format(model_name, self.serializer.file_extension)
         self.filename = str(model_dir / filename)
         self.name = model_name
         self.iterations = 0
@@ -889,7 +888,7 @@ class State():
         self.config = dict()
         self.load(config_changeable_items)
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs, pingpong)
+        self.create_new_session(no_logs, pingpong, config_changeable_items)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -926,7 +925,7 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs, pingpong):
+    def create_new_session(self, no_logs, pingpong, config_changeable_items):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
@@ -934,7 +933,8 @@ class State():
                                           "pingpong": pingpong,
                                           "loss_names": dict(),
                                           "batchsize": 0,
-                                          "iterations": 0}
+                                          "iterations": 0,
+                                          "config": config_changeable_items}
 
     def add_session_loss_names(self, side, loss_names):
         """ Add the session loss names to the sessions dictionary """
@@ -954,42 +954,33 @@ class State():
     def load(self, config_changeable_items):
         """ Load state file """
         logger.debug("Loading State")
-        try:
-            with open(self.filename, "rb") as inp:
-                state = self.serializer.unmarshal(inp.read().decode("utf-8"))
-                self.name = state.get("name", self.name)
-                self.sessions = state.get("sessions", dict())
-                self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
-                self.iterations = state.get("iterations", 0)
-                self.training_size = state.get("training_size", 256)
-                self.inputs = state.get("inputs", dict())
-                self.config = state.get("config", dict())
-                logger.debug("Loaded state: %s", state)
-                self.replace_config(config_changeable_items)
-        except IOError as err:
-            logger.warning("No existing state file found. Generating.")
-            logger.debug("IOError: %s", str(err))
-        except JSONDecodeError as err:
-            logger.debug("JSONDecodeError: %s:", str(err))
+        if not os.path.exists(self.filename):
+            logger.info("No existing state file found. Generating.")
+            return
+        state = self.serializer.load(self.filename)
+        self.name = state.get("name", self.name)
+        self.sessions = state.get("sessions", dict())
+        self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
+        self.iterations = state.get("iterations", 0)
+        self.training_size = state.get("training_size", 256)
+        self.inputs = state.get("inputs", dict())
+        self.config = state.get("config", dict())
+        logger.debug("Loaded state: %s", state)
+        self.replace_config(config_changeable_items)
 
     def save(self, backup_func=None):
         """ Save iteration number to state file """
         logger.debug("Saving State")
         if backup_func:
             backup_func(self.filename)
-        try:
-            with open(self.filename, "wb") as out:
-                state = {"name": self.name,
-                         "sessions": self.sessions,
-                         "lowest_avg_loss": self.lowest_avg_loss,
-                         "iterations": self.iterations,
-                         "inputs": self.inputs,
-                         "training_size": self.training_size,
-                         "config": _CONFIG}
-                state_json = self.serializer.marshal(state)
-                out.write(state_json.encode("utf-8"))
-        except IOError as err:
-            logger.error("Unable to save model state: %s", str(err.strerror))
+        state = {"name": self.name,
+                 "sessions": self.sessions,
+                 "lowest_avg_loss": self.lowest_avg_loss,
+                 "iterations": self.iterations,
+                 "inputs": self.inputs,
+                 "training_size": self.training_size,
+                 "config": _CONFIG}
+        self.serializer.save(self.filename, state)
         logger.debug("Saved State")
 
     def replace_config(self, config_changeable_items):
@@ -997,12 +988,12 @@ class State():
             Check for any fixed=False parameters changes and log info changes
         """
         global _CONFIG  # pylint: disable=global-statement
+        legacy_update = self._update_legacy_config()
         # Add any new items to state config for legacy purposes
         for key, val in _CONFIG.items():
             if key not in self.config.keys():
                 logger.info("Adding new config item to state file: '%s': '%s'", key, val)
                 self.config[key] = val
-        legacy_update = self.update_legacy_config()
         self.update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self.config
@@ -1011,18 +1002,64 @@ class State():
         logger.debug("Replaced config. New config: %s", _CONFIG)
         logger.info("Using configuration saved in state file")
 
-    def update_legacy_config(self):
-        """ Update legacy state config files with the new loss formating
+    def _update_legacy_config(self):
+        """ Legacy updates for new config additions.
+
+        When new config items are added to the Faceswap code, existing model state files need to be
+        updated to handle these new items.
+
+        Current existing legacy update items:
+
+            * loss - If old `dssim_loss` is ``true`` set new `loss_function` to `ssim` otherwise
+            set it to `mae`. Remove old `dssim_loss` item
+
+            * masks - If `learn_mask` does not exist then it is set to ``True`` if `mask_type` is
+            not ``None`` otherwised it is set to ``False``.
+
+            * masks type - Replace removed masks 'dfl_full' and 'facehull' with `components` mask
+
+        Returns
+        -------
+        bool
+            ``True`` if legacy items exist and state file has been updated, otherwise ``False``
         """
-        prior = "dssim_loss"
-        new = "loss_function"
-        if prior not in self.config:
-            return False
-        self.config[new] = "ssim" if self.config[prior] else "mae"
-        del self.config[prior]
-        logger.info("Updated config from older dssim format. New config loss function: %s",
-                    self.config[new])
-        return True
+        logger.debug("Checking for legacy state file update")
+        priors = ["dssim_loss", "mask_type", "mask_type"]
+        new_items = ["loss_function", "learn_mask", "mask_type"]
+        updated = False
+        for old, new in zip(priors, new_items):
+            if old not in self.config:
+                logger.debug("Legacy item '%s' not in config. Skipping update", old)
+                continue
+
+            # dssim_loss > loss_function
+            if old == "dssim_loss":
+                self.config[new] = "ssim" if self.config[old] else "mae"
+                del self.config[old]
+                updated = True
+                logger.info("Updated config from legacy dssim format. New config loss "
+                            "function: '%s'", self.config[new])
+                continue
+
+            # Add learn mask option and set to True if model has "penalized_mask_loss" specified
+            if old == "mask_type" and new == "learn_mask" and new not in self.config:
+                self.config[new] = self.config["mask_type"] is not None
+                updated = True
+                logger.info("Added new 'learn_mask' config item for this model. Value set to: %s",
+                            self.config[new])
+                continue
+
+            # Replace removed masks with most similar equivalent
+            if old == "mask_type" and new == "mask_type" and self.config[old] in ("facehull",
+                                                                                  "dfl_full"):
+                old_mask = self.config[old]
+                self.config[new] = "components"
+                updated = True
+                logger.info("Updated 'mask_type' from '%s' to '%s' for this model",
+                            old_mask, self.config[new])
+
+        logger.debug("State file updated for legacy config: %s", updated)
+        return updated
 
     def update_changed_config_items(self, config_changeable_items):
         """ Update any parameters which are not fixed and have been changed """
