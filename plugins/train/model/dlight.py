@@ -220,7 +220,7 @@ class Model(OriginalModel):
 
         outputs = [var_x]
 
-        if self.config.get("mask_type", False):
+        if self.config.get("learn_mask", False):
             var_y = var_xy  # mask decoder
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity)
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity // 2)
@@ -256,7 +256,7 @@ class Model(OriginalModel):
 
         outputs = [var_x]
 
-        if self.config.get("mask_type", False):
+        if self.config.get("learn_mask", False):
             var_y = var_xy  # mask decoder
 
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity)
@@ -303,7 +303,7 @@ class Model(OriginalModel):
 
         outputs = [var_x]
 
-        if self.config.get("mask_type", False):
+        if self.config.get("learn_mask", False):
             var_y = var_xy  # mask decoder
 
             var_y = self.blocks.upscale2x_hyb(var_y, mask_complexity)
