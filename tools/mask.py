@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Mask():
     """ This tool is part of the Faceswap Tools suite and should be called from
-    ``python tools.py mask``.
+    ``python tools.py mask`` command.
 
     Faceswap Masks tool. Generate masks from existing alignments files, and output masks
     for preview.
