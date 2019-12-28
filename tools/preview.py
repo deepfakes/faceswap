@@ -34,7 +34,7 @@ from plugins.convert._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Preview():  # pylint:disable=too-few-public-methods
+class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
     """ This tool is part of the Faceswap Tools suite and should be called from
     ``python tools.py preview`` command.
 
@@ -50,9 +50,9 @@ class Preview():  # pylint:disable=too-few-public-methods
 
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
+        super().__init__()
         self._config_tools = ConfigTools()
         self._lock = Lock()
-        self._root = tk.Tk()
         self._scaling = self._get_scaling()
 
         self._tk_vars = dict(refresh=tk.BooleanVar(), busy=tk.BooleanVar())
@@ -79,14 +79,14 @@ class Preview():  # pylint:disable=too-few-public-methods
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
         logger.debug("Initializing tkinter")
-        initialize_config(self._root, None, None, None)
+        initialize_config(self, None, None, None)
         initialize_images()
         self._set_geometry()
-        self._root.title("Faceswap.py - Convert Settings")
-        self._root.tk.call(
+        self.title("Faceswap.py - Convert Settings")
+        self.tk.call(
             "wm",
             "iconphoto",
-            self._root._w, get_images().icons["favicon"])  # pylint:disable=protected-access
+            self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
 
     def _get_scaling(self):
@@ -96,18 +96,18 @@ class Preview():  # pylint:disable=too-few-public-methods
         -------
         float: The scaling factor for display
         """
-        dpi = self._root.winfo_fpixels("1i")
+        dpi = self.winfo_fpixels("1i")
         scaling = dpi / 72.0
         logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
         return scaling
 
     def _set_geometry(self):
         """ Set the GUI window geometry. """
-        self._root.tk.call("tk", "scaling", self._scaling)
+        self.tk.call("tk", "scaling", self._scaling)
         width = int(940 * self._scaling)
         height = int(600 * self._scaling)
         logger.debug("Geometry: %sx%s", width, height)
-        self._root.geometry("{}x{}+80+80".format(str(width), str(height)))
+        self.geometry("{}x{}+80+80".format(str(width), str(height)))
 
     def process(self):
         """ The entry point for the Preview tool from :file:`lib.tools.cli`.
@@ -115,7 +115,7 @@ class Preview():  # pylint:disable=too-few-public-methods
         Launch the tkinter preview Window and run main loop.
         """
         self._build_ui()
-        self._root.mainloop()
+        self.mainloop()
 
     def _refresh(self, *args):
         """ Load new faces to display in preview.
@@ -136,7 +136,7 @@ class Preview():  # pylint:disable=too-few-public-methods
 
     def _build_ui(self):
         """ Build the elements for displaying preview images and options panels. """
-        container = tk.PanedWindow(self._root,
+        container = tk.PanedWindow(self,
                                    sashrelief=tk.RIDGE,
                                    sashwidth=4,
                                    sashpad=8,
