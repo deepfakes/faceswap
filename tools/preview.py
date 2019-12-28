@@ -779,11 +779,17 @@ class FacesDisplay():
 
 
 class ConfigTools():
-    """ Tools for loading, saving, setting and retrieving configuration file values. """
+    """ Tools for loading, saving, setting and retrieving configuration file values.
+
+    Attributes
+    ----------
+    tk_vars: dict
+        Global tkinter variables. `Refresh` and `Busy` :class:`tkinter.BooleanVar`
+    """
     def __init__(self):
         self._config = Config(None)
         self._config_dicts = self._get_config_dicts()  # Holds currently saved config
-        self._tk_vars = dict()
+        self.tk_vars = dict()
 
     @property
     def config(self):
@@ -811,7 +817,7 @@ class ConfigTools():
 
     def update_config(self):
         """ Update :attr:`config` with the currently selected values from the GUI. """
-        for section, items in self._tk_vars.items():
+        for section, items in self.tk_vars.items():
             for item, value in items.items():
                 try:
                     new_value = str(value.get())
@@ -857,14 +863,14 @@ class ConfigTools():
             sections are reset. Default: ``None``
         """
         logger.debug("Resetting to saved config: %s", section)
-        sections = [section] if section is not None else list(self._tk_vars.keys())
+        sections = [section] if section is not None else list(self.tk_vars.keys())
         for config_section in sections:
             for item, options in self._config_dicts[config_section].items():
                 if item == "helptext":
                     continue
                 val = options["value"]
-                if val != self._tk_vars[config_section][item].get():
-                    self._tk_vars[config_section][item].set(val)
+                if val != self.tk_vars[config_section][item].get():
+                    self.tk_vars[config_section][item].set(val)
                     logger.debug("Setting %s - %s to saved value %s", config_section, item, val)
         logger.debug("Reset to saved config: %s", section)
 
@@ -878,14 +884,14 @@ class ConfigTools():
             sections are reset. Default: ``None``
         """
         logger.debug("Resetting to default: %s", section)
-        sections = [section] if section is not None else list(self._tk_vars.keys())
+        sections = [section] if section is not None else list(self.tk_vars.keys())
         for config_section in sections:
             for item, options in self._config.defaults[config_section].items():
                 if item == "helptext":
                     continue
                 default = options["default"]
-                if default != self._tk_vars[config_section][item].get():
-                    self._tk_vars[config_section][item].set(default)
+                if default != self.tk_vars[config_section][item].get():
+                    self.tk_vars[config_section][item].set(default)
                     logger.debug("Setting %s - %s to default value %s",
                                  config_section, item, default)
         logger.debug("Reset to default: %s", section)
@@ -910,11 +916,11 @@ class ConfigTools():
                 if item == "helptext":
                     continue
                 if ((section is not None and config_section != section)
-                        or config_section not in self._tk_vars):
+                        or config_section not in self.tk_vars):
                     new_opt = options["value"]  # Keep saved item for other sections
                     logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
                 else:
-                    new_opt = self._tk_vars[config_section][item].get()
+                    new_opt = self.tk_vars[config_section][item].get()
                     logger.debug("Setting option: (item: '%s', value: '%s')", item, new_opt)
                 helptext = options["helptext"]
                 helptext = self._config.format_help(helptext, is_section=False)
@@ -1276,13 +1282,18 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         The function to execute when a patch callback is received
     scaling: float
         The scaling factor for display
+
+    Attributes
+    ----------
+    config_tools: :class:`ConfigTools`
+        Tools for loading and saving configuration files
     """
     def __init__(self, parent, config_tools, patch_callback, scaling):
         logger.debug("Initializing %s: (parent: %s, config: %s, scaling: %s)",
                      self.__class__.__name__, parent, config_tools, scaling)
         super().__init__(parent)
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
-        self._config_tools = config_tools
+        self.config_tools = config_tools
         self._scaling = scaling
 
         self._tabs = dict()
@@ -1294,20 +1305,18 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     def _build_tabs(self):
         """ Build the notebook tabs for the each configuration section. """
         logger.debug("Build Tabs")
-        for section in self._config_tools.sections:
+        for section in self.config_tools.sections:
             tab = ttk.Notebook(self)
             self._tabs[section] = {"tab": tab}
             self.add(tab, text=section.replace("_", " ").title())
 
     def _build_sub_tabs(self):
         """ Build the notebook sub tabs for each convert section's plugin. """
-        for section, plugins in self._config_tools.plugins_dict.items():
+        for section, plugins in self.config_tools.plugins_dict.items():
             for plugin in plugins:
                 config_key = ".".join((section, plugin))
-                config_dict = self._config_tools.config_dicts[config_key]
-                tab = ConfigFrame(self,
-                                  config_key,
-                                  config_dict)
+                config_dict = self.config_tools.config_dicts[config_key]
+                tab = ConfigFrame(self, config_key, config_dict)
                 self._tabs[section][plugin] = tab
                 self._tabs[section]["tab"].add(tab, text=plugin.replace("_", " ").title())
 
@@ -1319,7 +1328,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         patch_callback: python function
             The function to execute when the images require patching
         """
-        for plugins in self._config_tools.tk_vars.values():
+        for plugins in self.config_tools.tk_vars.values():
             for tk_var in plugins.values():
                 tk_var.trace("w", patch_callback)
 
