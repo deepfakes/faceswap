@@ -538,7 +538,7 @@ class Mask():
             mask = BlurMask(self._blur["type"],
                             mask,
                             self._blur["kernel"],
-                            self._blur["passes"]).blurred
+                            passes=self._blur["passes"]).blurred
         logger.trace("mask shape: %s", mask.shape)
         return mask
 
@@ -704,7 +704,7 @@ class BlurMask():
         Whether the given :attr:`kernel` parameter is a ratio or not. If ``True`` then the
         actual kernel size will be calculated from the given ratio and the mask size. If
         ``False`` then the kernel size will be set directly from the :attr:`kernel` parameter.
-        Default: ``True``
+        Default: ``False``
     passes: int, optional
         The number of passes to perform when blurring. Default: ``1``
 
@@ -716,10 +716,10 @@ class BlurMask():
     >>> print(new_mask.shape)
     (128, 128, 1)
     """
-    def __init__(self, blur_type, mask, kernel, is_ratio=True, passes=1):
+    def __init__(self, blur_type, mask, kernel, is_ratio=False, passes=1):
         logger.trace("Initializing %s: (blur_type: '%s', mask_shape: %s, kernel: %s, "
-                     "passes: %s)", self.__class__.__name__, blur_type, mask.shape, kernel,
-                     passes)
+                     "is_ratio: %s, passes: %s)", self.__class__.__name__, blur_type, mask.shape,
+                     kernel, is_ratio, passes)
         self._blur_type = blur_type.lower()
         self._mask = mask
         self._passes = passes
