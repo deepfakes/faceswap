@@ -161,7 +161,7 @@ class ControlPanelOption():
 
     @property
     def value(self):
-        """ Return either selected value or default """
+        """ Return either initial value or default """
         val = self._options["initial_value"]
         val = self.default if val is None else val
         return val
@@ -226,6 +226,17 @@ class ControlPanelOption():
     def set(self, value):
         """ Set the tk_var to a new value """
         self.tk_var.set(value)
+
+    def set_initial_value(self, value):
+        """ Set the initial_value to the given value
+
+        Parameters
+        ----------
+        value: varies
+            The value to set the initial value attribute to
+        """
+        logger.debug("Setting inital value for %s to %s", self.name, value)
+        self._options["initial_value"] = value
 
     def get_control(self):
         """ Set the correct control type based on the datatype or for this option """
