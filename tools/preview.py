@@ -16,10 +16,9 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
-from lib.gui.custom_widgets import ContextMenu
 from lib.gui.utils import get_images, initialize_config, initialize_images
 from lib.gui.custom_widgets import Tooltip
-from lib.gui.control_helper import ControlPanel, ControlPanelOption, set_slider_rounding
+from lib.gui.control_helper import ControlPanel, ControlPanelOption
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.multithreading import MultiThread
@@ -1105,26 +1104,27 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             A Progress bar to indicate that the Preview tool is busy
         """
         logger.debug("Building Action frame")
-        top_frame = ttk.Frame(self)
-        top_frame.pack(side=tk.TOP, fill=tk.BOTH, anchor=tk.N, expand=True)
+
         bottom_frame = ttk.Frame(self)
         bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
+        top_frame = ttk.Frame(self)
+        top_frame.pack(side=tk.TOP, fill=tk.BOTH, anchor=tk.N, expand=True)
 
-        self._add_comboboxes(top_frame, defaults, available_masks, has_predicted_mask)
-        busy_indicator = self._add_busy_indicator(top_frame)
-        self._add_refresh_button(top_frame, refresh_callback)
+        self._add_cli_choices(top_frame, defaults, available_masks, has_predicted_mask)
+
+        busy_indicator = self._add_busy_indicator(bottom_frame)
+        self._add_refresh_button(bottom_frame, refresh_callback)
         self._add_patch_callback(patch_callback)
         self._add_actions(bottom_frame)
         logger.debug("Built Action frame")
         return busy_indicator
 
-    def _add_comboboxes(self, parent, defaults, available_masks, has_predicted_mask):
-        """ Add combo boxes to the :class:`ActionFrame`.
+    def _add_cli_choices(self, parent, defaults, available_masks, has_predicted_mask):
+        """ Create :class:`lib.gui.control_helper.ControlPanel` object for the command
+        line options.
 
-        Parameters
-        ----------
-        parent: tkinter object
-            The parent tkinter object that holds the combo box
+        parent: :class:`ttk.Frame`
+            The frame to hold the command line choices
         defaults: dict
             The default command line options
         available_masks: list
@@ -1132,21 +1132,41 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         has_predicted_mask: bool
             Whether the model was trained with a mask
         """
+        cp_options = self._get_control_panel_options(defaults, available_masks, has_predicted_mask)
+        panel_kwargs = dict(blank_nones=False, label_width=10)
+        ControlPanel(parent, cp_options, header_text=None, **panel_kwargs)
+
+    def _get_control_panel_options(self, defaults, available_masks, has_predicted_mask):
+        """ Create :class:`lib.gui.control_helper.ControlPanelOption` objects for the command
+        line options.
+
+        defaults: dict
+            The default command line options
+        available_masks: list
+            The available masks that exist within the alignments file
+        has_predicted_mask: bool
+            Whether the model was trained with a mask
+
+        Returns
+        -------
+        list
+            The list of `lib.gui.control_helper.ControlPanelOption` objects for the Action Frame
+        """
+        cp_options = []
         for opt in self._options:
             if opt == "mask_type":
                 choices = self._create_mask_choices(defaults, available_masks, has_predicted_mask)
             else:
                 choices = PluginLoader.get_available_convert_plugins(opt, True)
-            choices = [self._format_to_display(choice) for choice in choices]
-            ctl = ControlBuilder(parent,
-                                 opt,
-                                 str,
-                                 defaults[opt],
-                                 choices=choices,
-                                 is_radio=False,
-                                 label_width=10,
-                                 control_width=12)
-            self._tk_vars[opt] = ctl.tk_var
+            cp_option = ControlPanelOption(title=opt,
+                                           dtype=str,
+                                           default=defaults[opt],
+                                           initial_value=defaults[opt],
+                                           choices=choices,
+                                           is_radio=False)
+            self._tk_vars[opt] = cp_option.tk_var
+            cp_options.append(cp_option)
+        return cp_options
 
     @staticmethod
     def _create_mask_choices(defaults, available_masks, has_predicted_mask):
@@ -1187,7 +1207,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             The function to execute when the refresh button is pressed
         """
         btn = ttk.Button(parent, text="Update Samples", command=refresh_callback)
-        btn.pack(padx=5, pady=5, side=tk.BOTTOM, fill=tk.X, anchor=tk.S)
+        btn.pack(padx=5, pady=5, side=tk.TOP, fill=tk.X, anchor=tk.N)
 
     def _add_patch_callback(self, patch_callback):
         """ Add callback to re-patch images on action option change.
@@ -1215,7 +1235,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """
         logger.debug("Placing busy indicator")
         pbar = ttk.Progressbar(parent, mode="indeterminate")
-        pbar.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
+        pbar.pack(side=tk.LEFT)
         pbar.pack_forget()
         self.busy_tkvar.trace("w", self._busy_indicator_trace)
         return pbar
@@ -1243,7 +1263,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     def _start_busy_indicator(self):
         """ Start and display progress bar """
         logger.debug("Starting busy indicator")
-        self.busy_indicator.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
+        self.busy_indicator.pack(side=tk.LEFT, padx=5, pady=(5, 10), fill=tk.X, expand=True)
         self.busy_indicator.start()
 
     def _add_actions(self, parent):
@@ -1256,7 +1276,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """
         logger.debug("Adding util buttons")
         frame = ttk.Frame(parent)
-        frame.pack(padx=5, pady=(5, 10), side=tk.BOTTOM, fill=tk.X, anchor=tk.E)
+        frame.pack(padx=5, pady=(5, 10), side=tk.RIGHT, fill=tk.X, anchor=tk.E)
 
         for utl in ("save", "clear", "reload"):
             logger.debug("Adding button: '%s'", utl)
@@ -1384,9 +1404,8 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         panel_kwargs = dict(columns=2, option_columns=2, blank_nones=False)
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        info_text = self._options.get("helptext", "")
         cp_options = [opt for key, opt in self._options.items() if key != "helptext"]
-        ControlPanel(frame, cp_options, header_text=info_text, **panel_kwargs)
+        ControlPanel(frame, cp_options, header_text=None, **panel_kwargs)
         self._add_actions(parent, config_key)
         logger.debug("Added Config Frame")
 
@@ -1431,214 +1450,3 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             btnutl.pack(padx=2, side=tk.RIGHT)
             Tooltip(btnutl, text=text, wraplength=200)
         logger.debug("Added util buttons")
-
-
-class ControlBuilder():
-    """
-    Builds and returns a frame containing a tkinter control with label
-
-    Currently only setup for config items
-
-    Parameters
-    ----------
-    parent: tkinter object
-        Parent tkinter object
-    title: str
-        Title of the control. Will be used for label text
-    dtype: datatype object
-        Datatype of the control
-    default: str
-        Default value for the control
-    selected_value: str, optional
-        Selected value for the control. If None, default will be used
-    choices: list or tuple, object
-        Used for combo boxes and radio control option setting
-    is_radio: bool, optional
-        Specifies to use a Radio control instead of combobox if choices are passed
-    rounding: int or float, optional
-        For slider controls. Sets the stepping
-    min_max: int or float, optional
-        For slider controls. Sets the min and max values
-    helptext: str, optional
-        Sets the tooltip text
-    radio_columns: int, optional
-        Sets the number of columns to use for grouping radio buttons
-    label_width: int, optional
-        Sets the width of the control label. Defaults to 20
-    control_width: int, optional
-        Sets the width of the control. Default is to auto expand
-    """
-    def __init__(self, parent, title, dtype, default,
-                 selected_value=None, choices=None, is_radio=False, rounding=None,
-                 min_max=None, helptext=None, radio_columns=3, label_width=20, control_width=None):
-        logger.debug("Initializing %s: (parent: %s, title: %s, dtype: %s, default: %s, "
-                     "selected_value: %s, choices: %s, is_radio: %s, rounding: %s, min_max: %s, "
-                     "helptext: %s, radio_columns: %s, label_width: %s, control_width: %s)",
-                     self.__class__.__name__, parent, title, dtype, default, selected_value,
-                     choices, is_radio, rounding, min_max, helptext, radio_columns, label_width,
-                     control_width)
-
-        self.title = title
-        self.default = default
-
-        self.frame = self.control_frame(parent, helptext)
-        self.control = self.set_control(dtype, choices, is_radio)
-        self.tk_var = self.set_tk_var(dtype, selected_value)
-
-        self.build_control(choices,
-                           dtype,
-                           rounding,
-                           min_max,
-                           radio_columns,
-                           label_width,
-                           control_width)
-        logger.debug("Initialized: %s", self.__class__.__name__)
-
-    # Frame, control type and variable
-    def control_frame(self, parent, helptext):
-        """ Frame to hold control and it's label """
-        logger.debug("Build control frame")
-        frame = ttk.Frame(parent)
-        frame.pack(side=tk.TOP, fill=tk.X)
-        if helptext is not None:
-            helptext = self.format_helptext(helptext)
-            Tooltip(frame, text=helptext, wraplength=720)
-        logger.debug("Built control frame")
-        return frame
-
-    def format_helptext(self, helptext):
-        """ Format the help text for tooltips """
-        logger.debug("Format control help: '%s'", self.title)
-        helptext = helptext.replace("\n\t", "\n  - ").replace("%%", "%")
-        helptext = self.title + " - " + helptext
-        logger.debug("Formatted control help: (title: '%s', help: '%s'", self.title, helptext)
-        return helptext
-
-    def set_control(self, dtype, choices, is_radio):
-        """ Set the correct control type based on the datatype or for this option """
-        if choices and is_radio:
-            control = ttk.Radiobutton
-        elif choices:
-            control = ttk.Combobox
-        elif dtype == bool:
-            control = ttk.Checkbutton
-        elif dtype in (int, float):
-            control = ttk.Scale
-        else:
-            control = ttk.Entry
-        logger.debug("Setting control '%s' to %s", self.title, control)
-        return control
-
-    def set_tk_var(self, dtype, selected_value):
-        """ Correct variable type for control """
-        logger.debug("Setting tk variable: (title: '%s', dtype: %s, selected_value: %s)",
-                     self.title, dtype, selected_value)
-        if dtype == bool:
-            var = tk.BooleanVar
-        elif dtype == int:
-            var = tk.IntVar
-        elif dtype == float:
-            var = tk.DoubleVar
-        else:
-            var = tk.StringVar
-        var = var(self.frame)
-        val = self.default if selected_value is None else selected_value
-        var.set(val)
-        logger.debug("Set tk variable: (title: '%s', type: %s, value: '%s')",
-                     self.title, type(var), val)
-        return var
-
-    # Build the full control
-    def build_control(self, choices, dtype, rounding, min_max, radio_columns,
-                      label_width, control_width):
-        """ Build the correct control type for the option passed through """
-        logger.debug("Build confog option control")
-        self.build_control_label(label_width)
-        self.build_one_control(choices, dtype, rounding, min_max, radio_columns, control_width)
-        logger.debug("Built option control")
-
-    def build_control_label(self, label_width):
-        """ Label for control """
-        logger.debug("Build control label: (title: '%s', label_width: %s)",
-                     self.title, label_width)
-        title = self.title.replace("_", " ").title()
-        lbl = ttk.Label(self.frame, text=title, width=label_width, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
-        logger.debug("Built control label: '%s'", self.title)
-
-    def build_one_control(self, choices, dtype, rounding, min_max, radio_columns, control_width):
-        """ Build and place the option controls """
-        logger.debug("Build control: (title: '%s', control: %s, choices: %s, dtype: %s, "
-                     "rounding: %s, min_max: %s: radio_columns: %s, control_width: %s)",
-                     self.title, self.control, choices, dtype, rounding, min_max, radio_columns,
-                     control_width)
-        if self.control == ttk.Scale:
-            ctl = self.slider_control(dtype, rounding, min_max)
-        elif self.control == ttk.Radiobutton:
-            ctl = self.radio_control(choices, radio_columns)
-        else:
-            ctl = self.control_to_optionsframe(choices)
-        self.set_control_width(ctl, control_width)
-        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
-        logger.debug("Built control: '%s'", self.title)
-
-    @staticmethod
-    def set_control_width(ctl, control_width):
-        """ Set the control width if required """
-        if control_width is not None:
-            ctl.config(width=control_width)
-
-    def radio_control(self, choices, columns):
-        """ Create a group of radio buttons """
-        logger.debug("Adding radio group: %s", self.title)
-        ctl = ttk.Frame(self.frame)
-        frames = list()
-        for _ in range(columns):
-            frame = ttk.Frame(ctl)
-            frame.pack(padx=5, pady=5, fill=tk.X, expand=True, side=tk.LEFT, anchor=tk.N)
-            frames.append(frame)
-
-        for idx, choice in enumerate(choices):
-            frame_id = idx % columns
-            radio = ttk.Radiobutton(frames[frame_id],
-                                    text=choice.title(),
-                                    value=choice,
-                                    variable=self.tk_var)
-            radio.pack(anchor=tk.W)
-            logger.debug("Adding radio option %s to column %s", choice, frame_id)
-        logger.debug("Added radio group: '%s'", self.title)
-        return ctl
-
-    def slider_control(self, dtype, rounding, min_max):
-        """ A slider control with corresponding Entry box """
-        logger.debug("Add slider control to Options Frame: (title: '%s', dtype: %s, rounding: %s, "
-                     "min_max: %s)", self.title, dtype, rounding, min_max)
-        tbox = ttk.Entry(self.frame, width=8, textvariable=self.tk_var, justify=tk.RIGHT)
-        tbox.pack(padx=(0, 5), side=tk.RIGHT)
-        ctl = self.control(
-            self.frame,
-            variable=self.tk_var,
-            command=lambda val, var=self.tk_var, dt=dtype, rn=rounding, mm=min_max:
-            set_slider_rounding(val, var, dt, rn, mm))
-        rc_menu = ContextMenu(tbox)
-        rc_menu.cm_bind()
-        ctl["from_"] = min_max[0]
-        ctl["to"] = min_max[1]
-        logger.debug("Added slider control to Options Frame: %s", self.title)
-        return ctl
-
-    def control_to_optionsframe(self, choices):
-        """ Standard non-check buttons sit in the main options frame """
-        logger.debug("Add control to Options Frame: (title: '%s', control: %s, choices: %s)",
-                     self.title, self.control, choices)
-        if self.control == ttk.Checkbutton:
-            ctl = self.control(self.frame, variable=self.tk_var, text=None)
-        else:
-            ctl = self.control(self.frame, textvariable=self.tk_var)
-            rc_menu = ContextMenu(ctl)
-            rc_menu.cm_bind()
-        if choices:
-            logger.debug("Adding combo choices: %s", choices)
-            ctl["values"] = [choice for choice in choices]
-        logger.debug("Added control to Options Frame: %s", self.title)
-        return ctl
