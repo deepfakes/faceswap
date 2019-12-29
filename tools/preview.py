@@ -593,7 +593,7 @@ class FacesDisplay():
         self._tk_vars = tk_vars
         self._padding = padding
 
-        self.faces = dict()
+        self._faces = dict()
         self._faces_source = None
         self._faces_dest = None
         self._tk_image = None
@@ -674,9 +674,9 @@ class FacesDisplay():
         self._faces_from_frames()
         if update_all:
             header = self._header_text()
-            source = np.hstack([self._draw_rect(face) for face in self.faces["src"]])
+            source = np.hstack([self._draw_rect(face) for face in self._faces["src"]])
             self._faces_source = np.vstack((header, source))
-        self._faces_dest = np.hstack([self._draw_rect(face) for face in self.faces["dst"]])
+        self._faces_dest = np.hstack([self._draw_rect(face) for face in self._faces["dst"]])
         logger.debug("source row shape: %s, swapped row shape: %s",
                      self._faces_dest.shape, self._faces_source.shape)
 
@@ -686,22 +686,23 @@ class FacesDisplay():
         if self.update_source:
             self._crop_source_faces()
         self._crop_destination_faces()
-        logger.debug("Extracted faces from frames: %s", {k: len(v) for k, v in self.faces.items()})
+        logger.debug("Extracted faces from frames: %s",
+                     {k: len(v) for k, v in self._faces.items()})
 
     def _crop_source_faces(self):
         """ Extract the source faces from the source frames, along with their filenames and the
         transformation matrix used to extract the faces. """
         logger.debug("Updating source faces")
-        self.faces = dict()
+        self._faces = dict()
         for image in self.source:
             detected_face = image["detected_faces"][0]
             src_img = image["image"]
             detected_face.load_aligned(src_img, self._size)
             matrix = detected_face.aligned["matrix"]
-            self.faces.setdefault("filenames",
-                                  list()).append(os.path.splitext(image["filename"])[0])
-            self.faces.setdefault("matrix", list()).append(matrix)
-            self.faces.setdefault("src", list()).append(AlignerExtract().transform(
+            self._faces.setdefault("filenames",
+                                   list()).append(os.path.splitext(image["filename"])[0])
+            self._faces.setdefault("matrix", list()).append(matrix)
+            self._faces.setdefault("src", list()).append(AlignerExtract().transform(
                 src_img,
                 matrix,
                 self._size,
@@ -713,13 +714,13 @@ class FacesDisplay():
         """ Extract the swapped faces from the swapped frames using the source face destination
         matrices. """
         logger.debug("Updating destination faces")
-        self.faces["dst"] = list()
+        self._faces["dst"] = list()
         destination = self.destination if self.destination else [np.ones_like(src["image"])
                                                                  for src in self.source]
         for idx, image in enumerate(destination):
-            self.faces["dst"].append(AlignerExtract().transform(
+            self._faces["dst"].append(AlignerExtract().transform(
                 image,
-                self.faces["matrix"][idx],
+                self._faces["matrix"][idx],
                 self._size,
                 self._padding))
         logger.debug("Updated destination faces")
@@ -736,7 +737,7 @@ class FacesDisplay():
         height = self._size // 8
         font = cv2.FONT_HERSHEY_SIMPLEX
         # Get size of placed text for positioning
-        text_sizes = [cv2.getTextSize(self.faces["filenames"][idx],
+        text_sizes = [cv2.getTextSize(self._faces["filenames"][idx],
                                       font,
                                       font_scale,
                                       1)[0]
@@ -746,9 +747,9 @@ class FacesDisplay():
         text_x = [int((self._size - text_sizes[idx][0]) / 2) + self._size * idx
                   for idx in range(self._total_columns)]
         logger.debug("filenames: %s, text_sizes: %s, text_x: %s, text_y: %s",
-                     self.faces["filenames"], text_sizes, text_x, text_y)
+                     self._faces["filenames"], text_sizes, text_x, text_y)
         header_box = np.ones((height, self._size * self._total_columns, 3), np.uint8) * 255
-        for idx, text in enumerate(self.faces["filenames"]):
+        for idx, text in enumerate(self._faces["filenames"]):
             cv2.putText(header_box,
                         text,
                         (text_x[idx], text_y),
@@ -1031,17 +1032,17 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
         self._options = ["color", "mask_type", "scaling"]
-        self.busy_tkvar = tk_vars["busy"]
+        self._busy_tkvar = tk_vars["busy"]
         self._tk_vars = dict()
 
         d_locals = locals()
         defaults = {opt: self._format_to_display(d_locals["selected_{}".format(opt)])
                     for opt in self._options}
-        self.busy_indicator = self._build_frame(defaults,
-                                                refresh_callback,
-                                                patch_callback,
-                                                available_masks,
-                                                has_predicted_mask)
+        self._busy_indicator = self._build_frame(defaults,
+                                                 refresh_callback,
+                                                 patch_callback,
+                                                 available_masks,
+                                                 has_predicted_mask)
 
     @property
     def convert_args(self):
@@ -1237,7 +1238,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         pbar = ttk.Progressbar(parent, mode="indeterminate")
         pbar.pack(side=tk.LEFT)
         pbar.pack_forget()
-        self.busy_tkvar.trace("w", self._busy_indicator_trace)
+        self._busy_tkvar.trace("w", self._busy_indicator_trace)
         return pbar
 
     def _busy_indicator_trace(self, *args):
@@ -1249,7 +1250,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             Required for tkinter event, but unused
         """
         logger.trace("Busy indicator trace: %s", args)
-        if self.busy_tkvar.get():
+        if self._busy_tkvar.get():
             self._start_busy_indicator()
         else:
             self._stop_busy_indicator()
@@ -1257,14 +1258,14 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     def _stop_busy_indicator(self):
         """ Stop and hide progress bar """
         logger.debug("Stopping busy indicator")
-        self.busy_indicator.stop()
-        self.busy_indicator.pack_forget()
+        self._busy_indicator.stop()
+        self._busy_indicator.pack_forget()
 
     def _start_busy_indicator(self):
         """ Start and display progress bar """
         logger.debug("Starting busy indicator")
-        self.busy_indicator.pack(side=tk.LEFT, padx=5, pady=(5, 10), fill=tk.X, expand=True)
-        self.busy_indicator.start()
+        self._busy_indicator.pack(side=tk.LEFT, padx=5, pady=(5, 10), fill=tk.X, expand=True)
+        self._busy_indicator.start()
 
     def _add_actions(self, parent):
         """ Add Action Buttons to the :class:`ActionFrame`
