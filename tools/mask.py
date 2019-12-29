@@ -375,7 +375,7 @@ class Mask():
               - The masked face
         """
         mask = detected_face.mask[self._mask_type]
-        mask.set_blur_kernel_and_threshold(**self._output_opts)
+        mask.set_blur_and_threshold(**self._output_opts)
         if not self._output_full_frame or self._input_is_faces:
             if self._input_is_faces:
                 face = detected_face.image
