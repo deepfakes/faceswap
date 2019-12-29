@@ -974,6 +974,17 @@ class ConvertArgs(ExtractConvertArgs):
             "help": "Sets allow_growth option of Tensorflow to spare memory on some "
                     "configurations."})
         argument_list.append({
+            "opts": ("-otf", "--on-the-fly"),
+            "action": "store_true",
+            "dest": "on_the_fly",
+            "group": "settings",
+            "default": False,
+            "help": "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
+                    "alignments file for your destination video. However, if you wish you can "
+                    "generate the alignments on-the-fly by enabling this option. This will use "
+                    "an inferior extraction pipeline and will lead to substandard results. If an "
+                    "alignments file is found, this option will be ignored."})
+        argument_list.append({
             "opts": ("-k", "--keep-unchanged"),
             "action": "store_true",
             "dest": "keep_unchanged",

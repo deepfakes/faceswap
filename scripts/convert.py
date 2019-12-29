@@ -363,14 +363,24 @@ class DiskIO():
         :class:`plugins.extract.Pipeline.Extractor`
             The face extraction chain to be used for on-the-fly conversion
         """
+        if not self._alignments.have_alignments_file and not self._args.on_the_fly:
+            logger.error("No alignments file found. Please provide an alignments file for your "
+                         "destination video (recommended) or enable on-the-fly conversion (not "
+                         "recommended).")
+            sys.exit(1)
         if self._alignments.have_alignments_file:
+            if self._args.on_the_fly:
+                logger.info("On-The-Fly conversion selected, but an alignments file was found. "
+                            "Using pre-existing alignments file: '%s'", self._alignments.file)
+            else:
+                logger.debug("Alignments file found: '%s'", self._alignments.file)
             return None
 
         logger.debug("Loading extractor")
-        logger.warning("No Alignments file found. Extracting on the fly.")
-        logger.warning("NB: This will use the inferior cv2-dnn for extraction "
-                       "and  landmarks. It is recommended to perfom Extract first for "
-                       "superior results")
+        logger.warning("On-The-Fly conversion selected. This will use the inferior cv2-dnn for "
+                       "extraction and will produce poor results.")
+        logger.warning("It is recommended to generate an alignments file for your destination "
+                       "video with Extract first for superior results.")
         extractor = Extractor(detector="cv2-dnn",
                               aligner="cv2-dnn",
                               masker="none",
