@@ -52,7 +52,7 @@ class Mask(Adjustment):
         raw_mask = np.expand_dims(raw_mask, axis=-1) if raw_mask.ndim != 3 else raw_mask
         mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
         logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
-        return mask, raw_mask
+        return mask.astype("float32") / 255.0, raw_mask.astype("float32") / 255.0
 
     def _get_mask(self, detected_face, predicted_mask):
         """ Return the requested mask with any requested blurring applied.

@@ -611,10 +611,11 @@ class Mask():
             Default: 0
         """
         logger.trace("blur_kernel: %s, threshold: %s", blur_kernel, threshold)
-        blur_kernel += 0 if blur_kernel == 0 or blur_kernel % 2 == 1 else 1
-        self._blur["kernel"] = blur_kernel
-        self._blur["type"] = blur_type
-        self._blur["passes"] = blur_passes
+        if blur_type is not None:
+            blur_kernel += 0 if blur_kernel == 0 or blur_kernel % 2 == 1 else 1
+            self._blur["kernel"] = blur_kernel
+            self._blur["type"] = blur_type
+            self._blur["passes"] = blur_passes
         self._threshold = (threshold / 100.0) * 255.0
 
     def _adjust_affine_matrix(self, mask_size, affine_matrix):
