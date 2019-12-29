@@ -1,18 +1,30 @@
 scripts package
 ===============
 
-Subpackages
------------
+scripts.extract module
+----------------------
+.. automodule:: scripts.extract
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-.. toctree::
+scripts.train module
+--------------------
+.. automodule:: scripts.train
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-   scripts.extract
-   scripts.train
+scripts.convert module
+----------------------
+.. automodule:: scripts.convert
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-Module contents
----------------
-
-.. automodule:: scripts
+scripts.fsmedia module
+----------------------
+.. automodule:: scripts.fsmedia
    :members:
    :undoc-members:
    :show-inheritance:

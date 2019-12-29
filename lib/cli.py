@@ -14,7 +14,6 @@ import textwrap
 from importlib import import_module
 
 from lib.logger import crash_log, log_setup
-from lib.model.masks import get_available_masks, get_default_mask
 from lib.utils import FaceswapError, get_backend, safe_shutdown, set_system_verbosity
 from plugins.plugin_loader import PluginLoader
 
@@ -576,9 +575,7 @@ class ExtractArgs(ExtractConvertArgs):
             "choices": PluginLoader.get_available_extractors("mask", add_none=True),
             "default": "extended",
             "group": "Plugins",
-            "help": "R|Masker to use. NB - masks generated here can be used for training, and "
-                    "converting with the 'predicted' mask. Availability of all masks specified "
-                    "here for convert is coming soon."
+            "help": "R|Masker to use."
                     "\nL|none: Don't use a mask."
                     "\nL|components: Mask designed to provide facial segmentation based on the "
                     "positioning of landmark locations. A convex hull is constructed around the "
@@ -808,23 +805,32 @@ class ConvertArgs(ExtractConvertArgs):
         argument_list.append({
             "opts": ("-M", "--mask-type"),
             "action": Radio,
-            "type": str.lower,
             "dest": "mask_type",
-            "choices": get_available_masks() + ["predicted"],
-            "group": "plugins",
-            "default": "predicted",
-            "help": "R|Mask to use to replace faces. Blending of the masks can be adjusted in "
-                    "'/config/convert.ini' or 'Settings > Configure Convert Plugins':"
-                    "\nL|components: An improved face hull mask using a facehull of 8 facial "
-                    "parts."
-                    "\nL|dfl_full: An improved face hull mask using a facehull of 3 facial parts."
-                    "\nL|extended: Based on components mask. Extends the eyebrow points to "
-                    "further up the forehead. May perform badly on difficult angles."
-                    "\nL|facehull: Face cutout based on landmarks."
-                    "\nL|predicted: The predicted mask generated from the model. If the model was "
-                    "not trained with a mask then this will fallback to "
-                    "'{}'".format(get_default_mask()) +
-                    "\nL|none: Don't use a mask."})
+            "type": str.lower,
+            "choices": PluginLoader.get_available_extractors("mask",
+                                                             add_none=True) + ["predicted"],
+            "default": "extended",
+            "group": "Plugins",
+            "help": "R|Masker to use. NB: The mask you require must exist within the alignments "
+                    "file. You can add additional masks with the Mask Tool."
+                    "\nL|none: Don't use a mask."
+                    "\nL|components: Mask designed to provide facial segmentation based on the "
+                    "positioning of landmark locations. A convex hull is constructed around the "
+                    "exterior of the landmarks to create a mask."
+                    "\nL|extended: Mask designed to provide facial segmentation based on the "
+                    "positioning of landmark locations. A convex hull is constructed around the "
+                    "exterior of the landmarks and the mask is extended upwards onto the forehead."
+                    "\nL|vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
+                    "faces clear of obstructions. Profile faces and obstructions may result in "
+                    "sub-par performance."
+                    "\nL|vgg-obstructed: Mask designed to provide smart segmentation of mostly "
+                    "frontal faces. The mask model has been specifically trained to recognize "
+                    "some facial obstructions (hands and eyeglasses). Profile faces may result in "
+                    "sub-par performance."
+                    "\nL|unet-dfl: Mask designed to provide smart segmentation of mostly frontal "
+                    "faces. The mask model has been trained by community members and will need "
+                    "testing for further description. Profile faces may result in sub-par "
+                    "performance."})
         argument_list.append({
             "opts": ("-sc", "--scaling"),
             "action": Radio,
@@ -967,6 +973,17 @@ class ConvertArgs(ExtractConvertArgs):
             "backend": "nvidia",
             "help": "Sets allow_growth option of Tensorflow to spare memory on some "
                     "configurations."})
+        argument_list.append({
+            "opts": ("-otf", "--on-the-fly"),
+            "action": "store_true",
+            "dest": "on_the_fly",
+            "group": "settings",
+            "default": False,
+            "help": "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
+                    "alignments file for your destination video. However, if you wish you can "
+                    "generate the alignments on-the-fly by enabling this option. This will use "
+                    "an inferior extraction pipeline and will lead to substandard results. If an "
+                    "alignments file is found, this option will be ignored."})
         argument_list.append({
             "opts": ("-k", "--keep-unchanged"),
             "action": "store_true",

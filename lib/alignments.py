@@ -160,6 +160,43 @@ class Alignments():
         logger.trace("'%s': %s", frame, retval)
         return retval
 
+    def mask_is_valid(self, mask_type):
+        """ Ensure the given ``mask_type`` is valid for this alignments file.
+
+        Every face in the alignments file must have the given mask type to successfully
+        pass the test.
+
+        Parameters
+        ----------
+        mask_type: str
+            The mask type to check against the current alignments
+
+        Returns
+        -------
+        bool:
+            ``True`` if all faces in the current alignments possess the given ``mask_type``
+            otherwise ``False``
+        """
+        retval = any([(face.get("mask", None) is not None and
+                       face["mask"].get(mask_type, None) is not None)
+                      for faces in self.data.values()
+                      for face in faces])
+        logger.debug(retval)
+        return retval
+
+    @property
+    def mask_summary(self):
+        """ Dict: The mask types and the number of faces which have each type that exist with in
+        the loaded alignments """
+        masks = dict()
+        for faces in self.data.values():
+            for face in faces:
+                if face.get("mask", None) is None:
+                    masks["none"] = masks.get("none", 0) + 1
+                for key in face.get("mask", dict):
+                    masks[key] = masks.get(key, 0) + 1
+        return masks
+
     # << DATA >> #
 
     def get_faces_in_frame(self, frame):

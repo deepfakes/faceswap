@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class Mask():
     """ This tool is part of the Faceswap Tools suite and should be called from
-    ``python tools.py mask``.
+    ``python tools.py mask`` command.
 
     Faceswap Masks tool. Generate masks from existing alignments files, and output masks
     for preview.
@@ -375,7 +375,7 @@ class Mask():
               - The masked face
         """
         mask = detected_face.mask[self._mask_type]
-        mask.set_blur_kernel_and_threshold(**self._output_opts)
+        mask.set_blur_and_threshold(**self._output_opts)
         if not self._output_full_frame or self._input_is_faces:
             if self._input_is_faces:
                 face = detected_face.image

@@ -1,17 +1,18 @@
 tools package
 =============
 
-Subpackages
------------
+tools.mask module
+-----------------
 
-.. toctree::
+.. automodule:: tools.mask
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-   tools.mask
+tools.preview module
+--------------------
 
-Module contents
----------------
-
-.. automodule:: tools
+.. automodule:: tools.preview
    :members:
    :undoc-members:
    :show-inheritance:

@@ -1118,8 +1118,8 @@ class TrainingAlignments():
         masks = dict()
         for fhash, face in detected_faces.items():
             mask = face.mask[self._training_opts["mask_type"]]
-            mask.set_blur_kernel_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
-                                               threshold=self._training_opts["mask_threshold"])
+            mask.set_blur_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
+                                        threshold=self._training_opts["mask_threshold"])
             for filename in self._hash_to_filenames(side, fhash):
                 masks[filename] = mask
         return masks

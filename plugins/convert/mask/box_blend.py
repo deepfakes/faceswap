@@ -1,26 +1,42 @@
 #!/usr/bin/env python3
-""" Adjustments for the swap box for faceswap.py converter """
+""" Plugin to blend the edges of the face box that comes out of the Faceswap Model into the final
+frame. """
 
 import numpy as np
 
-from ._base import Adjustment, BlurMask, logger
+from lib.faces_detect import BlurMask
+from ._base import Adjustment, logger
 
 
 class Mask(Adjustment):
-    """ Manipulations that occur on the swap box
-        Actions performed here occur prior to warping the face back to the background frame
+    """ Manipulations to perform on the edges of the box that is received from the Faceswap model.
 
-        For actions that occur identically for each frame (e.g. blend_box), constants can
-        be placed into self.func_constants to be compiled at launch, then referenced for
-        each face. """
-    def __init__(self, mask_type, output_size, predicted_available=False, **kwargs):
-        super().__init__(mask_type, output_size, predicted_available, **kwargs)
-        self.mask = self.get_mask() if not self.skip else None
+    As the size of the box coming out of the model is identical for every face, the mask to be
+    applied is just calculated once (at launch).
 
-    def get_mask(self):
-        """ The box for every face will be identical, so set the mask just once
-            As gaussian blur technically blurs both sides of the mask, reduce the mask ratio by
-            half to give a more expected box """
+    Parameters
+    ----------
+    output_size: int
+        The size of the output from the Faceswap model.
+    **kwargs: dict, optional
+        See the parent :class:`~plugins.convert.mask._base` for additional keyword arguments.
+    """
+    def __init__(self, output_size, **kwargs):
+        super().__init__("none", output_size, **kwargs)
+        self.mask = self._get_mask() if not self.skip else None
+
+    def _get_mask(self):
+        """ Create a mask to be used at the edges of the face box.
+
+        The box for every face will be identical, so the mask is set just once on initialization.
+        As gaussian blur technically blurs both sides of the mask, the mask ratio is reduced by
+        half to give a more expected box.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The mask to be used at the edges of the box output from the Faceswap model
+        """
         logger.debug("Building box mask")
         mask_ratio = self.config["distance"] / 200
         facesize = self.dummy.shape[0]
@@ -31,18 +47,31 @@ class Mask(Adjustment):
         mask = BlurMask(self.config["type"],
                         mask,
                         self.config["radius"],
-                        self.config["passes"]).blurred
+                        is_ratio=True,
+                        passes=self.config["passes"]).blurred
         logger.debug("Built box mask. Shape: %s", mask.shape)
         return mask
 
-    def process(self, new_face):
-        """ The blend box function. Adds the created mask to the alpha channel """
+    def process(self, new_face):  # pylint:disable=arguments-differ
+        """ Apply the box mask to the swapped face.
+
+        Parameters
+        ----------
+        new_face: :class:`numpy.ndarray`
+            The swapped face that has been output from the Faceswap model
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The input face is returned with the box mask added to the alpha channel if a blur type
+            has been specified in the plugin configuration. If this configuration is set to
+            ``None`` then the input face is returned with no mask applied.
+        """
         if self.skip:
             logger.trace("Skipping blend box")
             return new_face
 
         logger.trace("Blending box")
-        mask = np.expand_dims(self.mask, axis=-1)
-        new_face = np.clip(np.concatenate((new_face, mask), axis=-1), 0.0, 1.0)
+        new_face = np.concatenate((new_face, self.mask), axis=-1)
         logger.trace("Blended box")
         return new_face

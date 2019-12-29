@@ -1,5 +1,5 @@
 lib.image module
-========================
+================
 
 .. automodule:: lib.image
    :members:

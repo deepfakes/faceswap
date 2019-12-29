@@ -1,6 +1,10 @@
 plugins package
 ===============
 
+.. toctree::
+
+   plugins.plugin_loader
+
 Subpackages
 -----------
 
@@ -9,3 +13,4 @@ Subpackages
    plugins.extract
    plugins.plugin_loader
    plugins.train
+   plugins.convert
