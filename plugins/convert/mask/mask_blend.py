@@ -72,7 +72,7 @@ class Mask(Adjustment):
         """
         if self.mask_type == "none":
             # Return a dummy mask if not using a mask
-            mask = np.ones_like(self.dummy[:, :, 1])
+            mask = np.ones_like(self.dummy[:, :, 1], dtype="uint8") * 255
         elif self.mask_type == "predicted":
             mask = predicted_mask
         else:

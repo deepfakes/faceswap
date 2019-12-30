@@ -6,6 +6,7 @@ import random
 import tkinter as tk
 from tkinter import ttk
 import os
+import sys
 
 from configparser import ConfigParser
 from threading import Event, Lock
@@ -74,6 +75,14 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         self._opts_book = None
         self._cli_frame = None  # cli frame holds cli options
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def _available_masks(self):
+        """ list: The mask names that are available for every face in the alignmnets file """
+        retval = [key
+                  for key, val in self._samples.alignments.mask_summary.items()
+                  if val == self._samples.alignments.faces_count]
+        return retval
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -148,7 +157,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         options_frame = ttk.Frame(container)
         self._cli_frame = ActionFrame(
             options_frame,
-            list(self._samples.alignments.mask_summary.keys()),
+            self._available_masks,
             self._samples.predictor.has_predicted_mask,
             self._patch.converter.cli_arguments.color_adjustment.replace("-", "_"),
             self._patch.converter.cli_arguments.mask_type.replace("-", "_"),
@@ -205,7 +214,7 @@ class Samples():
                                       input_is_video=self._images.is_video)
         if not self._alignments.have_alignments_file:
             logger.error("Alignments file not found at: '%s'", self._alignments.file)
-            exit(1)
+            sys.exit(1)
         self._filelist = self._get_filelist()
         self._indices = self._get_indices()
 
