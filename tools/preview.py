@@ -17,7 +17,7 @@ from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
 from lib.cli import ConvertArgs
-from lib.gui.utils import get_images, initialize_config, initialize_images
+from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import ControlPanel, ControlPanelOption
 from lib.convert import Converter
@@ -53,7 +53,6 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         super().__init__()
         self._config_tools = ConfigTools()
         self._lock = Lock()
-        self._scaling = self._get_scaling()
 
         self._tk_vars = dict(refresh=tk.BooleanVar(), busy=tk.BooleanVar())
         for val in self._tk_vars.values():
@@ -78,7 +77,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
 
     @property
     def _available_masks(self):
-        """ list: The mask names that are available for every face in the alignmnets file """
+        """ list: The mask names that are available for every face in the alignments file """
         retval = [key
                   for key, val in self._samples.alignments.mask_summary.items()
                   if val == self._samples.alignments.faces_count]
@@ -89,33 +88,13 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         logger.debug("Initializing tkinter")
         initialize_config(self, None, None, None)
         initialize_images()
-        self._set_geometry()
+        get_config().set_geometry(940, 600, fullscreen=False)
         self.title("Faceswap.py - Convert Settings")
         self.tk.call(
             "wm",
             "iconphoto",
             self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
-
-    def _get_scaling(self):
-        """ Get dpi and update scaling for the display.
-
-        Returns
-        -------
-        float: The scaling factor for display
-        """
-        dpi = self.winfo_fpixels("1i")
-        scaling = dpi / 72.0
-        logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
-        return scaling
-
-    def _set_geometry(self):
-        """ Set the GUI window geometry. """
-        self.tk.call("tk", "scaling", self._scaling)
-        width = int(940 * self._scaling)
-        height = int(600 * self._scaling)
-        logger.debug("Geometry: %sx%s", width, height)
-        self.geometry("{}x{}+80+80".format(str(width), str(height)))
 
     def process(self):
         """ The entry point for the Preview tool from :file:`lib.tools.cli`.
@@ -152,7 +131,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         container.pack(fill=tk.BOTH, expand=True)
         container.preview_display = self._display
         self._image_canvas = ImagesCanvas(container, self._tk_vars)
-        container.add(self._image_canvas, height=400 * self._scaling)
+        container.add(self._image_canvas, height=400 * get_config().scaling_factor)
 
         options_frame = ttk.Frame(container)
         self._cli_frame = ActionFrame(
@@ -168,8 +147,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
             self._tk_vars)
         self._opts_book = OptionsBook(options_frame,
                                       self._config_tools,
-                                      self._refresh,
-                                      self._scaling)
+                                      self._refresh)
         container.add(options_frame)
 
 
@@ -1320,21 +1298,18 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         Tools for loading and saving configuration files
     patch_callback: python function
         The function to execute when a patch callback is received
-    scaling: float
-        The scaling factor for display
 
     Attributes
     ----------
     config_tools: :class:`ConfigTools`
         Tools for loading and saving configuration files
     """
-    def __init__(self, parent, config_tools, patch_callback, scaling):
-        logger.debug("Initializing %s: (parent: %s, config: %s, scaling: %s)",
-                     self.__class__.__name__, parent, config_tools, scaling)
+    def __init__(self, parent, config_tools, patch_callback):
+        logger.debug("Initializing %s: (parent: %s, config: %s)",
+                     self.__class__.__name__, parent, config_tools)
         super().__init__(parent)
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config_tools = config_tools
-        self._scaling = scaling
 
         self._tabs = dict()
         self._build_tabs()

@@ -24,7 +24,7 @@ class FaceswapGui(tk.Tk):
         self._config = self.initialize_globals()
         self.set_fonts()
         self.set_styles()
-        self.set_geometry()
+        self._config.set_geometry(1200, 640, self._config.user_config_dict["fullscreen"])
 
         self.wrapper = ProcessWrapper()
         self.objects = dict()
@@ -56,25 +56,6 @@ class FaceswapGui(tk.Tk):
         """ Set global custom styles """
         gui_style = ttk.Style()
         gui_style.configure('TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
-
-    def set_geometry(self):
-        """ Set GUI geometry """
-        fullscreen = self._config.user_config_dict["fullscreen"]
-        scaling_factor = self._config.scaling_factor
-
-        if fullscreen:
-            initial_dimensions = (self.winfo_screenwidth(), self.winfo_screenheight())
-        else:
-            initial_dimensions = (round(1200 * scaling_factor), round(640 * scaling_factor))
-
-        if fullscreen and sys.platform == "win32":
-            self.state('zoomed')
-        elif fullscreen:
-            self.attributes('-zoomed', True)
-        else:
-            self.geometry("{}x{}+80+80".format(str(initial_dimensions[0]),
-                                               str(initial_dimensions[1])))
-        logger.debug("Geometry: %sx%s", *initial_dimensions)
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """
@@ -183,7 +164,7 @@ class FaceswapGui(tk.Tk):
         get_images().delete_preview()
         self.quit()
         logger.debug("Closed GUI")
-        exit()
+        sys.exit(0)
 
     def _confirm_close_on_running_task(self):
         """ Pop a confirmation box to close the GUI if a task is running

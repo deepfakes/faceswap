@@ -352,8 +352,12 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
     def tree_clear(self):
         """ Clear the totals tree """
         logger.debug("Clearing treeview data")
-        self.tree.delete(* self.tree.get_children())
-        self.tree.configure(height=1)
+        try:
+            self.tree.delete(* self.tree.get_children())
+            self.tree.configure(height=1)
+        except tk.TclError:
+            # Catch non-existent tree view when rebuilding the GUI
+            pass
 
     def select_item(self, event):
         """ Update the session summary info with
