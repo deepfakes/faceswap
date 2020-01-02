@@ -1061,7 +1061,7 @@ class TrainArgs(FaceSwapArgs):
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "group": "model",
-                              "help": "R|Select which trainer to use. Trainers can be"
+                              "help": "R|Select which trainer to use. Trainers can be "
                                       "configured from the Settings menu or the config folder."
                                       "\nL|original: The original model created by /u/deepfakes."
                                       "\nL|dfaker: 64px in/128px out model from dfaker. "
