@@ -1078,13 +1078,14 @@ class TrainArgs(FaceSwapArgs):
                               "choices": PluginLoader.get_available_models(),
                               "default": PluginLoader.get_default_model(),
                               "group": "model",
-                              "help": "R|Select which trainer to use. Trainers can be"
+                              "help": "R|Select which trainer to use. Trainers can be "
                                       "configured from the Settings menu or the config folder."
                                       "\nL|original: The original model created by /u/deepfakes."
                                       "\nL|dfaker: 64px in/128px out model from dfaker. "
                                       "Enable 'warp-to-landmarks' for full dfaker method."
                                       "\nL|dfl-h128. 128px in/out model from deepfacelab"
                                       "\nL|dfl-sae. Adaptable model from deepfacelab"
+                                      "\nL|dlight. A lightweight, high resolution DFaker variant."
                                       "\nL|iae: A model that uses intermediate layers to try to "
                                       "get better details"
                                       "\nL|lightweight: A lightweight model for low-end cards. "
