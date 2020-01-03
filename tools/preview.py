@@ -62,6 +62,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         trigger_patch = Event()
         self._samples = Samples(arguments, 5, self._display, self._lock, trigger_patch)
         self._patch = Patch(arguments,
+                            self._available_masks,
                             self._samples,
                             self._display,
                             self._lock,
@@ -356,6 +357,8 @@ class Patch():
     ----------
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+    available_masks: list
+        The masks that are available for convert
     samples: :class:`Samples`
         The Samples for display.
     display: :class:`FacesDisplay`
@@ -376,10 +379,12 @@ class Patch():
     current_config::class:`lib.config.FaceswapConfig`
         The currently set configuration for the patch queue
     """
-    def __init__(self, arguments, samples, display, lock, trigger, config_tools, tk_vars):
-        logger.debug("Initializing %s: (arguments: '%s', samples: %s: display: %s, lock: %s,"
-                     " trigger: %s, config_tools: %s, tk_vars %s)", self.__class__.__name__,
-                     arguments, samples, display, lock, trigger, config_tools, tk_vars)
+    def __init__(self, arguments, available_masks, samples,
+                 display, lock, trigger, config_tools, tk_vars):
+        logger.debug("Initializing %s: (arguments: '%s', available_masks: %s, samples: %s, "
+                     "display: %s, lock: %s, trigger: %s, config_tools: %s, tk_vars %s)",
+                     self.__class__.__name__, arguments, available_masks, samples, display, lock,
+                     trigger, config_tools, tk_vars)
         self._samples = samples
         self._queue_patch_in = queue_manager.get_queue("preview_patch_in")
         self._display = display
@@ -393,7 +398,8 @@ class Patch():
                                     coverage_ratio=self._samples.predictor.coverage_ratio,
                                     draw_transparent=False,
                                     pre_encode=None,
-                                    arguments=self._generate_converter_arguments(arguments),
+                                    arguments=self._generate_converter_arguments(arguments,
+                                                                                 available_masks),
                                     configfile=configfile)
         self._shutdown = Event()
 
@@ -419,20 +425,23 @@ class Patch():
         return self._converter
 
     @staticmethod
-    def _generate_converter_arguments(arguments):
-        """ Add the default converter arguments to the initial arguments.
+    def _generate_converter_arguments(arguments, available_masks):
+        """ Add the default converter arguments to the initial arguments. Ensure the mask selection
+        is available.
 
         Parameters
         ----------
         arguments: :class:`argparse.Namespace`
             The :mod:`argparse` arguments as passed in from :mod:`tools.py`
-
+        available_masks: list
+            The masks that are available for convert
         Returns
         ----------
         arguments: :class:`argparse.Namespace`
             The :mod:`argparse` arguments as passed in with converter default
             arguments added
         """
+        valid_masks = available_masks + ["none"]
         converter_arguments = ConvertArgs(None, "convert").get_optional_arguments()
         for item in converter_arguments:
             value = item.get("default", None)
@@ -440,6 +449,9 @@ class Patch():
             if value is None:
                 continue
             option = item.get("dest", item["opts"][1].replace("--", ""))
+            if option == "mask_type" and value not in valid_masks:
+                logger.debug("Amending default mask from '%s' to '%s'", value, valid_masks[0])
+                value = valid_masks[0]
             # Skip options already in arguments
             if hasattr(arguments, option):
                 continue
