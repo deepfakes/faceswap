@@ -489,6 +489,7 @@ class ImagesLoader(ImageIO):
 
         self._is_video = self._check_for_video()
 
+        self._fps = self._get_fps()
         self._count = None
         self._file_list = None
         self._get_count_and_filelist(fast_count)
@@ -510,6 +511,12 @@ class ImagesLoader(ImageIO):
     def is_video(self):
         """ bool: ``True`` if the input is a video, ``False`` if it is not """
         return self._is_video
+
+    @property
+    def fps(self):
+        """ float: For an input folder of images, this will always return 25fps. If the input is a
+        video, then the fps of the video will be returned. """
+        return self._fps
 
     @property
     def file_list(self):
@@ -549,6 +556,25 @@ class ImagesLoader(ImageIO):
         else:
             raise FaceswapError("The input file '{}' is not a valid video".format(self.location))
         logger.debug("Input '%s' is_video: %s", self.location, retval)
+        return retval
+
+    def _get_fps(self):
+        """ Get the Frames per Second.
+
+        If the input is a folder of images than 25.0 will be returned, as it is not possible to
+        calculate the fps just from frames alone. For video files the correct FPS will be returned.
+
+        Returns
+        -------
+        float: The Frames per Second of the input sources
+        """
+        if self._is_video:
+            reader = imageio.get_reader(self.location, "ffmpeg")
+            retval = reader.get_meta_data()["fps"]
+            reader.close()
+        else:
+            retval = 25.0
+        logger.debug(retval)
         return retval
 
     def _get_count_and_filelist(self, fast_count):

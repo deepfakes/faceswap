@@ -37,6 +37,10 @@ if __name__ == "__main__":
     EFFMPEG = cli.EffmpegArgs(SUBPARSER,
                               "effmpeg",
                               "This command allows you to easily execute common ffmpeg tasks.")
+    MASK = cli.ManualArgs(SUBPARSER,
+                          "manual",
+                          "This command lets you perform various actions on frames, faces and "
+                          "alignments files using visual tools.")
     MASK = cli.MaskArgs(SUBPARSER,
                         "mask",
                         "This command lets you generate masks for existing alignments.")
