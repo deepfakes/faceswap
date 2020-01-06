@@ -51,7 +51,7 @@ class Manual(tk.Tk):
         self._containers["top"].add(lbl)
 
         self._set_layout()
-        self._set_keybindings()
+        self.bind("<Key>", self._handle_key_press)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_alignments(self, alignments_path):
@@ -114,20 +114,19 @@ class Manual(tk.Tk):
         """ Place the sashes of the paned window """
         self.update_idletasks()
         self._containers["top"].sash_place(0, (self._frame_cache.display_dims[0]) + 8, 1)
-        self._containers["main"].sash_place(0, 1, self._frame_cache.display_dims[1] + 8)
-
-    def _set_keybindings(self):
-        """ Set the keybindings for keyboard shortcuts """
-        self.bind("<Key>", self._handle_key_press)
+        self._containers["main"].sash_place(0, 1, self._frame_cache.display_dims[1] + 72)
 
     def _handle_key_press(self, event):
+        """ Keyboard shortcuts """
+        bindings = dict(left=self._frame_cache.decrement_frame,
+                        right=self._frame_cache.increment_frame,
+                        space=self._display.handle_play_button,
+                        home=self._frame_cache.set_first_frame,
+                        end=self._frame_cache.set_last_frame)
         key = event.keysym
-        if key.lower() == "left":
-            self._frame_cache.set_prev_frame()
-        elif key.lower() == "right":
-            self._frame_cache.set_next_frame()
-        elif key.lower() == "space":
-            self._display.handle_play_button()
+        if key.lower() in bindings:
+            self.focus_set()
+            bindings[key.lower()]()
 
     def process(self):
         """ The entry point for the Visual Alignments tool from :file:`lib.tools.cli`.
@@ -162,11 +161,11 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._frame_cache = frame_cache
         self._viewer = self._add_viewer()
 
-        transport_frame = ttk.Frame(self)
-        transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
+        self._transport_frame = ttk.Frame(self)
+        self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
 
-        self._add_nav(transport_frame)
-        self._play_button = self._add_transport(transport_frame)
+        self._add_nav()
+        self._play_button = self._add_transport()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_viewer(self):
@@ -188,12 +187,12 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         needs_update.trace("w", self._update_display)
         return dict(canvas=canvas, image_canvas=imgcanvas)
 
-    def _add_nav(self, transport_frame):
+    def _add_nav(self):
         """ Add the slider to navigate through frames """
         var = self._frame_cache.tk_position
         max_frame = self._frame_cache.frame_count - 1
 
-        frame = ttk.Frame(transport_frame)
+        frame = ttk.Frame(self._transport_frame)
 
         frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 5))
         lbl_frame = ttk.Frame(frame)
@@ -215,13 +214,13 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         nav = ttk.Scale(frame, variable=var, from_=0, to=max_frame, command=cmd)
         nav.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    def _add_transport(self, transport_frame):
+    def _add_transport(self):
         """ Add video transport controls """
-        frame = ttk.Frame(transport_frame)
+        frame = ttk.Frame(self._transport_frame)
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         icons = get_images().icons
 
-        for action in ("play", "prev", "next", "speed"):
+        for action in ("play", "beginning", "prev", "next", "end", "speed"):
             if action == "play":
                 play_button = ttk.Button(frame,
                                          image=icons[action],
@@ -230,12 +229,20 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 play_button.pack(side=tk.LEFT, padx=(0, 6))
                 Tooltip(play_button, text="Play/Pause (SPACE)")
                 self._frame_cache.tk_is_playing.trace("w", self._play)
-            if action in ("prev", "next"):
-                cmd = getattr(self._frame_cache, "set_{}_frame".format(action))
+            elif action in ("prev", "next"):
+                cmd_action = "decrement" if action == "prev" else "increment"
+                cmd = getattr(self._frame_cache, "{}_frame".format(cmd_action))
                 if action == "prev":
                     helptext = "Go to Previous Frame (LEFT)"
                 else:
                     helptext = "Go to Next Frame (RIGHT)"
+                btn = ttk.Button(frame, image=icons[action], width=14, command=cmd)
+                btn.pack(side=tk.LEFT)
+                Tooltip(btn, text=helptext)
+            elif action in ("beginning", "end"):
+                lookup = ("First", "HOME") if action == "beginning" else ("Last", "END")
+                helptext = "Go to {} Frame ({})".format(*lookup)
+                cmd = getattr(self._frame_cache, "set_{}_frame".format(lookup[0].lower()))
                 btn = ttk.Button(frame, image=icons[action], width=14, command=cmd)
                 btn.pack(side=tk.LEFT)
                 Tooltip(btn, text=helptext)
@@ -255,12 +262,16 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Adds the speed control Combo box and links to
         :attr:`_frame_cache.tk_playback_speed`. """
         tk_var = self._frame_cache.tk_playback_speed
-        tk_var.set("1x")
+        tk_var.set("Standard")
         sframe = ttk.Frame(frame)
         sframe.pack(side=tk.RIGHT)
         lbl = ttk.Label(sframe, text="Playback Speed")
         lbl.pack(side=tk.LEFT, padx=(0, 5))
-        combo = ttk.Combobox(sframe, textvariable=tk_var, values=["1x", "2x"], width=3)
+        combo = ttk.Combobox(sframe,
+                             textvariable=tk_var,
+                             state="readonly",
+                             values=["Standard", "Max"],
+                             width=8)
         combo.pack(side=tk.RIGHT)
         Tooltip(combo, text="Set Playback Speed")
 
@@ -283,13 +294,13 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Pause detected. Stopping.")
             return
 
-        self._frame_cache.set_next_frame(is_playing=True)
-        self._viewer["canvas"].itemconfig(self._viewer["image_canvas"],
-                                          image=self._frame_cache.current_frame)
-        speed = self._frame_cache.tk_playback_speed.get().replace("x", "")
-        delay = self._frame_cache.delay // int(speed)
-        duration = int((time() - start) * 1000)
-        delay = max(1, delay - duration)
+        self._frame_cache.increment_frame(is_playing=True)
+        if self._frame_cache.tk_playback_speed.get() == "Standard":
+            delay = self._frame_cache.delay
+            duration = int((time() - start) * 1000)
+            delay = max(1, delay - duration)
+        else:
+            delay = 1
         self.after(delay, self._play)
 
 
@@ -386,7 +397,7 @@ class FrameCache():
         return retval
 
     def _set_current_frame(self, *args,  # pylint:disable=unused-argument
-                           initialize=False, is_playing=False):
+                           initialize=False):
         """ Set the currently loaded, decompressed frame to :attr:`_current_frame`
 
         Parameters
@@ -396,17 +407,14 @@ class FrameCache():
         initialize: bool, optional
             ``True`` if initializing for the first frame to be displayed otherwise ``False``.
             Default: ``False``
-        is_playing: bool, optional
-            ``True`` if the frame is being incremented because the Play button has been pressed.
-            ``False`` if incremented for other reasons. Default: ``False``
         """
         position = self.tk_position.get()
         if not initialize and position == self._current_idx:
             return
         frame = cv2.imdecode(self._frames[position]["image"], cv2.IMREAD_UNCHANGED)
         self._current_frame = ImageTk.PhotoImage(Image.fromarray(frame))
-        if not is_playing:
-            self.tk_update.set(True)
+        self._current_idx = position
+        self.tk_update.set(True)
 
     def cache_frames(self):
         """ Increment through all frames JPG compressing each and caching to a list in frame order
@@ -448,28 +456,26 @@ class FrameCache():
         img = cv2.resize(img, dst_dims, interpolation=interp)
         return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 20])[1]
 
-    def set_next_frame(self, is_playing=False):
-        """ Update :attr:`self.current_frame` to the next frame
+    def increment_frame(self, is_playing=False):
+        """ Update :attr:`self.current_frame` to the next frame.
 
         Parameters
         ----------
-        is_playing: bool
+        is_playing: bool, optional
             ``True`` if the frame is being incremented because the Play button has been pressed.
-            ``False`` if incremented for other reasons
+            ``False`` if incremented for other reasons. Default: ``False``
         """
         position = self.tk_position.get()
         if position == self.frame_count - 1:
             logger.trace("End of stream. Not incrementing")
-            if is_playing:
+            if self.tk_is_playing.get():
                 self.tk_is_playing.set(False)
-        else:
-            if not is_playing and self.tk_is_playing.get():
-                # Stop playback
-                self.tk_is_playing.set(False)
-            self.tk_position.set(position + 1)
-        self._set_current_frame(is_playing)
+            return
+        if not is_playing and self.tk_is_playing.get():
+            self.tk_is_playing.set(False)
+        self.tk_position.set(position + 1)
 
-    def set_prev_frame(self):
+    def decrement_frame(self):
         """ Update :attr:`self.current_frame` to the previous frame """
         position = self.tk_position.get()
         if self.tk_is_playing.get():
@@ -477,6 +483,17 @@ class FrameCache():
             self.tk_is_playing.set(False)
         if position == 0:
             logger.trace("Beginning of stream. Not decrementing")
-        else:
-            self.tk_position.set(position - 1)
-        self._set_current_frame()
+            return
+        self.tk_position.set(position - 1)
+
+    def set_first_frame(self):
+        """ Load the first frame """
+        if self.tk_is_playing.get():
+            self.tk_is_playing.set(False)
+        self.tk_position.set(0)
+
+    def set_last_frame(self):
+        """ Load the last frame """
+        if self.tk_is_playing.get():
+            self.tk_is_playing.set(False)
+        self.tk_position.set(self.frame_count - 1)
