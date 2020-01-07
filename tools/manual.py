@@ -291,14 +291,50 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._extract_box = None
         self._landmarks = None
         self._mesh = None
+        self._drag_data = dict()
         self._add_initial_frame()
         self._add_callback()
+        self._add_mouse_tracking()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def _scaling(self):
         """ float: The scaling factor for the currently displayed frame """
         return self._frame_cache.current_scale
+
+    @property
+    def _bounding_box_layout(self):
+        """ tuple: The layout order of tkinter canvas bounding box points """
+        return ("left", "top", "right", "bottom")
+
+    @property
+    def _bounding_box_corner_order(self):
+        """ dict: The position index of bounding box corners """
+        return {0: ("top", "left"),
+                1: ("bottom", "left"),
+                2: ("top", "right"),
+                3: ("bottom", "right")}
+
+    @property
+    def _bounding_boxes(self):
+        """ list: List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed face's
+        bounding box. """
+        return [self.coords(face[0]) for face in self._annotations["bounding_box"]]
+
+    @property
+    def _bounding_box_anchors(self):
+        """ list: List of bounding box anchors for the corners of each face's bounding box. """
+        return [[self.coords(obj) for obj in face[1:]]
+                for face in self._annotations["bounding_box"]]
+
+    @property
+    def _bounding_box_points(self):
+        """ list: List of bounding box tuples for each face's bounding box """
+        return [((self.coords(obj[0])[0], self.coords(obj[0])[1]),
+                 (self.coords(obj[0])[0], self.coords(obj[0])[3]),
+                 (self.coords(obj[0])[2], self.coords(obj[0])[1]),
+                 (self.coords(obj[0])[2], self.coords(obj[0])[3]))
+                for obj in self._annotations["bounding_box"]]
 
     def _add_initial_frame(self):
         """ Adds the initial items to the canvas. """
@@ -309,14 +345,20 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._image = self.create_image(0, 0,
                                         image=self._frame_cache.current_frame,
                                         anchor=tk.NW)
-        self._annotations["bounding_box"] = self._update_bounding_box()
+        self._annotations["mesh"] = self._update_mesh()
         self._annotations["extract_box"] = self._update_extract_box()
         self._annotations["landmarks"] = self._update_landmarks()
-        self._annotations["mesh"] = self._update_mesh()
+        self._annotations["bounding_box"] = self._update_bounding_box()
 
     def _add_callback(self):
         needs_update = self._frame_cache.tk_update
         needs_update.trace("w", self._update_display)
+
+    def _add_mouse_tracking(self):
+        self.bind("<Motion>", self._update_cursor)
+        self.bind("<ButtonPress-1>", self._drag_start)
+        self.bind("<ButtonRelease-1>", self._drag_stop)
+        self.bind("<B1-Motion>", self._drag)
 
     def _update_display(self, *args):  # pylint:disable=unused-argument
         """ Update the display on frame cache update """
@@ -324,40 +366,53 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             return
         self._clear_annotations()
         self.itemconfig(self._image, image=self._frame_cache.current_frame)
-        self._annotations["bounding_box"] = self._update_bounding_box()
+        self._annotations["mesh"] = self._update_mesh()
         self._annotations["extract_box"] = self._update_extract_box()
         self._annotations["landmarks"] = self._update_landmarks()
-        self._annotations["mesh"] = self._update_mesh()
+        self._annotations["bounding_box"] = self._update_bounding_box()
         self._frame_cache.tk_update.set(False)
 
     def _clear_annotations(self):
         """ Removes all currently drawn annotations """
         for annotation in self._annotations.values():
-            for instance in annotation:
-                self.delete(instance)
+            for face in annotation:
+                for instance in face:
+                    self.delete(instance)
 
     def _update_bounding_box(self):
         """ Draw the bounding box around faces """
         color = self._colors["blue"]
         thickness = 1
-        bbox = []
+        faces = []
         for face in self._alignments.current_faces:
+            bbox = []
             box = (face.left * self._scaling,
                    face.top * self._scaling,
                    face.right * self._scaling,
                    face.bottom * self._scaling)
+            corners = ((box[0], box[1]), (box[0], box[3]), (box[2], box[1]), (box[2], box[3]))
             bbox.append(self.create_rectangle(*box, outline=color, width=thickness))
-        return bbox
+            radius = thickness * 5
+            for cnr in corners:
+                anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
+                bbox.append(self.create_oval(*anc,
+                                             outline=color,
+                                             fill="gray",
+                                             width=thickness,
+                                             activefill="white"))
+            faces.append(bbox)
+        return faces
 
     def _update_extract_box(self):
         """ Draw the extracted face box """
         color = self._colors["green"]
         thickness = 1
-        extract_box = []
+        faces = []
         # TODO FIX THIS TEST
         #  if not all(face.original_roi for face in self._alignments.current_faces):
         #      return extract_box
         for idx, face in enumerate(self._alignments.current_faces):
+            extract_box = []
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
             box = face.original_roi.flatten() * self._scaling
             top_left = box[:2] - 10
@@ -366,19 +421,22 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                                                 font=("Default", 20, "bold"),
                                                 text=str(idx)))
             extract_box.append(self.create_polygon(*box, fill="", outline=color, width=thickness))
-        return extract_box
+            faces.append(extract_box)
+        return faces
 
     def _update_landmarks(self):
         """ Draw the facial landmarks """
         color = self._colors["red"]
         radius = 1
-        landmarks = []
+        faces = []
         for face in self._alignments.current_faces:
+            landmarks = []
             for landmark in face.landmarks_xy:
                 box = (landmark * self._scaling).astype("int32")
                 bbox = (box[0] - radius, box[1] - radius, box[0] + radius, box[1] + radius)
                 landmarks.append(self.create_oval(*bbox, outline=color, fill=color, width=radius))
-        return landmarks
+            faces.append(landmarks)
+        return faces
 
     def _update_mesh(self):
         """ Draw the facial landmarks """
@@ -392,8 +450,9 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                                      nose=(27, 36),
                                      jaw=(0, 17),
                                      chin=(8, 11))
-        mesh = []
+        faces = []
         for face in self._alignments.current_faces:
+            mesh = []
             landmarks = face.landmarks_xy
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
                          landmarks, color, thickness)
@@ -403,7 +462,125 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                     mesh.append(self.create_polygon(*pts, fill="", outline=color, width=thickness))
                 else:
                     mesh.append(self.create_line(*pts, fill=color, width=thickness))
-        return mesh
+            faces.append(mesh)
+        return faces
+
+    # Mouse Callbacks
+    def _update_cursor(self, event):
+        if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
+               for face in self._bounding_box_anchors for bbox in face):
+            # Bounding box anchors
+            idx = [idx for face in self._bounding_box_anchors
+                   for idx, bbox in enumerate(face)
+                   if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
+            self.config(cursor="{}_{}_corner".format(*self._bounding_box_corner_order[idx]))
+        elif any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
+                 for bbox in self._bounding_boxes):
+            self.config(cursor="fleur")
+        else:
+            self.config(cursor="")
+
+    def _drag_start(self, event):
+        """ Collect information on start of drag """
+        click_object = self._get_click_object(event)
+        if click_object is None:
+            self._drag_data = dict()
+            return
+
+        if click_object == "bounding_box_anchor":
+            indices = [(face_idx, pnt_idx)
+                       for face_idx, face in enumerate(self._bounding_box_anchors)
+                       for pnt_idx, bbox in enumerate(face)
+                       if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
+            self._drag_data["objects"] = self._annotations["bounding_box"][indices[0]]
+            self._drag_data["corner"] = self._bounding_box_corner_order[indices[1]]
+            self._drag_data["callback"] = self._resize_bounding_box
+        elif click_object == "bounding_box":
+            face_idx = [idx for idx, bbox in enumerate(self._bounding_boxes)
+                        if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
+            self._drag_data["objects"] = self._annotations["bounding_box"][face_idx]
+            self._drag_data["current_location"] = (event.x, event.y)
+            self._drag_data["callback"] = self._move_bounding_box
+
+    def _get_click_object(self, event):
+        """ Return the object name that has been clicked on.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event
+
+        Returns
+        -------
+        str
+            The name of the object being clicked on. If no object clicked on, returns ``None``
+        """
+        if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
+               for face in self._bounding_box_anchors for bbox in face):
+            retval = "bounding_box_anchor"
+        elif any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
+                 for bbox in self._bounding_boxes):
+            retval = "bounding_box"
+        else:
+            retval = None
+        return retval
+
+    def _drag_stop(self, event):  # pylint:disable=unused-argument
+        """ Reset the :attr:`_drag_data` dict
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused but required
+        """
+        self._drag_data = dict()
+
+    def _drag(self, event):
+        """ Drag the bounding box and its anchors to current mouse position.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        if not self._drag_data:
+            return
+        self._drag_data["callback"](event)
+
+    def _resize_bounding_box(self, event):
+        """ Resizes a bounding box on an anchor drag event
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        radius = 4  # TODO Variable
+        rect = self._drag_data["objects"][0]
+        box = list(self.coords(rect))
+        # Switch top/bottom and left/right and set partial so indices match and we don't
+        # need branching logic for min/max.
+        limits = (partial(min, box[2] - 20),
+                  partial(min, box[3] - 20),
+                  partial(max, box[0] + 20),
+                  partial(max, box[1] + 20))
+        rect_xy_indices = [self._bounding_box_layout.index(pnt)
+                           for pnt in self._drag_data["corner"]]
+        box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
+        box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
+        self.coords(rect, *box)
+        corners = ((box[0], box[1]), (box[0], box[3]), (box[2], box[1]), (box[2], box[3]))
+        for idx, cnr in enumerate(corners):
+            anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
+            self.coords(self._drag_data["objects"][idx + 1], *anc)
+
+    def _move_bounding_box(self, event):
+        """ Moves the bounding box on a bounding box drag event """
+        shift_x = event.x - self._drag_data["current_location"][0]
+        shift_y = event.y - self._drag_data["current_location"][1]
+        for obj in self._drag_data["objects"]:
+            self.move(obj, shift_x, shift_y)
+        self._drag_data["current_location"] = (event.x, event.y)
 
 
 class FrameCache():
