@@ -14,10 +14,12 @@ from tqdm import tqdm
 from PIL import Image, ImageTk
 
 from lib.alignments import Alignments
+from lib.faces_detect import DetectedFace
 from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.image import ImagesLoader
+# from tools.lib_alignments import Annotate
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -39,13 +41,13 @@ class Manual(tk.Tk):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
         self._frame_cache = FrameCache(arguments.frames)
-        self._alignments = self._get_alignments(arguments.alignments_path)
+        alignments = AlignmentsCache(arguments.alignments_path, self._frame_cache)
         self._frame_cache.cache_frames()
 
         self._initialize_tkinter()
         self._containers = self._create_containers()
 
-        self._display = DisplayFrame(self._containers["top"], self._frame_cache)
+        self._display = DisplayFrame(self._containers["top"], self._frame_cache, alignments)
 
         lbl = ttk.Label(self._containers["top"], text="Top Right")
         self._containers["top"].add(lbl)
@@ -53,19 +55,6 @@ class Manual(tk.Tk):
         self._set_layout()
         self.bind("<Key>", self._handle_key_press)
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    def _get_alignments(self, alignments_path):
-        """ Get the alignments object """
-        if alignments_path:
-            folder, filename = os.path.split(self._arguments.alignments_path)
-        else:
-            filename = "alignments.fsa"
-            if self._frame_cache.is_video:
-                folder, vid = os.path.split(os.path.splitext(self._frame_cache.location)[0])
-                filename = "{}_{}".format(vid, filename)
-            else:
-                folder = self._frame_cache.location
-        return Alignments(folder, filename)
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -150,16 +139,18 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the display frame resides in
-    frames_location: str
-        The path to the input frames
+    frame_cache: :class:`FrameCache`
+        The object that holds the cache of frames.
+    alignments: dict
+        Dictionary of :class:`lib.faces_detect.DetectedFace` objects
     """
-    def __init__(self, parent, frame_cache):
+    def __init__(self, parent, frame_cache, alignments):
         logger.debug("Initializing %s: (parent: %s, frame_cache: %s)",
                      self.__class__.__name__, parent, frame_cache)
         super().__init__(parent)
         parent.add(self)
         self._frame_cache = frame_cache
-        self._viewer = self._add_viewer()
+        self._canvas = Viewer(self, alignments, self._frame_cache)
 
         self._transport_frame = ttk.Frame(self)
         self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
@@ -167,25 +158,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._add_nav()
         self._play_button = self._add_transport()
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    def _add_viewer(self):
-        """ Adds the frames viewer window
-
-        Returns
-        -------
-        dict:
-            The `canvas` (:class:`tk.canvas`) and `image_canvas`
-
-        """
-        canvas = tk.Canvas(self, bd=0, highlightthickness=0)
-        canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True, anchor=tk.E)
-        imgcanvas = canvas.create_image(self._frame_cache.display_dims[0] // 2,
-                                        self._frame_cache.display_dims[1] // 2,
-                                        image=self._frame_cache.current_frame, anchor=tk.CENTER)
-
-        needs_update = self._frame_cache.tk_update
-        needs_update.trace("w", self._update_display)
-        return dict(canvas=canvas, image_canvas=imgcanvas)
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
@@ -275,14 +247,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         combo.pack(side=tk.RIGHT)
         Tooltip(combo, text="Set Playback Speed")
 
-    def _update_display(self, *args):  # pylint:disable=unused-argument
-        """ Update the display on frame cache update """
-        if not self._frame_cache.tk_update.get():
-            return
-        self._viewer["canvas"].itemconfig(self._viewer["image_canvas"],
-                                          image=self._frame_cache.current_frame)
-        self._frame_cache.tk_update.set(False)
-
     def _play(self, *args):  # pylint:disable=unused-argument
         """ Play the video file at the selected speed """
         start = time()
@@ -304,6 +268,144 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.after(delay, self._play)
 
 
+class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
+    """ Annotation onto tkInter Canvas """
+    def __init__(self, parent, alignments, frame_cache):
+        logger.debug("Initializing %s: (parent: %s, alignments: %s, frame_cache: %s)",
+                     self.__class__.__name__, parent, alignments, frame_cache)
+        super().__init__(parent, bd=0, highlightthickness=0)
+        self.pack(side=tk.TOP, fill=tk.BOTH, expand=True, anchor=tk.E)
+
+        self._alignments = alignments
+        self._frame_cache = frame_cache
+        self._colors = dict(red="#ff0000",
+                            green="#00ff00",
+                            blue="#0000ff",
+                            cyan="#00ffff",
+                            yellow="#ffff00",
+                            magenta="#ff00ff")
+        self._image = None
+        self._annotations = dict()
+
+        self._bounding_box = None
+        self._extract_box = None
+        self._landmarks = None
+        self._mesh = None
+        self._add_initial_frame()
+        self._add_callback()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def _scaling(self):
+        """ float: The scaling factor for the currently displayed frame """
+        return self._frame_cache.current_scale
+
+    def _add_initial_frame(self):
+        """ Adds the initial items to the canvas. """
+#        self._image = self.create_image(self._frame_cache.display_dims[0] // 2,
+#                                        self._frame_cache.display_dims[1] // 2,
+#                                        image=self._frame_cache.current_frame,
+#                                        anchor=tk.CENTER)
+        self._image = self.create_image(0, 0,
+                                        image=self._frame_cache.current_frame,
+                                        anchor=tk.NW)
+        self._annotations["bounding_box"] = self._update_bounding_box()
+        self._annotations["extract_box"] = self._update_extract_box()
+        self._annotations["landmarks"] = self._update_landmarks()
+        self._annotations["mesh"] = self._update_mesh()
+
+    def _add_callback(self):
+        needs_update = self._frame_cache.tk_update
+        needs_update.trace("w", self._update_display)
+
+    def _update_display(self, *args):  # pylint:disable=unused-argument
+        """ Update the display on frame cache update """
+        if not self._frame_cache.tk_update.get():
+            return
+        self._clear_annotations()
+        self.itemconfig(self._image, image=self._frame_cache.current_frame)
+        self._annotations["bounding_box"] = self._update_bounding_box()
+        self._annotations["extract_box"] = self._update_extract_box()
+        self._annotations["landmarks"] = self._update_landmarks()
+        self._annotations["mesh"] = self._update_mesh()
+        self._frame_cache.tk_update.set(False)
+
+    def _clear_annotations(self):
+        """ Removes all currently drawn annotations """
+        for annotation in self._annotations.values():
+            for instance in annotation:
+                self.delete(instance)
+
+    def _update_bounding_box(self):
+        """ Draw the bounding box around faces """
+        color = self._colors["blue"]
+        thickness = 1
+        bbox = []
+        for face in self._alignments.current_faces:
+            box = (face.left * self._scaling,
+                   face.top * self._scaling,
+                   face.right * self._scaling,
+                   face.bottom * self._scaling)
+            bbox.append(self.create_rectangle(*box, outline=color, width=thickness))
+        return bbox
+
+    def _update_extract_box(self):
+        """ Draw the extracted face box """
+        color = self._colors["green"]
+        thickness = 1
+        extract_box = []
+        # TODO FIX THIS TEST
+        #  if not all(face.original_roi for face in self._alignments.current_faces):
+        #      return extract_box
+        for idx, face in enumerate(self._alignments.current_faces):
+            logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
+            box = face.original_roi.flatten() * self._scaling
+            top_left = box[:2] - 10
+            extract_box.append(self.create_text(*top_left,
+                                                fill=color,
+                                                font=("Default", 20, "bold"),
+                                                text=str(idx)))
+            extract_box.append(self.create_polygon(*box, fill="", outline=color, width=thickness))
+        return extract_box
+
+    def _update_landmarks(self):
+        """ Draw the facial landmarks """
+        color = self._colors["red"]
+        radius = 1
+        landmarks = []
+        for face in self._alignments.current_faces:
+            for landmark in face.landmarks_xy:
+                box = (landmark * self._scaling).astype("int32")
+                bbox = (box[0] - radius, box[1] - radius, box[0] + radius, box[1] + radius)
+                landmarks.append(self.create_oval(*bbox, outline=color, fill=color, width=radius))
+        return landmarks
+
+    def _update_mesh(self):
+        """ Draw the facial landmarks """
+        color = self._colors["cyan"]
+        thickness = 1
+        facial_landmarks_idxs = dict(mouth=(48, 68),
+                                     right_eyebrow=(17, 22),
+                                     left_eyebrow=(22, 27),
+                                     right_eye=(36, 42),
+                                     left_eye=(42, 48),
+                                     nose=(27, 36),
+                                     jaw=(0, 17),
+                                     chin=(8, 11))
+        mesh = []
+        for face in self._alignments.current_faces:
+            landmarks = face.landmarks_xy
+            logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
+                         landmarks, color, thickness)
+            for key, val in facial_landmarks_idxs.items():
+                pts = (landmarks[val[0]:val[1]] * self._scaling).astype("int32").flatten()
+                if key in ("right_eye", "left_eye", "mouth"):
+                    mesh.append(self.create_polygon(*pts, fill="", outline=color, width=thickness))
+                else:
+                    mesh.append(self.create_line(*pts, fill=color, width=thickness))
+        return mesh
+
+
 class FrameCache():
     """ Caches all video frames to compressed JPGs for full transport control.
 
@@ -319,8 +421,9 @@ class FrameCache():
                      self.__class__.__name__, frames_location)
         self._loader = ImagesLoader(frames_location)
         self._delay = int(round(1000 / self._loader.fps))
-        self._frames = list()
+        self._cache = list()
         self._current_idx = 0
+        self._current_scale = 1.0
         self._tk_vars = self._set_tk_vars()
         self._current_frame = None
         self._display_dims = (960, 540)
@@ -335,6 +438,22 @@ class FrameCache():
     def location(self):
         """ str: The input folder or video location. """
         return self._loader.location
+
+    @property
+    def filename_list(self):
+        """ list: List of filenames in correct frame order. """
+        return self._loader.file_list
+
+    @property
+    def current_cache_item(self):
+        """ dict: The current cache item for the current location. Keys are `filename`, `image`,
+        `original_dims`, `display_dims` """
+        return self._cache[self.tk_position.get()]
+
+    @property
+    def current_scale(self):
+        """ float: The scaling factor for the currently displayed frame """
+        return self._current_scale
 
     @property
     def current_frame(self):
@@ -355,7 +474,7 @@ class FrameCache():
     @property
     def frame_count(self):
         """ int: The total number of frames """
-        return len(self._frames)
+        return len(self._cache)
 
     @property
     def tk_playback_speed(self):
@@ -411,9 +530,11 @@ class FrameCache():
         position = self.tk_position.get()
         if not initialize and position == self._current_idx:
             return
-        frame = cv2.imdecode(self._frames[position]["image"], cv2.IMREAD_UNCHANGED)
+        item = self._cache[position]
+        frame = cv2.imdecode(item["image"], cv2.IMREAD_UNCHANGED)
         self._current_frame = ImageTk.PhotoImage(Image.fromarray(frame))
         self._current_idx = position
+        self._current_scale = item["scale"]
         self.tk_update.set(True)
 
     def cache_frames(self):
@@ -426,14 +547,14 @@ class FrameCache():
             for filename, frame in tqdm(self._loader.load(),
                                         total=self._loader.count,
                                         desc="Analyzing Video..."):
-                self._frames.append(filename)
+                self._cache.append(filename)
                 images[executor.submit(self._encode_frame, frame)] = (filename, frame.shape[:2])
             for future in tqdm(futures.as_completed(images), total=self._loader.count):
-                filename, dims = images[future]
-                img = future.result()
-                self._frames[self._frames.index(filename)] = dict(filename=filename,
-                                                                  image=img,
-                                                                  dims=dims)
+                filename, original_dims = images[future]
+                cached = future.result()
+                cached["filename"] = filename
+                cached["original_dims"] = original_dims
+                self._cache[self._cache.index(filename)] = cached
         self._set_current_frame(initialize=True)
 
     def _encode_frame(self, frame):
@@ -448,13 +569,18 @@ class FrameCache():
         -------
         bytes:
             Compressed and resized frame
+        tuple:
+            The (`height`, `width`) of the returned image
         """
         img = frame[..., 2::-1]
         scale = min(self._display_dims[0] / img.shape[1], self._display_dims[1] / img.shape[0])
         dst_dims = (int(round(img.shape[1] * scale)), int(round(img.shape[0] * scale)))
         interp = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
         img = cv2.resize(img, dst_dims, interpolation=interp)
-        return cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 20])[1]
+        retval = dict(image=cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 20])[1],
+                      display_dims=dst_dims,
+                      scale=scale)
+        return retval
 
     def increment_frame(self, is_playing=False):
         """ Update :attr:`self.current_frame` to the next frame.
@@ -497,3 +623,63 @@ class FrameCache():
         if self.tk_is_playing.get():
             self.tk_is_playing.set(False)
         self.tk_position.set(self.frame_count - 1)
+
+
+class AlignmentsCache():
+    """ Holds the alignments and annotations.
+
+    Parameters
+    ----------
+    alignments_path: str
+        Full path to the alignments file. If empty string is passed then location is calculated
+        from the source folder
+    frame_cache: :class:`FrameCache`
+        The object that holds the cache of frames.
+    """
+    def __init__(self, alignments_path, frame_cache):
+        logger.debug("Initializing %s: (alignments_path: '%s')",
+                     self.__class__.__name__, alignments_path)
+        self._frame_cache = frame_cache
+        self._alignments = self._get_alignments(alignments_path)
+        self._tk_position = frame_cache.tk_position
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def current_faces(self):
+        """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects """
+        filename = self._frame_cache.current_cache_item["filename"]
+        return self._alignments[filename]
+
+    def _get_alignments(self, alignments_path):
+        """ Get the alignments object.
+
+        Parameters
+        ----------
+        alignments_path: str
+            Full path to the alignments file. If empty string is passed then location is calculated
+            from the source folder
+
+        Returns
+        -------
+        dict
+            `frame name`: list of :class:`lib.faces_detect.DetectedFace` for the current frame
+        """
+        if alignments_path:
+            folder, filename = os.path.split(alignments_path, self._frame_cache)
+        else:
+            filename = "alignments.fsa"
+            if self._frame_cache.is_video:
+                folder, vid = os.path.split(os.path.splitext(self._frame_cache.location)[0])
+                filename = "{}_{}".format(vid, filename)
+            else:
+                folder = self._frame_cache.location
+        alignments = Alignments(folder, filename)
+        faces = dict()
+        for framename, items in alignments.data.items():
+            faces[framename] = []
+            for item in items:
+                face = DetectedFace()
+                face.from_alignment(item)
+                face.load_aligned(None, size=128)
+                faces[framename].append(face)
+        return faces
