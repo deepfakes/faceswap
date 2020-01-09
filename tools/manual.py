@@ -5,12 +5,10 @@ import os
 
 import tkinter as tk
 from tkinter import ttk
-from concurrent import futures
 from functools import partial
 from time import time
 
 import cv2
-from tqdm import tqdm
 from PIL import Image, ImageTk
 
 from lib.alignments import Alignments
@@ -19,7 +17,7 @@ from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.image import ImagesLoader
-# from tools.lib_alignments import Annotate
+from plugins.extract.pipeline import Extractor  # ExtractMedia
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -42,7 +40,6 @@ class Manual(tk.Tk):
         super().__init__()
         self._frame_cache = FrameCache(arguments.frames)
         alignments = AlignmentsCache(arguments.alignments_path, self._frame_cache)
-        self._frame_cache.cache_frames()
 
         self._initialize_tkinter()
         self._containers = self._create_containers()
@@ -124,12 +121,7 @@ class Manual(tk.Tk):
         """
         lbl = ttk.Label(self._containers["bottom"], text="Bottom")
         lbl.pack()
-        # self._build_ui()
         self.mainloop()
-
-    def _build_ui(self):
-        """ Build the page elements for displaying the Visual Alignments tool. """
-        pass
 
 
 class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
@@ -150,6 +142,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         parent.add(self)
         self._frame_cache = frame_cache
+        self._extractor = Aligner()
         self._canvas = Viewer(self, alignments, self._frame_cache)
 
         self._transport_frame = ttk.Frame(self)
@@ -584,9 +577,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
 
 class FrameCache():
-    """ Caches all video frames to compressed JPGs for full transport control.
-
-    Handles the return of the correct frame for the GUI.
+    """Handles the return of the correct frame for the GUI.
 
     Parameters
     ----------
@@ -596,14 +587,15 @@ class FrameCache():
     def __init__(self, frames_location):
         logger.debug("Initializing %s: (frames_location: '%s')",
                      self.__class__.__name__, frames_location)
-        self._loader = ImagesLoader(frames_location)
+        self._loader = ImagesLoader(frames_location, fast_count=False, queue_size=1)
         self._delay = int(round(1000 / self._loader.fps))
-        self._cache = list()
+        self._meta = dict()
         self._current_idx = 0
         self._current_scale = 1.0
         self._tk_vars = self._set_tk_vars()
         self._current_frame = None
         self._display_dims = (960, 540)
+        self._set_current_frame(initialize=True)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -622,10 +614,15 @@ class FrameCache():
         return self._loader.file_list
 
     @property
-    def current_cache_item(self):
-        """ dict: The current cache item for the current location. Keys are `filename`, `image`,
-        `original_dims`, `display_dims` """
-        return self._cache[self.tk_position.get()]
+    def frame_count(self):
+        """ int: The total number of frames """
+        return self._loader.count
+
+    @property
+    def current_meta_data(self):
+        """ dict: The current cache item for the current location. Keys are `filename`,
+        `display_dims`, `scale` and `interp`. """
+        return self._meta[self.tk_position.get()]
 
     @property
     def current_scale(self):
@@ -647,11 +644,6 @@ class FrameCache():
     def display_dims(self):
         """ tuple: The (`width`, `height`) of the display image. """
         return self._display_dims
-
-    @property
-    def frame_count(self):
-        """ int: The total number of frames """
-        return len(self._cache)
 
     @property
     def tk_playback_speed(self):
@@ -707,57 +699,38 @@ class FrameCache():
         position = self.tk_position.get()
         if not initialize and position == self._current_idx:
             return
-        item = self._cache[position]
-        frame = cv2.imdecode(item["image"], cv2.IMREAD_UNCHANGED)
+        filename, frame = self._loader.frame_from_index(position)
+        self._add_meta_data(position, frame, filename)
+        frame = cv2.resize(frame,
+                           self.current_meta_data["display_dims"],
+                           interpolation=self.current_meta_data["interp"])[..., 2::-1]
         self._current_frame = ImageTk.PhotoImage(Image.fromarray(frame))
         self._current_idx = position
-        self._current_scale = item["scale"]
+        self._current_scale = self.current_meta_data["scale"]
         self.tk_update.set(True)
 
-    def cache_frames(self):
-        """ Increment through all frames JPG compressing each and caching to a list in frame order
-        and assign to :attr:`_frames`
-        """
-        executor = futures.ThreadPoolExecutor(max_workers=3)
-        images = dict()
-        with executor:
-            for filename, frame in tqdm(self._loader.load(),
-                                        total=self._loader.count,
-                                        desc="Analyzing Video..."):
-                self._cache.append(filename)
-                images[executor.submit(self._encode_frame, frame)] = (filename, frame.shape[:2])
-            for future in tqdm(futures.as_completed(images), total=self._loader.count):
-                filename, original_dims = images[future]
-                cached = future.result()
-                cached["filename"] = filename
-                cached["original_dims"] = original_dims
-                self._cache[self._cache.index(filename)] = cached
-        self._set_current_frame(initialize=True)
-
-    def _encode_frame(self, frame):
-        """ Resize frame and encode to jpg
+    def _add_meta_data(self, position, frame, filename):
+        """ Adds the metadata for the current frame to :attr:`meta`.
 
         Parameters
         ----------
+        position: int
+            The current frame index
         frame: :class:`numpy.ndarray`
-            The frame to be compressed and resized
+            The current frame
+        filename: str
+            The filename for the current frame
 
-        Returns
-        -------
-        bytes:
-            Compressed and resized frame
-        tuple:
-            The (`height`, `width`) of the returned image
         """
-        img = frame[..., 2::-1]
-        scale = min(self._display_dims[0] / img.shape[1], self._display_dims[1] / img.shape[0])
-        dst_dims = (int(round(img.shape[1] * scale)), int(round(img.shape[0] * scale)))
-        interp = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
-        img = cv2.resize(img, dst_dims, interpolation=interp)
-        retval = dict(image=cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 20])[1],
-                      display_dims=dst_dims,
-                      scale=scale)
-        return retval
+        if position in self._meta:
+            return
+        scale = min(self._display_dims[0] / frame.shape[1],
+                    self._display_dims[1] / frame.shape[0])
+        self._meta[position] = dict(scale=scale,
+                                    interp=cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA,
+                                    display_dims=(int(round(frame.shape[1] * scale)),
+                                                  int(round(frame.shape[0] * scale))),
+                                    filename=filename)
 
     def increment_frame(self, is_playing=False):
         """ Update :attr:`self.current_frame` to the next frame.
@@ -824,7 +797,7 @@ class AlignmentsCache():
     @property
     def current_faces(self):
         """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects """
-        filename = self._frame_cache.current_cache_item["filename"]
+        filename = self._frame_cache.current_meta_data["filename"]
         return self._alignments[filename]
 
     def _get_alignments(self, alignments_path):
@@ -860,3 +833,27 @@ class AlignmentsCache():
                 face.load_aligned(None, size=128)
                 faces[framename].append(face)
         return faces
+
+
+class Aligner():
+    """ Handles the extraction pipeline for retrieving the alignment landmarks """
+    def __init__(self):
+        self._aligner = self._init_aligner()
+
+    @property
+    def _in_queue(self):
+        """ :class:`queue.Queue` - The input queue to the aligner. """
+        return self._aligner.input_queue
+
+    @staticmethod
+    def _init_aligner():
+        # TODO FAN
+        # TODO Init in thread whilst caching frames
+        """ Initialize Aligner """
+        logger.debug("Initialize Aligner")
+        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
+        # Set the batchsize to 1
+        aligner.set_batchsize("align", 1)
+        aligner.launch()
+        logger.debug("Initialized Extractor")
+        return aligner

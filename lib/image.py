@@ -405,7 +405,7 @@ class ImageIO():
             raise FaceswapError("Not all locations in the input list exist")
 
     def _set_thread(self):
-        """ Set the load/save thread """
+        """ Set the background thread for the load and save iterators and launch it. """
         logger.debug("Setting thread")
         if self._thread is not None and self._thread.is_alive():
             logger.debug("Thread pre-exists and is alive: %s", self._thread)
@@ -432,6 +432,7 @@ class ImageIO():
         logger.debug("Received Close")
         if self._thread is not None:
             self._thread.join()
+        self._thread = None
         logger.debug("Closed")
 
 
@@ -461,7 +462,7 @@ class ImagesLoader(ImageIO):
         but accurately. Default: ``True``.
     skip_list: list, optional
         Optional list of frame/image indices to not load. Any indices provided here will be skipped
-        when reading images from the given location. Default: ``None``
+        when executing the :func:`load` function from the given location. Default: ``None``
 
     Examples
     --------
@@ -492,6 +493,7 @@ class ImagesLoader(ImageIO):
         self._fps = self._get_fps()
         self._count = None
         self._file_list = None
+        self._single_frame_reader = None
         self._get_count_and_filelist(fast_count)
 
     @property
@@ -531,7 +533,8 @@ class ImagesLoader(ImageIO):
         Parameters
         ----------
         skip_list: list
-            A list of indices corresponding to the frame indices that should be skipped
+            A list of indices corresponding to the frame indices that should be skipped by the
+            :func:`load` function.
         """
         logger.debug(skip_list)
         self._skip_list = set(skip_list)
@@ -732,7 +735,36 @@ class ImagesLoader(ImageIO):
                                           for v in retval])
             yield retval
         logger.debug("Closing Load Generator")
-        self._thread.join()
+        self.close()
+
+    def frame_from_index(self, index):
+        """ Return a single frame for the given index.
+
+        Parameters
+        ----------
+        index: int
+            The index number (frame number) of the frame to retrieve. NB: The first frame is
+            index `0`
+
+        Returns
+        -------
+        filename: str
+            The filename of the returned image
+        image: :class:`numpy.ndarray`
+            The image for the given index
+        Notes
+        -----
+        Retrieving frames from video files can be slow as the whole video file needs to be
+        iterated to retrieve the requested frame. If a frame has already been retrieved, then
+        retrieving frames of a higher index will be quicker than retrieving frames of a lower
+        index, as iteration needs to start from the beginning again when navigating backwards.
+        """
+        # TODO Images in folders
+        if self._single_frame_reader is None:
+            self._single_frame_reader = imageio.get_reader(self.location, "ffmpeg")
+        frame = self._single_frame_reader.get_data(index)[..., ::-1]
+        filename = self._dummy_video_framename(index)
+        return filename, frame
 
 
 class ImagesSaver(ImageIO):
