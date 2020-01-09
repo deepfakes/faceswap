@@ -38,13 +38,13 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
-        self._frame_cache = FrameCache(arguments.frames)
-        alignments = AlignmentsCache(arguments.alignments_path, self._frame_cache)
+        self._frames = FrameNavigation(arguments.frames)
+        alignments = AlignmentsCache(arguments.alignments_path, self._frames)
 
         self._initialize_tkinter()
         self._containers = self._create_containers()
 
-        self._display = DisplayFrame(self._containers["top"], self._frame_cache, alignments)
+        self._display = DisplayFrame(self._containers["top"], self._frames, alignments)
 
         lbl = ttk.Label(self._containers["top"], text="Top Right")
         self._containers["top"].add(lbl)
@@ -99,16 +99,16 @@ class Manual(tk.Tk):
     def _set_layout(self):
         """ Place the sashes of the paned window """
         self.update_idletasks()
-        self._containers["top"].sash_place(0, (self._frame_cache.display_dims[0]) + 8, 1)
-        self._containers["main"].sash_place(0, 1, self._frame_cache.display_dims[1] + 72)
+        self._containers["top"].sash_place(0, (self._frames.display_dims[0]) + 8, 1)
+        self._containers["main"].sash_place(0, 1, self._frames.display_dims[1] + 72)
 
     def _handle_key_press(self, event):
         """ Keyboard shortcuts """
-        bindings = dict(left=self._frame_cache.decrement_frame,
-                        right=self._frame_cache.increment_frame,
+        bindings = dict(left=self._frames.decrement_frame,
+                        right=self._frames.increment_frame,
                         space=self._display.handle_play_button,
-                        home=self._frame_cache.set_first_frame,
-                        end=self._frame_cache.set_last_frame)
+                        home=self._frames.set_first_frame,
+                        end=self._frames.set_last_frame)
         key = event.keysym
         if key.lower() in bindings:
             self.focus_set()
@@ -131,19 +131,19 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the display frame resides in
-    frame_cache: :class:`FrameCache`
+    frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     alignments: dict
         Dictionary of :class:`lib.faces_detect.DetectedFace` objects
     """
-    def __init__(self, parent, frame_cache, alignments):
-        logger.debug("Initializing %s: (parent: %s, frame_cache: %s)",
-                     self.__class__.__name__, parent, frame_cache)
+    def __init__(self, parent, frames, alignments):
+        logger.debug("Initializing %s: (parent: %s, frames: %s)",
+                     self.__class__.__name__, parent, frames)
         super().__init__(parent)
         parent.add(self)
-        self._frame_cache = frame_cache
+        self._frames = frames
         self._extractor = Aligner()
-        self._canvas = Viewer(self, alignments, self._frame_cache)
+        self._canvas = Viewer(self, alignments, self._frames)
 
         self._transport_frame = ttk.Frame(self)
         self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
@@ -154,8 +154,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
-        var = self._frame_cache.tk_position
-        max_frame = self._frame_cache.frame_count - 1
+        var = self._frames.tk_position
+        max_frame = self._frames.frame_count - 1
 
         frame = ttk.Frame(self._transport_frame)
 
@@ -193,10 +193,10 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                          command=self.handle_play_button)
                 play_button.pack(side=tk.LEFT, padx=(0, 6))
                 Tooltip(play_button, text="Play/Pause (SPACE)")
-                self._frame_cache.tk_is_playing.trace("w", self._play)
+                self._frames.tk_is_playing.trace("w", self._play)
             elif action in ("prev", "next"):
                 cmd_action = "decrement" if action == "prev" else "increment"
-                cmd = getattr(self._frame_cache, "{}_frame".format(cmd_action))
+                cmd = getattr(self._frames, "{}_frame".format(cmd_action))
                 if action == "prev":
                     helptext = "Go to Previous Frame (LEFT)"
                 else:
@@ -207,7 +207,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             elif action in ("beginning", "end"):
                 lookup = ("First", "HOME") if action == "beginning" else ("Last", "END")
                 helptext = "Go to {} Frame ({})".format(*lookup)
-                cmd = getattr(self._frame_cache, "set_{}_frame".format(lookup[0].lower()))
+                cmd = getattr(self._frames, "set_{}_frame".format(lookup[0].lower()))
                 btn = ttk.Button(frame, image=icons[action], width=14, command=cmd)
                 btn.pack(side=tk.LEFT)
                 Tooltip(btn, text=helptext)
@@ -218,15 +218,15 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def handle_play_button(self):
         """ Handle the play button.
 
-        Switches the :attr:`_frame_cache.is_playing` variable.
+        Switches the :attr:`_frames.is_playing` variable.
         """
-        is_playing = self._frame_cache.tk_is_playing.get()
-        self._frame_cache.tk_is_playing.set(not is_playing)
+        is_playing = self._frames.tk_is_playing.get()
+        self._frames.tk_is_playing.set(not is_playing)
 
     def _add_speed_combo(self, frame):
         """ Adds the speed control Combo box and links to
-        :attr:`_frame_cache.tk_playback_speed`. """
-        tk_var = self._frame_cache.tk_playback_speed
+        :attr:`_frames.tk_playback_speed`. """
+        tk_var = self._frames.tk_playback_speed
         tk_var.set("Standard")
         sframe = ttk.Frame(frame)
         sframe.pack(side=tk.RIGHT)
@@ -243,7 +243,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _play(self, *args):  # pylint:disable=unused-argument
         """ Play the video file at the selected speed """
         start = time()
-        is_playing = self._frame_cache.tk_is_playing.get()
+        is_playing = self._frames.tk_is_playing.get()
         icon = "pause" if is_playing else "play"
         self._play_button.config(image=get_images().icons[icon])
 
@@ -251,9 +251,9 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Pause detected. Stopping.")
             return
 
-        self._frame_cache.increment_frame(is_playing=True)
-        if self._frame_cache.tk_playback_speed.get() == "Standard":
-            delay = self._frame_cache.delay
+        self._frames.increment_frame(is_playing=True)
+        if self._frames.tk_playback_speed.get() == "Standard":
+            delay = self._frames.delay
             duration = int((time() - start) * 1000)
             delay = max(1, delay - duration)
         else:
@@ -263,14 +263,14 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     """ Annotation onto tkInter Canvas """
-    def __init__(self, parent, alignments, frame_cache):
-        logger.debug("Initializing %s: (parent: %s, alignments: %s, frame_cache: %s)",
-                     self.__class__.__name__, parent, alignments, frame_cache)
+    def __init__(self, parent, alignments, frames):
+        logger.debug("Initializing %s: (parent: %s, alignments: %s, frames: %s)",
+                     self.__class__.__name__, parent, alignments, frames)
         super().__init__(parent, bd=0, highlightthickness=0)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True, anchor=tk.E)
 
         self._alignments = alignments
-        self._frame_cache = frame_cache
+        self._frames = frames
         self._colors = dict(red="#ff0000",
                             green="#00ff00",
                             blue="#0000ff",
@@ -293,7 +293,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     @property
     def _scaling(self):
         """ float: The scaling factor for the currently displayed frame """
-        return self._frame_cache.current_scale
+        return self._frames.current_scale
 
     @property
     def _bounding_box_layout(self):
@@ -331,12 +331,12 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
     def _add_initial_frame(self):
         """ Adds the initial items to the canvas. """
-#        self._image = self.create_image(self._frame_cache.display_dims[0] // 2,
-#                                        self._frame_cache.display_dims[1] // 2,
-#                                        image=self._frame_cache.current_frame,
+#        self._image = self.create_image(self._frames.display_dims[0] // 2,
+#                                        self._frames.display_dims[1] // 2,
+#                                        image=self._frames.current_frame,
 #                                        anchor=tk.CENTER)
         self._image = self.create_image(0, 0,
-                                        image=self._frame_cache.current_frame,
+                                        image=self._frames.current_frame,
                                         anchor=tk.NW)
         self._annotations["mesh"] = self._update_mesh()
         self._annotations["extract_box"] = self._update_extract_box()
@@ -344,7 +344,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._annotations["bounding_box"] = self._update_bounding_box()
 
     def _add_callback(self):
-        needs_update = self._frame_cache.tk_update
+        needs_update = self._frames.tk_update
         needs_update.trace("w", self._update_display)
 
     def _add_mouse_tracking(self):
@@ -355,15 +355,15 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
     def _update_display(self, *args):  # pylint:disable=unused-argument
         """ Update the display on frame cache update """
-        if not self._frame_cache.tk_update.get():
+        if not self._frames.tk_update.get():
             return
         self._clear_annotations()
-        self.itemconfig(self._image, image=self._frame_cache.current_frame)
+        self.itemconfig(self._image, image=self._frames.current_frame)
         self._annotations["mesh"] = self._update_mesh()
         self._annotations["extract_box"] = self._update_extract_box()
         self._annotations["landmarks"] = self._update_landmarks()
         self._annotations["bounding_box"] = self._update_bounding_box()
-        self._frame_cache.tk_update.set(False)
+        self._frames.tk_update.set(False)
 
     def _clear_annotations(self):
         """ Removes all currently drawn annotations """
@@ -576,7 +576,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._drag_data["current_location"] = (event.x, event.y)
 
 
-class FrameCache():
+class FrameNavigation():
     """Handles the return of the correct frame for the GUI.
 
     Parameters
@@ -621,7 +621,7 @@ class FrameCache():
     @property
     def current_meta_data(self):
         """ dict: The current cache item for the current location. Keys are `filename`,
-        `display_dims`, `scale` and `interp`. """
+        `display_dims`, `scale` and `interpolation`. """
         return self._meta[self.tk_position.get()]
 
     @property
@@ -699,11 +699,11 @@ class FrameCache():
         position = self.tk_position.get()
         if not initialize and position == self._current_idx:
             return
-        filename, frame = self._loader.frame_from_index(position)
+        filename, frame = self._loader.image_from_index(position)
         self._add_meta_data(position, frame, filename)
         frame = cv2.resize(frame,
                            self.current_meta_data["display_dims"],
-                           interpolation=self.current_meta_data["interp"])[..., 2::-1]
+                           interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
         self._current_frame = ImageTk.PhotoImage(Image.fromarray(frame))
         self._current_idx = position
         self._current_scale = self.current_meta_data["scale"]
@@ -726,11 +726,12 @@ class FrameCache():
             return
         scale = min(self._display_dims[0] / frame.shape[1],
                     self._display_dims[1] / frame.shape[0])
-        self._meta[position] = dict(scale=scale,
-                                    interp=cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA,
-                                    display_dims=(int(round(frame.shape[1] * scale)),
-                                                  int(round(frame.shape[0] * scale))),
-                                    filename=filename)
+        self._meta[position] = dict(
+            scale=scale,
+            interpolation=cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA,
+            display_dims=(int(round(frame.shape[1] * scale)),
+                          int(round(frame.shape[0] * scale))),
+            filename=filename)
 
     def increment_frame(self, is_playing=False):
         """ Update :attr:`self.current_frame` to the next frame.
@@ -783,21 +784,21 @@ class AlignmentsCache():
     alignments_path: str
         Full path to the alignments file. If empty string is passed then location is calculated
         from the source folder
-    frame_cache: :class:`FrameCache`
+    frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, alignments_path, frame_cache):
+    def __init__(self, alignments_path, frames):
         logger.debug("Initializing %s: (alignments_path: '%s')",
                      self.__class__.__name__, alignments_path)
-        self._frame_cache = frame_cache
+        self._frames = frames
         self._alignments = self._get_alignments(alignments_path)
-        self._tk_position = frame_cache.tk_position
+        self._tk_position = frames.tk_position
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def current_faces(self):
         """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects """
-        filename = self._frame_cache.current_meta_data["filename"]
+        filename = self._frames.current_meta_data["filename"]
         return self._alignments[filename]
 
     def _get_alignments(self, alignments_path):
@@ -815,14 +816,14 @@ class AlignmentsCache():
             `frame name`: list of :class:`lib.faces_detect.DetectedFace` for the current frame
         """
         if alignments_path:
-            folder, filename = os.path.split(alignments_path, self._frame_cache)
+            folder, filename = os.path.split(alignments_path, self._frames)
         else:
             filename = "alignments.fsa"
-            if self._frame_cache.is_video:
-                folder, vid = os.path.split(os.path.splitext(self._frame_cache.location)[0])
+            if self._frames.is_video:
+                folder, vid = os.path.split(os.path.splitext(self._frames.location)[0])
                 filename = "{}_{}".format(vid, filename)
             else:
-                folder = self._frame_cache.location
+                folder = self._frames.location
         alignments = Alignments(folder, filename)
         faces = dict()
         for framename, items in alignments.data.items():

@@ -334,7 +334,7 @@ def count_frames(filename, fast=False):
             logger.debug("frame line: %s", output)
             if not init_tqdm:
                 logger.debug("Initializing tqdm")
-                pbar = tqdm(desc="Counting Video Frames", leave=False, total=duration, unit="secs")
+                pbar = tqdm(desc="Analyzing Video", leave=False, total=duration, unit="secs")
                 init_tqdm = True
             time_idx = output.find("time=") + len("time=")
             frame_idx = output.find("frame=") + len("frame=")
@@ -737,8 +737,8 @@ class ImagesLoader(ImageIO):
         logger.debug("Closing Load Generator")
         self.close()
 
-    def frame_from_index(self, index):
-        """ Return a single frame for the given index.
+    def image_from_index(self, index):
+        """ Return a single image from :attr:`file_list` for the given index.
 
         Parameters
         ----------
@@ -752,19 +752,28 @@ class ImagesLoader(ImageIO):
             The filename of the returned image
         image: :class:`numpy.ndarray`
             The image for the given index
+
         Notes
         -----
         Retrieving frames from video files can be slow as the whole video file needs to be
         iterated to retrieve the requested frame. If a frame has already been retrieved, then
         retrieving frames of a higher index will be quicker than retrieving frames of a lower
         index, as iteration needs to start from the beginning again when navigating backwards.
+
+        We do not use a background thread for this task, as it is assumed that requesting an image
+        by index will be done when required.
         """
-        # TODO Images in folders
-        if self._single_frame_reader is None:
-            self._single_frame_reader = imageio.get_reader(self.location, "ffmpeg")
-        frame = self._single_frame_reader.get_data(index)[..., ::-1]
-        filename = self._dummy_video_framename(index)
-        return filename, frame
+        if self.is_video:
+            if self._single_frame_reader is None:
+                self._single_frame_reader = imageio.get_reader(self.location, "ffmpeg")
+            image = self._single_frame_reader.get_data(index)[..., ::-1]
+            filename = self._dummy_video_framename(index)
+        else:
+            filename = self.file_list[index]
+            image = read_image(filename, raise_error=True)
+            filename = os.path.basename(filename)
+        logger.trace("index: %s, filename: %s image shape: %s", index, filename, image.shape)
+        return filename, image
 
 
 class ImagesSaver(ImageIO):
