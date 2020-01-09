@@ -4,6 +4,7 @@
 import logging
 import subprocess
 import os
+import sys
 
 from concurrent import futures
 from hashlib import sha1
@@ -26,6 +27,164 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 # <<< IMAGE IO >>> #
+
+class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
+    """ Monkey patch imageio ffmpeg to use keyframes whilst seeking """
+    def __init__(self, format, request):
+        super().__init__(format, request)
+        self._keyframes = None
+
+    def get_keyframes(self):
+        """ Store the source video's keyframes in :attr:`_keyframes" for the current video for use
+        in :func:`initialize`. """
+        assert isinstance(self._filename, str), "Video path must be a string"
+
+        cmd = [im_ffm.get_ffmpeg_exe(),
+               "-hide_banner",
+               "-copyts",
+               "-discard", "nokey",
+               "-i", self._filename,
+               "-vf", "showinfo",
+               "-start_number", "0",
+               "-an",
+               "-f", "null",
+               "-"]
+        logger.debug("FFMPEG Command: '%s'", " ".join(cmd))
+        process = subprocess.Popen(cmd,
+                                   stderr=subprocess.STDOUT,
+                                   stdout=subprocess.PIPE,
+                                   universal_newlines=True)
+        keyframes = []
+        prev_pts_time = 0
+        pbar = tqdm(desc="Analyzing Keyframes",
+                    leave=False,
+                    total=self._meta["duration"],
+                    unit="secs")
+        while True:
+            output = process.stdout.readline().strip()
+            if output == "" and process.poll() is not None:
+                break
+            if "iskey" not in output:
+                continue
+            logger.trace("Keyframe line: %s", output)
+            idx = output.find("pts_time:") + len("pts_time:")
+            pts_time = float(output[idx:].split(" ")[0].strip())
+            frame_no = int(round(pts_time * self._meta["fps"]))
+            keyframes.append((pts_time, frame_no))
+            logger.trace("pts_time: %s, frame_no: %s", pts_time, frame_no)
+            pbar.update(round(pts_time - prev_pts_time, 2))
+            prev_pts_time = pts_time
+        pbar.close()
+        logger.debug("keyframes: %s", keyframes)
+        return_code = process.poll()
+        logger.debug("Return code: %s, keyframes: %s", return_code, keyframes)
+        self._keyframes = keyframes
+
+    def _previous_keyframe_pts(self, index=0):
+        """ Return the previous keyframe's pts_time """
+        prev_pts_time = 0.0
+        prev_frame_no = 0
+        for pts_time, frame_no in self._keyframes:
+            if prev_frame_no <= index < frame_no:
+                break
+            prev_pts_time = pts_time
+            prev_frame_no = frame_no
+        logger.trace("keyframe pts_time: %s, keyframe: %s", prev_pts_time, prev_frame_no)
+        return prev_pts_time
+
+    def _initialize(self, index=0):
+        """ Replace ImageIO _initialize with a version that explictly uses keyframes.
+
+        This introduces a minor change by seeking fast to the previous keyframe and then
+        seeking slowly for the remainder, rather than seeking fast to 10 seconds prior to
+        the requsted frame
+        """
+        # pylint: disable-all
+        if self._read_gen is not None:
+            self._read_gen.close()
+
+        iargs = []
+        oargs = []
+
+        # Create input args
+        iargs += self._arg_input_params
+        if self.request._video:
+            iargs += ["-f", CAM_FORMAT]  # noqa
+            if self._arg_pixelformat:
+                iargs += ["-pix_fmt", self._arg_pixelformat]
+            if self._arg_size:
+                iargs += ["-s", self._arg_size]
+        elif index > 0:  # re-initialize  / seek
+            # Note: only works if we initialized earlier, and now have meta
+            # Some info here: https://trac.ffmpeg.org/wiki/Seeking
+            # There are two ways to seek, one before -i (input_params) and
+            # after (output_params). The former is fast, because it uses
+            # keyframes, the latter is slow but accurate. According to
+            # the article above, the fast method should also be accurate
+            # from ffmpeg version 2.1, however in version 4.1 our tests
+            # start failing again. Not sure why, but we can solve this
+            # by combining slow and fast. The old method would go back
+            # 10 seconds and then seek slow. This monkey patched version
+            # goes to the previous keyframe fast then seeks slow for the remainder.
+            if self._keyframes is None:
+                self._get_keyframes()
+            prev_keyframe_time = self._previous_keyframe_pts(index)
+            starttime = index / self._meta["fps"]
+
+            seek_fast = prev_keyframe_time
+            seek_slow = starttime - seek_fast
+
+            # We used to have this epsilon earlier, when we did not use
+            # the slow seek. I don't think we need it anymore.
+            # epsilon = -1 / self._meta["fps"] * 0.1
+            iargs += ["-ss", "%.06f" % (seek_fast)]
+            oargs += ["-ss", "%.06f" % (seek_slow)]
+
+        # Output args, for writing to pipe
+        if self._arg_size:
+            oargs += ["-s", self._arg_size]
+        if self.request.kwargs.get("fps", None):
+            fps = float(self.request.kwargs["fps"])
+            oargs += ["-r", "%.02f" % fps]
+        oargs += self._arg_output_params
+
+        # Get pixelformat and bytes per pixel
+        pix_fmt = self._pix_fmt
+        bpp = self._depth * self._bytes_per_channel
+
+        # Create generator
+        rf = self._ffmpeg_api.read_frames
+        self._read_gen = rf(
+            self._filename, pix_fmt, bpp, input_params=iargs, output_params=oargs
+        )
+
+        # Read meta data. This start the generator (and ffmpeg subprocess)
+        if self.request._video:
+            # With cameras, catch error and turn into IndexError
+            try:
+                meta = self._read_gen.__next__()
+            except IOError as err:
+                err_text = str(err)
+                if "darwin" in sys.platform:
+                    if "Unknown input format: 'avfoundation'" in err_text:
+                        err_text += (
+                            "Try installing FFMPEG using "
+                            "home brew to get a version with "
+                            "support for cameras."
+                        )
+                raise IndexError(
+                    "No camera at {}.\n\n{}".format(self.request._video, err_text)
+                )
+            else:
+                self._meta.update(meta)
+        elif index == 0:
+            self._meta.update(self._read_gen.__next__())
+        else:
+            self._read_gen.__next__()  # we already have meta data
+
+
+imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader
+
 
 def read_image(filename, raise_error=False, with_hash=False):
     """ Read an image file from a file location.
@@ -491,10 +650,13 @@ class ImagesLoader(ImageIO):
         self._is_video = self._check_for_video()
 
         self._fps = self._get_fps()
+
         self._count = None
         self._file_list = None
-        self._single_frame_reader = None
         self._get_count_and_filelist(fast_count)
+
+        self._keyframes = None
+        self._single_frame_reader = None
 
     @property
     def count(self):
@@ -766,6 +928,7 @@ class ImagesLoader(ImageIO):
         if self.is_video:
             if self._single_frame_reader is None:
                 self._single_frame_reader = imageio.get_reader(self.location, "ffmpeg")
+                self._single_frame_reader.get_keyframes()
             image = self._single_frame_reader.get_data(index)[..., ::-1]
             filename = self._dummy_video_framename(index)
         else:
