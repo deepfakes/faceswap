@@ -17,7 +17,7 @@ from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.image import ImagesLoader
-from plugins.extract.pipeline import Extractor  # ExtractMedia
+from plugins.extract.pipeline import Extractor, ExtractMedia
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -142,7 +142,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         parent.add(self)
         self._frames = frames
-        self._extractor = Aligner()
         self._canvas = Viewer(self, alignments, self._frames)
 
         self._transport_frame = ttk.Frame(self)
@@ -336,7 +335,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 #                                        image=self._frames.current_frame,
 #                                        anchor=tk.CENTER)
         self._image = self.create_image(0, 0,
-                                        image=self._frames.current_frame,
+                                        image=self._frames.current_display_frame,
                                         anchor=tk.NW)
         self._annotations["mesh"] = self._update_mesh()
         self._annotations["extract_box"] = self._update_extract_box()
@@ -358,16 +357,21 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         if not self._frames.tk_update.get():
             return
         self._clear_annotations()
-        self.itemconfig(self._image, image=self._frames.current_frame)
+        self.itemconfig(self._image, image=self._frames.current_display_frame)
         self._annotations["mesh"] = self._update_mesh()
         self._annotations["extract_box"] = self._update_extract_box()
         self._annotations["landmarks"] = self._update_landmarks()
-        self._annotations["bounding_box"] = self._update_bounding_box()
+        if not self._drag_data:
+            self._annotations["bounding_box"] = self._update_bounding_box()
         self._frames.tk_update.set(False)
+        self.update_idletasks()
 
     def _clear_annotations(self):
         """ Removes all currently drawn annotations """
-        for annotation in self._annotations.values():
+        for title, annotation in self._annotations.items():
+            # TODO this check will need to be more robust when adding new elements
+            if title == "bounding_box" and self._drag_data:
+                continue
             for face in annotation:
                 for instance in face:
                     self.delete(instance)
@@ -479,8 +483,8 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         if click_object is None:
             self._drag_data = dict()
             return
-
-        if click_object == "bounding_box_anchor":
+        object_type, self._drag_data["index"] = click_object
+        if object_type == "bounding_box_anchor":
             indices = [(face_idx, pnt_idx)
                        for face_idx, face in enumerate(self._bounding_box_anchors)
                        for pnt_idx, bbox in enumerate(face)
@@ -488,7 +492,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             self._drag_data["objects"] = self._annotations["bounding_box"][indices[0]]
             self._drag_data["corner"] = self._bounding_box_corner_order[indices[1]]
             self._drag_data["callback"] = self._resize_bounding_box
-        elif click_object == "bounding_box":
+        elif object_type == "bounding_box":
             face_idx = [idx for idx, bbox in enumerate(self._bounding_boxes)
                         if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
             self._drag_data["objects"] = self._annotations["bounding_box"][face_idx]
@@ -496,7 +500,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             self._drag_data["callback"] = self._move_bounding_box
 
     def _get_click_object(self, event):
-        """ Return the object name that has been clicked on.
+        """ Return the object type and index that has been clicked on.
 
         Parameters
         ----------
@@ -505,17 +509,22 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
         Returns
         -------
-        str
-            The name of the object being clicked on. If no object clicked on, returns ``None``
+        tuple
+            (`type`, `index`) The type of object being clicked on and the index of the face.
+            If no object clicked on then return value is ``None``
         """
-        if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-               for face in self._bounding_box_anchors for bbox in face):
-            retval = "bounding_box_anchor"
-        elif any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-                 for bbox in self._bounding_boxes):
-            retval = "bounding_box"
-        else:
-            retval = None
+        retval = None
+        for idx, face in enumerate(self._bounding_box_anchors):
+            if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
+                   for bbox in face):
+                retval = "bounding_box_anchor", idx
+        if retval is not None:
+            return retval
+
+        for idx, bbox in enumerate(self._bounding_boxes):
+            if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
+                retval = "bounding_box", idx
+
         return retval
 
     def _drag_stop(self, event):  # pylint:disable=unused-argument
@@ -566,14 +575,35 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         for idx, cnr in enumerate(corners):
             anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
             self.coords(self._drag_data["objects"][idx + 1], *anc)
+        self._alignments.set_current_bounding_box(self._drag_data["index"],
+                                                  *self._coords_to_bounding_box(box))
 
     def _move_bounding_box(self, event):
         """ Moves the bounding box on a bounding box drag event """
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        for obj in self._drag_data["objects"]:
+        selected_objects = self._drag_data["objects"]
+        for obj in selected_objects:
             self.move(obj, shift_x, shift_y)
+        box = self.coords(selected_objects[0])
+        self._alignments.set_current_bounding_box(self._drag_data["index"],
+                                                  *self._coords_to_bounding_box(box))
         self._drag_data["current_location"] = (event.x, event.y)
+
+    def _coords_to_bounding_box(self, coords):
+        """ Converts tkinter coordinates to :class:`lib.faces_detect.DetectedFace` bounding
+        box format, scaled up for feeding the model.
+
+        Returns
+        -------
+        tuple
+            The (`x`, `width`, `y`, `height`) integer points of the bounding box.
+
+        """
+        return (int(round(coords[0] / self._scaling)),
+                int(round((coords[2] - coords[0]) / self._scaling)),
+                int(round(coords[1] / self._scaling)),
+                int(round((coords[3] - coords[1]) / self._scaling)))
 
 
 class FrameNavigation():
@@ -594,6 +624,7 @@ class FrameNavigation():
         self._current_scale = 1.0
         self._tk_vars = self._set_tk_vars()
         self._current_frame = None
+        self._current_display_frame = None
         self._display_dims = (960, 540)
         self._set_current_frame(initialize=True)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -631,8 +662,14 @@ class FrameNavigation():
 
     @property
     def current_frame(self):
-        """ :class:`ImageTk.PhotoImage`: The currently loaded, decompressed frame. """
+        """ :class:`numpy.ndarray`: The currently loaded, full frame. """
         return self._current_frame
+
+    @property
+    def current_display_frame(self):
+        """ :class:`ImageTk.PhotoImage`: The currently loaded frame, formatted and sized
+        for display. """
+        return self._current_display_frame
 
     @property
     def delay(self):
@@ -686,7 +723,7 @@ class FrameNavigation():
 
     def _set_current_frame(self, *args,  # pylint:disable=unused-argument
                            initialize=False):
-        """ Set the currently loaded, decompressed frame to :attr:`_current_frame`
+        """ Set the currently loaded frame to :attr:`_current_frame`
 
         Parameters
         ----------
@@ -701,10 +738,11 @@ class FrameNavigation():
             return
         filename, frame = self._loader.image_from_index(position)
         self._add_meta_data(position, frame, filename)
-        frame = cv2.resize(frame,
-                           self.current_meta_data["display_dims"],
-                           interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
-        self._current_frame = ImageTk.PhotoImage(Image.fromarray(frame))
+        self._current_frame = frame
+        display = cv2.resize(self._current_frame,
+                             self.current_meta_data["display_dims"],
+                             interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
+        self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
         self._current_idx = position
         self._current_scale = self.current_meta_data["scale"]
         self.tk_update.set(True)
@@ -790,16 +828,57 @@ class AlignmentsCache():
     def __init__(self, alignments_path, frames):
         logger.debug("Initializing %s: (alignments_path: '%s')",
                      self.__class__.__name__, alignments_path)
-        self._frames = frames
+        self.frames = frames
         self._alignments = self._get_alignments(alignments_path)
         self._tk_position = frames.tk_position
+        self._face_index = 0
+        self._extractor = Aligner(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def current_faces(self):
-        """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects """
-        filename = self._frames.current_meta_data["filename"]
-        return self._alignments[filename]
+        """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects. Returns
+        modified alignments if they are modified, otherwise original saved alignments. """
+        alignments = self._alignments[self.frames.current_meta_data["filename"]]
+        # TODO use get and return a default for when alignments don't exist
+        retval = alignments.get("new", alignments["saved"])
+        return retval
+
+    @property
+    def current_face(self):
+        """ :class:`lib.faces_detect.DetectedFace` The currently selected face """
+        return self.current_faces[self._face_index]
+
+    def set_current_bounding_box(self, index, pnt_x, width, pnt_y, height):
+        """ Update the bounding box for the current alignments.
+
+        Parameters
+        ----------
+        index: int
+            The face index to set this bounding box for
+        pnt_x: int
+            The left point of the bounding box
+        width: int
+            The width of the bounding box
+        pnt_y: int
+            The top point of the bounding box
+        height: int
+            The height of the bounding box
+        """
+        self._face_index = index
+        filename = self.frames.current_meta_data["filename"]
+        if self._alignments[filename].get("new", None) is None:
+            # Copy over saved alignments to new alignments
+            self._alignments[filename]["new"] = self._alignments[filename]["saved"].copy()
+        face = self.current_face
+        face.x = pnt_x
+        face.w = width
+        face.y = pnt_y
+        face.h = height
+        face.mask = dict()
+        face.landmarks_xy = self._extractor.get_landmarks()
+        face.load_aligned(None, size=128, force=True)
+        self.frames.tk_update.set(True)
 
     def _get_alignments(self, alignments_path):
         """ Get the alignments object.
@@ -816,35 +895,53 @@ class AlignmentsCache():
             `frame name`: list of :class:`lib.faces_detect.DetectedFace` for the current frame
         """
         if alignments_path:
-            folder, filename = os.path.split(alignments_path, self._frames)
+            folder, filename = os.path.split(alignments_path, self.frames)
         else:
             filename = "alignments.fsa"
-            if self._frames.is_video:
-                folder, vid = os.path.split(os.path.splitext(self._frames.location)[0])
+            if self.frames.is_video:
+                folder, vid = os.path.split(os.path.splitext(self.frames.location)[0])
                 filename = "{}_{}".format(vid, filename)
             else:
-                folder = self._frames.location
+                folder = self.frames.location
         alignments = Alignments(folder, filename)
         faces = dict()
         for framename, items in alignments.data.items():
             faces[framename] = []
+            this_frame_faces = []
             for item in items:
                 face = DetectedFace()
                 face.from_alignment(item)
                 face.load_aligned(None, size=128)
-                faces[framename].append(face)
+                this_frame_faces.append(face)
+            faces[framename] = dict(saved=this_frame_faces)
         return faces
 
 
 class Aligner():
-    """ Handles the extraction pipeline for retrieving the alignment landmarks """
-    def __init__(self):
+    """ Handles the extraction pipeline for retrieving the alignment landmarks
+
+    Parameters
+    ----------
+    alignments: :class:`Aligner`
+        The alignments cache object for the manual tool
+    """
+    def __init__(self, alignments):
+        self._alignments = alignments
         self._aligner = self._init_aligner()
+        self._trigger = False
 
     @property
     def _in_queue(self):
         """ :class:`queue.Queue` - The input queue to the aligner. """
         return self._aligner.input_queue
+
+    @property
+    def _feed_face(self):
+        """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
+        aligner, formatted for the pipeline """
+        return ExtractMedia(self._alignments.frames.current_meta_data["filename"],
+                            self._alignments.frames.current_frame,
+                            detected_faces=[self._alignments.current_face])
 
     @staticmethod
     def _init_aligner():
@@ -858,3 +955,15 @@ class Aligner():
         aligner.launch()
         logger.debug("Initialized Extractor")
         return aligner
+
+    def get_landmarks(self):
+        """ Feed the detected face into the alignment pipeline and retrieve the landmarks
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The 68 point landmark alignments
+        """
+        self._in_queue.put(self._feed_face)
+        detected_face = next(self._aligner.detected_faces()).detected_faces[0]
+        return detected_face.landmarks_xy

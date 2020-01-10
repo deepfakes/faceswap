@@ -216,7 +216,7 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, dtype=None):
+    def load_aligned(self, image, size=256, dtype=None, force=False):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
@@ -235,6 +235,9 @@ class DetectedFace():
             The size of the output face in pixels
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+        force: bool, optional
+            Force an updated of the aligned face, even if it is already loaded. Default: ``False``
+
 
         Notes
         -----
@@ -244,7 +247,7 @@ class DetectedFace():
             - :func:`aligned_face`
             - :func:`adjusted_interpolators`
         """
-        if self.aligned:
+        if self.aligned and not force:
             # Don't reload an already aligned face
             logger.trace("Skipping alignment calculation for already aligned face")
         else:
