@@ -6,7 +6,7 @@ import os
 import tkinter as tk
 from tkinter import ttk
 from functools import partial
-from time import time
+from time import time, sleep
 
 import cv2
 from PIL import Image, ImageTk
@@ -17,6 +17,7 @@ from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.image import ImagesLoader
+from lib.multithreading import MultiThread
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -38,8 +39,11 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
+        extractor = Aligner()
         self._frames = FrameNavigation(arguments.frames)
-        alignments = AlignmentsCache(arguments.alignments_path, self._frames)
+        self._wait_for_extractor(extractor)
+
+        alignments = AlignmentsCache(arguments.alignments_path, self._frames, extractor)
 
         self._initialize_tkinter()
         self._containers = self._create_containers()
@@ -52,6 +56,17 @@ class Manual(tk.Tk):
         self._set_layout()
         self.bind("<Key>", self._handle_key_press)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @staticmethod
+    def _wait_for_extractor(extractor):
+        """ The :class:`Aligner` is launched in a background thread. Wait for it to be initialized
+        prior to proceeding """
+        while True:
+            if extractor.is_initialized:
+                logger.debug("Aligner inialized")
+                return
+            logger.debug("Aligner not initialized. Waiting...")
+            sleep(1)
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -825,14 +840,15 @@ class AlignmentsCache():
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, alignments_path, frames):
+    def __init__(self, alignments_path, frames, extractor):
         logger.debug("Initializing %s: (alignments_path: '%s')",
                      self.__class__.__name__, alignments_path)
         self.frames = frames
         self._alignments = self._get_alignments(alignments_path)
         self._tk_position = frames.tk_position
         self._face_index = 0
-        self._extractor = Aligner(self)
+        self._extractor = extractor
+        self._extractor.link_alignments(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -925,10 +941,10 @@ class Aligner():
     alignments: :class:`Aligner`
         The alignments cache object for the manual tool
     """
-    def __init__(self, alignments):
-        self._alignments = alignments
-        self._aligner = self._init_aligner()
-        self._trigger = False
+    def __init__(self):
+        self._alignments = None
+        self._aligner = None
+        self._init_thread = self._background_init_aligner()
 
     @property
     def _in_queue(self):
@@ -943,18 +959,44 @@ class Aligner():
                             self._alignments.frames.current_frame,
                             detected_faces=[self._alignments.current_face])
 
-    @staticmethod
-    def _init_aligner():
-        # TODO FAN
-        # TODO Init in thread whilst caching frames
-        """ Initialize Aligner """
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        thread_is_alive = self._init_thread.is_alive()
+        if thread_is_alive:
+            self._init_thread.check_and_raise_error()
+        else:
+            self._init_thread.join()
+        return not thread_is_alive
+
+    def _background_init_aligner(self):
+        """ Launch the aligner in a background thread so we can run other tasks whilst
+        waiting for initialization """
+        thread = MultiThread(self._init_aligner,
+                             thread_count=1,
+                             name="{}.init_aligner".format(self.__class__.__name__))
+        thread.start()
+        return thread
+
+    def _init_aligner(self):
+        """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()
         logger.debug("Initialized Extractor")
-        return aligner
+        self._aligner = aligner
+
+    def link_alignments(self, alignments):
+        """ Add the :class:`AlignmentsCache` object as a property of the aligner.
+
+        Parameters
+        ----------
+        alignments: :class:`AlignmentsCache`
+            The alignments cache object for the manual tool
+        """
+        self._alignments = alignments
 
     def get_landmarks(self):
         """ Feed the detected face into the alignment pipeline and retrieve the landmarks
