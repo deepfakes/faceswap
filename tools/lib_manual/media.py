@@ -5,6 +5,7 @@ import os
 import tkinter as tk
 
 import cv2
+import numpy as np
 from PIL import Image, ImageTk
 
 from lib.alignments import Alignments
@@ -38,11 +39,6 @@ class Annotations():
         self._extract_box = self._update_extract_box()
         self._landmarks = self._update_landmarks()
         self._bounding_box = self._update_bounding_box()
-
-    @property
-    def _scaling(self):
-        """ float: The scaling factor for the currently displayed frame """
-        return self._frames.current_scale
 
     @property
     def bounding_box_layout(self):
@@ -110,6 +106,37 @@ class Annotations():
                 for instance in face:
                     self._canvas.delete(instance)
 
+    def _scale_to_display(self, points):
+        """ Scale and offset the given points to the current display scale and offset values.
+
+        Parameters
+        ----------
+        points: :class:`numpy.ndarray`
+            Array of x, y co-ordinates to adjust
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The adjusted x, y co-ordinates for display purposes
+        """
+        return (points * self._frames.current_scale) + self._canvas.offset
+
+    def scale_from_display(self, points):
+        """ Scale and offset the given points from the current display to the correct original
+        values.
+
+        Parameters
+        ----------
+        points: :class:`numpy.ndarray`
+            Array of x, y co-ordinates to adjust
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The adjusted x, y co-ordinates to the original frame location
+        """
+        return (points - self._canvas.offset) / self._frames.current_scale
+
     def bbox_objects_for_face(self, index):
         """ Return the bounding box object with the anchor objects for the given face index.
 
@@ -133,10 +160,8 @@ class Annotations():
         faces = []
         for face in self._alignments.current_faces:
             bbox = []
-            box = (face.left * self._scaling,
-                   face.top * self._scaling,
-                   face.right * self._scaling,
-                   face.bottom * self._scaling)
+            box = np.array([(face.left, face.top), (face.right, face.bottom)])
+            box = self._scale_to_display(box).astype("int32").flatten()
             corners = ((box[0], box[1]), (box[0], box[3]), (box[2], box[1]), (box[2], box[3]))
             bbox.append(self._canvas.create_rectangle(*box, outline=color, width=thickness))
             radius = thickness * 5
@@ -161,7 +186,7 @@ class Annotations():
         for idx, face in enumerate(self._alignments.current_faces):
             extract_box = []
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
-            box = face.original_roi.flatten() * self._scaling
+            box = self._scale_to_display(face.original_roi).flatten()
             top_left = box[:2] - 10
             extract_box.append(self._canvas.create_text(*top_left,
                                                         fill=color,
@@ -182,7 +207,7 @@ class Annotations():
         for face in self._alignments.current_faces:
             landmarks = []
             for landmark in face.landmarks_xy:
-                box = (landmark * self._scaling).astype("int32")
+                box = self._scale_to_display(landmark).astype("int32")
                 bbox = (box[0] - radius, box[1] - radius, box[0] + radius, box[1] + radius)
                 landmarks.append(self._canvas.create_oval(*bbox,
                                                           outline=color,
@@ -210,7 +235,7 @@ class Annotations():
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
                          landmarks, color, thickness)
             for key, val in facial_landmarks_idxs.items():
-                pts = (landmarks[val[0]:val[1]] * self._scaling).astype("int32").flatten()
+                pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
                 if key in ("right_eye", "left_eye", "mouth"):
                     mesh.append(self._canvas.create_polygon(*pts,
                                                             fill="",
@@ -402,32 +427,38 @@ class FrameNavigation():
             if self.tk_is_playing.get():
                 self.tk_is_playing.set(False)
             return
-        if not is_playing and self.tk_is_playing.get():
-            self.tk_is_playing.set(False)
-        self.tk_position.set(position + 1)
+        self.goto_frame(position + 1, stop_playback=not is_playing and self.tk_is_playing.get())
 
     def decrement_frame(self):
         """ Update :attr:`self.current_frame` to the previous frame """
         position = self.tk_position.get()
-        if self.tk_is_playing.get():
-            # Stop playback
-            self.tk_is_playing.set(False)
         if position == 0:
             logger.trace("Beginning of stream. Not decrementing")
             return
-        self.tk_position.set(position - 1)
+        self.goto_frame(position - 1, stop_playback=True)
 
     def set_first_frame(self):
         """ Load the first frame """
-        if self.tk_is_playing.get():
-            self.tk_is_playing.set(False)
-        self.tk_position.set(0)
+        self.goto_frame(0, stop_playback=True)
 
     def set_last_frame(self):
         """ Load the last frame """
-        if self.tk_is_playing.get():
+        self.goto_frame(self.frame_count - 1, stop_playback=True)
+
+    def goto_frame(self, index, stop_playback=True):
+        """ Load the frame given by the specified index.
+
+        Parameters
+        ----------
+        index: int
+            The frame index to navigate to
+        stop_playback: bool, optional
+            ``True`` to Stop video playback, if a video is playing, otherwise ``False``.
+            Default: ``True``
+        """
+        if stop_playback and self.tk_is_playing.get():
             self.tk_is_playing.set(False)
-        self.tk_position.set(self.frame_count - 1)
+        self.tk_position.set(index)
 
 
 class AlignmentsData():
@@ -465,6 +496,51 @@ class AlignmentsData():
     def current_face(self):
         """ :class:`lib.faces_detect.DetectedFace` The currently selected face """
         return self.current_faces[self._face_index]
+
+    @property
+    def _no_face(self):
+        """ list: The indexes of all frames that contain no faces """
+        return [idx for idx, count in enumerate(self._face_count_per_index) if count == 0]
+
+    @property
+    def _multi_face(self):
+        """ list: The indexes of all frames that contain no faces """
+        return [idx for idx, count in enumerate(self._face_count_per_index) if count > 1]
+
+    @property
+    def _single_face(self):
+        """ list: The indexes of all frames that contain no faces """
+        return [idx for idx, count in enumerate(self._face_count_per_index) if count == 1]
+
+    @property
+    def _face_count_per_index(self):
+        """ list: Count of faces for each frame. List is in frame index order.
+
+        The list needs to be calculated on the fly as the number of faces in a frame
+        can change based on user actions. """
+        return [len(self._alignments[key]) for key in sorted(self._alignments)]
+
+    def set_next_frame(self, direction, filter_type):
+        """ Set the display frame to the next or previous frame based on the given filter.
+
+        Parameters
+        ----------
+        direction = ["prev", "next"]
+            The direction to search for the next face
+        filter_type: ["no", "multi", "single"]
+            The filter method to use for selecting the next frame
+        """
+        position = self._tk_position.get()
+        search_list = getattr(self, "_{}_face".format(filter_type))
+        try:
+            if direction == "prev":
+                frame_idx = next(idx for idx in reversed(search_list) if idx < position)
+            else:
+                frame_idx = next(idx for idx in search_list if idx > position)
+        except StopIteration:
+            # If no remaining frames meet criteria go to the first or last frame
+            frame_idx = 0 if direction == "prev" else self.frames.frame_count - 1
+        self.frames.goto_frame(frame_idx)
 
     def set_current_bounding_box(self, index, pnt_x, width, pnt_y, height):
         """ Update the bounding box for the current alignments.

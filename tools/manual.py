@@ -7,6 +7,8 @@ from tkinter import ttk
 from functools import partial
 from time import time, sleep
 
+import numpy as np
+
 from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
@@ -118,7 +120,12 @@ class Manual(tk.Tk):
                         right=self._frames.increment_frame,
                         space=self._display.handle_play_button,
                         home=self._frames.set_first_frame,
-                        end=self._frames.set_last_frame)
+                        end=self._frames.set_last_frame,
+                        v=lambda k=event.keysym: self._display.set_action(k),
+                        b=lambda k=event.keysym: self._display.set_action(k),
+                        e=lambda k=event.keysym: self._display.set_action(k),
+                        m=lambda k=event.keysym: self._display.set_action(k),
+                        l=lambda k=event.keysym: self._display.set_action(k))  # noqa
         key = event.keysym
         if key.lower() in bindings:
             self.focus_set()
@@ -152,14 +159,55 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         parent.add(self)
         self._frames = frames
-        self._canvas = Viewer(self, alignments, self._frames)
+        self._alignments = alignments
 
-        self._transport_frame = ttk.Frame(self)
+        self._actions_frame = ActionsFrame(self)
+
+        self._video_frame = ttk.Frame(self)
+        self._video_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        self._canvas = Viewer(self._video_frame,
+                              self._alignments,
+                              self._frames,
+                              self._actions_frame.tk_selected_action)
+
+        self._transport_frame = ttk.Frame(self._video_frame)
         self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
 
         self._add_nav()
         self._play_button = self._add_transport()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def _helptext(self):
+        """ dict: {`name`: `help text`} Helptext lookup for navigation buttons """
+        return dict(
+            play="Play/Pause (SPACE)",
+            beginning="Go to First Frame (HOME)",
+            prev="Go to Previous Frame (LEFT)",
+            prev_single_face="Go to Previous Frame that contains a Single Face (SHIFT+LEFT)",
+            prev_multi_face="Go to Previous Frame that contains Multiple Faces (CTRL+LEFT)",
+            prev_no_face="Go to Previous Frame that contains No Faces (ALT+LEFT)",
+            next="Go to Next Frame (RIGHT)",
+            next_single_face="Go to Next Frame that contains a Single Face (SHIFT+RIGHT)",
+            next_multi_face="Go to Next Frame that contains Multiple Faces (CTRL+RIGHT)",
+            next_no_face="Go to Next Frame that contains No Faces (ALT+LEFT)",
+            end="Go to Last Frame (END)",
+            speed="Set Playback Speed")
+
+    @property
+    def _btn_action(self):
+        """ dict: {`name`: `action`} Command lookup for navigation buttons """
+        actions = dict(play=self.handle_play_button,
+                       beginning=self._frames.set_first_frame,
+                       prev=self._frames.decrement_frame,
+                       next=self._frames.increment_frame,
+                       end=self._frames.set_last_frame)
+        for drn in ("prev", "next"):
+            for flt in ("no", "multi", "single"):
+                actions["{}_{}_face".format(drn, flt)] = (lambda d=drn, f=flt:
+                                                          self._alignments.set_next_frame(d, f))
+        return actions
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
@@ -190,39 +238,25 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_transport(self):
         """ Add video transport controls """
+        # TODO Disable buttons when no frames meet filter criteria
         frame = ttk.Frame(self._transport_frame)
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         icons = get_images().icons
 
-        for action in ("play", "beginning", "prev", "next", "end", "speed"):
+        for action in ("play", "beginning", "prev", "prev_single_face", "prev_multi_face",
+                       "prev_no_face", "next_no_face", "next_multi_face", "next_single_face",
+                       "next", "end", "speed"):
+            padx = (0, 6) if action in ("play", "prev", "next_face") else (0, 0)
+            if action != "speed":
+                wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
+                wgt.pack(side=tk.LEFT, padx=padx)
+            else:
+                wgt = self._add_speed_combo(frame)
             if action == "play":
-                play_button = ttk.Button(frame,
-                                         image=icons[action],
-                                         width=14,
-                                         command=self.handle_play_button)
-                play_button.pack(side=tk.LEFT, padx=(0, 6))
-                Tooltip(play_button, text="Play/Pause (SPACE)")
+                play_btn = wgt
                 self._frames.tk_is_playing.trace("w", self._play)
-            elif action in ("prev", "next"):
-                cmd_action = "decrement" if action == "prev" else "increment"
-                cmd = getattr(self._frames, "{}_frame".format(cmd_action))
-                if action == "prev":
-                    helptext = "Go to Previous Frame (LEFT)"
-                else:
-                    helptext = "Go to Next Frame (RIGHT)"
-                btn = ttk.Button(frame, image=icons[action], width=14, command=cmd)
-                btn.pack(side=tk.LEFT)
-                Tooltip(btn, text=helptext)
-            elif action in ("beginning", "end"):
-                lookup = ("First", "HOME") if action == "beginning" else ("Last", "END")
-                helptext = "Go to {} Frame ({})".format(*lookup)
-                cmd = getattr(self._frames, "set_{}_frame".format(lookup[0].lower()))
-                btn = ttk.Button(frame, image=icons[action], width=14, command=cmd)
-                btn.pack(side=tk.LEFT)
-                Tooltip(btn, text=helptext)
-            elif action == "speed":
-                self._add_speed_combo(frame)
-        return play_button
+            Tooltip(wgt, text=self._helptext[action])
+        return play_btn
 
     def handle_play_button(self):
         """ Handle the play button.
@@ -231,6 +265,16 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         is_playing = self._frames.tk_is_playing.get()
         self._frames.tk_is_playing.set(not is_playing)
+
+    def set_action(self, key):
+        """ Set the current action based on keyboard shortcut
+
+        Parameters
+        ----------
+        key: str
+            The pressed key
+        """
+        self._actions_frame.on_click(self._actions_frame.key_bindings[key.lower()])
 
     def _add_speed_combo(self, frame):
         """ Adds the speed control Combo box and links to
@@ -247,7 +291,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                              values=["Standard", "Max"],
                              width=8)
         combo.pack(side=tk.RIGHT)
-        Tooltip(combo, text="Set Playback Speed")
+        return combo
 
     def _play(self, *args):  # pylint:disable=unused-argument
         """ Play the video file at the selected speed """
@@ -270,24 +314,142 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.after(delay, self._play)
 
 
+class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ The left hand action frame holding the action buttons.
+
+    Parameters
+    ----------
+    parent: :class:`DisplayFrame`
+        The Display frame that the Actions reside in
+    """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
+
+        self._configure_style()
+        self._buttons = self._add_buttons()
+        self._selected_action = tk.StringVar()
+        self._selected_action.set("view")
+
+    @property
+    def tk_selected_action(self):
+        """ :class:`tkinter.StringVar`: The variable holding the currently selected action """
+        return self._selected_action
+
+    @property
+    def key_bindings(self):
+        """ dict: {`key`: `action`}. The mapping of key presses to actions """
+        return dict(v="view", b="boundingbox", e="extractbox", m="mask", l="landmarks")  # noqa
+
+    @property
+    def _helptext(self):
+        """ dict: `button key`: `button helptext`. The help text to display for each button. """
+        return dict(view="View alignments (V)",
+                    boundingbox="Bounding box editor (B)",
+                    extractbox="Edit the size and orientation of the existing alignments (E)",
+                    mask="Mask editor (M)",
+                    landmarks="Individual landmark point editor (L)")
+
+    def _configure_style(self):
+        """ Configure background color for Actions widget """
+        style = ttk.Style()
+        style.configure("actions.TFrame", background='#d3d3d3')
+        self.config(style="actions.TFrame")
+
+    def _add_buttons(self):
+        """ Add the action buttons to the Display window.
+
+        Returns
+        -------
+        dict:
+            The action name and its associated button.
+        """
+        style = ttk.Style()
+        style.configure("actions_selected.TButton", relief="flat", background="#bedaf1")
+        style.configure("actions_deselected.TButton", relief="flat")
+
+        buttons = dict()
+
+        for action in self.key_bindings.values():
+            if action == "view":
+                state = (["focus"])
+                btn_style = "actions_selected.TButton"
+            else:
+                btn_style = "actions_deselected.TButton"
+
+            button = ttk.Button(self,
+                                image=get_images().icons[action],
+                                command=lambda t=action: self.on_click(t),
+                                style=btn_style)
+            button.state(state)
+            button.pack()
+            Tooltip(button, text=self._helptext[action])
+            buttons[action] = button
+        return buttons
+
+    def on_click(self, action):
+        """ Click event for all of the buttons.
+
+        Parameters
+        ----------
+        action: str
+            The action name for the button that has called this event as exists in :attr:`_buttons`
+        """
+        for title, button in self._buttons.items():
+            if action == title:
+                button.configure(style="actions_selected.TButton")
+            else:
+                button.configure(style="actions_deselected.TButton")
+        self._selected_action.set(action)
+
+
 class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
-    """ Annotation onto tkInter Canvas """
-    def __init__(self, parent, alignments, frames):
-        logger.debug("Initializing %s: (parent: %s, alignments: %s, frames: %s)",
-                     self.__class__.__name__, parent, alignments, frames)
+    """ Annotation onto tkInter Canvas.
+
+    Parameters
+    ----------
+    parent: :class:`tkinter.ttk.Frame`
+        The parent frame for the canvas
+    alignments: :class:`AlignmentsData`
+        The alignments data for this manual session
+    frames: :class:`FrameNavigation`
+        The frames navigator for this manual session
+    tk_action_var: :class:`tkinter.StringVar`
+        The variable holding the currently selected action
+    """
+    def __init__(self, parent, alignments, frames, tk_action_var):
+        logger.debug("Initializing %s: (parent: %s, alignments: %s, frames: %s, "
+                     "tk_action_var: %s)",
+                     self.__class__.__name__, parent, alignments, frames, tk_action_var)
         super().__init__(parent, bd=0, highlightthickness=0)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True, anchor=tk.E)
 
         self._alignments = alignments
         self._frames = frames
-        self._image = self.create_image(0, 0,
+        self._tk_action_var = tk_action_var
+        self._image = self.create_image(self._frames.display_dims[0] / 2,
+                                        self._frames.display_dims[1] / 2,
                                         image=self._frames.current_display_frame,
-                                        anchor=tk.NW)
+                                        anchor=tk.CENTER)
         self._annotations = Annotations(self._alignments, self._frames, self)
         self._drag_data = dict()
         self._add_callback()
         self._add_mouse_tracking()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def _selected_action(self):
+        return self._tk_action_var.get()
+
+    @property
+    def offset(self):
+        """ tuple: The (`width`, `height`) offset of the canvas based on the size of the currently
+        displayed image """
+        frame_dims = self._frames.current_meta_data["display_dims"]
+        offset_x = (self._frames.display_dims[0] - frame_dims[0]) / 2
+        offset_y = (self._frames.display_dims[1] - frame_dims[1]) / 2
+        logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
+        return offset_x, offset_y
 
     def _add_callback(self):
         needs_update = self._frames.tk_update
@@ -310,9 +472,18 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
     # Mouse Callbacks
     def _update_cursor(self, event):
+        if self._selected_action == "view":
+            self.config(cursor="")
+        # TODO Other cursors
+        elif self._selected_action != "boundingbox":
+            self.config(cursor="")
+        else:
+            getattr(self, "_{}_cursor".format(self._selected_action))(event)
+
+    def _boundingbox_cursor(self, event):
+        """ Update the cursors for hovering over bounding boxes or bounding box corner anchors. """
         if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
                for face in self._annotations.bounding_box_anchors for bbox in face):
-            # Bounding box anchors
             idx = [idx for face in self._annotations.bounding_box_anchors
                    for idx, bbox in enumerate(face)
                    if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
@@ -360,6 +531,12 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             (`type`, `index`) The type of object being clicked on and the index of the face.
             If no object clicked on then return value is ``None``
         """
+        if self._selected_action == "view":
+            return None
+        # TODO Other actions
+        if self._selected_action != "boundingbox":
+            return None
+
         retval = None
         for idx, face in enumerate(self._annotations.bounding_box_anchors):
             if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
@@ -439,7 +616,7 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
     def _coords_to_bounding_box(self, coords):
         """ Converts tkinter coordinates to :class:`lib.faces_detect.DetectedFace` bounding
-        box format, scaled up for feeding the model.
+        box format, scaled up and offset for feeding the model.
 
         Returns
         -------
@@ -447,10 +624,9 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             The (`x`, `width`, `y`, `height`) integer points of the bounding box.
 
         """
-        return (int(round(coords[0] / self._frames.current_scale)),
-                int(round((coords[2] - coords[0]) / self._frames.current_scale)),
-                int(round(coords[1] / self._frames.current_scale)),
-                int(round((coords[3] - coords[1]) / self._frames.current_scale)))
+        coords = self._annotations.scale_from_display(
+            np.array(coords).reshape((2, 2))).flatten().astype("int32")
+        return (coords[0], coords[2] - coords[0], coords[1], coords[3] - coords[1])
 
 
 class Aligner():
@@ -501,7 +677,6 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        # TODO FAN
         aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
