@@ -40,12 +40,12 @@ class Manual(tk.Tk):
         self._frames = FrameNavigation(arguments.frames)
         self._wait_for_extractor(extractor)
 
-        alignments = AlignmentsData(arguments.alignments_path, self._frames, extractor)
+        self._alignments = AlignmentsData(arguments.alignments_path, self._frames, extractor)
 
         self._initialize_tkinter()
         self._containers = self._create_containers()
 
-        self._display = DisplayFrame(self._containers["top"], self._frames, alignments)
+        self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
 
         lbl = ttk.Label(self._containers["top"], text="Top Right")
         self._containers["top"].add(lbl)
@@ -116,20 +116,34 @@ class Manual(tk.Tk):
 
     def _handle_key_press(self, event):
         """ Keyboard shortcuts """
-        bindings = dict(left=self._frames.decrement_frame,
-                        right=self._frames.increment_frame,
-                        space=self._display.handle_play_button,
-                        home=self._frames.set_first_frame,
-                        end=self._frames.set_last_frame,
-                        v=lambda k=event.keysym: self._display.set_action(k),
-                        b=lambda k=event.keysym: self._display.set_action(k),
-                        e=lambda k=event.keysym: self._display.set_action(k),
-                        m=lambda k=event.keysym: self._display.set_action(k),
-                        l=lambda k=event.keysym: self._display.set_action(k))  # noqa
-        key = event.keysym
-        if key.lower() in bindings:
+        modifiers = {0x0001: 'shift',
+                     0x0004: 'ctrl',
+                     0x0008: 'alt',
+                     0x0080: 'alt'}
+
+        bindings = dict(
+            left=self._frames.decrement_frame,
+            shift_left=lambda d="prev", f="single": self._alignments.set_next_frame(d, f),
+            ctrl_left=lambda d="prev", f="multi": self._alignments.set_next_frame(d, f),
+            alt_left=lambda d="prev", f="no": self._alignments.set_next_frame(d, f),
+            right=self._frames.increment_frame,
+            shift_right=lambda d="next", f="single": self._alignments.set_next_frame(d, f),
+            ctrl_right=lambda d="next", f="multi": self._alignments.set_next_frame(d, f),
+            alt_right=lambda d="next", f="no": self._alignments.set_next_frame(d, f),
+            space=self._display.handle_play_button,
+            home=self._frames.set_first_frame,
+            end=self._frames.set_last_frame,
+            v=lambda k=event.keysym: self._display.set_action(k),
+            b=lambda k=event.keysym: self._display.set_action(k),
+            e=lambda k=event.keysym: self._display.set_action(k),
+            m=lambda k=event.keysym: self._display.set_action(k),
+            l=lambda k=event.keysym: self._display.set_action(k))  # noqa
+
+        modifier = "_".join(val for key, val in modifiers.items() if event.state & key != 0)
+        key_press = "_".join([modifier, event.keysym]) if modifier else event.keysym
+        if key_press.lower() in bindings:
             self.focus_set()
-            bindings[key.lower()]()
+            bindings[key_press.lower()]()
 
     def process(self):
         """ The entry point for the Visual Alignments tool from :file:`lib.tools.cli`.
@@ -191,7 +205,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             next="Go to Next Frame (RIGHT)",
             next_single_face="Go to Next Frame that contains a Single Face (SHIFT+RIGHT)",
             next_multi_face="Go to Next Frame that contains Multiple Faces (CTRL+RIGHT)",
-            next_no_face="Go to Next Frame that contains No Faces (ALT+LEFT)",
+            next_no_face="Go to Next Frame that contains No Faces (ALT+RIGHT)",
             end="Go to Last Frame (END)",
             speed="Set Playback Speed")
 
@@ -677,7 +691,7 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()

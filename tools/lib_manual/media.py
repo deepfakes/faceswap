@@ -484,13 +484,26 @@ class AlignmentsData():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
+    def _latest_alignments(self):
+        """ dict: The filename as key, and either the modified alignments as values (if they exist)
+        or the saved alignments """
+        return {key: val.get("new", val["saved"]) for key, val in self._alignments.items()}
+
+    @property
     def current_faces(self):
         """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects. Returns
         modified alignments if they are modified, otherwise original saved alignments. """
-        alignments = self._alignments[self.frames.current_meta_data["filename"]]
         # TODO use get and return a default for when alignments don't exist
-        retval = alignments.get("new", alignments["saved"])
-        return retval
+        return self._latest_alignments[self.frames.current_meta_data["filename"]]
+
+    @property
+    def _face_count_per_index(self):
+        """ list: Count of faces for each frame. List is in frame index order.
+
+        The list needs to be calculated on the fly as the number of faces in a frame
+        can change based on user actions. """
+        alignments = self._latest_alignments
+        return [len(alignments[key]) for key in sorted(alignments)]
 
     @property
     def current_face(self):
@@ -511,14 +524,6 @@ class AlignmentsData():
     def _single_face(self):
         """ list: The indexes of all frames that contain no faces """
         return [idx for idx, count in enumerate(self._face_count_per_index) if count == 1]
-
-    @property
-    def _face_count_per_index(self):
-        """ list: Count of faces for each frame. List is in frame index order.
-
-        The list needs to be calculated on the fly as the number of faces in a frame
-        can change based on user actions. """
-        return [len(self._alignments[key]) for key in sorted(self._alignments)]
 
     def set_next_frame(self, direction, filter_type):
         """ Set the display frame to the next or previous frame based on the given filter.
