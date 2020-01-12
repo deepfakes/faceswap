@@ -7,15 +7,14 @@ from tkinter import ttk
 from functools import partial
 from time import time, sleep
 
-import numpy as np
-
 from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .lib_manual import AlignmentsData, Annotations, FrameNavigation
+from .lib_manual.media import AlignmentsData, FrameNavigation
+from .lib_manual.editor import Editor, BoundingBox, ExtractBox, Landmarks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -34,7 +33,7 @@ class Manual(tk.Tk):
     """
 
     def __init__(self, arguments):
-        logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
+        logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
         extractor = Aligner()
         self._frames = FrameNavigation(arguments.frames)
@@ -183,6 +182,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._canvas = Viewer(self._video_frame,
                               self._alignments,
                               self._frames,
+                              self._actions_frame.actions,
                               self._actions_frame.tk_selected_action)
 
         self._transport_frame = ttk.Frame(self._video_frame)
@@ -341,9 +341,15 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
 
         self._configure_style()
+        self._actions = ("view", "boundingbox", "extractbox", "mask", "landmarks")
         self._buttons = self._add_buttons()
         self._selected_action = tk.StringVar()
         self._selected_action.set("view")
+
+    @property
+    def actions(self):
+        """ tuple: The available action names as a tuple of strings. """
+        return self._actions
 
     @property
     def tk_selected_action(self):
@@ -352,8 +358,9 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     @property
     def key_bindings(self):
-        """ dict: {`key`: `action`}. The mapping of key presses to actions """
-        return dict(v="view", b="boundingbox", e="extractbox", m="mask", l="landmarks")  # noqa
+        """ dict: {`key`: `action`}. The mapping of key presses to actions. Keyboard shortcut is
+        the first letter of each action. """
+        return {action[0]: action for action in self._actions}
 
     @property
     def _helptext(self):
@@ -428,32 +435,39 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         The alignments data for this manual session
     frames: :class:`FrameNavigation`
         The frames navigator for this manual session
+    actions: tuple
+        The available actions from :attr:`ActionFrame.actions`
     tk_action_var: :class:`tkinter.StringVar`
         The variable holding the currently selected action
     """
-    def __init__(self, parent, alignments, frames, tk_action_var):
-        logger.debug("Initializing %s: (parent: %s, alignments: %s, frames: %s, "
+    def __init__(self, parent, alignments, frames, actions, tk_action_var):
+        logger.debug("Initializing %s: (parent: %s, alignments: %s, frames: %s, actions: %s, "
                      "tk_action_var: %s)",
-                     self.__class__.__name__, parent, alignments, frames, tk_action_var)
+                     self.__class__.__name__, parent, alignments, frames, actions, tk_action_var)
         super().__init__(parent, bd=0, highlightthickness=0)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True, anchor=tk.E)
 
         self._alignments = alignments
         self._frames = frames
+        self._actions = actions
         self._tk_action_var = tk_action_var
         self._image = self.create_image(self._frames.display_dims[0] / 2,
                                         self._frames.display_dims[1] / 2,
                                         image=self._frames.current_display_frame,
                                         anchor=tk.CENTER)
-        self._annotations = Annotations(self._alignments, self._frames, self)
-        self._drag_data = dict()
-        self._add_callback()
-        self._add_mouse_tracking()
+        self._editors = self._get_editors()
+        self._add_callbacks()
+        self._update_mouse_cursor_tracking()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def _selected_action(self):
         return self._tk_action_var.get()
+
+    @property
+    def _active_editor(self):
+        """ :class:`Editor`: The current editor in use based on :attr:`_selected_action`. """
+        return self._editors[self._selected_action]
 
     @property
     def offset(self):
@@ -465,182 +479,50 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
         return offset_x, offset_y
 
-    def _add_callback(self):
+    def _get_editors(self):
+        """ Get the object editors for the canvas.
+
+        Returns
+        ------
+        dict
+            The {`action`: :class:`Editor`} dictionary of editors for :attr:`_actions` name.
+        """
+        name_mapping = dict(boundingbox=BoundingBox,
+                            extractbox=ExtractBox,
+                            landmarks=Landmarks,
+                            view=Editor,
+                            mask=Editor)
+        editors = dict()
+        for action in self._actions:
+            editor = name_mapping[action]
+            editor = editor(self, self._alignments, self._frames)
+            editors[action] = editor
+        logger.debug(editors)
+        return editors
+
+    def _add_callbacks(self):
+        """ Add the callback trace functions to the :class:`tkinter.Variable` s
+
+        Adds callbacks for:
+            :attr:`_frames.tk_update` Update the display for the current image
+            :attr:`__tk_action_var` Update the mouse display tracking for current action
+        """
         needs_update = self._frames.tk_update
         needs_update.trace("w", self._update_display)
+        self._tk_action_var.trace("w", self._update_mouse_cursor_tracking)
 
-    def _add_mouse_tracking(self):
-        self.bind("<Motion>", self._update_cursor)
-        self.bind("<ButtonPress-1>", self._drag_start)
-        self.bind("<ButtonRelease-1>", self._drag_stop)
-        self.bind("<B1-Motion>", self._drag)
+    def _update_mouse_cursor_tracking(self, *args):  # pylint:disable=unused-argument
+        self._active_editor.set_mouse_cursor_tracking()
 
     def _update_display(self, *args):  # pylint:disable=unused-argument
         """ Update the display on frame cache update """
         if not self._frames.tk_update.get():
             return
         self.itemconfig(self._image, image=self._frames.current_display_frame)
-        self._annotations.update(skip_bounding_box=bool(self._drag_data))
+        for editor in self._editors.values():
+            editor.update_annotation()
         self._frames.tk_update.set(False)
         self.update_idletasks()
-
-    # Mouse Callbacks
-    def _update_cursor(self, event):
-        if self._selected_action == "view":
-            self.config(cursor="")
-        # TODO Other cursors
-        elif self._selected_action != "boundingbox":
-            self.config(cursor="")
-        else:
-            getattr(self, "_{}_cursor".format(self._selected_action))(event)
-
-    def _boundingbox_cursor(self, event):
-        """ Update the cursors for hovering over bounding boxes or bounding box corner anchors. """
-        if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-               for face in self._annotations.bounding_box_anchors for bbox in face):
-            idx = [idx for face in self._annotations.bounding_box_anchors
-                   for idx, bbox in enumerate(face)
-                   if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
-            self.config(
-                cursor="{}_{}_corner".format(*self._annotations.bounding_box_corner_order[idx]))
-        elif any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-                 for bbox in self._annotations.bounding_boxes):
-            self.config(cursor="fleur")
-        else:
-            self.config(cursor="")
-
-    def _drag_start(self, event):
-        """ Collect information on start of drag """
-        click_object = self._get_click_object(event)
-        if click_object is None:
-            self._drag_data = dict()
-            return
-        object_type, self._drag_data["index"] = click_object
-        if object_type == "bounding_box_anchor":
-            indices = [(face_idx, pnt_idx)
-                       for face_idx, face in enumerate(self._annotations.bounding_box_anchors)
-                       for pnt_idx, bbox in enumerate(face)
-                       if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
-            self._drag_data["objects"] = self._annotations.bbox_objects_for_face(indices[0])
-            self._drag_data["corner"] = self._annotations.bounding_box_corner_order[indices[1]]
-            self._drag_data["callback"] = self._resize_bounding_box
-        elif object_type == "bounding_box":
-            face_idx = [idx for idx, bbox in enumerate(self._annotations.bounding_boxes)
-                        if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
-            self._drag_data["objects"] = self._annotations.bbox_objects_for_face(face_idx)
-            self._drag_data["current_location"] = (event.x, event.y)
-            self._drag_data["callback"] = self._move_bounding_box
-
-    def _get_click_object(self, event):
-        """ Return the object type and index that has been clicked on.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event
-
-        Returns
-        -------
-        tuple
-            (`type`, `index`) The type of object being clicked on and the index of the face.
-            If no object clicked on then return value is ``None``
-        """
-        if self._selected_action == "view":
-            return None
-        # TODO Other actions
-        if self._selected_action != "boundingbox":
-            return None
-
-        retval = None
-        for idx, face in enumerate(self._annotations.bounding_box_anchors):
-            if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-                   for bbox in face):
-                retval = "bounding_box_anchor", idx
-        if retval is not None:
-            return retval
-
-        for idx, bbox in enumerate(self._annotations.bounding_boxes):
-            if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
-                retval = "bounding_box", idx
-
-        return retval
-
-    def _drag_stop(self, event):  # pylint:disable=unused-argument
-        """ Reset the :attr:`_drag_data` dict
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event. Unused but required
-        """
-        self._drag_data = dict()
-
-    def _drag(self, event):
-        """ Drag the bounding box and its anchors to current mouse position.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event.
-        """
-        if not self._drag_data:
-            return
-        self._drag_data["callback"](event)
-
-    def _resize_bounding_box(self, event):
-        """ Resizes a bounding box on an anchor drag event
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event.
-        """
-        radius = 4  # TODO Variable
-        rect = self._drag_data["objects"][0]
-        box = list(self.coords(rect))
-        # Switch top/bottom and left/right and set partial so indices match and we don't
-        # need branching logic for min/max.
-        limits = (partial(min, box[2] - 20),
-                  partial(min, box[3] - 20),
-                  partial(max, box[0] + 20),
-                  partial(max, box[1] + 20))
-        rect_xy_indices = [self._annotations.bounding_box_layout.index(pnt)
-                           for pnt in self._drag_data["corner"]]
-        box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
-        box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
-        self.coords(rect, *box)
-        corners = ((box[0], box[1]), (box[0], box[3]), (box[2], box[1]), (box[2], box[3]))
-        for idx, cnr in enumerate(corners):
-            anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
-            self.coords(self._drag_data["objects"][idx + 1], *anc)
-        self._alignments.set_current_bounding_box(self._drag_data["index"],
-                                                  *self._coords_to_bounding_box(box))
-
-    def _move_bounding_box(self, event):
-        """ Moves the bounding box on a bounding box drag event """
-        shift_x = event.x - self._drag_data["current_location"][0]
-        shift_y = event.y - self._drag_data["current_location"][1]
-        selected_objects = self._drag_data["objects"]
-        for obj in selected_objects:
-            self.move(obj, shift_x, shift_y)
-        box = self.coords(selected_objects[0])
-        self._alignments.set_current_bounding_box(self._drag_data["index"],
-                                                  *self._coords_to_bounding_box(box))
-        self._drag_data["current_location"] = (event.x, event.y)
-
-    def _coords_to_bounding_box(self, coords):
-        """ Converts tkinter coordinates to :class:`lib.faces_detect.DetectedFace` bounding
-        box format, scaled up and offset for feeding the model.
-
-        Returns
-        -------
-        tuple
-            The (`x`, `width`, `y`, `height`) integer points of the bounding box.
-
-        """
-        coords = self._annotations.scale_from_display(
-            np.array(coords).reshape((2, 2))).flatten().astype("int32")
-        return (coords[0], coords[2] - coords[0], coords[1], coords[3] - coords[1])
 
 
 class Aligner():
@@ -691,7 +573,7 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()
