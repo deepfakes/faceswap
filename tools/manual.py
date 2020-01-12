@@ -260,7 +260,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for action in ("play", "beginning", "prev", "prev_single_face", "prev_multi_face",
                        "prev_no_face", "next_no_face", "next_multi_face", "next_single_face",
                        "next", "end", "speed"):
-            padx = (0, 6) if action in ("play", "prev", "next_face") else (0, 0)
+            padx = (0, 6) if action in ("play", "prev", "next_single_face") else (0, 0)
             if action != "speed":
                 wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
                 wgt.pack(side=tk.LEFT, padx=padx)
@@ -691,7 +691,7 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()
