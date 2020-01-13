@@ -114,7 +114,19 @@ class Manual(tk.Tk):
         self._containers["main"].sash_place(0, 1, self._frames.display_dims[1] + 72)
 
     def _handle_key_press(self, event):
-        """ Keyboard shortcuts """
+        """ Keyboard shortcuts
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event()`
+            The tkinter key press event
+
+        Notes
+        -----
+        The following keys are reserved for the :mod:`tools.lib_manual.editor` classes
+            * Delete - Used for deleting faces
+        """
+        # TODO - Alt modifier doesn't seem to work on windows. Check
         modifiers = {0x0001: 'shift',
                      0x0004: 'ctrl',
                      0x0008: 'alt',
@@ -573,7 +585,7 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()

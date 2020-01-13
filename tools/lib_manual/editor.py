@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """ Editor objects for the manual adjustments tool """
 import logging
+import platform
+import tkinter as tk
 
 from functools import partial
 
@@ -34,6 +36,7 @@ class Editor():
                             yellow="#ffff00",
                             magenta="#ff00ff")
         self._objects = []
+        self._right_click_button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         self.update_annotation()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -56,13 +59,14 @@ class Editor():
     # Mouse Callbacks
     def set_mouse_cursor_tracking(self):
         """ Default mouse cursor tracking removes all bindings from mouse events to just
-        display the standard cursor. Override for specific Editor mouse cursor display.
+        display the standard cursor and perform no mouse click or right click actions. Override
+        for specific Editor mouse cursor display and actions.
 
-        NB: Only Mouse Button 1 is cleared as we want to keep Buttons 2 + 3 available for other
-        purposes outside of Editor functions.
+        NB: Only Mouse Button 1 is used for click events. Mouse button 3 (or 2 for macOS) is used
+        for the right click context menu.
         """
         for event in ("B1-Motion", "ButtonPress-1", "ButtonRelease-1", "Double-Button-1",
-                      "Motion"):
+                      "Motion", self._right_click_button):
             logger.debug("Unbinding mouse event: %s", event)
             self._canvas.unbind("<{}>".format(event))
 
@@ -106,7 +110,12 @@ class BoundingBox(Editor):
     """ The Bounding Box Editor. """
     def __init__(self, canvas, alignments, frames):
         self._drag_data = dict()
+        self._mouse_location = None
+        self._right_click_menu = RightClickMenu(["Delete Face"],
+                                                [self._delete_current_face],
+                                                ["Del"])
         super().__init__(canvas, alignments, frames)
+        self._bind_hotkeys()
 
     @property
     def _coords_layout(self):
@@ -141,6 +150,16 @@ class BoundingBox(Editor):
         """ list: List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed face's
         bounding box. """
         return [self._canvas.coords(face[0]) for face in self._objects]
+
+    def _bind_hotkeys(self):
+        """ Add keyboard shortcuts.
+
+        We bind to root because the canvas does not get focus, so keyboard shortcuts won't do
+        anything
+
+        * Delete - Delete the currently hovered over face
+        """
+        self._canvas.winfo_toplevel().bind("<Delete>", self._delete_current_face)
 
     def _bbox_objects_for_face(self, index):
         """ Return the bounding box object with the anchor objects for the given face index.
@@ -197,50 +216,80 @@ class BoundingBox(Editor):
         self._canvas.bind("<ButtonPress-1>", self._drag_start)
         self._canvas.bind("<ButtonRelease-1>", self._drag_stop)
         self._canvas.bind("<B1-Motion>", self._drag)
+        self._canvas.bind(self._right_click_button, self._context_menu)
 
     def _update_cursor(self, event):
-        """ Update the cursors for hovering over bounding boxes or bounding box corner anchors. """
-        display_dims = self._frames.current_meta_data["display_dims"]
-        if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-               for face in self._anchors for bbox in face):
-            idx = [idx for face in self._anchors for idx, bbox in enumerate(face)
-                   if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
-            self._canvas.config(
-                cursor="{}_{}_corner".format(*self._corner_order[idx]))
-        elif any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-                 for bbox in self._bounding_boxes):
-            self._canvas.config(cursor="fleur")
-        elif (self._canvas.offset[0] <= event.x <= display_dims[0] + self._canvas.offset[0] and
-              self._canvas.offset[1] <= event.y <= display_dims[1] + self._canvas.offset[1]):
-            self._canvas.config(cursor="plus")
-        else:
-            self._canvas.config(cursor="")
+        """ Update the cursors for hovering over bounding boxes or bounding box corner anchors and
+        update :attr:`_mouse_location`. """
+        for face_idx in range(len(self._bounding_boxes)):
+            if self._check_cursor_anchors(event, face_idx):
+                return
+            if self._check_cursor_bounding_box(event, face_idx):
+                return
 
-    # Mouse Actions
-    def _drag_start(self, event):
-        """ Collect information on start of drag """
-        click_object = self._get_click_object(event)
-        if click_object is None:
-            self._drag_data = dict()
+        if self._check_cursor_image(event):
             return
-        object_type, self._drag_data["index"] = click_object
-        if object_type == "anchor":
-            indices = [(face_idx, pnt_idx)
-                       for face_idx, face in enumerate(self._anchors)
-                       for pnt_idx, bbox in enumerate(face)
-                       if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
-            self._drag_data["objects"] = self._bbox_objects_for_face(indices[0])
-            self._drag_data["corner"] = self._corner_order[indices[1]]
-            self._drag_data["callback"] = self._resize_bounding_box
-        elif object_type == "box":
-            face_idx = [idx for idx, bbox in enumerate(self._bounding_boxes)
-                        if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]][0]
-            self._drag_data["objects"] = self._bbox_objects_for_face(face_idx)
-            self._drag_data["current_location"] = (event.x, event.y)
-            self._drag_data["callback"] = self._move_bounding_box
 
-    def _get_click_object(self, event):
-        """ Return the object type and index that has been clicked on.
+        self._canvas.config(cursor="")
+        self._mouse_location = None
+
+    def _check_cursor_anchors(self, event, face_index):
+        """ Check whether the cursor is over an anchor.
+
+        If it is, set the appropriate cursor type and set :attr:`_mouse_location` to:
+            ("anchor", (`face index`, `anchor index`)
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event
+        face_index: int:
+            The face index to check the anchor points for
+
+        Returns
+        -------
+        bool
+            ``True`` if cursor is over an anchor point otherwise ``False``
+        """
+        anchor_indices = [idx for idx, bbox in enumerate(self._anchors[face_index])
+                          if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]]
+        if not anchor_indices:
+            return False
+        corner = anchor_indices[0]
+        self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner]))
+        self._mouse_location = ("anchor", (face_index, corner))
+        return True
+
+    def _check_cursor_bounding_box(self, event, face_index):
+        """ Check whether the cursor is over a bounding box.
+
+        If it is, set the appropriate cursor type and set :attr:`_mouse_location` to:
+            ("box", `face index`)
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event
+        face_index: int:
+            The face index to check the bounding box for
+
+        Returns
+        -------
+        bool
+            ``True`` if cursor is over a bounding box otherwise ``False``
+        """
+        bbox = self._bounding_boxes[face_index]
+        if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
+            self._canvas.config(cursor="fleur")
+            self._mouse_location = ("box", face_index)
+            return True
+        return False
+
+    def _check_cursor_image(self, event):
+        """ Check whether the cursor is over the image.
+
+        If it is, set the appropriate cursor type and set :attr:`_mouse_location` to:
+            ("image", )
 
         Parameters
         ----------
@@ -249,22 +298,54 @@ class BoundingBox(Editor):
 
         Returns
         -------
-        tuple
-            (`type`, `index`) The type of object being clicked on and the index of the face.
-            If no object clicked on then return value is ``None``
+        bool
+            ``True`` if cursor is over a bounding box otherwise ``False``
         """
-        retval = None
-        for idx, face in enumerate(self._anchors):
-            if any(bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]
-                   for bbox in face):
-                retval = "anchor", idx
-        if retval is not None:
-            return retval
+        display_dims = self._frames.current_meta_data["display_dims"]
+        if (self._canvas.offset[0] <= event.x <= display_dims[0] + self._canvas.offset[0] and
+                self._canvas.offset[1] <= event.y <= display_dims[1] + self._canvas.offset[1]):
+            self._canvas.config(cursor="plus")
+            self._mouse_location = ("image", )
+            return True
+        return False
 
-        for idx, bbox in enumerate(self._bounding_boxes):
-            if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
-                retval = "box", idx
-        return retval
+    # Mouse Actions
+    def _drag_start(self, event):
+        """ Collect information on start of drag """
+        if self._mouse_location is None:
+            self._drag_data = dict()
+            return
+        if self._mouse_location[0] == "anchor":
+            self._drag_data["face_index"] = self._mouse_location[1][0]
+            self._drag_data["corner"] = self._corner_order[self._mouse_location[1][1]]
+            self._drag_data["objects"] = self._bbox_objects_for_face(self._mouse_location[1][0])
+            self._drag_data["callback"] = self._resize_bounding_box
+        elif self._mouse_location[0] == "box":
+            self._drag_data["face_index"] = self._mouse_location[1]
+            self._drag_data["objects"] = self._bbox_objects_for_face(self._mouse_location[1])
+            self._drag_data["current_location"] = (event.x, event.y)
+            self._drag_data["callback"] = self._move_bounding_box
+        elif self._mouse_location[0] == "image":
+            self._create_new_bounding_box(event)
+            # Refresh cursor and _mouse_location for new bounding box and reset _drag_start
+            self._update_cursor(event)
+            self._drag_start(event)
+
+    def _create_new_bounding_box(self, event):
+        """ Create a new bounding box when user clicks on image, outside of existing boxes.
+
+        The bounding box is created as a square located around the click location, with dimensions
+        1 quarter the size of the frame's shortest side
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event
+        """
+        size = min(self._frames.current_meta_data["display_dims"]) // 8
+        box = (event.x - size, event.y - size, event.x + size, event.y + size)
+        logger.debug("Creating new bounding box: %s ", box)
+        self._alignments.add_face(*self._coords_to_bounding_box(box))
 
     def _drag_stop(self, event):  # pylint:disable=unused-argument
         """ Reset the :attr:`_drag_data` dict
@@ -314,7 +395,7 @@ class BoundingBox(Editor):
         for idx, cnr in enumerate(corners):
             anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
             self._canvas.coords(self._drag_data["objects"][idx + 1], *anc)
-        self._alignments.set_current_bounding_box(self._drag_data["index"],
+        self._alignments.set_current_bounding_box(self._drag_data["face_index"],
                                                   *self._coords_to_bounding_box(box))
 
     def _move_bounding_box(self, event):
@@ -325,7 +406,7 @@ class BoundingBox(Editor):
         for obj in selected_objects:
             self._canvas.move(obj, shift_x, shift_y)
         box = self._canvas.coords(selected_objects[0])
-        self._alignments.set_current_bounding_box(self._drag_data["index"],
+        self._alignments.set_current_bounding_box(self._drag_data["face_index"],
                                                   *self._coords_to_bounding_box(box))
         self._drag_data["current_location"] = (event.x, event.y)
 
@@ -342,6 +423,26 @@ class BoundingBox(Editor):
         coords = self.scale_from_display(
             np.array(coords).reshape((2, 2))).flatten().astype("int32")
         return (coords[0], coords[2] - coords[0], coords[1], coords[3] - coords[1])
+
+    def _context_menu(self, event):
+        """ Create a right click context menu to delete the alignment that is being
+        hovered over. """
+        if self._mouse_location is None or self._mouse_location[0] != "box":
+            return
+        self._right_click_menu.popup(event)
+
+    def _delete_current_face(self, *args):  # pylint:disable=unused-argument
+        """ Called by the right click delete event. Deletes the face that the mouse is currently
+        over.
+
+        Parameters
+        ----------
+        args: tuple (unused)
+            The event parameter is passed in by the hot key binding, so args is required
+        """
+        if self._mouse_location is None or self._mouse_location[0] != "box":
+            return
+        self._alignments.delete_face_at_index(self._mouse_location[1])
 
 
 class ExtractBox(Editor):
@@ -432,3 +533,48 @@ class Landmarks(Editor):
             faces.append(mesh)
         logger.trace("Updated mesh annotations: %s", faces)
         return faces
+
+
+class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
+    """ A Pop up menu that can be bound to a right click mouse event to bring up a context menu
+
+    Parameters
+    ----------
+    labels: list
+        A list of label titles that will appear in the right click menu
+    actions: list
+        A list of python functions that are called when the corresponding label is clicked on
+    hotkeys: list, optional
+        The hotkeys corresponding to the labels. If using hotkeys, then there must be an entry in
+        the list for every label even if they don't all use hotkeys. Labels without a hotkey can be
+        an empty string or ``None``. Passing ``None`` instead of a list means that no actions will
+        be given hotkeys. NB: The hotkey is not bound by this class, that needs to be done in code.
+        Giving hotkeys here means that they will be displayed in the menu though. Default: ``None``
+    """
+    def __init__(self, labels, actions, hotkeys=None):
+        logger.debug("Initializing %s: (labels: %s, actions: %s)", self.__class__.__name__, labels,
+                     actions)
+        super().__init__(tearoff=0)
+        self._labels = labels
+        self._actions = actions
+        self._hotkeys = hotkeys
+        self._create_menu()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _create_menu(self):
+        """ Create the menu based on :attr:`_labels` and :attr:`_actions`. """
+        for idx, (label, action) in enumerate(zip(self._labels, self._actions)):
+            kwargs = dict(label=label, command=action)
+            if isinstance(self._hotkeys, (list, tuple)) and self._hotkeys[idx]:
+                kwargs["accelerator"] = self._hotkeys[idx]
+            self.add_command(**kwargs)
+
+    def popup(self, event):
+        """ Pop up the right click menu.
+
+        Parameters
+        ----------
+        event: class:`tkinter.Event`
+            The tkinter mouse event calling this popup
+        """
+        self.tk_popup(event.x_root + 15, event.y_root + 5, 0)

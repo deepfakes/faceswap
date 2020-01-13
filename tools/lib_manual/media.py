@@ -260,7 +260,7 @@ class AlignmentsData():
     def current_faces(self):
         """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects. Returns
         modified alignments if they are modified, otherwise original saved alignments. """
-        # TODO use get and return a default for when alignments don't exist
+        # TODO use get and return a default for when the frame don't exist
         return self._latest_alignments[self.frames.current_meta_data["filename"]]
 
     @property
@@ -291,59 +291,6 @@ class AlignmentsData():
     def _single_face(self):
         """ list: The indexes of all frames that contain no faces """
         return [idx for idx, count in enumerate(self._face_count_per_index) if count == 1]
-
-    def set_next_frame(self, direction, filter_type):
-        """ Set the display frame to the next or previous frame based on the given filter.
-
-        Parameters
-        ----------
-        direction = ["prev", "next"]
-            The direction to search for the next face
-        filter_type: ["no", "multi", "single"]
-            The filter method to use for selecting the next frame
-        """
-        position = self._tk_position.get()
-        search_list = getattr(self, "_{}_face".format(filter_type))
-        try:
-            if direction == "prev":
-                frame_idx = next(idx for idx in reversed(search_list) if idx < position)
-            else:
-                frame_idx = next(idx for idx in search_list if idx > position)
-        except StopIteration:
-            # If no remaining frames meet criteria go to the first or last frame
-            frame_idx = 0 if direction == "prev" else self.frames.frame_count - 1
-        self.frames.goto_frame(frame_idx)
-
-    def set_current_bounding_box(self, index, pnt_x, width, pnt_y, height):
-        """ Update the bounding box for the current alignments.
-
-        Parameters
-        ----------
-        index: int
-            The face index to set this bounding box for
-        pnt_x: int
-            The left point of the bounding box
-        width: int
-            The width of the bounding box
-        pnt_y: int
-            The top point of the bounding box
-        height: int
-            The height of the bounding box
-        """
-        self._face_index = index
-        filename = self.frames.current_meta_data["filename"]
-        if self._alignments[filename].get("new", None) is None:
-            # Copy over saved alignments to new alignments
-            self._alignments[filename]["new"] = self._alignments[filename]["saved"].copy()
-        face = self.current_face
-        face.x = pnt_x
-        face.w = width
-        face.y = pnt_y
-        face.h = height
-        face.mask = dict()
-        face.landmarks_xy = self._extractor.get_landmarks()
-        face.load_aligned(None, size=128, force=True)
-        self.frames.tk_update.set(True)
 
     def _get_alignments(self, alignments_path):
         """ Get the alignments object.
@@ -380,3 +327,92 @@ class AlignmentsData():
                 this_frame_faces.append(face)
             faces[framename] = dict(saved=this_frame_faces)
         return faces
+
+    def set_next_frame(self, direction, filter_type):
+        """ Set the display frame to the next or previous frame based on the given filter.
+
+        Parameters
+        ----------
+        direction = ["prev", "next"]
+            The direction to search for the next face
+        filter_type: ["no", "multi", "single"]
+            The filter method to use for selecting the next frame
+        """
+        position = self._tk_position.get()
+        search_list = getattr(self, "_{}_face".format(filter_type))
+        try:
+            if direction == "prev":
+                frame_idx = next(idx for idx in reversed(search_list) if idx < position)
+            else:
+                frame_idx = next(idx for idx in search_list if idx > position)
+        except StopIteration:
+            # If no remaining frames meet criteria go to the first or last frame
+            frame_idx = 0 if direction == "prev" else self.frames.frame_count - 1
+        self.frames.goto_frame(frame_idx)
+
+    def _check_for_new_alignments(self):
+        """ Checks whether there are already new alignments in :attr:`_alignments`. If not
+        then saved alignments are copied to new ready for update """
+        filename = self.frames.current_meta_data["filename"]
+        if self._alignments[filename].get("new", None) is None:
+            self._alignments[filename]["new"] = self._alignments[filename]["saved"].copy()
+
+    def set_current_bounding_box(self, index, pnt_x, width, pnt_y, height):
+        """ Update the bounding box for the current alignments.
+
+        Parameters
+        ----------
+        index: int
+            The face index to set this bounding box for
+        pnt_x: int
+            The left point of the bounding box
+        width: int
+            The width of the bounding box
+        pnt_y: int
+            The top point of the bounding box
+        height: int
+            The height of the bounding box
+        """
+        self._check_for_new_alignments()
+        self._face_index = index
+        face = self.current_face
+        face.x = pnt_x
+        face.w = width
+        face.y = pnt_y
+        face.h = height
+        face.mask = dict()
+        face.landmarks_xy = self._extractor.get_landmarks()
+        face.load_aligned(None, size=128, force=True)
+        self.frames.tk_update.set(True)
+
+    def add_face(self, pnt_x, width, pnt_y, height):
+        """ Add a face to the current frame with the given dimensions.
+
+        Parameters
+        ----------
+        pnt_x: int
+            The left point of the bounding box
+        width: int
+            The width of the bounding box
+        pnt_y: int
+            The top point of the bounding box
+        height: int
+            The height of the bounding box
+        """
+        # TODO Make sure this works if there are no pre-existing faces (probably not)
+        self._check_for_new_alignments()
+        self.current_faces.append(DetectedFace(x=pnt_x, w=width, y=pnt_y, h=height))
+        self.set_current_bounding_box(len(self.current_faces) - 1, pnt_x, width, pnt_y, height)
+
+    def delete_face_at_index(self, index):
+        """ Delete the :class:`DetectedFace` object for the given face index.
+
+        Parameters
+        ----------
+        index: int
+            The face index to remove the face for
+        """
+        logger.debug("Deleting face at index: %s", index)
+        self._check_for_new_alignments()
+        del self.current_faces[index]
+        self.frames.tk_update.set(True)
