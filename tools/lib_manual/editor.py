@@ -217,9 +217,9 @@ class BoundingBox(Editor):
     def _corner_order(self):
         """ dict: The position index of bounding box corners """
         return {0: ("top", "left"),
-                1: ("bottom", "left"),
-                2: ("top", "right"),
-                3: ("bottom", "right")}
+                1: ("top", "right"),
+                2: ("bottom", "right"),
+                3: ("bottom", "left")}
 
     @property
     def _anchors(self):
@@ -282,23 +282,25 @@ class BoundingBox(Editor):
         color = self._colors["blue"]
         thickness = 1
         faces = []
-        for face in self._alignments.current_faces:
+        for idx, face in enumerate(self._alignments.current_faces):
             bbox = []
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
             bbox.append(self._canvas.create_rectangle(*box, outline=color, width=thickness))
-            bbox.extend(self._update_anchor_annotation(box, thickness, color))
+            bbox.extend(self._update_anchor_annotation(idx, box, thickness, color))
             faces.append(bbox)
         logger.trace("Updated annotations: %s", faces)
         self._objects = faces
 
-    def _update_anchor_annotation(self, bounding_box, thickness, color):
+    def _update_anchor_annotation(self, face_index, bounding_box, thickness, color):
         """ Update the anchor annotations for each corner of the bounding box.
 
         The anchors only display when the bounding box editor is active.
 
         Parameters
         ----------
+        face_index: int
+            The index of the face being annotated
         bounding_box: :class:`numpy.ndarray`
             The scaled bounding box to get the corner anchors for
         thickness: int
@@ -307,39 +309,84 @@ class BoundingBox(Editor):
             The hex color of the bounding box line
         """
         bbox = []
-        radius = 5
         color = color if self._is_active else ""
         fill_color = "gray" if self._is_active else ""
         activefill_color = "white" if self._is_active else ""
-        corners = ((bounding_box[0], bounding_box[1]), (bounding_box[0], bounding_box[3]),
-                   (bounding_box[2], bounding_box[1]), (bounding_box[2], bounding_box[3]))
-        for cnr in corners:
-            anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
-            bbox.append(self._canvas.create_oval(*anc,
+        corners = self._corners_from_coords(bounding_box)
+        for idx, (anc_dsp, anc_grb) in enumerate(zip(*self._get_anchor_points(corners))):
+            bbox.append(self._canvas.create_oval(*anc_dsp,
                                                  outline=color,
                                                  fill=fill_color,
+                                                 width=thickness))
+            bbox.append(self._canvas.create_oval(*anc_grb,
+                                                 outline="",
+                                                 fill="",
                                                  width=thickness,
-                                                 activefill=activefill_color))
+                                                 activefill=activefill_color,
+                                                 tags="anchor_{}_{}".format(face_index, idx)))
         return bbox
+
+    @staticmethod
+    def _corners_from_coords(bounding_box):
+        """ Retrieve the (x, y) co-ordinates of each corner from a bounding box.
+
+        Parameters
+        bounding_box: :class:`numpy.ndarray`, list or tuple
+            The (left, top), (right, bottom) (x, y) coordinates of the bounding box
+
+        Returns
+        -------
+        The (`top-left`, `top-right`, `bottom-right`, `bottom-left`) (x, y) coordinates of the
+        bounding box
+        """
+        return ((bounding_box[0], bounding_box[1]), (bounding_box[2], bounding_box[1]),
+                (bounding_box[2], bounding_box[3]), (bounding_box[0], bounding_box[3]))
+
+    @staticmethod
+    def _get_anchor_points(bounding_box):
+        """ Retrieve the (x, y) co-ordinates for each of the 4 corners of a bounding box's anchors
+        for both the displayed anchors and the anchor grab locations.
+
+        Parameters
+        ----------
+        bounding_box: tuple
+            The (`top-left`, `top-right`, `bottom-right`, `bottom-left`) (x, y) coordinates of the
+            bounding box
+
+        Returns
+            display_anchors: tuple
+                The (`top`, `left`, `bottom`, `right`) co-ordinates for each circle at each point
+                of the bounding box corners, sized for display
+            grab_anchors: tuple
+                The (`top`, `left`, `bottom`, `right`) co-ordinates for each circle at each point
+                of the bounding box corners, at a larger size for grabbing with a mouse
+        """
+        radius = 4
+        grab_radius = radius * 2
+        display_anchors = tuple((cnr[0] - radius, cnr[1] - radius,
+                                 cnr[0] + radius, cnr[1] + radius)
+                                for cnr in bounding_box)
+        grab_anchors = tuple((cnr[0] - grab_radius, cnr[1] - grab_radius,
+                              cnr[0] + grab_radius, cnr[1] + grab_radius)
+                             for cnr in bounding_box)
+        return display_anchors, grab_anchors
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
     def _update_cursor(self, event):
         """ Update the cursors for hovering over bounding boxes or bounding box corner anchors and
         update :attr:`_mouse_location`. """
-        for face_idx in range(len(self._bounding_boxes)):
-            if self._check_cursor_anchors(event, face_idx):
-                return
-            if self._check_cursor_bounding_box(event, face_idx):
-                return
-
+        if self._check_cursor_anchors(event):
+            return
+        if self._check_cursor_bounding_box(event):
+            return
         if self._check_cursor_image(event):
             return
 
         self._canvas.config(cursor="")
         self._mouse_location = None
 
-    def _check_cursor_anchors(self, event, face_index):
+    def _check_cursor_anchors(self, event):  # pylint:disable=unused-argument
         """ Check whether the cursor is over an anchor.
 
         If it is, set the appropriate cursor type and set :attr:`_mouse_location` to:
@@ -347,48 +394,55 @@ class BoundingBox(Editor):
 
         Parameters
         ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event
-        face_index: int:
-            The face index to check the anchor points for
+        event: :class:`tkinter.Event`, unused
+            The tkinter mouse event, required for callback but unused
 
         Returns
         -------
         bool
             ``True`` if cursor is over an anchor point otherwise ``False``
         """
-        anchor_indices = [idx for idx, bbox in enumerate(self._anchors[face_index])
-                          if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]]
-        if not anchor_indices:
+        item_ids = self._canvas.find_withtag('current')
+        if not item_ids:
             return False
-        corner = anchor_indices[0]
-        self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner]))
-        self._mouse_location = ("anchor", (face_index, corner))
+
+        item_id = item_ids[0]
+        tag = [name for name in self._canvas.gettags(item_id) if name.startswith("anchor")]
+        if not tag:
+            return False
+
+        tag = tag[0]
+        face_idx, corner_idx = (int(idx) for idx in tag[tag.find("_") + 1:].split("_"))
+        self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
+        self._mouse_location = ("anchor", (face_idx, corner_idx))
         return True
 
-    def _check_cursor_bounding_box(self, event, face_index):
+    def _check_cursor_bounding_box(self, event):
         """ Check whether the cursor is over a bounding box.
 
         If it is, set the appropriate cursor type and set :attr:`_mouse_location` to:
-            ("box", `face index`)
+        ("box", `face index`)
 
         Parameters
         ----------
         event: :class:`tkinter.Event`
             The tkinter mouse event
-        face_index: int:
-            The face index to check the bounding box for
 
         Returns
         -------
         bool
             ``True`` if cursor is over a bounding box otherwise ``False``
+
+        Notes
+        -----
+        We can't use tags on unfilled rectangles as the interior of the rectangle is not tagged.
         """
-        bbox = self._bounding_boxes[face_index]
-        if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
-            self._canvas.config(cursor="fleur")
-            self._mouse_location = ("box", face_index)
-            return True
+        for face_idx in range(len(self._bounding_boxes)):
+            bbox = self._bounding_boxes[face_idx]
+            if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
+                self._canvas.config(cursor="fleur")
+                self._mouse_location = ("box", face_idx)
+                return True
         return False
 
     def _check_cursor_image(self, event):
@@ -474,7 +528,6 @@ class BoundingBox(Editor):
         event: :class:`tkinter.Event`
             The tkinter mouse event.
         """
-        radius = 4  # TODO Variable
         rect = self._drag_data["objects"][0]
         box = list(self._canvas.coords(rect))
         # Switch top/bottom and left/right and set partial so indices match and we don't
@@ -488,10 +541,10 @@ class BoundingBox(Editor):
         box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
         box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
         self._canvas.coords(rect, *box)
-        corners = ((box[0], box[1]), (box[0], box[3]), (box[2], box[1]), (box[2], box[3]))
-        for idx, cnr in enumerate(corners):
-            anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
-            self._canvas.coords(self._drag_data["objects"][idx + 1], *anc)
+        corners = self._corners_from_coords(box)
+        for idx, (anc_dsp, anc_grb) in enumerate(zip(*self._get_anchor_points(corners))):
+            self._canvas.coords(self._drag_data["objects"][(idx * 2) + 1], *anc_dsp)
+            self._canvas.coords(self._drag_data["objects"][(idx * 2) + 2], *anc_grb)
         self._alignments.set_current_bounding_box(self._drag_data["face_index"],
                                                   *self._coords_to_bounding_box(box))
 
@@ -692,18 +745,25 @@ class Landmarks(Editor):
 
     def _update_landmarks(self):
         """ Draw the facial landmarks """
+        radius = 2 if self._is_active else 1
         color = self._colors["red"] if self._is_active or self._active_editor == "view" else ""
-        radius = 1
+        activeoutline_color = "yellow" if self._is_active else ""
+        activefill_color = "yellow" if self._is_active else ""
+        activewidth = radius * 4 if self._is_active else 0.0
         faces = []
         for face in self._alignments.current_faces:
             landmarks = []
-            for landmark in face.landmarks_xy:
+            for idx, landmark in enumerate(face.landmarks_xy):
                 box = self._scale_to_display(landmark).astype("int32")
                 bbox = (box[0] - radius, box[1] - radius, box[0] + radius, box[1] + radius)
                 landmarks.append(self._canvas.create_oval(*bbox,
                                                           outline=color,
                                                           fill=color,
-                                                          width=radius))
+                                                          width=radius,
+                                                          activeoutline=activeoutline_color,
+                                                          activefill=activefill_color,
+                                                          activewidth=activewidth,
+                                                          tags="landmark_{}".format(idx)))
             faces.append(landmarks)
         logger.trace("Updated landmark annotations: %s", faces)
         return faces
@@ -738,6 +798,27 @@ class Landmarks(Editor):
             faces.append(mesh)
         logger.trace("Updated mesh annotations: %s", faces)
         return faces
+
+    # << MOUSE HANDLING >>
+    # Mouse cursor display
+    def _update_cursor(self, event):
+        """ Update the cursors for hovering over extract boxes and update
+        :attr:`_mouse_location`. """
+        item_ids = self._canvas.find_withtag('current')
+        if not item_ids:
+            self._canvas.config(cursor="")
+            self._mouse_location = None
+            return
+        item_id = item_ids[0]
+        tag = [name for name in self._canvas.gettags(item_id) if name.startswith("landmark")]
+        if not tag:
+            self._canvas.config(cursor="")
+            self._mouse_location = None
+            return
+        tag = tag[0]
+        self._canvas.config(cursor="fleur")
+        face_idx = [idx for idx, face in enumerate(self._objects) if item_id in face][0]
+        self._mouse_location = (face_idx, int(tag[tag.find("_") + 1:]))
 
 
 class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
