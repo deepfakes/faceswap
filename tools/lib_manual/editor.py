@@ -36,9 +36,29 @@ class Editor():
                             yellow="#ffff00",
                             magenta="#ff00ff")
         self._objects = []
+        self._mouse_location = None
+        self._drag_data = dict()
+        self._drag_callback = None
         self._right_click_button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         self.update_annotation()
+        self.bind_mouse_motion()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def _is_active(self):
+        """ bool: ``True`` if this editor is currently active otherwise ``False``.
+
+        Notes
+        -----
+        When initializing, the active_editor parameter will not be set in the parent,
+        so return ``False`` in this instance
+        """
+        return hasattr(self._canvas, "active_editor") and self._canvas.active_editor == self
+
+    @property
+    def _active_editor(self):
+        """ str: The name of the currently active editor """
+        return self._canvas.selected_action
 
     def update_annotation(self):
         """ Update the display annotations for the current objects.
@@ -51,24 +71,94 @@ class Editor():
 
     def _clear_annotation(self):
         """ Removes all currently drawn annotations for the current :class:`Editor`. """
+        logger.trace("clearing annotation")
         for faces in self._objects:
             for obj in faces:
                 logger.trace("Deleting object: %s (id: %s)", self._canvas.type(obj), obj)
                 self._canvas.delete(obj)
 
-    # Mouse Callbacks
-    def set_mouse_cursor_tracking(self):
-        """ Default mouse cursor tracking removes all bindings from mouse events to just
-        display the standard cursor and perform no mouse click or right click actions. Override
-        for specific Editor mouse cursor display and actions.
+    # << MOUSE CALLBACKS >>
+    # Mouse cursor display
+    def bind_mouse_motion(self):
+        """ Binds the mouse motion to the current editor's mouse <Motion> event.
 
-        NB: Only Mouse Button 1 is used for click events. Mouse button 3 (or 2 for macOS) is used
-        for the right click context menu.
+        Called on initialization and active editor update.
         """
-        for event in ("B1-Motion", "ButtonPress-1", "ButtonRelease-1", "Double-Button-1",
-                      "Motion", self._right_click_button):
-            logger.debug("Unbinding mouse event: %s", event)
-            self._canvas.unbind("<{}>".format(event))
+        self._canvas.bind("<Motion>", self._update_cursor)
+
+    def _update_cursor(self, event):  # pylint: disable=unused-argument
+        """ The mouse cursor display as bound to the mouses <Motion> event..
+
+        The default is to always return a standard cursor, so this method should be overridden for
+        editor specific cursor update.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused for default tracking, but available for specific editor
+            tracking.
+        """
+        self._canvas.config(cursor="")
+
+    # Mouse click and drag actions
+    def set_mouse_click_actions(self):
+        """ Add the bindings for left mouse button click and drag actions.
+
+        This binds the mouse to the :func:`_drag_start`, :func:`_drag` and :func:`_drag_stop`
+        methods.
+
+        By default these methods do nothing (except for :func:`_drag_stop` which resets
+        :attr:`_drag_data`.
+
+        This bindings should be added for all editors. To add additional bindings,
+        `super().set_mouse_click_actions` should be called prior to adding them..
+        """
+        logger.debug("Setting mouse bindings")
+        self._canvas.bind("<ButtonPress-1>", self._drag_start)
+        self._canvas.bind("<ButtonRelease-1>", self._drag_stop)
+        self._canvas.bind("<B1-Motion>", self._drag)
+
+    def _drag_start(self, event):  # pylint:disable=unused-argument
+        """ The action to perform when the user starts clicking and dragging the mouse.
+
+        The default does nothing except reset the attr:`drag_data` and attr:`drag_callback`.
+        Override for Editor specific click and drag start actions.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused but for default action, but available for editor
+            specific actions
+        """
+        self._drag_data = dict()
+        self._drag_callback = None
+
+    def _drag(self, event):
+        """ The default callback for the drag part of a mouse click and drag action.
+
+        :attr:`_drag_callback` should be set in :func:`self._drag_start`. This callback will then
+        be executed on a mouse drag event.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        if self._drag_callback is None:
+            return
+        self._drag_callback(event)
+
+    def _drag_stop(self, event):  # pylint:disable=unused-argument
+        """ The action to perform when the user stops clicking and dragging the mouse.
+
+        Default is to set :attr:`_drag_data` to `dict`. Override for Editor specific stop actions.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused but required
+        """
+        self._drag_data = dict()
 
     def _scale_to_display(self, points):
         """ Scale and offset the given points to the current display scale and offset values.
@@ -87,7 +177,7 @@ class Editor():
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
 
-    def scale_from_display(self, points):
+    def scale_from_display(self, points, do_offset=True):
         """ Scale and offset the given points from the current display to the correct original
         values.
 
@@ -95,13 +185,16 @@ class Editor():
         ----------
         points: :class:`numpy.ndarray`
             Array of x, y co-ordinates to adjust
+        offset: bool, optional
+            ``True`` if the offset should be calculated otherwise ``False``. Default: ``True``
 
         Returns
         -------
         :class:`numpy.ndarray`
             The adjusted x, y co-ordinates to the original frame location
         """
-        retval = (points - self._canvas.offset) / self._frames.current_scale
+        offset = self._canvas.offset if do_offset else (0, 0)
+        retval = (points - offset) / self._frames.current_scale
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
 
@@ -109,8 +202,6 @@ class Editor():
 class BoundingBox(Editor):
     """ The Bounding Box Editor. """
     def __init__(self, canvas, alignments, frames):
-        self._drag_data = dict()
-        self._mouse_location = None
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
@@ -185,6 +276,9 @@ class BoundingBox(Editor):
             logger.trace("Object being edited. Not updating annotation")
             return
         self._clear_annotation()
+        if not self._is_active and self._active_editor != "view":
+            self._objects = []
+            return
         color = self._colors["blue"]
         thickness = 1
         faces = []
@@ -192,32 +286,44 @@ class BoundingBox(Editor):
             bbox = []
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
-            corners = ((box[0], box[1]), (box[0], box[3]), (box[2], box[1]), (box[2], box[3]))
             bbox.append(self._canvas.create_rectangle(*box, outline=color, width=thickness))
-            radius = thickness * 5
-            for cnr in corners:
-                anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
-                bbox.append(self._canvas.create_oval(*anc,
-                                                     outline=color,
-                                                     fill="gray",
-                                                     width=thickness,
-                                                     activefill="white"))
+            bbox.extend(self._update_anchor_annotation(box, thickness, color))
             faces.append(bbox)
         logger.trace("Updated annotations: %s", faces)
         self._objects = faces
 
+    def _update_anchor_annotation(self, bounding_box, thickness, color):
+        """ Update the anchor annotations for each corner of the bounding box.
+
+        The anchors only display when the bounding box editor is active.
+
+        Parameters
+        ----------
+        bounding_box: :class:`numpy.ndarray`
+            The scaled bounding box to get the corner anchors for
+        thickness: int
+            The line thickness of the bounding box
+        color: str
+            The hex color of the bounding box line
+        """
+        bbox = []
+        radius = 5
+        color = color if self._is_active else ""
+        fill_color = "gray" if self._is_active else ""
+        activefill_color = "white" if self._is_active else ""
+        corners = ((bounding_box[0], bounding_box[1]), (bounding_box[0], bounding_box[3]),
+                   (bounding_box[2], bounding_box[1]), (bounding_box[2], bounding_box[3]))
+        for cnr in corners:
+            anc = (cnr[0] - radius, cnr[1] - radius, cnr[0] + radius, cnr[1] + radius)
+            bbox.append(self._canvas.create_oval(*anc,
+                                                 outline=color,
+                                                 fill=fill_color,
+                                                 width=thickness,
+                                                 activefill=activefill_color))
+        return bbox
+
     # << MOUSE HANDLING >>
     # Mouse cursor display
-    def set_mouse_cursor_tracking(self):
-        """ Default mouse cursor tracking removes all bindings from mouse events to just
-        display the standard cursor. Override for specific Editor mouse cursor display """
-        logger.debug("Setting mouse bindings")
-        self._canvas.bind("<Motion>", self._update_cursor)
-        self._canvas.bind("<ButtonPress-1>", self._drag_start)
-        self._canvas.bind("<ButtonRelease-1>", self._drag_stop)
-        self._canvas.bind("<B1-Motion>", self._drag)
-        self._canvas.bind(self._right_click_button, self._context_menu)
-
     def _update_cursor(self, event):
         """ Update the cursors for hovering over bounding boxes or bounding box corner anchors and
         update :attr:`_mouse_location`. """
@@ -310,8 +416,21 @@ class BoundingBox(Editor):
         return False
 
     # Mouse Actions
+    def set_mouse_click_actions(self):
+        """ Add right click context menu to default mouse click bindings """
+        super().set_mouse_click_actions()
+        self._canvas.bind(self._right_click_button, self._context_menu)
+
     def _drag_start(self, event):
-        """ Collect information on start of drag """
+        """ The action to perform when the user starts clicking and dragging the mouse.
+
+        Collect information about the object being clicked on and add to :attr:`_drag_data`
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
         if self._mouse_location is None:
             self._drag_data = dict()
             return
@@ -319,12 +438,12 @@ class BoundingBox(Editor):
             self._drag_data["face_index"] = self._mouse_location[1][0]
             self._drag_data["corner"] = self._corner_order[self._mouse_location[1][1]]
             self._drag_data["objects"] = self._bbox_objects_for_face(self._mouse_location[1][0])
-            self._drag_data["callback"] = self._resize_bounding_box
+            self._drag_callback = self._resize
         elif self._mouse_location[0] == "box":
             self._drag_data["face_index"] = self._mouse_location[1]
             self._drag_data["objects"] = self._bbox_objects_for_face(self._mouse_location[1])
             self._drag_data["current_location"] = (event.x, event.y)
-            self._drag_data["callback"] = self._move_bounding_box
+            self._drag_callback = self._move
         elif self._mouse_location[0] == "image":
             self._create_new_bounding_box(event)
             # Refresh cursor and _mouse_location for new bounding box and reset _drag_start
@@ -347,29 +466,7 @@ class BoundingBox(Editor):
         logger.debug("Creating new bounding box: %s ", box)
         self._alignments.add_face(*self._coords_to_bounding_box(box))
 
-    def _drag_stop(self, event):  # pylint:disable=unused-argument
-        """ Reset the :attr:`_drag_data` dict
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event. Unused but required
-        """
-        self._drag_data = dict()
-
-    def _drag(self, event):
-        """ Drag the bounding box and its anchors to current mouse position.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event.
-        """
-        if not self._drag_data:
-            return
-        self._drag_data["callback"](event)
-
-    def _resize_bounding_box(self, event):
+    def _resize(self, event):
         """ Resizes a bounding box on an anchor drag event
 
         Parameters
@@ -398,8 +495,15 @@ class BoundingBox(Editor):
         self._alignments.set_current_bounding_box(self._drag_data["face_index"],
                                                   *self._coords_to_bounding_box(box))
 
-    def _move_bounding_box(self, event):
-        """ Moves the bounding box on a bounding box drag event """
+    def _move(self, event):
+        """ Moves the bounding box on a bounding box drag event.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+
+        """
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
         selected_objects = self._drag_data["objects"]
@@ -446,11 +550,30 @@ class BoundingBox(Editor):
 
 
 class ExtractBox(Editor):
-    """ The Bounding Box Editor. """
+    """ The Extract Box Editor. """
+    def __init__(self, canvas, alignments, frames):
+        self._right_click_menu = RightClickMenu(["Delete Face"],
+                                                [self._delete_current_face],
+                                                ["Del"])
+        super().__init__(canvas, alignments, frames)
+        self._bind_hotkeys()
+
+    def _bind_hotkeys(self):
+        """ Add keyboard shortcuts.
+
+        We bind to root because the canvas does not get focus, so keyboard shortcuts won't do
+        anything
+
+        * Delete - Delete the currently hovered over face
+        """
+        self._canvas.winfo_toplevel().bind("<Delete>", self._delete_current_face)
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
         self._clear_annotation()
+        if not self._is_active and self._active_editor != "view":
+            self._objects = []
+            return
         color = self._colors["green"]
         thickness = 1
         faces = []
@@ -469,10 +592,92 @@ class ExtractBox(Editor):
             extract_box.append(self._canvas.create_polygon(*box,
                                                            fill="",
                                                            outline=color,
-                                                           width=thickness))
+                                                           width=thickness,
+                                                           tags="extract_box"))
             faces.append(extract_box)
         logger.trace("Updated annotations: %s", faces)
         self._objects = faces
+
+    # << MOUSE HANDLING >>
+    # Mouse cursor display
+    def _update_cursor(self, event):
+        """ Update the cursors for hovering over extract boxes and update
+        :attr:`_mouse_location`. """
+        item_ids = self._canvas.find_withtag('current')
+        if not item_ids:
+            self._canvas.config(cursor="")
+            self._mouse_location = None
+            return
+        item_id = item_ids[0]
+        if "extract_box" in self._canvas.gettags(item_id):
+            self._canvas.config(cursor="fleur")
+            self._mouse_location = [idx for idx, face in enumerate(self._objects)
+                                    if item_id in face][0]
+        else:
+            self._canvas.config(cursor="")
+            self._mouse_location = None
+
+    # Mouse click actions
+    def set_mouse_click_actions(self):
+        """ Add right click context menu to default mouse click bindings """
+        super().set_mouse_click_actions()
+        self._canvas.bind(self._right_click_button, self._context_menu)
+
+    def _drag_start(self, event):
+        """ The action to perform when the user starts clicking and dragging the mouse.
+
+        Collect information about the object being clicked on and add to :attr:`_drag_data`
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        if self._mouse_location is None:
+            self._drag_data = dict()
+            return
+        self._drag_data["face_index"] = self._mouse_location
+        self._drag_data["objects"] = self._objects[self._mouse_location]
+        self._drag_data["current_location"] = (event.x, event.y)
+        self._drag_callback = self._move
+
+    def _move(self, event):
+        """ Moves the Extract box and the underlying landmarks on an extract box drag event.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+
+        """
+        shift_x = event.x - self._drag_data["current_location"][0]
+        shift_y = event.y - self._drag_data["current_location"][1]
+        selected_objects = self._drag_data["objects"]
+        for obj in selected_objects:
+            self._canvas.move(obj, shift_x, shift_y)
+        scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
+        self._alignments.shift_landmarks(self._drag_data["face_index"], *scaled_shift)
+        self._drag_data["current_location"] = (event.x, event.y)
+
+    def _context_menu(self, event):
+        """ Create a right click context menu to delete the alignment that is being
+        hovered over. """
+        if self._mouse_location is None:
+            return
+        self._right_click_menu.popup(event)
+
+    def _delete_current_face(self, *args):  # pylint:disable=unused-argument
+        """ Called by the right click delete event. Deletes the face that the mouse is currently
+        over.
+
+        Parameters
+        ----------
+        args: tuple (unused)
+            The event parameter is passed in by the hot key binding, so args is required
+        """
+        if self._mouse_location is None:
+            return
+        self._alignments.delete_face_at_index(self._mouse_location)
 
 
 class Landmarks(Editor):
@@ -487,7 +692,7 @@ class Landmarks(Editor):
 
     def _update_landmarks(self):
         """ Draw the facial landmarks """
-        color = self._colors["red"]
+        color = self._colors["red"] if self._is_active or self._active_editor == "view" else ""
         radius = 1
         faces = []
         for face in self._alignments.current_faces:
@@ -505,7 +710,7 @@ class Landmarks(Editor):
 
     def _update_mesh(self):
         """ Draw the facial landmarks """
-        color = self._colors["cyan"]
+        color = "" if self._is_active or self._active_editor == "mask" else self._colors["cyan"]
         thickness = 1
         facial_landmarks_idxs = dict(mouth=(48, 68),
                                      right_eyebrow=(17, 22),

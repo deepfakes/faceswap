@@ -469,17 +469,18 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                                         anchor=tk.CENTER)
         self._editors = self._get_editors()
         self._add_callbacks()
-        self._update_mouse_cursor_tracking()
+        self._update_active_display()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def _selected_action(self):
+    def selected_action(self):
+        """str: The name of the currently selected Editor action """
         return self._tk_action_var.get()
 
     @property
-    def _active_editor(self):
-        """ :class:`Editor`: The current editor in use based on :attr:`_selected_action`. """
-        return self._editors[self._selected_action]
+    def active_editor(self):
+        """ :class:`Editor`: The current editor in use based on :attr:`selected_action`. """
+        return self._editors[self.selected_action]
 
     @property
     def offset(self):
@@ -521,10 +522,21 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """
         needs_update = self._frames.tk_update
         needs_update.trace("w", self._update_display)
-        self._tk_action_var.trace("w", self._update_mouse_cursor_tracking)
+        self._tk_action_var.trace("w", self._update_active_display)
 
-    def _update_mouse_cursor_tracking(self, *args):  # pylint:disable=unused-argument
-        self._active_editor.set_mouse_cursor_tracking()
+    def _update_active_display(self, *args):  # pylint:disable=unused-argument
+        """ Update the display for the active editor.
+
+        Sets the editor's cursor tracking and annotation display based on which editor is active.
+
+        Parameters
+        ----------
+        args: tuple, unused
+            Required for tkinter callback but unused
+        """
+        self.active_editor.bind_mouse_motion()
+        self.active_editor.set_mouse_click_actions()
+        self._frames.tk_update.set(True)
 
     def _update_display(self, *args):  # pylint:disable=unused-argument
         """ Update the display on frame cache update """
@@ -585,7 +597,7 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()
