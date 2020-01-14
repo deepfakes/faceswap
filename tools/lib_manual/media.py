@@ -385,6 +385,29 @@ class AlignmentsData():
         face.load_aligned(None, size=128, force=True)
         self.frames.tk_update.set(True)
 
+    def shift_landmark(self, face_index, landmark_index, shift_x, shift_y):
+        """ Shift a single landmark point the given face index and landmark index by the given x and
+        y values.
+
+        Parameters
+        ----------
+        face_index: int
+            The face index to shift the landmark for
+        landmark_index: int
+            The landmark index to shift
+        shift_x: int
+            The amount to shift the landmark by along the x axis
+        shift_y: int
+            The amount to shift the landmark by along the y axis
+        """
+        self._check_for_new_alignments()
+        self._face_index = face_index
+        face = self.current_face
+        face.mask = dict()
+        face.landmarks_xy[landmark_index] += (shift_x, shift_y)
+        face.load_aligned(None, size=128, force=True)
+        self.frames.tk_update.set(True)
+
     def shift_landmarks(self, index, shift_x, shift_y):
         """ Shift the landmarks and bounding box for the given face index by the given x and y
         values.

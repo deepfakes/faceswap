@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Editor objects for the manual adjustments tool """
+
 import logging
 import platform
 import tkinter as tk
@@ -9,6 +10,7 @@ from functools import partial
 import numpy as np
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+# pylint:disable=too-many-lines
 
 
 class Editor():
@@ -159,6 +161,22 @@ class Editor():
             The tkinter mouse event. Unused but required
         """
         self._drag_data = dict()
+
+    def _get_objects_from_identifier(self, identifier):
+        """ Retrieve all of the objects that match the given identifier suffix
+
+        Parameters
+        ----------
+        identifier: str
+            The identifier suffix to search tags for
+
+        Returns
+        -------
+        Tuple
+            The object ids of objects containing the identifier suffix
+        """
+        return tuple(obj for obj in self._canvas.find_all()
+                     if any(tag for tag in self._canvas.gettags(obj) if tag.endswith(identifier)))
 
     def _scale_to_display(self, points):
         """ Scale and offset the given points to the current display scale and offset values.
@@ -761,20 +779,24 @@ class Landmarks(Editor):
             landmarks = []
             for lm_idx, landmark in enumerate(face.landmarks_xy):
                 box = self._scale_to_display(landmark).astype("int32")
-                landmarks.append(self._display_landmark(box))
+                landmarks.append(self._display_landmark(box, face_idx, lm_idx))
                 landmarks.append(self._grab_landmark(box, face_idx, lm_idx))
                 landmarks.extend(self._label_landmark(box, face_idx, lm_idx))
             faces.append(landmarks)
         logger.trace("Updated landmark annotations: %s", faces)
         return faces
 
-    def _display_landmark(self, bounding_box):
+    def _display_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a display landmark to the canvas.
 
         Parameters
         ----------
         box: :class:`numpy.ndarray`
             The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
+        face_index: int
+            The index of the face being annotated
+        landmark_index
+            The index of the landmark being annotated
 
         Returns
         int
@@ -784,7 +806,11 @@ class Landmarks(Editor):
         color = self._colors["red"]
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
-        return self._canvas.create_oval(*bbox, outline=color, fill=color, width=radius)
+        return self._canvas.create_oval(*bbox,
+                                        outline=color,
+                                        fill=color,
+                                        width=radius,
+                                        tags="dsp_{}_{}".format(face_index, landmark_index))
 
     def _grab_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a grab landmark to the canvas.
@@ -793,6 +819,10 @@ class Landmarks(Editor):
         ----------
         box: :class:`numpy.ndarray`
             The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
+        face_index: int
+            The index of the face being annotated
+        landmark_index
+            The index of the landmark being annotated
 
         Returns
         int
@@ -809,7 +839,7 @@ class Landmarks(Editor):
                                         width=radius,
                                         activeoutline=activeoutline_color,
                                         activefill=activefill_color,
-                                        tags="landmark_{}_{}".format(face_index, landmark_index))
+                                        tags="grb_{}_{}".format(face_index, landmark_index))
 
     def _label_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a text label for a landmark to the canvas.
@@ -818,6 +848,10 @@ class Landmarks(Editor):
         ----------
         box: :class:`numpy.ndarray`
             The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
+        face_index: int
+            The index of the face being annotated
+        landmark_index
+            The index of the landmark being annotated
 
         Returns
         tuple
@@ -830,15 +864,16 @@ class Landmarks(Editor):
                                         fill="black",
                                         font=("Default", 10),
                                         text=str(landmark_index + 1),
-                                        tags=("lbltext_{}_{}".format(face_index, landmark_index),
-                                              "_lbltext"))
+                                        tags=("label",
+                                              "lbltxt_{}_{}".format(face_index, landmark_index)))
         bbox = self._canvas.bbox(text)
         bbox = [bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2]
         bgr = self._canvas.create_rectangle(bbox,
                                             fill="",
                                             outline="",
-                                            tags=("lblbg_{}_{}".format(face_index, landmark_index),
-                                                  "_lblbg"))
+                                            tags=("label",
+                                                  "lblbg_{}_{}".format(face_index,
+                                                                       landmark_index)))
         self._canvas.lower(bgr, text)
         self._canvas.itemconfig(text, fill="")
         return text, bgr
@@ -871,34 +906,68 @@ class Landmarks(Editor):
     def _update_cursor(self, event):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
-        item_ids = self._canvas.find_withtag("current")
         self._clear_labels()
+        item_ids = self._canvas.find_withtag("current")
         if not item_ids:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
         item_id = item_ids[0]
-        tags = [name for name in self._canvas.gettags(item_id) if name.startswith("landmark")]
+        tags = [tag for tag in self._canvas.gettags(item_id) if tag.startswith("grb")]
         if not tags:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
-        tag = tags[0]
-        face_idx, landmark_idx = (int(idx) for idx in tag.split("_")[1:])
+        identifier = tags[0][tags[0].find("_") + 1:]
         self._canvas.config(cursor="fleur")
-        txt_label = self._canvas.find_withtag("lbltext_{}_{}".format(face_idx, landmark_idx))
-        txt_bg = self._canvas.find_withtag("lblbg_{}_{}".format(face_idx, landmark_idx))
+        txt_label = self._canvas.find_withtag("lbltxt_{}".format(identifier))
+        txt_bg = self._canvas.find_withtag("lblbg_{}".format(identifier))
         self._canvas.itemconfig(txt_label, fill="black")
         self._canvas.itemconfig(txt_bg, fill="#ffffea", outline="black")
-        self._mouse_location = (face_idx, landmark_idx)
+        self._mouse_location = identifier
 
     def _clear_labels(self):
         """ Clear all landmark text labels from display """
-        txtlbls = self._canvas.find_withtag("_lbltext")
-        txtbgs = self._canvas.find_withtag("_lblbg")
-        for lbl, bgr in zip(txtlbls, txtbgs):
-            self._canvas.itemconfig(lbl, fill="")
-            self._canvas.itemconfig(bgr, fill="", outline="")
+        labels = self._canvas.find_withtag("label")
+        for item_id in labels:
+            self._canvas.itemconfig(item_id, fill="")
+            if self._canvas.type(item_id) == "rectangle":
+                self._canvas.itemconfig(item_id, outline="")
+
+    # Mouse actions
+    def _drag_start(self, event):
+        """ The action to perform when the user starts clicking and dragging the mouse.
+
+        Collect information about the landmark being clicked on and add to :attr:`_drag_data`
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        if self._mouse_location is None:
+            self._drag_data = dict()
+            return
+        self._drag_data["current_location"] = (event.x, event.y)
+        self._drag_callback = self._move
+
+    def _move(self, event):
+        """ Moves the Extract box and the underlying landmarks on an extract box drag event.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        shift_x = event.x - self._drag_data["current_location"][0]
+        shift_y = event.y - self._drag_data["current_location"][1]
+        objects = self._get_objects_from_identifier(self._mouse_location)
+        for obj in objects:
+            self._canvas.move(obj, shift_x, shift_y)
+        scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
+        self._alignments.shift_landmark(*[int(idx) for idx in self._mouse_location.split("_")],
+                                        *scaled_shift)
+        self._drag_data["current_location"] = (event.x, event.y)
 
 
 class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
