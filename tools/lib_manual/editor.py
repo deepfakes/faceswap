@@ -402,17 +402,17 @@ class BoundingBox(Editor):
         bool
             ``True`` if cursor is over an anchor point otherwise ``False``
         """
-        item_ids = self._canvas.find_withtag('current')
+        item_ids = self._canvas.find_withtag("current")
         if not item_ids:
             return False
 
         item_id = item_ids[0]
-        tag = [name for name in self._canvas.gettags(item_id) if name.startswith("anchor")]
-        if not tag:
+        tags = [name for name in self._canvas.gettags(item_id) if name.startswith("anchor")]
+        if not tags:
             return False
 
-        tag = tag[0]
-        face_idx, corner_idx = (int(idx) for idx in tag[tag.find("_") + 1:].split("_"))
+        tag = tags[0]
+        face_idx, corner_idx = (int(idx) for idx in tag.split("_")[1:])
         self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
         self._mouse_location = ("anchor", (face_idx, corner_idx))
         return True
@@ -646,7 +646,7 @@ class ExtractBox(Editor):
                                                            fill="",
                                                            outline=color,
                                                            width=thickness,
-                                                           tags="extract_box"))
+                                                           tags="extract_box_{}".format(idx)))
             faces.append(extract_box)
         logger.trace("Updated annotations: %s", faces)
         self._objects = faces
@@ -656,19 +656,20 @@ class ExtractBox(Editor):
     def _update_cursor(self, event):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
-        item_ids = self._canvas.find_withtag('current')
+        item_ids = self._canvas.find_withtag("current")
         if not item_ids:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
         item_id = item_ids[0]
-        if "extract_box" in self._canvas.gettags(item_id):
-            self._canvas.config(cursor="fleur")
-            self._mouse_location = [idx for idx, face in enumerate(self._objects)
-                                    if item_id in face][0]
-        else:
+        tags = [name for name in self._canvas.gettags(item_id) if name.startswith("extract_box")]
+        if not tags:
             self._canvas.config(cursor="")
             self._mouse_location = None
+            return
+        tag = tags[0]
+        self._canvas.config(cursor="fleur")
+        self._mouse_location = int(tag.split("_")[-1])
 
     # Mouse click actions
     def set_mouse_click_actions(self):
@@ -735,6 +736,16 @@ class ExtractBox(Editor):
 
 class Landmarks(Editor):
     """ The Landmarks Editor. """
+    def __init__(self, canvas, alignments, frames):
+        self._landmark_mapping = dict(mouth=(48, 68),
+                                      right_eyebrow=(17, 22),
+                                      left_eyebrow=(22, 27),
+                                      right_eye=(36, 42),
+                                      left_eye=(42, 48),
+                                      nose=(27, 36),
+                                      jaw=(0, 17),
+                                      chin=(8, 11))
+        super().__init__(canvas, alignments, frames)
 
     def update_annotation(self):
         """ Draw the Landmarks and the Face Mesh set the objects to :attr:`_object`"""
@@ -745,48 +756,104 @@ class Landmarks(Editor):
 
     def _update_landmarks(self):
         """ Draw the facial landmarks """
-        radius = 2 if self._is_active else 1
-        color = self._colors["red"] if self._is_active or self._active_editor == "view" else ""
-        activeoutline_color = "yellow" if self._is_active else ""
-        activefill_color = "yellow" if self._is_active else ""
-        activewidth = radius * 4 if self._is_active else 0.0
         faces = []
-        for face in self._alignments.current_faces:
+        for face_idx, face in enumerate(self._alignments.current_faces):
             landmarks = []
-            for idx, landmark in enumerate(face.landmarks_xy):
+            for lm_idx, landmark in enumerate(face.landmarks_xy):
                 box = self._scale_to_display(landmark).astype("int32")
-                bbox = (box[0] - radius, box[1] - radius, box[0] + radius, box[1] + radius)
-                landmarks.append(self._canvas.create_oval(*bbox,
-                                                          outline=color,
-                                                          fill=color,
-                                                          width=radius,
-                                                          activeoutline=activeoutline_color,
-                                                          activefill=activefill_color,
-                                                          activewidth=activewidth,
-                                                          tags="landmark_{}".format(idx)))
+                landmarks.append(self._display_landmark(box))
+                landmarks.append(self._grab_landmark(box, face_idx, lm_idx))
+                landmarks.extend(self._label_landmark(box, face_idx, lm_idx))
             faces.append(landmarks)
         logger.trace("Updated landmark annotations: %s", faces)
         return faces
+
+    def _display_landmark(self, bounding_box):
+        """ Add a display landmark to the canvas.
+
+        Parameters
+        ----------
+        box: :class:`numpy.ndarray`
+            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
+
+        Returns
+        int
+            The id of the canvas oval object
+        """
+        radius = 1
+        color = self._colors["red"]
+        bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
+                bounding_box[0] + radius, bounding_box[1] + radius)
+        return self._canvas.create_oval(*bbox, outline=color, fill=color, width=radius)
+
+    def _grab_landmark(self, bounding_box, face_index, landmark_index):
+        """ Add a grab landmark to the canvas.
+
+        Parameters
+        ----------
+        box: :class:`numpy.ndarray`
+            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
+
+        Returns
+        int
+            The id of the canvas oval object
+        """
+        radius = 6
+        activeoutline_color = "black" if self._is_active else ""
+        activefill_color = "white" if self._is_active else ""
+        bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
+                bounding_box[0] + radius, bounding_box[1] + radius)
+        return self._canvas.create_oval(*bbox,
+                                        outline="",
+                                        fill="",
+                                        width=radius,
+                                        activeoutline=activeoutline_color,
+                                        activefill=activefill_color,
+                                        tags="landmark_{}_{}".format(face_index, landmark_index))
+
+    def _label_landmark(self, bounding_box, face_index, landmark_index):
+        """ Add a text label for a landmark to the canvas.
+
+        Parameters
+        ----------
+        box: :class:`numpy.ndarray`
+            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
+
+        Returns
+        tuple
+            The ids of the canvas text object and the background canvas rectangle object
+        """
+        top_left = np.array(bounding_box[:2]) - 16
+        # NB The fill must be visible to be able to get the bounding box, so set fill to empty
+        # after the bounding box has been retrieved
+        text = self._canvas.create_text(*top_left,
+                                        fill="black",
+                                        font=("Default", 10),
+                                        text=str(landmark_index + 1),
+                                        tags=("lbltext_{}_{}".format(face_index, landmark_index),
+                                              "_lbltext"))
+        bbox = self._canvas.bbox(text)
+        bbox = [bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2]
+        bgr = self._canvas.create_rectangle(bbox,
+                                            fill="",
+                                            outline="",
+                                            tags=("lblbg_{}_{}".format(face_index, landmark_index),
+                                                  "_lblbg"))
+        self._canvas.lower(bgr, text)
+        self._canvas.itemconfig(text, fill="")
+        return text, bgr
 
     def _update_mesh(self):
         """ Draw the facial landmarks """
         color = "" if self._is_active or self._active_editor == "mask" else self._colors["cyan"]
         thickness = 1
-        facial_landmarks_idxs = dict(mouth=(48, 68),
-                                     right_eyebrow=(17, 22),
-                                     left_eyebrow=(22, 27),
-                                     right_eye=(36, 42),
-                                     left_eye=(42, 48),
-                                     nose=(27, 36),
-                                     jaw=(0, 17),
-                                     chin=(8, 11))
         faces = []
         for face in self._alignments.current_faces:
             mesh = []
             landmarks = face.landmarks_xy
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
                          landmarks, color, thickness)
-            for key, val in facial_landmarks_idxs.items():
+            for key, val in self._landmark_mapping.items():
                 pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
                 if key in ("right_eye", "left_eye", "mouth"):
                     mesh.append(self._canvas.create_polygon(*pts,
@@ -804,21 +871,34 @@ class Landmarks(Editor):
     def _update_cursor(self, event):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
-        item_ids = self._canvas.find_withtag('current')
+        item_ids = self._canvas.find_withtag("current")
+        self._clear_labels()
         if not item_ids:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
         item_id = item_ids[0]
-        tag = [name for name in self._canvas.gettags(item_id) if name.startswith("landmark")]
-        if not tag:
+        tags = [name for name in self._canvas.gettags(item_id) if name.startswith("landmark")]
+        if not tags:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
-        tag = tag[0]
+        tag = tags[0]
+        face_idx, landmark_idx = (int(idx) for idx in tag.split("_")[1:])
         self._canvas.config(cursor="fleur")
-        face_idx = [idx for idx, face in enumerate(self._objects) if item_id in face][0]
-        self._mouse_location = (face_idx, int(tag[tag.find("_") + 1:]))
+        txt_label = self._canvas.find_withtag("lbltext_{}_{}".format(face_idx, landmark_idx))
+        txt_bg = self._canvas.find_withtag("lblbg_{}_{}".format(face_idx, landmark_idx))
+        self._canvas.itemconfig(txt_label, fill="black")
+        self._canvas.itemconfig(txt_bg, fill="#ffffea", outline="black")
+        self._mouse_location = (face_idx, landmark_idx)
+
+    def _clear_labels(self):
+        """ Clear all landmark text labels from display """
+        txtlbls = self._canvas.find_withtag("_lbltext")
+        txtbgs = self._canvas.find_withtag("_lblbg")
+        for lbl, bgr in zip(txtlbls, txtbgs):
+            self._canvas.itemconfig(lbl, fill="")
+            self._canvas.itemconfig(bgr, fill="", outline="")
 
 
 class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
