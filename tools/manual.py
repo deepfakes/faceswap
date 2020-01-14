@@ -597,7 +597,7 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()

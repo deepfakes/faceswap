@@ -24,8 +24,11 @@ class Editor():
         The alignments data for this manual session
     frames: :class:`FrameNavigation`
         The frames navigator for this manual session
+    prefix: str
+        The canvas object tag's prefix for this editor
     """
-    def __init__(self, canvas, alignments, frames):
+    # TODO make prefix an arg rather than kwarg
+    def __init__(self, canvas, alignments, frames, prefix=None):
         logger.debug("Initializing %s: (canvas: '%s', alignments: %s, frames: %s)",
                      self.__class__.__name__, canvas, alignments, frames)
         self._canvas = canvas
@@ -37,7 +40,7 @@ class Editor():
                             cyan="#00ffff",
                             yellow="#ffff00",
                             magenta="#ff00ff")
-        self._objects = []
+        self._prefix = prefix
         self._mouse_location = None
         self._drag_data = dict()
         self._drag_callback = None
@@ -62,6 +65,16 @@ class Editor():
         """ str: The name of the currently active editor """
         return self._canvas.selected_action
 
+    @property
+    def _objects(self):
+        """ list: The canvas objects ids for this canvas' objects """
+        # TODO remove when self._prefix moved to arg
+        if self._prefix is None:
+            return []
+        return [item_id for item_id in self._canvas.find_all()
+                if any(tag for tag in self._canvas.gettags(item_id)
+                       if tag.startswith(self._prefix))]
+
     def update_annotation(self):
         """ Update the display annotations for the current objects.
 
@@ -69,15 +82,13 @@ class Editor():
         """
         logger.trace("Default annotations. Not storing Objects")
         self._clear_annotation()
-        self._objects = []
 
     def _clear_annotation(self):
         """ Removes all currently drawn annotations for the current :class:`Editor`. """
         logger.trace("clearing annotation")
-        for faces in self._objects:
-            for obj in faces:
-                logger.trace("Deleting object: %s (id: %s)", self._canvas.type(obj), obj)
-                self._canvas.delete(obj)
+        for obj in self._objects:
+            logger.trace("Deleting object: %s (id: %s)", self._canvas.type(obj), obj)
+            self._canvas.delete(obj)
 
     # << MOUSE CALLBACKS >>
     # Mouse cursor display
@@ -162,11 +173,13 @@ class Editor():
         """
         self._drag_data = dict()
 
-    def _get_objects_from_identifier(self, identifier):
-        """ Retrieve all of the objects that match the given identifier suffix
+    def _get_objects_from_identifier(self, prefix, identifier):
+        """ Retrieve all of the objects that match the given tag's identifier suffix
 
         Parameters
         ----------
+        prefix: str
+            The tag prefix to return objects for
         identifier: str
             The identifier suffix to search tags for
 
@@ -175,8 +188,26 @@ class Editor():
         Tuple
             The object ids of objects containing the identifier suffix
         """
+        return tuple(item_id for item_id in self._canvas.find_all()
+                     if any(tag for tag in self._canvas.gettags(item_id)
+                            if tag.startswith(prefix) and tag.endswith(identifier)))
+
+    def _get_objects_from_prefix(self, prefix):
+        """ Retrieve all of the objects that match the given tag prefix
+
+        Parameters
+        ----------
+        prefix: str
+            The tag prefix to return objects for
+
+        Returns
+        -------
+        Tuple
+            The object ids of objects starting with the given tag prefix
+        """
         return tuple(obj for obj in self._canvas.find_all()
-                     if any(tag for tag in self._canvas.gettags(obj) if tag.endswith(identifier)))
+                     if any(tag for tag in self._canvas.gettags(obj)
+                            if tag.startswith(prefix)))
 
     def _scale_to_display(self, points):
         """ Scale and offset the given points to the current display scale and offset values.
@@ -223,7 +254,7 @@ class BoundingBox(Editor):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
-        super().__init__(canvas, alignments, frames)
+        super().__init__(canvas, alignments, frames, "bb")
         self._bind_hotkeys()
 
     @property
@@ -240,25 +271,11 @@ class BoundingBox(Editor):
                 3: ("bottom", "left")}
 
     @property
-    def _anchors(self):
-        """ list: List of bounding box anchors for the corners of each face's bounding box. """
-        return [[self._canvas.coords(obj) for obj in face[1:]]
-                for face in self._objects]
-
-    @property
-    def _corner_points(self):
-        """ list: List of bounding box tuples for each face's bounding box """
-        return [((self._canvas.coords(obj[0])[0], self._canvas.coords(obj[0])[1]),
-                 (self._canvas.coords(obj[0])[0], self._canvas.coords(obj[0])[3]),
-                 (self._canvas.coords(obj[0])[2], self._canvas.coords(obj[0])[1]),
-                 (self._canvas.coords(obj[0])[2], self._canvas.coords(obj[0])[3]))
-                for obj in self._objects]
-
-    @property
     def _bounding_boxes(self):
         """ list: List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed face's
         bounding box. """
-        return [self._canvas.coords(face[0]) for face in self._objects]
+        rects = self._get_objects_from_prefix("{}box".format(self._prefix))
+        return [self._canvas.coords(rect) for rect in rects]
 
     def _bind_hotkeys(self):
         """ Add keyboard shortcuts.
@@ -270,24 +287,6 @@ class BoundingBox(Editor):
         """
         self._canvas.winfo_toplevel().bind("<Delete>", self._delete_current_face)
 
-    def _bbox_objects_for_face(self, index):
-        """ Return the bounding box object with the anchor objects for the given face index.
-
-        Parameters
-        ----------
-        index: int
-            The face index to return the bounding box objects for
-
-        Returns
-        -------
-        list
-            A list of bounding box object and bounding box anchor objects. Bounding box is in
-            position 0, anchors in positions 1 to 4.
-        """
-        retval = self._objects[index]
-        logger.trace("objects: %s, index: %s, selected object: %s", self._objects, index, retval)
-        return retval
-
     def update_annotation(self):
         """ Draw the bounding box around faces and set the object to :attr:`_object`"""
         if self._drag_data:
@@ -295,20 +294,19 @@ class BoundingBox(Editor):
             return
         self._clear_annotation()
         if not self._is_active and self._active_editor != "view":
-            self._objects = []
             return
         color = self._colors["blue"]
         thickness = 1
         faces = []
         for idx, face in enumerate(self._alignments.current_faces):
-            bbox = []
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
-            bbox.append(self._canvas.create_rectangle(*box, outline=color, width=thickness))
-            bbox.extend(self._update_anchor_annotation(idx, box, thickness, color))
-            faces.append(bbox)
+            self._canvas.create_rectangle(*box,
+                                          outline=color,
+                                          width=thickness,
+                                          tags="bbbox_{}".format(idx))
+            self._update_anchor_annotation(idx, box, thickness, color)
         logger.trace("Updated annotations: %s", faces)
-        self._objects = faces
 
     def _update_anchor_annotation(self, face_index, bounding_box, thickness, color):
         """ Update the anchor annotations for each corner of the bounding box.
@@ -326,23 +324,22 @@ class BoundingBox(Editor):
         color: str
             The hex color of the bounding box line
         """
-        bbox = []
         color = color if self._is_active else ""
         fill_color = "gray" if self._is_active else ""
         activefill_color = "white" if self._is_active else ""
         corners = self._corners_from_coords(bounding_box)
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*self._get_anchor_points(corners))):
-            bbox.append(self._canvas.create_oval(*anc_dsp,
-                                                 outline=color,
-                                                 fill=fill_color,
-                                                 width=thickness))
-            bbox.append(self._canvas.create_oval(*anc_grb,
-                                                 outline="",
-                                                 fill="",
-                                                 width=thickness,
-                                                 activefill=activefill_color,
-                                                 tags="anchor_{}_{}".format(face_index, idx)))
-        return bbox
+            self._canvas.create_oval(*anc_dsp,
+                                     outline=color,
+                                     fill=fill_color,
+                                     width=thickness,
+                                     tags="bbancdsp_{}_{}".format(face_index, idx))
+            self._canvas.create_oval(*anc_grb,
+                                     outline="",
+                                     fill="",
+                                     width=thickness,
+                                     activefill=activefill_color,
+                                     tags="bbancgrb_{}_{}".format(face_index, idx))
 
     @staticmethod
     def _corners_from_coords(bounding_box):
@@ -425,14 +422,15 @@ class BoundingBox(Editor):
             return False
 
         item_id = item_ids[0]
-        tags = [name for name in self._canvas.gettags(item_id) if name.startswith("anchor")]
+        prefix = "{}ancgrb".format(self._prefix)
+        tags = [tag for tag in self._canvas.gettags(item_id) if tag.startswith(prefix)]
         if not tags:
             return False
 
-        tag = tags[0]
-        face_idx, corner_idx = (int(idx) for idx in tag.split("_")[1:])
+        identifier = tags[0][tags[0].find("_") + 1:]
+        corner_idx = int(identifier.split("_")[-1])
         self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
-        self._mouse_location = ("anchor", (face_idx, corner_idx))
+        self._mouse_location = ("anchor", identifier)
         return True
 
     def _check_cursor_bounding_box(self, event):
@@ -459,7 +457,7 @@ class BoundingBox(Editor):
             bbox = self._bounding_boxes[face_idx]
             if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
                 self._canvas.config(cursor="fleur")
-                self._mouse_location = ("box", face_idx)
+                self._mouse_location = ("box", str(face_idx))
                 return True
         return False
 
@@ -505,15 +503,13 @@ class BoundingBox(Editor):
         """
         if self._mouse_location is None:
             self._drag_data = dict()
+            self._drag_callback = None
             return
         if self._mouse_location[0] == "anchor":
-            self._drag_data["face_index"] = self._mouse_location[1][0]
-            self._drag_data["corner"] = self._corner_order[self._mouse_location[1][1]]
-            self._drag_data["objects"] = self._bbox_objects_for_face(self._mouse_location[1][0])
+            corner_idx = int(self._mouse_location[1].split("_")[-1])
+            self._drag_data["corner"] = self._corner_order[corner_idx]
             self._drag_callback = self._resize
         elif self._mouse_location[0] == "box":
-            self._drag_data["face_index"] = self._mouse_location[1]
-            self._drag_data["objects"] = self._bbox_objects_for_face(self._mouse_location[1])
             self._drag_data["current_location"] = (event.x, event.y)
             self._drag_callback = self._move
         elif self._mouse_location[0] == "image":
@@ -546,7 +542,8 @@ class BoundingBox(Editor):
         event: :class:`tkinter.Event`
             The tkinter mouse event.
         """
-        rect = self._drag_data["objects"][0]
+        face_idx = int(self._mouse_location[1].split("_")[0])
+        rect = self._get_objects_from_identifier("bbbox", str(face_idx))
         box = list(self._canvas.coords(rect))
         # Switch top/bottom and left/right and set partial so indices match and we don't
         # need branching logic for min/max.
@@ -561,10 +558,12 @@ class BoundingBox(Editor):
         self._canvas.coords(rect, *box)
         corners = self._corners_from_coords(box)
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*self._get_anchor_points(corners))):
-            self._canvas.coords(self._drag_data["objects"][(idx * 2) + 1], *anc_dsp)
-            self._canvas.coords(self._drag_data["objects"][(idx * 2) + 2], *anc_grb)
-        self._alignments.set_current_bounding_box(self._drag_data["face_index"],
-                                                  *self._coords_to_bounding_box(box))
+            identifier = "{}_{}".format(face_idx, idx)
+            obj_dsp = self._get_objects_from_identifier("bbancdsp", identifier)
+            obj_grb = self._get_objects_from_identifier("bbancgrb", identifier)
+            self._canvas.coords(obj_dsp, *anc_dsp)
+            self._canvas.coords(obj_grb, *anc_grb)
+        self._alignments.set_current_bounding_box(face_idx, *self._coords_to_bounding_box(box))
 
     def _move(self, event):
         """ Moves the bounding box on a bounding box drag event.
@@ -573,16 +572,21 @@ class BoundingBox(Editor):
         ----------
         event: :class:`tkinter.Event`
             The tkinter mouse event.
-
         """
+        face_idx = int(self._mouse_location[1])
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        selected_objects = self._drag_data["objects"]
-        for obj in selected_objects:
+        rect = self._get_objects_from_identifier("bbbox", self._mouse_location[1])
+        objects = [rect]
+        for idx in range(4):
+            identifier = "{}_{}".format(face_idx, idx)
+            objects.append(self._get_objects_from_identifier("bbancdsp", identifier))
+            objects.append(self._get_objects_from_identifier("bbancgrb", identifier))
+
+        for obj in objects:
             self._canvas.move(obj, shift_x, shift_y)
-        box = self._canvas.coords(selected_objects[0])
-        self._alignments.set_current_bounding_box(self._drag_data["face_index"],
-                                                  *self._coords_to_bounding_box(box))
+        coords = self._canvas.coords(rect)
+        self._alignments.set_current_bounding_box(face_idx, *self._coords_to_bounding_box(coords))
         self._drag_data["current_location"] = (event.x, event.y)
 
     def _coords_to_bounding_box(self, coords):
@@ -593,7 +597,6 @@ class BoundingBox(Editor):
         -------
         tuple
             The (`x`, `width`, `y`, `height`) integer points of the bounding box.
-
         """
         coords = self.scale_from_display(
             np.array(coords).reshape((2, 2))).flatten().astype("int32")
@@ -626,7 +629,7 @@ class ExtractBox(Editor):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
-        super().__init__(canvas, alignments, frames)
+        super().__init__(canvas, alignments, frames, "eb")
         self._bind_hotkeys()
 
     def _bind_hotkeys(self):
@@ -643,31 +646,27 @@ class ExtractBox(Editor):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
         self._clear_annotation()
         if not self._is_active and self._active_editor != "view":
-            self._objects = []
             return
         color = self._colors["green"]
         thickness = 1
-        faces = []
         # TODO FIX THIS TEST
         #  if not all(face.original_roi for face in self._alignments.current_faces):
         #      return extract_box
         for idx, face in enumerate(self._alignments.current_faces):
-            extract_box = []
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
             box = self._scale_to_display(face.original_roi).flatten()
             top_left = box[:2] - 10
-            extract_box.append(self._canvas.create_text(*top_left,
-                                                        fill=color,
-                                                        font=("Default", 20, "bold"),
-                                                        text=str(idx)))
-            extract_box.append(self._canvas.create_polygon(*box,
-                                                           fill="",
-                                                           outline=color,
-                                                           width=thickness,
-                                                           tags="extract_box_{}".format(idx)))
-            faces.append(extract_box)
-        logger.trace("Updated annotations: %s", faces)
-        self._objects = faces
+            self._canvas.create_text(*top_left,
+                                     fill=color,
+                                     font=("Default", 20, "bold"),
+                                     text=str(idx),
+                                     tags="eblbl_{}".format(idx))
+            self._canvas.create_polygon(*box,
+                                        fill="",
+                                        outline=color,
+                                        width=thickness,
+                                        tags="ebbox_{}".format(idx))
+        logger.trace("Updated annotations")
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -680,14 +679,14 @@ class ExtractBox(Editor):
             self._mouse_location = None
             return
         item_id = item_ids[0]
-        tags = [name for name in self._canvas.gettags(item_id) if name.startswith("extract_box")]
+        prefix = "{}box".format(self._prefix)
+        tags = [tag for tag in self._canvas.gettags(item_id) if tag.startswith(prefix)]
         if not tags:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
-        tag = tags[0]
         self._canvas.config(cursor="fleur")
-        self._mouse_location = int(tag.split("_")[-1])
+        self._mouse_location = int(tags[0].split("_")[-1])
 
     # Mouse click actions
     def set_mouse_click_actions(self):
@@ -708,8 +707,6 @@ class ExtractBox(Editor):
         if self._mouse_location is None:
             self._drag_data = dict()
             return
-        self._drag_data["face_index"] = self._mouse_location
-        self._drag_data["objects"] = self._objects[self._mouse_location]
         self._drag_data["current_location"] = (event.x, event.y)
         self._drag_callback = self._move
 
@@ -724,11 +721,10 @@ class ExtractBox(Editor):
         """
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        selected_objects = self._drag_data["objects"]
-        for obj in selected_objects:
+        for obj in self._get_objects_from_identifier("eb", str(self._mouse_location)):
             self._canvas.move(obj, shift_x, shift_y)
         scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
-        self._alignments.shift_landmarks(self._drag_data["face_index"], *scaled_shift)
+        self._alignments.shift_landmarks(self._mouse_location, *scaled_shift)
         self._drag_data["current_location"] = (event.x, event.y)
 
     def _context_menu(self, event):
@@ -763,28 +759,23 @@ class Landmarks(Editor):
                                       nose=(27, 36),
                                       jaw=(0, 17),
                                       chin=(8, 11))
-        super().__init__(canvas, alignments, frames)
+        super().__init__(canvas, alignments, frames, "lm")
 
     def update_annotation(self):
         """ Draw the Landmarks and the Face Mesh set the objects to :attr:`_object`"""
         self._clear_annotation()
-        landmarks = self._update_landmarks()
-        mesh = self._update_mesh()
-        self._objects = landmarks + mesh
+        self._update_landmarks()
+        self._update_mesh()
 
     def _update_landmarks(self):
         """ Draw the facial landmarks """
-        faces = []
         for face_idx, face in enumerate(self._alignments.current_faces):
-            landmarks = []
             for lm_idx, landmark in enumerate(face.landmarks_xy):
                 box = self._scale_to_display(landmark).astype("int32")
-                landmarks.append(self._display_landmark(box, face_idx, lm_idx))
-                landmarks.append(self._grab_landmark(box, face_idx, lm_idx))
-                landmarks.extend(self._label_landmark(box, face_idx, lm_idx))
-            faces.append(landmarks)
-        logger.trace("Updated landmark annotations: %s", faces)
-        return faces
+                self._display_landmark(box, face_idx, lm_idx)
+                self._grab_landmark(box, face_idx, lm_idx)
+                self._label_landmark(box, face_idx, lm_idx)
+        logger.trace("Updated landmark annotations")
 
     def _display_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a display landmark to the canvas.
@@ -797,20 +788,18 @@ class Landmarks(Editor):
             The index of the face being annotated
         landmark_index
             The index of the landmark being annotated
-
-        Returns
-        int
-            The id of the canvas oval object
         """
+        if not self._is_active and self._active_editor != "view":
+            return
         radius = 1
         color = self._colors["red"]
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
-        return self._canvas.create_oval(*bbox,
-                                        outline=color,
-                                        fill=color,
-                                        width=radius,
-                                        tags="dsp_{}_{}".format(face_index, landmark_index))
+        self._canvas.create_oval(*bbox,
+                                 outline=color,
+                                 fill=color,
+                                 width=radius,
+                                 tags="lmdsp_{}_{}".format(face_index, landmark_index))
 
     def _grab_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a grab landmark to the canvas.
@@ -823,23 +812,21 @@ class Landmarks(Editor):
             The index of the face being annotated
         landmark_index
             The index of the landmark being annotated
-
-        Returns
-        int
-            The id of the canvas oval object
         """
+        if not self._is_active and self._active_editor != "view":
+            return
         radius = 6
         activeoutline_color = "black" if self._is_active else ""
         activefill_color = "white" if self._is_active else ""
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
-        return self._canvas.create_oval(*bbox,
-                                        outline="",
-                                        fill="",
-                                        width=radius,
-                                        activeoutline=activeoutline_color,
-                                        activefill=activefill_color,
-                                        tags="grb_{}_{}".format(face_index, landmark_index))
+        self._canvas.create_oval(*bbox,
+                                 outline="",
+                                 fill="",
+                                 width=radius,
+                                 activeoutline=activeoutline_color,
+                                 activefill=activefill_color,
+                                 tags="lmgrb_{}_{}".format(face_index, landmark_index))
 
     def _label_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a text label for a landmark to the canvas.
@@ -852,10 +839,6 @@ class Landmarks(Editor):
             The index of the face being annotated
         landmark_index
             The index of the landmark being annotated
-
-        Returns
-        tuple
-            The ids of the canvas text object and the background canvas rectangle object
         """
         top_left = np.array(bounding_box[:2]) - 16
         # NB The fill must be visible to be able to get the bounding box, so set fill to empty
@@ -864,42 +847,41 @@ class Landmarks(Editor):
                                         fill="black",
                                         font=("Default", 10),
                                         text=str(landmark_index + 1),
-                                        tags=("label",
-                                              "lbltxt_{}_{}".format(face_index, landmark_index)))
+                                        tags=("lmlabel",
+                                              "lmlbltxt_{}_{}".format(face_index, landmark_index)))
         bbox = self._canvas.bbox(text)
         bbox = [bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2]
         bgr = self._canvas.create_rectangle(bbox,
                                             fill="",
                                             outline="",
-                                            tags=("label",
-                                                  "lblbg_{}_{}".format(face_index,
-                                                                       landmark_index)))
+                                            tags=("lmlabel",
+                                                  "lmlblbg_{}_{}".format(face_index,
+                                                                         landmark_index)))
         self._canvas.lower(bgr, text)
         self._canvas.itemconfig(text, fill="")
-        return text, bgr
 
     def _update_mesh(self):
         """ Draw the facial landmarks """
         color = "" if self._is_active or self._active_editor == "mask" else self._colors["cyan"]
         thickness = 1
-        faces = []
-        for face in self._alignments.current_faces:
-            mesh = []
+        for face_idx, face in enumerate(self._alignments.current_faces):
             landmarks = face.landmarks_xy
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
                          landmarks, color, thickness)
             for key, val in self._landmark_mapping.items():
                 pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
                 if key in ("right_eye", "left_eye", "mouth"):
-                    mesh.append(self._canvas.create_polygon(*pts,
-                                                            fill="",
-                                                            outline=color,
-                                                            width=thickness))
+                    self._canvas.create_polygon(*pts,
+                                                fill="",
+                                                outline=color,
+                                                width=thickness,
+                                                tags="lmmesh_{}".format(face_idx))
                 else:
-                    mesh.append(self._canvas.create_line(*pts, fill=color, width=thickness))
-            faces.append(mesh)
-        logger.trace("Updated mesh annotations: %s", faces)
-        return faces
+                    self._canvas.create_line(*pts,
+                                             fill=color,
+                                             width=thickness,
+                                             tags="lmmesh_{}".format(face_idx))
+        logger.trace("Updated mesh annotations")
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -913,26 +895,30 @@ class Landmarks(Editor):
             self._mouse_location = None
             return
         item_id = item_ids[0]
-        tags = [tag for tag in self._canvas.gettags(item_id) if tag.startswith("grb")]
+        prefix = "{}grb".format(self._prefix)
+        tags = [tag for tag in self._canvas.gettags(item_id) if tag.startswith(prefix)]
         if not tags:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
         identifier = tags[0][tags[0].find("_") + 1:]
         self._canvas.config(cursor="fleur")
-        txt_label = self._canvas.find_withtag("lbltxt_{}".format(identifier))
-        txt_bg = self._canvas.find_withtag("lblbg_{}".format(identifier))
+        txt_label = self._canvas.find_withtag("lmlbltxt_{}".format(identifier))
+        txt_bg = self._canvas.find_withtag("lmlblbg_{}".format(identifier))
         self._canvas.itemconfig(txt_label, fill="black")
         self._canvas.itemconfig(txt_bg, fill="#ffffea", outline="black")
         self._mouse_location = identifier
 
     def _clear_labels(self):
         """ Clear all landmark text labels from display """
-        labels = self._canvas.find_withtag("label")
+        logger.trace("Clearing labels")
+        labels = self._canvas.find_withtag("{}label".format(self._prefix))
         for item_id in labels:
+            logger.trace("Clearing: %s", self._canvas.gettags(item_id))
             self._canvas.itemconfig(item_id, fill="")
             if self._canvas.type(item_id) == "rectangle":
                 self._canvas.itemconfig(item_id, outline="")
+        logger.trace("Cleared labels")
 
     # Mouse actions
     def _drag_start(self, event):
@@ -961,7 +947,7 @@ class Landmarks(Editor):
         """
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        objects = self._get_objects_from_identifier(self._mouse_location)
+        objects = self._get_objects_from_identifier("lm", self._mouse_location)
         for obj in objects:
             self._canvas.move(obj, shift_x, shift_y)
         scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
