@@ -8,12 +8,12 @@ from functools import partial
 from time import time, sleep
 
 from lib.gui.control_helper import set_slider_rounding
-from lib.gui.custom_widgets import Tooltip
+from lib.gui.custom_widgets import Tooltip, StatusBar
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .lib_manual.media import AlignmentsData, FrameNavigation
+from .lib_manual.media import AlignmentsData, FrameNavigation, FaceCache
 from .lib_manual.editor import Editor, BoundingBox, ExtractBox, Landmarks
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -44,7 +44,11 @@ class Manual(tk.Tk):
         self._initialize_tkinter()
         self._containers = self._create_containers()
 
+        pbar = StatusBar(self._containers["bottom"], hide_status=True)
+        self._faces = FaceCache(self._alignments, pbar)
+
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
+        self._faces_frame = FacesFrame(self._containers["bottom"], self._faces)
 
         lbl = ttk.Label(self._containers["top"], text="Top Right")
         self._containers["top"].add(lbl)
@@ -161,8 +165,6 @@ class Manual(tk.Tk):
 
         Launch the tkinter Visual Alignments Window and run main loop.
         """
-        lbl = ttk.Label(self._containers["bottom"], text="Bottom")
-        lbl.pack()
         self.mainloop()
 
 
@@ -191,11 +193,11 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._video_frame = ttk.Frame(self)
         self._video_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        self._canvas = Viewer(self._video_frame,
-                              self._alignments,
-                              self._frames,
-                              self._actions_frame.actions,
-                              self._actions_frame.tk_selected_action)
+        self._canvas = FrameViewer(self._video_frame,
+                                   self._alignments,
+                                   self._frames,
+                                   self._actions_frame.actions,
+                                   self._actions_frame.tk_selected_action)
 
         self._transport_frame = ttk.Frame(self._video_frame)
         self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
@@ -436,7 +438,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._selected_action.set(action)
 
 
-class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
+class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     """ Annotation onto tkInter Canvas.
 
     Parameters
@@ -549,6 +551,77 @@ class Viewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self.update_idletasks()
 
 
+class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ The faces display frame (bottom section of GUI).
+
+    Parameters
+    ----------
+    parent: :class:`tkinter.PanedWindow`
+        The paned window that the faces frame resides in
+    faces: :class:`tools.manual.lib_manual.FaceCache`
+        The faces cache that holds the aligned faces
+    """
+    def __init__(self, parent, faces):
+        logger.debug("Initializing %s: (parent: %s, faces: %s)",
+                     self.__class__.__name__, parent, faces)
+        super().__init__(parent)
+        self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self._faces = faces
+
+        self._faces_frame = ttk.Frame(self)
+        self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self._canvas = FacesViewer(self._faces_frame, self._faces)
+        scrollbar_width = self._add_scrollbar()
+        self._canvas.load_faces(self.winfo_width() - scrollbar_width)
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _add_scrollbar(self):
+        """ Add a scrollbar to the faces frame """
+        logger.debug("Add Config Scrollbar")
+        scrollbar = ttk.Scrollbar(self._faces_frame, command=self._canvas.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self._canvas.config(yscrollcommand=scrollbar.set)
+        self.bind("<Configure>", self._update_scrollbar)
+        logger.debug("Added Config Scrollbar")
+        self.update_idletasks()  # Update so scrollbar width is correct
+        return scrollbar.winfo_width()
+
+    def _update_scrollbar(self, event):  # pylint: disable=unused-argument
+        """ Update the faces frame scrollbar """
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+
+class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
+    """ Annotation onto tkInter Canvas.
+
+    Parameters
+    ----------
+    parent: :class:`tkinter.ttk.Frame`
+        The parent frame for the canvas
+    faces: :class:`tools.manual.lib_manual.FaceCache`
+        The faces cache that holds the aligned faces
+    """
+    def __init__(self, parent, faces):
+        logger.debug("Initializing %s: (parent: %s, faces: %s)", self.__class__.__name__, parent,
+                     faces)
+        super().__init__(parent, bd=0, highlightthickness=0)
+        self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
+        self.parent = parent
+        self._faces = faces
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def load_faces(self, frame_width):
+        """ Load the faces into the Faces Canvas in a background thread.
+
+        Parameters
+        ----------
+        frame_width: int
+            The width of the :class:`tkinter.ttk.Frame` that holds this canvas """
+        self._faces.load_faces(self, frame_width)
+
+
 class Aligner():
     """ Handles the extraction pipeline for retrieving the alignment landmarks
 
@@ -597,7 +670,9 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
+        # TODO FAN
+        # TODO Normalization option
+        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()

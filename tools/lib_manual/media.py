@@ -10,6 +10,7 @@ from PIL import Image, ImageTk
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.image import ImagesLoader
+from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -264,6 +265,11 @@ class AlignmentsData():
         return self._latest_alignments[self.frames.current_meta_data["filename"]]
 
     @property
+    def saved_alignments(self):
+        """ dict: The filename as key, and the currently saved alignments as values. """
+        return {key: val["saved"] for key, val in self._alignments.items()}
+
+    @property
     def _face_count_per_index(self):
         """ list: Count of faces for each frame. List is in frame index order.
 
@@ -467,3 +473,87 @@ class AlignmentsData():
         self._check_for_new_alignments()
         del self.current_faces[index]
         self.frames.tk_update.set(True)
+
+
+class FaceCache():
+    """ Holds the face images for display in the bottom GUI Panel """
+    def __init__(self, alignments, progress_bar):
+        self._alignments = alignments
+        self._pbar = progress_bar
+        self._size = 96
+        self._faces = dict()
+        self._init_thread = None
+
+    @property
+    def faces(self):
+        """ dict: The filename as key with list of aligned faces in :class:`ImageTk.PhotoImage`
+        format for display in the GUI. """
+        return self._faces
+
+    @property
+    def frame_count(self):
+        """ int: The total number of frames in :attr:`_frames`. """
+        return self._frames.frame_count
+
+    @property
+    def _frames(self):
+        """ :class:`FrameNavigation`: The Frames for this manual session """
+        return self._alignments.frames
+
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        thread_is_alive = self._init_thread.is_alive()
+        if thread_is_alive:
+            self._init_thread.check_and_raise_error()
+        else:
+            self._init_thread.join()
+        return not thread_is_alive
+
+    def load_faces(self, canvas, frame_width):
+        """ Launch a background thread to load the faces into cache """
+        thread = MultiThread(self._load_faces,
+                             canvas,
+                             frame_width,
+                             thread_count=1,
+                             name="{}.load_faces".format(self.__class__.__name__))
+        thread.start()
+        self._init_thread = thread
+
+    def _load_faces(self, canvas, frame_width):
+        """ Loads the faces into the :attr:`_faces` dict at 128px size formatted for GUI display.
+
+        Updates a GUI progress bar to show loading progress.
+        """
+        # TODO Make it so user can't save until faces are loaded (so alignments dict doesn't
+        # change)
+        try:
+            self._pbar.start(mode="determinate")
+            columns = frame_width // self._size
+            idx = 0
+            loader = ImagesLoader(self._frames.location, count=self.frame_count)
+            for frame_idx, (filename, frame) in enumerate(loader.load()):
+                progress = int(round(((idx + 1) / self.frame_count) * 100))
+                self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
+                for face_idx, face in enumerate(self._alignments.saved_alignments[filename]):
+                    face.load_aligned(frame, size=self._size, force=True)
+                    dsp_face = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
+                    tag = "_".join((str(frame_idx), str(face_idx)))
+                    self._faces[tag] = dsp_face
+                    self._place_face(canvas, columns, idx, tag, dsp_face)
+                    face.aligned["face"] = None
+                idx += 1
+            self._pbar.stop()
+        except Exception as err:  # pylint: disable=broad-except
+            logger.error("Error loading face. Error: %s", str(err))
+            # TODO Remove this
+            import sys; import traceback
+            exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
+
+    def _place_face(self, canvas, columns, idx, tag, face):
+        """ Places the aligned faces on the canvas """
+        pos_x = (idx % columns) * self._size
+        pos_y = (idx // columns) * self._size
+        canvas.create_image(pos_x, pos_y, image=face, anchor=tk.NW, tags="img{}".format(tag))
+        if pos_x == 0:
+            canvas.configure(scrollregion=canvas.bbox("all"))
