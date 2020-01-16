@@ -367,30 +367,48 @@ class _OriginalCommand:
 
 
 class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
-    """ Status Bar for displaying the Status Message and  Progress Bar at the
-    bottom of the GUI. """
+    """ Status Bar for displaying the Status Message and  Progress Bar at the bottom of the GUI.
 
-    def __init__(self, parent):
+    Parameters
+    ----------
+    parent: tkinter object
+        The parent tkinter widget that will hold the status bar
+    hide_status: bool, optional
+        ``True`` to hide the status message that appears at the far left hand side of the status
+        frame otherwise ``False``. Default: ``False``
+    """
+
+    def __init__(self, parent, hide_status=False):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.BOTTOM, padx=10, pady=2, fill=tk.X, expand=False)
 
-        self._status_message = tk.StringVar()
+        self._message = tk.StringVar()
         self._pbar_message = tk.StringVar()
         self._pbar_position = tk.IntVar()
 
-        self._status_message.set("Ready")
+        self._message.set("Ready")
 
-        self._status()
+        self._status(hide_status)
         self._pbar = self._progress_bar()
 
     @property
-    def status_message(self):
+    def message(self):
         """:class:`tkinter.StringVar`: The variable to hold the status bar message on the left
         hand side of the status bar. """
-        return self._status_message
+        return self._message
 
-    def _status(self):
-        """ Place Status label into left of the status bar. """
+    def _status(self, hide_status):
+        """ Place Status label into left of the status bar.
+
+        Parameters
+        ----------
+        hide_status: bool, optional
+            ``True`` to hide the status message that appears at the far left hand side of the
+            status frame otherwise ``False``
+        """
+        if hide_status:
+            return
+
         statusframe = ttk.Frame(self)
         statusframe.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=False)
 
@@ -399,7 +417,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         lblstatus = ttk.Label(statusframe,
                               width=40,
-                              textvariable=self._status_message,
+                              textvariable=self._message,
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
 
@@ -420,7 +438,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         pbar.pack_forget()
         return pbar
 
-    def progress_start(self, mode):
+    def start(self, mode):
         """ Set progress bar mode and display,
 
         Parameters
@@ -428,17 +446,17 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         mode: ["indeterminate", "determinate"]
             The mode that the progress bar should be executed in
         """
-        self._progress_set_mode(mode)
+        self._set_mode(mode)
         self._pbar.pack()
 
-    def progress_stop(self):
+    def stop(self):
         """ Reset progress bar and hide """
         self._pbar_message.set("")
         self._pbar_position.set(0)
-        self._progress_set_mode("determinate")
+        self._set_mode("determinate")
         self._pbar.pack_forget()
 
-    def _progress_set_mode(self, mode):
+    def _set_mode(self, mode):
         """ Set the progress bar mode """
         self._pbar.config(mode=mode)
         if mode == "indeterminate":

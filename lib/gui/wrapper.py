@@ -74,9 +74,9 @@ class ProcessWrapper():
             self.tk_vars["istraining"].set(True)
         print("Loading...")
 
-        self.statusbar.status_message.set("Executing - {}.py".format(self.command))
+        self.statusbar.message.set("Executing - {}.py".format(self.command))
         mode = "indeterminate" if self.command in ("effmpeg", "train") else "determinate"
-        self.statusbar.progress_start(mode)
+        self.statusbar.start(mode)
 
         args = self.build_args(category)
         self.tk_vars["display"].set(self.command)
@@ -126,8 +126,8 @@ class ProcessWrapper():
         self.tk_vars["runningtask"].set(False)
         if self.task.command == "train":
             self.tk_vars["istraining"].set(False)
-        self.statusbar.progress_stop()
-        self.statusbar.status_message.set(message)
+        self.statusbar.stop()
+        self.statusbar.message.set(message)
         self.tk_vars["display"].set(None)
         get_images().delete_preview()
         get_config().session.__init__()
