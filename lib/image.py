@@ -55,10 +55,10 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
                                    stdout=subprocess.PIPE,
                                    universal_newlines=True)
         keyframes = []
-        prev_pts_time = 0
+        last_update = 0
         pbar = tqdm(desc="Analyzing Keyframes",
                     leave=False,
-                    total=self._meta["duration"],
+                    total=int(self._meta["duration"]),
                     unit="secs")
         while True:
             output = process.stdout.readline().strip()
@@ -72,8 +72,12 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
             frame_no = int(round(pts_time * self._meta["fps"]))
             keyframes.append((pts_time, frame_no))
             logger.trace("pts_time: %s, frame_no: %s", pts_time, frame_no)
-            pbar.update(round(pts_time - prev_pts_time, 2))
-            prev_pts_time = pts_time
+            if int(pts_time) == last_update:
+                # Floating points make TQDM display poorly, so only update on full
+                # second increments
+                continue
+            pbar.update(int(pts_time) - last_update)
+            last_update = int(pts_time)
         pbar.close()
         logger.debug("keyframes: %s", keyframes)
         return_code = process.poll()
@@ -622,6 +626,10 @@ class ImagesLoader(ImageIO):
     skip_list: list, optional
         Optional list of frame/image indices to not load. Any indices provided here will be skipped
         when executing the :func:`load` function from the given location. Default: ``None``
+    count: int, optional
+        If the number of images that the loader will encounter is already known, it can be passed
+        in here to skip the image counting step, which can save time at launch. Set to ``None`` if
+        the count is not already known. Default: ``None``
 
     Examples
     --------
@@ -638,10 +646,11 @@ class ImagesLoader(ImageIO):
     >>>     <do processing>
     """
 
-    def __init__(self, path, queue_size=8, load_with_hash=False, fast_count=True, skip_list=None):
+    def __init__(self, path,
+                 queue_size=8, load_with_hash=False, fast_count=True, skip_list=None, count=None):
         logger.debug("Initializing %s: (path: %s, queue_size: %s, load_with_hash: %s, "
-                     "fast_count: %s, skip_list: %s)", self.__class__.__name__, path, queue_size,
-                     load_with_hash, fast_count, skip_list)
+                     "fast_count: %s, skip_list: %s count: %s)", self.__class__.__name__, path,
+                     queue_size, load_with_hash, fast_count, skip_list, count)
 
         args = (load_with_hash, )
         super().__init__(path, queue_size=queue_size, args=args)
@@ -653,7 +662,7 @@ class ImagesLoader(ImageIO):
 
         self._count = None
         self._file_list = None
-        self._get_count_and_filelist(fast_count)
+        self._get_count_and_filelist(fast_count, count)
 
         self._keyframes = None
         self._single_frame_reader = None
@@ -742,7 +751,7 @@ class ImagesLoader(ImageIO):
         logger.debug(retval)
         return retval
 
-    def _get_count_and_filelist(self, fast_count):
+    def _get_count_and_filelist(self, fast_count, count):
         """ Set the count of images to be processed and set the file list
 
             If the input is a video, a dummy file list is created for checking against an
@@ -755,16 +764,20 @@ class ImagesLoader(ImageIO):
             count. This can be done quite quickly without guaranteed accuracy, or slower with
             guaranteed accuracy. Set to ``True`` to count quickly, or ``False`` to count slower
             but accurately.
+        count: int
+            The number of images that the loader will encounter if already known, otherwise
+            ``None``
         """
         if self._is_video:
-            self._count = int(count_frames(self.location, fast=fast_count))
+            self._count = int(count_frames(self.location,
+                                           fast=fast_count)) if count is None else count
             self._file_list = [self._dummy_video_framename(i) for i in range(self.count)]
         else:
             if isinstance(self.location, (list, tuple)):
                 self._file_list = self.location
             else:
                 self._file_list = get_image_paths(self.location)
-            self._count = len(self.file_list)
+            self._count = len(self.file_list) if count is None else count
 
         logger.debug("count: %s", self.count)
         logger.trace("filelist: %s", self.file_list)
