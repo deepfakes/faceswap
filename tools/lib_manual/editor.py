@@ -28,7 +28,7 @@ class Editor():
         The canvas object tag's prefix for this editor
     """
     # TODO make prefix an arg rather than kwarg
-    def __init__(self, canvas, alignments, frames, prefix=None):
+    def __init__(self, canvas, alignments, frames, primary_tag=None, prefix=None):
         logger.debug("Initializing %s: (canvas: '%s', alignments: %s, frames: %s)",
                      self.__class__.__name__, canvas, alignments, frames)
         self._canvas = canvas
@@ -40,6 +40,7 @@ class Editor():
                             cyan="#00ffff",
                             yellow="#ffff00",
                             magenta="#ff00ff")
+        self._primary_tag = primary_tag
         self._prefix = prefix
         self._mouse_location = None
         self._drag_data = dict()
@@ -65,16 +66,6 @@ class Editor():
         """ str: The name of the currently active editor """
         return self._canvas.selected_action
 
-    @property
-    def _objects(self):
-        """ list: The canvas objects ids for this canvas' objects """
-        # TODO remove when self._prefix moved to arg
-        if self._prefix is None:
-            return []
-        return [item_id for item_id in self._canvas.find_all()
-                if any(tag for tag in self._canvas.gettags(item_id)
-                       if tag.startswith(self._prefix))]
-
     def update_annotation(self):
         """ Update the display annotations for the current objects.
 
@@ -86,9 +77,9 @@ class Editor():
     def _clear_annotation(self):
         """ Removes all currently drawn annotations for the current :class:`Editor`. """
         logger.trace("clearing annotation")
-        for obj in self._objects:
-            logger.trace("Deleting object: %s (id: %s)", self._canvas.type(obj), obj)
-            self._canvas.delete(obj)
+        # TODO Make sure everything has a primary tag
+        if self._primary_tag is not None:
+            self._canvas.delete(self._primary_tag)
 
     # << MOUSE CALLBACKS >>
     # Mouse cursor display
@@ -254,7 +245,7 @@ class BoundingBox(Editor):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
-        super().__init__(canvas, alignments, frames, "bb")
+        super().__init__(canvas, alignments, frames, prefix="bb", primary_tag="boundingbox")
         self._bind_hotkeys()
 
     @property
@@ -304,7 +295,7 @@ class BoundingBox(Editor):
             self._canvas.create_rectangle(*box,
                                           outline=color,
                                           width=thickness,
-                                          tags="bbbox_{}".format(idx))
+                                          tags=("bbbox_{}".format(idx), self._primary_tag))
             self._update_anchor_annotation(idx, box, thickness, color)
         logger.trace("Updated annotations: %s", faces)
 
@@ -333,13 +324,15 @@ class BoundingBox(Editor):
                                      outline=color,
                                      fill=fill_color,
                                      width=thickness,
-                                     tags="bbancdsp_{}_{}".format(face_index, idx))
+                                     tags=("bbancdsp_{}_{}".format(face_index, idx),
+                                           self._primary_tag))
             self._canvas.create_oval(*anc_grb,
                                      outline="",
                                      fill="",
                                      width=thickness,
                                      activefill=activefill_color,
-                                     tags="bbancgrb_{}_{}".format(face_index, idx))
+                                     tags=("bbancgrb_{}_{}".format(face_index, idx),
+                                           self._primary_tag))
 
     @staticmethod
     def _corners_from_coords(bounding_box):
@@ -629,7 +622,7 @@ class ExtractBox(Editor):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
-        super().__init__(canvas, alignments, frames, "eb")
+        super().__init__(canvas, alignments, frames, prefix="eb", primary_tag="extractbox")
         self._bind_hotkeys()
 
     def _bind_hotkeys(self):
@@ -660,12 +653,12 @@ class ExtractBox(Editor):
                                      fill=color,
                                      font=("Default", 20, "bold"),
                                      text=str(idx),
-                                     tags="eblbl_{}".format(idx))
+                                     tags=("eblbl_{}".format(idx), self._primary_tag))
             self._canvas.create_polygon(*box,
                                         fill="",
                                         outline=color,
                                         width=thickness,
-                                        tags="ebbox_{}".format(idx))
+                                        tags=("ebbox_{}".format(idx), self._primary_tag))
         logger.trace("Updated annotations")
 
     # << MOUSE HANDLING >>
@@ -759,7 +752,7 @@ class Landmarks(Editor):
                                       nose=(27, 36),
                                       jaw=(0, 17),
                                       chin=(8, 11))
-        super().__init__(canvas, alignments, frames, "lm")
+        super().__init__(canvas, alignments, frames, prefix="lm", primary_tag="landmark")
 
     def update_annotation(self):
         """ Draw the Landmarks and the Face Mesh set the objects to :attr:`_object`"""
@@ -799,7 +792,8 @@ class Landmarks(Editor):
                                  outline=color,
                                  fill=color,
                                  width=radius,
-                                 tags="lmdsp_{}_{}".format(face_index, landmark_index))
+                                 tags=("lmdsp_{}_{}".format(face_index, landmark_index),
+                                       self._primary_tag))
 
     def _grab_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a grab landmark to the canvas.
@@ -826,7 +820,8 @@ class Landmarks(Editor):
                                  width=radius,
                                  activeoutline=activeoutline_color,
                                  activefill=activefill_color,
-                                 tags="lmgrb_{}_{}".format(face_index, landmark_index))
+                                 tags=("lmgrb_{}_{}".format(face_index, landmark_index),
+                                       self._primary_tag))
 
     def _label_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a text label for a landmark to the canvas.
@@ -848,7 +843,8 @@ class Landmarks(Editor):
                                         font=("Default", 10),
                                         text=str(landmark_index + 1),
                                         tags=("lmlabel",
-                                              "lmlbltxt_{}_{}".format(face_index, landmark_index)))
+                                              "lmlbltxt_{}_{}".format(face_index, landmark_index),
+                                              self._primary_tag))
         bbox = self._canvas.bbox(text)
         bbox = [bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2]
         bgr = self._canvas.create_rectangle(bbox,
@@ -856,7 +852,8 @@ class Landmarks(Editor):
                                             outline="",
                                             tags=("lmlabel",
                                                   "lmlblbg_{}_{}".format(face_index,
-                                                                         landmark_index)))
+                                                                         landmark_index),
+                                                  self._primary_tag))
         self._canvas.lower(bgr, text)
         self._canvas.itemconfig(text, fill="")
 
@@ -875,12 +872,14 @@ class Landmarks(Editor):
                                                 fill="",
                                                 outline=color,
                                                 width=thickness,
-                                                tags="lmmesh_{}".format(face_idx))
+                                                tags=("lmmesh_{}".format(face_idx),
+                                                      self._primary_tag))
                 else:
                     self._canvas.create_line(*pts,
                                              fill=color,
                                              width=thickness,
-                                             tags="lmmesh_{}".format(face_idx))
+                                             tags=("lmmesh_{}".format(face_idx),
+                                                   self._primary_tag))
         logger.trace("Updated mesh annotations")
 
     # << MOUSE HANDLING >>
