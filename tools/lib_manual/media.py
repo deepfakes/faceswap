@@ -3,6 +3,7 @@
 import logging
 import os
 import tkinter as tk
+from threading import Event
 
 import cv2
 from PIL import Image, ImageTk
@@ -482,7 +483,10 @@ class FaceCache():
         self._pbar = progress_bar
         self._size = 96
         self._faces = dict()
-        self._init_thread = None
+        self._canvas = None
+        self._set_tk_trace()
+        self._initialized = Event()
+        self._highlighted = []
 
     @property
     def faces(self):
@@ -500,27 +504,23 @@ class FaceCache():
         """ :class:`FrameNavigation`: The Frames for this manual session """
         return self._alignments.frames
 
-    @property
-    def is_initialized(self):
-        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
-        thread_is_alive = self._init_thread.is_alive()
-        if thread_is_alive:
-            self._init_thread.check_and_raise_error()
-        else:
-            self._init_thread.join()
-        return not thread_is_alive
+    def _set_tk_trace(self):
+        """ Set the trace on tkinter variables:
+        self._frames.current_position
+        """
+        self._frames.tk_position.trace("w", self._highlight_current)
 
     def load_faces(self, canvas, frame_width):
-        """ Launch a background thread to load the faces into cache """
+        """ Launch a background thread to load the faces into cache and assign the canvas to
+        :attr:`_canvas` """
+        self._canvas = canvas
         thread = MultiThread(self._load_faces,
-                             canvas,
                              frame_width,
                              thread_count=1,
                              name="{}.load_faces".format(self.__class__.__name__))
         thread.start()
-        self._init_thread = thread
 
-    def _load_faces(self, canvas, frame_width):
+    def _load_faces(self, frame_width):
         """ Loads the faces into the :attr:`_faces` dict at 128px size formatted for GUI display.
 
         Updates a GUI progress bar to show loading progress.
@@ -530,30 +530,102 @@ class FaceCache():
         try:
             self._pbar.start(mode="determinate")
             columns = frame_width // self._size
-            idx = 0
+            face_count = 0
             loader = ImagesLoader(self._frames.location, count=self.frame_count)
             for frame_idx, (filename, frame) in enumerate(loader.load()):
-                progress = int(round(((idx + 1) / self.frame_count) * 100))
+                progress = int(round(((frame_idx + 1) / self.frame_count) * 100))
                 self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
                 for face_idx, face in enumerate(self._alignments.saved_alignments[filename]):
                     face.load_aligned(frame, size=self._size, force=True)
-                    dsp_face = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
                     tag = "_".join((str(frame_idx), str(face_idx)))
-                    self._faces[tag] = dsp_face
-                    self._place_face(canvas, columns, idx, tag, dsp_face)
+                    self._faces.setdefault(frame_idx, []).append(self._place_face(columns,
+                                                                                  face_count,
+                                                                                  tag,
+                                                                                  face))
                     face.aligned["face"] = None
-                idx += 1
+                    face_count += 1
             self._pbar.stop()
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Error loading face. Error: %s", str(err))
             # TODO Remove this
             import sys; import traceback
             exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
+        self._initialized.set()
+        self._highlight_current()
 
-    def _place_face(self, canvas, columns, idx, tag, face):
-        """ Places the aligned faces on the canvas """
-        pos_x = (idx % columns) * self._size
-        pos_y = (idx // columns) * self._size
-        canvas.create_image(pos_x, pos_y, image=face, anchor=tk.NW, tags="img{}".format(tag))
-        if pos_x == 0:
-            canvas.configure(scrollregion=canvas.bbox("all"))
+    def _place_face(self, columns, idx, tag, face):
+        """ Places the aligned faces on the canvas and create invisible annotations.
+
+        Returns
+        -------
+        dict: The `image`, `border` and `mesh` objects
+        """
+        dsp_face = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
+
+        pos = ((idx % columns) * self._size, (idx // columns) * self._size)
+        rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
+        border_tag = "brd_{}".format(tag.split("_")[0])
+        self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW, tags="img_{}".format(tag))
+        border = self._canvas.create_rectangle(*rect_dims, outline="", width=2, tags=border_tag)
+        mesh = self._draw_mesh(tag, face, pos)
+        objects = dict(image=dsp_face, border=border, mesh=mesh)
+        if pos[0] == 0:
+            self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        return objects
+
+    def _draw_mesh(self, tag, face, position):
+        """ Draw an invisible landmarks mesh on the face that can be displayed when required """
+        landmark_mapping = dict(mouth=(48, 68),
+                                right_eyebrow=(17, 22),
+                                left_eyebrow=(22, 27),
+                                right_eye=(36, 42),
+                                left_eye=(42, 48),
+                                nose=(27, 36),
+                                jaw=(0, 17),
+                                chin=(8, 11))
+        mesh = []
+        for key, val in landmark_mapping.items():
+            pts = (face.aligned_landmarks[val[0]:val[1]] + position).flatten()
+            if key in ("right_eye", "left_eye", "mouth"):
+                mesh.append(self._canvas.create_polygon(*pts,
+                                                        fill="",
+                                                        outline="",
+                                                        width=1,
+                                                        tags="lm_{}".format(tag)))
+            else:
+                mesh.append(self._canvas.create_line(*pts,
+                                                     fill="",
+                                                     width=1,
+                                                     tags="lm_{}".format(tag)))
+        return mesh
+
+    def _clear_highlighted(self):
+        """ Clear all the highlighted borders and landmarks """
+        for item_id in self._highlighted:
+            if self._canvas.type(item_id) == "line":
+                self._canvas.itemconfig(item_id, fill="")
+            else:
+                self._canvas.itemconfig(item_id, outline="")
+        self._highlighted = []
+
+    def _highlight_current(self, *args):  # pylint:disable=unused-argument
+        """ Place a border around current face and draw landmarks """
+        if not self._initialized.is_set():
+            return
+        position = self._frames.tk_position.get()
+        self._clear_highlighted()
+
+        objects = self._faces[position]
+        for obj in objects:
+            self._canvas.itemconfig(obj["border"], outline="#00ff00")
+            self._highlighted.append(obj["border"])
+            for mesh in obj["mesh"]:
+                if self._canvas.type(mesh) == "line":
+                    self._canvas.itemconfig(mesh, fill="#00ffff")
+                else:
+                    self._canvas.itemconfig(mesh, outline="#00ffff")
+                self._highlighted.append(mesh)
+
+        top = self._canvas.coords(self._highlighted[0])[1] / self._canvas.bbox("all")[3]
+        if top != self._canvas.yview()[0]:
+            self._canvas.yview_moveto(top)
