@@ -692,6 +692,10 @@ class ExtractBox(Editor):
             The tkinter mouse event.
 
         """
+        if not self._drag_data:
+            # TODO This should never have no data, but sometimes it does. It doesn't appear
+            # to interfere with the GUI beyond spitting out errors.
+            return
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
         for obj in self._objects.values():

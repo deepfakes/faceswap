@@ -271,6 +271,11 @@ class AlignmentsData():
         return {key: val["saved"] for key, val in self._alignments.items()}
 
     @property
+    def face_index(self):
+        """int: The index of the current face in the current frame """
+        return self._face_index
+
+    @property
     def _face_count_per_index(self):
         """ list: Count of faces for each frame. List is in frame index order.
 
@@ -330,7 +335,7 @@ class AlignmentsData():
             for item in items:
                 face = DetectedFace()
                 face.from_alignment(item)
-                face.load_aligned(None, size=128)
+                face.load_aligned(None, size=96)
                 this_frame_faces.append(face)
             faces[framename] = dict(saved=this_frame_faces)
         return faces
@@ -389,7 +394,7 @@ class AlignmentsData():
         face.h = height
         face.mask = dict()
         face.landmarks_xy = self._extractor.get_landmarks()
-        face.load_aligned(None, size=128, force=True)
+        face.load_aligned(self.frames.current_frame, size=96, force=True)
         self.frames.tk_update.set(True)
 
     def shift_landmark(self, face_index, landmark_index, shift_x, shift_y):
@@ -412,7 +417,7 @@ class AlignmentsData():
         face = self.current_face
         face.mask = dict()
         face.landmarks_xy[landmark_index] += (shift_x, shift_y)
-        face.load_aligned(None, size=128, force=True)
+        face.load_aligned(self.frames.current_frame, size=96, force=True)
         self.frames.tk_update.set(True)
 
     def shift_landmarks(self, index, shift_x, shift_y):
@@ -440,7 +445,7 @@ class AlignmentsData():
         face.y += shift_y
         face.mask = dict()
         face.landmarks_xy += (shift_x, shift_y)
-        face.load_aligned(None, size=128, force=True)
+        face.load_aligned(self.frames.current_frame, size=96, force=True)
         self.frames.tk_update.set(True)
 
     def add_face(self, pnt_x, width, pnt_y, height):
@@ -478,6 +483,7 @@ class AlignmentsData():
 
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
+    # TODO Handle adding of new faces to a frame
     def __init__(self, alignments, progress_bar):
         self._alignments = alignments
         self._pbar = progress_bar
@@ -487,6 +493,14 @@ class FaceCache():
         self._set_tk_trace()
         self._initialized = Event()
         self._highlighted = []
+        self._landmark_mapping = dict(mouth=(48, 68),
+                                      right_eyebrow=(17, 22),
+                                      left_eyebrow=(22, 27),
+                                      right_eye=(36, 42),
+                                      left_eye=(42, 48),
+                                      nose=(27, 36),
+                                      jaw=(0, 17),
+                                      chin=(8, 11))
 
     @property
     def faces(self):
@@ -509,6 +523,7 @@ class FaceCache():
         self._frames.current_position
         """
         self._frames.tk_position.trace("w", self._highlight_current)
+        self._frames.tk_update.trace("w", self._update_current)
 
     def load_faces(self, canvas, frame_width):
         """ Launch a background thread to load the faces into cache and assign the canvas to
@@ -535,12 +550,10 @@ class FaceCache():
             for frame_idx, (filename, frame) in enumerate(loader.load()):
                 progress = int(round(((frame_idx + 1) / self.frame_count) * 100))
                 self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
-                for face_idx, face in enumerate(self._alignments.saved_alignments[filename]):
+                for face in self._alignments.saved_alignments[filename]:
                     face.load_aligned(frame, size=self._size, force=True)
-                    tag = "_".join((str(frame_idx), str(face_idx)))
                     self._faces.setdefault(frame_idx, []).append(self._place_face(columns,
                                                                                   face_count,
-                                                                                  tag,
                                                                                   face))
                     face.aligned["face"] = None
                     face_count += 1
@@ -553,7 +566,7 @@ class FaceCache():
         self._initialized.set()
         self._highlight_current()
 
-    def _place_face(self, columns, idx, tag, face):
+    def _place_face(self, columns, idx, face):
         """ Places the aligned faces on the canvas and create invisible annotations.
 
         Returns
@@ -564,48 +577,40 @@ class FaceCache():
 
         pos = ((idx % columns) * self._size, (idx // columns) * self._size)
         rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
-        border_tag = "brd_{}".format(tag.split("_")[0])
-        self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW, tags="img_{}".format(tag))
-        border = self._canvas.create_rectangle(*rect_dims, outline="", width=2, tags=border_tag)
-        mesh = self._draw_mesh(tag, face, pos)
-        objects = dict(image=dsp_face, border=border, mesh=mesh)
+        image_id = self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW)
+        border = self._canvas.create_rectangle(*rect_dims,
+                                               outline="#00ff00",
+                                               width=2,
+                                               state="hidden")
+        mesh = self._draw_mesh(face, pos)
+        objects = dict(image=dsp_face, image_id=image_id, border=border, mesh=mesh, position=pos)
         if pos[0] == 0:
             self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         return objects
 
-    def _draw_mesh(self, tag, face, position):
+    def _draw_mesh(self, face, position):
         """ Draw an invisible landmarks mesh on the face that can be displayed when required """
-        landmark_mapping = dict(mouth=(48, 68),
-                                right_eyebrow=(17, 22),
-                                left_eyebrow=(22, 27),
-                                right_eye=(36, 42),
-                                left_eye=(42, 48),
-                                nose=(27, 36),
-                                jaw=(0, 17),
-                                chin=(8, 11))
         mesh = []
-        for key, val in landmark_mapping.items():
+        for key in sorted(self._landmark_mapping):
+            val = self._landmark_mapping[key]
             pts = (face.aligned_landmarks[val[0]:val[1]] + position).flatten()
             if key in ("right_eye", "left_eye", "mouth"):
                 mesh.append(self._canvas.create_polygon(*pts,
                                                         fill="",
-                                                        outline="",
-                                                        width=1,
-                                                        tags="lm_{}".format(tag)))
+                                                        outline="#00ffff",
+                                                        state="hidden",
+                                                        width=1))
             else:
                 mesh.append(self._canvas.create_line(*pts,
-                                                     fill="",
-                                                     width=1,
-                                                     tags="lm_{}".format(tag)))
+                                                     fill="#00ffff",
+                                                     state="hidden",
+                                                     width=1))
         return mesh
 
     def _clear_highlighted(self):
         """ Clear all the highlighted borders and landmarks """
         for item_id in self._highlighted:
-            if self._canvas.type(item_id) == "line":
-                self._canvas.itemconfig(item_id, fill="")
-            else:
-                self._canvas.itemconfig(item_id, outline="")
+            self._canvas.itemconfig(item_id, state="hidden")
         self._highlighted = []
 
     def _highlight_current(self, *args):  # pylint:disable=unused-argument
@@ -617,15 +622,31 @@ class FaceCache():
 
         objects = self._faces[position]
         for obj in objects:
-            self._canvas.itemconfig(obj["border"], outline="#00ff00")
+            self._canvas.itemconfig(obj["border"], state="normal")
             self._highlighted.append(obj["border"])
             for mesh in obj["mesh"]:
-                if self._canvas.type(mesh) == "line":
-                    self._canvas.itemconfig(mesh, fill="#00ffff")
-                else:
-                    self._canvas.itemconfig(mesh, outline="#00ffff")
+                self._canvas.itemconfig(mesh, state="normal")
                 self._highlighted.append(mesh)
 
         top = self._canvas.coords(self._highlighted[0])[1] / self._canvas.bbox("all")[3]
         if top != self._canvas.yview()[0]:
             self._canvas.yview_moveto(top)
+
+    def _update_current(self, *args):  # pylint:disable=unused-argument
+        """ Update the currently selected face on editor update """
+        if not self._initialized.is_set():
+            return
+        face = self._alignments.current_face
+        if face.aligned_face is None:
+            return
+
+        position = self._frames.tk_position.get()
+        objects = self._faces[position][self._alignments.face_index]
+        objects["image"] = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
+        self._canvas.itemconfig(objects["image_id"], image=objects["image"])
+
+        for idx, key in enumerate(sorted(self._landmark_mapping)):
+            val = self._landmark_mapping[key]
+            pts = (face.aligned_landmarks[val[0]:val[1]] + objects["position"]).flatten()
+            self._canvas.coords(objects["mesh"][idx], *pts)
+        face.aligned["face"] = None
