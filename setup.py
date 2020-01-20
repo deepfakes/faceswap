@@ -274,7 +274,7 @@ class Environment():
     def update_amd_dep(self):
         """ Update amd dependency for AMD cards """
         if self.enable_amd:
-            self.required_packages.append("plaidml-keras==0.6.4")
+            self.required_packages.extend(["plaidml-keras==0.6.4", "plaidml==0.6.4"])
 
     def set_config(self):
         """ Set the backend in the faceswap config file """
