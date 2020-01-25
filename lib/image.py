@@ -93,14 +93,8 @@ def read_image(filename, raise_error=False, with_hash=False):
 def read_image_batch(filenames):
     """ Load a batch of images from the given file locations.
 
-    Leverages multi-threading to load multiple images from disk at the same time
-    leading to vastly reduced image read times.
-
-    Notes
-    -----
-    Images are loaded concurrently, so the order of the returned batch will likely not be the same
-    as the order of the input filenames. Filenames are returned with the batch in the correct order
-    corresponding to the returned batch.
+    Leverages multi-threading to load multiple images from disk at the same time leading to vastly
+    reduced image read times.
 
     Parameters
     ----------
@@ -109,10 +103,8 @@ def read_image_batch(filenames):
 
     Returns
     -------
-    list
-        Filenames in the correct order as they are returned
     numpy.ndarray
-        The batch of images in `BGR` channel order.
+        The batch of images in `BGR` channel order returned in the order of :attr:`filenames`
 
     Notes
     -----
@@ -121,21 +113,25 @@ def read_image_batch(filenames):
     Example
     -------
     >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
-    >>> filenames, images = read_image_batch(image_filenames)
+    >>> images = read_image_batch(image_filenames)
     """
     logger.trace("Requested batch: '%s'", filenames)
     executor = futures.ThreadPoolExecutor()
     with executor:
         images = {executor.submit(read_image, filename, raise_error=True): filename
                   for filename in filenames}
-        batch = []
-        filenames = []
+        batch = [None for _ in range(len(filenames))]
+        # There is no guarantee that the same filename will not be passed through multiple times
+        # (and when shuffle is true this can definitely happen), so we can't just call
+        # filenames.index().
+        return_indices = {filename: [idx for idx, fname in enumerate(filenames)
+                                     if fname == filename]
+                          for filename in set(filenames)}
         for future in futures.as_completed(images):
-            batch.append(future.result())
-            filenames.append(images[future])
-        batch = np.array(batch)
+            batch[return_indices[images[future]].pop()] = future.result()
+    batch = np.array(batch)
     logger.trace("Returning images: (filenames: %s, batch shape: %s)", filenames, batch.shape)
-    return filenames, batch
+    return batch
 
 
 def read_image_hash(filename):
