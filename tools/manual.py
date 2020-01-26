@@ -7,7 +7,7 @@ from tkinter import ttk
 from functools import partial
 from time import time, sleep
 
-from lib.gui.control_helper import set_slider_rounding
+from lib.gui.control_helper import set_slider_rounding, ControlPanel, ControlPanelOption
 from lib.gui.custom_widgets import Tooltip, StatusBar
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
@@ -35,13 +35,14 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
+        self._initialize_tkinter()
+
         extractor = Aligner()
-        self._frames = FrameNavigation(arguments.frames)
+        self._frames = FrameNavigation(arguments.frames, get_config().scaling_factor)
         self._wait_for_extractor(extractor)
 
         self._alignments = AlignmentsData(arguments.alignments_path, self._frames, extractor)
 
-        self._initialize_tkinter()
         self._containers = self._create_containers()
 
         pbar = StatusBar(self._containers["bottom"], hide_status=True)
@@ -50,10 +51,8 @@ class Manual(tk.Tk):
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"], self._faces)
 
-        lbl = ttk.Label(self._containers["top"], text="Top Right")
-        self._containers["top"].add(lbl)
+        self._options = Options(self._containers["top"])
 
-        self._set_layout()
         self.bind("<Key>", self._handle_key_press)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -98,24 +97,13 @@ class Manual(tk.Tk):
                               name="pw_main")
         main.pack(fill=tk.BOTH, expand=True)
 
-        top = tk.PanedWindow(main,
-                             sashrelief=tk.RIDGE,
-                             sashwidth=2,
-                             sashpad=4,
-                             orient=tk.HORIZONTAL,
-                             name="pw_top")
+        top = ttk.Frame(main, name="frame_top")
         main.add(top)
 
         bottom = ttk.Frame(main, name="frame_bottom")
         main.add(bottom)
         logger.debug("Created containers")
         return dict(main=main, top=top, bottom=bottom)
-
-    def _set_layout(self):
-        """ Place the sashes of the paned window """
-        self.update_idletasks()
-        self._containers["top"].sash_place(0, (self._frames.display_dims[0]) + 8, 1)
-        self._containers["main"].sash_place(0, 1, self._frames.display_dims[1] + 72)
 
     def _handle_key_press(self, event):
         """ Keyboard shortcuts
@@ -184,14 +172,19 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, frames: %s)",
                      self.__class__.__name__, parent, frames)
         super().__init__(parent)
-        parent.add(self)
+        self.pack(side=tk.LEFT, anchor=tk.NW, expand=True)
+
         self._frames = frames
         self._alignments = alignments
 
         self._actions_frame = ActionsFrame(self)
 
-        self._video_frame = ttk.Frame(self)
-        self._video_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        self._video_frame = ttk.Frame(self,
+                                      width=self._frames.display_dims[0],
+                                      height=self._frames.display_dims[1])
+
+        self._video_frame.pack(side=tk.RIGHT, expand=True)
+        self._video_frame.pack_propagate(False)
 
         self._canvas = FrameViewer(self._video_frame,
                                    self._alignments,
@@ -220,8 +213,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             next_single_face="Go to Next Frame that contains a Single Face (SHIFT+RIGHT)",
             next_multi_face="Go to Next Frame that contains Multiple Faces (CTRL+RIGHT)",
             next_no_face="Go to Next Frame that contains No Faces (ALT+RIGHT)",
-            end="Go to Last Frame (END)",
-            speed="Set Playback Speed")
+            end="Go to Last Frame (END)")
 
     @property
     def _btn_action(self):
@@ -273,13 +265,10 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         for action in ("play", "beginning", "prev", "prev_single_face", "prev_multi_face",
                        "prev_no_face", "next_no_face", "next_multi_face", "next_single_face",
-                       "next", "end", "speed"):
+                       "next", "end"):
             padx = (0, 6) if action in ("play", "prev", "next_single_face") else (0, 0)
-            if action != "speed":
-                wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
-                wgt.pack(side=tk.LEFT, padx=padx)
-            else:
-                wgt = self._add_speed_combo(frame)
+            wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
+            wgt.pack(side=tk.LEFT, padx=padx)
             if action == "play":
                 play_btn = wgt
                 self._frames.tk_is_playing.trace("w", self._play)
@@ -304,25 +293,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         self._actions_frame.on_click(self._actions_frame.key_bindings[key.lower()])
 
-    def _add_speed_combo(self, frame):
-        """ Adds the speed control Combo box and links to
-        :attr:`_frames.tk_playback_speed`. """
-        tk_var = self._frames.tk_playback_speed
-        tk_var.set("Standard")
-        sframe = ttk.Frame(frame)
-        sframe.pack(side=tk.RIGHT)
-        lbl = ttk.Label(sframe, text="Playback Speed")
-        lbl.pack(side=tk.LEFT, padx=(0, 5))
-        combo = ttk.Combobox(sframe,
-                             textvariable=tk_var,
-                             state="readonly",
-                             values=["Standard", "Max"],
-                             width=8)
-        combo.pack(side=tk.RIGHT)
-        return combo
-
     def _play(self, *args):  # pylint:disable=unused-argument
-        """ Play the video file at the selected speed """
+        """ Play the video file. """
         start = time()
         is_playing = self._frames.tk_is_playing.get()
         icon = "pause" if is_playing else "play"
@@ -333,12 +305,9 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             return
 
         self._frames.increment_frame(is_playing=True)
-        if self._frames.tk_playback_speed.get() == "Standard":
-            delay = self._frames.delay
-            duration = int((time() - start) * 1000)
-            delay = max(1, delay - duration)
-        else:
-            delay = 1
+        delay = 16  # Cap speed at approx 60fps max. Unlikely to hit, but just in case
+        duration = int((time() - start) * 1000)
+        delay = max(1, delay - duration)
         self.after(delay, self._play)
 
 
@@ -458,7 +427,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, alignments: %s, frames: %s, actions: %s, "
                      "tk_action_var: %s)",
                      self.__class__.__name__, parent, alignments, frames, actions, tk_action_var)
-        super().__init__(parent, bd=0, highlightthickness=0)
+        super().__init__(parent, bd=0, highlightthickness=0, background="black")
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True, anchor=tk.E)
 
         self._alignments = alignments
@@ -549,6 +518,26 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             editor.update_annotation()
         self._frames.tk_update.set(False)
         self.update_idletasks()
+
+
+class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ Options for frames.
+    """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.pack(side=tk.RIGHT, anchor=tk.NW)
+
+        opt_frame = ttk.Frame(self)
+        opt_frame.pack(side=tk.TOP, anchor=tk.W, expand=True, fill=tk.BOTH)
+        options = [ControlPanelOption("Bounding Box", bool, group="Display", default=True),
+                   ControlPanelOption("Extract Box", bool, group="Display", default=True),
+                   ControlPanelOption("Landmarks", bool, group="Display", default=True),
+                   ControlPanelOption("Mesh", bool, group="Display", default=True)]
+        ControlPanel(opt_frame, options,
+                     option_columns=2,
+                     header_text="Viewer\nPreview the frame's annotations.",
+                     blank_nones=False,
+                     label_width=10)
 
 
 class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors

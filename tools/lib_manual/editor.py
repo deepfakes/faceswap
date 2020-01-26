@@ -82,6 +82,9 @@ class Editor():
         objects = self._objects.values() if key is None else [self._objects.get(key, [])]
         for objs in objects:
             for item_id in objs:
+                if self._canvas.itemcget(item_id, "state") == "hidden":
+                    continue
+                logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
                 self._canvas.itemconfig(item_id, state="hidden")
 
     def _create_or_update(self, key, object_type, index, coordinates, object_kwargs):
@@ -110,6 +113,8 @@ class Editor():
         else:
             obj = self._objects[key][index]
             if object_kwargs.get("state", "normal") != "hidden":
+                logger.trace("Setting object state to normal: %s id: %s",
+                             self._canvas.type(obj), obj)
                 self._canvas.itemconfig(self._objects[key][index], state="normal")
             self._canvas.coords(self._objects[key][index], *coordinates)
             logger.trace("Updating object: (key: '%s', object_type: %s, index:%s, "
@@ -830,11 +835,12 @@ class Landmarks(Editor):
 
         bbox = self._canvas.bbox(self._objects[keys[0]][object_index])
         bbox = [bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2]
-        background_kwargs = dict(fill="#ffffea", outline="black", state="hidden")
+        background_kwargs = dict(fill="#ffffea", outline="black")
         self._create_or_update(keys[1], "rectangle", object_index, bbox, background_kwargs)
         self._canvas.lower(self._objects[keys[1]][object_index],
                            self._objects[keys[0]][object_index])
         self._canvas.itemconfig(self._objects[keys[0]][object_index], state="hidden")
+        self._canvas.itemconfig(self._objects[keys[1]][object_index], state="hidden")
 
     def _update_mesh(self):
         """ Draw the facial landmarks """
@@ -873,14 +879,17 @@ class Landmarks(Editor):
         obj_idx = self._objects["grab"].index(list(item_ids)[0])
         self._canvas.config(cursor="fleur")
         for label in [self._objects["label"][obj_idx], self._objects["label_background"][obj_idx]]:
+            logger.trace("Displaying: %s id: %s", self._canvas.type(label), label)
             self._canvas.itemconfig(label, state="normal")
         self._mouse_location = obj_idx
 
     def _hide_labels(self):
         """ Clear all landmark text labels from display """
-        logger.trace("Clearing labels")
         labels = [idx for key, val in self._objects.items() for idx in val
-                  if key.startswith("label")]
+                  if key.startswith("label") and self._canvas.itemcget(idx, "state") == "normal"]
+        if not labels:
+            return
+        logger.trace("Clearing labels")
         for item_id in labels:
             logger.trace("hiding: %s id: %s", self._canvas.type(item_id), item_id)
             self._canvas.itemconfig(item_id, state="hidden")
@@ -904,7 +913,8 @@ class Landmarks(Editor):
         self._drag_callback = self._move
 
     def _move(self, event):
-        """ Moves the Extract box and the underlying landmarks on an extract box drag event.
+        """ Moves the selected landmark point box and updates the underlying landmark on a point
+        drag event.
 
         Parameters
         ----------
@@ -916,6 +926,8 @@ class Landmarks(Editor):
         objects = [self._objects[key][self._mouse_location] for key in self._objects
                    if key != "mesh"]
         for obj in objects:
+            logger.trace("Moving: %s id: %s", self._canvas.type(obj), obj)
+            logger.trace(self._canvas.itemcget(obj, "state"))
             self._canvas.move(obj, shift_x, shift_y)
         scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
         self._alignments.shift_landmark(self._mouse_location // self._landmark_count,

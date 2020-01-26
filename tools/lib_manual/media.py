@@ -24,14 +24,14 @@ class FrameNavigation():
     frames_location: str
         The path to the input frames
     """
-    def __init__(self, frames_location):
-        logger.debug("Initializing %s: (frames_location: '%s')",
-                     self.__class__.__name__, frames_location)
+    def __init__(self, frames_location, scaling_factor):
+        logger.debug("Initializing %s: (frames_location: '%s', scaling_factor: %s)",
+                     self.__class__.__name__, frames_location, scaling_factor)
         self._loader = ImagesLoader(frames_location, fast_count=False, queue_size=1)
-        self._delay = int(round(1000 / self._loader.fps))
         self._meta = dict()
         self._current_idx = 0
         self._current_scale = 1.0
+        self._scaling = scaling_factor
         self._tk_vars = self._set_tk_vars()
         self._current_frame = None
         self._current_display_frame = None
@@ -82,20 +82,10 @@ class FrameNavigation():
         return self._current_display_frame
 
     @property
-    def delay(self):
-        """ int: The number of milliseconds between updates to playback the video at the
-        correct fps """
-        return self._delay
-
-    @property
     def display_dims(self):
-        """ tuple: The (`width`, `height`) of the display image. """
-        return self._display_dims
-
-    @property
-    def tk_playback_speed(self):
-        """ :class:`tkinter.IntVar`: Multiplier to playback speed. """
-        return self._tk_vars["speed"]
+        """ tuple: The (`width`, `height`) of the display image with scaling factor applied. """
+        retval = [int(round(dim * self._scaling)) for dim in self._display_dims]
+        return tuple(retval)
 
     @property
     def tk_position(self):
@@ -172,8 +162,8 @@ class FrameNavigation():
         """
         if position in self._meta:
             return
-        scale = min(self._display_dims[0] / frame.shape[1],
-                    self._display_dims[1] / frame.shape[0])
+        scale = min(self.display_dims[0] / frame.shape[1],
+                    self.display_dims[1] / frame.shape[0])
         self._meta[position] = dict(
             scale=scale,
             interpolation=cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA,
