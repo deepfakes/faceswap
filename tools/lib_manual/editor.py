@@ -87,7 +87,7 @@ class Editor():
                 logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
                 self._canvas.itemconfig(item_id, state="hidden")
 
-    def _create_or_update(self, key, object_type, index, coordinates, object_kwargs):
+    def _create_or_update(self, key, object_type, object_index, coordinates, object_kwargs):
         """ Create an annotation object and add it to :attr:`_objects` or update an existing
         annotation if it has already been created.
 
@@ -97,28 +97,28 @@ class Editor():
             The key for this annotation in :attr:`_objects`
         object_type: str
             This can be any string that is a natural extension to :class:`tkinter.Canvas.create_`
-        index: int
-            The object index for this item for the list returned from :attr:`_objects`[`key`]
+        object_index: int
+            The object_index for this item for the list returned from :attr:`_objects`[`key`]
         coordinates: tuple or list
             The bounding box coordinates for this object
         object_kwargs: dict
             The keyword arguments for this object
         """
-        if key not in self._objects or len(self._objects[key]) - 1 < index:
-            logger.trace("Adding object: (key: '%s', object_type: '%s', index: %s, "
+        if key not in self._objects or len(self._objects[key]) - 1 < object_index:
+            logger.trace("Adding object: (key: '%s', object_type: '%s', object_index: %s, "
                          "coordinates: %s, object_kwargs: %s)",
-                         key, index, object_type, coordinates, object_kwargs)
+                         key, object_type, object_index, coordinates, object_kwargs)
             obj = getattr(self._canvas, "create_{}".format(object_type))
             self._objects.setdefault(key, []).append(obj(*coordinates, **object_kwargs))
         else:
-            obj = self._objects[key][index]
+            obj = self._objects[key][object_index]
             if object_kwargs.get("state", "normal") != "hidden":
                 logger.trace("Setting object state to normal: %s id: %s",
                              self._canvas.type(obj), obj)
-                self._canvas.itemconfig(self._objects[key][index], state="normal")
-            self._canvas.coords(self._objects[key][index], *coordinates)
-            logger.trace("Updating object: (key: '%s', object_type: %s, index:%s, "
-                         "coordinates: %s)", key, index, object_type, coordinates)
+                self._canvas.itemconfig(self._objects[key][object_index], state="normal")
+            self._canvas.coords(self._objects[key][object_index], *coordinates)
+            logger.trace("Updating object: (key: '%s', object_type: %s, object_index:%s, "
+                         "coordinates: %s)", key, object_type, object_index, coordinates)
 
     # << MOUSE CALLBACKS >>
     # Mouse cursor display
@@ -285,8 +285,8 @@ class BoundingBox(Editor):
         if self._drag_data:
             logger.trace("Object being edited. Not updating annotation")
             return
+        self._hide_annotation()
         if not self._is_active and self._active_editor != "view":
-            self._hide_annotation()
             return
         key = "boundingbox"
         color = self._colors["blue"]
@@ -630,8 +630,8 @@ class ExtractBox(Editor):
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
+        self._hide_annotation()
         if not self._is_active and self._active_editor != "view":
-            self._hide_annotation()
             return
         keys = ("text", "extractbox")
         color = self._colors["green"]
@@ -746,6 +746,7 @@ class Landmarks(Editor):
 
     def update_annotation(self):
         """ Draw the Landmarks and the Face Mesh set the objects to :attr:`_object`"""
+        self._hide_annotation()
         self._update_landmarks()
         self._update_mesh()
         logger.trace("Updated landmark annotations: %s", self._objects)

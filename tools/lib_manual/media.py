@@ -277,7 +277,8 @@ class AlignmentsData():
     @property
     def current_face(self):
         """ :class:`lib.faces_detect.DetectedFace` The currently selected face """
-        return self.current_faces[self._face_index]
+        retval = None if not self.current_faces else self.current_faces[self._face_index]
+        return retval
 
     @property
     def _no_face(self):
@@ -538,9 +539,10 @@ class FaceCache():
             face_count = 0
             loader = ImagesLoader(self._frames.location, count=self.frame_count)
             for frame_idx, (filename, frame) in enumerate(loader.load()):
+                frame_name = os.path.basename(filename)
                 progress = int(round(((frame_idx + 1) / self.frame_count) * 100))
                 self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
-                for face in self._alignments.saved_alignments[filename]:
+                for face in self._alignments.saved_alignments.get(frame_name, list()):
                     face.load_aligned(frame, size=self._size, force=True)
                     self._faces.setdefault(frame_idx, []).append(self._place_face(columns,
                                                                                   face_count,
@@ -604,13 +606,16 @@ class FaceCache():
         self._highlighted = []
 
     def _highlight_current(self, *args):  # pylint:disable=unused-argument
-        """ Place a border around current face and draw landmarks """
+        """ Place a border around current face and display landmarks """
         if not self._initialized.is_set():
             return
         position = self._frames.tk_position.get()
         self._clear_highlighted()
 
-        objects = self._faces[position]
+        objects = self._faces.get(position, None)
+        if objects is None:
+            return
+
         for obj in objects:
             self._canvas.itemconfig(obj["border"], state="normal")
             self._highlighted.append(obj["border"])
@@ -627,7 +632,7 @@ class FaceCache():
         if not self._initialized.is_set():
             return
         face = self._alignments.current_face
-        if face.aligned_face is None:
+        if face is None or face.aligned_face is None:
             return
 
         position = self._frames.tk_position.get()
