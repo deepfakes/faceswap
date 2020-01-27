@@ -9,6 +9,8 @@ from functools import partial
 
 import numpy as np
 
+from lib.gui.control_helper import ControlPanelOption
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # pylint:disable=too-many-lines
 
@@ -24,19 +26,20 @@ class Editor():
         The alignments data for this manual session
     frames: :class:`FrameNavigation`
         The frames navigator for this manual session
+    control_text: str
+        The text that is to be displayed at the top of the Editor's control panel.
     """
-    def __init__(self, canvas, alignments, frames):
-        logger.debug("Initializing %s: (canvas: '%s', alignments: %s, frames: %s)",
-                     self.__class__.__name__, canvas, alignments, frames)
+    def __init__(self, canvas, alignments, frames, control_text=""):
+        logger.debug("Initializing %s: (canvas: '%s', alignments: %s, frames: %s, "
+                     "control_text: %s)", self.__class__.__name__, canvas, alignments, frames,
+                     control_text)
         self._canvas = canvas
         self._alignments = alignments
         self._frames = frames
-        self._colors = dict(red="#ff0000",
-                            green="#00ff00",
-                            blue="#0000ff",
-                            cyan="#00ffff",
-                            yellow="#ffff00",
-                            magenta="#ff00ff")
+
+        self._controls = dict(header=control_text, controls=[])
+        self._add_controls()
+
         self._objects = dict()
         self._mouse_location = None
         self._drag_data = dict()
@@ -45,6 +48,27 @@ class Editor():
         self.update_annotation()
         self.bind_mouse_motion()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def _colors(self):
+        """ dict: Available colors for annotations """
+        return dict(white="#000000",
+                    red="#ff0000",
+                    green="#00ff00",
+                    blue="#0000ff",
+                    cyan="#00ffff",
+                    yellow="#ffff00",
+                    magenta="#ff00ff",
+                    black="#ffffff")
+
+    @property
+    def _default_colors(self):
+        """ dict: The default colors for each annotation """
+        return {"Bounding Box": "blue",
+                "Extract Box": "green",
+                "Landmarks": "red",
+                "Mask": "black",
+                "Mesh": "cyan"}
 
     @property
     def _is_active(self):
@@ -61,6 +85,11 @@ class Editor():
     def _active_editor(self):
         """ str: The name of the currently active editor """
         return self._canvas.selected_action
+
+    @property
+    def controls(self):
+        """ dict: The control panel options and header text for the current editor """
+        return self._controls
 
     def update_annotation(self):
         """ Update the display annotations for the current objects.
@@ -241,6 +270,24 @@ class Editor():
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
 
+    # << CONTROL PANEL OPTIONS >>
+    def _add_controls(self):
+        """ Add the controls for this editor's control panel.
+
+        The default does nothing. Override for editor specific controls
+        """
+        self._controls = self._controls
+
+    def _add_control(self, option):
+        """ Add a control panel control to :attr:`_controls`.
+
+        Parameters
+        ----------
+        option: :class:`lib.gui.control_helper.ControlPanelOption'
+            The control panel option to add to this editor's control
+        """
+        self._controls["controls"].append(option)
+
 
 class BoundingBox(Editor):
     """ The Bounding Box Editor. """
@@ -248,7 +295,12 @@ class BoundingBox(Editor):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
-        super().__init__(canvas, alignments, frames)
+        control_text = ("Bounding Box Editor\nEdit the bounding box being fed into the aligner "
+                        "and recalculate landmarks.\n\n"
+                        " - Grab the corner anchors to resize the bounding box.\n"
+                        " - Click and drag the bounding box to relocate.\n"
+                        " - Click in empty space to create a new bounding box")
+        super().__init__(canvas, alignments, frames, control_text)
         self._bind_hotkeys()
 
     @property
@@ -270,6 +322,22 @@ class BoundingBox(Editor):
         bounding box. """
         return [self._canvas.coords(rect) for rect in self._objects.get("boundingbox", [])]
 
+    def _add_controls(self):
+        for dsp in ("Extract Box", "Landmarks", "Mesh"):
+            self._add_control(ControlPanelOption(dsp,
+                                                 bool,
+                                                 group="Display",
+                                                 default=dsp not in ("Extract Box", "Landmarks"),
+                                                 helptext="Show the {} annotations".format(dsp)))
+        for dsp in ("Bounding Box", "Extract Box", "Landmarks", "Mesh"):
+            self._add_control(ControlPanelOption(dsp,
+                                                 str,
+                                                 group="Color",
+                                                 choices=sorted(self._colors),
+                                                 default=self._default_colors[dsp],
+                                                 is_radio=False,
+                                                 helptext="Set the annotation color"))
+
     def _bind_hotkeys(self):
         """ Add keyboard shortcuts.
 
@@ -285,8 +353,8 @@ class BoundingBox(Editor):
         if self._drag_data:
             logger.trace("Object being edited. Not updating annotation")
             return
-        self._hide_annotation()
         if not self._is_active and self._active_editor != "view":
+            self._hide_annotation()
             return
         key = "boundingbox"
         color = self._colors["blue"]
@@ -615,8 +683,28 @@ class ExtractBox(Editor):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
-        super().__init__(canvas, alignments, frames)
+        control_text = ("Extract Box Editor\nMove the extract box that has been generated by the "
+                        "aligner.\n\n"
+                        " - Click and drag the bounding box to relocate the landmarks without "
+                        "recalculating them.")
+        super().__init__(canvas, alignments, frames, control_text)
         self._bind_hotkeys()
+
+    def _add_controls(self):
+        for dsp in ("Landmarks", "Mesh"):
+            self._add_control(ControlPanelOption(dsp,
+                                                 bool,
+                                                 group="Display",
+                                                 default=dsp != "Landmarks",
+                                                 helptext="Show the {} annotations".format(dsp)))
+        for dsp in ("Extract Box", "Landmarks", "Mesh"):
+            self._add_control(ControlPanelOption(dsp,
+                                                 str,
+                                                 group="Color",
+                                                 choices=sorted(self._colors),
+                                                 default=self._default_colors[dsp],
+                                                 is_radio=False,
+                                                 helptext="Set the annotation color"))
 
     def _bind_hotkeys(self):
         """ Add keyboard shortcuts.
@@ -630,8 +718,8 @@ class ExtractBox(Editor):
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
-        self._hide_annotation()
         if not self._is_active and self._active_editor != "view":
+            self._hide_annotation()
             return
         keys = ("text", "extractbox")
         color = self._colors["green"]
@@ -742,11 +830,28 @@ class Landmarks(Editor):
                                       jaw=(0, 17),
                                       chin=(8, 11))
         self._landmark_count = None
-        super().__init__(canvas, alignments, frames)
+        control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
+                        " - Click and drag individual landmark points to relocate.")
+        super().__init__(canvas, alignments, frames, control_text)
+
+    def _add_controls(self):
+        for dsp in ("Extract Box", "Landmarks", "Mesh"):
+            self._add_control(ControlPanelOption(dsp,
+                                                 bool,
+                                                 group="Display",
+                                                 default=dsp == "Landmarks",
+                                                 helptext="Show the {} annotations".format(dsp)))
+        for dsp in ("Extract Box", "Landmarks", "Mesh"):
+            self._add_control(ControlPanelOption(dsp,
+                                                 str,
+                                                 group="Color",
+                                                 choices=sorted(self._colors),
+                                                 default=self._default_colors[dsp],
+                                                 is_radio=False,
+                                                 helptext="Set the annotation color"))
 
     def update_annotation(self):
         """ Draw the Landmarks and the Face Mesh set the objects to :attr:`_object`"""
-        self._hide_annotation()
         self._update_landmarks()
         self._update_mesh()
         logger.trace("Updated landmark annotations: %s", self._objects)
@@ -935,6 +1040,51 @@ class Landmarks(Editor):
                                         self._mouse_location % self._landmark_count,
                                         *scaled_shift)
         self._drag_data["current_location"] = (event.x, event.y)
+
+
+class Mask(Editor):
+    """ The mask Editor """
+    def __init__(self, canvas, alignments, frames):
+        control_text = "Mask Editor\nEdit the mask."
+        super().__init__(canvas, alignments, frames, control_text)
+
+    def _add_controls(self):
+        self._add_control(ControlPanelOption("Mask type",
+                                             str,
+                                             group=None,
+                                             choices=["Not", "Yet", "Implemented"],
+                                             default="Not",
+                                             is_radio=True,
+                                             helptext="Select which mask to edit"))
+        self._add_control(ControlPanelOption("Mask Color",
+                                             str,
+                                             group=None,
+                                             choices=sorted(self._colors),
+                                             default=self._default_colors["Mask"],
+                                             is_radio=False,
+                                             helptext="Set the annotation color"))
+
+
+class View(Editor):
+    """ The view Editor """
+    def __init__(self, canvas, alignments, frames):
+        control_text = "Viewer\nPreview the frame's annotations."
+        super().__init__(canvas, alignments, frames, control_text)
+
+    def _add_controls(self):
+        for dsp in ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh"):
+            self._add_control(ControlPanelOption(dsp,
+                                                 bool,
+                                                 group="Display",
+                                                 default=dsp != "Mask",
+                                                 helptext="Show the {} annotations".format(dsp)))
+            self._add_control(ControlPanelOption(dsp,
+                                                 str,
+                                                 group="Color",
+                                                 choices=sorted(self._colors),
+                                                 default=self._default_colors[dsp],
+                                                 is_radio=False,
+                                                 helptext="Set the annotation color"))
 
 
 class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors

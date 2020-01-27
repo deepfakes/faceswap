@@ -7,14 +7,14 @@ from tkinter import ttk
 from functools import partial
 from time import time, sleep
 
-from lib.gui.control_helper import set_slider_rounding, ControlPanel, ControlPanelOption
+from lib.gui.control_helper import set_slider_rounding, ControlPanel
 from lib.gui.custom_widgets import Tooltip, StatusBar
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .lib_manual.media import AlignmentsData, FrameNavigation, FaceCache
-from .lib_manual.editor import Editor, BoundingBox, ExtractBox, Landmarks
+from .lib_manual.editor import BoundingBox, ExtractBox, Landmarks, Mask, View
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -51,7 +51,7 @@ class Manual(tk.Tk):
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"], self._faces)
 
-        self._options = Options(self._containers["top"])
+        self._options = Options(self._containers["top"], self._display)
 
         self.bind("<Key>", self._handle_key_press)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -172,7 +172,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, frames: %s)",
                      self.__class__.__name__, parent, frames)
         super().__init__(parent)
-        self.pack(side=tk.LEFT, anchor=tk.NW, expand=True)
+        self.pack(side=tk.LEFT, anchor=tk.NW)
 
         self._frames = frames
         self._alignments = alignments
@@ -228,6 +228,16 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 actions["{}_{}_face".format(drn, flt)] = (lambda d=drn, f=flt:
                                                           self._alignments.set_next_frame(d, f))
         return actions
+
+    @property
+    def tk_selected_action(self):
+        """ :class:`tkinter.StringVar`: The variable holding the currently selected action """
+        return self._actions_frame.tk_selected_action
+
+    @property
+    def active_editor(self):
+        """ :class:`Editor`: The current editor in use based on :attr:`selected_action`. """
+        return self._canvas.active_editor
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
@@ -474,8 +484,8 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         name_mapping = dict(boundingbox=BoundingBox,
                             extractbox=ExtractBox,
                             landmarks=Landmarks,
-                            view=Editor,
-                            mask=Editor)
+                            view=View,
+                            mask=Mask)
         editors = dict()
         for action in self._actions:
             editor = name_mapping[action]
@@ -521,23 +531,71 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
 
 class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ Options for frames.
-    """
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.pack(side=tk.RIGHT, anchor=tk.NW)
+    """ Control panel options for currently displayed Editor.
 
-        opt_frame = ttk.Frame(self)
-        opt_frame.pack(side=tk.TOP, anchor=tk.W, expand=True, fill=tk.BOTH)
-        options = [ControlPanelOption("Bounding Box", bool, group="Display", default=True),
-                   ControlPanelOption("Extract Box", bool, group="Display", default=True),
-                   ControlPanelOption("Landmarks", bool, group="Display", default=True),
-                   ControlPanelOption("Mesh", bool, group="Display", default=True)]
-        ControlPanel(opt_frame, options,
-                     option_columns=2,
-                     header_text="Viewer\nPreview the frame's annotations.",
-                     blank_nones=False,
-                     label_width=10)
+    parent: :class:`tkinter.ttk.Frame`
+        The parent frame for the control panel options
+    display_frame: :class:`DisplayFrame`
+        The frame that holds the editors
+    """
+    def __init__(self, parent, display_frame):
+        super().__init__(parent)
+        self.pack(side=tk.LEFT, fill=tk.BOTH)
+        self._display_frame = display_frame
+        self._control_panels = dict()
+        self._set_tk_callback()
+        self._update_options()
+
+    def _set_tk_callback(self):
+        """ Sets the callback to change to the relevant control panel options when the selected
+        editor is changed """
+        self._display_frame.tk_selected_action.trace("w", self._update_options)
+
+    def _update_options(self, *args):  # pylint:disable=unused-argument
+        """ Update the control panel display for the current editor.
+
+        If the options have not already been set, then adds the control panel to
+        :attr:`_control_panels`. Displays the current editor's control panel
+
+        Parameters
+        ----------
+        args: tuple
+            Unused but required for tkinter variable callback
+        """
+        self._clear_options_frame()
+        editor = self._display_frame.tk_selected_action.get()
+        controls = self._display_frame.active_editor.controls
+        if editor not in self._control_panels:
+            self._add_control_panel(editor, controls)
+        else:
+            logger.debug("Displaying control panel for editor: '%s'", editor)
+            self._control_panels[editor].pack(expand=True, fill=tk.BOTH)
+
+    def _clear_options_frame(self):
+        """ Hides the currently displayed control panel """
+        for editor, panel in self._control_panels.items():
+            if panel.winfo_ismapped():
+                logger.debug("Hiding control panel for: %s", editor)
+                panel.pack_forget()
+
+    def _add_control_panel(self, editor, controls):
+        """ Add the control panel options for the current editor.
+
+        Adds the control panel to :attr:`_control_panels`.
+
+        Parameters
+        ----------
+        editor: str
+            The editor that the options should be displayed for
+        controls: dict
+            The Controls for the currently displayed editor
+        """
+        logger.debug("Adding control panel: (editor: '%s', controls: '%s')", editor, controls)
+        self._control_panels[editor] = ControlPanel(self, controls["controls"],
+                                                    option_columns=2,
+                                                    header_text=controls["header"],
+                                                    blank_nones=False,
+                                                    label_width=18)
 
 
 class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
