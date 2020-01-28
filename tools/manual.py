@@ -14,7 +14,7 @@ from lib.multithreading import MultiThread
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .lib_manual.media import AlignmentsData, FrameNavigation, FaceCache
-from .lib_manual.editor import BoundingBox, ExtractBox, Landmarks, Mask, View
+from .lib_manual.editor import BoundingBox, ExtractBox, Landmarks, Mask, Mesh, View
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -485,10 +485,11 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         name_mapping = dict(boundingbox=BoundingBox,
                             extractbox=ExtractBox,
                             landmarks=Landmarks,
-                            view=View,
-                            mask=Mask)
+                            mask=Mask,
+                            mesh=Mesh,
+                            view=View)
         editors = dict()
-        for action in self._actions:
+        for action in self._actions + ("mesh", ):
             editor = name_mapping[action]
             editor = editor(self, self._alignments, self._frames)
             editors[action] = editor

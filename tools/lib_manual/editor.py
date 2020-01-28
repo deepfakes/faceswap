@@ -863,14 +863,6 @@ class ExtractBox(Editor):
 class Landmarks(Editor):
     """ The Landmarks Editor. """
     def __init__(self, canvas, alignments, frames):
-        self._landmark_mapping = dict(mouth=(48, 68),
-                                      right_eyebrow=(17, 22),
-                                      left_eyebrow=(22, 27),
-                                      right_eye=(36, 42),
-                                      left_eye=(42, 48),
-                                      nose=(27, 36),
-                                      jaw=(0, 17),
-                                      chin=(8, 11))
         self._landmark_count = None
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
                         " - Click and drag individual landmark points to relocate.")
@@ -893,13 +885,7 @@ class Landmarks(Editor):
                                                  helptext="Set the annotation color"))
 
     def update_annotation(self):
-        """ Draw the Landmarks and the Face Mesh set the objects to :attr:`_object`"""
-        self._update_landmarks()
-        self._update_mesh()
-        logger.trace("Updated landmark annotations: %s", self._objects)
-
-    def _update_landmarks(self):
-        """ Draw the facial landmarks """
+        """ Draw the Landmarks and set the objects to :attr:`_object`"""
         for face_idx, face in enumerate(self._alignments.current_faces):
             if self._landmark_count is None:
                 self._landmark_count = len(face.landmarks_xy)
@@ -909,6 +895,7 @@ class Landmarks(Editor):
                 self._display_landmark(box, obj_idx)
                 self._grab_landmark(box, obj_idx)
                 self._label_landmark(box, obj_idx, lm_idx)
+        logger.trace("Updated landmark annotations: %s", self._objects)
 
     def _display_landmark(self, bounding_box, object_index):
         """ Add a display landmark to the canvas.
@@ -925,9 +912,10 @@ class Landmarks(Editor):
             self._hide_annotation(key)
             return
         radius = 1
+        color = self._control_color
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
-        kwargs = dict(outline=self._control_color, fill=self._control_color, width=radius)
+        kwargs = dict(outline=color, fill=color, width=radius)
         self._create_or_update(key, "oval", object_index, bbox, kwargs)
 
     def _grab_landmark(self, bounding_box, object_index):
@@ -988,29 +976,6 @@ class Landmarks(Editor):
                            self._objects[keys[0]][object_index])
         self._canvas.itemconfig(self._objects[keys[0]][object_index], state="hidden")
         self._canvas.itemconfig(self._objects[keys[1]][object_index], state="hidden")
-
-    def _update_mesh(self):
-        """ Draw the facial landmarks """
-        key = "mesh"
-        if self._active_editor == "mask" or self._is_active:
-            self._hide_annotation(key)
-            return
-        color = "" if self._is_active or self._active_editor == "mask" else self._colors["cyan"]
-        thickness = 1
-        for face_idx, face in enumerate(self._alignments.current_faces):
-            landmarks = face.landmarks_xy
-            base_idx = (face_idx * len(self._landmark_mapping))
-            logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
-                         landmarks, color, thickness)
-            for idx, (segment, val) in enumerate(self._landmark_mapping.items()):
-                obj_idx = base_idx + idx
-                pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
-                if segment in ("right_eye", "left_eye", "mouth"):
-                    kwargs = dict(fill="", outline=color, width=thickness)
-                    self._create_or_update(key, "polygon", obj_idx, pts, kwargs)
-                else:
-                    kwargs = dict(fill=color, width=thickness)
-                    self._create_or_update(key, "line", obj_idx, pts, kwargs)
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -1104,6 +1069,43 @@ class Mask(Editor):
                                              default=self._default_colors["Mask"],
                                              is_radio=False,
                                              helptext="Set the annotation color"))
+
+
+class Mesh(Editor):
+    """ The Landmarks Mesh Display. """
+    def __init__(self, canvas, alignments, frames):
+        self._landmark_mapping = dict(mouth=(48, 68),
+                                      right_eyebrow=(17, 22),
+                                      left_eyebrow=(22, 27),
+                                      right_eye=(36, 42),
+                                      left_eye=(42, 48),
+                                      nose=(27, 36),
+                                      jaw=(0, 17),
+                                      chin=(8, 11))
+        super().__init__(canvas, alignments, frames, None)
+
+    def update_annotation(self):
+        """ Draw the Landmarks Mesh and set the objects to :attr:`_object`"""
+        key = self.__class__.__name__.lower()
+        if not self._should_display:
+            self._hide_annotation(key)
+            return
+        color = self._control_color
+        thickness = 1
+        for face_idx, face in enumerate(self._alignments.current_faces):
+            landmarks = face.landmarks_xy
+            base_idx = (face_idx * len(self._landmark_mapping))
+            logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
+                         landmarks, color, thickness)
+            for idx, (segment, val) in enumerate(self._landmark_mapping.items()):
+                obj_idx = base_idx + idx
+                pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
+                if segment in ("right_eye", "left_eye", "mouth"):
+                    kwargs = dict(fill="", outline=color, width=thickness)
+                    self._create_or_update(key, "polygon", obj_idx, pts, kwargs)
+                else:
+                    kwargs = dict(fill=color, width=thickness)
+                    self._create_or_update(key, "line", obj_idx, pts, kwargs)
 
 
 class View(Editor):
