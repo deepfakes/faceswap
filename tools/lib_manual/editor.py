@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # pylint:disable=too-many-lines
 
 
+# Tracking for all control panel variables, for access from all editors
+_CONTROL_VARS = dict()
+
+# TODO Hide annotations for additional faces
+
+
 class Editor():
     """ Parent Class for Object Editors.
 
@@ -37,6 +43,7 @@ class Editor():
         self._alignments = alignments
         self._frames = frames
 
+        self._current_color = dict()
         self._controls = dict(header=control_text, controls=[])
         self._add_controls()
 
@@ -45,21 +52,20 @@ class Editor():
         self._drag_data = dict()
         self._drag_callback = None
         self._right_click_button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
-        self.update_annotation()
         self.bind_mouse_motion()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def _colors(self):
         """ dict: Available colors for annotations """
-        return dict(white="#000000",
+        return dict(black="#000000",
                     red="#ff0000",
                     green="#00ff00",
                     blue="#0000ff",
                     cyan="#00ffff",
                     yellow="#ffff00",
                     magenta="#ff00ff",
-                    black="#ffffff")
+                    white="#ffffff")
 
     @property
     def _default_colors(self):
@@ -90,6 +96,21 @@ class Editor():
     def controls(self):
         """ dict: The control panel options and header text for the current editor """
         return self._controls
+
+    @property
+    def _control_color(self):
+        """ str: The hex color code set in the control panel for the current editor. """
+        annotation = self.__class__.__name__.lower()
+        return self._colors[_CONTROL_VARS[self._active_editor]["color"][annotation].get()]
+
+    @property
+    def _should_display(self):
+        """ bool: Whether the control panel option for the current editor is set to display
+        or not. """
+        annotation = self.__class__.__name__.lower()
+        should_display = _CONTROL_VARS.get(self._active_editor,
+                                           dict()).get("display", dict()).get(annotation, None)
+        return self._is_active or (should_display is not None and should_display.get())
 
     def update_annotation(self):
         """ Update the display annotations for the current objects.
@@ -133,18 +154,28 @@ class Editor():
         object_kwargs: dict
             The keyword arguments for this object
         """
+        object_color_key = "fill" if object_type in ("text", "line") else "outline"
+        tracking_id = "_".join((key, str(object_index)))
         if key not in self._objects or len(self._objects[key]) - 1 < object_index:
             logger.trace("Adding object: (key: '%s', object_type: '%s', object_index: %s, "
                          "coordinates: %s, object_kwargs: %s)",
                          key, object_type, object_index, coordinates, object_kwargs)
             obj = getattr(self._canvas, "create_{}".format(object_type))
             self._objects.setdefault(key, []).append(obj(*coordinates, **object_kwargs))
+            self._current_color[tracking_id] = object_kwargs[object_color_key]
         else:
             obj = self._objects[key][object_index]
+            update_kwargs = dict()
             if object_kwargs.get("state", "normal") != "hidden":
                 logger.trace("Setting object state to normal: %s id: %s",
                              self._canvas.type(obj), obj)
-                self._canvas.itemconfig(self._objects[key][object_index], state="normal")
+                update_kwargs["state"] = "normal"
+            if object_kwargs[object_color_key] != self._current_color[tracking_id]:
+                new_color = object_kwargs[object_color_key]
+                update_kwargs[object_color_key] = new_color
+                self._current_color[tracking_id] = new_color
+            if update_kwargs:
+                self._canvas.itemconfig(self._objects[key][object_index], **update_kwargs)
             self._canvas.coords(self._objects[key][object_index], *coordinates)
             logger.trace("Updating object: (key: '%s', object_type: %s, object_index:%s, "
                          "coordinates: %s)", key, object_type, object_index, coordinates)
@@ -279,7 +310,8 @@ class Editor():
         self._controls = self._controls
 
     def _add_control(self, option):
-        """ Add a control panel control to :attr:`_controls`.
+        """ Add a control panel control to :attr:`_controls` and add a trace to the variable
+        to update display.
 
         Parameters
         ----------
@@ -287,6 +319,14 @@ class Editor():
             The control panel option to add to this editor's control
         """
         self._controls["controls"].append(option)
+        editor_key = self.__class__.__name__.lower()
+        group_key = option.group.replace(" ", "").lower()
+        annotation_key = option.title.replace(" ", "").lower()
+        _CONTROL_VARS.setdefault(editor_key,
+                                 dict()).setdefault(group_key,
+                                                    dict())[annotation_key] = option.tk_var
+        option.tk_var.set(option.default)
+        option.tk_var.trace("w", lambda *e: self._frames.tk_update.set(True))
 
 
 class BoundingBox(Editor):
@@ -353,11 +393,13 @@ class BoundingBox(Editor):
         if self._drag_data:
             logger.trace("Object being edited. Not updating annotation")
             return
-        if not self._is_active and self._active_editor != "view":
+
+        if not self._should_display:
             self._hide_annotation()
             return
-        key = "boundingbox"
-        color = self._colors["blue"]
+
+        key = self.__class__.__name__.lower()
+        color = self._control_color
         thickness = 1
         for idx, face in enumerate(self._alignments.current_faces):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
@@ -718,11 +760,11 @@ class ExtractBox(Editor):
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
-        if not self._is_active and self._active_editor != "view":
+        if not self._should_display:
             self._hide_annotation()
             return
         keys = ("text", "extractbox")
-        color = self._colors["green"]
+        color = self._control_color
         thickness = 1
         # TODO FIX THIS TEST
         #  if not all(face.original_roi for face in self._alignments.current_faces):
@@ -879,14 +921,13 @@ class Landmarks(Editor):
             The index of the this item in :attr:`_objects`
         """
         key = "lm_display"
-        if not self._is_active and self._active_editor != "view":
+        if not self._should_display:
             self._hide_annotation(key)
             return
         radius = 1
-        color = self._colors["red"]
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
-        kwargs = dict(outline=color, fill=color, width=radius)
+        kwargs = dict(outline=self._control_color, fill=self._control_color, width=radius)
         self._create_or_update(key, "oval", object_index, bbox, kwargs)
 
     def _grab_landmark(self, bounding_box, object_index):

@@ -52,6 +52,7 @@ class Manual(tk.Tk):
         self._faces_frame = FacesFrame(self._containers["bottom"], self._faces)
 
         self._options = Options(self._containers["top"], self._display)
+        self._display.tk_selected_action.set("view")
 
         self.bind("<Key>", self._handle_key_press)
         logger.debug("Initialized %s", self.__class__.__name__)
