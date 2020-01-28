@@ -236,9 +236,19 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return self._actions_frame.tk_selected_action
 
     @property
+    def tk_update(self):
+        """ :class:`tkinter.BooleanVar`: The frames display update flag. """
+        return self._frames.tk_update
+
+    @property
     def active_editor(self):
         """ :class:`Editor`: The current editor in use based on :attr:`selected_action`. """
         return self._canvas.active_editor
+
+    @property
+    def editors(self):
+        """ dict: All of the :class:`Editor` that the canvas holds """
+        return self._canvas.editors
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
@@ -465,6 +475,11 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         return self._editors[self.selected_action]
 
     @property
+    def editors(self):
+        """ dict: All of the :class:`Editor` objects that exist """
+        return self._editors
+
+    @property
     def offset(self):
         """ tuple: The (`width`, `height`) offset of the canvas based on the size of the currently
         displayed image """
@@ -544,14 +559,52 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.BOTH)
         self._display_frame = display_frame
-        self._control_panels = dict()
-        self._set_tk_callback()
+        self._control_panels = self._initialize()
+        self._set_tk_callbacks()
         self._update_options()
 
-    def _set_tk_callback(self):
+    def _initialize(self):
+        """ Initialize all of the control panels, then display the default panel.
+
+        Adds the control panel to :attr:`_control_panels` and sets the traceback to update
+        display when a panel option has been changed.
+
+        Notes
+        -----
+        All panels must be initialized at the beginning so that the global format options are not
+        reset to default when the editor is first selected.
+
+        The Traceback must be set after the panel has first been packed as otherwise it interferes
+        with the loading of the faces pane.
+        """
+        panels = dict()
+        for name, editor in self._display_frame.editors.items():
+            logger.debug("Initializing control panel for '%s' editor", name)
+            controls = editor.controls
+            panel = ControlPanel(self, controls["controls"],
+                                 option_columns=2,
+                                 header_text=controls["header"],
+                                 blank_nones=False,
+                                 label_width=18)
+            panel.pack_forget()
+            panels[name] = panel
+        return panels
+
+    def _set_tk_callbacks(self):
         """ Sets the callback to change to the relevant control panel options when the selected
-        editor is changed """
+        editor is changed, and the display update on panel option change."""
         self._display_frame.tk_selected_action.trace("w", self._update_options)
+        seen_controls = set()
+        for name, editor in self._display_frame.editors.items():
+            for ctl in editor.controls["controls"]:
+                if ctl in seen_controls:
+                    # Some controls are re-used (annotation format), so skip if trace has already
+                    # been set
+                    continue
+                logger.debug("Adding control update callback: (editor: %s, control: %s)",
+                             name, ctl.title)
+                seen_controls.add(ctl)
+                ctl.tk_var.trace("w", lambda *e: self._display_frame.tk_update.set(True))
 
     def _update_options(self, *args):  # pylint:disable=unused-argument
         """ Update the control panel display for the current editor.
@@ -566,12 +619,8 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         self._clear_options_frame()
         editor = self._display_frame.tk_selected_action.get()
-        controls = self._display_frame.active_editor.controls
-        if editor not in self._control_panels:
-            self._add_control_panel(editor, controls)
-        else:
-            logger.debug("Displaying control panel for editor: '%s'", editor)
-            self._control_panels[editor].pack(expand=True, fill=tk.BOTH)
+        logger.debug("Displaying control panel for editor: '%s'", editor)
+        self._control_panels[editor].pack(expand=True, fill=tk.BOTH)
 
     def _clear_options_frame(self):
         """ Hides the currently displayed control panel """
@@ -579,25 +628,6 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
             if panel.winfo_ismapped():
                 logger.debug("Hiding control panel for: %s", editor)
                 panel.pack_forget()
-
-    def _add_control_panel(self, editor, controls):
-        """ Add the control panel options for the current editor.
-
-        Adds the control panel to :attr:`_control_panels`.
-
-        Parameters
-        ----------
-        editor: str
-            The editor that the options should be displayed for
-        controls: dict
-            The Controls for the currently displayed editor
-        """
-        logger.debug("Adding control panel: (editor: '%s', controls: '%s')", editor, controls)
-        self._control_panels[editor] = ControlPanel(self, controls["controls"],
-                                                    option_columns=2,
-                                                    header_text=controls["header"],
-                                                    blank_nones=False,
-                                                    label_width=18)
 
 
 class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # Tracking for all control panel variables, for access from all editors
 _CONTROL_VARS = dict()
+_ANNOTATION_FORMAT = dict()
 
 # TODO Hide annotations for additional faces
 
@@ -46,6 +47,7 @@ class Editor():
         self._current_color = dict()
         self._controls = dict(header=control_text, controls=[])
         self._add_controls()
+        self._add_annotation_format_controls()
 
         self._objects = dict()
         self._mouse_location = None
@@ -101,7 +103,7 @@ class Editor():
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
         annotation = self.__class__.__name__.lower()
-        return self._colors[_CONTROL_VARS[self._active_editor]["color"][annotation].get()]
+        return self._colors[_ANNOTATION_FORMAT[annotation]["color"].get()]
 
     @property
     def _should_display(self):
@@ -309,7 +311,7 @@ class Editor():
         """
         self._controls = self._controls
 
-    def _add_control(self, option):
+    def _add_control(self, option, global_control=False):
         """ Add a control panel control to :attr:`_controls` and add a trace to the variable
         to update display.
 
@@ -317,16 +319,47 @@ class Editor():
         ----------
         option: :class:`lib.gui.control_helper.ControlPanelOption'
             The control panel option to add to this editor's control
+        global_control: bool, optional
+            Whether the given control is a global control (i.e. annotation formatting).
+            Default: ``False``
         """
         self._controls["controls"].append(option)
+        if global_control:
+            return
+
         editor_key = self.__class__.__name__.lower()
         group_key = option.group.replace(" ", "").lower()
         annotation_key = option.title.replace(" ", "").lower()
         _CONTROL_VARS.setdefault(editor_key,
                                  dict()).setdefault(group_key,
                                                     dict())[annotation_key] = option.tk_var
-        option.tk_var.set(option.default)
-        option.tk_var.trace("w", lambda *e: self._frames.tk_update.set(True))
+
+    def _add_annotation_format_controls(self):
+        """ Add the annotation display (color/size) controls.
+
+        These should be universal and available for all editors.
+        """
+        editors = ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh")
+        if not _ANNOTATION_FORMAT:
+            for editor in editors:
+                logger.debug("Adding to global format controls: '%s'", editor)
+                ctl = ControlPanelOption(editor,
+                                         str,
+                                         group="Color",
+                                         choices=sorted(self._colors),
+                                         default=self._default_colors[editor],
+                                         is_radio=False,
+                                         state="readonly",
+                                         helptext="Set the annotation color")
+                group_key = ctl.group.replace(" ", "").lower()
+                annotation_key = editor.replace(" ", "").lower()
+                _ANNOTATION_FORMAT.setdefault(annotation_key, dict())[group_key] = ctl
+        for editor in editors:
+            annotation_key = editor.replace(" ", "").lower()
+            for group, ctl in _ANNOTATION_FORMAT[annotation_key].items():
+                logger.debug("Adding global format control to editor: (editor:'%s', group: '%s')",
+                             editor, group)
+                self._add_control(ctl, global_control=True)
 
 
 class BoundingBox(Editor):
@@ -369,14 +402,6 @@ class BoundingBox(Editor):
                                                  group="Display",
                                                  default=dsp not in ("Extract Box", "Landmarks"),
                                                  helptext="Show the {} annotations".format(dsp)))
-        for dsp in ("Bounding Box", "Extract Box", "Landmarks", "Mesh"):
-            self._add_control(ControlPanelOption(dsp,
-                                                 str,
-                                                 group="Color",
-                                                 choices=sorted(self._colors),
-                                                 default=self._default_colors[dsp],
-                                                 is_radio=False,
-                                                 helptext="Set the annotation color"))
 
     def _bind_hotkeys(self):
         """ Add keyboard shortcuts.
@@ -739,14 +764,6 @@ class ExtractBox(Editor):
                                                  group="Display",
                                                  default=dsp != "Landmarks",
                                                  helptext="Show the {} annotations".format(dsp)))
-        for dsp in ("Extract Box", "Landmarks", "Mesh"):
-            self._add_control(ControlPanelOption(dsp,
-                                                 str,
-                                                 group="Color",
-                                                 choices=sorted(self._colors),
-                                                 default=self._default_colors[dsp],
-                                                 is_radio=False,
-                                                 helptext="Set the annotation color"))
 
     def _bind_hotkeys(self):
         """ Add keyboard shortcuts.
@@ -875,14 +892,6 @@ class Landmarks(Editor):
                                                  group="Display",
                                                  default=dsp == "Landmarks",
                                                  helptext="Show the {} annotations".format(dsp)))
-        for dsp in ("Extract Box", "Landmarks", "Mesh"):
-            self._add_control(ControlPanelOption(dsp,
-                                                 str,
-                                                 group="Color",
-                                                 choices=sorted(self._colors),
-                                                 default=self._default_colors[dsp],
-                                                 is_radio=False,
-                                                 helptext="Set the annotation color"))
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
@@ -1062,13 +1071,6 @@ class Mask(Editor):
                                              default="Not",
                                              is_radio=True,
                                              helptext="Select which mask to edit"))
-        self._add_control(ControlPanelOption("Mask Color",
-                                             str,
-                                             group=None,
-                                             choices=sorted(self._colors),
-                                             default=self._default_colors["Mask"],
-                                             is_radio=False,
-                                             helptext="Set the annotation color"))
 
 
 class Mesh(Editor):
@@ -1121,13 +1123,6 @@ class View(Editor):
                                                  group="Display",
                                                  default=dsp != "Mask",
                                                  helptext="Show the {} annotations".format(dsp)))
-            self._add_control(ControlPanelOption(dsp,
-                                                 str,
-                                                 group="Color",
-                                                 choices=sorted(self._colors),
-                                                 default=self._default_colors[dsp],
-                                                 is_radio=False,
-                                                 helptext="Set the annotation color"))
 
 
 class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
