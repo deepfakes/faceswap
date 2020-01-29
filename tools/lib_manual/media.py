@@ -76,6 +76,11 @@ class FrameNavigation():
         return self._current_frame
 
     @property
+    def current_frame_dims(self):
+        """ tuple: The (`height`, `width`) of the source frame that is being displayed """
+        return self._current_frame.shape[:2]
+
+    @property
     def current_display_frame(self):
         """ :class:`ImageTk.PhotoImage`: The currently loaded frame, formatted and sized
         for display. """
@@ -109,15 +114,13 @@ class FrameNavigation():
         position.set(self._current_idx)
         position.trace("w", self._set_current_frame)
 
-        speed = tk.StringVar()
-
         is_playing = tk.BooleanVar()
         is_playing.set(False)
 
         updated = tk.BooleanVar()
         updated.set(False)
 
-        retval = dict(position=position, is_playing=is_playing, speed=speed, updated=updated)
+        retval = dict(position=position, is_playing=is_playing, updated=updated)
         logger.debug("Set tkinter variables: %s", retval)
         return retval
 
@@ -139,13 +142,17 @@ class FrameNavigation():
         filename, frame = self._loader.image_from_index(position)
         self._add_meta_data(position, frame, filename)
         self._current_frame = frame
+        self.set_current_default_frame()
+        self._current_idx = position
+        self._current_scale = self.current_meta_data["scale"]
+        self.tk_update.set(True)
+
+    def set_current_default_frame(self):
+        """ Set or reset the current display frame to the default current frame """
         display = cv2.resize(self._current_frame,
                              self.current_meta_data["display_dims"],
                              interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
         self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
-        self._current_idx = position
-        self._current_scale = self.current_meta_data["scale"]
-        self.tk_update.set(True)
 
     def _add_meta_data(self, position, frame, filename):
         """ Adds the metadata for the current frame to :attr:`meta`.
@@ -219,6 +226,16 @@ class FrameNavigation():
             self.tk_is_playing.set(False)
         self.tk_position.set(index)
 
+    def set_annotated_frame(self, display_image):
+        """ Update the currently displayed frame with the given image.
+
+        Parameters
+        ----------
+        display_image: :class:`numpy.ndarray`
+            The image to replace the :attr:`_current_display_frame` with.
+        """
+        self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display_image))
+
 
 class AlignmentsData():
     """ Holds the alignments and annotations.
@@ -235,12 +252,18 @@ class AlignmentsData():
         logger.debug("Initializing %s: (alignments_path: '%s')",
                      self.__class__.__name__, alignments_path)
         self.frames = frames
-        self._alignments = self._get_alignments(alignments_path)
+        self._mask_names, self._alignments = self._get_alignments(alignments_path)
+
         self._tk_position = frames.tk_position
         self._face_index = 0
         self._extractor = extractor
         self._extractor.link_alignments(self)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def available_masks(self):
+        """ set: Names of all masks that exist in the alignments file """
+        return self._mask_names
 
     @property
     def _latest_alignments(self):
@@ -319,6 +342,7 @@ class AlignmentsData():
             else:
                 folder = self.frames.location
         alignments = Alignments(folder, filename)
+        mask_names = set(alignments.mask_summary)
         faces = dict()
         for framename, items in alignments.data.items():
             faces[framename] = []
@@ -329,7 +353,7 @@ class AlignmentsData():
                 face.load_aligned(None, size=96)
                 this_frame_faces.append(face)
             faces[framename] = dict(saved=this_frame_faces)
-        return faces
+        return mask_names, faces
 
     def set_next_frame(self, direction, filter_type):
         """ Set the display frame to the next or previous frame based on the given filter.

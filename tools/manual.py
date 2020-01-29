@@ -540,11 +540,15 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """ Update the display on frame cache update """
         if not self._frames.tk_update.get():
             return
-        self.itemconfig(self._image, image=self._frames.current_display_frame)
+        self.refresh_display_image()
         for editor in self._editors.values():
             editor.update_annotation()
         self._frames.tk_update.set(False)
         self.update_idletasks()
+
+    def refresh_display_image(self):
+        """ Update the displayed frame """
+        self.itemconfig(self._image, image=self._frames.current_display_frame)
 
 
 class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
@@ -751,7 +755,7 @@ class Aligner():
         logger.debug("Initialize Aligner")
         # TODO FAN
         # TODO Normalization option
-        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()

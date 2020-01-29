@@ -7,6 +7,7 @@ import tkinter as tk
 
 from functools import partial
 
+import cv2
 import numpy as np
 
 from lib.gui.control_helper import ControlPanelOption
@@ -20,6 +21,7 @@ _CONTROL_VARS = dict()
 _ANNOTATION_FORMAT = dict()
 
 # TODO Hide annotations for additional faces
+# TODO Landmarks, Color outline and fill
 
 
 class Editor():
@@ -74,8 +76,8 @@ class Editor():
         """ dict: The default colors for each annotation """
         return {"Bounding Box": "blue",
                 "Extract Box": "green",
-                "Landmarks": "red",
-                "Mask": "black",
+                "Landmarks": "magenta",
+                "Mask": "red",
                 "Mesh": "cyan"}
 
     @property
@@ -329,6 +331,7 @@ class Editor():
 
         editor_key = self.__class__.__name__.lower()
         group_key = option.group.replace(" ", "").lower()
+        group_key = "none" if group_key == "_master" else group_key
         annotation_key = option.title.replace(" ", "").lower()
         _CONTROL_VARS.setdefault(editor_key,
                                  dict()).setdefault(group_key,
@@ -341,19 +344,27 @@ class Editor():
         """
         editors = ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh")
         if not _ANNOTATION_FORMAT:
+            opacity = ControlPanelOption("Mask Opacity",
+                                         int,
+                                         group="Color",
+                                         min_max=(0, 100),
+                                         default=20,
+                                         rounding=1,
+                                         helptext="Set the mask opacity")
             for editor in editors:
                 logger.debug("Adding to global format controls: '%s'", editor)
-                ctl = ControlPanelOption(editor,
-                                         str,
-                                         group="Color",
-                                         choices=sorted(self._colors),
-                                         default=self._default_colors[editor],
-                                         is_radio=False,
-                                         state="readonly",
-                                         helptext="Set the annotation color")
-                group_key = ctl.group.replace(" ", "").lower()
+                colors = ControlPanelOption(editor,
+                                            str,
+                                            group="Color",
+                                            choices=sorted(self._colors),
+                                            default=self._default_colors[editor],
+                                            is_radio=False,
+                                            state="readonly",
+                                            helptext="Set the annotation color")
                 annotation_key = editor.replace(" ", "").lower()
-                _ANNOTATION_FORMAT.setdefault(annotation_key, dict())[group_key] = ctl
+                _ANNOTATION_FORMAT.setdefault(annotation_key, dict())["color"] = colors
+                _ANNOTATION_FORMAT[annotation_key]["mask_opacity"] = opacity
+
         for editor in editors:
             annotation_key = editor.replace(" ", "").lower()
             for group, ctl in _ANNOTATION_FORMAT[annotation_key].items():
@@ -1060,17 +1071,57 @@ class Landmarks(Editor):
 class Mask(Editor):
     """ The mask Editor """
     def __init__(self, canvas, alignments, frames):
-        control_text = "Mask Editor\nEdit the mask."
+        control_text = ("Mask Editor\nEdit the mask."
+                        "\n - NB: For Landmark based masks (e.g. components/extended) it is "
+                        "better to make sure the landmarks are correct rather than editing the "
+                        "mask directly. Any change to the landmarks after editing the mask will "
+                        "override your manual edits.")
         super().__init__(canvas, alignments, frames, control_text)
 
+    @property
+    def _opacity(self):
+        """ float: The mask opacity setting from the control panel from 0.0 - 1.0. """
+        annotation = self.__class__.__name__.lower()
+        return _ANNOTATION_FORMAT[annotation]["mask_opacity"].get() / 100.0
+
     def _add_controls(self):
+        masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])
         self._add_control(ControlPanelOption("Mask type",
                                              str,
-                                             group=None,
-                                             choices=["Not", "Yet", "Implemented"],
-                                             default="Not",
+                                             group="Display",
+                                             choices=masks,
+                                             default=masks[0],
                                              is_radio=True,
                                              helptext="Select which mask to edit"))
+
+    def update_annotation(self):
+        """ Draw the Landmarks and set the objects to :attr:`_object`"""
+        if not self._should_display:
+            self._frames.set_current_default_frame()
+            self._canvas.refresh_display_image()
+            return
+        key = self.__class__.__name__.lower()
+        mask_type = _CONTROL_VARS[key]["display"]["masktype"].get().lower()
+        background = self._frames.current_frame[..., 2::-1].copy()
+        combined = background
+        color = self._control_color[1:]
+        opacity = self._opacity
+        rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))) / 255.0
+        for face in self._alignments.current_faces:
+            mask = face.mask.get(mask_type, None)
+            if mask is None:
+                continue
+            mask = mask.get_full_frame_mask(*reversed(self._frames.current_frame_dims))[..., None]
+            mask = np.tile(np.rint(mask / 255.0), 3)
+            mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = rgb_color
+            combined = cv2.addWeighted(background, 1.0, (mask * 255.0).astype("uint8"), opacity, 0)
+
+        display = cv2.resize(combined,
+                             self._frames.current_meta_data["display_dims"],
+                             interpolation=self._frames.current_meta_data["interpolation"])
+        self._frames.set_annotated_frame(display)
+        self._canvas.refresh_display_image()
+        logger.trace("Updated mask annotation")
 
 
 class Mesh(Editor):

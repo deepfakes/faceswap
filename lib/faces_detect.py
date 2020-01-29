@@ -525,6 +525,7 @@ class Mask():
         self._blur = dict()
         self._blur_kernel = 0
         self._threshold = 0.0
+        self.set_blur_and_threshold()
 
     @property
     def mask(self):
