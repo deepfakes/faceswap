@@ -1077,12 +1077,27 @@ class Mask(Editor):
                         "mask directly. Any change to the landmarks after editing the mask will "
                         "override your manual edits.")
         super().__init__(canvas, alignments, frames, control_text)
+        self._mouse_location = [self._canvas.create_oval(0, 0, 0, 0,
+                                                         outline="black", state="hidden"),
+                                False]
+        self._bind_hotkeys()
 
     @property
     def _opacity(self):
         """ float: The mask opacity setting from the control panel from 0.0 - 1.0. """
         annotation = self.__class__.__name__.lower()
         return _ANNOTATION_FORMAT[annotation]["mask_opacity"].get() / 100.0
+
+    @property
+    def _brush_radius(self):
+        """ int: The radius of the brush to use as set in control panel options """
+        return _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushsize"].get()
+
+    @property
+    def _cursor_color(self):
+        """ str: The hex code for the selected cursor color """
+        color = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["cursorcolor"].get()
+        return self._colors[color.lower()]
 
     def _add_controls(self):
         masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])
@@ -1093,6 +1108,60 @@ class Mask(Editor):
                                              default=masks[0],
                                              is_radio=True,
                                              helptext="Select which mask to edit"))
+        self._add_control(ControlPanelOption("Brush Type",
+                                             str,
+                                             group="Brushes",
+                                             choices=["Paint", "Erase"],
+                                             default="Paint",
+                                             is_radio=True,
+                                             helptext="Select the brush type."
+                                                      "\n\t Paint - Add to the mask"
+                                                      "\n\t Erase - Remove from the mask"))
+        self._add_control(ControlPanelOption("Brush Size",
+                                             int,
+                                             group="Brushes",
+                                             min_max=(1, 100),
+                                             default=10,
+                                             rounding=1,
+                                             helptext="Set the brush size. ([ - decrease, "
+                                                      "] - increase)"))
+        self._add_control(ControlPanelOption("Cursor Color",
+                                             str,
+                                             group="Brushes",
+                                             choices=sorted(self._colors),
+                                             default="White",
+                                             helptext="Select the brush cursor color."))
+
+    def _bind_hotkeys(self):
+        self._canvas.winfo_toplevel().bind("[",
+                                           lambda *e: self._adjust_brush_radius(increase=False))
+        self._canvas.winfo_toplevel().bind("]",
+                                           lambda *e: self._adjust_brush_radius(increase=True))
+
+    def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
+        """ Adjust the brush radius up or down by 1px.
+
+        Sets the control panel option for brush radius to 1 less or 1 more than its current value
+
+        Parameters
+        ----------
+        increase: bool, optional
+            ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
+        """
+        radius_var = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushsize"]
+        current_val = radius_var.get()
+        new_val = min(100, current_val + 1) if increase else max(1, current_val - 1)
+        logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)
+        radius_var.set(new_val)
+
+        delta = new_val - current_val
+        if not self._mouse_location[1] or delta == 0:
+            return
+        current_coords = self._canvas.coords(self._mouse_location[0])
+        new_coords = tuple(coord - delta if idx < 2 else coord + delta
+                           for idx, coord in enumerate(current_coords))
+        logger.trace("Adjusting brush coordinates from %s to %s", current_coords, new_coords)
+        self._canvas.coords(self._mouse_location[0], new_coords)
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
@@ -1122,6 +1191,50 @@ class Mask(Editor):
         self._frames.set_annotated_frame(display)
         self._canvas.refresh_display_image()
         logger.trace("Updated mask annotation")
+
+    # << MOUSE HANDLING >>
+    # Mouse cursor display
+    def _update_cursor(self, event):
+        """ Update the cursor for brush painting and set :attr:`_mouse_location`. """
+        display_dims = self._frames.current_meta_data["display_dims"]
+        if (self._canvas.offset[0] <= event.x <= display_dims[0] + self._canvas.offset[0] and
+                self._canvas.offset[1] <= event.y <= display_dims[1] + self._canvas.offset[1]):
+            radius = self._brush_radius
+            pos_x, pos_y = event.x + 3, event.y + 7
+            coords = (pos_x - radius, pos_y - radius, pos_x + radius, pos_y + radius)
+            self._canvas.config(cursor="none")
+            self._canvas.coords(self._mouse_location[0], *coords)
+            self._canvas.itemconfig(self._mouse_location[0],
+                                    state="normal",
+                                    outline=self._cursor_color)
+            self._mouse_location[1] = True
+            self._canvas.update_idletasks()
+        else:
+            self._canvas.config(cursor="")
+            self._canvas.itemconfig(self._mouse_location[0], state="hidden")
+            self._mouse_location[1] = False
+
+    def _drag_start(self, event):
+        """ The action to perform when the user starts clicking and dragging the mouse.
+
+        Collect information about the object being clicked on and add to :attr:`_drag_data`
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        if not self._mouse_location[1]:
+            self._drag_data = dict()
+            self._drag_callback = None
+            return
+        self._drag_data["starting_location"] = (event.x, event.y)
+        self._drag_callback = self._paint
+
+    def _paint(self, event):
+        """ Paint or erase from Mask and update cursor on click and drag """
+        print(self._drag_data)
+        self._update_cursor(event)
 
 
 class Mesh(Editor):

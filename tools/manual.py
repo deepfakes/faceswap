@@ -118,6 +118,7 @@ class Manual(tk.Tk):
         -----
         The following keys are reserved for the :mod:`tools.lib_manual.editor` classes
             * Delete - Used for deleting faces
+            * [] - decrease / increase brush size
         """
         # TODO - Alt modifier doesn't seem to work on windows. Check
         modifiers = {0x0001: 'shift',
@@ -755,7 +756,7 @@ class Aligner():
         logger.debug("Initialize Aligner")
         # TODO FAN
         # TODO Normalization option
-        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "CV2-DNN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()
