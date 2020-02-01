@@ -142,17 +142,13 @@ class FrameNavigation():
         filename, frame = self._loader.image_from_index(position)
         self._add_meta_data(position, frame, filename)
         self._current_frame = frame
-        self.set_current_default_frame()
-        self._current_idx = position
-        self._current_scale = self.current_meta_data["scale"]
-        self.tk_update.set(True)
-
-    def set_current_default_frame(self):
-        """ Set or reset the current display frame to the default current frame """
         display = cv2.resize(self._current_frame,
                              self.current_meta_data["display_dims"],
                              interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
         self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
+        self._current_idx = position
+        self._current_scale = self.current_meta_data["scale"]
+        self.tk_update.set(True)
 
     def _add_meta_data(self, position, frame, filename):
         """ Adds the metadata for the current frame to :attr:`meta`.
@@ -225,16 +221,6 @@ class FrameNavigation():
         if stop_playback and self.tk_is_playing.get():
             self.tk_is_playing.set(False)
         self.tk_position.set(index)
-
-    def set_annotated_frame(self, display_image):
-        """ Update the currently displayed frame with the given image.
-
-        Parameters
-        ----------
-        display_image: :class:`numpy.ndarray`
-            The image to replace the :attr:`_current_display_frame` with.
-        """
-        self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display_image))
 
 
 class AlignmentsData():

@@ -9,6 +9,7 @@ from functools import partial
 
 import cv2
 import numpy as np
+from PIL import Image, ImageTk
 
 from lib.gui.control_helper import ControlPanelOption
 
@@ -158,31 +159,110 @@ class Editor():
         object_kwargs: dict
             The keyword arguments for this object
         """
-        object_color_key = "fill" if object_type in ("text", "line") else "outline"
+        object_color_keys = self._get_object_color_keys(key, object_type)
         tracking_id = "_".join((key, str(object_index)))
+
         if key not in self._objects or len(self._objects[key]) - 1 < object_index:
-            logger.trace("Adding object: (key: '%s', object_type: '%s', object_index: %s, "
-                         "coordinates: %s, object_kwargs: %s)",
-                         key, object_type, object_index, coordinates, object_kwargs)
-            obj = getattr(self._canvas, "create_{}".format(object_type))
-            self._objects.setdefault(key, []).append(obj(*coordinates, **object_kwargs))
-            self._current_color[tracking_id] = object_kwargs[object_color_key]
+            self._add_new_object(key, object_type, coordinates, object_kwargs)
+            update_color = bool(object_color_keys)
         else:
-            obj = self._objects[key][object_index]
-            update_kwargs = dict()
-            if object_kwargs.get("state", "normal") != "hidden":
-                logger.trace("Setting object state to normal: %s id: %s",
-                             self._canvas.type(obj), obj)
-                update_kwargs["state"] = "normal"
-            if object_kwargs[object_color_key] != self._current_color[tracking_id]:
-                new_color = object_kwargs[object_color_key]
-                update_kwargs[object_color_key] = new_color
-                self._current_color[tracking_id] = new_color
-            if update_kwargs:
-                self._canvas.itemconfig(self._objects[key][object_index], **update_kwargs)
-            self._canvas.coords(self._objects[key][object_index], *coordinates)
-            logger.trace("Updating object: (key: '%s', object_type: %s, object_index:%s, "
-                         "coordinates: %s)", key, object_type, object_index, coordinates)
+            update_color = self._update_existing_object(self._objects[key][object_index],
+                                                        coordinates,
+                                                        object_kwargs,
+                                                        tracking_id,
+                                                        object_color_keys)
+        if update_color:
+            self._current_color[tracking_id] = object_kwargs[object_color_keys[0]]
+
+    @staticmethod
+    def _get_object_color_keys(key, object_type):
+        """ The canvas object's parameter that needs to be adjusted for color varies based on
+        the type of object that is being used. Returns the correct parameter based on object.
+
+        Parameters
+        ----------
+        key: str
+            The key for this annotation in :attr:`_objects`
+        object_type: str
+            This can be any string that is a natural extension to :class:`tkinter.Canvas.create_`
+
+        Returns
+        -------
+        list:
+            The list of keyword arguments for this objects color parameter(s) or an empty list
+            if it is not relevant for this object
+        """
+        if object_type in ("line", "text"):
+            retval = ["fill"]
+        elif object_type == "image":
+            retval = []
+        elif object_type == "oval" and key == "lm_display":
+            retval = ["fill", "outline"]
+        else:
+            retval = ["outline"]
+        logger.trace("returning %s for key: %s, object_type: %s", retval, key, object_type)
+        return retval
+
+    def _add_new_object(self, key, object_type, coordinates, object_kwargs):
+        """ Add a new object to :attr:'_objects' for tracking.
+
+        Parameters
+        ----------
+        key: str
+            The key for this annotation in :attr:`_objects`
+        object_type: str
+            This can be any string that is a natural extension to :class:`tkinter.Canvas.create_`
+        coordinates: tuple or list
+            The bounding box coordinates for this object
+        object_kwargs: dict
+            The keyword arguments for this object
+        """
+        logger.trace("Adding object: (key: '%s', object_type: '%s', coordinates: %s, "
+                     "object_kwargs: %s)", key, object_type, coordinates, object_kwargs)
+        obj = getattr(self._canvas, "create_{}".format(object_type))
+        self._objects.setdefault(key, []).append(obj(*coordinates, **object_kwargs))
+
+    def _update_existing_object(self, tk_object, coordinates, object_kwargs,
+                                tracking_id, object_color_keys):
+        """ Update an existing tracked object.
+
+        Parameters
+        ----------
+        tk_object: tkinter canvas object
+            The canvas object to be updated
+        coordinates: tuple or list
+            The bounding box coordinates for this object
+        object_kwargs: dict
+            The keyword arguments for this object
+        tracking_id: str
+            The tracking identifier for this object
+        object_color_keys: list
+            The list of keyword arguments for this object to update for color
+
+        Returns
+        -------
+        bool
+            ``True`` if :att:`_current_color` should be updated otherwise ``False``
+        """
+        update_color = (object_color_keys and
+                        object_kwargs[object_color_keys[0]] != self._current_color[tracking_id])
+        update_kwargs = dict()
+        if object_kwargs.get("state", "normal") != "hidden":
+            logger.trace("Setting object state to normal: %s id: %s",
+                         self._canvas.type(tk_object), tk_object)
+            update_kwargs["state"] = "normal"
+        if update_color:
+            for key in object_color_keys:
+                update_kwargs[key] = object_kwargs[object_color_keys[0]]
+        if self._canvas.type(tk_object) == "image" and "image" in object_kwargs:
+            update_kwargs["image"] = object_kwargs["image"]
+        logger.trace("Updating coordinates: (tracking_id: %s, tk_object: '%s', object_kwargs: %s, "
+                     "coordinates: %s, update_kwargs: %s", tracking_id, tk_object, object_kwargs,
+                     coordinates, update_kwargs)
+        if update_kwargs:
+            self._canvas.itemconfig(tk_object, **update_kwargs)
+        self._canvas.coords(tk_object, *coordinates)
+        return update_color
 
     # << MOUSE CALLBACKS >>
     # Mouse cursor display
@@ -345,10 +425,10 @@ class Editor():
         editors = ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh")
         if not _ANNOTATION_FORMAT:
             opacity = ControlPanelOption("Mask Opacity",
-                                         int,
+                                         float,
                                          group="Color",
-                                         min_max=(0, 100),
-                                         default=20,
+                                         min_max=(0., 100.),
+                                         default=20.,
                                          rounding=1,
                                          helptext="Set the mask opacity")
             for editor in editors:
@@ -1076,6 +1156,7 @@ class Mask(Editor):
                         "better to make sure the landmarks are correct rather than editing the "
                         "mask directly. Any change to the landmarks after editing the mask will "
                         "override your manual edits.")
+        self._meta = dict()
         super().__init__(canvas, alignments, frames, control_text)
         self._mouse_location = [self._canvas.create_oval(0, 0, 0, 0,
                                                          outline="black", state="hidden"),
@@ -1138,67 +1219,76 @@ class Mask(Editor):
         self._canvas.winfo_toplevel().bind("]",
                                            lambda *e: self._adjust_brush_radius(increase=True))
 
-    def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
-        """ Adjust the brush radius up or down by 1px.
-
-        Sets the control panel option for brush radius to 1 less or 1 more than its current value
-
-        Parameters
-        ----------
-        increase: bool, optional
-            ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
-        """
-        radius_var = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushsize"]
-        current_val = radius_var.get()
-        new_val = min(100, current_val + 1) if increase else max(1, current_val - 1)
-        logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)
-        radius_var.set(new_val)
-
-        delta = new_val - current_val
-        if not self._mouse_location[1] or delta == 0:
-            return
-        current_coords = self._canvas.coords(self._mouse_location[0])
-        new_coords = tuple(coord - delta if idx < 2 else coord + delta
-                           for idx, coord in enumerate(current_coords))
-        logger.trace("Adjusting brush coordinates from %s to %s", current_coords, new_coords)
-        self._canvas.coords(self._mouse_location[0], new_coords)
-
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
         if not self._should_display:
-            self._frames.set_current_default_frame()
-            self._canvas.refresh_display_image()
+            self._hide_annotation()
+            self._meta = dict()
             return
         key = self.__class__.__name__.lower()
         mask_type = _CONTROL_VARS[key]["display"]["masktype"].get().lower()
-        background = self._frames.current_frame[..., 2::-1].copy()
-        combined = background
         color = self._control_color[1:]
-        opacity = self._opacity
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))) / 255.0
-        for face in self._alignments.current_faces:
+        roi_color = self._colors[_ANNOTATION_FORMAT["extractbox"]["color"].get()]
+        thickness = 1
+        opacity = self._opacity
+        for idx, face in enumerate(self._alignments.current_faces):
             mask = face.mask.get(mask_type, None)
             if mask is None:
                 continue
-            mask = mask.get_full_frame_mask(*reversed(self._frames.current_frame_dims))[..., None]
-            mask = np.tile(np.rint(mask / 255.0), 3)
-            mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = rgb_color
-            combined = cv2.addWeighted(background, 1.0, (mask * 255.0).astype("uint8"), opacity, 0)
+            self._update_mask_image(key, mask, idx, rgb_color, opacity)
+            self._update_roi_box(mask, idx, roi_color, thickness)
 
-        display = cv2.resize(combined,
-                             self._frames.current_meta_data["display_dims"],
-                             interpolation=self._frames.current_meta_data["interpolation"])
-        self._frames.set_annotated_frame(display)
-        self._canvas.refresh_display_image()
+        self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
         logger.trace("Updated mask annotation")
+
+    def _update_mask_image(self, key, mask, face_index, rgb_color, opacity):
+        """ Obtain a full frame mask, overlay over image.
+        """
+        # TODO Get mask at correct display dims rather than resize
+        frame_dims = tuple(reversed(self._frames.current_frame_dims))
+        original_roi = mask.original_roi.clip(min=(0, 0), max=frame_dims)
+        pnt_min, pnt_max = original_roi.min(axis=0), original_roi.max(axis=0)
+        yslice, xslice = slice(pnt_min[0], pnt_max[0]), slice(pnt_min[1], pnt_max[1])
+
+        mask = (mask.get_full_frame_mask(
+            *frame_dims)[xslice, yslice][..., None] * opacity).astype("uint8")
+        rgb = np.tile(rgb_color * 255.0, mask.shape).astype("uint8")
+        scale = self._frames.current_meta_data["scale"]
+        new_size = np.rint(np.array((pnt_max[0] - pnt_min[0],
+                                     pnt_max[1] - pnt_min[1])) * scale).astype("int32")
+        rgba = cv2.resize(np.concatenate((rgb, mask), axis=2),
+                          tuple(new_size),
+                          interpolation=self._frames.current_meta_data["interpolation"])
+        display = ImageTk.PhotoImage(Image.fromarray(rgba))
+        self._meta.setdefault("image", []).append(display)
+
+        top_left = self._scale_to_display(pnt_min)
+        kwargs = dict(image=display, anchor=tk.NW)
+        object_count = len(self._objects.get(key, []))
+        self._create_or_update(key, "image", face_index, top_left, kwargs)
+        if object_count < len(self._objects[key]):
+            self._canvas.tag_lower(self._objects[key][-1])
+            self._canvas.send_frame_to_bottom()
+
+    def _update_roi_box(self, mask, face_index, color, thickness):
+        """ Update the region of interest box for the current mask """
+        keys = ("text", "roibox")
+        box = self._scale_to_display(mask.original_roi).flatten()
+        top_left = box[:2] - 10
+        kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(face_index))
+        self._create_or_update(keys[0], "text", face_index, top_left, kwargs)
+        kwargs = dict(fill="", outline=color, width=thickness)
+        self._create_or_update(keys[1], "polygon", face_index, box, kwargs)
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
+
     def _update_cursor(self, event):
         """ Update the cursor for brush painting and set :attr:`_mouse_location`. """
-        display_dims = self._frames.current_meta_data["display_dims"]
-        if (self._canvas.offset[0] <= event.x <= display_dims[0] + self._canvas.offset[0] and
-                self._canvas.offset[1] <= event.y <= display_dims[1] + self._canvas.offset[1]):
+        roi_boxes = self._objects["roibox"]
+        item_ids = set(self._canvas.find_withtag("current")).intersection(roi_boxes)
+        if item_ids:
             radius = self._brush_radius
             pos_x, pos_y = event.x + 3, event.y + 7
             coords = (pos_x - radius, pos_y - radius, pos_x + radius, pos_y + radius)
@@ -1233,8 +1323,32 @@ class Mask(Editor):
 
     def _paint(self, event):
         """ Paint or erase from Mask and update cursor on click and drag """
-        print(self._drag_data)
         self._update_cursor(event)
+
+    def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
+        """ Adjust the brush radius up or down by 1px.
+
+        Sets the control panel option for brush radius to 1 less or 1 more than its current value
+
+        Parameters
+        ----------
+        increase: bool, optional
+            ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
+        """
+        radius_var = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushsize"]
+        current_val = radius_var.get()
+        new_val = min(100, current_val + 1) if increase else max(1, current_val - 1)
+        logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)
+        radius_var.set(new_val)
+
+        delta = new_val - current_val
+        if not self._mouse_location[1] or delta == 0:
+            return
+        current_coords = self._canvas.coords(self._mouse_location[0])
+        new_coords = tuple(coord - delta if idx < 2 else coord + delta
+                           for idx, coord in enumerate(current_coords))
+        logger.trace("Adjusting brush coordinates from %s to %s", current_coords, new_coords)
+        self._canvas.coords(self._mouse_location[0], new_coords)
 
 
 class Mesh(Editor):

@@ -490,6 +490,10 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
         return offset_x, offset_y
 
+    def send_frame_to_bottom(self):
+        """ Sent the background frame to the bottom of the stack """
+        self.tag_lower(self._image)
+
     def _get_editors(self):
         """ Get the object editors for the canvas.
 
@@ -756,7 +760,7 @@ class Aligner():
         logger.debug("Initialize Aligner")
         # TODO FAN
         # TODO Normalization option
-        aligner = Extractor(None, "CV2-DNN", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()

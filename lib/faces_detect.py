@@ -546,6 +546,18 @@ class Mask():
         logger.trace("mask shape: %s", mask.shape)
         return mask
 
+    @property
+    def original_roi(self):
+        """ numpy.ndarray: The original region of interest of the mask in the source frame """
+        points = np.array([[0, 0],
+                           [0, self.stored_size - 1],
+                           [self.stored_size - 1, self.stored_size - 1],
+                           [self.stored_size - 1, 0]], np.int32).reshape((-1, 1, 2))
+        matrix = cv2.invertAffineTransform(self._affine_matrix)
+        roi = cv2.transform(points, matrix).reshape((4, 2))
+        logger.trace("Returning: %s", roi)
+        return roi
+
     def get_full_frame_mask(self, width, height):
         """ Return the stored mask in a full size frame of the given dimensions
 
