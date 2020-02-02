@@ -390,23 +390,16 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         dict:
             The action name and its associated button.
         """
-        style = ttk.Style()
-        style.configure("actions_selected.TButton", relief="flat", background="#bedaf1")
-        style.configure("actions_deselected.TButton", relief="flat")
-
         buttons = dict()
-
         for action in self.key_bindings.values():
             if action == "view":
-                state = (["focus"])
-                btn_style = "actions_selected.TButton"
+                state = (["pressed", "focus"])
             else:
-                btn_style = "actions_deselected.TButton"
+                state = (["!pressed", "!focus"])
 
             button = ttk.Button(self,
                                 image=get_images().icons[action],
-                                command=lambda t=action: self.on_click(t),
-                                style=btn_style)
+                                command=lambda t=action: self.on_click(t))
             button.state(state)
             button.pack()
             Tooltip(button, text=self._helptext[action])
@@ -423,9 +416,10 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         for title, button in self._buttons.items():
             if action == title:
-                button.configure(style="actions_selected.TButton")
+                button.state(["pressed", "focus"])
             else:
-                button.configure(style="actions_deselected.TButton")
+                button.state(["!pressed", "!focus"])
+        self.update_idletasks()
         self._selected_action.set(action)
 
 

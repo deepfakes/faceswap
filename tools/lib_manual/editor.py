@@ -1188,11 +1188,12 @@ class Mask(Editor):
 
     def _add_controls(self):
         masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])
+        default = masks[0] if len(masks) == 1 else [mask for mask in masks if mask != "None"][0]
         self._add_control(ControlPanelOption("Mask type",
                                              str,
                                              group="Display",
                                              choices=masks,
-                                             default=masks[0],
+                                             default=default,
                                              is_radio=True,
                                              helptext="Select which mask to edit"))
         self._add_control(ControlPanelOption("Brush Type",
