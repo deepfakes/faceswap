@@ -425,10 +425,10 @@ class Editor():
         editors = ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh")
         if not _ANNOTATION_FORMAT:
             opacity = ControlPanelOption("Mask Opacity",
-                                         float,
+                                         int,
                                          group="Color",
-                                         min_max=(0., 100.),
-                                         default=20.,
+                                         min_max=(0, 100),
+                                         default=20,
                                          rounding=1,
                                          helptext="Set the mask opacity")
             for editor in editors:
@@ -1156,7 +1156,7 @@ class Mask(Editor):
                         "better to make sure the landmarks are correct rather than editing the "
                         "mask directly. Any change to the landmarks after editing the mask will "
                         "override your manual edits.")
-        self._meta = dict()
+        self._meta = []
         super().__init__(canvas, alignments, frames, control_text)
         self._mouse_location = [self._canvas.create_oval(0, 0, 0, 0,
                                                          outline="black", state="hidden"),
@@ -1173,6 +1173,12 @@ class Mask(Editor):
     def _brush_radius(self):
         """ int: The radius of the brush to use as set in control panel options """
         return _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushsize"].get()
+
+    @property
+    def _brush_value(self):
+        """ int: `0` if erase has been selected, `255` if paint has been selected. """
+        brushtype = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushtype"].get()
+        return 0 if brushtype == "Erase" else 255
 
     @property
     def _cursor_color(self):
@@ -1219,12 +1225,36 @@ class Mask(Editor):
         self._canvas.winfo_toplevel().bind("]",
                                            lambda *e: self._adjust_brush_radius(increase=True))
 
+    def _update_meta(self, key, item, face_index):
+        """ Update the meta information for the given object.
+
+        Parameters
+        ----------
+        key: str
+            The object key in the meta dictionary
+        item: tkinter object
+            The object to be stored
+        index:
+            The face index that this object pertains to.
+        """
+        logger.trace("Updating meta dict: (key: %s, object: %s, face_index: %s)",
+                     key, item, face_index)
+        if key not in self._meta or len(self._meta[key]) - 1 < face_index:
+            logger.trace("Creating new item list")
+            self._meta.setdefault(key, []).append(item)
+        else:
+            logger.trace("Appending to existing item list")
+            self._meta[key][face_index] = item
+
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
         if not self._should_display:
             self._hide_annotation()
             self._meta = dict()
             return
+        position = self._frames.tk_position.get()
+        if position != self._meta.get("position", -1):
+            self._meta = dict(position=position)
         key = self.__class__.__name__.lower()
         mask_type = _CONTROL_VARS[key]["display"]["masktype"].get().lower()
         color = self._control_color[1:]
@@ -1248,28 +1278,57 @@ class Mask(Editor):
         # TODO Get mask at correct display dims rather than resize
         frame_dims = tuple(reversed(self._frames.current_frame_dims))
         original_roi = mask.original_roi.clip(min=(0, 0), max=frame_dims)
-        pnt_min, pnt_max = original_roi.min(axis=0), original_roi.max(axis=0)
-        yslice, xslice = slice(pnt_min[0], pnt_max[0]), slice(pnt_min[1], pnt_max[1])
+        pnts = dict(min=original_roi.min(axis=0), max=original_roi.max(axis=0))
 
-        mask = (mask.get_full_frame_mask(
-            *frame_dims)[xslice, yslice][..., None] * opacity).astype("uint8")
-        rgb = np.tile(rgb_color * 255.0, mask.shape).astype("uint8")
-        scale = self._frames.current_meta_data["scale"]
-        new_size = np.rint(np.array((pnt_max[0] - pnt_min[0],
-                                     pnt_max[1] - pnt_min[1])) * scale).astype("int32")
-        rgba = cv2.resize(np.concatenate((rgb, mask), axis=2),
-                          tuple(new_size),
-                          interpolation=self._frames.current_meta_data["interpolation"])
+        scaled_size = np.rint(
+            np.array((pnts["max"][0] - pnts["min"][0], pnts["max"][1] - pnts["min"][1])) *
+            self._frames.current_meta_data["scale"]).astype("int32")
+        rgb = np.tile(rgb_color * 255.0, (*scaled_size, 1)).astype("uint8")
+        mask = self._get_mask(mask,
+                              face_index,
+                              frame_dims,
+                              pnts["min"],
+                              pnts["max"],
+                              scaled_size) * opacity
+        rgba = np.concatenate((rgb, mask.astype("uint8")), axis=2)
+
         display = ImageTk.PhotoImage(Image.fromarray(rgba))
-        self._meta.setdefault("image", []).append(display)
+        top_left = self._scale_to_display(pnts["min"])
+        self._update_meta("image", display, face_index)
+        self._update_meta("top_left", np.rint(top_left).astype("uint16"), face_index)
 
-        top_left = self._scale_to_display(pnt_min)
         kwargs = dict(image=display, anchor=tk.NW)
         object_count = len(self._objects.get(key, []))
         self._create_or_update(key, "image", face_index, top_left, kwargs)
         if object_count < len(self._objects[key]):
             self._canvas.tag_lower(self._objects[key][-1])
             self._canvas.send_frame_to_bottom()
+
+    def _get_mask(self, mask, face_index, frame_dims, pnt_min, pnt_max, scaled_size):
+        """ TODO
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The one channel mask cropped to the ROI
+        face_index: int
+            The index pertaining to the current face
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            A single channel image of mask dimensions, either blank or containing existing
+            annotations
+        """
+        masks = self._meta.get("mask", None)
+        if masks is None or len(masks) - 1 < face_index:
+            yslice, xslice = slice(pnt_min[0], pnt_max[0]), slice(pnt_min[1], pnt_max[1])
+            mask = (mask.get_full_frame_mask(*frame_dims)[xslice, yslice]).astype("uint8")
+            self._meta.setdefault("mask", []).append(
+                cv2.resize(
+                    mask,
+                    tuple(scaled_size),
+                    interpolation=self._frames.current_meta_data["interpolation"])[..., None])
+        return self._meta["mask"][face_index]
 
     def _update_roi_box(self, mask, face_index, color, thickness):
         """ Update the region of interest box for the current mask """
@@ -1286,9 +1345,10 @@ class Mask(Editor):
 
     def _update_cursor(self, event):
         """ Update the cursor for brush painting and set :attr:`_mouse_location`. """
-        roi_boxes = self._objects["roibox"]
+        roi_boxes = self._objects.get("roibox", [])
         item_ids = set(self._canvas.find_withtag("current")).intersection(roi_boxes)
         if item_ids:
+            obj_idx = roi_boxes.index(list(item_ids)[0])
             radius = self._brush_radius
             pos_x, pos_y = event.x + 3, event.y + 7
             coords = (pos_x - radius, pos_y - radius, pos_x + radius, pos_y + radius)
@@ -1297,12 +1357,12 @@ class Mask(Editor):
             self._canvas.itemconfig(self._mouse_location[0],
                                     state="normal",
                                     outline=self._cursor_color)
-            self._mouse_location[1] = True
+            self._mouse_location[1] = obj_idx
             self._canvas.update_idletasks()
         else:
             self._canvas.config(cursor="")
             self._canvas.itemconfig(self._mouse_location[0], state="hidden")
-            self._mouse_location[1] = False
+            self._mouse_location[1] = None
 
     def _drag_start(self, event):
         """ The action to perform when the user starts clicking and dragging the mouse.
@@ -1314,15 +1374,27 @@ class Mask(Editor):
         event: :class:`tkinter.Event`
             The tkinter mouse event.
         """
-        if not self._mouse_location[1]:
+        face_idx = self._mouse_location[1]
+        if face_idx is None:
             self._drag_data = dict()
             self._drag_callback = None
             return
-        self._drag_data["starting_location"] = (event.x, event.y)
+        self._drag_data["starting_location"] = np.array((event.x, event.y))
         self._drag_callback = self._paint
 
     def _paint(self, event):
         """ Paint or erase from Mask and update cursor on click and drag """
+        face_idx = self._mouse_location[1]
+        offset = self._meta["top_left"][face_idx]
+        radius = self._brush_radius
+        start = self._drag_data["starting_location"] - offset
+        end = np.array((event.x, event.y)) - offset
+        paint_y = slice(*np.sort([start[0] - radius, end[0] + radius]))
+        paint_x = slice(*np.sort([start[1] - radius, end[1] + radius]))
+
+        self._meta["mask"][face_idx][paint_x, paint_y] = self._brush_value
+        self._drag_data["starting_location"] = np.array((event.x, event.y))
+        self._frames.tk_update.set(True)
         self._update_cursor(event)
 
     def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
