@@ -1254,11 +1254,12 @@ class Mask(Editor):
             return
         position = self._frames.tk_position.get()
         if position != self._meta.get("position", -1):
-            self._meta = dict(position=position)
+            self._meta = dict(position=position,
+                              frame_dims=tuple(reversed(self._frames.current_frame_dims)))
         key = self.__class__.__name__.lower()
         mask_type = _CONTROL_VARS[key]["display"]["masktype"].get().lower()
         color = self._control_color[1:]
-        rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))) / 255.0
+        rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
         roi_color = self._colors[_ANNOTATION_FORMAT["extractbox"]["color"].get()]
         thickness = 1
         opacity = self._opacity
@@ -1266,69 +1267,78 @@ class Mask(Editor):
             mask = face.mask.get(mask_type, None)
             if mask is None:
                 continue
-            self._update_mask_image(key, mask, idx, rgb_color, opacity)
+            self._set_face_meta_data(mask, idx)
+            self._update_mask_image(key, idx, rgb_color, opacity)
             self._update_roi_box(mask, idx, roi_color, thickness)
 
         self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
         logger.trace("Updated mask annotation")
 
-    def _update_mask_image(self, key, mask, face_index, rgb_color, opacity):
-        """ Obtain a full frame mask, overlay over image.
-        """
-        # TODO Get mask at correct display dims rather than resize
-        frame_dims = tuple(reversed(self._frames.current_frame_dims))
-        original_roi = mask.original_roi.clip(min=(0, 0), max=frame_dims)
-        pnts = dict(min=original_roi.min(axis=0), max=original_roi.max(axis=0))
+    def _set_face_meta_data(self, mask, face_index):
+        """ Set the metadata for the current face if it has changed or is new
 
-        scaled_size = np.rint(
-            np.array((pnts["max"][0] - pnts["min"][0], pnts["max"][1] - pnts["min"][1])) *
-            self._frames.current_meta_data["scale"]).astype("int32")
-        rgb = np.tile(rgb_color * 255.0, (*scaled_size, 1)).astype("uint8")
-        mask = self._get_mask(mask,
-                              face_index,
-                              frame_dims,
-                              pnts["min"],
-                              pnts["max"],
-                              scaled_size) * opacity
-        rgba = np.concatenate((rgb, mask.astype("uint8")), axis=2)
-
-        display = ImageTk.PhotoImage(Image.fromarray(rgba))
-        top_left = self._scale_to_display(pnts["min"])
-        self._update_meta("image", display, face_index)
-        self._update_meta("top_left", np.rint(top_left).astype("uint16"), face_index)
-
-        kwargs = dict(image=display, anchor=tk.NW)
-        object_count = len(self._objects.get(key, []))
-        self._create_or_update(key, "image", face_index, top_left, kwargs)
-        if object_count < len(self._objects[key]):
-            self._canvas.tag_lower(self._objects[key][-1])
-            self._canvas.send_frame_to_bottom()
-
-    def _get_mask(self, mask, face_index, frame_dims, pnt_min, pnt_max, scaled_size):
-        """ TODO
         Parameters
         ----------
         mask: :class:`numpy.ndarray`
             The one channel mask cropped to the ROI
         face_index: int
             The index pertaining to the current face
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            A single channel image of mask dimensions, either blank or containing existing
-            annotations
         """
+        # TODO Update when mask type changes
+        # TODO Get mask at correct display dims rather than resize
         masks = self._meta.get("mask", None)
-        if masks is None or len(masks) - 1 < face_index:
-            yslice, xslice = slice(pnt_min[0], pnt_max[0]), slice(pnt_min[1], pnt_max[1])
-            mask = (mask.get_full_frame_mask(*frame_dims)[xslice, yslice]).astype("uint8")
-            self._meta.setdefault("mask", []).append(
-                cv2.resize(
-                    mask,
-                    tuple(scaled_size),
-                    interpolation=self._frames.current_meta_data["interpolation"])[..., None])
-        return self._meta["mask"][face_index]
+        if masks is not None and len(masks) - 1 == face_index:
+            logger.trace("Meta information already defined for face: %s", face_index)
+            return
+
+        logger.debug("Defining meta information for face: %s", face_index)
+        scale = self._frames.current_meta_data["scale"]
+        # Clip the original ROI where it goes out of frame
+        original_roi = mask.original_roi
+        clipped_roi = original_roi.clip(min=(0, 0), max=self._meta["frame_dims"])
+        min_max = dict(min=clipped_roi.min(axis=0), max=clipped_roi.max(axis=0))
+        scaled_roi = np.rint(
+            np.array((min_max["max"][0] - min_max["min"][0],
+                      min_max["max"][1] - min_max["min"][1])) * scale).astype("uint16")
+        xslice = slice(min_max["min"][1], min_max["max"][1])
+        yslice = slice(min_max["min"][0], min_max["max"][0])
+        mask = (mask.get_full_frame_mask(*self._meta["frame_dims"])[xslice,
+                                                                    yslice]).astype("uint8")
+        mask = cv2.resize(mask,
+                          tuple(scaled_roi),
+                          interpolation=self._frames.current_meta_data["interpolation"])[..., None]
+
+        roi_mask = np.zeros_like(mask)
+        roi_corners = np.rint(np.array([original_roi - min_max["min"]]) * scale).astype("int32")
+        cv2.fillPoly(roi_mask, roi_corners, 255)
+
+        self._meta.setdefault("mask", []).append(mask)
+        self._meta.setdefault("roi_mask", []).append(roi_mask)
+        self._meta.setdefault("scaled_roi_size", []).append(scaled_roi)
+        self._meta.setdefault("top_left", []).append(
+            np.rint(self._scale_to_display(min_max["min"])).astype("uint16"))
+
+    def _update_mask_image(self, key, face_index, rgb_color, opacity):
+        """ Obtain a full frame mask, overlay over image.
+        """
+        rgb = np.tile(rgb_color,
+                      (*reversed(self._meta["scaled_roi_size"][face_index]), 1)).astype("uint8")
+        mask = (self._meta["mask"][face_index] * opacity).astype("uint8")
+        rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
+
+        display = ImageTk.PhotoImage(Image.fromarray(rgba))
+        self._update_meta("image", display, face_index)
+
+        object_count = len(self._objects.get(key, []))
+        self._create_or_update(key,
+                               "image",
+                               face_index,
+                               self._meta["top_left"][face_index],
+                               dict(image=display, anchor=tk.NW))
+        if object_count < len(self._objects[key]):
+            logger.trace("Sending mask to bottom")
+            self._canvas.tag_lower(self._objects[key][-1])
+            self._canvas.send_frame_to_bottom()
 
     def _update_roi_box(self, mask, face_index, color, thickness):
         """ Update the region of interest box for the current mask """
@@ -1350,8 +1360,7 @@ class Mask(Editor):
         if item_ids:
             obj_idx = roi_boxes.index(list(item_ids)[0])
             radius = self._brush_radius
-            pos_x, pos_y = event.x + 3, event.y + 7
-            coords = (pos_x - radius, pos_y - radius, pos_x + radius, pos_y + radius)
+            coords = (event.x - radius, event.y - radius, event.x + radius, event.y + radius)
             self._canvas.config(cursor="none")
             self._canvas.coords(self._mouse_location[0], *coords)
             self._canvas.itemconfig(self._mouse_location[0],
@@ -1386,13 +1395,14 @@ class Mask(Editor):
         """ Paint or erase from Mask and update cursor on click and drag """
         face_idx = self._mouse_location[1]
         offset = self._meta["top_left"][face_idx]
-        radius = self._brush_radius
-        start = self._drag_data["starting_location"] - offset
-        end = np.array((event.x, event.y)) - offset
-        paint_y = slice(*np.sort([start[0] - radius, end[0] + radius]))
-        paint_x = slice(*np.sort([start[1] - radius, end[1] + radius]))
+        start = tuple(self._drag_data["starting_location"] - offset)
+        end = tuple(np.array((event.x, event.y)) - offset)
+        cv2.line(self._meta["mask"][face_idx],
+                 start,
+                 end,
+                 self._brush_value,
+                 self._brush_radius * 2)
 
-        self._meta["mask"][face_idx][paint_x, paint_y] = self._brush_value
         self._drag_data["starting_location"] = np.array((event.x, event.y))
         self._frames.tk_update.set(True)
         self._update_cursor(event)
