@@ -5,6 +5,7 @@ import logging
 import platform
 import tkinter as tk
 
+from collections import OrderedDict
 from functools import partial
 
 import cv2
@@ -48,7 +49,10 @@ class Editor():
         self._frames = frames
 
         self._current_color = dict()
+        self._actions = OrderedDict()
         self._controls = dict(header=control_text, controls=[])
+
+        self._add_actions()
         self._add_controls()
         self._add_annotation_format_controls()
 
@@ -96,6 +100,12 @@ class Editor():
     def _active_editor(self):
         """ str: The name of the currently active editor """
         return self._canvas.selected_action
+
+    @property
+    def actions(self):
+        """ list: The optional action buttons for the actions frame in the GUI for the
+        current editor """
+        return self._actions
 
     @property
     def controls(self):
@@ -385,11 +395,25 @@ class Editor():
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
 
-    # << CONTROL PANEL OPTIONS >>
+    # << ACTION CONTROL PANEL OPTIONS >>
+    def _add_actions(self):
+        """ Add the Action buttons for this editor's optional left hand side action sections.
+
+        The default does nothing. Override for editor specific actions.
+        """
+        self._actions = self._actions
+
+    def _add_action(self, title, icon, helptext, hotkey=None):
+        """ Add an action dictionary to :attr:`_actions`. This will create a button in the optional
+        actions frame to the left hand side of the frames viewer.
+        """
+        var = tk.BooleanVar()
+        self._actions[title] = dict(icon=icon, helptext=helptext, tk_var=var, hotkey=hotkey)
+
     def _add_controls(self):
         """ Add the controls for this editor's control panel.
 
-        The default does nothing. Override for editor specific controls
+        The default does nothing. Override for editor specific controls.
         """
         self._controls = self._controls
 
@@ -516,16 +540,15 @@ class BoundingBox(Editor):
 
         key = self.__class__.__name__.lower()
         color = self._control_color
-        thickness = 1
         for idx, face in enumerate(self._alignments.current_faces):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
-            kwargs = dict(outline=color, width=thickness)
+            kwargs = dict(outline=color, width=1)
             self._create_or_update(key, "rectangle", idx, box, kwargs)
-            self._update_anchor_annotation(idx, box, thickness, color)
+            self._update_anchor_annotation(idx, box, color)
         logger.trace("Updated bounding box annotations: %s", self._objects[key])
 
-    def _update_anchor_annotation(self, face_index, bounding_box, thickness, color):
+    def _update_anchor_annotation(self, face_index, bounding_box, color):
         """ Update the anchor annotations for each corner of the bounding box.
 
         The anchors only display when the bounding box editor is active.
@@ -536,8 +559,6 @@ class BoundingBox(Editor):
             The index of the face being annotated
         bounding_box: :class:`numpy.ndarray`
             The scaled bounding box to get the corner anchors for
-        thickness: int
-            The line thickness of the bounding box
         color: str
             The hex color of the bounding box line
         """
@@ -551,9 +572,9 @@ class BoundingBox(Editor):
         anchor_points = self._get_anchor_points(self._corners_from_coords(bounding_box))
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*anchor_points)):
             obj_idx = (face_index * 4) + idx
-            dsp_kwargs = dict(outline=color, fill=fill_color, width=thickness)
+            dsp_kwargs = dict(outline=color, fill=fill_color, width=1)
             self._create_or_update(keys[0], "oval", obj_idx, anc_dsp, dsp_kwargs)
-            grb_kwargs = dict(outline="", fill="", width=thickness, activefill=activefill_color)
+            grb_kwargs = dict(outline="", fill="", width=1, activefill=activefill_color)
             self._create_or_update(keys[1], "oval", obj_idx, anc_grb, grb_kwargs)
         logger.trace("Updated bounding box anchor annotations: %s", {key: self._objects[key]
                                                                      for key in keys})
@@ -873,7 +894,6 @@ class ExtractBox(Editor):
             return
         keys = ("text", "extractbox")
         color = self._control_color
-        thickness = 1
         # TODO FIX THIS TEST
         #  if not all(face.original_roi for face in self._alignments.current_faces):
         #      return extract_box
@@ -883,7 +903,7 @@ class ExtractBox(Editor):
             top_left = box[:2] - 10
             kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
             self._create_or_update(keys[0], "text", idx, top_left, kwargs)
-            kwargs = dict(fill="", outline=color, width=thickness)
+            kwargs = dict(fill="", outline=color, width=1)
             self._create_or_update(keys[1], "polygon", idx, box, kwargs)
             self._canvas.tag_raise(self._objects[keys[1]][idx])
 
@@ -975,6 +995,10 @@ class Landmarks(Editor):
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
                         " - Click and drag individual landmark points to relocate.")
         super().__init__(canvas, alignments, frames, control_text)
+
+    def _add_actions(self):
+        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
+        self._add_action("move", "move", "Edit individual Landmarks", hotkey="D")
 
     def _add_controls(self):
         for dsp in ("Extract Box", "Landmarks", "Mesh"):
@@ -1177,14 +1201,19 @@ class Mask(Editor):
     @property
     def _brush_value(self):
         """ int: `0` if erase has been selected, `255` if paint has been selected. """
-        brushtype = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushtype"].get()
-        return 0 if brushtype == "Erase" else 255
+        action = [name for name, option in self._actions.items() if option["tk_var"].get()]
+        return 0 if action[0] == "erase" else 255
 
     @property
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
         color = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["cursorcolor"].get()
         return self._colors[color.lower()]
+
+    def _add_actions(self):
+        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
+        self._add_action("draw", "draw", "Draw the mask", hotkey="D")
+        self._add_action("erase", "erase", "Erase the mask", hotkey="R")
 
     def _add_controls(self):
         masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])
@@ -1196,15 +1225,6 @@ class Mask(Editor):
                                              default=default,
                                              is_radio=True,
                                              helptext="Select which mask to edit"))
-        self._add_control(ControlPanelOption("Brush Type",
-                                             str,
-                                             group="Brushes",
-                                             choices=["Paint", "Erase"],
-                                             default="Paint",
-                                             is_radio=True,
-                                             helptext="Select the brush type."
-                                                      "\n\t Paint - Add to the mask"
-                                                      "\n\t Erase - Remove from the mask"))
         self._add_control(ControlPanelOption("Brush Size",
                                              int,
                                              group="Brushes",
@@ -1262,7 +1282,6 @@ class Mask(Editor):
         color = self._control_color[1:]
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
         roi_color = self._colors[_ANNOTATION_FORMAT["extractbox"]["color"].get()]
-        thickness = 1
         opacity = self._opacity
         for idx, face in enumerate(self._alignments.current_faces):
             mask = face.mask.get(mask_type, None)
@@ -1270,7 +1289,7 @@ class Mask(Editor):
                 continue
             self._set_face_meta_data(mask, idx)
             self._update_mask_image(key, idx, rgb_color, opacity)
-            self._update_roi_box(mask, idx, roi_color, thickness)
+            self._update_roi_box(mask, idx, roi_color)
 
         self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
         logger.trace("Updated mask annotation")
@@ -1341,14 +1360,14 @@ class Mask(Editor):
             self._canvas.tag_lower(self._objects[key][-1])
             self._canvas.send_frame_to_bottom()
 
-    def _update_roi_box(self, mask, face_index, color, thickness):
+    def _update_roi_box(self, mask, face_index, color):
         """ Update the region of interest box for the current mask """
         keys = ("text", "roibox")
         box = self._scale_to_display(mask.original_roi).flatten()
         top_left = box[:2] - 10
         kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(face_index))
         self._create_or_update(keys[0], "text", face_index, top_left, kwargs)
-        kwargs = dict(fill="", outline=color, width=thickness)
+        kwargs = dict(fill="", outline=color, width=1)
         self._create_or_update(keys[1], "polygon", face_index, box, kwargs)
 
     # << MOUSE HANDLING >>
@@ -1454,21 +1473,18 @@ class Mesh(Editor):
             self._hide_annotation(key)
             return
         color = self._control_color
-        thickness = 1
         for face_idx, face in enumerate(self._alignments.current_faces):
             landmarks = face.landmarks_xy
             base_idx = (face_idx * len(self._landmark_mapping))
-            logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s, thickness: %s)",
-                         landmarks, color, thickness)
+            logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s)", landmarks, color)
             for idx, (segment, val) in enumerate(self._landmark_mapping.items()):
                 obj_idx = base_idx + idx
                 pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
                 if segment in ("right_eye", "left_eye", "mouth"):
-                    kwargs = dict(fill="", outline=color, width=thickness)
+                    kwargs = dict(fill="", outline=color, width=1)
                     self._create_or_update(key, "polygon", obj_idx, pts, kwargs)
                 else:
-                    kwargs = dict(fill=color, width=thickness)
-                    self._create_or_update(key, "line", obj_idx, pts, kwargs)
+                    self._create_or_update(key, "line", obj_idx, pts, dict(fill=color, width=1))
 
 
 class View(Editor):

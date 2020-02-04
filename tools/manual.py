@@ -119,6 +119,7 @@ class Manual(tk.Tk):
         The following keys are reserved for the :mod:`tools.lib_manual.editor` classes
             * Delete - Used for deleting faces
             * [] - decrease / increase brush size
+            * R, Z, D - Optional Actions
         """
         # TODO - Alt modifier doesn't seem to work on windows. Check
         modifiers = {0x0001: 'shift',
@@ -199,6 +200,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self._add_nav()
         self._play_button = self._add_transport()
+        self._actions_frame.add_optional_buttons(self.editors)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -345,11 +347,11 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
 
-        self._configure_style()
+        self._configure_styles()
         self._actions = ("view", "boundingbox", "extractbox", "mask", "landmarks")
         self._buttons = self._add_buttons()
-        self._selected_action = tk.StringVar()
-        self._selected_action.set("view")
+        self._selected_action = self._set_selected_action_tkvar()
+        self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
 
     @property
     def actions(self):
@@ -376,10 +378,12 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                     mask="Mask editor (M)",
                     landmarks="Individual landmark point editor (L)")
 
-    def _configure_style(self):
+    def _configure_styles(self):
         """ Configure background color for Actions widget """
         style = ttk.Style()
         style.configure("actions.TFrame", background='#d3d3d3')
+        style.configure("actions_selected.TButton", relief="flat", background="#bedaf1")
+        style.configure("actions_deselected.TButton", relief="flat")
         self.config(style="actions.TFrame")
 
     def _add_buttons(self):
@@ -390,10 +394,8 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         dict:
             The action name and its associated button.
         """
-        style = ttk.Style()
-        style.configure("actions_selected.TButton", relief="flat", background="#bedaf1")
-        style.configure("actions_deselected.TButton", relief="flat")
-
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP, fill=tk.Y)
         buttons = dict()
         for action in self.key_bindings.values():
             if action == "view":
@@ -403,7 +405,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 btn_style = "actions_deselected.TButton"
                 state = (["!pressed", "!focus"])
 
-            button = ttk.Button(self,
+            button = ttk.Button(frame,
                                 image=get_images().icons[action],
                                 command=lambda t=action: self.on_click(t),
                                 style=btn_style)
@@ -414,7 +416,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return buttons
 
     def on_click(self, action):
-        """ Click event for all of the buttons.
+        """ Click event for all of the main buttons.
 
         Parameters
         ----------
@@ -428,8 +430,112 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             else:
                 button.configure(style="actions_deselected.TButton")
                 button.state(["!pressed", "!focus"])
-        self.update_idletasks()
         self._selected_action.set(action)
+
+    def _set_selected_action_tkvar(self):
+        """ Set the tkinter string variable that holds the currently selected editor action.
+        Add traceback to display or hide editor specific optional buttons.
+
+        Returns
+        -------
+        :class:`tkinter.StringVar
+            The variable that holds the currently selected action
+        """
+        var = tk.StringVar()
+        var.set("view")
+        var.trace("w", self._display_optional_buttons)
+        return var
+
+    def add_optional_buttons(self, editors):
+        """ Add the optional editor specific action buttons """
+        for name, editor in editors.items():
+            actions = editor.actions
+            if not actions:
+                self._optional_buttons[name] = None
+                continue
+            frame = ttk.Frame(self)
+            sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
+            sep.pack(fill=tk.X, pady=5, side=tk.TOP)
+            for idx, action in enumerate(actions.values()):
+                if idx == 0:
+                    btn_style = "actions_selected.TButton"
+                    state = (["pressed", "focus"])
+                    action["tk_var"].set(True)
+                else:
+                    btn_style = "actions_deselected.TButton"
+                    state = (["!pressed", "!focus"])
+                    action["tk_var"].set(False)
+                button = ttk.Button(frame,
+                                    image=get_images().icons[action["icon"]],
+                                    style=btn_style)
+                button.config(command=lambda b=button: self._on_optional_click(b))
+                button.state(state)
+                button.pack()
+
+                helptext = action["helptext"]
+                hotkey = action["hotkey"]
+                helptext += "" if hotkey is None else " ({})".format(hotkey.upper())
+                Tooltip(button, text=helptext)
+                self._optional_buttons.setdefault(name,
+                                                  dict())[button] = dict(hotkey=hotkey,
+                                                                         tk_var=action["tk_var"])
+            self._optional_buttons[name]["frame"] = frame
+        self._display_optional_buttons()
+
+    def _on_optional_click(self, button):
+        """ Click event for all of the optional buttons.
+
+        Parameters
+        ----------
+        button: str
+            The action name for the button that has called this event as exists in :attr:`_buttons`
+        """
+        options = self._optional_buttons[self._selected_action.get()]
+        for child in options["frame"].winfo_children():
+            if child.winfo_class() != "TButton":
+                continue
+            if child == button:
+                child.configure(style="actions_selected.TButton")
+                child.state(["pressed", "focus"])
+                options[child]["tk_var"].set(True)
+            else:
+                child.configure(style="actions_deselected.TButton")
+                child.state(["!pressed", "!focus"])
+                options[child]["tk_var"].set(False)
+
+    def _display_optional_buttons(self, *args):  # pylint:disable=unused-argument
+        """ Pack or forget the optional buttons depending on active editor """
+        self._unbind_optional_hotkeys()
+        for editor, option in self._optional_buttons.items():
+            if option is None:
+                continue
+            if editor == self._selected_action.get():
+                logger.debug("Displaying optional buttons for '%s'", editor)
+                option["frame"].pack(side=tk.TOP, fill=tk.Y)
+                for child in option["frame"].winfo_children():
+                    if child.winfo_class() != "TButton":
+                        continue
+                    hotkey = option[child]["hotkey"]
+                    if hotkey is not None:
+                        logger.debug("Binding optional hotkey for editor '%s': %s", editor, hotkey)
+                        self.winfo_toplevel().bind(hotkey.lower(),
+                                                   lambda e, b=child: self._on_optional_click(b))
+            elif option["frame"].winfo_ismapped():
+                logger.debug("Hiding optional buttons for '%s'", editor)
+                option["frame"].pack_forget()
+
+    def _unbind_optional_hotkeys(self):
+        """ Unbind all mapped optional button hotkeys """
+        for editor, option in self._optional_buttons.items():
+            if option is None or not option["frame"].winfo_ismapped():
+                continue
+            for child in option["frame"].winfo_children():
+                if child.winfo_class() != "TButton":
+                    continue
+                hotkey = option[child]["hotkey"]
+                if hotkey is not None:
+                    logger.debug("Unbinding optional hotkey for editor '%s': %s", editor, hotkey)
+                    self.winfo_toplevel().unbind(hotkey.lower())
 
 
 class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
