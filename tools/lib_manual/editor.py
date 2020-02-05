@@ -24,6 +24,7 @@ _ANNOTATION_FORMAT = dict()
 
 # TODO Hide annotations for additional faces
 # TODO Landmarks, Color outline and fill
+# TODO dynamically bind and unbind keybindings
 
 
 class Editor():
@@ -889,7 +890,8 @@ class ExtractBox(Editor):
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
-        if not self._should_display:
+        # Extract box must show for landmarks for zooming
+        if not self._should_display and self._active_editor != "landmarks":
             self._hide_annotation()
             return
         keys = ("text", "extractbox")
@@ -905,7 +907,6 @@ class ExtractBox(Editor):
             self._create_or_update(keys[0], "text", idx, top_left, kwargs)
             kwargs = dict(fill="", outline=color, width=1)
             self._create_or_update(keys[1], "polygon", idx, box, kwargs)
-            self._canvas.tag_raise(self._objects[keys[1]][idx])
 
         logger.trace("Updated extract box annotations: %s", {key: self._objects[key]
                                                              for key in keys})
@@ -990,23 +991,30 @@ class ExtractBox(Editor):
 
 class Landmarks(Editor):
     """ The Landmarks Editor. """
+    # TODO Tag raise landmarks above extract box
     def __init__(self, canvas, alignments, frames):
         self._landmark_count = None
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
                         " - Click and drag individual landmark points to relocate.")
         super().__init__(canvas, alignments, frames, control_text)
 
+    @property
+    def _edit_mode(self):
+        """ str: The currently selected edit mode based on optional action button.
+        One of "draw", "erase" or "zoom" """
+        action = [name for name, option in self._actions.items() if option["tk_var"].get()]
+        return "move" if not action else action[0]
+
     def _add_actions(self):
         self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
-        self._add_action("move", "move", "Edit individual Landmarks", hotkey="D")
+        self._add_action("drag", "move", "Drag individual Landmarks", hotkey="D")
 
     def _add_controls(self):
-        for dsp in ("Extract Box", "Landmarks", "Mesh"):
-            self._add_control(ControlPanelOption(dsp,
-                                                 bool,
-                                                 group="Display",
-                                                 default=dsp == "Landmarks",
-                                                 helptext="Show the {} annotations".format(dsp)))
+        self._add_control(ControlPanelOption("Mesh",
+                                             bool,
+                                             group="Display",
+                                             default=False,
+                                             helptext="Show the Mesh annotations"))
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
@@ -1113,10 +1121,14 @@ class Landmarks(Editor):
             self._mouse_location = None
             return
         obj_idx = self._objects["grab"].index(list(item_ids)[0])
-        self._canvas.config(cursor="fleur")
-        for label in [self._objects["label"][obj_idx], self._objects["label_background"][obj_idx]]:
-            logger.trace("Displaying: %s id: %s", self._canvas.type(label), label)
-            self._canvas.itemconfig(label, state="normal")
+        if self._edit_mode == "zoom":
+            self._canvas.config(cursor="sizing")
+        else:
+            self._canvas.config(cursor="fleur")
+            for label in [self._objects["label"][obj_idx],
+                          self._objects["label_background"][obj_idx]]:
+                logger.trace("Displaying: %s id: %s", self._canvas.type(label), label)
+                self._canvas.itemconfig(label, state="normal")
         self._mouse_location = obj_idx
 
     def _hide_labels(self):
@@ -1196,18 +1208,19 @@ class Mask(Editor):
     @property
     def _brush_radius(self):
         """ int: The radius of the brush to use as set in control panel options """
-        return _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushsize"].get()
+        return _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["brushsize"].get()
 
     @property
-    def _brush_value(self):
-        """ int: `0` if erase has been selected, `255` if paint has been selected. """
+    def _edit_mode(self):
+        """ str: The currently selected edit mode based on optional action button.
+        One of "draw", "erase" or "zoom" """
         action = [name for name, option in self._actions.items() if option["tk_var"].get()]
-        return 0 if action[0] == "erase" else 255
+        return "draw" if not action else action[0]
 
     @property
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
-        color = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["cursorcolor"].get()
+        color = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
         return self._colors[color.lower()]
 
     def _add_actions(self):
@@ -1227,7 +1240,7 @@ class Mask(Editor):
                                              helptext="Select which mask to edit"))
         self._add_control(ControlPanelOption("Brush Size",
                                              int,
-                                             group="Brushes",
+                                             group="Brush",
                                              min_max=(1, 100),
                                              default=10,
                                              rounding=1,
@@ -1235,7 +1248,7 @@ class Mask(Editor):
                                                       "] - increase)"))
         self._add_control(ControlPanelOption("Cursor Color",
                                              str,
-                                             group="Brushes",
+                                             group="Brush",
                                              choices=sorted(self._colors),
                                              default="White",
                                              helptext="Select the brush cursor color."))
@@ -1377,8 +1390,16 @@ class Mask(Editor):
         """ Update the cursor for brush painting and set :attr:`_mouse_location`. """
         roi_boxes = self._objects.get("roibox", [])
         item_ids = set(self._canvas.find_withtag("current")).intersection(roi_boxes)
-        if item_ids:
-            obj_idx = roi_boxes.index(list(item_ids)[0])
+        if not item_ids:
+            self._canvas.config(cursor="")
+            self._canvas.itemconfig(self._mouse_location[0], state="hidden")
+            self._mouse_location[1] = None
+            return
+
+        obj_idx = roi_boxes.index(list(item_ids)[0])
+        if self._edit_mode == "zoom":
+            self._canvas.config(cursor="sizing")
+        else:
             radius = self._brush_radius
             coords = (event.x - radius, event.y - radius, event.x + radius, event.y + radius)
             self._canvas.config(cursor="none")
@@ -1386,12 +1407,8 @@ class Mask(Editor):
             self._canvas.itemconfig(self._mouse_location[0],
                                     state="normal",
                                     outline=self._cursor_color)
-            self._mouse_location[1] = obj_idx
-            self._canvas.update_idletasks()
-        else:
-            self._canvas.config(cursor="")
-            self._canvas.itemconfig(self._mouse_location[0], state="hidden")
-            self._mouse_location[1] = None
+        self._mouse_location[1] = obj_idx
+        self._canvas.update_idletasks()
 
     def _drag_start(self, event):
         """ The action to perform when the user starts clicking and dragging the mouse.
@@ -1420,7 +1437,7 @@ class Mask(Editor):
         cv2.line(self._meta["mask"][face_idx],
                  start,
                  end,
-                 self._brush_value,
+                 0 if self._edit_mode == "erase" else 255,
                  self._brush_radius * 2)
 
         self._drag_data["starting_location"] = np.array((event.x, event.y))
@@ -1437,14 +1454,14 @@ class Mask(Editor):
         increase: bool, optional
             ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
         """
-        radius_var = _CONTROL_VARS[self.__class__.__name__.lower()]["brushes"]["brushsize"]
+        radius_var = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["brushsize"]
         current_val = radius_var.get()
         new_val = min(100, current_val + 1) if increase else max(1, current_val - 1)
         logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)
         radius_var.set(new_val)
 
         delta = new_val - current_val
-        if not self._mouse_location[1] or delta == 0:
+        if delta == 0:
             return
         current_coords = self._canvas.coords(self._mouse_location[0])
         new_coords = tuple(coord - delta if idx < 2 else coord + delta
