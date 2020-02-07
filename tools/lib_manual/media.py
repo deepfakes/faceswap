@@ -30,12 +30,11 @@ class FrameNavigation():
         self._loader = ImagesLoader(frames_location, fast_count=False, queue_size=1)
         self._meta = dict()
         self._current_idx = 0
-        self._current_scale = 1.0
         self._scaling = scaling_factor
         self._tk_vars = self._set_tk_vars()
         self._current_frame = None
         self._current_display_frame = None
-        self._display_dims = (960, 540)
+        self._display_dims = (896, 504)
         self._set_current_frame(initialize=True)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -68,7 +67,7 @@ class FrameNavigation():
     @property
     def current_scale(self):
         """ float: The scaling factor for the currently displayed frame """
-        return self._current_scale
+        return self.current_meta_data["scale"]
 
     @property
     def current_frame(self):
@@ -147,7 +146,6 @@ class FrameNavigation():
                              interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
         self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
         self._current_idx = position
-        self._current_scale = self.current_meta_data["scale"]
         self.tk_update.set(True)
 
     def _add_meta_data(self, position, frame, filename):
@@ -238,6 +236,7 @@ class AlignmentsData():
         logger.debug("Initializing %s: (alignments_path: '%s')",
                      self.__class__.__name__, alignments_path)
         self.frames = frames
+        self._face_size = min(self.frames.display_dims)
         self._mask_names, self._alignments = self._get_alignments(alignments_path)
 
         self._tk_position = frames.tk_position
@@ -336,7 +335,8 @@ class AlignmentsData():
             for item in items:
                 face = DetectedFace()
                 face.from_alignment(item)
-                face.load_aligned(None, size=96)
+                # Size is set so attributes are correct for zooming into a face in the frame viewer
+                face.load_aligned(None, size=self._face_size)
                 this_frame_faces.append(face)
             faces[framename] = dict(saved=this_frame_faces)
         return mask_names, faces
@@ -395,7 +395,7 @@ class AlignmentsData():
         face.h = height
         face.mask = dict()
         face.landmarks_xy = self._extractor.get_landmarks()
-        face.load_aligned(self.frames.current_frame, size=96, force=True)
+        face.load_aligned(None, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 
     def shift_landmark(self, face_index, landmark_index, shift_x, shift_y):
@@ -418,7 +418,7 @@ class AlignmentsData():
         face = self.current_face
         face.mask = dict()
         face.landmarks_xy[landmark_index] += (shift_x, shift_y)
-        face.load_aligned(self.frames.current_frame, size=96, force=True)
+        face.load_aligned(None, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 
     def shift_landmarks(self, index, shift_x, shift_y):
@@ -446,7 +446,7 @@ class AlignmentsData():
         face.y += shift_y
         face.mask = dict()
         face.landmarks_xy += (shift_x, shift_y)
-        face.load_aligned(self.frames.current_frame, size=96, force=True)
+        face.load_aligned(None, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 
     def add_face(self, pnt_x, width, pnt_y, height):
@@ -480,6 +480,25 @@ class AlignmentsData():
         self._check_for_new_alignments()
         del self.current_faces[index]
         self.frames.tk_update.set(True)
+
+    def get_aligned_face_at_index(self, index):
+        """ Return the aligned face sized for frame viewer.
+
+        Parameters
+        ----------
+        index: int
+            The face index to return the face for
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The aligned face
+        """
+        face = self.current_faces[index]
+        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        retval = face.aligned_face.copy()
+        face.aligned["face"] = None
+        return retval
 
 
 class FaceCache():
@@ -647,11 +666,14 @@ class FaceCache():
 
         position = self._frames.tk_position.get()
         objects = self._faces[position][self._alignments.face_index]
-        objects["image"] = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
+        display_face = cv2.resize(face.aligned_face[..., 2::-1],
+                                  (self._size, self._size),
+                                  interpolation=cv2.INTER_AREA)
+        objects["image"] = ImageTk.PhotoImage(Image.fromarray(display_face))
         self._canvas.itemconfig(objects["image_id"], image=objects["image"])
-
+        scale = self._size / face.aligned["size"]
         for idx, key in enumerate(sorted(self._landmark_mapping)):
             val = self._landmark_mapping[key]
-            pts = (face.aligned_landmarks[val[0]:val[1]] + objects["position"]).flatten()
+            pts = ((face.aligned_landmarks[val[0]:val[1]] * scale) + objects["position"]).flatten()
             self._canvas.coords(objects["mesh"][idx], *pts)
         face.aligned["face"] = None

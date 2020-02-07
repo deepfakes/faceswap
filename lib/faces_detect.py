@@ -548,7 +548,8 @@ class Mask():
 
     @property
     def original_roi(self):
-        """ numpy.ndarray: The original region of interest of the mask in the source frame """
+        """ :class: `numpy.ndarray`: The original region of interest of the mask in the
+        source frame. """
         points = np.array([[0, 0],
                            [0, self.stored_size - 1],
                            [self.stored_size - 1, self.stored_size - 1],
@@ -557,6 +558,16 @@ class Mask():
         roi = cv2.transform(points, matrix).reshape((4, 2))
         logger.trace("Returning: %s", roi)
         return roi
+
+    @property
+    def affine_matrix(self):
+        """ :class: `numpy.ndarray`: The affine matrix to transpose the mask to a full frame. """
+        return self._affine_matrix
+
+    @property
+    def interpolator(self):
+        """ int: The cv2 interpolator required to transpose the mask to a full frame. """
+        return self._interpolator
 
     def get_full_frame_mask(self, width, height):
         """ Return the stored mask in a full size frame of the given dimensions

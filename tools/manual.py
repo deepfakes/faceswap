@@ -55,6 +55,7 @@ class Manual(tk.Tk):
         self._display.tk_selected_action.set("view")
 
         self.bind("<Key>", self._handle_key_press)
+        self._set_initial_layout()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
@@ -151,6 +152,12 @@ class Manual(tk.Tk):
             self.focus_set()
             bindings[key_press.lower()]()
 
+    def _set_initial_layout(self):
+        """ Set the bottom frame position to correct location to display full frame window. """
+        self.update_idletasks()
+        location = self._display.winfo_reqheight() + 5
+        self._containers["main"].sash_place(0, 1, location)
+
     def process(self):
         """ The entry point for the Visual Alignments tool from :file:`lib.tools.cli`.
 
@@ -181,12 +188,13 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._alignments = alignments
 
         self._actions_frame = ActionsFrame(self)
-
-        self._video_frame = ttk.Frame(self,
+        main_frame = ttk.Frame(self)
+        main_frame.pack(side=tk.RIGHT)
+        self._video_frame = ttk.Frame(main_frame,
                                       width=self._frames.display_dims[0],
                                       height=self._frames.display_dims[1])
 
-        self._video_frame.pack(side=tk.RIGHT, expand=True)
+        self._video_frame.pack(side=tk.TOP, expand=True)
         self._video_frame.pack_propagate(False)
 
         self._canvas = FrameViewer(self._video_frame,
@@ -195,7 +203,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    self._actions_frame.actions,
                                    self._actions_frame.tk_selected_action)
 
-        self._transport_frame = ttk.Frame(self._video_frame)
+        self._transport_frame = ttk.Frame(main_frame)
         self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
 
         self._add_nav()
@@ -563,6 +571,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
         self._alignments = alignments
         self._frames = frames
+        self._image_is_hidden = False
         self._actions = actions
         self._tk_action_var = tk_action_var
         self._image = self.create_image(self._frames.display_dims[0] / 2,
@@ -599,9 +608,20 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
         return offset_x, offset_y
 
+    @property
+    def image_is_hidden(self):
+        """ bool: ``True`` if the background frame image is hidden otherwise ``False``. """
+        return self._image_is_hidden
+
     def send_frame_to_bottom(self):
         """ Sent the background frame to the bottom of the stack """
         self.tag_lower(self._image)
+
+    def toggle_image_display(self):
+        """ Toggle the background frame between displayed and hidden. """
+        state = "normal" if self._image_is_hidden else "hidden"
+        self.itemconfig(self._image, state=state)
+        self._image_is_hidden = not self._image_is_hidden
 
     def _get_editors(self):
         """ Get the object editors for the canvas.
@@ -663,6 +683,9 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def refresh_display_image(self):
         """ Update the displayed frame """
         self.itemconfig(self._image, image=self._frames.current_display_frame)
+        # TODO Fix when updating annotation
+        # if self._image_is_hidden:
+        #    self.toggle_image_display()
 
 
 class Options(ttk.Frame):  # pylint:disable=too-many-ancestors

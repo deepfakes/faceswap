@@ -57,6 +57,7 @@ class Editor():
         self._add_controls()
         self._add_annotation_format_controls()
 
+        self._zoomed_roi = self._get_zoomed_roi()
         self._objects = dict()
         self._mouse_location = None
         self._drag_data = dict()
@@ -98,6 +99,12 @@ class Editor():
         return hasattr(self._canvas, "active_editor") and self._canvas.active_editor == self
 
     @property
+    def _is_zoomed(self):
+        """ bool: ``True`` if a face is currently zoomed in, ``False`` if the full frame is
+        displayed """
+        return self._canvas.image_is_hidden
+
+    @property
     def _active_editor(self):
         """ str: The name of the currently active editor """
         return self._canvas.selected_action
@@ -114,6 +121,11 @@ class Editor():
         return self._controls
 
     @property
+    def objects(self):
+        """ dict: The objects currently stored for this editor """
+        return self._objects
+
+    @property
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
         annotation = self.__class__.__name__.lower()
@@ -127,6 +139,25 @@ class Editor():
         should_display = _CONTROL_VARS.get(self._active_editor,
                                            dict()).get("display", dict()).get(annotation, None)
         return self._is_active or (should_display is not None and should_display.get())
+
+    def _get_zoomed_roi(self):
+        """ Get the Region of Interest for when the face is zoomed.
+
+        The ROI is dictated by display frame size, so it will be constant for every face
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The (`left`, `top`, `right`, `bottom`) roi of the zoomed face in the display frame
+        """
+        half_size = min(self._frames.display_dims) / 2
+        left = self._frames.display_dims[0] / 2 - half_size
+        top = 0
+        right = self._frames.display_dims[0] / 2 + half_size
+        bottom = self._frames.display_dims[1]
+        retval = np.rint(np.array((left, top, right, bottom))).astype("int32")
+        logger.debug("Zoomed ROI: %s", retval)
+        return retval
 
     def update_annotation(self):
         """ Update the display annotations for the current objects.
@@ -153,7 +184,7 @@ class Editor():
                 logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
                 self._canvas.itemconfig(item_id, state="hidden")
 
-    def _create_or_update(self, key, object_type, object_index, coordinates, object_kwargs):
+    def _object_tracker(self, key, object_type, object_index, coordinates, object_kwargs):
         """ Create an annotation object and add it to :attr:`_objects` or update an existing
         annotation if it has already been created.
 
@@ -257,11 +288,7 @@ class Editor():
         """
         update_color = (object_color_keys and
                         object_kwargs[object_color_keys[0]] != self._current_color[tracking_id])
-        update_kwargs = dict()
-        if object_kwargs.get("state", "normal") != "hidden":
-            logger.trace("Setting object state to normal: %s id: %s",
-                         self._canvas.type(tk_object), tk_object)
-            update_kwargs["state"] = "normal"
+        update_kwargs = dict(state=object_kwargs.get("state", "normal"))
         if update_color:
             for key in object_color_keys:
                 update_kwargs[key] = object_kwargs[object_color_keys[0]]
@@ -270,8 +297,7 @@ class Editor():
         logger.trace("Updating coordinates: (tracking_id: %s, tk_object: '%s', object_kwargs: %s, "
                      "coordinates: %s, update_kwargs: %s", tracking_id, tk_object, object_kwargs,
                      coordinates, update_kwargs)
-        if update_kwargs:
-            self._canvas.itemconfig(tk_object, **update_kwargs)
+        self._canvas.itemconfig(tk_object, **update_kwargs)
         self._canvas.coords(tk_object, *coordinates)
         return update_color
 
@@ -545,7 +571,7 @@ class BoundingBox(Editor):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
             kwargs = dict(outline=color, width=1)
-            self._create_or_update(key, "rectangle", idx, box, kwargs)
+            self._object_tracker(key, "rectangle", idx, box, kwargs)
             self._update_anchor_annotation(idx, box, color)
         logger.trace("Updated bounding box annotations: %s", self._objects[key])
 
@@ -574,9 +600,9 @@ class BoundingBox(Editor):
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*anchor_points)):
             obj_idx = (face_index * 4) + idx
             dsp_kwargs = dict(outline=color, fill=fill_color, width=1)
-            self._create_or_update(keys[0], "oval", obj_idx, anc_dsp, dsp_kwargs)
+            self._object_tracker(keys[0], "oval", obj_idx, anc_dsp, dsp_kwargs)
             grb_kwargs = dict(outline="", fill="", width=1, activefill=activefill_color)
-            self._create_or_update(keys[1], "oval", obj_idx, anc_grb, grb_kwargs)
+            self._object_tracker(keys[1], "oval", obj_idx, anc_grb, grb_kwargs)
         logger.trace("Updated bounding box anchor annotations: %s", {key: self._objects[key]
                                                                      for key in keys})
 
@@ -904,9 +930,11 @@ class ExtractBox(Editor):
             box = self._scale_to_display(face.original_roi).flatten()
             top_left = box[:2] - 10
             kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
-            self._create_or_update(keys[0], "text", idx, top_left, kwargs)
+            self._object_tracker(keys[0], "text", idx, top_left, kwargs)
             kwargs = dict(fill="", outline=color, width=1)
-            self._create_or_update(keys[1], "polygon", idx, box, kwargs)
+            self._object_tracker(keys[1], "polygon", idx, box, kwargs)
+            # Ensure extract box is above other annotations for mouse grabber
+            self._canvas.tag_raise(self._objects[keys[1]][idx])
 
         logger.trace("Updated extract box annotations: %s", {key: self._objects[key]
                                                              for key in keys})
@@ -1006,8 +1034,34 @@ class Landmarks(Editor):
         return "move" if not action else action[0]
 
     def _add_actions(self):
-        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
         self._add_action("drag", "move", "Drag individual Landmarks", hotkey="D")
+        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
+        self._add_edit_mode_callback()
+
+    def _add_edit_mode_callback(self):
+        """ Add a callback to change the top most object to be extract box (in zoom mode) or
+        landmark grab points (in drag) mode) for mouse tracking """
+        for key, option in self._actions.items():
+            tk_var = option["tk_var"]
+            tk_var.trace("w", lambda *e, k=key, v=tk_var: self._raise_object(k, v))
+
+    def _raise_object(self, key, tk_var):
+        """ Raise the extract box to the top (if in zoom mode) otherwise raise the landmark
+        grab points """
+        if not tk_var.get():
+            logger.debug("Action %s is not active. Returning", key)
+            return
+        objects = self._get_extract_boxes() if key == "zoom" else self._objects.get("grab", [])
+        if not objects:
+            logger.debug("Objects for %s not yet created. Returning", key)
+            return
+        logger.debug("Raising objects for '%s': %s", key, objects)
+        for obj in objects:
+            self._canvas.tag_raise(obj)
+
+    def _get_extract_boxes(self):
+        """ Get the extract box objects """
+        return self._canvas.editors["extractbox"].objects.get("extractbox", [])
 
     def _add_controls(self):
         self._add_control(ControlPanelOption("Mesh",
@@ -1048,7 +1102,7 @@ class Landmarks(Editor):
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
         kwargs = dict(outline=color, fill=color, width=radius)
-        self._create_or_update(key, "oval", object_index, bbox, kwargs)
+        self._object_tracker(key, "oval", object_index, bbox, kwargs)
 
     def _grab_landmark(self, bounding_box, object_index):
         """ Add a grab landmark to the canvas.
@@ -1074,7 +1128,9 @@ class Landmarks(Editor):
                       width=radius,
                       activeoutline=activeoutline_color,
                       activefill=activefill_color)
-        self._create_or_update(key, "oval", object_index, bbox, kwargs)
+        self._object_tracker(key, "oval", object_index, bbox, kwargs)
+        # Bring the grabbers above the extract box
+        self._canvas.tag_raise(self._objects[key][object_index])
 
     def _label_landmark(self, bounding_box, object_index, landmark_index):
         """ Add a text label for a landmark to the canvas.
@@ -1098,12 +1154,12 @@ class Landmarks(Editor):
         # after the bounding box has been retrieved
 
         text_kwargs = dict(fill="black", font=("Default", 10), text=str(landmark_index + 1))
-        self._create_or_update(keys[0], "text", object_index, top_left, text_kwargs)
+        self._object_tracker(keys[0], "text", object_index, top_left, text_kwargs)
 
         bbox = self._canvas.bbox(self._objects[keys[0]][object_index])
         bbox = [bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2]
         background_kwargs = dict(fill="#ffffea", outline="black")
-        self._create_or_update(keys[1], "rectangle", object_index, bbox, background_kwargs)
+        self._object_tracker(keys[1], "rectangle", object_index, bbox, background_kwargs)
         self._canvas.lower(self._objects[keys[1]][object_index],
                            self._objects[keys[0]][object_index])
         self._canvas.itemconfig(self._objects[keys[0]][object_index], state="hidden")
@@ -1115,12 +1171,14 @@ class Landmarks(Editor):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
         self._hide_labels()
-        item_ids = set(self._canvas.find_withtag("current")).intersection(self._objects["grab"])
+        objs = self._get_extract_boxes() if self._edit_mode == "zoom" else self._objects["grab"]
+        item_ids = set(self._canvas.find_withtag("current")).intersection(objs)
         if not item_ids:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
-        obj_idx = self._objects["grab"].index(list(item_ids)[0])
+
+        obj_idx = objs.index(list(item_ids)[0])
         if self._edit_mode == "zoom":
             self._canvas.config(cursor="sizing")
         else:
@@ -1223,10 +1281,16 @@ class Mask(Editor):
         color = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
         return self._colors[color.lower()]
 
+    @property
+    def _zoomed_dims(self):
+        """ tuple: The (`width`, `height`) of the zoomed ROI """
+        return (self._zoomed_roi[2] - self._zoomed_roi[0],
+                self._zoomed_roi[3] - self._zoomed_roi[1])
+
     def _add_actions(self):
-        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
         self._add_action("draw", "draw", "Draw the mask", hotkey="D")
         self._add_action("erase", "erase", "Erase the mask", hotkey="R")
+        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
 
     def _add_controls(self):
         masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])
@@ -1288,8 +1352,8 @@ class Mask(Editor):
             return
         position = self._frames.tk_position.get()
         if position != self._meta.get("position", -1):
-            self._meta = dict(position=position,
-                              frame_dims=tuple(reversed(self._frames.current_frame_dims)))
+            # Reset meta information when moving to a new frame
+            self._meta = dict(position=position)
         key = self.__class__.__name__.lower()
         mask_type = _CONTROL_VARS[key]["display"]["masktype"].get().lower()
         color = self._control_color[1:]
@@ -1325,63 +1389,154 @@ class Mask(Editor):
             return
 
         logger.debug("Defining meta information for face: %s", face_index)
-        scale = self._frames.current_meta_data["scale"]
-        # Clip the original ROI where it goes out of frame
-        original_roi = mask.original_roi
-        clipped_roi = original_roi.clip(min=(0, 0), max=self._meta["frame_dims"])
+        self._set_full_frame_meta(mask)
+        self._meta.setdefault("mask", []).append(mask.mask)
+
+    def _set_full_frame_meta(self, mask):
+        """ Sets the meta information for displaying the mask in full frame mode.
+
+        Sets the following parameters to :attr:`_meta`:
+            - roi_mask: the rectangular ROI box from the full frame that contains the original ROI
+            for the full frame mask
+            - top_left: The location that the roi_mask should be placed in the display frame
+            - affine_matrix: The matrix for transposing the mask to a full frame
+            - interpolator: The cv2 interpolation method to use for transposing mask to a
+            full frame
+            - slices: The (`xslice`, `yslice`) slice objects required to extract the mask ROI
+            from the full frame
+        """
+        frame_dims = self._frames.current_meta_data["display_dims"]
+        scaled_mask_roi = np.rint(mask.original_roi * self._frames.current_scale).astype("int32")
+
+        # Scale and clip the ROI to fit within display frame boundaries
+        clipped_roi = scaled_mask_roi.clip(min=(0, 0), max=frame_dims)
+
+        # Obtain min and max points to get ROI as a rectangle
         min_max = dict(min=clipped_roi.min(axis=0), max=clipped_roi.max(axis=0))
-        scaled_roi = np.rint(
-            np.array((min_max["max"][0] - min_max["min"][0],
-                      min_max["max"][1] - min_max["min"][1])) * scale).astype("uint16")
-        xslice = slice(min_max["min"][1], min_max["max"][1])
-        yslice = slice(min_max["min"][0], min_max["max"][0])
-        mask = (mask.get_full_frame_mask(*self._meta["frame_dims"])[xslice,
-                                                                    yslice]).astype("uint8")
-        mask = cv2.resize(mask,
-                          tuple(scaled_roi),
-                          interpolation=self._frames.current_meta_data["interpolation"])[..., None]
 
-        roi_mask = np.zeros_like(mask)
-        roi_corners = np.rint(np.array([original_roi - min_max["min"]]) * scale).astype("int32")
+        # Create a bounding box rectangle ROI
+        roi_dims = np.rint((min_max["max"][1] - min_max["min"][1],
+                            min_max["max"][0] - min_max["min"][0])).astype("uint16")
+        roi_mask = np.zeros(roi_dims, dtype="uint8")[..., None]
+
+        # Block out areas outside of the actual mask ROI polygon
+        roi_corners = np.expand_dims(scaled_mask_roi - min_max["min"], axis=0)
         cv2.fillPoly(roi_mask, roi_corners, 255)
+        logger.trace("Setting Full Frame mask ROI. shape: %s", roi_mask.shape)
 
-        self._meta.setdefault("mask", []).append(mask)
+        # obtain the slices for cropping mask from full frame
+        xslice = slice(int(round(min_max["min"][1])), int(round(min_max["max"][1])))
+        yslice = slice(int(round(min_max["min"][0])), int(round(min_max["max"][0])))
+
+        # Adjust affine matrix for display dimensions
+        adjustment_mat = np.array([[1 / self._frames.current_scale, 0, 0],
+                                   [0, 1 / self._frames.current_scale, 0],
+                                   [0, 0, 1]])
+        affine_matrix = np.dot(mask.affine_matrix, adjustment_mat)
+
         self._meta.setdefault("roi_mask", []).append(roi_mask)
-        self._meta.setdefault("scaled_roi_size", []).append(scaled_roi)
-        self._meta.setdefault("top_left", []).append(
-            np.rint(self._scale_to_display(min_max["min"])).astype("uint16"))
+        self._meta.setdefault("affine_matrix", []).append(affine_matrix)
+        self._meta.setdefault("interpolator", []).append(mask.interpolator)
+        self._meta.setdefault("slices", []).append((xslice, yslice))
+        self._meta.setdefault("top_left", []).append(min_max["min"] + self._canvas.offset)
 
     def _update_mask_image(self, key, face_index, rgb_color, opacity):
-        """ Obtain a full frame mask, overlay over image.
-        """
-        rgb = np.tile(rgb_color,
-                      (*reversed(self._meta["scaled_roi_size"][face_index]), 1)).astype("uint8")
+        """ Obtain a full frame mask, overlay over image. """
         mask = (self._meta["mask"][face_index] * opacity).astype("uint8")
-        rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
-
-        display = ImageTk.PhotoImage(Image.fromarray(rgba))
-        self._update_meta("image", display, face_index)
+        if self._is_zoomed:
+            display_image = self._update_mask_image_zoomed(mask, rgb_color)
+            top_left = self._zoomed_roi[:2]
+        else:
+            display_image = self._update_mask_image_full_frame(mask, rgb_color, face_index)
+            top_left = self._meta["top_left"][face_index]
+        self._update_meta("image", display_image, face_index)
 
         object_count = len(self._objects.get(key, []))
-        self._create_or_update(key,
-                               "image",
-                               face_index,
-                               self._meta["top_left"][face_index],
-                               dict(image=display, anchor=tk.NW))
-        if object_count < len(self._objects[key]):
+        self._object_tracker(key,
+                             "image",
+                             face_index,
+                             top_left,
+                             dict(image=display_image, anchor=tk.NW))
+
+        # TODO Double check this raising/lowering
+        if self._is_zoomed:
+            self._canvas.tag_raise(self._objects[key][-1])
+        elif object_count < len(self._objects[key]) and not self._is_zoomed:
             logger.trace("Sending mask to bottom")
             self._canvas.tag_lower(self._objects[key][-1])
             self._canvas.send_frame_to_bottom()
 
+    def _update_mask_image_zoomed(self, mask, rgb_color):
+        """ Update the mask image when zoomed in.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The raw mask
+        rgb_color: tuple
+            The rgb color selected for the mask
+
+        Returns
+        -------
+        :class: `ImageTk.PhotoImage`
+            The zoomed mask image formatted for display
+        """
+        rgb = np.tile(rgb_color, self._zoomed_dims + (1, )).astype("uint8")
+        mask = cv2.resize(mask, self._zoomed_dims, interpolation=cv2.INTER_CUBIC)[..., None]
+        rgba = np.concatenate((rgb, mask), axis=2)
+        display = ImageTk.PhotoImage(Image.fromarray(rgba))
+        return display
+
+    def _update_mask_image_full_frame(self, mask, rgb_color, face_index):
+        """ Update the mask image when in full frame view.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The raw mask
+        rgb_color: tuple
+            The rgb color selected for the mask
+        face_index: int
+            The index of the face being displayed
+
+        Returns
+        -------
+        :class: `ImageTk.PhotoImage`
+            The full frame mask image formatted for display
+        """
+        frame_dims = self._frames.current_meta_data["display_dims"]
+        frame = np.zeros(frame_dims + (1, ), dtype="uint8")
+        interpolator = self._meta["interpolator"][face_index]
+        slices = self._meta["slices"][face_index]
+        mask = cv2.warpAffine(mask,
+                              self._meta["affine_matrix"][face_index],
+                              frame_dims,
+                              frame,
+                              flags=cv2.WARP_INVERSE_MAP | interpolator,
+                              borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]][..., None]
+        rgb = np.tile(rgb_color, mask.shape).astype("uint8")
+        rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
+        display = ImageTk.PhotoImage(Image.fromarray(rgba))
+        return display
+
     def _update_roi_box(self, mask, face_index, color):
         """ Update the region of interest box for the current mask """
         keys = ("text", "roibox")
-        box = self._scale_to_display(mask.original_roi).flatten()
+        if self._is_zoomed:
+            box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
+                            self._zoomed_roi[2], self._zoomed_roi[1],
+                            self._zoomed_roi[2], self._zoomed_roi[3],
+                            self._zoomed_roi[0], self._zoomed_roi[3]))
+        else:
+            box = self._scale_to_display(mask.original_roi).flatten()
         top_left = box[:2] - 10
         kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(face_index))
-        self._create_or_update(keys[0], "text", face_index, top_left, kwargs)
+        self._object_tracker(keys[0], "text", face_index, top_left, kwargs)
         kwargs = dict(fill="", outline=color, width=1)
-        self._create_or_update(keys[1], "polygon", face_index, box, kwargs)
+        self._object_tracker(keys[1], "polygon", face_index, box, kwargs)
+        if self._is_zoomed:
+            # Raise box above zoomed image
+            self._canvas.tag_raise(self._objects[keys[1]][face_index])
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -1424,21 +1579,48 @@ class Mask(Editor):
         if face_idx is None:
             self._drag_data = dict()
             self._drag_callback = None
-            return
-        self._drag_data["starting_location"] = np.array((event.x, event.y))
-        self._drag_callback = self._paint
+        elif self._edit_mode == "zoom":
+            self._drag_data = dict()
+            self._drag_callback = None
+            self._zoom_face(face_idx)
+        else:
+            self._drag_data["starting_location"] = np.array((event.x, event.y))
+            self._drag_callback = self._paint
+
+    def _zoom_face(self, face_index):
+        self._canvas.toggle_image_display()
+        coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
+        if self._is_zoomed:
+            face = self._alignments.get_aligned_face_at_index(face_index)[..., 2::-1]
+            display = ImageTk.PhotoImage(Image.fromarray(face))
+            self._update_meta("zoomed", display, face_index)
+            kwargs = dict(image=display, anchor=tk.CENTER)
+        else:
+            kwargs = dict(state="hidden")
+        self._object_tracker("zoom", "image", face_index, coords, kwargs)
+        self.update_annotation()
 
     def _paint(self, event):
         """ Paint or erase from Mask and update cursor on click and drag """
         face_idx = self._mouse_location[1]
-        offset = self._meta["top_left"][face_idx]
-        start = tuple(self._drag_data["starting_location"] - offset)
-        end = tuple(np.array((event.x, event.y)) - offset)
+        mask = self._meta["mask"][face_idx]
+        line = np.array((self._drag_data["starting_location"], (event.x, event.y)))
+        brush_radius = int(round(self._brush_radius * (mask.shape[0] / self._zoomed_dims[0])))
+
+        if self._is_zoomed:
+            offset = self._zoomed_roi[:2]
+            scale = mask.shape[0] / self._zoomed_dims[0]
+            line = np.rint((line - offset) * scale).astype("int32")
+        else:
+            line = np.expand_dims(line - self._canvas.offset, axis=0)
+            line = cv2.transform(line, self._meta["affine_matrix"][face_idx]).squeeze()
+            line = np.rint(line).astype("int32")
+
         cv2.line(self._meta["mask"][face_idx],
-                 start,
-                 end,
+                 tuple(line[0]),
+                 tuple(line[1]),
                  0 if self._edit_mode == "erase" else 255,
-                 self._brush_radius * 2)
+                 brush_radius * 2)
 
         self._drag_data["starting_location"] = np.array((event.x, event.y))
         self._frames.tk_update.set(True)
@@ -1499,9 +1681,9 @@ class Mesh(Editor):
                 pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
                 if segment in ("right_eye", "left_eye", "mouth"):
                     kwargs = dict(fill="", outline=color, width=1)
-                    self._create_or_update(key, "polygon", obj_idx, pts, kwargs)
+                    self._object_tracker(key, "polygon", obj_idx, pts, kwargs)
                 else:
-                    self._create_or_update(key, "line", obj_idx, pts, dict(fill=color, width=1))
+                    self._object_tracker(key, "line", obj_idx, pts, dict(fill=color, width=1))
 
 
 class View(Editor):
