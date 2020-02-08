@@ -20,9 +20,8 @@ class Mask(Editor):
         self._meta = []
         self._internal_size = 512
         super().__init__(canvas, alignments, frames, control_text)
-        self._mouse_location = [self._canvas.create_oval(0, 0, 0, 0,
-                                                         outline="black", state="hidden"),
-                                False]
+        self._mouse_location = [
+            self._canvas.create_oval(0, 0, 0, 0, outline="black", state="hidden"), False]
         self._bind_hotkeys()
 
     @property
@@ -48,12 +47,6 @@ class Mask(Editor):
         """ str: The hex code for the selected cursor color """
         color = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
         return self._colors[color.lower()]
-
-    @property
-    def _zoomed_dims(self):
-        """ tuple: The (`width`, `height`) of the zoomed ROI """
-        return (self._zoomed_roi[2] - self._zoomed_roi[0],
-                self._zoomed_roi[3] - self._zoomed_roi[1])
 
     def _add_actions(self):
         self._add_action("draw", "draw", "Draw the mask", hotkey="D")
@@ -238,21 +231,11 @@ class Mask(Editor):
             display_image = self._update_mask_image_full_frame(mask, rgb_color, face_index)
             top_left = self._meta["top_left"][face_index]
         self._update_meta("image", display_image, face_index)
-
-        object_count = len(self._objects.get(key, []))
         self._object_tracker(key,
                              "image",
                              face_index,
                              top_left,
                              dict(image=display_image, anchor=tk.NW))
-
-        # TODO Double check this raising/lowering
-        if self._is_zoomed:
-            self._canvas.tag_raise(self._objects[key][-1])
-        elif object_count < len(self._objects[key]) and not self._is_zoomed:
-            logger.trace("Sending mask to bottom")
-            self._canvas.tag_lower(self._objects[key][-1])
-            self._canvas.send_frame_to_bottom()
 
     def _update_mask_image_zoomed(self, mask, rgb_color):
         """ Update the mask image when zoomed in.
@@ -386,7 +369,8 @@ class Mask(Editor):
         else:
             kwargs = dict(state="hidden")
         self._object_tracker("zoom", "image", face_index, coords, kwargs)
-        self.update_annotation()
+        self._canvas.tag_lower(self._objects["zoom"][face_index])
+        self._frames.tk_update.set(True)
 
     def _paint(self, event):
         """ Paint or erase from Mask and update cursor on click and drag """

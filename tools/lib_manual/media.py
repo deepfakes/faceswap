@@ -6,8 +6,10 @@ import tkinter as tk
 from threading import Event
 
 import cv2
+import numpy as np
 from PIL import Image, ImageTk
 
+from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.image import ImagesLoader
@@ -412,7 +414,7 @@ class AlignmentsData():
         face.load_aligned(None, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 
-    def shift_landmark(self, face_index, landmark_index, shift_x, shift_y):
+    def shift_landmark(self, face_index, landmark_index, shift_x, shift_y, is_zoomed):
         """ Shift a single landmark point the given face index and landmark index by the given x and
         y values.
 
@@ -426,12 +428,25 @@ class AlignmentsData():
             The amount to shift the landmark by along the x axis
         shift_y: int
             The amount to shift the landmark by along the y axis
+        is_zoomed: bool
+            ``` True if landmarks are being adjusted on a zoomed image otherwise ``False``
         """
         self._check_for_new_alignments()
         self._face_index = face_index
         face = self.current_face
-        face.mask = dict()
-        face.landmarks_xy[landmark_index] += (shift_x, shift_y)
+        face.mask = dict()  # TODO Something with masks that doesn't involve clearing them
+        if is_zoomed:
+            landmark = face.aligned_landmarks[landmark_index]
+            landmark += (shift_x, shift_y)
+            matrix = AlignerExtract.transform_matrix(face.aligned["matrix"],
+                                                     face.aligned["size"],
+                                                     face.aligned["padding"])
+            matrix = cv2.invertAffineTransform(matrix)
+            landmark = np.reshape(landmark, (1, 1, 2))
+            landmark = cv2.transform(landmark, matrix, landmark.shape).squeeze()
+            face.landmarks_xy[landmark_index] = landmark
+        else:
+            face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         face.load_aligned(None, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 

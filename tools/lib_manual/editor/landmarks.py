@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """ Landmarks Editor and Landmarks Mesh viewer for the manual adjustments tool """
+import tkinter as tk
 
 import numpy as np
+from PIL import Image, ImageTk
+
 from ._base import ControlPanelOption, Editor, logger
 
 
 class Landmarks(Editor):
     """ The Landmarks Editor. """
-    # TODO Tag raise landmarks above extract box
     def __init__(self, canvas, alignments, frames):
         self._landmark_count = None
+        self._zoomed_face = None
+        self._zoomed_face_index = None
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
                         " - Click and drag individual landmark points to relocate.")
         super().__init__(canvas, alignments, frames, control_text)
@@ -17,7 +21,7 @@ class Landmarks(Editor):
     @property
     def _edit_mode(self):
         """ str: The currently selected edit mode based on optional action button.
-        One of "draw", "erase" or "zoom" """
+        One of "draw" or "zoom" """
         action = [name for name, option in self._actions.items() if option["tk_var"].get()]
         return "move" if not action else action[0]
 
@@ -63,12 +67,17 @@ class Landmarks(Editor):
         for face_idx, face in enumerate(self._alignments.current_faces):
             if self._landmark_count is None:
                 self._landmark_count = len(face.landmarks_xy)
-            for lm_idx, landmark in enumerate(face.landmarks_xy):
-                box = self._scale_to_display(landmark).astype("int32")
+            if self._is_zoomed:
+                landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
+            else:
+                landmarks = self._scale_to_display(face.landmarks_xy)
+            for lm_idx, landmark in enumerate(landmarks):
                 obj_idx = (face_idx * self._landmark_count) + lm_idx
-                self._display_landmark(box, obj_idx)
-                self._grab_landmark(box, obj_idx)
-                self._label_landmark(box, obj_idx, lm_idx)
+                self._display_landmark(landmark, obj_idx)
+                self._grab_landmark(landmark, obj_idx)
+                self._label_landmark(landmark, obj_idx, lm_idx)
+        if self._is_zoomed:
+            self._zoom_face(update_only=True)
         logger.trace("Updated landmark annotations: %s", self._objects)
 
     def _display_landmark(self, bounding_box, object_index):
@@ -202,9 +211,43 @@ class Landmarks(Editor):
         """
         if self._mouse_location is None:
             self._drag_data = dict()
-            return
-        self._drag_data["current_location"] = (event.x, event.y)
-        self._drag_callback = self._move
+            self._drag_callback = None
+        elif self._edit_mode == "zoom":
+            self._drag_data = dict()
+            self._drag_callback = None
+            self._zoomed_face_index = self._mouse_location
+            self._zoom_face()
+        else:
+            self._drag_data["current_location"] = (event.x, event.y)
+            self._drag_callback = self._move
+
+    def _zoom_face(self, update_only=False):
+        """ Zoom in on the selected face.
+
+        Parameters
+        ----------
+        update_only: bool, optional
+            `` True`` if the zoomed image is being updated by a landmark edit, ``False`` if the
+            zoom action button has been pressed. Default: ``False``
+        """
+        face_index = self._zoomed_face_index
+        if not update_only:
+            self._canvas.toggle_image_display()
+        coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
+        if self._is_zoomed:
+            face = self._alignments.get_aligned_face_at_index(face_index)[..., 2::-1]
+            display = ImageTk.PhotoImage(Image.fromarray(face))
+            self._zoomed_face = display
+            kwargs = dict(image=self._zoomed_face, anchor=tk.CENTER)
+        else:
+            kwargs = dict(state="hidden")
+            self._zoomed_face_index = None
+        self._object_tracker("zoom", "image", face_index, coords, kwargs)
+        self._canvas.tag_lower(self._objects["zoom"][face_index])
+        self._frames.tk_update.set(True)
+        if not update_only:
+            for obj in self._get_extract_boxes():
+                self._canvas.tag_raise(obj)
 
     def _move(self, event):
         """ Moves the selected landmark point box and updates the underlying landmark on a point
@@ -218,15 +261,19 @@ class Landmarks(Editor):
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
         objects = [self._objects[key][self._mouse_location] for key in self._objects
-                   if key != "mesh"]
+                   if key != "zoom"]
         for obj in objects:
             logger.trace("Moving: %s id: %s", self._canvas.type(obj), obj)
             logger.trace(self._canvas.itemcget(obj, "state"))
             self._canvas.move(obj, shift_x, shift_y)
-        scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
+        if self._is_zoomed:
+            scaled_shift = np.array((shift_x, shift_y))
+        else:
+            scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
         self._alignments.shift_landmark(self._mouse_location // self._landmark_count,
                                         self._mouse_location % self._landmark_count,
-                                        *scaled_shift)
+                                        *scaled_shift,
+                                        self._is_zoomed)
         self._drag_data["current_location"] = (event.x, event.y)
 
 
@@ -251,12 +298,15 @@ class Mesh(Editor):
             return
         color = self._control_color
         for face_idx, face in enumerate(self._alignments.current_faces):
-            landmarks = face.landmarks_xy
+            if self._is_zoomed:
+                landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
+            else:
+                landmarks = self._scale_to_display(face.landmarks_xy)
             base_idx = (face_idx * len(self._landmark_mapping))
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s)", landmarks, color)
             for idx, (segment, val) in enumerate(self._landmark_mapping.items()):
                 obj_idx = base_idx + idx
-                pts = self._scale_to_display(landmarks[val[0]:val[1]]).astype("int32").flatten()
+                pts = landmarks[val[0]:val[1]].flatten()
                 if segment in ("right_eye", "left_eye", "mouth"):
                     kwargs = dict(fill="", outline=color, width=1)
                     self._object_tracker(key, "polygon", obj_idx, pts, kwargs)

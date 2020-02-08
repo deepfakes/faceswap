@@ -49,7 +49,13 @@ class ExtractBox(Editor):
         #      return extract_box
         for idx, face in enumerate(self._alignments.current_faces):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
-            box = self._scale_to_display(face.original_roi).flatten()
+            if self._is_zoomed:
+                box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
+                                self._zoomed_roi[2], self._zoomed_roi[1],
+                                self._zoomed_roi[2], self._zoomed_roi[3],
+                                self._zoomed_roi[0], self._zoomed_roi[3]))
+            else:
+                box = self._scale_to_display(face.original_roi).flatten()
             top_left = box[:2] - 10
             kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
             self._object_tracker(keys[0], "text", idx, top_left, kwargs)

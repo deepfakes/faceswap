@@ -136,6 +136,12 @@ class Editor():
                                            dict()).get("display", dict()).get(annotation, None)
         return self._is_active or (should_display is not None and should_display.get())
 
+    @property
+    def _zoomed_dims(self):
+        """ tuple: The (`width`, `height`) of the zoomed ROI """
+        return (self._zoomed_roi[2] - self._zoomed_roi[0],
+                self._zoomed_roi[3] - self._zoomed_roi[1])
+
     def _get_zoomed_roi(self):
         """ Get the Region of Interest for when the face is zoomed.
 
