@@ -682,10 +682,15 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
     def refresh_display_image(self):
         """ Update the displayed frame """
+        if not self._frames.needs_update:
+            logger.trace("Background frame not updated. Returning")
+            return
+        logger.trace("Updating background frame")
         self.itemconfig(self._image, image=self._frames.current_display_frame)
-        # TODO Fix when updating annotation
-        # if self._image_is_hidden:
-        #    self.toggle_image_display()
+        if self._image_is_hidden:
+            logger.trace("Unhiding background frame")
+            self.toggle_image_display()
+        self._frames.clear_update_flag()
 
 
 class Options(ttk.Frame):  # pylint:disable=too-many-ancestors

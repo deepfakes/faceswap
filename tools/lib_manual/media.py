@@ -29,6 +29,7 @@ class FrameNavigation():
                      self.__class__.__name__, frames_location, scaling_factor)
         self._loader = ImagesLoader(frames_location, fast_count=False, queue_size=1)
         self._meta = dict()
+        self._needs_update = False
         self._current_idx = 0
         self._scaling = scaling_factor
         self._tk_vars = self._set_tk_vars()
@@ -92,6 +93,12 @@ class FrameNavigation():
         return tuple(retval)
 
     @property
+    def needs_update(self):
+        """ bool: ``True`` if the position has changed and displayed frame needs to be updated
+        otherwise ``False`` """
+        return self._needs_update
+
+    @property
     def tk_position(self):
         """ :class:`tkinter.IntVar`: The current frame position. """
         return self._tk_vars["position"]
@@ -146,6 +153,7 @@ class FrameNavigation():
                              interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
         self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
         self._current_idx = position
+        self._needs_update = True
         self.tk_update.set(True)
 
     def _add_meta_data(self, position, frame, filename):
@@ -171,6 +179,12 @@ class FrameNavigation():
             display_dims=(int(round(frame.shape[1] * scale)),
                           int(round(frame.shape[0] * scale))),
             filename=filename)
+
+    def clear_update_flag(self):
+        """ Trigger to clear the update flag once the canvas has been updated with the latest
+        display frame """
+        logger.trace("Clearing update flag")
+        self._needs_update = False
 
     def increment_frame(self, is_playing=False):
         """ Update :attr:`self.current_frame` to the next frame.
