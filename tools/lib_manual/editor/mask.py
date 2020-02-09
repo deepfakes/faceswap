@@ -200,13 +200,13 @@ class Mask(Editor):
         yslice = slice(int(round(min_max["min"][0])), int(round(min_max["max"][0])))
 
         # Adjust affine matrix for internal mask size and display dimensions
-        in_adjustment = np.array([[mask_scale, 0, 0], [0, mask_scale, 0]])
-        out_adjustment = np.array([[1 / self._frames.current_scale, 0, 0],
-                                   [0, 1 / self._frames.current_scale, 0],
-                                   [0, 0, 1]])
+        in_adjustment = np.array([[mask_scale, 0., 0.], [0., mask_scale, 0.]])
+        out_adjustment = np.array([[1 / self._frames.current_scale, 0., 0.],
+                                   [0., 1 / self._frames.current_scale, 0.],
+                                   [0., 0., 1.]])
 
         in_matrix = np.dot(in_adjustment,
-                           np.concatenate((mask.affine_matrix, np.array([[0, 0, 1]]))))
+                           np.concatenate((mask.affine_matrix, np.array([[0., 0., 1.]]))))
         affine_matrix = np.dot(in_matrix, out_adjustment)
 
         # Get the size of the mask roi box in the frame

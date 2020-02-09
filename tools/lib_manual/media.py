@@ -585,7 +585,7 @@ class FaceCache():
         thread.start()
 
     def _load_faces(self, frame_width):
-        """ Loads the faces into the :attr:`_faces` dict at 128px size formatted for GUI display.
+        """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
 
         Updates a GUI progress bar to show loading progress.
         """
