@@ -123,31 +123,35 @@ class Manual(tk.Tk):
             * R, Z, D - Optional Actions
         """
         # TODO - Alt modifier doesn't seem to work on windows. Check
+        # TODO - Auto generate key bindings for actions
+
         modifiers = {0x0001: 'shift',
                      0x0004: 'ctrl',
                      0x0008: 'alt',
                      0x0080: 'alt'}
 
-        bindings = dict(
-            left=self._frames.decrement_frame,
-            shift_left=lambda d="prev", f="single": self._alignments.set_next_frame(d, f),
-            ctrl_left=lambda d="prev", f="multi": self._alignments.set_next_frame(d, f),
-            alt_left=lambda d="prev", f="no": self._alignments.set_next_frame(d, f),
-            right=self._frames.increment_frame,
-            shift_right=lambda d="next", f="single": self._alignments.set_next_frame(d, f),
-            ctrl_right=lambda d="next", f="multi": self._alignments.set_next_frame(d, f),
-            alt_right=lambda d="next", f="no": self._alignments.set_next_frame(d, f),
-            space=self._display.handle_play_button,
-            home=self._frames.set_first_frame,
-            end=self._frames.set_last_frame,
-            v=lambda k=event.keysym: self._display.set_action(k),
-            b=lambda k=event.keysym: self._display.set_action(k),
-            e=lambda k=event.keysym: self._display.set_action(k),
-            m=lambda k=event.keysym: self._display.set_action(k),
-            l=lambda k=event.keysym: self._display.set_action(k))  # noqa
+        bindings = {
+            "left": self._frames.decrement_frame,
+            "shift_left": lambda d="prev", f="single": self._alignments.set_next_frame(d, f),
+            "ctrl_left": lambda d="prev", f="multi": self._alignments.set_next_frame(d, f),
+            "alt_left": lambda d="prev", f="no": self._alignments.set_next_frame(d, f),
+            "right": self._frames.increment_frame,
+            "shift_right": lambda d="next", f="single": self._alignments.set_next_frame(d, f),
+            "ctrl_right": lambda d="next", f="multi": self._alignments.set_next_frame(d, f),
+            "alt_right": lambda d="next", f="no": self._alignments.set_next_frame(d, f),
+            "space": self._display.handle_play_button,
+            "home": self._frames.set_first_frame,
+            "end": self._frames.set_last_frame,
+            "1": lambda k=event.keysym: self._display.set_action(k),
+            "2": lambda k=event.keysym: self._display.set_action(k),
+            "3": lambda k=event.keysym: self._display.set_action(k),
+            "4": lambda k=event.keysym: self._display.set_action(k),
+            "5": lambda k=event.keysym: self._display.set_action(k)}
 
+        # Allow keypad keys to be used for numbers
+        press = event.keysym.replace("KP_", "") if event.keysym.startswith("KP_") else event.keysym
         modifier = "_".join(val for key, val in modifiers.items() if event.state & key != 0)
-        key_press = "_".join([modifier, event.keysym]) if modifier else event.keysym
+        key_press = "_".join([modifier, press]) if modifier else press
         if key_press.lower() in bindings:
             self.focus_set()
             bindings[key_press.lower()]()
@@ -323,6 +327,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         key: str
             The pressed key
         """
+        # Allow key pad keys for numeric presses
+        key = key.replace("KP_", "") if key.startswith("KP_") else key
         self._actions_frame.on_click(self._actions_frame.key_bindings[key.lower()])
 
     def _play(self, *args):  # pylint:disable=unused-argument
@@ -357,6 +363,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self._configure_styles()
         self._actions = ("view", "boundingbox", "extractbox", "mask", "landmarks")
+        self._initial_action = "view"
         self._buttons = self._add_buttons()
         self._selected_action = self._set_selected_action_tkvar()
         self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
@@ -375,16 +382,20 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def key_bindings(self):
         """ dict: {`key`: `action`}. The mapping of key presses to actions. Keyboard shortcut is
         the first letter of each action. """
-        return {action[0]: action for action in self._actions}
+        return {str(idx + 1): action for idx, action in enumerate(self._actions)}
 
     @property
     def _helptext(self):
         """ dict: `button key`: `button helptext`. The help text to display for each button. """
-        return dict(view="View alignments (V)",
-                    boundingbox="Bounding box editor (B)",
-                    extractbox="Edit the size and orientation of the existing alignments (E)",
-                    mask="Mask editor (M)",
-                    landmarks="Individual landmark point editor (L)")
+        inverse_keybindings = {val: key for key, val in self.key_bindings.items()}
+        retval = dict(view="View alignments",
+                      boundingbox="Bounding box editor",
+                      extractbox="Edit the size and orientation of the existing alignments",
+                      mask="Mask editor",
+                      landmarks="Individual landmark point editor")
+        for item in retval:
+            retval[item] += " ({})".format(inverse_keybindings[item])
+        return retval
 
     def _configure_styles(self):
         """ Configure background color for Actions widget """
@@ -406,7 +417,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame.pack(side=tk.TOP, fill=tk.Y)
         buttons = dict()
         for action in self.key_bindings.values():
-            if action == "view":
+            if action == self._initial_action:
                 btn_style = "actions_selected.TButton"
                 state = (["pressed", "focus"])
             else:
@@ -450,7 +461,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The variable that holds the currently selected action
         """
         var = tk.StringVar()
-        var.set("view")
+        var.set(self._initial_action)
         var.trace("w", self._display_optional_buttons)
         return var
 
@@ -703,7 +714,7 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
     """
     def __init__(self, parent, display_frame):
         super().__init__(parent)
-        self.pack(side=tk.LEFT, fill=tk.BOTH)
+        self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._display_frame = display_frame
         self._control_panels = self._initialize()
         self._set_tk_callbacks()
@@ -728,10 +739,13 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Initializing control panel for '%s' editor", name)
             controls = editor.controls
             panel = ControlPanel(self, controls["controls"],
-                                 option_columns=2,
+                                 option_columns=3,
+                                 columns=1,
+                                 max_columns=1,
                                  header_text=controls["header"],
                                  blank_nones=False,
-                                 label_width=18)
+                                 label_width=18,
+                                 scrollbar=False)
             panel.pack_forget()
             panels[name] = panel
         return panels
@@ -793,6 +807,8 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._faces = faces
 
+        self._actions_frame = FacesActionsFrame(self)
+
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -816,6 +832,120 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the faces frame scrollbar """
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+
+class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ The left hand action frame holding the action buttons.
+
+    Parameters
+    ----------
+    parent: :class:`FacesFrame`
+        The Faces frame that the Actions reside in
+    """
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
+
+        self._configure_styles()
+        self._actions = ("landmarks", "mask")
+        self._initial_action = "landmarks"
+        self._buttons = self._add_buttons()
+        self._selected_action = self._set_selected_action_tkvar()
+        self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
+
+    @property
+    def actions(self):
+        """ tuple: The available action names as a tuple of strings. """
+        return self._actions
+
+    @property
+    def tk_selected_action(self):
+        """ :class:`tkinter.StringVar`: The variable holding the currently selected action """
+        return self._selected_action
+
+    @property
+    def key_bindings(self):
+        """ dict: {`key`: `action`}. The mapping of key presses to actions. Keyboard shortcut is
+        the first letter of each action. """
+        # TODO Key bindings
+        return {"#TODO {}".format(action): action for action in self._actions}
+
+    @property
+    def _helptext(self):
+        """ dict: `button key`: `button helptext`. The help text to display for each button. """
+        inverse_keybindings = {val: key for key, val in self.key_bindings.items()}
+        retval = dict(landmarks="Display the landmarks mesh",
+                      mask="Display the mask")
+        for item in retval:
+            retval[item] += " ({})".format(inverse_keybindings[item])
+        return retval
+
+    def _configure_styles(self):
+        """ Configure background color for Actions widget """
+        style = ttk.Style()
+        style.configure("actions.TFrame", background='#d3d3d3')
+        style.configure("actions_selected.TButton", relief="flat", background="#bedaf1")
+        style.configure("actions_deselected.TButton", relief="flat")
+        self.config(style="actions.TFrame")
+
+    def _add_buttons(self):
+        """ Add the action buttons to the Display window.
+
+        Returns
+        -------
+        dict:
+            The action name and its associated button.
+        """
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP, fill=tk.Y)
+        buttons = dict()
+        for action in self.key_bindings.values():
+            if action == self._initial_action:
+                btn_style = "actions_selected.TButton"
+                state = (["pressed", "focus"])
+            else:
+                btn_style = "actions_deselected.TButton"
+                state = (["!pressed", "!focus"])
+
+            button = ttk.Button(frame,
+                                image=get_images().icons[action],
+                                command=lambda t=action: self.on_click(t),
+                                style=btn_style)
+            button.state(state)
+            button.pack()
+            Tooltip(button, text=self._helptext[action])
+            buttons[action] = button
+        return buttons
+
+    def on_click(self, action):
+        """ Click event for all of the main buttons.
+
+        Parameters
+        ----------
+        action: str
+            The action name for the button that has called this event as exists in :attr:`_buttons`
+        """
+        for title, button in self._buttons.items():
+            if action == title:
+                button.configure(style="actions_selected.TButton")
+                button.state(["pressed", "focus"])
+            else:
+                button.configure(style="actions_deselected.TButton")
+                button.state(["!pressed", "!focus"])
+        self._selected_action.set(action)
+
+    def _set_selected_action_tkvar(self):
+        """ Set the tkinter string variable that holds the currently selected editor action.
+        Add traceback to display or hide editor specific optional buttons.
+
+        Returns
+        -------
+        :class:`tkinter.StringVar
+            The variable that holds the currently selected action
+        """
+        var = tk.StringVar()
+        var.set(self._initial_action)
+        return var
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors

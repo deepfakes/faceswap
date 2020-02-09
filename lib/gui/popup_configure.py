@@ -106,12 +106,12 @@ class ConfigurePlugins(tk.Toplevel):
         """ Build a plugin config page """
         logger.debug("Building plugin config page: '%s'", category)
         plugins = sorted(list(key for key in self.config_cpanel_dict[category].keys()))
-        panel_kwargs = dict(columns=2, option_columns=2, blank_nones=False)
+        panel_kwargs = dict(columns=2, max_columns=2, option_columns=2, blank_nones=False)
         if any(plugin != category for plugin in plugins):
             page = ttk.Notebook(container)
             page.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             for plugin in plugins:
-                cp_options = [opt for opt in self.config_cpanel_dict[category][plugin].values()]
+                cp_options = list(self.config_cpanel_dict[category][plugin].values())
                 frame = ControlPanel(page,
                                      cp_options,
                                      header_text=self.plugin_info[plugin],
@@ -120,7 +120,7 @@ class ConfigurePlugins(tk.Toplevel):
                 title = title.replace("_", " ").title()
                 page.add(frame, text=title)
         else:
-            cp_options = [opt for opt in self.config_cpanel_dict[category][plugins[0]].values()]
+            cp_options = list(self.config_cpanel_dict[category][plugins[0]].values())
             page = ControlPanel(container,
                                 cp_options,
                                 header_text=self.plugin_info[plugins[0]],

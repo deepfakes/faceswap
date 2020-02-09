@@ -401,6 +401,11 @@ class AlignmentsData():
             The top point of the bounding box
         height: int
             The height of the bounding box
+
+        Notes
+        -----
+        The aligned face image is loaded so that the faces viewer can pick it up. This image
+        is cleared by the faces viewer after collection to save ram.
         """
         self._check_for_new_alignments()
         self._face_index = index
@@ -411,7 +416,7 @@ class AlignmentsData():
         face.h = height
         face.mask = dict()
         face.landmarks_xy = self._extractor.get_landmarks()
-        face.load_aligned(None, size=self._face_size, force=True)
+        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 
     def shift_landmark(self, face_index, landmark_index, shift_x, shift_y, is_zoomed):
@@ -430,6 +435,11 @@ class AlignmentsData():
             The amount to shift the landmark by along the y axis
         is_zoomed: bool
             ``` True if landmarks are being adjusted on a zoomed image otherwise ``False``
+
+        Notes
+        -----
+        The aligned face image is loaded so that the faces viewer can pick it up. This image
+        is cleared by the faces viewer after collection to save ram.
         """
         self._check_for_new_alignments()
         self._face_index = face_index
@@ -447,7 +457,7 @@ class AlignmentsData():
             face.landmarks_xy[landmark_index] = landmark
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
-        face.load_aligned(None, size=self._face_size, force=True)
+        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 
     def shift_landmarks(self, index, shift_x, shift_y):
@@ -467,6 +477,9 @@ class AlignmentsData():
         -----
         Whilst the bounding box does not need to be shifted, it is anyway, to ensure that it is
         aligned with the newly adjusted landmarks.
+
+        The aligned face image is loaded so that the faces viewer can pick it up. This image
+        is cleared by the faces viewer after collection to save ram.
         """
         self._check_for_new_alignments()
         self._face_index = index
@@ -475,7 +488,7 @@ class AlignmentsData():
         face.y += shift_y
         face.mask = dict()
         face.landmarks_xy += (shift_x, shift_y)
-        face.load_aligned(None, size=self._face_size, force=True)
+        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
         self.frames.tk_update.set(True)
 
     def add_face(self, pnt_x, width, pnt_y, height):
@@ -690,12 +703,17 @@ class FaceCache():
         if not self._initialized.is_set():
             return
         face = self._alignments.current_face
-        if face is None or face.aligned_face is None:
+        if face is None:
             return
+        if face.aligned_face is None:
+            # When in zoomed in mode the face isn't loaded, so get a copy
+            aligned_face = self._alignments.get_aligned_face_at_index(self._alignments.face_index)
+        else:
+            aligned_face = face.aligned_face
 
         position = self._frames.tk_position.get()
         objects = self._faces[position][self._alignments.face_index]
-        display_face = cv2.resize(face.aligned_face[..., 2::-1],
+        display_face = cv2.resize(aligned_face[..., 2::-1],
                                   (self._size, self._size),
                                   interpolation=cv2.INTER_AREA)
         objects["image"] = ImageTk.PhotoImage(Image.fromarray(display_face))

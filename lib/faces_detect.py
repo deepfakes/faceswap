@@ -257,7 +257,7 @@ class DetectedFace():
             self.aligned["padding"] = padding
             self.aligned["matrix"] = get_align_mat(self)
             self.aligned["face"] = None
-        if image is not None and self.aligned["face"] is None:
+        if image is not None and (self.aligned["face"] is None or force):
             logger.trace("Getting aligned face")
             face = AlignerExtract().transform(image, self.aligned["matrix"], size, padding)
             self.aligned["face"] = face if dtype is None else face.astype(dtype)
