@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Tool to manually interact with the alignments file using visual tools """
 import logging
+import platform
 
 import tkinter as tk
 from tkinter import ttk
@@ -49,7 +50,7 @@ class Manual(tk.Tk):
         self._faces = FaceCache(self._alignments, pbar)
 
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
-        self._faces_frame = FacesFrame(self._containers["bottom"], self._faces)
+        self._faces_frame = FacesFrame(self._containers["bottom"], self._faces, self._frames)
 
         self._options = Options(self._containers["top"], self._display)
         self._display.tk_selected_action.set("view")
@@ -799,8 +800,10 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         The paned window that the faces frame resides in
     faces: :class:`tools.manual.lib_manual.FaceCache`
         The faces cache that holds the aligned faces
+    frames: :class:`FrameNavigation`
+        The object that holds the cache of frames.
     """
-    def __init__(self, parent, faces):
+    def __init__(self, parent, faces, frames):
         logger.debug("Initializing %s: (parent: %s, faces: %s)",
                      self.__class__.__name__, parent, faces)
         super().__init__(parent)
@@ -812,7 +815,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self._canvas = FacesViewer(self._faces_frame, self._faces)
+        self._canvas = FacesViewer(self._faces_frame, self._faces, frames)
         scrollbar_width = self._add_scrollbar()
         self._canvas.load_faces(self.winfo_width() - scrollbar_width)
 
@@ -957,15 +960,29 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         The parent frame for the canvas
     faces: :class:`tools.manual.lib_manual.FaceCache`
         The faces cache that holds the aligned faces
+    frames: :class:`FrameNavigation`
+        The object that holds the cache of frames.
     """
-    def __init__(self, parent, faces):
+    def __init__(self, parent, faces, frames):
         logger.debug("Initializing %s: (parent: %s, faces: %s)", self.__class__.__name__, parent,
                      faces)
         super().__init__(parent, bd=0, highlightthickness=0)
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self.parent = parent
         self._faces = faces
+        self._frames = frames
+        self._bind_mouse()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _bind_mouse(self):
+        """ Bind the mouse actions. """
+        self.bind("<Motion>", self._update_cursor)
+        self.bind("<ButtonPress-1>", self._select_frame)
+        if platform.system() == "Linux":
+            self.bind("<Button-4>", self._scroll)
+            self.bind("<Button-5>", self._scroll)
+        else:
+            self.bind("<MouseWheel>", self._scroll)
 
     def load_faces(self, frame_width):
         """ Load the faces into the Faces Canvas in a background thread.
@@ -975,6 +992,60 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         frame_width: int
             The width of the :class:`tkinter.ttk.Frame` that holds this canvas """
         self._faces.load_faces(self, frame_width)
+
+    # << MOUSE HANDLING >>
+    # Mouse cursor display
+    def _update_cursor(self, event):  # pylint: disable=unused-argument
+        """ The mouse cursor display as bound to the mouses <Motion> event.
+        The canvas only displays faces, so if the mouse is over an object change the cursor
+        otherwise use default.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused for default tracking, but available for specific editor
+            tracking.
+        """
+        # TODO Highlight hovered
+        # TODO Hide cursor on current frame
+        item_ids = self.find_withtag("current")
+        if not item_ids:
+            self.config(cursor="")
+        else:
+            self.config(cursor="hand1")
+
+    def _select_frame(self, event):  # pylint: disable=unused-argument
+        """ Update the cursors for hovering over extract boxes and update
+        :attr:`_mouse_location`.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused but required.
+        """
+        item_ids = self.find_withtag("current")
+        if not item_ids:
+            self.config(cursor="")
+            return
+        tags = [tag.replace("frame_id_", "")
+                for tag in self.itemcget(item_ids[0], "tags").split()
+                if tag.startswith("frame_id_")]
+        if not tags:
+            return
+        self._frames.goto_frame(int(tags[0]))
+
+    def _scroll(self, event):
+        """ Handle mouse wheel scrolling over the faces canvas """
+        # TODO Test Windows + macOS
+        if platform.system() == "Darwin":
+            adjust = event.delta
+        elif platform.system() == "Windows":
+            adjust = event.delta / 120
+        elif event.num == 5:
+            adjust = -1
+        else:
+            adjust = 1
+        self.yview_scroll(int(-1 * adjust), "units")
 
 
 class Aligner():

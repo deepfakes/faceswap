@@ -610,12 +610,14 @@ class FaceCache():
             face_count = 0
             loader = ImagesLoader(self._frames.location, count=self.frame_count)
             for frame_idx, (filename, frame) in enumerate(loader.load()):
+                tags = ["frame_id_{}".format(frame_idx)]
                 frame_name = os.path.basename(filename)
                 progress = int(round(((frame_idx + 1) / self.frame_count) * 100))
                 self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
                 for face in self._alignments.saved_alignments.get(frame_name, list()):
                     face.load_aligned(frame, size=self._size, force=True)
                     self._faces.setdefault(frame_idx, []).append(self._place_face(columns,
+                                                                                  tags,
                                                                                   face_count,
                                                                                   face))
                     face.aligned["face"] = None
@@ -629,7 +631,7 @@ class FaceCache():
         self._initialized.set()
         self._highlight_current()
 
-    def _place_face(self, columns, idx, face):
+    def _place_face(self, columns, tags, idx, face):
         """ Places the aligned faces on the canvas and create invisible annotations.
 
         Returns
@@ -640,18 +642,19 @@ class FaceCache():
 
         pos = ((idx % columns) * self._size, (idx // columns) * self._size)
         rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
-        image_id = self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW)
+        image_id = self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW, tags=tags)
         border = self._canvas.create_rectangle(*rect_dims,
                                                outline="#00ff00",
                                                width=2,
-                                               state="hidden")
-        mesh = self._draw_mesh(face, pos)
+                                               state="hidden",
+                                               tags=tags)
+        mesh = self._draw_mesh(face, pos, tags)
         objects = dict(image=dsp_face, image_id=image_id, border=border, mesh=mesh, position=pos)
         if pos[0] == 0:
             self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         return objects
 
-    def _draw_mesh(self, face, position):
+    def _draw_mesh(self, face, position, tags):
         """ Draw an invisible landmarks mesh on the face that can be displayed when required """
         mesh = []
         for key in sorted(self._landmark_mapping):
@@ -662,12 +665,14 @@ class FaceCache():
                                                         fill="",
                                                         outline="#00ffff",
                                                         state="hidden",
-                                                        width=1))
+                                                        width=1,
+                                                        tags=tags))
             else:
                 mesh.append(self._canvas.create_line(*pts,
                                                      fill="#00ffff",
                                                      state="hidden",
-                                                     width=1))
+                                                     width=1,
+                                                     tags=tags))
         return mesh
 
     def _clear_highlighted(self):
