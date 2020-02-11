@@ -252,6 +252,7 @@ class AlignmentsData():
         logger.debug("Initializing %s: (alignments_path: '%s')",
                      self.__class__.__name__, alignments_path)
         self.frames = frames
+        self._remove_idx = None
         self._face_size = min(self.frames.display_dims)
         self._mask_names, self._alignments = self._get_alignments(alignments_path)
 
@@ -520,8 +521,24 @@ class AlignmentsData():
         """
         logger.debug("Deleting face at index: %s", index)
         self._check_for_new_alignments()
+        self._remove_idx = index  # Set the remove_idx to this index for Faces window to pick up
         del self.current_faces[index]
+        self._face_index = 0
         self.frames.tk_update.set(True)
+
+    def get_removal_index(self):
+        """ Return the index for the face set for removal and reset :attr:`_remove_idx` to None.
+
+        Called from the Faces viewer when a face has been removed from the alignments file
+
+        Returns
+        -------
+        int:
+            The index of the currently displayed faces that has been removed
+        """
+        retval = self._remove_idx
+        self._remove_idx = None
+        return retval
 
     def get_aligned_face_at_index(self, index):
         """ Return the aligned face sized for frame viewer.
@@ -545,13 +562,13 @@ class AlignmentsData():
 
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
-    # TODO Handle adding of new faces to a frame
     def __init__(self, alignments, progress_bar):
         self._alignments = alignments
         self._pbar = progress_bar
         self._size = 96
         self._faces = dict()
         self._canvas = None
+        self._columns = None
         self._set_tk_trace()
         self._initialized = Event()
         self._selected = []
@@ -657,7 +674,7 @@ class FaceCache():
         # change)
         try:
             self._pbar.start(mode="determinate")
-            columns = frame_width // self._size
+            self._columns = frame_width // self._size
             faces_seen = 0
             loader = ImagesLoader(self._frames.location, count=self.frame_count)
             for frame_idx, (filename, frame) in enumerate(loader.load()):
@@ -666,12 +683,9 @@ class FaceCache():
                 self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
                 faces = self._alignments.saved_alignments.get(frame_name, list())
                 for face_idx, face in enumerate(faces):
-                    tags = ["frame_id_{}".format(frame_idx), "face_id_{}".format(face_idx)]
                     face.load_aligned(frame, size=self._size, force=True)
-                    self._faces.setdefault(frame_idx, []).append(self._place_face(columns,
-                                                                                  tags,
-                                                                                  faces_seen,
-                                                                                  face))
+                    self._faces.setdefault(frame_idx, []).append(
+                        self._place_face(self._create_tag(frame_idx, face_idx), faces_seen, face))
                     face.aligned["face"] = None
                     faces_seen += 1
             self._pbar.stop()
@@ -683,7 +697,12 @@ class FaceCache():
         self._initialized.set()
         self._highlight_selected()
 
-    def _place_face(self, columns, tags, idx, face):
+    @staticmethod
+    def _create_tag(frame_index, face_index):
+        """ Create an object tag from the frame and face index """
+        return ["frame_id_{}".format(frame_index), "face_id_{}".format(face_index)]
+
+    def _place_face(self, tags, idx, face, landmarks=None):
         """ Places the aligned faces on the canvas and create invisible annotations.
 
         Returns
@@ -692,7 +711,7 @@ class FaceCache():
         """
         dsp_face = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
 
-        pos = ((idx % columns) * self._size, (idx // columns) * self._size)
+        pos = ((idx % self._columns) * self._size, (idx // self._columns) * self._size)
         rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
         image_id = self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW, tags=tags)
         border = self._canvas.create_rectangle(*rect_dims,
@@ -701,7 +720,16 @@ class FaceCache():
                                                state="hidden",
                                                tags=tags)
         mesh = self._draw_mesh(face, pos, tags)
-        objects = dict(image=dsp_face, image_id=image_id, border=border, mesh=mesh, position=pos)
+        # Creating new object, the landmarks are scaled correctly. For existing objects
+        # the scaled landmarks are passed in.
+        landmarks = face.aligned_landmarks if landmarks is None else landmarks
+        objects = dict(image=dsp_face,
+                       image_id=image_id,
+                       border=border,
+                       mesh=mesh,
+                       position=pos,
+                       index=idx,
+                       landmarks=landmarks)
         if pos[0] == 0:
             self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         return objects
@@ -744,9 +772,8 @@ class FaceCache():
         self._clear_selected()
 
         objects = self._faces.get(position, None)
-        if objects is None:
+        if not objects or objects is None:
             return
-
         for obj in objects:
             self._canvas.itemconfig(obj["border"], state="normal")
             self._selected.append(obj["border"])
@@ -762,10 +789,11 @@ class FaceCache():
 
     def _update_current(self, *args):  # pylint:disable=unused-argument
         """ Update the currently selected face on editor update """
-        # TODO Handle insertion and deletion of faces from the main frame
-        # (currently bugs on missing indices)
         if not self._initialized.is_set():
             return
+
+        position = self._frames.tk_position.get()
+        self._add_remove_face(position)
         face = self._alignments.current_face
         if face is None:
             return
@@ -775,17 +803,19 @@ class FaceCache():
         else:
             aligned_face = face.aligned_face
 
-        position = self._frames.tk_position.get()
         objects = self._faces[position][self._alignments.face_index]
         display_face = cv2.resize(aligned_face[..., 2::-1],
                                   (self._size, self._size),
                                   interpolation=cv2.INTER_AREA)
         objects["image"] = ImageTk.PhotoImage(Image.fromarray(display_face))
-        self._canvas.itemconfig(objects["image_id"], image=objects["image"])
         scale = self._size / face.aligned["size"]
+        landmarks = face.aligned_landmarks * scale
+        objects["landmarks"] = landmarks
+        self._canvas.itemconfig(objects["image_id"], image=objects["image"])
+
         for idx, key in enumerate(sorted(self._landmark_mapping)):
             val = self._landmark_mapping[key]
-            pts = ((face.aligned_landmarks[val[0]:val[1]] * scale) + objects["position"]).flatten()
+            pts = (landmarks[val[0]:val[1]] + objects["position"]).flatten()
             self._canvas.coords(objects["mesh"][idx], *pts)
         face.aligned["face"] = None
 
@@ -827,3 +857,60 @@ class FaceCache():
             color_attr = "outline" if self._canvas.type(object_id) == "polygon" else "fill"
             kwargs = {color_attr: self._colors["{}_half".format(display)], "state": "normal"}
             self._canvas.itemconfig(object_id, **kwargs)
+
+    def _add_remove_face(self, position):
+        """ Add or remove a face into the viewer """
+        current_faces = self._faces[position]
+        alignment_faces = len(self._alignments.current_faces)
+        display_faces = len(current_faces)
+
+        if alignment_faces > display_faces:
+            tags = self._create_tag(position, alignment_faces - 1)
+            starting_idx = self._insert_new_face(current_faces, tags)
+            increment = True
+        elif alignment_faces < display_faces:
+            starting_idx = self._delete_face(current_faces)
+            increment = False
+        else:
+            return
+        self._update_following_faces(position, starting_idx, increment)
+        self._highlight_selected()
+
+    def _insert_new_face(self, current_faces, tags):
+        """ Insert a new face into the faces viewer. """
+        insert_index = current_faces[-1]["index"] + 1
+        scale = self._size / self._alignments.current_face.aligned["size"]
+        landmarks = self._alignments.current_face.aligned_landmarks * scale
+        current_faces.append(self._place_face(tags,
+                                              insert_index,
+                                              self._alignments.current_face,
+                                              landmarks=landmarks))
+        return insert_index + 1
+
+    def _delete_face(self, current_faces):
+        """ Remove a face from the faces viewer. """
+        face_idx = self._alignments.get_removal_index()
+        rem_face = current_faces[face_idx]
+        removed_index = rem_face["index"]
+        indices = [rem_face["image_id"], rem_face["border"]] + rem_face["mesh"]
+        for idx in indices:
+            self._canvas.delete(idx)
+        del current_faces[face_idx]
+        return removed_index
+
+    def _update_following_faces(self, position, starting_idx, increment=True):
+        """ Update the face positions for all faces following an insert or delete. """
+        update_faces = [obj for k, v in self._faces.items() for obj in v
+                        if k > position or (k == position and obj["index"] >= starting_idx)]
+        for objects in update_faces:
+            idx = objects["index"] + 1 if increment else objects["index"] - 1
+            objects["index"] = idx
+            pos = ((idx % self._columns) * self._size, (idx // self._columns) * self._size)
+            rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
+            objects["position"] = pos
+            self._canvas.coords(objects["image_id"], *pos)
+            self._canvas.coords(objects["border"], *rect_dims)
+            for idx, key in enumerate(sorted(self._landmark_mapping)):
+                val = self._landmark_mapping[key]
+                pts = (objects["landmarks"][val[0]:val[1]] + objects["position"]).flatten()
+                self._canvas.coords(objects["mesh"][idx], *pts)
