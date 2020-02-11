@@ -8,7 +8,7 @@ Pillow==6.2.1
 scikit-learn
 toposort
 fastcluster
-matplotlib==3.1.1
+matplotlib==3.0.3
 imageio==2.6.1
 imageio-ffmpeg
 ffmpy==0.2.2
