@@ -25,6 +25,10 @@ class Landmarks(Editor):
         action = [name for name, option in self._actions.items() if option["tk_var"].get()]
         return "move" if not action else action[0]
 
+    def _get_objects_per_face(self):
+        """ The number of objects for each annotation per face """
+        return dict(lm_display=68, lm_grab=68, lm_label=68, lm_label_bg=68)
+
     def _add_actions(self):
         self._add_action("drag", "move", "Drag individual Landmarks", hotkey="D")
         self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
@@ -43,7 +47,7 @@ class Landmarks(Editor):
         if not tk_var.get():
             logger.debug("Action %s is not active. Returning", key)
             return
-        objects = self._get_extract_boxes() if key == "zoom" else self._objects.get("grab", [])
+        objects = self._get_extract_boxes() if key == "zoom" else self._objects.get("lm_grab", [])
         if not objects:
             logger.debug("Objects for %s not yet created. Returning", key)
             return
@@ -76,6 +80,7 @@ class Landmarks(Editor):
                 self._display_landmark(landmark, obj_idx)
                 self._grab_landmark(landmark, obj_idx)
                 self._label_landmark(landmark, obj_idx, lm_idx)
+        self._hide_additional_annotations()
         if self._is_zoomed:
             self._zoom_face(update_only=True)
         logger.trace("Updated landmark annotations: %s", self._objects)
@@ -111,7 +116,7 @@ class Landmarks(Editor):
         object_index: int
             The index of the this item in :attr:`_objects`
         """
-        key = "grab"
+        key = "lm_grab"
         if not self._is_active:
             self._hide_annotation(key)
             return
@@ -141,7 +146,7 @@ class Landmarks(Editor):
         landmark_index
             The index of the landmark being annotated
         """
-        keys = ["label", "label_background"]
+        keys = ["lm_label", "lm_label_bg"]
         if not self._is_active:
             for key in keys:
                 self._hide_annotation(key)
@@ -168,7 +173,7 @@ class Landmarks(Editor):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
         self._hide_labels()
-        objs = self._get_extract_boxes() if self._edit_mode == "zoom" else self._objects["grab"]
+        objs = self._get_extract_boxes() if self._edit_mode == "zoom" else self._objects["lm_grab"]
         item_ids = set(self._canvas.find_withtag("current")).intersection(objs)
         if not item_ids:
             self._canvas.config(cursor="")
@@ -180,8 +185,8 @@ class Landmarks(Editor):
             self._canvas.config(cursor="sizing")
         else:
             self._canvas.config(cursor="fleur")
-            for label in [self._objects["label"][obj_idx],
-                          self._objects["label_background"][obj_idx]]:
+            for label in [self._objects["lm_label"][obj_idx],
+                          self._objects["lm_label_bg"][obj_idx]]:
                 logger.trace("Displaying: %s id: %s", self._canvas.type(label), label)
                 self._canvas.itemconfig(label, state="normal")
         self._mouse_location = obj_idx
@@ -189,7 +194,8 @@ class Landmarks(Editor):
     def _hide_labels(self):
         """ Clear all landmark text labels from display """
         labels = [idx for key, val in self._objects.items() for idx in val
-                  if key.startswith("label") and self._canvas.itemcget(idx, "state") == "normal"]
+                  if (key.startswith("lm_label")
+                      and self._canvas.itemcget(idx, "state")) == "normal"]
         if not labels:
             return
         logger.trace("Clearing labels")
@@ -290,6 +296,10 @@ class Mesh(Editor):
                                       chin=(8, 11))
         super().__init__(canvas, alignments, frames, None)
 
+    def _get_objects_per_face(self):
+        """ The number of objects for each annotation per face """
+        return dict(mesh=len(self._landmark_mapping))
+
     def update_annotation(self):
         """ Draw the Landmarks Mesh and set the objects to :attr:`_object`"""
         key = self.__class__.__name__.lower()
@@ -312,3 +322,4 @@ class Mesh(Editor):
                     self._object_tracker(key, "polygon", obj_idx, pts, kwargs)
                 else:
                     self._object_tracker(key, "line", obj_idx, pts, dict(fill=color, width=1))
+        self._hide_additional_annotations()

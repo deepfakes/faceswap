@@ -41,6 +41,10 @@ class BoundingBox(Editor):
         bounding box. """
         return [self._canvas.coords(rect) for rect in self._objects.get("boundingbox", [])]
 
+    def _get_objects_per_face(self):
+        """ The number of objects for each annotation per face """
+        return dict(boundingbox=1, anchor_display=4, anchor_grab=4)
+
     def _add_controls(self):
         for dsp in ("Extract Box", "Landmarks", "Mesh"):
             self._add_control(ControlPanelOption(dsp,
@@ -77,7 +81,8 @@ class BoundingBox(Editor):
             kwargs = dict(outline=color, width=1)
             self._object_tracker(key, "rectangle", idx, box, kwargs)
             self._update_anchor_annotation(idx, box, color)
-        logger.trace("Updated bounding box annotations: %s", self._objects[key])
+        self._hide_additional_annotations()
+        logger.trace("Updated bounding box annotations: %s", self._objects)
 
     def _update_anchor_annotation(self, face_index, bounding_box, color):
         """ Update the anchor annotations for each corner of the bounding box.

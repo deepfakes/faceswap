@@ -55,6 +55,7 @@ class Editor():
 
         self._zoomed_roi = self._get_zoomed_roi()
         self._objects = dict()
+        self._objects_per_face = self._get_objects_per_face()
         self._mouse_location = None
         self._drag_data = dict()
         self._drag_callback = None
@@ -161,6 +162,16 @@ class Editor():
         logger.debug("Zoomed ROI: %s", retval)
         return retval
 
+    def _get_objects_per_face(self):
+        """ Objects for each frame a stored in a straight list, so the process needs to know
+        how many objects are stored per face for each annotation for hiding or displaying
+        additional faces.
+
+        Override for editor specific figures
+        """
+        print(self.__class__.__name__)
+        raise NotImplementedError
+
     def update_annotation(self):
         """ Update the display annotations for the current objects.
 
@@ -184,6 +195,23 @@ class Editor():
                 if self._canvas.itemcget(item_id, "state") == "hidden":
                     continue
                 logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
+                self._canvas.itemconfig(item_id, state="hidden")
+
+    def _hide_additional_annotations(self):
+        """ Hide any annotations, when more faces are stored than are currently displayed """
+        face_count = len(self._alignments.current_faces)
+        for key, objects in self._objects.items():
+            num_objects = len(objects)
+            displayed_count = num_objects // self._objects_per_face[key]
+            to_hide = (displayed_count - face_count) * self._objects_per_face[key]
+            if to_hide <= 0:
+                continue
+            hide_objs = objects[-to_hide:]
+            for item_id in hide_objs:
+                if self._canvas.itemcget(item_id, "state") == "hidden":
+                    continue
+                logger.trace("Hiding extra face annotations: %s, id: %s",
+                             self._canvas.type(item_id), item_id)
                 self._canvas.itemconfig(item_id, state="hidden")
 
     def _object_tracker(self, key, object_type, object_index, coordinates, object_kwargs):
@@ -511,6 +539,10 @@ class View(Editor):
     def __init__(self, canvas, alignments, frames):
         control_text = "Viewer\nPreview the frame's annotations."
         super().__init__(canvas, alignments, frames, control_text)
+
+    def _get_objects_per_face(self):
+        """ The number of objects for each annotation per face """
+        return dict()
 
     def _add_controls(self):
         for dsp in ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh"):

@@ -48,6 +48,10 @@ class Mask(Editor):
         color = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
         return self._colors[color.lower()]
 
+    def _get_objects_per_face(self):
+        """ The number of objects for each annotation per face """
+        return dict(mask=1)
+
     def _add_actions(self):
         self._add_action("draw", "draw", "Draw the mask", hotkey="D")
         self._add_action("erase", "erase", "Erase the mask", hotkey="R")
@@ -129,6 +133,7 @@ class Mask(Editor):
             self._update_mask_image(key, idx, rgb_color, opacity)
             self._update_roi_box(mask, idx, roi_color)
 
+        self._hide_additional_annotations()
         self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
         logger.trace("Updated mask annotation")
 

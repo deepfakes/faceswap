@@ -18,6 +18,10 @@ class ExtractBox(Editor):
         super().__init__(canvas, alignments, frames, control_text)
         self._bind_hotkeys()
 
+    def _get_objects_per_face(self):
+        """ The number of objects for each annotation per face """
+        return dict(extractbox=1, text=1)
+
     def _add_controls(self):
         for dsp in ("Landmarks", "Mesh"):
             self._add_control(ControlPanelOption(dsp,
@@ -63,7 +67,7 @@ class ExtractBox(Editor):
             self._object_tracker(keys[1], "polygon", idx, box, kwargs)
             # Ensure extract box is above other annotations for mouse grabber
             self._canvas.tag_raise(self._objects[keys[1]][idx])
-
+        self._hide_additional_annotations()
         logger.trace("Updated extract box annotations: %s", {key: self._objects[key]
                                                              for key in keys})
 
