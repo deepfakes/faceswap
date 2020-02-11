@@ -554,7 +554,9 @@ class FaceCache():
         self._canvas = None
         self._set_tk_trace()
         self._initialized = Event()
-        self._highlighted = []
+        self._selected = []
+        self._current_display = None
+        self._hovered = None
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -580,11 +582,60 @@ class FaceCache():
         """ :class:`FrameNavigation`: The Frames for this manual session """
         return self._alignments.frames
 
+    @property
+    def _colors(self):
+        """ dict: Colors for the annotations. """
+        return dict(border="#00ff00", mesh="#00ffff", border_half="#009900", mesh_half="#009999")
+
+    def frame_index_from_object(self, object_id):
+        """ Retrieve the frame index that an object belongs to from it's tag.
+
+        Parameters
+        ----------
+        object_id: int
+            The tkinter canvas object id
+
+        Returns
+        -------
+        int
+            The frame index that the object belongs to or ``None`` if the tag cannot be found
+        """
+        tags = [tag.replace("frame_id_", "")
+                for tag in self._canvas.itemcget(object_id, "tags").split()
+                if tag.startswith("frame_id_")]
+        retval = int(tags[0]) if tags else None
+        logger.trace("object_id: %s, frame_id: %s", object_id, retval)
+        return retval
+
+    def clear_hovered(self):
+        """ Hide the hovered box and clear the :attr:`_hovered` attribute """
+        if self._hovered is None:
+            return
+        self._canvas.itemconfig(self._hovered, state="hidden")
+        self._hovered = None
+
+    def highlight_hovered(self, frame_id, object_id):
+        """ Display the box around the face the mouse is over
+
+        Parameters
+        ----------
+        object_id: int
+            The tkinter canvas object id
+        """
+        self.clear_hovered()
+        tags = [tag.replace("face_id_", "")
+                for tag in self._canvas.itemcget(object_id, "tags").split()
+                if tag.startswith("face_id_")]
+        if not tags:
+            return
+        self._hovered = self._faces[frame_id][int(tags[0])]["border"]
+        self._canvas.itemconfig(self._hovered, state="normal")
+
     def _set_tk_trace(self):
         """ Set the trace on tkinter variables:
         self._frames.current_position
         """
-        self._frames.tk_position.trace("w", self._highlight_current)
+        self._frames.tk_position.trace("w", self._highlight_selected)
         self._frames.tk_update.trace("w", self._update_current)
 
     def load_faces(self, canvas, frame_width):
@@ -607,21 +658,22 @@ class FaceCache():
         try:
             self._pbar.start(mode="determinate")
             columns = frame_width // self._size
-            face_count = 0
+            faces_seen = 0
             loader = ImagesLoader(self._frames.location, count=self.frame_count)
             for frame_idx, (filename, frame) in enumerate(loader.load()):
-                tags = ["frame_id_{}".format(frame_idx)]
                 frame_name = os.path.basename(filename)
                 progress = int(round(((frame_idx + 1) / self.frame_count) * 100))
                 self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
-                for face in self._alignments.saved_alignments.get(frame_name, list()):
+                faces = self._alignments.saved_alignments.get(frame_name, list())
+                for face_idx, face in enumerate(faces):
+                    tags = ["frame_id_{}".format(frame_idx), "face_id_{}".format(face_idx)]
                     face.load_aligned(frame, size=self._size, force=True)
                     self._faces.setdefault(frame_idx, []).append(self._place_face(columns,
                                                                                   tags,
-                                                                                  face_count,
+                                                                                  faces_seen,
                                                                                   face))
                     face.aligned["face"] = None
-                    face_count += 1
+                    faces_seen += 1
             self._pbar.stop()
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Error loading face. Error: %s", str(err))
@@ -629,7 +681,7 @@ class FaceCache():
             import sys; import traceback
             exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
         self._initialized.set()
-        self._highlight_current()
+        self._highlight_selected()
 
     def _place_face(self, columns, tags, idx, face):
         """ Places the aligned faces on the canvas and create invisible annotations.
@@ -644,7 +696,7 @@ class FaceCache():
         rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
         image_id = self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW, tags=tags)
         border = self._canvas.create_rectangle(*rect_dims,
-                                               outline="#00ff00",
+                                               outline=self._colors["border"],
                                                width=2,
                                                state="hidden",
                                                tags=tags)
@@ -663,30 +715,33 @@ class FaceCache():
             if key in ("right_eye", "left_eye", "mouth"):
                 mesh.append(self._canvas.create_polygon(*pts,
                                                         fill="",
-                                                        outline="#00ffff",
+                                                        outline=self._colors["mesh"],
                                                         state="hidden",
                                                         width=1,
-                                                        tags=tags))
+                                                        tags=tags + ["mesh"]))
             else:
                 mesh.append(self._canvas.create_line(*pts,
-                                                     fill="#00ffff",
+                                                     fill=self._colors["mesh"],
                                                      state="hidden",
                                                      width=1,
-                                                     tags=tags))
+                                                     tags=tags + ["mesh"]))
         return mesh
 
-    def _clear_highlighted(self):
+    def _clear_selected(self):
         """ Clear all the highlighted borders and landmarks """
-        for item_id in self._highlighted:
-            self._canvas.itemconfig(item_id, state="hidden")
-        self._highlighted = []
+        for object_id in self._selected:
+            if self._current_display in self._canvas.itemcget(object_id, "tags").split():
+                self._display_annotations(self._current_display, [object_id])
+            else:
+                self._canvas.itemconfig(object_id, state="hidden")
+        self._selected = []
 
-    def _highlight_current(self, *args):  # pylint:disable=unused-argument
+    def _highlight_selected(self, *args):  # pylint:disable=unused-argument
         """ Place a border around current face and display landmarks """
         if not self._initialized.is_set():
             return
         position = self._frames.tk_position.get()
-        self._clear_highlighted()
+        self._clear_selected()
 
         objects = self._faces.get(position, None)
         if objects is None:
@@ -694,17 +749,21 @@ class FaceCache():
 
         for obj in objects:
             self._canvas.itemconfig(obj["border"], state="normal")
-            self._highlighted.append(obj["border"])
+            self._selected.append(obj["border"])
             for mesh in obj["mesh"]:
-                self._canvas.itemconfig(mesh, state="normal")
-                self._highlighted.append(mesh)
+                color_attr = "outline" if self._canvas.type(mesh) == "polygon" else "fill"
+                kwargs = {color_attr: self._colors["mesh"], "state": "normal"}
+                self._canvas.itemconfig(mesh, **kwargs)
+                self._selected.append(mesh)
 
-        top = self._canvas.coords(self._highlighted[0])[1] / self._canvas.bbox("all")[3]
+        top = self._canvas.coords(self._selected[0])[1] / self._canvas.bbox("all")[3]
         if top != self._canvas.yview()[0]:
             self._canvas.yview_moveto(top)
 
     def _update_current(self, *args):  # pylint:disable=unused-argument
         """ Update the currently selected face on editor update """
+        # TODO Handle insertion and deletion of faces from the main frame
+        # (currently bugs on missing indices)
         if not self._initialized.is_set():
             return
         face = self._alignments.current_face
@@ -729,3 +788,42 @@ class FaceCache():
             pts = ((face.aligned_landmarks[val[0]:val[1]] * scale) + objects["position"]).flatten()
             self._canvas.coords(objects["mesh"][idx], *pts)
         face.aligned["face"] = None
+
+    def update_all(self, display):
+        """ Update all widgets with the for the given display type.
+
+        Parameters
+        ----------
+        display: {"landmarks", "mask" or "none"}
+            The annotation that should be displayed
+        """
+        if not self._initialized.is_set():
+            return
+        display = "mesh" if display == "landmarks" else display
+        position = self._frames.tk_position.get()
+        for key, val in self._faces.items():
+            if key == position:
+                continue
+            for face in val:
+                # TODO Add masks and change from a get to standard dict retrieval
+                current_object_ids = face.get(self._current_display, None)
+                new_object_ids = face.get(display, None)
+                self._clear_annotations(current_object_ids)
+                # TODO Remove when mask is in
+                if new_object_ids is None:
+                    continue
+                self._display_annotations(display, new_object_ids)
+        self._current_display = display
+
+    def _clear_annotations(self, object_ids):
+        """ Clear the annotations of now deselected objects """
+        if object_ids is not None:
+            for object_id in object_ids:
+                self._canvas.itemconfig(object_id, state="hidden")
+
+    def _display_annotations(self, display, object_ids):
+        """ Display the newly selected objects. """
+        for object_id in object_ids:
+            color_attr = "outline" if self._canvas.type(object_id) == "polygon" else "fill"
+            kwargs = {color_attr: self._colors["{}_half".format(display)], "state": "normal"}
+            self._canvas.itemconfig(object_id, **kwargs)

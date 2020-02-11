@@ -384,4 +384,4 @@ class BoundingBox(Editor):
         """
         if self._mouse_location is None or self._mouse_location[0] != "box":
             return
-        self._alignments.delete_face_at_index(self._mouse_location[1])
+        self._alignments.delete_face_at_index(int(self._mouse_location[1]))
