@@ -320,6 +320,10 @@ class AlignmentsData():
         """ list: The indexes of all frames that contain no faces """
         return [idx for idx, count in enumerate(self._face_count_per_index) if count == 1]
 
+    def reset_face_id(self):
+        """ Reset the attribute :attr:`_face_index` to 0 """
+        self._face_index = 0
+
     def _get_alignments(self, alignments_path):
         """ Get the alignments object.
 
@@ -574,6 +578,7 @@ class FaceCache():
         self._selected = []
         self._current_display = None
         self._hovered = None
+        self._current_frame_id = 0
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -793,7 +798,11 @@ class FaceCache():
             return
 
         position = self._frames.tk_position.get()
-        self._add_remove_face(position)
+        if position != self._current_frame_id:
+            self._current_frame_id = position
+            self._alignments.reset_face_id()
+
+        self._add_remove_face()
         face = self._alignments.current_face
         if face is None:
             return
@@ -830,9 +839,8 @@ class FaceCache():
         if not self._initialized.is_set():
             return
         display = "mesh" if display == "landmarks" else display
-        position = self._frames.tk_position.get()
         for key, val in self._faces.items():
-            if key == position:
+            if key == self._current_frame_id:
                 continue
             for face in val:
                 # TODO Add masks and change from a get to standard dict retrieval
@@ -858,14 +866,14 @@ class FaceCache():
             kwargs = {color_attr: self._colors["{}_half".format(display)], "state": "normal"}
             self._canvas.itemconfig(object_id, **kwargs)
 
-    def _add_remove_face(self, position):
+    def _add_remove_face(self):
         """ Add or remove a face into the viewer """
-        current_faces = self._faces[position]
+        current_faces = self._faces[self._current_frame_id]
         alignment_faces = len(self._alignments.current_faces)
         display_faces = len(current_faces)
 
         if alignment_faces > display_faces:
-            tags = self._create_tag(position, alignment_faces - 1)
+            tags = self._create_tag(self._current_frame_id, alignment_faces - 1)
             starting_idx = self._insert_new_face(current_faces, tags)
             increment = True
         elif alignment_faces < display_faces:
@@ -873,12 +881,12 @@ class FaceCache():
             increment = False
         else:
             return
-        self._update_following_faces(position, starting_idx, increment)
+        self._update_following_faces(starting_idx, increment)
         self._highlight_selected()
 
     def _insert_new_face(self, current_faces, tags):
         """ Insert a new face into the faces viewer. """
-        insert_index = current_faces[-1]["index"] + 1
+        insert_index = current_faces[-1]["index"] + 1 if current_faces else 0
         scale = self._size / self._alignments.current_face.aligned["size"]
         landmarks = self._alignments.current_face.aligned_landmarks * scale
         current_faces.append(self._place_face(tags,
@@ -898,10 +906,11 @@ class FaceCache():
         del current_faces[face_idx]
         return removed_index
 
-    def _update_following_faces(self, position, starting_idx, increment=True):
+    def _update_following_faces(self, starting_idx, increment=True):
         """ Update the face positions for all faces following an insert or delete. """
         update_faces = [obj for k, v in self._faces.items() for obj in v
-                        if k > position or (k == position and obj["index"] >= starting_idx)]
+                        if k > self._current_frame_id or (k == self._current_frame_id
+                                                          and obj["index"] >= starting_idx)]
         for objects in update_faces:
             idx = objects["index"] + 1 if increment else objects["index"] - 1
             objects["index"] = idx

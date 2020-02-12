@@ -40,7 +40,8 @@ class BoundingBox(Editor):
         """ list: Flattened List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed
         face's bounding box. """
         return [self._canvas.coords(item_id)
-                for item_id in self._flatten_list(self._objects.get("boundingbox", []))]
+                for item_id in self._flatten_list(self._objects.get("boundingbox", []))
+                if self._canvas.itemcget(item_id, "state") != "hidden"]
 
     def _add_controls(self):
         for dsp in ("Extract Box", "Landmarks", "Mesh"):
@@ -186,7 +187,7 @@ class BoundingBox(Editor):
         bool
             ``True`` if cursor is over an anchor point otherwise ``False``
         """
-        anchors = self._flatten_list(self._objects["anchor_grab"])
+        anchors = self._flatten_list(self._objects.get("anchor_grab", []))
         item_ids = set(self._canvas.find_withtag("current")).intersection(anchors)
         if not item_ids:
             return False
@@ -218,8 +219,7 @@ class BoundingBox(Editor):
         -----
         We can't use tags on unfilled rectangles as the interior of the rectangle is not tagged.
         """
-        bounding_coords = self._bounding_boxes
-        for face_idx, bbox in enumerate(bounding_coords):
+        for face_idx, bbox in enumerate(self._bounding_boxes):
             if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
                 self._canvas.config(cursor="fleur")
                 self._mouse_location = ("box", str(face_idx))

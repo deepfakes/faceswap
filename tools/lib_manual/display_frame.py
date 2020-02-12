@@ -140,7 +140,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_transport(self):
         """ Add video transport controls """
-        # TODO Disable buttons when no frames meet filter criteria
+        # TODO Change excess buttons to a filter spinbox
         frame = ttk.Frame(self._transport_frame)
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         icons = get_images().icons
@@ -509,8 +509,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             :attr:`_frames.tk_update` Update the display for the current image
             :attr:`__tk_action_var` Update the mouse display tracking for current action
         """
-        needs_update = self._frames.tk_update
-        needs_update.trace("w", self._update_display)
+        self._frames.tk_update.trace("w", self._update_display)
         self._tk_action_var.trace("w", self._update_active_display)
 
     def _update_active_display(self, *args):  # pylint:disable=unused-argument
@@ -534,6 +533,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self.refresh_display_image()
         for editor in self._editors.values():
             editor.update_annotation()
+            editor.hide_additional_annotations()
         self._frames.tk_update.set(False)
         self.update_idletasks()
 

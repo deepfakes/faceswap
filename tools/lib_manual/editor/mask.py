@@ -322,9 +322,9 @@ class Mask(Editor):
             self._canvas.itemconfig(self._mouse_location[0], state="hidden")
             self._mouse_location[1] = None
             return
-        item_id = item_ids[0]
+        item_id = list(item_ids)[0]
         obj_idx = [face_idx
-                   for face_idx, face in enumerate(self._objects["extractbox"])
+                   for face_idx, face in enumerate(self._objects["roibox"])
                    if item_id in face][0]
         if self._edit_mode == "zoom":
             self._canvas.config(cursor="sizing")

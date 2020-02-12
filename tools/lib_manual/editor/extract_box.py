@@ -71,7 +71,7 @@ class ExtractBox(Editor):
     def _update_cursor(self, event):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
-        extract_boxes = self._flatten_list(self._objects["extractbox"])
+        extract_boxes = self._flatten_list(self._objects.get("extractbox", []))
         item_ids = set(self._canvas.find_withtag("current")).intersection(extract_boxes)
         if not item_ids:
             self._canvas.config(cursor="")

@@ -17,8 +17,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONTROL_VARS = dict()
 _ANNOTATION_FORMAT = dict()
 
-# TODO Hide annotations for additional faces
-# TODO Landmarks, Color outline and fill
 # TODO dynamically bind and unbind keybindings
 # TODO Global variables to canvas
 
@@ -186,6 +184,20 @@ class Editor():
                         continue
                     logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
                     self._canvas.itemconfig(item_id, state="hidden")
+
+    def hide_additional_annotations(self):
+        """ Hide any excess face annotations """
+        current_face_count = len(self._alignments.current_faces)
+        hide_objects = [self._flatten_list(face[-(len(face) - current_face_count):])
+                        for face in self._objects.values()
+                        if len(face) > current_face_count]
+        if not hide_objects:
+            return
+        for item_id in self._flatten_list(hide_objects):
+            if self._canvas.itemcget(item_id, "state") == "hidden":
+                continue
+            logger.trace("Hiding annotation %s for type: %s", item_id, self._canvas.type(item_id))
+            self._canvas.itemconfig(item_id, state="hidden")
 
     def _object_tracker(self, key, object_type, face_index,
                         object_index, coordinates, object_kwargs):

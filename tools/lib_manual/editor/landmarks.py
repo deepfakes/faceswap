@@ -170,7 +170,7 @@ class Landmarks(Editor):
         :attr:`_mouse_location`. """
         self._hide_labels()
         objs = (self._get_extract_boxes() if self._edit_mode == "zoom"
-                else self._flatten_list(self._objects["lm_grab"]))
+                else self._flatten_list(self._objects.get("lm_grab", [])))
         item_ids = set(self._canvas.find_withtag("current")).intersection(objs)
         if not item_ids:
             self._canvas.config(cursor="")
