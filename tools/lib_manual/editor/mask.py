@@ -48,10 +48,6 @@ class Mask(Editor):
         color = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
         return self._colors[color.lower()]
 
-    def _get_objects_per_face(self):
-        """ The number of objects for each annotation per face """
-        return dict(mask=1)
-
     def _add_actions(self):
         self._add_action("draw", "draw", "Draw the mask", hotkey="D")
         self._add_action("erase", "erase", "Erase the mask", hotkey="R")
@@ -133,7 +129,6 @@ class Mask(Editor):
             self._update_mask_image(key, idx, rgb_color, opacity)
             self._update_roi_box(mask, idx, roi_color)
 
-        self._hide_additional_annotations()
         self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
         logger.trace("Updated mask annotation")
 
@@ -239,6 +234,7 @@ class Mask(Editor):
         self._object_tracker(key,
                              "image",
                              face_index,
+                             0,
                              top_left,
                              dict(image=display_image, anchor=tk.NW))
 
@@ -307,27 +303,29 @@ class Mask(Editor):
             box = self._scale_to_display(mask.original_roi).flatten()
         top_left = box[:2] - 10
         kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(face_index))
-        self._object_tracker(keys[0], "text", face_index, top_left, kwargs)
+        self._object_tracker(keys[0], "text", face_index, 0, top_left, kwargs)
         kwargs = dict(fill="", outline=color, width=1)
-        self._object_tracker(keys[1], "polygon", face_index, box, kwargs)
+        self._object_tracker(keys[1], "polygon", face_index, 0, box, kwargs)
         if self._is_zoomed:
             # Raise box above zoomed image
-            self._canvas.tag_raise(self._objects[keys[1]][face_index])
+            self._canvas.tag_raise(self._objects[keys[1]][face_index][0])
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
 
     def _update_cursor(self, event):
         """ Update the cursor for brush painting and set :attr:`_mouse_location`. """
-        roi_boxes = self._objects.get("roibox", [])
+        roi_boxes = self._flatten_list(self._objects.get("roibox", []))
         item_ids = set(self._canvas.find_withtag("current")).intersection(roi_boxes)
         if not item_ids:
             self._canvas.config(cursor="")
             self._canvas.itemconfig(self._mouse_location[0], state="hidden")
             self._mouse_location[1] = None
             return
-
-        obj_idx = roi_boxes.index(list(item_ids)[0])
+        item_id = item_ids[0]
+        obj_idx = [face_idx
+                   for face_idx, face in enumerate(self._objects["extractbox"])
+                   if item_id in face][0]
         if self._edit_mode == "zoom":
             self._canvas.config(cursor="sizing")
         else:
@@ -373,8 +371,8 @@ class Mask(Editor):
             kwargs = dict(image=display, anchor=tk.CENTER)
         else:
             kwargs = dict(state="hidden")
-        self._object_tracker("zoom", "image", face_index, coords, kwargs)
-        self._canvas.tag_lower(self._objects["zoom"][face_index])
+        self._object_tracker("zoom", "image", face_index, 0, coords, kwargs)
+        self._canvas.tag_lower(self._objects["zoom"][face_index][0])
         self._frames.tk_update.set(True)
 
     def _paint(self, event):

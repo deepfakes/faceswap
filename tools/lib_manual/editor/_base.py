@@ -55,7 +55,6 @@ class Editor():
 
         self._zoomed_roi = self._get_zoomed_roi()
         self._objects = dict()
-        self._objects_per_face = self._get_objects_per_face()
         self._mouse_location = None
         self._drag_data = dict()
         self._drag_callback = None
@@ -162,16 +161,6 @@ class Editor():
         logger.debug("Zoomed ROI: %s", retval)
         return retval
 
-    def _get_objects_per_face(self):
-        """ Objects for each frame a stored in a straight list, so the process needs to know
-        how many objects are stored per face for each annotation for hiding or displaying
-        additional faces.
-
-        Override for editor specific figures
-        """
-        print(self.__class__.__name__)
-        raise NotImplementedError
-
     def update_annotation(self):
         """ Update the display annotations for the current objects.
 
@@ -190,31 +179,16 @@ class Editor():
             all annotations are hidden for this editor. Default: ``None``
         """
         objects = self._objects.values() if key is None else [self._objects.get(key, [])]
-        for objs in objects:
-            for item_id in objs:
-                if self._canvas.itemcget(item_id, "state") == "hidden":
-                    continue
-                logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
-                self._canvas.itemconfig(item_id, state="hidden")
+        for faces in objects:
+            for face in faces:
+                for item_id in face:
+                    if self._canvas.itemcget(item_id, "state") == "hidden":
+                        continue
+                    logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
+                    self._canvas.itemconfig(item_id, state="hidden")
 
-    def _hide_additional_annotations(self):
-        """ Hide any annotations, when more faces are stored than are currently displayed """
-        face_count = len(self._alignments.current_faces)
-        for key, objects in self._objects.items():
-            num_objects = len(objects)
-            displayed_count = num_objects // self._objects_per_face[key]
-            to_hide = (displayed_count - face_count) * self._objects_per_face[key]
-            if to_hide <= 0:
-                continue
-            hide_objs = objects[-to_hide:]
-            for item_id in hide_objs:
-                if self._canvas.itemcget(item_id, "state") == "hidden":
-                    continue
-                logger.trace("Hiding extra face annotations: %s, id: %s",
-                             self._canvas.type(item_id), item_id)
-                self._canvas.itemconfig(item_id, state="hidden")
-
-    def _object_tracker(self, key, object_type, object_index, coordinates, object_kwargs):
+    def _object_tracker(self, key, object_type, face_index,
+                        object_index, coordinates, object_kwargs):
         """ Create an annotation object and add it to :attr:`_objects` or update an existing
         annotation if it has already been created.
 
@@ -232,17 +206,20 @@ class Editor():
             The keyword arguments for this object
         """
         object_color_keys = self._get_object_color_keys(key, object_type)
-        tracking_id = "_".join((key, str(object_index)))
+        tracking_id = "_".join((key, str(face_index), str(object_index)))
 
-        if key not in self._objects or len(self._objects[key]) - 1 < object_index:
-            self._add_new_object(key, object_type, coordinates, object_kwargs)
+        if (key not in self._objects
+                or len(self.objects[key]) - 1 < face_index
+                or len(self._objects[key][face_index]) - 1 < object_index):
+            self._add_new_object(key, object_type, face_index, coordinates, object_kwargs)
             update_color = bool(object_color_keys)
         else:
-            update_color = self._update_existing_object(self._objects[key][object_index],
-                                                        coordinates,
-                                                        object_kwargs,
-                                                        tracking_id,
-                                                        object_color_keys)
+            update_color = self._update_existing_object(
+                self._objects[key][face_index][object_index],
+                coordinates,
+                object_kwargs,
+                tracking_id,
+                object_color_keys)
         if update_color:
             self._current_color[tracking_id] = object_kwargs[object_color_keys[0]]
 
@@ -275,7 +252,7 @@ class Editor():
         logger.trace("returning %s for key: %s, object_type: %s", retval, key, object_type)
         return retval
 
-    def _add_new_object(self, key, object_type, coordinates, object_kwargs):
+    def _add_new_object(self, key, object_type, face_index, coordinates, object_kwargs):
         """ Add a new object to :attr:'_objects' for tracking.
 
         Parameters
@@ -289,10 +266,16 @@ class Editor():
         object_kwargs: dict
             The keyword arguments for this object
         """
-        logger.trace("Adding object: (key: '%s', object_type: '%s', coordinates: %s, "
-                     "object_kwargs: %s)", key, object_type, coordinates, object_kwargs)
-        obj = getattr(self._canvas, "create_{}".format(object_type))
-        self._objects.setdefault(key, []).append(obj(*coordinates, **object_kwargs))
+        logger.trace("Adding object: (key: '%s', object_type: '%s', face_index: %s, "
+                     "coordinates: %s, object_kwargs: %s)", key, object_type, face_index,
+                     coordinates, object_kwargs)
+        obj = getattr(self._canvas, "create_{}".format(object_type))(*coordinates, **object_kwargs)
+        if key not in self._objects:
+            self._objects[key] = []
+        if len(self._objects[key]) - 1 < face_index:
+            self._objects[key].append([obj])
+        else:
+            self._objects[key][face_index].append(obj)
 
     def _update_existing_object(self, tk_object, coordinates, object_kwargs,
                                 tracking_id, object_color_keys):
@@ -330,6 +313,11 @@ class Editor():
         self._canvas.itemconfig(tk_object, **update_kwargs)
         self._canvas.coords(tk_object, *coordinates)
         return update_color
+
+    @staticmethod
+    def _flatten_list(input_list):
+        """ Flatten a list of lists to a single list """
+        return [item for sublist in input_list for item in sublist]
 
     # << MOUSE CALLBACKS >>
     # Mouse cursor display
@@ -539,10 +527,6 @@ class View(Editor):
     def __init__(self, canvas, alignments, frames):
         control_text = "Viewer\nPreview the frame's annotations."
         super().__init__(canvas, alignments, frames, control_text)
-
-    def _get_objects_per_face(self):
-        """ The number of objects for each annotation per face """
-        return dict()
 
     def _add_controls(self):
         for dsp in ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh"):

@@ -37,13 +37,10 @@ class BoundingBox(Editor):
 
     @property
     def _bounding_boxes(self):
-        """ list: List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed face's
-        bounding box. """
-        return [self._canvas.coords(rect) for rect in self._objects.get("boundingbox", [])]
-
-    def _get_objects_per_face(self):
-        """ The number of objects for each annotation per face """
-        return dict(boundingbox=1, anchor_display=4, anchor_grab=4)
+        """ list: Flattened List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed
+        face's bounding box. """
+        return [self._canvas.coords(item_id)
+                for item_id in self._flatten_list(self._objects.get("boundingbox", []))]
 
     def _add_controls(self):
         for dsp in ("Extract Box", "Landmarks", "Mesh"):
@@ -79,9 +76,8 @@ class BoundingBox(Editor):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
             kwargs = dict(outline=color, width=1)
-            self._object_tracker(key, "rectangle", idx, box, kwargs)
+            self._object_tracker(key, "rectangle", idx, 0, box, kwargs)
             self._update_anchor_annotation(idx, box, color)
-        self._hide_additional_annotations()
         logger.trace("Updated bounding box annotations: %s", self._objects)
 
     def _update_anchor_annotation(self, face_index, bounding_box, color):
@@ -107,11 +103,10 @@ class BoundingBox(Editor):
         activefill_color = "white" if self._is_active else ""
         anchor_points = self._get_anchor_points(self._corners_from_coords(bounding_box))
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*anchor_points)):
-            obj_idx = (face_index * 4) + idx
             dsp_kwargs = dict(outline=color, fill=fill_color, width=1)
-            self._object_tracker(keys[0], "oval", obj_idx, anc_dsp, dsp_kwargs)
+            self._object_tracker(keys[0], "oval", face_index, idx, anc_dsp, dsp_kwargs)
             grb_kwargs = dict(outline="", fill="", width=1, activefill=activefill_color)
-            self._object_tracker(keys[1], "oval", obj_idx, anc_grb, grb_kwargs)
+            self._object_tracker(keys[1], "oval", face_index, idx, anc_grb, grb_kwargs)
         logger.trace("Updated bounding box anchor annotations: %s", {key: self._objects[key]
                                                                      for key in keys})
 
@@ -191,15 +186,16 @@ class BoundingBox(Editor):
         bool
             ``True`` if cursor is over an anchor point otherwise ``False``
         """
-        anchors = self._objects["anchor_grab"]
+        anchors = self._flatten_list(self._objects["anchor_grab"])
         item_ids = set(self._canvas.find_withtag("current")).intersection(anchors)
         if not item_ids:
             return False
-        corners = 4
-        obj_idx = anchors.index(list(item_ids)[0])
-        corner_idx = obj_idx % corners
-        self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
-        self._mouse_location = ("anchor", "_".join((str(obj_idx // corners), str(corner_idx))))
+        item_id = list(item_ids)[0]
+        obj_idx = [(face_idx, face.index(item_id))
+                   for face_idx, face in enumerate(self._objects["anchor_grab"])
+                   if item_id in face][0]
+        self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[obj_idx[1]]))
+        self._mouse_location = ("anchor", "{}_{}".format(*obj_idx))
         return True
 
     def _check_cursor_bounding_box(self, event):
@@ -312,8 +308,8 @@ class BoundingBox(Editor):
             The tkinter mouse event.
         """
         face_idx = int(self._mouse_location[1].split("_")[0])
-        rect = self._objects["boundingbox"][face_idx]
-        box = self._canvas.coords(rect)
+        item_id = self._objects["boundingbox"][face_idx][0]
+        box = self._canvas.coords(item_id)
         # Switch top/bottom and left/right and set partial so indices match and we don't
         # need branching logic for min/max.
         limits = (partial(min, box[2] - 20),
@@ -323,13 +319,11 @@ class BoundingBox(Editor):
         rect_xy_indices = [self._coords_layout.index(pnt) for pnt in self._drag_data["corner"]]
         box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
         box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
-        self._canvas.coords(rect, *box)
+        self._canvas.coords(item_id, *box)
         corners = self._corners_from_coords(box)
-        base_idx = face_idx * len(corners)
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*self._get_anchor_points(corners))):
-            obj_idx = base_idx + idx
-            self._canvas.coords(self._objects["anchor_display"][obj_idx], *anc_dsp)
-            self._canvas.coords(self._objects["anchor_grab"][obj_idx], *anc_grb)
+            self._canvas.coords(self._objects["anchor_display"][face_idx][idx], *anc_dsp)
+            self._canvas.coords(self._objects["anchor_grab"][face_idx][idx], *anc_grb)
         self._alignments.set_current_bounding_box(face_idx, *self._coords_to_bounding_box(box))
 
     def _move(self, event):
@@ -343,18 +337,16 @@ class BoundingBox(Editor):
         face_idx = int(self._mouse_location[1])
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        rect = self._objects["boundingbox"][face_idx]
-        objects = [rect]
+        item_id = self._objects["boundingbox"][face_idx][0]
+        objects = [item_id]
         corner_count = 4
-        base_idx = face_idx * corner_count
         for idx in range(corner_count):
-            obj_idx = base_idx + idx
-            objects.append(self._objects["anchor_display"][obj_idx])
-            objects.append(self._objects["anchor_grab"][obj_idx])
+            objects.append(self._objects["anchor_display"][face_idx][idx])
+            objects.append(self._objects["anchor_grab"][face_idx][idx])
 
         for obj in objects:
             self._canvas.move(obj, shift_x, shift_y)
-        coords = self._canvas.coords(rect)
+        coords = self._canvas.coords(item_id)
         self._alignments.set_current_bounding_box(face_idx, *self._coords_to_bounding_box(coords))
         self._drag_data["current_location"] = (event.x, event.y)
 
