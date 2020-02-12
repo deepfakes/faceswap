@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """ Tool to manually interact with the alignments file using visual tools """
 import logging
+import os
 import platform
+import sys
 import tkinter as tk
 from tkinter import ttk
 from time import sleep
@@ -10,6 +12,7 @@ from lib.gui.control_helper import ControlPanel
 from lib.gui.custom_widgets import Tooltip, StatusBar
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
+from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .lib_manual.display_frame import DisplayFrame
@@ -34,13 +37,18 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
+        is_video = self._check_input(arguments.frames)
         self._initialize_tkinter()
 
         extractor = Aligner()
         self._frames = FrameNavigation(arguments.frames, get_config().scaling_factor)
-        self._wait_for_extractor(extractor)
+        self._alignments = AlignmentsData(arguments.alignments_path,
+                                          self._frames,
+                                          extractor,
+                                          arguments.frames,
+                                          is_video)
 
-        self._alignments = AlignmentsData(arguments.alignments_path, self._frames, extractor)
+        self._wait_for_threads(extractor)
 
         self._containers = self._create_containers()
 
@@ -58,14 +66,53 @@ class Manual(tk.Tk):
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
-    def _wait_for_extractor(extractor):
+    def _check_input(frames_location):
+        """ Check whether the input is a video
+
+        Parameters
+        ----------
+        frames_location: str
+            The input location for video or images
+
+        Returns
+        -------
+        bool: 'True' if input is a video 'False' if it is a folder.
+
+        Raises
+        ------
+        FaceswapError
+            If the given location is a file and does not have a valid video extension.
+
+        """
+        if os.path.isdir(frames_location):
+            retval = False
+        elif os.path.splitext(frames_location)[1].lower() in _video_extensions:
+            retval = True
+        else:
+            logger.error("The input location '%s' is not valid", frames_location)
+            sys.exit(1)
+        logger.debug("Input '%s' is_video: %s", frames_location, retval)
+        return retval
+
+    def _wait_for_threads(self, extractor):
         """ The :class:`Aligner` is launched in a background thread. Wait for it to be initialized
-        prior to proceeding """
+        prior to proceeding
+
+        Notes
+        -----
+        Because some of the initialize checks perform extra work once their threads are complete,
+        they should only return ``True`` once, and should not be queried again.
+
+        """
+        extractor_init = False
+        frames_init = False
         while True:
-            if extractor.is_initialized:
-                logger.debug("Aligner inialized")
+            extractor_init = extractor_init if extractor_init else extractor.is_initialized
+            frames_init = frames_init if frames_init else self._frames.is_initialized
+            if extractor_init and frames_init:
+                logger.debug("Threads inialized")
                 return
-            logger.debug("Aligner not initialized. Waiting...")
+            logger.debug("Threads not initialized. Waiting...")
             sleep(1)
 
     def _initialize_tkinter(self):
@@ -547,7 +594,7 @@ class Aligner():
         logger.debug("Initialize Aligner")
         # TODO FAN
         # TODO Normalization option
-        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()

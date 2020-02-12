@@ -29,7 +29,7 @@ class FrameNavigation():
     def __init__(self, frames_location, scaling_factor):
         logger.debug("Initializing %s: (frames_location: '%s', scaling_factor: %s)",
                      self.__class__.__name__, frames_location, scaling_factor)
-        self._loader = ImagesLoader(frames_location, fast_count=False, queue_size=1)
+        self._loader = None
         self._meta = dict()
         self._needs_update = False
         self._current_idx = 0
@@ -38,8 +38,20 @@ class FrameNavigation():
         self._current_frame = None
         self._current_display_frame = None
         self._display_dims = (896, 504)
-        self._set_current_frame(initialize=True)
+        self._init_thread = self._background_init_frames(frames_location)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        thread_is_alive = self._init_thread.is_alive()
+        if thread_is_alive:
+            self._init_thread.check_and_raise_error()
+        else:
+            self._init_thread.join()
+            # Setting the initial frame cannot be done in the thread, so set when queried from main
+            self._set_current_frame(initialize=True)
+        return not thread_is_alive
 
     @property
     def is_video(self):
@@ -131,6 +143,20 @@ class FrameNavigation():
         retval = dict(position=position, is_playing=is_playing, updated=updated)
         logger.debug("Set tkinter variables: %s", retval)
         return retval
+
+    def _background_init_frames(self, frames_location):
+        """ Launch the images loader in a background thread so we can run other tasks whilst
+        waiting for initialization. """
+        thread = MultiThread(self._load_images,
+                             frames_location,
+                             thread_count=1,
+                             name="{}.init_frames".format(self.__class__.__name__))
+        thread.start()
+        return thread
+
+    def _load_images(self, frames_location):
+        """ Load the images in a background thread. """
+        self._loader = ImagesLoader(frames_location, fast_count=False, queue_size=1)
 
     def _set_current_frame(self, *args,  # pylint:disable=unused-argument
                            initialize=False):
@@ -248,13 +274,16 @@ class AlignmentsData():
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, alignments_path, frames, extractor):
-        logger.debug("Initializing %s: (alignments_path: '%s')",
-                     self.__class__.__name__, alignments_path)
+    def __init__(self, alignments_path, frames, extractor, input_location, is_video):
+        logger.debug("Initializing %s: (alignments_path: '%s', frames: %s, extractor: %s, "
+                     "input_location: %s, is_video: %s)", self.__class__.__name__, alignments_path,
+                     frames, extractor, input_location, is_video)
         self.frames = frames
         self._remove_idx = None
         self._face_size = min(self.frames.display_dims)
-        self._mask_names, self._alignments = self._get_alignments(alignments_path)
+        self._mask_names, self._alignments = self._get_alignments(alignments_path,
+                                                                  input_location,
+                                                                  is_video)
 
         self._tk_position = frames.tk_position
         self._face_index = 0
@@ -324,7 +353,7 @@ class AlignmentsData():
         """ Reset the attribute :attr:`_face_index` to 0 """
         self._face_index = 0
 
-    def _get_alignments(self, alignments_path):
+    def _get_alignments(self, alignments_path, input_location, is_video):
         """ Get the alignments object.
 
         Parameters
@@ -332,6 +361,8 @@ class AlignmentsData():
         alignments_path: str
             Full path to the alignments file. If empty string is passed then location is calculated
             from the source folder
+        is_video: bool
+            ``True`` if the input file is a video otherwise ``False``
 
         Returns
         -------
@@ -339,14 +370,14 @@ class AlignmentsData():
             `frame name`: list of :class:`lib.faces_detect.DetectedFace` for the current frame
         """
         if alignments_path:
-            folder, filename = os.path.split(alignments_path, self.frames)
+            folder, filename = os.path.split(alignments_path)
         else:
             filename = "alignments.fsa"
-            if self.frames.is_video:
-                folder, vid = os.path.split(os.path.splitext(self.frames.location)[0])
+            if is_video:
+                folder, vid = os.path.split(os.path.splitext(input_location)[0])
                 filename = "{}_{}".format(vid, filename)
             else:
-                folder = self.frames.location
+                folder = input_location
         alignments = Alignments(folder, filename)
         mask_names = set(alignments.mask_summary)
         faces = dict()
