@@ -44,9 +44,6 @@ class ExtractBox(Editor):
             return
         keys = ("text", "extractbox")
         color = self._control_color
-        # TODO FIX THIS TEST
-        #  if not all(face.original_roi for face in self._alignments.current_faces):
-        #      return extract_box
         for idx, face in enumerate(self._alignments.current_faces):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
             if self._is_zoomed:
@@ -115,8 +112,6 @@ class ExtractBox(Editor):
 
         """
         if not self._drag_data:
-            # TODO This should never have no data, but sometimes it does. It doesn't appear
-            # to interfere with the GUI beyond spitting out errors.
             return
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]

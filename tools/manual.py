@@ -118,6 +118,8 @@ class Manual(tk.Tk):
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
         logger.debug("Initializing tkinter")
+        for widget in ("TButton", "TCheckbutton", "TRadiobutton"):
+            self.unbind_class(widget, "<Key-space>")
         initialize_config(self, None, None, None)
         initialize_images()
         get_config().set_geometry(940, 600, fullscreen=True)
@@ -594,7 +596,7 @@ class Aligner():
         logger.debug("Initialize Aligner")
         # TODO FAN
         # TODO Normalization option
-        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
         # Set the batchsize to 1
         aligner.set_batchsize("align", 1)
         aligner.launch()
