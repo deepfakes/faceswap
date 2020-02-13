@@ -193,7 +193,7 @@ class Alignments():
             for face in faces:
                 if face.get("mask", None) is None:
                     masks["none"] = masks.get("none", 0) + 1
-                for key in face.get("mask", dict):
+                for key in face.get("mask", dict()):
                     masks[key] = masks.get(key, 0) + 1
         return masks
 
