@@ -170,26 +170,18 @@ class Manual(tk.Tk):
             * [] - decrease / increase brush size
             * R, Z, D - Optional Actions
         """
-        # TODO - Alt modifier doesn't seem to work on windows. Check
         # TODO - Auto generate key bindings for actions
-
         modifiers = {0x0001: 'shift',
                      0x0004: 'ctrl',
                      0x0008: 'alt',
                      0x0080: 'alt'}
 
         bindings = {
-            "left": self._frames.decrement_frame,
-            "shift_left": lambda d="prev", f="single": self._alignments.set_next_frame(d, f),
-            "ctrl_left": lambda d="prev", f="multi": self._alignments.set_next_frame(d, f),
-            "alt_left": lambda d="prev", f="no": self._alignments.set_next_frame(d, f),
-            "right": self._frames.increment_frame,
-            "shift_right": lambda d="next", f="single": self._alignments.set_next_frame(d, f),
-            "ctrl_right": lambda d="next", f="multi": self._alignments.set_next_frame(d, f),
-            "alt_right": lambda d="next", f="no": self._alignments.set_next_frame(d, f),
+            "left": self._display.decrement_frame,
+            "right": self._display.increment_frame,
             "space": self._display.handle_play_button,
-            "home": self._frames.set_first_frame,
-            "end": self._frames.set_last_frame,
+            "home": self._display.goto_first_frame,
+            "end": self._display.goto_last_frame,
             "1": lambda k=event.keysym: self._display.set_action(k),
             "2": lambda k=event.keysym: self._display.set_action(k),
             "3": lambda k=event.keysym: self._display.set_action(k),

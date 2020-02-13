@@ -56,7 +56,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._transport_frame = ttk.Frame(main_frame)
         self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
 
-        self._add_nav()
+        self._nav = self._add_nav()
         self._play_button = self._add_transport()
         self._actions_frame.add_optional_buttons(self.editors)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -68,27 +68,18 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             play="Play/Pause (SPACE)",
             beginning="Go to First Frame (HOME)",
             prev="Go to Previous Frame (LEFT)",
-            prev_single_face="Go to Previous Frame that contains a Single Face (SHIFT+LEFT)",
-            prev_multi_face="Go to Previous Frame that contains Multiple Faces (CTRL+LEFT)",
-            prev_no_face="Go to Previous Frame that contains No Faces (ALT+LEFT)",
             next="Go to Next Frame (RIGHT)",
-            next_single_face="Go to Next Frame that contains a Single Face (SHIFT+RIGHT)",
-            next_multi_face="Go to Next Frame that contains Multiple Faces (CTRL+RIGHT)",
-            next_no_face="Go to Next Frame that contains No Faces (ALT+RIGHT)",
-            end="Go to Last Frame (END)")
+            end="Go to Last Frame (END)",
+            mode="Filter the frames to those containing the selected item.")
 
     @property
     def _btn_action(self):
         """ dict: {`name`: `action`} Command lookup for navigation buttons """
         actions = dict(play=self.handle_play_button,
-                       beginning=self._frames.set_first_frame,
-                       prev=self._frames.decrement_frame,
-                       next=self._frames.increment_frame,
-                       end=self._frames.set_last_frame)
-        for drn in ("prev", "next"):
-            for flt in ("no", "multi", "single"):
-                actions["{}_{}_face".format(drn, flt)] = (lambda d=drn, f=flt:
-                                                          self._alignments.set_next_frame(d, f))
+                       beginning=self.goto_first_frame,
+                       prev=self.decrement_frame,
+                       next=self.increment_frame,
+                       end=self.goto_last_frame)
         return actions
 
     @property
@@ -111,9 +102,41 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ dict: All of the :class:`Editor` that the canvas holds """
         return self._canvas.editors
 
+    @property
+    def _frames_list(self):
+        """ list: The list of frame indices based on the current navigation mode """
+        nav_mode = self._frames.tk_navigation_mode.get()
+        if nav_mode == "No Faces":
+            retval = self._alignments.no_face_frames
+        elif nav_mode == "Multiple Faces":
+            retval = self._alignments.multi_face_frames
+        elif nav_mode == "Has Face(s)":
+            retval = self._alignments.with_face_frames
+        else:
+            retval = range(self._frames.frame_count)
+        logger.trace("nav_mode: %s, number_frames: %s", nav_mode, len(retval))
+        return retval
+
+    @property
+    def _frames_count(self):
+        """ int: The number of frames based on the current navigation mode """
+        nav_mode = self._frames.tk_navigation_mode.get()
+        if nav_mode == "No Faces":
+            retval = self._alignments.no_face_count
+        elif nav_mode == "Multiple Faces":
+            retval = self._alignments.multi_face_count
+        elif nav_mode == "Has Face(s)":
+            retval = self._alignments.with_face_count
+        else:
+            retval = self._frames.frame_count
+        logger.trace("nav_mode: %s, number_frames: %s", nav_mode, retval)
+        return retval
+
     def _add_nav(self):
         """ Add the slider to navigate through frames """
-        var = self._frames.tk_position
+        var = tk.IntVar()
+        var.set(0)
+        var.trace("w", self._set_real_frame_index)
         max_frame = self._frames.frame_count - 1
 
         frame = ttk.Frame(self._transport_frame)
@@ -137,25 +160,63 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         nav = ttk.Scale(frame, variable=var, from_=0, to=max_frame, command=cmd)
         nav.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        return dict(entry=tbox, scale=nav, label=lbl, var=var)
+
+    def _set_real_frame_index(self, *args):  # pylint:disable=unused-argument
+        """ Set the actual frame index based on current slider position and filter mode. """
+        slider_position = self._nav["var"].get()
+        frames = self._frames_list
+        frame_idx = frames[slider_position] if frames else 0
+        logger.trace("slider_position: %s, frame_idx: %s", slider_position, frame_idx)
+        self._frames.tk_position.set(frame_idx)
 
     def _add_transport(self):
         """ Add video transport controls """
-        # TODO Change excess buttons to a filter spinbox
         frame = ttk.Frame(self._transport_frame)
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         icons = get_images().icons
 
-        for action in ("play", "beginning", "prev", "prev_single_face", "prev_multi_face",
-                       "prev_no_face", "next_no_face", "next_multi_face", "next_single_face",
-                       "next", "end"):
-            padx = (0, 6) if action in ("play", "prev", "next_single_face") else (0, 0)
-            wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
-            wgt.pack(side=tk.LEFT, padx=padx)
+        for action in ("play", "beginning", "prev", "next", "end", "mode"):
+            padx = (0, 6) if action in ("play", "prev") else (0, 0)
+            if action != "mode":
+                wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
+                side = tk.LEFT
+            else:
+                wgt = self._add_navigation_mode_combo(frame)
+                side = tk.RIGHT
+            wgt.pack(side=side, padx=padx)
             if action == "play":
                 play_btn = wgt
                 self._frames.tk_is_playing.trace("w", self._play)
             Tooltip(wgt, text=self._helptext[action])
         return play_btn
+
+    def _add_navigation_mode_combo(self, frame):
+        """ Add the navigation mode combo box to the transport frame """
+        tk_var = self._frames.tk_navigation_mode
+        tk_var.set("All Frames")
+        tk_var.trace("w", self._nav_scale_callback)
+        nav_frame = ttk.Frame(frame)
+        lbl = ttk.Label(nav_frame, text="Filter:")
+        lbl.pack(side=tk.LEFT, padx=(0, 5))
+        combo = ttk.Combobox(
+            nav_frame,
+            textvariable=tk_var,
+            state="readonly",
+            values=["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"])
+        combo.pack(side=tk.RIGHT)
+        return nav_frame
+
+    def _nav_scale_callback(self, *args):  # pylint:disable=unused-argument
+        """ Adjust transport slider scale for different filters """
+        self._frames.stop_playback()
+        frame_count = self._frames_count
+        max_frame = frame_count if frame_count == 0 else frame_count - 1
+        self._nav["scale"].config(to=max_frame)
+        self._nav["label"].config(text="/{}".format(max_frame))
+        state = "disabled" if max_frame == 0 else "normal"
+        self._nav["entry"].config(state=state)
+        self._nav["var"].set(0)
 
     def handle_play_button(self):
         """ Handle the play button.
@@ -177,7 +238,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         key = key.replace("KP_", "") if key.startswith("KP_") else key
         self._actions_frame.on_click(self._actions_frame.key_bindings[key.lower()])
 
-    def _play(self, *args):  # pylint:disable=unused-argument
+    # << TRANSPORT >> #
+    def _play(self, *args, frame_count=None):  # pylint:disable=unused-argument
         """ Play the video file. """
         start = time()
         is_playing = self._frames.tk_is_playing.get()
@@ -188,11 +250,51 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Pause detected. Stopping.")
             return
 
-        self._frames.increment_frame(is_playing=True)
+        # Populate the filtered frames count on first frame
+        frame_count = self._frames_count if frame_count is None else frame_count
+        self.increment_frame(frame_count=frame_count, is_playing=True)
         delay = 16  # Cap speed at approx 60fps max. Unlikely to hit, but just in case
         duration = int((time() - start) * 1000)
         delay = max(1, delay - duration)
-        self.after(delay, self._play)
+        self.after(delay, lambda f=frame_count: self._play(f))
+
+    def increment_frame(self, frame_count=None, is_playing=False):
+        """ Update The frame navigation position to the next frame based on filter. """
+        if not is_playing:
+            self._frames.stop_playback()
+        position = self._nav["var"].get()
+        frame_count = self._frames_count if frame_count is None else frame_count
+        if position == frame_count - 1:
+            logger.trace("End of stream. Not incrementing")
+            self._frames.stop_playback()
+            return
+        self._nav["var"].set(position + 1)
+
+    def decrement_frame(self):
+        """ Update The frame navigation position to the previous frame based on filter. """
+        self._frames.stop_playback()
+        position = self._nav["var"].get()
+        if position == 0:
+            logger.trace("Beginning of stream. Not decrementing")
+            return
+        self._nav["var"].set(position - 1)
+
+    def goto_first_frame(self):
+        """ Go to the first frame that meets the filter criteria. """
+        self._frames.stop_playback()
+        position = self._nav["var"].get()
+        if position == 0:
+            return
+        self._nav["var"].set(0)
+
+    def goto_last_frame(self):
+        """ Go to the last frame that meets the filter criteria. """
+        self._frames.stop_playback()
+        position = self._nav["var"].get()
+        frame_count = self._frames_count
+        if position == frame_count - 1:
+            return
+        self._nav["var"].set(frame_count - 1)
 
 
 class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors

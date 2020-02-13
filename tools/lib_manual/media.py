@@ -127,6 +127,12 @@ class FrameNavigation():
         """ :class:`tkinter.BooleanVar`: Whether the display needs to be updated. """
         return self._tk_vars["updated"]
 
+    @property
+    def tk_navigation_mode(self):
+        """ :class:`tkinter.StringVar`: The variable holding the selected frame navigation
+        mode. """
+        return self._tk_vars["nav_mode"]
+
     def _set_tk_vars(self):
         """ Set the initial tkinter variables and add traces. """
         logger.debug("Setting tkinter variables")
@@ -140,7 +146,9 @@ class FrameNavigation():
         updated = tk.BooleanVar()
         updated.set(False)
 
-        retval = dict(position=position, is_playing=is_playing, updated=updated)
+        nav_mode = tk.StringVar()
+
+        retval = dict(position=position, is_playing=is_playing, updated=updated, nav_mode=nav_mode)
         logger.debug("Set tkinter variables: %s", retval)
         return retval
 
@@ -214,39 +222,6 @@ class FrameNavigation():
         logger.trace("Clearing update flag")
         self._needs_update = False
 
-    def increment_frame(self, is_playing=False):
-        """ Update :attr:`self.current_frame` to the next frame.
-
-        Parameters
-        ----------
-        is_playing: bool, optional
-            ``True`` if the frame is being incremented because the Play button has been pressed.
-            ``False`` if incremented for other reasons. Default: ``False``
-        """
-        position = self.tk_position.get()
-        if position == self.frame_count - 1:
-            logger.trace("End of stream. Not incrementing")
-            if self.tk_is_playing.get():
-                self.tk_is_playing.set(False)
-            return
-        self.goto_frame(position + 1, stop_playback=not is_playing and self.tk_is_playing.get())
-
-    def decrement_frame(self):
-        """ Update :attr:`self.current_frame` to the previous frame """
-        position = self.tk_position.get()
-        if position == 0:
-            logger.trace("Beginning of stream. Not decrementing")
-            return
-        self.goto_frame(position - 1, stop_playback=True)
-
-    def set_first_frame(self):
-        """ Load the first frame """
-        self.goto_frame(0, stop_playback=True)
-
-    def set_last_frame(self):
-        """ Load the last frame """
-        self.goto_frame(self.frame_count - 1, stop_playback=True)
-
     def goto_frame(self, index, stop_playback=True):
         """ Load the frame given by the specified index.
 
@@ -258,9 +233,16 @@ class FrameNavigation():
             ``True`` to Stop video playback, if a video is playing, otherwise ``False``.
             Default: ``True``
         """
+        # TODO This can probably go??
         if stop_playback and self.tk_is_playing.get():
             self.tk_is_playing.set(False)
         self.tk_position.set(index)
+
+    def stop_playback(self):
+        """ Stop play back if playing """
+        if self.tk_is_playing.get():
+            logger.trace("Stopping playback")
+            self.tk_is_playing.set(False)
 
 
 class AlignmentsData():
@@ -335,19 +317,34 @@ class AlignmentsData():
         return retval
 
     @property
-    def _no_face(self):
+    def with_face_frames(self):
+        """ list: The indexes of all frames that contain faces """
+        return [idx for idx, count in enumerate(self._face_count_per_index) if count != 0]
+
+    @property
+    def no_face_frames(self):
         """ list: The indexes of all frames that contain no faces """
         return [idx for idx, count in enumerate(self._face_count_per_index) if count == 0]
 
     @property
-    def _multi_face(self):
-        """ list: The indexes of all frames that contain no faces """
+    def multi_face_frames(self):
+        """ list: The indexes of all frames that contain multiple faces """
         return [idx for idx, count in enumerate(self._face_count_per_index) if count > 1]
 
     @property
-    def _single_face(self):
-        """ list: The indexes of all frames that contain no faces """
-        return [idx for idx, count in enumerate(self._face_count_per_index) if count == 1]
+    def with_face_count(self):
+        """ int: The count of frames that contain no faces """
+        return sum(1 for faces in self._latest_alignments.values() if len(faces) != 0)
+
+    @property
+    def no_face_count(self):
+        """ int: The count of frames that contain no faces """
+        return sum(1 for faces in self._latest_alignments.values() if len(faces) == 0)
+
+    @property
+    def multi_face_count(self):
+        """ int: The count of frames that contain multiple faces """
+        return sum(1 for faces in self._latest_alignments.values() if len(faces) > 1)
 
     def reset_face_id(self):
         """ Reset the attribute :attr:`_face_index` to 0 """
@@ -392,28 +389,6 @@ class AlignmentsData():
                 this_frame_faces.append(face)
             faces[framename] = dict(saved=this_frame_faces)
         return mask_names, faces
-
-    def set_next_frame(self, direction, filter_type):
-        """ Set the display frame to the next or previous frame based on the given filter.
-
-        Parameters
-        ----------
-        direction = ["prev", "next"]
-            The direction to search for the next face
-        filter_type: ["no", "multi", "single"]
-            The filter method to use for selecting the next frame
-        """
-        position = self._tk_position.get()
-        search_list = getattr(self, "_{}_face".format(filter_type))
-        try:
-            if direction == "prev":
-                frame_idx = next(idx for idx in reversed(search_list) if idx < position)
-            else:
-                frame_idx = next(idx for idx in search_list if idx > position)
-        except StopIteration:
-            # If no remaining frames meet criteria go to the first or last frame
-            frame_idx = 0 if direction == "prev" else self.frames.frame_count - 1
-        self.frames.goto_frame(frame_idx)
 
     def _check_for_new_alignments(self):
         """ Checks whether there are already new alignments in :attr:`_alignments`. If not
@@ -899,10 +874,9 @@ class FaceCache():
 
     def _add_remove_face(self):
         """ Add or remove a face into the viewer """
-        current_faces = self._faces[self._current_frame_id]
+        current_faces = self._faces.get(self._current_frame_id, [])
         alignment_faces = len(self._alignments.current_faces)
         display_faces = len(current_faces)
-
         if alignment_faces > display_faces:
             tags = self._create_tag(self._current_frame_id, alignment_faces - 1)
             starting_idx = self._insert_new_face(current_faces, tags)
