@@ -118,6 +118,11 @@ class FrameNavigation():
         return self._tk_vars["position"]
 
     @property
+    def tk_transport_position(self):
+        """ :class:`tkinter.IntVar`: The current index of the display frame's transport slider. """
+        return self._tk_vars["transport_position"]
+
+    @property
     def tk_is_playing(self):
         """ :class:`tkinter.BooleanVar`: Whether the stream is currently playing. """
         return self._tk_vars["is_playing"]
@@ -147,8 +152,14 @@ class FrameNavigation():
         updated.set(False)
 
         nav_mode = tk.StringVar()
+        transport_position = tk.IntVar()
+        transport_position.set(0)
 
-        retval = dict(position=position, is_playing=is_playing, updated=updated, nav_mode=nav_mode)
+        retval = dict(position=position,
+                      is_playing=is_playing,
+                      updated=updated,
+                      nav_mode=nav_mode,
+                      transport_position=transport_position)
         logger.debug("Set tkinter variables: %s", retval)
         return retval
 
@@ -221,22 +232,6 @@ class FrameNavigation():
         display frame """
         logger.trace("Clearing update flag")
         self._needs_update = False
-
-    def goto_frame(self, index, stop_playback=True):
-        """ Load the frame given by the specified index.
-
-        Parameters
-        ----------
-        index: int
-            The frame index to navigate to
-        stop_playback: bool, optional
-            ``True`` to Stop video playback, if a video is playing, otherwise ``False``.
-            Default: ``True``
-        """
-        # TODO This can probably go??
-        if stop_playback and self.tk_is_playing.get():
-            self.tk_is_playing.set(False)
-        self.tk_position.set(index)
 
     def stop_playback(self):
         """ Stop play back if playing """
@@ -317,21 +312,6 @@ class AlignmentsData():
         return retval
 
     @property
-    def with_face_frames(self):
-        """ list: The indexes of all frames that contain faces """
-        return [idx for idx, count in enumerate(self._face_count_per_index) if count != 0]
-
-    @property
-    def no_face_frames(self):
-        """ list: The indexes of all frames that contain no faces """
-        return [idx for idx, count in enumerate(self._face_count_per_index) if count == 0]
-
-    @property
-    def multi_face_frames(self):
-        """ list: The indexes of all frames that contain multiple faces """
-        return [idx for idx, count in enumerate(self._face_count_per_index) if count > 1]
-
-    @property
     def with_face_count(self):
         """ int: The count of frames that contain no faces """
         return sum(1 for faces in self._latest_alignments.values() if len(faces) != 0)
@@ -349,6 +329,20 @@ class AlignmentsData():
     def reset_face_id(self):
         """ Reset the attribute :attr:`_face_index` to 0 """
         self._face_index = 0
+
+    def get_filtered_frames_list(self):
+        """ Return a list of filtered faces based on navigation mode """
+        nav_mode = self.frames.tk_navigation_mode.get()
+        if nav_mode == "No Faces":
+            retval = [idx for idx, count in enumerate(self._face_count_per_index) if count == 0]
+        elif nav_mode == "Multiple Faces":
+            retval = [idx for idx, count in enumerate(self._face_count_per_index) if count > 1]
+        elif nav_mode == "Has Face(s)":
+            retval = [idx for idx, count in enumerate(self._face_count_per_index) if count != 0]
+        else:
+            retval = range(self.frames.frame_count)
+        logger.trace("nav_mode: %s, number_frames: %s", nav_mode, len(retval))
+        return retval
 
     def _get_alignments(self, alignments_path, input_location, is_video):
         """ Get the alignments object.
@@ -585,6 +579,7 @@ class FaceCache():
         self._current_display = None
         self._hovered = None
         self._current_frame_id = 0
+        self._filter_mode = "All Faces"
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -635,6 +630,13 @@ class FaceCache():
         logger.trace("object_id: %s, frame_id: %s", object_id, retval)
         return retval
 
+    def transport_index_from_frame_index(self, frame_index):
+        """ Retrieve the index in the filtered frame list for the given frame index. """
+        frames_list = self._alignments.get_filtered_frames_list()
+        retval = frames_list.index(frame_index) if frame_index in frames_list else None
+        logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
+        return retval
+
     def clear_hovered(self):
         """ Hide the hovered box and clear the :attr:`_hovered` attribute """
         if self._hovered is None:
@@ -665,6 +667,7 @@ class FaceCache():
         """
         self._frames.tk_position.trace("w", self._highlight_selected)
         self._frames.tk_update.trace("w", self._update_current)
+        self._frames.tk_navigation_mode.trace("w", self._filter_faces)
 
     def load_faces(self, canvas, frame_width):
         """ Launch a background thread to load the faces into cache and assign the canvas to
@@ -713,6 +716,10 @@ class FaceCache():
         """ Create an object tag from the frame and face index """
         return ["frame_id_{}".format(frame_index), "face_id_{}".format(face_index)]
 
+    def _position_from_index(self, index):
+        """ Return the position an object should be placed on the canvas from it's index. """
+        return ((index % self._columns) * self._size, (index // self._columns) * self._size)
+
     def _place_face(self, tags, idx, face, landmarks=None):
         """ Places the aligned faces on the canvas and create invisible annotations.
 
@@ -722,7 +729,7 @@ class FaceCache():
         """
         dsp_face = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
 
-        pos = ((idx % self._columns) * self._size, (idx // self._columns) * self._size)
+        pos = self._position_from_index(idx)
         rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
         image_id = self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW, tags=tags)
         border = self._canvas.create_rectangle(*rect_dims,
@@ -919,7 +926,7 @@ class FaceCache():
         for objects in update_faces:
             idx = objects["index"] + 1 if increment else objects["index"] - 1
             objects["index"] = idx
-            pos = ((idx % self._columns) * self._size, (idx // self._columns) * self._size)
+            pos = self._position_from_index(idx)
             rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
             objects["position"] = pos
             self._canvas.coords(objects["image_id"], *pos)
@@ -928,3 +935,38 @@ class FaceCache():
                 val = self._landmark_mapping[key]
                 pts = (objects["landmarks"][val[0]:val[1]] + objects["position"]).flatten()
                 self._canvas.coords(objects["mesh"][idx], *pts)
+
+    def _filter_faces(self, *args):  # pylint:disable=unused-argument
+        """ Filter the viewed faces based on currently selected navigation mode. """
+        if not self._initialized.is_set():
+            return
+        nav_mode = self._frames.tk_navigation_mode.get()
+        nav_mode = "All Frames" if nav_mode == "Has Face(s)" else nav_mode
+        if nav_mode == self._filter_mode:
+            return
+        frames_list = self._alignments.get_filtered_frames_list()
+        dsp_idx = 0
+        for frame_idx, faces in self._faces.items():
+            show_face = frame_idx in frames_list
+            state = "normal" if show_face else "hidden"
+            for objects in faces:
+                self._canvas.itemconfig(objects["image_id"], state=state)
+                if show_face:
+                    pos = self._position_from_index(dsp_idx)
+                    rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
+                    self._canvas.coords(objects["image_id"], *pos)
+                    self._canvas.coords(objects["border"], *rect_dims)
+
+                for idx, key in enumerate(sorted(self._landmark_mapping)):
+                    if self._current_display == "mesh":
+                        self._canvas.itemconfig(objects["mesh"][idx], state=state)
+                    if show_face:
+                        val = self._landmark_mapping[key]
+                        pts = (objects["landmarks"][val[0]:val[1]] + pos).flatten()
+                        self._canvas.coords(objects["mesh"][idx], *pts)
+                if show_face:
+                    dsp_idx += 1
+
+        self._filter_mode = nav_mode
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        self._canvas.yview_moveto(0.0)

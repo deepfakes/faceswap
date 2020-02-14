@@ -520,8 +520,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         frame_id = self._faces.frame_index_from_object(item_ids[0])
         if frame_id is None or frame_id == self._frames.tk_position.get():
             return
-        self._faces.clear_hovered()
-        self._frames.goto_frame(frame_id)
+        transport_id = self._faces.transport_index_from_frame_index(frame_id)
+        if transport_id is None:
+            return
+        self._frames.stop_playback()
+        self._frames.tk_transport_position.set(transport_id)
 
     def _scroll(self, event):
         """ Handle mouse wheel scrolling over the faces canvas """
