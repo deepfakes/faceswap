@@ -13,12 +13,7 @@ from lib.gui.control_helper import ControlPanelOption
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# Tracking for all control panel variables, for access from all editors
-_CONTROL_VARS = dict()
-_ANNOTATION_FORMAT = dict()
-
 # TODO dynamically bind and unbind keybindings
-# TODO Global variables to canvas
 
 
 class Editor():
@@ -104,6 +99,14 @@ class Editor():
         return self._canvas.selected_action
 
     @property
+    def _control_vars(self):
+        return self._canvas.control_tk_vars
+
+    @property
+    def _annotation_formats(self):
+        return self._canvas.annotation_formats
+
+    @property
     def actions(self):
         """ list: The optional action buttons for the actions frame in the GUI for the
         current editor """
@@ -123,15 +126,15 @@ class Editor():
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
         annotation = self.__class__.__name__.lower()
-        return self._colors[_ANNOTATION_FORMAT[annotation]["color"].get()]
+        return self._colors[self._annotation_formats[annotation]["color"].get()]
 
     @property
     def _should_display(self):
         """ bool: Whether the control panel option for the current editor is set to display
         or not. """
         annotation = self.__class__.__name__.lower()
-        should_display = _CONTROL_VARS.get(self._active_editor,
-                                           dict()).get("display", dict()).get(annotation, None)
+        should_display = self._control_vars.get(
+            self._active_editor, dict()).get("display", dict()).get(annotation, None)
         return self._is_active or (should_display is not None and should_display.get())
 
     @property
@@ -494,9 +497,8 @@ class Editor():
         group_key = option.group.replace(" ", "").lower()
         group_key = "none" if group_key == "_master" else group_key
         annotation_key = option.title.replace(" ", "").lower()
-        _CONTROL_VARS.setdefault(editor_key,
-                                 dict()).setdefault(group_key,
-                                                    dict())[annotation_key] = option.tk_var
+        self._control_vars.setdefault(
+            editor_key, dict()).setdefault(group_key, dict())[annotation_key] = option.tk_var
 
     def _add_annotation_format_controls(self):
         """ Add the annotation display (color/size) controls.
@@ -504,7 +506,7 @@ class Editor():
         These should be universal and available for all editors.
         """
         editors = ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh")
-        if not _ANNOTATION_FORMAT:
+        if not self._annotation_formats:
             opacity = ControlPanelOption("Mask Opacity",
                                          int,
                                          group="Color",
@@ -523,12 +525,12 @@ class Editor():
                                             state="readonly",
                                             helptext="Set the annotation color")
                 annotation_key = editor.replace(" ", "").lower()
-                _ANNOTATION_FORMAT.setdefault(annotation_key, dict())["color"] = colors
-                _ANNOTATION_FORMAT[annotation_key]["mask_opacity"] = opacity
+                self._annotation_formats.setdefault(annotation_key, dict())["color"] = colors
+                self._annotation_formats[annotation_key]["mask_opacity"] = opacity
 
         for editor in editors:
             annotation_key = editor.replace(" ", "").lower()
-            for group, ctl in _ANNOTATION_FORMAT[annotation_key].items():
+            for group, ctl in self._annotation_formats[annotation_key].items():
                 logger.debug("Adding global format control to editor: (editor:'%s', group: '%s')",
                              editor, group)
                 self._add_control(ctl, global_control=True)

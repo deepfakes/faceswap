@@ -15,10 +15,11 @@ class BoundingBox(Editor):
                                                 [self._delete_current_face],
                                                 ["Del"])
         control_text = ("Bounding Box Editor\nEdit the bounding box being fed into the aligner "
-                        "and recalculate landmarks.\n\n"
+                        "to recalculate the landmarks.\n\n"
                         " - Grab the corner anchors to resize the bounding box.\n"
                         " - Click and drag the bounding box to relocate.\n"
-                        " - Click in empty space to create a new bounding box")
+                        " - Click in empty space to create a new bounding box.\n"
+                        " - Right click a bounding box to delete a face.")
         super().__init__(canvas, alignments, frames, control_text)
         self._bind_hotkeys()
 
@@ -50,6 +51,25 @@ class BoundingBox(Editor):
                                                  group="Display",
                                                  default=dsp not in ("Extract Box", "Landmarks"),
                                                  helptext="Show the {} annotations".format(dsp)))
+        norm_ctl = ControlPanelOption(
+            "Normalization method",
+            str,
+            group="Aligner",
+            choices=["none", "clahe", "hist", "mean"],
+            default="hist",
+            is_radio=True,
+            helptext="Normalization method to use for feeding faces to the aligner. This can help "
+                     "the aligner better align faces with difficult lighting conditions. "
+                     "Different methods will yield different results on different sets. NB: This "
+                     "does not impact the output face, just the input to the aligner."
+                     "\n\tnone: Don't perform normalization on the face."
+                     "\n\tclahe: Perform Contrast Limited Adaptive Histogram Equalization on the "
+                     "face."
+                     "\n\thist: Equalize the histograms on the RGB channels."
+                     "\n\tmean: Normalize the face colors to the mean.")
+        var = norm_ctl.tk_var
+        var.trace("w", lambda *e, v=var: self._alignments.extractor.set_normalization_method(v))
+        self._add_control(norm_ctl)
 
     def _bind_hotkeys(self):
         """ Add keyboard shortcuts.

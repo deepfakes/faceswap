@@ -521,6 +521,8 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                                         self._frames.display_dims[1] / 2,
                                         image=self._frames.current_display_frame,
                                         anchor=tk.CENTER)
+        self._control_tk_vars = dict()
+        self._annotation_formats = dict()
         self._editors = self._get_editors()
         self._add_callbacks()
         self._update_active_display()
@@ -530,6 +532,17 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def selected_action(self):
         """str: The name of the currently selected Editor action """
         return self._tk_action_var.get()
+
+    @property
+    def control_tk_vars(self):
+        """ dict: dictionary of tkinter variables as populated by the right hand control panel.
+        Tracking for all control panel variables, for access from all editors. """
+        return self._control_tk_vars
+
+    @property
+    def annotation_formats(self):
+        """ dict: The selected formatting options for each annotation """
+        return self._annotation_formats
 
     @property
     def active_editor(self):

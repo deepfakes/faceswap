@@ -590,10 +590,8 @@ class Aligner():
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # TODO FAN
-        # TODO Normalization option
         aligner = Extractor(None, "cv2-dnn", None, multiprocess=True, normalize_method="hist")
-        # Set the batchsize to 1
-        aligner.set_batchsize("align", 1)
+        aligner.set_batchsize("align", 1)  # Set the batchsize to 1
         aligner.launch()
         logger.debug("Initialized Extractor")
         self._aligner = aligner
@@ -619,3 +617,8 @@ class Aligner():
         self._in_queue.put(self._feed_face)
         detected_face = next(self._aligner.detected_faces()).detected_faces[0]
         return detected_face.landmarks_xy
+
+    def set_normalization_method(self, method_var):
+        """ Change the normalization method for faces fed into the aligner """
+        method = method_var.get()
+        self._aligner.set_aligner_normalization_method(method)

@@ -455,6 +455,17 @@ class Extractor():
                 available_vram = vram_free - vram_required
                 self._set_plugin_batchsize(plugin, available_vram)
 
+    def set_aligner_normalization_method(self, method):
+        """ Change the normalization method for faces fed into the aligner.
+
+        Parameters
+        ----------
+        method: {"none", "clahe", "hist", "mean"}
+            The normalization method to change the aligner's input normalization to
+        """
+        logger.debug("Setting to: '%s'", method)
+        self._align.set_normalize_method(method)
+
     @staticmethod
     def _set_plugin_batchsize(plugin, available_vram):
         """ Set the batch size for the given plugin based on given available vram.

@@ -6,7 +6,7 @@ import numpy as np
 import cv2
 from PIL import Image, ImageTk
 
-from ._base import ControlPanelOption, Editor, logger, _ANNOTATION_FORMAT, _CONTROL_VARS
+from ._base import ControlPanelOption, Editor, logger
 
 
 class Mask(Editor):
@@ -28,12 +28,12 @@ class Mask(Editor):
     def _opacity(self):
         """ float: The mask opacity setting from the control panel from 0.0 - 1.0. """
         annotation = self.__class__.__name__.lower()
-        return _ANNOTATION_FORMAT[annotation]["mask_opacity"].get() / 100.0
+        return self._annotation_formats[annotation]["mask_opacity"].get() / 100.0
 
     @property
     def _brush_radius(self):
         """ int: The radius of the brush to use as set in control panel options """
-        return _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["brushsize"].get()
+        return self._control_vars[self.__class__.__name__.lower()]["brush"]["brushsize"].get()
 
     @property
     def _edit_mode(self):
@@ -45,7 +45,7 @@ class Mask(Editor):
     @property
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
-        color = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
+        color = self._control_vars[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
         return self._colors[color.lower()]
 
     def _add_actions(self):
@@ -116,10 +116,10 @@ class Mask(Editor):
             # Reset meta information when moving to a new frame
             self._meta = dict(position=position)
         key = self.__class__.__name__.lower()
-        mask_type = _CONTROL_VARS[key]["display"]["masktype"].get().lower()
+        mask_type = self._control_vars[key]["display"]["masktype"].get().lower()
         color = self._control_color[1:]
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
-        roi_color = self._colors[_ANNOTATION_FORMAT["extractbox"]["color"].get()]
+        roi_color = self._colors[self._annotation_formats["extractbox"]["color"].get()]
         opacity = self._opacity
         for idx, face in enumerate(self._alignments.current_faces):
             mask = face.mask.get(mask_type, None)
@@ -412,7 +412,7 @@ class Mask(Editor):
         increase: bool, optional
             ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
         """
-        radius_var = _CONTROL_VARS[self.__class__.__name__.lower()]["brush"]["brushsize"]
+        radius_var = self._control_vars[self.__class__.__name__.lower()]["brush"]["brushsize"]
         current_val = radius_var.get()
         new_val = min(100, current_val + 1) if increase else max(1, current_val - 1)
         logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)

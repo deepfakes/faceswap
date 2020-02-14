@@ -269,6 +269,11 @@ class AlignmentsData():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
+    def extractor(self):
+        """ :class:`lib.manual.Aligner`: The aligner for calculating landmarks. """
+        return self._extractor
+
+    @property
     def available_masks(self):
         """ set: Names of all masks that exist in the alignments file """
         return self._mask_names
