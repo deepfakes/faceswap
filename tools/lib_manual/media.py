@@ -724,13 +724,16 @@ class FaceCache():
                 frame_name = os.path.basename(filename)
                 progress = int(round(((frame_idx + 1) / self.frame_count) * 100))
                 self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
+                frame_faces = []
                 faces = self._alignments.saved_alignments.get(frame_name, list())
                 for face_idx, face in enumerate(faces):
                     face.load_aligned(frame, size=self._size, force=True)
-                    self._faces.setdefault(frame_idx, []).append(
-                        self._place_face(self._create_tag(frame_idx, face_idx), faces_seen, face))
+                    frame_faces.append(self._place_face(self._create_tag(frame_idx, face_idx),
+                                                        faces_seen,
+                                                        face))
                     face.aligned["face"] = None
                     faces_seen += 1
+                self._faces[frame_idx] = frame_faces
             self._pbar.stop()
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Error loading face. Error: %s", str(err))

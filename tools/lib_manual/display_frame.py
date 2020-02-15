@@ -148,6 +148,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _set_frame_index(self, *args):  # pylint:disable=unused-argument
         """ Set the actual frame index based on current slider position and filter mode. """
+        # TODO Update total/slider position when adding/removing faces for single/multi face frames
         slider_position = self._frames.tk_transport_position.get()
         frames = self._alignments.get_filtered_frames_list()
         frame_idx = frames[slider_position] if frames else 0
