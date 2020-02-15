@@ -568,6 +568,30 @@ class AlignmentsData():
         face.aligned["face"] = None
         return retval
 
+    def copy_alignments(self, direction):
+        """ Copy the alignments from the previous or next frame that has alignments
+        to the current frame.
+
+        Notes
+        -----
+        The aligned face image is loaded so that the faces viewer can pick it up. This image
+        is cleared by the faces viewer after collection to save ram.
+        """
+        alignments = self._latest_alignments
+        if direction == "previous":
+            search_list = reversed(sorted(alignments)[:self.frames.tk_position.get()])
+        else:
+            search_list = sorted(alignments)[self.frames.tk_position.get() + 1:]
+        for frame_idx in search_list:
+            if len(alignments[frame_idx]) == 0:
+                continue
+            self.current_faces.extend(alignments[frame_idx])
+            break
+        for face in self.current_faces:
+            face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        self._face_index = len(self.current_faces) - 1
+        self.frames.tk_update.set(True)
+
 
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
@@ -732,7 +756,12 @@ class FaceCache():
         -------
         dict: The `image`, `border` and `mesh` objects
         """
-        dsp_face = ImageTk.PhotoImage(Image.fromarray(face.aligned_face[..., 2::-1]))
+        aligned_face = face.aligned_face[..., 2::-1]
+        if aligned_face.shape[0] != self._size:
+            aligned_face = cv2.resize(aligned_face,
+                                      (self._size, self._size),
+                                      interpolation=cv2.INTER_AREA)
+        dsp_face = ImageTk.PhotoImage(Image.fromarray(aligned_face))
 
         pos = self._position_from_index(idx)
         rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)

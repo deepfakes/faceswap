@@ -37,7 +37,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._frames = frames
         self._alignments = alignments
 
-        self._actions_frame = ActionsFrame(self)
+        self._actions_frame = ActionsFrame(self, self._alignments)
         main_frame = ttk.Frame(self)
         main_frame.pack(side=tk.RIGHT)
         self._video_frame = ttk.Frame(main_frame,
@@ -288,8 +288,10 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`DisplayFrame`
         The Display frame that the Actions reside in
+    alignments: dict
+        Dictionary of :class:`lib.faces_detect.DetectedFace` objects
     """
-    def __init__(self, parent):
+    def __init__(self, parent, alignments):
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
 
@@ -297,6 +299,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._actions = ("view", "boundingbox", "extractbox", "mask", "landmarks")
         self._initial_action = "view"
         self._buttons = self._add_buttons()
+        self._add_copy_buttons(alignments)
         self._selected_action = self._set_selected_action_tkvar()
         self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
 
@@ -397,6 +400,23 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         var.trace("w", self._display_optional_buttons)
         return var
 
+    def _add_copy_buttons(self, alignments):
+        """ Add the buttons to copy alignments from previous and next frames """
+        lookup = dict(copy_prev=("Previous", "C"), copy_next=("Next", "V"))
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP, fill=tk.Y)
+        sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
+        sep.pack(fill=tk.X, pady=5, side=tk.TOP)
+        for action in ("copy_prev", "copy_next"):
+            direction = action.replace("copy_", "")
+            button = ttk.Button(frame,
+                                image=get_images().icons[action],
+                                command=lambda d=direction: alignments.copy_alignments(d),
+                                style="actions_deselected.TButton")
+            button.pack()
+            helptext = "Copy {} Alignments to this Frame ({})".format(*lookup[action])
+            Tooltip(button, text=helptext)
+
     def add_optional_buttons(self, editors):
         """ Add the optional editor specific action buttons """
         for name, editor in editors.items():
@@ -427,9 +447,8 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 hotkey = action["hotkey"]
                 helptext += "" if hotkey is None else " ({})".format(hotkey.upper())
                 Tooltip(button, text=helptext)
-                self._optional_buttons.setdefault(name,
-                                                  dict())[button] = dict(hotkey=hotkey,
-                                                                         tk_var=action["tk_var"])
+                self._optional_buttons.setdefault(
+                    name, dict())[button] = dict(hotkey=hotkey, tk_var=action["tk_var"])
             self._optional_buttons[name]["frame"] = frame
         self._display_optional_buttons()
 
