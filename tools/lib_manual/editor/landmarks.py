@@ -25,8 +25,8 @@ class Landmarks(Editor):
         return "move" if not action else action[0]
 
     def _add_actions(self):
-        self._add_action("drag", "move", "Drag individual Landmarks", hotkey="D")
-        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
+        self._add_action("drag", "move", "Drag Tool", hotkey="D")
+        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
         self._add_edit_mode_callback()
 
     def _add_edit_mode_callback(self):
@@ -53,7 +53,7 @@ class Landmarks(Editor):
 
     def _get_extract_boxes(self):
         """ Get flattened list of extract box ids """
-        return self._flatten_list(self._canvas.editors["extractbox"].objects.get("extractbox", []))
+        return self._flatten_list(self._canvas.editors["ExtractBox"].objects.get("extractbox", []))
 
     def _add_controls(self):
         self._add_control(ControlPanelOption("Mesh",
@@ -300,7 +300,7 @@ class Mesh(Editor):
 
     def update_annotation(self):
         """ Draw the Landmarks Mesh and set the objects to :attr:`_object`"""
-        key = self.__class__.__name__.lower()
+        key = "mesh"
         if not self._should_display:
             self._hide_annotation(key)
             return

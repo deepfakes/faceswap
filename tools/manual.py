@@ -59,7 +59,7 @@ class Manual(tk.Tk):
         self._faces_frame = FacesFrame(self._containers["bottom"], self._faces, self._frames)
 
         self._options = Options(self._containers["top"], self._display)
-        self._display.tk_selected_action.set("view")
+        self._display.tk_selected_action.set("View")
 
         self.bind("<Key>", self._handle_key_press)
         self._set_initial_layout()
@@ -168,9 +168,9 @@ class Manual(tk.Tk):
         The following keys are reserved for the :mod:`tools.lib_manual.editor` classes
             * Delete - Used for deleting faces
             * [] - decrease / increase brush size
-            * R, Z, D - Optional Actions
+            * B, D, E, Z - Optional Actions (Brush, Drag, Erase, Zoom)
         """
-        # TODO - Auto generate key bindings for actions
+        # TODO - Add optional action buttons to global key bindings method
         modifiers = {0x0001: 'shift',
                      0x0004: 'ctrl',
                      0x0008: 'alt',

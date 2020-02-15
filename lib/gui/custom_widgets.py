@@ -496,7 +496,7 @@ class Tooltip:
     text: str, optional
         The text to be displayed in the tool-tip. Default: 'widget info'
     waittime: int, optional
-        The time in miliseconds to wait before showing the tool-tip. Default: 400
+        The time in milliseconds to wait before showing the tool-tip. Default: 400
     wraplength: int, optional
         The text length for each line before wrapping. Default: 250
 
@@ -510,19 +510,6 @@ class Tooltip:
     -----
     Adapted from StackOverflow: http://stackoverflow.com/questions/3221956 and
     http://www.daniweb.com/programming/software-development/code/484591/a-tooltip-class-for-tkinter
-
-
-    - Originally written by vegaseat on 2014.09.09.
-    - Modified to include a delay time by Victor Zaccardo on 2016.03.25.
-    - Modified to correct extreme right and extreme bottom behavior by Alberto Vassena on \
-        2016.11.05.
-    - Modified to stay inside the screen whenever the tooltip might go out on the top but still \
-        the screen is higher than the tooltip  by Alberto Vassena on 2016.11.05.
-    - Modified to use the more flexible mouse positioning  by Alberto Vassena on 2016.11.05.
-    - Modified to add customizable background color, padding, waittime and wraplength on creation \
-        by Alberto Vassena on 2016.11.05.
-
-    Tested on Ubuntu 16.04/16.10, running Python 3.5.2
     """
     def __init__(self, widget, *, background="#FFFFEA", pad=(5, 3, 5, 3), text="widget info",
                  waittime=400, wraplength=250):
@@ -544,7 +531,7 @@ class Tooltip:
         self._schedule()
 
     def _on_leave(self, event=None):  # pylint:disable=unused-argument
-        """ Unschedule on a leave event """
+        """ remove schedule on a leave event """
         self._unschedule()
         self._hide()
 
@@ -601,7 +588,7 @@ class Tooltip:
 
                 # TIP:
                 # A further mod might auto-magically augment the
-                # wraplength when the tooltip is too high to be
+                # wrap length when the tooltip is too high to be
                 # kept inside the screen.
                 y_1 = 0
 
@@ -611,7 +598,7 @@ class Tooltip:
         pad = self._pad
         widget = self._widget
 
-        # creates a toplevel window
+        # creates a top level window
         self._topwidget = tk.Toplevel(widget)
         if platform.system() == "Darwin":
             # For Mac OS

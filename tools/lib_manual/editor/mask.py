@@ -12,28 +12,30 @@ from ._base import ControlPanelOption, Editor, logger
 class Mask(Editor):
     """ The mask Editor """
     def __init__(self, canvas, alignments, frames):
+        self._meta = []
+        self._internal_size = 512
         control_text = ("Mask Editor\nEdit the mask."
                         "\n - NB: For Landmark based masks (e.g. components/extended) it is "
                         "better to make sure the landmarks are correct rather than editing the "
                         "mask directly. Any change to the landmarks after editing the mask will "
                         "override your manual edits.")
-        self._meta = []
-        self._internal_size = 512
-        super().__init__(canvas, alignments, frames, control_text)
+        key_bindings = {"[": lambda *e, i=False: self._adjust_brush_radius(increase=i),
+                        "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
+        super().__init__(canvas, alignments, frames,
+                         control_text=control_text, key_bindings=key_bindings)
         self._mouse_location = [
             self._canvas.create_oval(0, 0, 0, 0, outline="black", state="hidden"), False]
-        self._bind_hotkeys()
 
     @property
     def _opacity(self):
         """ float: The mask opacity setting from the control panel from 0.0 - 1.0. """
-        annotation = self.__class__.__name__.lower()
+        annotation = self.__class__.__name__
         return self._annotation_formats[annotation]["mask_opacity"].get() / 100.0
 
     @property
     def _brush_radius(self):
         """ int: The radius of the brush to use as set in control panel options """
-        return self._control_vars[self.__class__.__name__.lower()]["brush"]["brushsize"].get()
+        return self._control_vars[self.__class__.__name__]["brush"]["BrushSize"].get()
 
     @property
     def _edit_mode(self):
@@ -45,13 +47,13 @@ class Mask(Editor):
     @property
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
-        color = self._control_vars[self.__class__.__name__.lower()]["brush"]["cursorcolor"].get()
+        color = self._control_vars[self.__class__.__name__]["brush"]["CursorColor"].get()
         return self._colors[color.lower()]
 
     def _add_actions(self):
-        self._add_action("draw", "draw", "Draw the mask", hotkey="D")
-        self._add_action("erase", "erase", "Erase the mask", hotkey="R")
-        self._add_action("zoom", "zoom", "Zoom in or out of the selected face", hotkey="Z")
+        self._add_action("draw", "draw", "Draw Tool", hotkey="D")
+        self._add_action("erase", "erase", "Erase Tool", hotkey="E")
+        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
 
     def _add_controls(self):
         masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])
@@ -77,12 +79,6 @@ class Mask(Editor):
                                              choices=sorted(self._colors),
                                              default="White",
                                              helptext="Select the brush cursor color."))
-
-    def _bind_hotkeys(self):
-        self._canvas.winfo_toplevel().bind("[",
-                                           lambda *e: self._adjust_brush_radius(increase=False))
-        self._canvas.winfo_toplevel().bind("]",
-                                           lambda *e: self._adjust_brush_radius(increase=True))
 
     def _update_meta(self, key, item, face_index):
         """ Update the meta information for the given object.
@@ -115,18 +111,18 @@ class Mask(Editor):
         if position != self._meta.get("position", -1):
             # Reset meta information when moving to a new frame
             self._meta = dict(position=position)
-        key = self.__class__.__name__.lower()
-        mask_type = self._control_vars[key]["display"]["masktype"].get().lower()
+        key = self.__class__.__name__
+        mask_type = self._control_vars[key]["display"]["MaskType"].get().lower()
         color = self._control_color[1:]
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
-        roi_color = self._colors[self._annotation_formats["extractbox"]["color"].get()]
+        roi_color = self._colors[self._annotation_formats["ExtractBox"]["color"].get()]
         opacity = self._opacity
         for idx, face in enumerate(self._alignments.current_faces):
             mask = face.mask.get(mask_type, None)
             if mask is None:
                 continue
             self._set_face_meta_data(mask, idx)
-            self._update_mask_image(key, idx, rgb_color, opacity)
+            self._update_mask_image(key.lower(), idx, rgb_color, opacity)
             self._update_roi_box(mask, idx, roi_color)
 
         self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
@@ -412,9 +408,9 @@ class Mask(Editor):
         increase: bool, optional
             ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
         """
-        radius_var = self._control_vars[self.__class__.__name__.lower()]["brush"]["brushsize"]
+        radius_var = self._control_vars[self.__class__.__name__]["brush"]["BrushSize"]
         current_val = radius_var.get()
-        new_val = min(100, current_val + 1) if increase else max(1, current_val - 1)
+        new_val = min(100, current_val + 2) if increase else max(1, current_val - 2)
         logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)
         radius_var.set(new_val)
 

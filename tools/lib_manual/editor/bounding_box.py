@@ -20,8 +20,9 @@ class BoundingBox(Editor):
                         " - Click and drag the bounding box to relocate.\n"
                         " - Click in empty space to create a new bounding box.\n"
                         " - Right click a bounding box to delete a face.")
-        super().__init__(canvas, alignments, frames, control_text)
-        self._bind_hotkeys()
+        key_bindings = {"<Delete>": self._delete_current_face}
+        super().__init__(canvas, alignments, frames,
+                         control_text=control_text, key_bindings=key_bindings)
 
     @property
     def _coords_layout(self):
@@ -71,16 +72,6 @@ class BoundingBox(Editor):
         var.trace("w", lambda *e, v=var: self._alignments.extractor.set_normalization_method(v))
         self._add_control(norm_ctl)
 
-    def _bind_hotkeys(self):
-        """ Add keyboard shortcuts.
-
-        We bind to root because the canvas does not get focus, so keyboard shortcuts won't do
-        anything
-
-        * Delete - Delete the currently hovered over face
-        """
-        self._canvas.winfo_toplevel().bind("<Delete>", self._delete_current_face)
-
     def update_annotation(self):
         """ Draw the bounding box around faces and set the object to :attr:`_object`"""
         if self._drag_data:
@@ -91,7 +82,7 @@ class BoundingBox(Editor):
             self._hide_annotation()
             return
 
-        key = self.__class__.__name__.lower()
+        key = "boundingbox"
         color = self._control_color
         for idx, face in enumerate(self._alignments.current_faces):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])

@@ -15,8 +15,9 @@ class ExtractBox(Editor):
                         "aligner.\n\n"
                         " - Click and drag the bounding box to relocate the landmarks without "
                         "recalculating them.")
-        super().__init__(canvas, alignments, frames, control_text)
-        self._bind_hotkeys()
+        key_bindings = {"<Delete>": self._delete_current_face}
+        super().__init__(canvas, alignments, frames,
+                         control_text=control_text, key_bindings=key_bindings)
 
     def _add_controls(self):
         for dsp in ("Landmarks", "Mesh"):
@@ -26,20 +27,10 @@ class ExtractBox(Editor):
                                                  default=dsp != "Landmarks",
                                                  helptext="Show the {} annotations".format(dsp)))
 
-    def _bind_hotkeys(self):
-        """ Add keyboard shortcuts.
-
-        We bind to root because the canvas does not get focus, so keyboard shortcuts won't do
-        anything
-
-        * Delete - Delete the currently hovered over face
-        """
-        self._canvas.winfo_toplevel().bind("<Delete>", self._delete_current_face)
-
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
         # Extract box must show for landmarks for zooming
-        if not self._should_display and self._active_editor != "landmarks":
+        if not self._should_display and self._active_editor != "Landmarks":
             self._hide_annotation()
             return
         keys = ("text", "extractbox")

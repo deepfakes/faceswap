@@ -11,7 +11,8 @@ from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images
 
-from .editor import BoundingBox, ExtractBox, Landmarks, Mask, Mesh, View
+from .editor import (BoundingBox, ExtractBox, Landmarks, Mask, # noqa pylint:disable=unused-import
+                     Mesh, View)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -221,7 +222,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         # Allow key pad keys for numeric presses
         key = key.replace("KP_", "") if key.startswith("KP_") else key
-        self._actions_frame.on_click(self._actions_frame.key_bindings[key.lower()])
+        self._actions_frame.on_click(self._actions_frame.key_bindings[key])
 
     # << TRANSPORT >> #
     def _play(self, *args, frame_count=None):  # pylint:disable=unused-argument
@@ -297,8 +298,8 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
 
         self._configure_styles()
-        self._actions = ("view", "boundingbox", "extractbox", "mask", "landmarks")
-        self._initial_action = "view"
+        self._actions = ("View", "BoundingBox", "ExtractBox", "Mask", "Landmarks")
+        self._initial_action = "View"
         self._buttons = self._add_buttons()
         self._add_copy_buttons(alignments)
         self._selected_action = self._set_selected_action_tkvar()
@@ -324,11 +325,11 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _helptext(self):
         """ dict: `button key`: `button helptext`. The help text to display for each button. """
         inverse_keybindings = {val: key for key, val in self.key_bindings.items()}
-        retval = dict(view="View alignments",
-                      boundingbox="Bounding box editor",
-                      extractbox="Edit the size and orientation of the existing alignments",
-                      mask="Mask editor",
-                      landmarks="Individual landmark point editor")
+        retval = dict(View="View alignments",
+                      BoundingBox="Bounding box editor",
+                      ExtractBox="Edit the size and orientation of the existing alignments",
+                      Mask="Mask editor",
+                      Landmarks="Individual landmark point editor")
         for item in retval:
             retval[item] += " ({})".format(inverse_keybindings[item])
         return retval
@@ -361,7 +362,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 state = (["!pressed", "!focus"])
 
             button = ttk.Button(frame,
-                                image=get_images().icons[action],
+                                image=get_images().icons[action.lower()],
                                 command=lambda t=action: self.on_click(t),
                                 style=btn_style)
             button.state(state)
@@ -541,8 +542,9 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                                         self._frames.display_dims[1] / 2,
                                         image=self._frames.current_display_frame,
                                         anchor=tk.CENTER)
-        self._control_tk_vars = dict()
-        self._annotation_formats = dict()
+        self._editor_globals = dict(control_tk_vars=dict(),
+                                    annotation_formats=dict(),
+                                    key_bindings=dict())
         self._editors = self._get_editors()
         self._add_callbacks()
         self._update_active_display()
@@ -557,12 +559,17 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def control_tk_vars(self):
         """ dict: dictionary of tkinter variables as populated by the right hand control panel.
         Tracking for all control panel variables, for access from all editors. """
-        return self._control_tk_vars
+        return self._editor_globals["control_tk_vars"]
+
+    @property
+    def key_bindings(self):
+        """ dict: dictionary of key bindings for each editor for access from all editors. """
+        return self._editor_globals["key_bindings"]
 
     @property
     def annotation_formats(self):
         """ dict: The selected formatting options for each annotation """
-        return self._annotation_formats
+        return self._editor_globals["annotation_formats"]
 
     @property
     def active_editor(self):
@@ -607,17 +614,12 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         dict
             The {`action`: :class:`Editor`} dictionary of editors for :attr:`_actions` name.
         """
-        name_mapping = dict(boundingbox=BoundingBox,
-                            extractbox=ExtractBox,
-                            landmarks=Landmarks,
-                            mask=Mask,
-                            mesh=Mesh,
-                            view=View)
         editors = dict()
-        for action in self._actions + ("mesh", ):
-            editor = name_mapping[action]
-            editor = editor(self, self._alignments, self._frames)
-            editors[action] = editor
+        for editor_name in self._actions + ("Mesh", ):
+            editor = eval(editor_name)(self,  # pylint:disable=eval-used
+                                       self._alignments,
+                                       self._frames)
+            editors[editor_name] = editor
         logger.debug(editors)
         return editors
 
@@ -653,6 +655,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         for editor in self._editors.values():
             editor.update_annotation()
             editor.hide_additional_annotations()
+        self._bind_unbind_keys()
         self._frames.tk_update.set(False)
         self.update_idletasks()
 
@@ -667,3 +670,22 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             logger.trace("Unhiding background frame")
             self.toggle_image_display()
         self._frames.clear_update_flag()
+
+    def _bind_unbind_keys(self):
+        """ Bind or unbind this editor's hotkeys depending on whether it is active. """
+        unbind_keys = [key for key, binding in self.key_bindings.items()
+                       if binding["bound_to"] is not None
+                       and binding["bound_to"] != self.selected_action]
+        for key in unbind_keys:
+            logger.debug("Unbinding key '%s'", key)
+            self.winfo_toplevel().unbind(key)
+            self.key_bindings[key]["bound_to"] = None
+
+        bind_keys = {key: binding[self.selected_action]
+                     for key, binding in self.key_bindings.items()
+                     if self.selected_action in binding
+                     and binding["bound_to"] != self.selected_action}
+        for key, method in bind_keys.items():
+            logger.debug("Binding key '%s' to method %s", key, method)
+            self.winfo_toplevel().bind(key, method)
+            self.key_bindings[key]["bound_to"] = self.selected_action

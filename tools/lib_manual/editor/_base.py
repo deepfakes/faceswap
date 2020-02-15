@@ -13,8 +13,6 @@ from lib.gui.control_helper import ControlPanelOption
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO dynamically bind and unbind keybindings
-
 
 class Editor():
     """ Parent Class for Object Editors.
@@ -30,7 +28,7 @@ class Editor():
     control_text: str
         The text that is to be displayed at the top of the Editor's control panel.
     """
-    def __init__(self, canvas, alignments, frames, control_text=""):
+    def __init__(self, canvas, alignments, frames, control_text="", key_bindings=None):
         logger.debug("Initializing %s: (canvas: '%s', alignments: %s, frames: %s, "
                      "control_text: %s)", self.__class__.__name__, canvas, alignments, frames,
                      control_text)
@@ -41,6 +39,7 @@ class Editor():
         self._current_color = dict()
         self._actions = OrderedDict()
         self._controls = dict(header=control_text, controls=[])
+        self._add_key_bindings(key_bindings)
 
         self._add_actions()
         self._add_controls()
@@ -125,14 +124,14 @@ class Editor():
     @property
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
-        annotation = self.__class__.__name__.lower()
+        annotation = self.__class__.__name__
         return self._colors[self._annotation_formats[annotation]["color"].get()]
 
     @property
     def _should_display(self):
         """ bool: Whether the control panel option for the current editor is set to display
         or not. """
-        annotation = self.__class__.__name__.lower()
+        annotation = self.__class__.__name__
         should_display = self._control_vars.get(
             self._active_editor, dict()).get("display", dict()).get(annotation, None)
         return self._is_active or (should_display is not None and should_display.get())
@@ -142,6 +141,13 @@ class Editor():
         """ tuple: The (`width`, `height`) of the zoomed ROI """
         return (self._zoomed_roi[2] - self._zoomed_roi[0],
                 self._zoomed_roi[3] - self._zoomed_roi[1])
+
+    def _add_key_bindings(self, key_bindings):
+        if key_bindings is None:
+            return
+        for key, method in key_bindings.items():
+            self._canvas.key_bindings.setdefault(key, dict())["bound_to"] = None
+            self._canvas.key_bindings[key][self.__class__.__name__] = method
 
     def _get_zoomed_roi(self):
         """ Get the Region of Interest for when the face is zoomed.
@@ -493,10 +499,10 @@ class Editor():
         if global_control:
             return
 
-        editor_key = self.__class__.__name__.lower()
+        editor_key = self.__class__.__name__
         group_key = option.group.replace(" ", "").lower()
         group_key = "none" if group_key == "_master" else group_key
-        annotation_key = option.title.replace(" ", "").lower()
+        annotation_key = option.title.replace(" ", "")
         self._control_vars.setdefault(
             editor_key, dict()).setdefault(group_key, dict())[annotation_key] = option.tk_var
 
@@ -524,12 +530,12 @@ class Editor():
                                             is_radio=False,
                                             state="readonly",
                                             helptext="Set the annotation color")
-                annotation_key = editor.replace(" ", "").lower()
+                annotation_key = editor.replace(" ", "")
                 self._annotation_formats.setdefault(annotation_key, dict())["color"] = colors
                 self._annotation_formats[annotation_key]["mask_opacity"] = opacity
 
         for editor in editors:
-            annotation_key = editor.replace(" ", "").lower()
+            annotation_key = editor.replace(" ", "")
             for group, ctl in self._annotation_formats[annotation_key].items():
                 logger.debug("Adding global format control to editor: (editor:'%s', group: '%s')",
                              editor, group)
