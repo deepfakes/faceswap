@@ -56,10 +56,7 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         """
         button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         logger.debug("Binding '%s' to '%s'", button, self._widget.winfo_class())
-        scaling_factor = get_config().scaling_factor if get_config() is not None else 1.0
-        x_offset = int(34 * scaling_factor)
-        self._widget.bind(button,
-                          lambda event: self.tk_popup(event.x_root + x_offset, event.y_root, 0))
+        self._widget.bind(button, lambda event: self.tk_popup(event.x_root, event.y_root))
 
     def _select_all(self):
         """ Select all for Text or Entry widgets """

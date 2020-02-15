@@ -593,6 +593,4 @@ class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         event: class:`tkinter.Event`
             The tkinter mouse event calling this popup
         """
-        pos_x = event.x_root + (self.winfo_reqwidth() // 2) + 2
-        pos_y = event.y_root + (self.winfo_reqheight() // 2) + 2
-        self.tk_popup(pos_x, pos_y, 0)
+        self.tk_popup(event.x_root, event.y_root)
