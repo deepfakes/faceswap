@@ -10,6 +10,7 @@ from math import ceil, sqrt
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 from lib.serializer import get_serializer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -86,13 +87,18 @@ class TensorBoardLogs():
             if session is not None and sess != session:
                 logger.debug("Skipping sessions: %s", sess)
                 continue
-            for logfile in sides.values():
-                timestamps = [event.wall_time
-                              for event in tf.train.summary_iterator(logfile)
-                              if event.summary.value]
-                logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
-                all_timestamps[sess] = timestamps
-                break  # break after first file read
+            try:
+                for logfile in sides.values():
+                    timestamps = [event.wall_time
+                                  for event in tf.train.summary_iterator(logfile)
+                                  if event.summary.value]
+                    logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
+                    all_timestamps[sess] = timestamps
+                    break  # break after first file read
+            except tf_errors.DataLossError as err:
+                logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
+                               "The totals do not include this session. Original error message: "
+                               "'%s'", sess, str(err))
         return all_timestamps
 
 
@@ -119,7 +125,7 @@ class Session():
     @property
     def config(self):
         """ Return config and other information """
-        retval = {key: val for key, val in self.state["config"]}
+        retval = self.state["config"].copy()
         retval["training_size"] = self.state["training_size"]
         retval["input_size"] = [val[0] for key, val in self.state["inputs"].items()
                                 if key.startswith("face")][0]
@@ -193,7 +199,7 @@ class Session():
         """ Return collated loss for all session """
         loss_dict = dict()
         all_loss = self.tb_logs.get_loss()
-        for key in sorted(int(idx) for idx in all_loss.keys()):
+        for key in sorted(int(idx) for idx in all_loss):
             for loss_key, side_loss in all_loss[key].items():
                 for side, loss in side_loss.items():
                     loss_dict.setdefault(loss_key, dict()).setdefault(side, list()).extend(loss)
@@ -397,7 +403,7 @@ class Calculations():
             if len(iterations) > 1:
                 # Crop all losses to the same number of items
                 if self.iterations == 0:
-                    raw = {lossname: list() for lossname in raw.keys()}
+                    raw = {lossname: list() for lossname in raw}
                 else:
                     raw = {lossname: loss[:self.iterations] for lossname, loss in raw.items()}
 
@@ -498,10 +504,8 @@ class Calculations():
             if idx < presample or idx >= datapoints - postsample:
                 avgs.append(None)
                 continue
-            else:
-                avg = sum(data[idx - presample:idx + postsample]) \
-                        / self.args["avg_samples"]
-                avgs.append(avg)
+            avg = sum(data[idx - presample:idx + postsample]) / self.args["avg_samples"]
+            avgs.append(avg)
         logger.debug("Calculated Average")
         return avgs
 
