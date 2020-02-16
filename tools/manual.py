@@ -170,7 +170,6 @@ class Manual(tk.Tk):
             * [] - decrease / increase brush size
             * B, D, E, Z - Optional Actions (Brush, Drag, Erase, Zoom)
         """
-        # TODO - Add optional action buttons to global key bindings method
         modifiers = {0x0001: 'shift',
                      0x0004: 'ctrl',
                      0x0008: 'alt',
@@ -182,6 +181,7 @@ class Manual(tk.Tk):
             "space": self._display.handle_play_button,
             "home": self._display.goto_first_frame,
             "end": self._display.goto_last_frame,
+            "f": self._display.cycle_navigation_mode,
             "1": lambda k=event.keysym: self._display.set_action(k),
             "2": lambda k=event.keysym: self._display.set_action(k),
             "3": lambda k=event.keysym: self._display.set_action(k),

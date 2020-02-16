@@ -264,6 +264,7 @@ class AlignmentsData():
 
         self._tk_position = frames.tk_position
         self._face_index = 0
+        self._face_count_modified = False
         self._extractor = extractor
         self._extractor.link_alignments(self)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -300,6 +301,12 @@ class AlignmentsData():
     def face_index(self):
         """int: The index of the current face in the current frame """
         return self._face_index
+
+    @property
+    def face_count_modified(self):
+        """ bool: ``True`` if a face has been deleted or inserted for the current frame
+        otherwise ``False``. """
+        return self._face_count_modified
 
     @property
     def _face_count_per_index(self):
@@ -518,6 +525,7 @@ class AlignmentsData():
         # TODO Make sure this works if there are no pre-existing faces (probably not)
         self._check_for_new_alignments()
         self.current_faces.append(DetectedFace(x=pnt_x, w=width, y=pnt_y, h=height))
+        self._face_count_modified = True
         self.set_current_bounding_box(len(self.current_faces) - 1, pnt_x, width, pnt_y, height)
 
     def delete_face_at_index(self, index):
@@ -532,8 +540,13 @@ class AlignmentsData():
         self._check_for_new_alignments()
         self._remove_idx = index  # Set the remove_idx to this index for Faces window to pick up
         del self.current_faces[index]
+        self._face_count_modified = True
         self._face_index = 0
         self.frames.tk_update.set(True)
+
+    def reset_face_count_modified(self):
+        """ Reset :attr:`_face_count_modified` to ``False``. """
+        self._face_count_modified = False
 
     def get_removal_index(self):
         """ Return the index for the face set for removal and reset :attr:`_remove_idx` to None.
@@ -609,6 +622,7 @@ class FaceCache():
         self._hovered = None
         self._current_frame_id = 0
         self._filter_mode = "All Faces"
+        self._face_count_modified = False
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -819,13 +833,14 @@ class FaceCache():
                 self._canvas.itemconfig(object_id, state="hidden")
         self._selected = []
 
-    def _highlight_selected(self, *args):  # pylint:disable=unused-argument
+    def _highlight_selected(self, *args, new_frame=True):  # pylint:disable=unused-argument
         """ Place a border around current face and display landmarks """
         if not self._initialized.is_set():
             return
         position = self._frames.tk_position.get()
         self._clear_selected()
-
+        if new_frame:
+            self._filter_faces()
         objects = self._faces.get(position, None)
         if not objects or objects is None:
             return
@@ -931,7 +946,8 @@ class FaceCache():
         else:
             return
         self._update_following_faces(starting_idx, increment)
-        self._highlight_selected()
+        self._face_count_modified = True
+        self._highlight_selected(new_frame=False)
 
     def _insert_new_face(self, current_faces, tags):
         """ Insert a new face into the faces viewer. """
@@ -979,7 +995,12 @@ class FaceCache():
             return
         nav_mode = self._frames.tk_navigation_mode.get()
         nav_mode = "All Frames" if nav_mode == "Has Face(s)" else nav_mode
-        if nav_mode == self._filter_mode:
+        if ((nav_mode == self._filter_mode and not self._face_count_modified) or
+                (self._face_count_modified and nav_mode == "All Frames")):
+            logger.trace("Not filtering faces: (nav_mode: %s, self._filter_mode: %s, "
+                         "self._face_count_modified: %s)", nav_mode, self._filter_mode,
+                         self._face_count_modified)
+            self._face_count_modified = False
             return
         frames_list = self._alignments.get_filtered_frames_list()
         dsp_idx = 0
@@ -1007,3 +1028,4 @@ class FaceCache():
         self._filter_mode = nav_mode
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         self._canvas.yview_moveto(0.0)
+        self._face_count_modified = False

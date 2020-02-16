@@ -71,7 +71,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             prev="Go to Previous Frame (LEFT)",
             next="Go to Next Frame (RIGHT)",
             end="Go to Last Frame (END)",
-            mode="Filter the frames to those containing the selected item.")
+            mode="Filter Frames to only those Containing the Selected Item (F)")
 
     @property
     def _btn_action(self):
@@ -118,6 +118,11 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.trace("nav_mode: %s, number_frames: %s", nav_mode, retval)
         return retval
 
+    @property
+    def _navigation_modes(self):
+        """ list: The navigation modes combo box values """
+        return ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"]
+
     def _add_nav(self):
         """ Add the slider to navigate through frames """
         var = self._frames.tk_transport_position
@@ -149,7 +154,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _set_frame_index(self, *args):  # pylint:disable=unused-argument
         """ Set the actual frame index based on current slider position and filter mode. """
-        # TODO Update total/slider position when adding/removing faces for single/multi face frames
         slider_position = self._frames.tk_transport_position.get()
         frames = self._alignments.get_filtered_frames_list()
         frame_idx = frames[slider_position] if frames else 0
@@ -189,14 +193,22 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             nav_frame,
             textvariable=tk_var,
             state="readonly",
-            values=["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"])
+            values=self._navigation_modes)
         combo.pack(side=tk.RIGHT)
         return nav_frame
+
+    def cycle_navigation_mode(self):
+        """ Cycle the navigation mode combo entry """
+        current_mode = self._frames.tk_navigation_mode.get()
+        idx = (self._navigation_modes.index(current_mode) + 1) % len(self._navigation_modes)
+        self._frames.tk_navigation_mode.set(self._navigation_modes[idx])
 
     def _nav_scale_callback(self, *args):  # pylint:disable=unused-argument
         """ Adjust transport slider scale for different filters """
         self._frames.stop_playback()
         frame_count = self._frames_count
+        if self._nav["scale"].cget("to") == frame_count - 1:
+            return
         max_frame = frame_count if frame_count == 0 else frame_count - 1
         self._nav["scale"].config(to=max_frame)
         self._nav["label"].config(text="/{}".format(max_frame))
@@ -249,8 +261,13 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         if not is_playing:
             self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
+        if self._alignments.face_count_modified:
+            self._nav_scale_callback()
+            self._alignments.reset_face_count_modified()
+            position -= 1
+
         frame_count = self._frames_count if frame_count is None else frame_count
-        if position == frame_count - 1:
+        if position == frame_count - 1 or frame_count == 0:
             logger.trace("End of stream. Not incrementing")
             self._frames.stop_playback()
             return
@@ -260,6 +277,9 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Update The frame navigation position to the previous frame based on filter. """
         self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
+        if self._alignments.face_count_modified:
+            self._nav_scale_callback()
+            self._alignments.reset_face_count_modified()
         if position == 0:
             logger.trace("Beginning of stream. Not decrementing")
             return
