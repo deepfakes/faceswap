@@ -2,10 +2,12 @@
 """ Utilities for working with images and videos """
 
 import logging
+import re
 import subprocess
 import os
 import sys
 
+from bisect import bisect
 from concurrent import futures
 from hashlib import sha1
 
@@ -32,17 +34,17 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
     """ Monkey patch imageio ffmpeg to use keyframes whilst seeking """
     def __init__(self, format, request):
         super().__init__(format, request)
+        self._frame_pts = None
         self._keyframes = None
 
-    def get_keyframes(self):
-        """ Store the source video's keyframes in :attr:`_keyframes" for the current video for use
+    def get_frame_info(self):
+        """ Store the source video's keyframes in :attr:`_frame_info" for the current video for use
         in :func:`initialize`. """
         assert isinstance(self._filename, str), "Video path must be a string"
 
         cmd = [im_ffm.get_ffmpeg_exe(),
                "-hide_banner",
                "-copyts",
-               "-discard", "nokey",
                "-i", self._filename,
                "-vf", "showinfo",
                "-start_number", "0",
@@ -54,9 +56,10 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
                                    stderr=subprocess.STDOUT,
                                    stdout=subprocess.PIPE,
                                    universal_newlines=True)
-        keyframes = []
+        frame_pts = []
+        key_frames = []
         last_update = 0
-        pbar = tqdm(desc="Analyzing Keyframes",
+        pbar = tqdm(desc="Analyzing Video",
                     leave=False,
                     total=int(self._meta["duration"]),
                     unit="secs")
@@ -67,10 +70,13 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
             if "iskey" not in output:
                 continue
             logger.trace("Keyframe line: %s", output)
-            idx = output.find("pts_time:") + len("pts_time:")
-            pts_time = float(output[idx:].split(" ")[0].strip())
-            frame_no = int(round(pts_time * self._meta["fps"]))
-            keyframes.append((pts_time, frame_no))
+            line = re.split(r"\s+|:\s*", output)
+            pts_time = float(line[line.index("pts_time") + 1])
+            frame_no = int(line[line.index("n") + 1])
+            frame_pts.append(pts_time)
+            if "iskey:1" in output:
+                key_frames.append(frame_no)
+
             logger.trace("pts_time: %s, frame_no: %s", pts_time, frame_no)
             if int(pts_time) == last_update:
                 # Floating points make TQDM display poorly, so only update on full
@@ -79,29 +85,33 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
             pbar.update(int(pts_time) - last_update)
             last_update = int(pts_time)
         pbar.close()
-        logger.debug("keyframes: %s", keyframes)
         return_code = process.poll()
-        logger.debug("Return code: %s, keyframes: %s", return_code, keyframes)
-        self._keyframes = keyframes
+        frame_count = len(frame_pts)
+        logger.debug("Return code: %s, frame_pts: %s, keyframes: %s, frame_count: %s",
+                     return_code, frame_pts, key_frames, frame_count)
 
-    def _previous_keyframe_pts(self, index=0):
-        """ Return the previous keyframe's pts_time """
-        prev_pts_time = 0.0
-        prev_frame_no = 0
-        for pts_time, frame_no in self._keyframes:
-            if prev_frame_no <= index < frame_no:
-                break
-            prev_pts_time = pts_time
-            prev_frame_no = frame_no
-        logger.trace("keyframe pts_time: %s, keyframe: %s", prev_pts_time, prev_frame_no)
-        return prev_pts_time
+        self._frame_pts = frame_pts
+        self._keyframes = key_frames
+        return frame_count
+
+    def _previous_keyframe_info(self, index=0):
+        """ Return the previous keyframe's pts_time and frame number """
+        prev_keyframe_idx = bisect(self._keyframes, index) - 1
+        prev_keyframe = self._keyframes[prev_keyframe_idx]
+        prev_pts_time = self._frame_pts[prev_keyframe]
+        logger.trace("keyframe pts_time: %s, keyframe: %s", prev_pts_time, prev_keyframe)
+        return prev_pts_time, prev_keyframe
 
     def _initialize(self, index=0):
         """ Replace ImageIO _initialize with a version that explictly uses keyframes.
 
-        This introduces a minor change by seeking fast to the previous keyframe and then
-        seeking slowly for the remainder, rather than seeking fast to 10 seconds prior to
-        the requsted frame
+        Notes
+        -----
+        This introduces a minor change by seeking fast to the previous keyframe and then discarding
+        subsequent frames until the desired frame is reached. In testing, setting -ss flag either
+        prior to input, or both prior (fast) and after (slow) would not always bring back the
+        correct frame for all videos. Navigating to the previous keyframe then discarding frames
+        until the correct frame is reached appears to work well.
         """
         # pylint: disable-all
         if self._read_gen is not None:
@@ -109,6 +119,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
 
         iargs = []
         oargs = []
+        skip_frames = 0
 
         # Create input args
         iargs += self._arg_input_params
@@ -119,30 +130,28 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
             if self._arg_size:
                 iargs += ["-s", self._arg_size]
         elif index > 0:  # re-initialize  / seek
-            # Note: only works if we initialized earlier, and now have meta
-            # Some info here: https://trac.ffmpeg.org/wiki/Seeking
-            # There are two ways to seek, one before -i (input_params) and
-            # after (output_params). The former is fast, because it uses
-            # keyframes, the latter is slow but accurate. According to
-            # the article above, the fast method should also be accurate
-            # from ffmpeg version 2.1, however in version 4.1 our tests
-            # start failing again. Not sure why, but we can solve this
-            # by combining slow and fast. The old method would go back
-            # 10 seconds and then seek slow. This monkey patched version
-            # goes to the previous keyframe fast then seeks slow for the remainder.
-            if self._keyframes is None:
-                self._get_keyframes()
-            prev_keyframe_time = self._previous_keyframe_pts(index)
-            starttime = index / self._meta["fps"]
+            # Note: only works if we initialized earlier, and now have meta. Some info here:
+            # https://trac.ffmpeg.org/wiki/Seeking
+            # There are two ways to seek, one before -i (input_params) and after (output_params).
+            # The former is fast, because it uses keyframes, the latter is slow but accurate.
+            # According to the article above, the fast method should also be accurate from ffmpeg
+            # version 2.1, however in version 4.1 our tests start failing again. Not sure why, but
+            # we can solve this by combining slow and fast.
+            # Further note: The old method would go back 10 seconds and then seek slow. This was
+            # still somewhat unresponsive and did not always land on the correct frame. This monkey
+            # patched version goes to the previous keyframe then discards frames until the correct
+            # frame is landed on.
+            if self._frame_pts is None:
+                self.get_frame_info()
 
-            seek_fast = prev_keyframe_time
-            seek_slow = starttime - seek_fast
+            keyframe_pts, keyframe = self._previous_keyframe_info(index)
+            seek_fast = keyframe_pts
+            skip_frames = index - keyframe
 
             # We used to have this epsilon earlier, when we did not use
             # the slow seek. I don't think we need it anymore.
             # epsilon = -1 / self._meta["fps"] * 0.1
             iargs += ["-ss", "%.06f" % (seek_fast)]
-            oargs += ["-ss", "%.06f" % (seek_slow)]
 
         # Output args, for writing to pipe
         if self._arg_size:
@@ -184,6 +193,11 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
         elif index == 0:
             self._meta.update(self._read_gen.__next__())
         else:
+            frames_skipped = 0
+            while skip_frames != frames_skipped:
+                # Skip frames that are not the desired frame
+                _ = self._read_gen.__next__()
+                frames_skipped += 1
             self._read_gen.__next__()  # we already have meta data
 
 
@@ -646,8 +660,14 @@ class ImagesLoader(ImageIO):
     >>>     <do processing>
     """
 
-    def __init__(self, path,
-                 queue_size=8, load_with_hash=False, fast_count=True, skip_list=None, count=None):
+    def __init__(self,
+                 path,
+                 queue_size=8,
+                 load_with_hash=False,
+                 fast_count=True,
+                 skip_list=None,
+                 count=None,
+                 single_frame_reader=False):
         logger.debug("Initializing %s: (path: %s, queue_size: %s, load_with_hash: %s, "
                      "fast_count: %s, skip_list: %s count: %s)", self.__class__.__name__, path,
                      queue_size, load_with_hash, fast_count, skip_list, count)
@@ -662,10 +682,9 @@ class ImagesLoader(ImageIO):
 
         self._count = None
         self._file_list = None
-        self._get_count_and_filelist(fast_count, count)
-
-        self._keyframes = None
-        self._single_frame_reader = None
+        self._single_frame_reader = self._get_count_and_filelist(fast_count,
+                                                                 count,
+                                                                 single_frame_reader)
 
     @property
     def count(self):
@@ -751,7 +770,7 @@ class ImagesLoader(ImageIO):
         logger.debug(retval)
         return retval
 
-    def _get_count_and_filelist(self, fast_count, count):
+    def _get_count_and_filelist(self, fast_count, count, single_frame_reader):
         """ Set the count of images to be processed and set the file list
 
             If the input is a video, a dummy file list is created for checking against an
@@ -768,7 +787,11 @@ class ImagesLoader(ImageIO):
             The number of images that the loader will encounter if already known, otherwise
             ``None``
         """
+        retval = None
         if self._is_video:
+            if single_frame_reader:
+                retval = imageio.get_reader(self.location, "ffmpeg")
+                count = retval.get_frame_info()
             self._count = int(count_frames(self.location,
                                            fast=fast_count)) if count is None else count
             self._file_list = [self._dummy_video_framename(i) for i in range(self.count)]
@@ -781,6 +804,7 @@ class ImagesLoader(ImageIO):
 
         logger.debug("count: %s", self.count)
         logger.trace("filelist: %s", self.file_list)
+        return retval
 
     def _process(self, queue):
         """ The load thread.
@@ -939,9 +963,6 @@ class ImagesLoader(ImageIO):
         by index will be done when required.
         """
         if self.is_video:
-            if self._single_frame_reader is None:
-                self._single_frame_reader = imageio.get_reader(self.location, "ffmpeg")
-                self._single_frame_reader.get_keyframes()
             image = self._single_frame_reader.get_data(index)[..., ::-1]
             filename = self._dummy_video_framename(index)
         else:

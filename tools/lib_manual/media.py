@@ -175,7 +175,7 @@ class FrameNavigation():
 
     def _load_images(self, frames_location):
         """ Load the images in a background thread. """
-        self._loader = ImagesLoader(frames_location, fast_count=False, queue_size=1)
+        self._loader = ImagesLoader(frames_location, queue_size=1, single_frame_reader=True)
 
     def _set_current_frame(self, *args,  # pylint:disable=unused-argument
                            initialize=False):

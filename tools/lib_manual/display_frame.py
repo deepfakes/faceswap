@@ -203,7 +203,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         idx = (self._navigation_modes.index(current_mode) + 1) % len(self._navigation_modes)
         self._frames.tk_navigation_mode.set(self._navigation_modes[idx])
 
-    def _nav_scale_callback(self, *args):  # pylint:disable=unused-argument
+    def _nav_scale_callback(self, *args, reset_progress=True):  # pylint:disable=unused-argument
         """ Adjust transport slider scale for different filters """
         self._frames.stop_playback()
         frame_count = self._frames_count
@@ -214,7 +214,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._nav["label"].config(text="/{}".format(max_frame))
         state = "disabled" if max_frame == 0 else "normal"
         self._nav["entry"].config(state=state)
-        self._frames.tk_transport_position.set(0)
+        if reset_progress:
+            self._frames.tk_transport_position.set(0)
 
     def handle_play_button(self):
         """ Handle the play button.
@@ -262,7 +263,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
         if self._alignments.face_count_modified:
-            self._nav_scale_callback()
+            self._nav_scale_callback(reset_progress=False)
             self._alignments.reset_face_count_modified()
             position -= 1
 
@@ -278,7 +279,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
         if self._alignments.face_count_modified:
-            self._nav_scale_callback()
+            self._nav_scale_callback(reset_progress=False)
             self._alignments.reset_face_count_modified()
         if position == 0:
             logger.trace("Beginning of stream. Not decrementing")
