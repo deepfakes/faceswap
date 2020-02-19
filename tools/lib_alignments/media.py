@@ -4,6 +4,8 @@
 
 import logging
 import os
+import sys
+
 import cv2
 import numpy as np
 from tqdm import tqdm
@@ -47,7 +49,7 @@ class AlignmentData(Alignments):
             logger.info("Using extracted DFL faces for alignments")
         elif not os.path.isfile(alignments_file):
             logger.error("ERROR: alignments file not found at: '%s'", alignments_file)
-            exit(0)
+            sys.exit(0)
         if folder:
             logger.verbose("Alignments file exists at '%s'", alignments_file)
         return folder, filename
@@ -56,6 +58,19 @@ class AlignmentData(Alignments):
         """ Backup copy of old alignments and save new alignments """
         self.backup()
         super().save()
+
+    def add_face_hashes(self, frame_name, hashes):
+        """ Recalculate face hashes """
+        logger.trace("Adding face hash: (frame: '%s', hashes: %s)", frame_name, hashes)
+        faces = self.get_faces_in_frame(frame_name)
+        count_match = len(faces) - len(hashes)
+        if count_match != 0:
+            msg = "more" if count_match > 0 else "fewer"
+            logger.warning("There are %s %s face(s) in the alignments file than exist in the "
+                           "faces folder. Check your sources for frame '%s'.",
+                           abs(count_match), msg, frame_name)
+        for idx, i_hash in hashes.items():
+            faces[idx]["hash"] = i_hash
 
 
 class MediaLoader():
@@ -99,7 +114,7 @@ class MediaLoader():
                    "found".format(loadtype, self.folder))
         if err:
             logger.error(err)
-            exit(0)
+            sys.exit(0)
 
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
