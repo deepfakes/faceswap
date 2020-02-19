@@ -258,10 +258,14 @@ class AlignmentsData():
         self.frames = frames
         self._remove_idx = None
         self._face_size = min(self.frames.display_dims)
-        self._mask_names, self._alignments = self._get_alignments(alignments_path,
-                                                                  input_location,
-                                                                  is_video)
 
+        self._alignments_file = None
+        self._mask_names = None
+        self._alignments = None
+        self._get_alignments(alignments_path, input_location, is_video)
+
+        self._tk_updated = tk.BooleanVar()
+        self._tk_updated.set(False)
         self._tk_position = frames.tk_position
         self._face_index = 0
         self._face_count_modified = False
@@ -338,6 +342,12 @@ class AlignmentsData():
         """ int: The count of frames that contain multiple faces """
         return sum(1 for faces in self._latest_alignments.values() if len(faces) > 1)
 
+    @property
+    def tk_updated(self):
+        """ :class:`tkinter.BooleanVar`: The variable indicating whether the alignments have been
+        updated since the last save. """
+        return self._tk_updated
+
     def reset_face_id(self):
         """ Reset the attribute :attr:`_face_index` to 0 """
         self._face_index = 0
@@ -394,7 +404,26 @@ class AlignmentsData():
                 face.load_aligned(None, size=self._face_size)
                 this_frame_faces.append(face)
             faces[framename] = dict(saved=this_frame_faces)
-        return mask_names, faces
+        self._alignments_file = alignments
+        self._mask_names = mask_names
+        self._alignments = faces
+
+    def save(self):
+        """ Save the alignments file """
+        if not self._tk_updated.get():
+            logger.debug("Alignments not updated. Returning")
+            return
+        to_save = {key: val["new"] for key, val in self._alignments.items() if "new" in val}
+        logger.info("Saving alignments for frames: '%s'", list(to_save.keys()))
+
+        for frame, faces in to_save.items():
+            self._alignments_file.data[frame] = [face.to_alignment() for face in faces]
+            self._alignments[frame]["saved"] = faces
+            del self._alignments[frame]["new"]
+
+        self._alignments_file.backup()
+        self._alignments_file.save()
+        self._tk_updated.set(False)
 
     def _check_for_new_alignments(self):
         """ Checks whether there are already new alignments in :attr:`_alignments`. If not
@@ -402,6 +431,8 @@ class AlignmentsData():
         filename = self.frames.current_meta_data["filename"]
         if self._alignments[filename].get("new", None) is None:
             self._alignments[filename]["new"] = self._alignments[filename]["saved"].copy()
+            if not self._tk_updated.get():
+                self._tk_updated.set(True)
 
     def set_current_bounding_box(self, index, pnt_x, width, pnt_y, height):
         """ Update the bounding box for the current alignments.

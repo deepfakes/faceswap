@@ -188,7 +188,8 @@ class Manual(tk.Tk):
             "4": lambda k=event.keysym: self._display.set_action(k),
             "5": lambda k=event.keysym: self._display.set_action(k),
             "c": lambda d="previous": self._alignments.copy_alignments(d),
-            "v": lambda d="next": self._alignments.copy_alignments(d)}
+            "v": lambda d="next": self._alignments.copy_alignments(d),
+            "ctrl_s": self._alignments.save}
 
         # Allow keypad keys to be used for numbers
         press = event.keysym.replace("KP_", "") if event.keysym.startswith("KP_") else event.keysym

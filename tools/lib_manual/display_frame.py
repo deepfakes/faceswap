@@ -58,7 +58,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
 
         self._nav = self._add_nav()
-        self._play_button = self._add_transport()
+        self._buttons = self._add_transport()
+        self._add_transport_tk_trace()
         self._actions_frame.add_optional_buttons(self.editors)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -71,6 +72,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             prev="Go to Previous Frame (LEFT)",
             next="Go to Next Frame (RIGHT)",
             end="Go to Last Frame (END)",
+            save="Save the Alignments file (Ctrl+S)",
             mode="Filter Frames to only those Containing the Selected Item (F)")
 
     @property
@@ -80,7 +82,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                        beginning=self.goto_first_frame,
                        prev=self.decrement_frame,
                        next=self.increment_frame,
-                       end=self.goto_last_frame)
+                       end=self.goto_last_frame,
+                       save=self._alignments.save)
         return actions
 
     @property
@@ -165,21 +168,26 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame = ttk.Frame(self._transport_frame)
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         icons = get_images().icons
-
-        for action in ("play", "beginning", "prev", "next", "end", "mode"):
-            padx = (0, 6) if action in ("play", "prev") else (0, 0)
+        buttons = dict()
+        for action in ("play", "beginning", "prev", "next", "end", "save", "mode"):
+            padx = (0, 6) if action in ("play", "prev", "mode") else (0, 0)
+            side = tk.RIGHT if action in ("save", "mode") else tk.LEFT
+            state = ["!disabled"] if action != "save" else ["disabled"]
             if action != "mode":
                 wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
-                side = tk.LEFT
+                wgt.state(state)
             else:
                 wgt = self._add_navigation_mode_combo(frame)
-                side = tk.RIGHT
             wgt.pack(side=side, padx=padx)
-            if action == "play":
-                play_btn = wgt
-                self._frames.tk_is_playing.trace("w", self._play)
             Tooltip(wgt, text=self._helptext[action])
-        return play_btn
+            buttons[action] = wgt
+        logger.debug("Transport buttons: %s", buttons)
+        return buttons
+
+    def _add_transport_tk_trace(self):
+        """ Add the tkinter variable traces to buttons """
+        self._frames.tk_is_playing.trace("w", self._play)
+        self._alignments.tk_updated.trace("w", self._toggle_save_state)
 
     def _add_navigation_mode_combo(self, frame):
         """ Add the navigation mode combo box to the transport frame """
@@ -243,7 +251,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         start = time()
         is_playing = self._frames.tk_is_playing.get()
         icon = "pause" if is_playing else "play"
-        self._play_button.config(image=get_images().icons[icon])
+        self._buttons["play"].config(image=get_images().icons[icon])
 
         if not is_playing:
             logger.debug("Pause detected. Stopping.")
@@ -256,6 +264,11 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         duration = int((time() - start) * 1000)
         delay = max(1, delay - duration)
         self.after(delay, lambda f=frame_count: self._play(f))
+
+    def _toggle_save_state(self, *args):  # pylint:disable=unused-argument
+        """ Toggle the state of the save button when alignments are updated. """
+        state = ["!disabled"] if self._alignments.tk_updated.get() else ["disabled"]
+        self._buttons["save"].state(state)
 
     def increment_frame(self, frame_count=None, is_playing=False):
         """ Update The frame navigation position to the next frame based on filter. """
