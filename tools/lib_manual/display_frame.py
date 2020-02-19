@@ -38,7 +38,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._frames = frames
         self._alignments = alignments
 
-        self._actions_frame = ActionsFrame(self, self._alignments)
+        self._actions_frame = ActionsFrame(self, self._frames, self._alignments)
         main_frame = ttk.Frame(self)
         main_frame.pack(side=tk.RIGHT)
         self._video_frame = ttk.Frame(main_frame,
@@ -327,15 +327,18 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     alignments: dict
         Dictionary of :class:`lib.faces_detect.DetectedFace` objects
     """
-    def __init__(self, parent, alignments):
+    def __init__(self, parent, frames, alignments):
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
+
+        self._frames = frames
+        self._alignments = alignments
 
         self._configure_styles()
         self._actions = ("View", "BoundingBox", "ExtractBox", "Mask", "Landmarks")
         self._initial_action = "View"
         self._buttons = self._add_buttons()
-        self._add_copy_buttons(alignments)
+        self._static_buttons = self._add_static_buttons()
         self._selected_action = self._set_selected_action_tkvar()
         self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
 
@@ -436,22 +439,52 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         var.trace("w", self._display_optional_buttons)
         return var
 
-    def _add_copy_buttons(self, alignments):
+    def _add_static_buttons(self):
         """ Add the buttons to copy alignments from previous and next frames """
-        lookup = dict(copy_prev=("Previous", "C"), copy_next=("Next", "V"))
+        lookup = dict(copy_prev=("Previous", "C"), copy_next=("Next", "V"), reload=("", "F5"))
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.Y)
         sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=5, side=tk.TOP)
-        for action in ("copy_prev", "copy_next"):
-            direction = action.replace("copy_", "")
+        buttons = dict()
+        for action in ("copy_prev", "copy_next", "reload"):
+            if action == "reload":
+                icon = "reload3"
+                cmd = self._alignments.revert_to_saved
+                helptext = "Revert this frame to saved Alignments ({})".format(lookup[action][1])
+            else:
+                icon = action
+                direction = action.replace("copy_", "")
+                cmd = lambda d=direction: self._alignments.copy_alignments(d)
+                helptext = "Copy {} Alignments to this Frame ({})".format(*lookup[action])
+            state = ["!disabled"] if action == "copy_next" else ["disabled"]
             button = ttk.Button(frame,
-                                image=get_images().icons[action],
-                                command=lambda d=direction: alignments.copy_alignments(d),
+                                image=get_images().icons[icon],
+                                command=cmd,
                                 style="actions_deselected.TButton")
+            button.state(state)
             button.pack()
-            helptext = "Copy {} Alignments to this Frame ({})".format(*lookup[action])
             Tooltip(button, text=helptext)
+            buttons[action] = button
+        self._frames.tk_frame_change.trace("w", self._disable_enable_copy_buttons)
+        self._frames.tk_update.trace("w", self._disable_enable_reload_button)
+        return buttons
+
+    def _disable_enable_copy_buttons(self, *args):  # pylint: disable=unused-argument
+        """ Disable or enable the static buttons """
+        position = self._frames.tk_position.get()
+        face_count_per_index = self._alignments.face_count_per_index
+        prev_exists = any(count != 0 for count in face_count_per_index[:position])
+        next_exists = any(count != 0 for count in face_count_per_index[position + 1:])
+        states = dict(prev=["!disabled"] if prev_exists else ["disabled"],
+                      next=["!disabled"] if next_exists else ["disabled"])
+        for direction in ("prev", "next"):
+            self._static_buttons["copy_{}".format(direction)].state(states[direction])
+
+    def _disable_enable_reload_button(self, *args):  # pylint: disable=unused-argument
+        """ Disable or enable the static buttons """
+        state = ["!disabled"] if self._alignments.current_frame_updated else ["disabled"]
+        self._static_buttons["reload"].state(state)
 
     def add_optional_buttons(self, editors):
         """ Add the optional editor specific action buttons """

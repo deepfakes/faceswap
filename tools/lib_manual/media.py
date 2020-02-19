@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """ Media objects for the manual adjustments tool """
 import logging
+import bisect
 import os
 import tkinter as tk
+from copy import deepcopy
 from threading import Event
 
 import cv2
@@ -128,6 +130,12 @@ class FrameNavigation():
         return self._tk_vars["is_playing"]
 
     @property
+    def tk_frame_change(self):
+        """ :class:`tkinter.BooleanVar`: The variable indicating that the displayed frame has
+        changed. """
+        return self._tk_vars["frame_change"]
+
+    @property
     def tk_update(self):
         """ :class:`tkinter.BooleanVar`: Whether the display needs to be updated. """
         return self._tk_vars["updated"]
@@ -148,6 +156,10 @@ class FrameNavigation():
         is_playing = tk.BooleanVar()
         is_playing.set(False)
 
+        frame_change = tk.BooleanVar()
+        frame_change.set(False)
+        frame_change.trace("w", self._trigger_update_flag)
+
         updated = tk.BooleanVar()
         updated.set(False)
 
@@ -157,11 +169,19 @@ class FrameNavigation():
 
         retval = dict(position=position,
                       is_playing=is_playing,
+                      frame_change=frame_change,
                       updated=updated,
                       nav_mode=nav_mode,
                       transport_position=transport_position)
         logger.debug("Set tkinter variables: %s", retval)
         return retval
+
+    def _trigger_update_flag(self, *args):  # pylint:disable=unused-argument
+        """ Triggers the global update flag on a frame change """
+        if not self.tk_frame_change.get():
+            return
+        self.tk_update.set(True)
+        self.tk_frame_change.set(False)
 
     def _background_init_frames(self, frames_location):
         """ Launch the images loader in a background thread so we can run other tasks whilst
@@ -201,7 +221,7 @@ class FrameNavigation():
         self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
         self._current_idx = position
         self._needs_update = True
-        self.tk_update.set(True)
+        self.tk_frame_change.set(True)
 
     def _add_meta_data(self, position, frame, filename):
         """ Adds the metadata for the current frame to :attr:`meta`.
@@ -313,7 +333,7 @@ class AlignmentsData():
         return self._face_count_modified
 
     @property
-    def _face_count_per_index(self):
+    def face_count_per_index(self):
         """ list: Count of faces for each frame. List is in frame index order.
 
         The list needs to be calculated on the fly as the number of faces in a frame
@@ -326,6 +346,12 @@ class AlignmentsData():
         """ :class:`lib.faces_detect.DetectedFace` The currently selected face """
         retval = None if not self.current_faces else self.current_faces[self._face_index]
         return retval
+
+    @property
+    def _frames_with_faces(self):
+        """ list: A list of frame numbers that contain faces. """
+        alignments = self._latest_alignments
+        return [key for key in sorted(alignments) if len(alignments[key]) != 0]
 
     @property
     def with_face_count(self):
@@ -348,6 +374,11 @@ class AlignmentsData():
         updated since the last save. """
         return self._tk_updated
 
+    @property
+    def current_frame_updated(self):
+        """ bool: ``True`` if the current frame has been updated otherwise ``False`` """
+        return "new" in self._alignments[self.frames.current_meta_data["filename"]]
+
     def reset_face_id(self):
         """ Reset the attribute :attr:`_face_index` to 0 """
         self._face_index = 0
@@ -356,11 +387,11 @@ class AlignmentsData():
         """ Return a list of filtered faces based on navigation mode """
         nav_mode = self.frames.tk_navigation_mode.get()
         if nav_mode == "No Faces":
-            retval = [idx for idx, count in enumerate(self._face_count_per_index) if count == 0]
+            retval = [idx for idx, count in enumerate(self.face_count_per_index) if count == 0]
         elif nav_mode == "Multiple Faces":
-            retval = [idx for idx, count in enumerate(self._face_count_per_index) if count > 1]
+            retval = [idx for idx, count in enumerate(self.face_count_per_index) if count > 1]
         elif nav_mode == "Has Face(s)":
-            retval = [idx for idx, count in enumerate(self._face_count_per_index) if count != 0]
+            retval = [idx for idx, count in enumerate(self.face_count_per_index) if count != 0]
         else:
             retval = range(self.frames.frame_count)
         logger.trace("nav_mode: %s, number_frames: %s", nav_mode, len(retval))
@@ -430,7 +461,8 @@ class AlignmentsData():
         then saved alignments are copied to new ready for update """
         filename = self.frames.current_meta_data["filename"]
         if self._alignments[filename].get("new", None) is None:
-            self._alignments[filename]["new"] = self._alignments[filename]["saved"].copy()
+            new_faces = [deepcopy(face) for face in self._alignments[filename]["saved"]]
+            self._alignments[filename]["new"] = new_faces
             if not self._tk_updated.get():
                 self._tk_updated.set(True)
 
@@ -621,19 +653,33 @@ class AlignmentsData():
         The aligned face image is loaded so that the faces viewer can pick it up. This image
         is cleared by the faces viewer after collection to save ram.
         """
-        alignments = self._latest_alignments
+        frames_with_faces = self._frames_with_faces
+        frame_name = self.frames.current_meta_data["filename"]
+
         if direction == "previous":
-            search_list = reversed(sorted(alignments)[:self.frames.tk_position.get()])
+            idx = bisect.bisect_left(frames_with_faces, frame_name) - 1
+            if idx < 0:
+                return
         else:
-            search_list = sorted(alignments)[self.frames.tk_position.get() + 1:]
-        for frame_idx in search_list:
-            if len(alignments[frame_idx]) == 0:
-                continue
-            self.current_faces.extend(alignments[frame_idx])
-            break
+            idx = bisect.bisect(frames_with_faces, frame_name)
+            if idx == len(frames_with_faces):
+                return
+        frame_idx = frames_with_faces[idx]
+        logger.debug("Copying frame: %s", frame_idx)
+        self.current_faces.extend(deepcopy(self._latest_alignments[frame_idx]))
         for face in self.current_faces:
             face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
         self._face_index = len(self.current_faces) - 1
+        self.frames.tk_update.set(True)
+
+    def revert_to_saved(self):
+        """ Revert the current frame's alignments to their saved version """
+        frame_name = self.frames.current_meta_data["filename"]
+        if "new" not in self._alignments[frame_name]:
+            logger.info("Alignments not amended. Returning")
+            return
+        logger.debug("Reverting alignments for '%s'", frame_name)
+        del self._alignments[frame_name]["new"]
         self.frames.tk_update.set(True)
 
 
