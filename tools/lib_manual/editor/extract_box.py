@@ -23,7 +23,6 @@ class ExtractBox(Editor):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
         # Extract box must show for landmarks for zooming
         if not self._should_display and self._active_editor != "Landmarks":
-            self._hide_annotation()
             return
         keys = ("text", "extractbox")
         color = self._control_color

@@ -104,7 +104,6 @@ class Mask(Editor):
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
         if not self._should_display:
-            self._hide_annotation()
             self._meta = dict()
             return
         position = self._frames.tk_position.get()

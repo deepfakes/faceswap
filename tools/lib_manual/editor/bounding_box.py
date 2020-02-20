@@ -68,12 +68,11 @@ class BoundingBox(Editor):
 
     def update_annotation(self):
         """ Draw the bounding box around faces and set the object to :attr:`_object`"""
-        if self._drag_data:
-            logger.trace("Object being edited. Not updating annotation")
+        if not self._should_display:
             return
 
-        if not self._should_display:
-            self._hide_annotation()
+        if self._drag_data:
+            logger.trace("Object being edited. Not updating annotation")
             return
 
         key = "boundingbox"
@@ -100,11 +99,9 @@ class BoundingBox(Editor):
         color: str
             The hex color of the bounding box line
         """
-        keys = ["anchor_display", "anchor_grab"]
         if not self._is_active:
-            for key in keys:
-                self._hide_annotation(key)
             return
+        keys = ["anchor_display", "anchor_grab"]
         fill_color = "gray"
         activefill_color = "white" if self._is_active else ""
         anchor_points = self._get_anchor_points(self._corners_from_coords(bounding_box))

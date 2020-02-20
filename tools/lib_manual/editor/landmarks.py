@@ -80,10 +80,9 @@ class Landmarks(Editor):
         object_index: int
             The index of the this item in :attr:`_objects`
         """
-        key = "lm_display"
         if not self._should_display:
-            self._hide_annotation(key)
             return
+        key = "lm_display"
         radius = 1
         color = self._control_color
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
@@ -101,10 +100,9 @@ class Landmarks(Editor):
         object_index: int
             The index of the this item in :attr:`_objects`
         """
-        key = "lm_grab"
         if not self._is_active:
-            self._hide_annotation(key)
             return
+        key = "lm_grab"
         radius = 6
         activeoutline_color = "black" if self._is_active else ""
         activefill_color = "white" if self._is_active else ""
@@ -131,11 +129,9 @@ class Landmarks(Editor):
         landmark_index
             The index of the landmark being annotated
         """
-        keys = ["lm_label", "lm_label_bg"]
         if not self._is_active:
-            for key in keys:
-                self._hide_annotation(key)
             return
+        keys = ["lm_label", "lm_label_bg"]
         top_left = np.array(bounding_box[:2]) - 16
         # NB The text must be visible to be able to get the bounding box, so set to hidden
         # after the bounding box has been retrieved
@@ -293,10 +289,9 @@ class Mesh(Editor):
 
     def update_annotation(self):
         """ Draw the Landmarks Mesh and set the objects to :attr:`_object`"""
-        key = "mesh"
         if not self._should_display:
-            self._hide_annotation(key)
             return
+        key = "mesh"
         color = self._control_color
         for face_idx, face in enumerate(self._alignments.current_faces):
             if self._is_zoomed:

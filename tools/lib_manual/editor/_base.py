@@ -169,31 +169,19 @@ class Editor():
         logger.debug("Zoomed ROI: %s", retval)
         return retval
 
-    def update_annotation(self):
+    def update_annotation(self):  # pylint:disable=no-self-use
         """ Update the display annotations for the current objects.
 
         Override for specific editors.
         """
         logger.trace("Default annotations. Not storing Objects")
-        self._hide_annotation()
 
-    def _hide_annotation(self, key=None):
-        """ Hide annotations for this editor.
-
-        Parameters
-        ----------
-        key: str, optional
-            The object key from :attr:`_objects` to hide the annotations for. If ``None`` then
-            all annotations are hidden for this editor. Default: ``None``
-        """
-        objects = self._objects.values() if key is None else [self._objects.get(key, [])]
-        for faces in objects:
-            for face in faces:
-                for item_id in face:
-                    if self._canvas.itemcget(item_id, "state") == "hidden":
-                        continue
-                    logger.trace("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
-                    self._canvas.itemconfig(item_id, state="hidden")
+    def hide_annotation(self):
+        """ Hide annotations for this editor. """
+        for item_id in self._flatten_list(list(self._objects.values())):
+            if self._canvas.itemcget(item_id, "state") != "hidden":
+                logger.debug("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
+                self._canvas.itemconfig(item_id, state="hidden")
 
     def hide_additional_annotations(self):
         """ Hide any excess face annotations """
@@ -336,10 +324,13 @@ class Editor():
         self._canvas.coords(tk_object, *coordinates)
         return update_color
 
-    @staticmethod
-    def _flatten_list(input_list):
-        """ Flatten a list of lists to a single list """
-        return [item for sublist in input_list for item in sublist]
+    def _flatten_list(self, input_list):
+        """ Recursively Flatten a list of lists to a single list """
+        if input_list == []:
+            return input_list
+        if isinstance(input_list[0], list):
+            return self._flatten_list(input_list[0]) + self._flatten_list(input_list[1:])
+        return input_list[:1] + self._flatten_list(input_list[1:])
 
     # << MOUSE CALLBACKS >>
     # Mouse cursor display
