@@ -69,8 +69,8 @@ class Editor():
     @property
     def _default_colors(self):
         """ dict: The default colors for each annotation """
-        return {"Bounding Box": "blue",
-                "Extract Box": "green",
+        return {"BoundingBox": "blue",
+                "ExtractBox": "green",
                 "Landmarks": "magenta",
                 "Mask": "red",
                 "Mesh": "cyan"}
@@ -125,16 +125,17 @@ class Editor():
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
         annotation = self.__class__.__name__
-        return self._colors[self._annotation_formats[annotation]["color"].get()]
+        color = self._annotation_formats[annotation]["color"].get()
+        color = self._default_colors[annotation] if not color else color
+        return self._colors[color]
 
     @property
     def _should_display(self):
         """ bool: Whether the control panel option for the current editor is set to display
         or not. """
         annotation = self.__class__.__name__
-        should_display = self._control_vars.get(
-            self._active_editor, dict()).get("display", dict()).get(annotation, None)
-        return self._is_active or (should_display is not None and should_display.get())
+        should_display = annotation in self._canvas.editor_display.get(self._active_editor, list())
+        return self._is_active or should_display
 
     @property
     def _zoomed_dims(self):
@@ -521,16 +522,16 @@ class Editor():
                                          rounding=1,
                                          helptext="Set the mask opacity")
             for editor in editors:
+                annotation_key = editor.replace(" ", "")
                 logger.debug("Adding to global format controls: '%s'", editor)
                 colors = ControlPanelOption(editor,
                                             str,
                                             group="Color",
                                             choices=sorted(self._colors),
-                                            default=self._default_colors[editor],
+                                            default=self._default_colors[annotation_key],
                                             is_radio=False,
                                             state="readonly",
                                             helptext="Set the annotation color")
-                annotation_key = editor.replace(" ", "")
                 self._annotation_formats.setdefault(annotation_key, dict())["color"] = colors
                 self._annotation_formats[annotation_key]["mask_opacity"] = opacity
 
@@ -547,14 +548,6 @@ class View(Editor):
     def __init__(self, canvas, alignments, frames):
         control_text = "Viewer\nPreview the frame's annotations."
         super().__init__(canvas, alignments, frames, control_text)
-
-    def _add_controls(self):
-        for dsp in ("Bounding Box", "Extract Box", "Landmarks", "Mask", "Mesh"):
-            self._add_control(ControlPanelOption(dsp,
-                                                 bool,
-                                                 group="Display",
-                                                 default=dsp != "Mask",
-                                                 helptext="Show the {} annotations".format(dsp)))
 
 
 class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors

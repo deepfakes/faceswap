@@ -130,12 +130,6 @@ class FrameNavigation():
         return self._tk_vars["is_playing"]
 
     @property
-    def tk_frame_change(self):
-        """ :class:`tkinter.BooleanVar`: The variable indicating that the displayed frame has
-        changed. """
-        return self._tk_vars["frame_change"]
-
-    @property
     def tk_update(self):
         """ :class:`tkinter.BooleanVar`: Whether the display needs to be updated. """
         return self._tk_vars["updated"]
@@ -156,10 +150,6 @@ class FrameNavigation():
         is_playing = tk.BooleanVar()
         is_playing.set(False)
 
-        frame_change = tk.BooleanVar()
-        frame_change.set(False)
-        frame_change.trace("w", self._trigger_update_flag)
-
         updated = tk.BooleanVar()
         updated.set(False)
 
@@ -169,19 +159,11 @@ class FrameNavigation():
 
         retval = dict(position=position,
                       is_playing=is_playing,
-                      frame_change=frame_change,
                       updated=updated,
                       nav_mode=nav_mode,
                       transport_position=transport_position)
         logger.debug("Set tkinter variables: %s", retval)
         return retval
-
-    def _trigger_update_flag(self, *args):  # pylint:disable=unused-argument
-        """ Triggers the global update flag on a frame change """
-        if not self.tk_frame_change.get():
-            return
-        self.tk_update.set(True)
-        self.tk_frame_change.set(False)
 
     def _background_init_frames(self, frames_location):
         """ Launch the images loader in a background thread so we can run other tasks whilst
@@ -221,7 +203,7 @@ class FrameNavigation():
         self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
         self._current_idx = position
         self._needs_update = True
-        self.tk_frame_change.set(True)
+        self.tk_update.set(True)
 
     def _add_meta_data(self, position, frame, filename):
         """ Adds the metadata for the current frame to :attr:`meta`.
@@ -653,6 +635,7 @@ class AlignmentsData():
         The aligned face image is loaded so that the faces viewer can pick it up. This image
         is cleared by the faces viewer after collection to save ram.
         """
+        self._check_for_new_alignments()
         frames_with_faces = self._frames_with_faces
         frame_name = self.frames.current_meta_data["filename"]
 

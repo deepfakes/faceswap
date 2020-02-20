@@ -51,9 +51,9 @@ class Mask(Editor):
         return self._colors[color.lower()]
 
     def _add_actions(self):
+        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
         self._add_action("draw", "draw", "Draw Tool", hotkey="D")
         self._add_action("erase", "erase", "Erase Tool", hotkey="E")
-        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
 
     def _add_controls(self):
         masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])

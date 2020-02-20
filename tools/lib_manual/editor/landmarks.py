@@ -5,7 +5,7 @@ import tkinter as tk
 import numpy as np
 from PIL import Image, ImageTk
 
-from ._base import ControlPanelOption, Editor, logger
+from ._base import Editor, logger
 
 
 class Landmarks(Editor):
@@ -25,8 +25,8 @@ class Landmarks(Editor):
         return "move" if not action else action[0]
 
     def _add_actions(self):
-        self._add_action("drag", "move", "Drag Tool", hotkey="D")
         self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
+        self._add_action("drag", "move", "Drag Tool", hotkey="D")
         self._add_edit_mode_callback()
 
     def _add_edit_mode_callback(self):
@@ -54,13 +54,6 @@ class Landmarks(Editor):
     def _get_extract_boxes(self):
         """ Get flattened list of extract box ids """
         return self._flatten_list(self._canvas.editors["ExtractBox"].objects.get("extractbox", []))
-
-    def _add_controls(self):
-        self._add_control(ControlPanelOption("Mesh",
-                                             bool,
-                                             group="Display",
-                                             default=False,
-                                             helptext="Show the Mesh annotations"))
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""

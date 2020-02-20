@@ -46,12 +46,6 @@ class BoundingBox(Editor):
                 if self._canvas.itemcget(item_id, "state") != "hidden"]
 
     def _add_controls(self):
-        for dsp in ("Extract Box", "Landmarks", "Mesh"):
-            self._add_control(ControlPanelOption(dsp,
-                                                 bool,
-                                                 group="Display",
-                                                 default=dsp not in ("Extract Box", "Landmarks"),
-                                                 helptext="Show the {} annotations".format(dsp)))
         norm_ctl = ControlPanelOption(
             "Normalization method",
             str,

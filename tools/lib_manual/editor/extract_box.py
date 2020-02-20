@@ -2,7 +2,7 @@
 """ Extract Box Editor for the manual adjustments tool """
 
 import numpy as np
-from ._base import ControlPanelOption, Editor, RightClickMenu, logger
+from ._base import Editor, RightClickMenu, logger
 
 
 class ExtractBox(Editor):
@@ -18,14 +18,6 @@ class ExtractBox(Editor):
         key_bindings = {"<Delete>": self._delete_current_face}
         super().__init__(canvas, alignments, frames,
                          control_text=control_text, key_bindings=key_bindings)
-
-    def _add_controls(self):
-        for dsp in ("Landmarks", "Mesh"):
-            self._add_control(ControlPanelOption(dsp,
-                                                 bool,
-                                                 group="Display",
-                                                 default=dsp != "Landmarks",
-                                                 helptext="Show the {} annotations".format(dsp)))
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""

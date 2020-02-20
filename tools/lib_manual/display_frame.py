@@ -335,7 +335,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._alignments = alignments
 
         self._configure_styles()
-        self._actions = ("View", "BoundingBox", "ExtractBox", "Mask", "Landmarks")
+        self._actions = ("View", "BoundingBox", "ExtractBox", "Landmarks", "Mask")
         self._initial_action = "View"
         self._buttons = self._add_buttons()
         self._static_buttons = self._add_static_buttons()
@@ -364,9 +364,9 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         inverse_keybindings = {val: key for key, val in self.key_bindings.items()}
         retval = dict(View="View alignments",
                       BoundingBox="Bounding box editor",
-                      ExtractBox="Edit the size and orientation of the existing alignments",
+                      ExtractBox="Location editor",
                       Mask="Mask editor",
-                      Landmarks="Individual landmark point editor")
+                      Landmarks="Landmark point editor")
         for item in retval:
             retval[item] += " ({})".format(inverse_keybindings[item])
         return retval
@@ -451,12 +451,12 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             if action == "reload":
                 icon = "reload3"
                 cmd = self._alignments.revert_to_saved
-                helptext = "Revert this frame to saved Alignments ({})".format(lookup[action][1])
+                helptext = "Revert to saved Alignments ({})".format(lookup[action][1])
             else:
                 icon = action
                 direction = action.replace("copy_", "")
                 cmd = lambda d=direction: self._alignments.copy_alignments(d)
-                helptext = "Copy {} Alignments to this Frame ({})".format(*lookup[action])
+                helptext = "Copy {} Alignments ({})".format(*lookup[action])
             state = ["!disabled"] if action == "copy_next" else ["disabled"]
             button = ttk.Button(frame,
                                 image=get_images().icons[icon],
@@ -466,7 +466,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             button.pack()
             Tooltip(button, text=helptext)
             buttons[action] = button
-        self._frames.tk_frame_change.trace("w", self._disable_enable_copy_buttons)
+        self._frames.tk_position.trace("w", self._disable_enable_copy_buttons)
         self._frames.tk_update.trace("w", self._disable_enable_reload_button)
         return buttons
 
@@ -647,6 +647,15 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def editors(self):
         """ dict: All of the :class:`Editor` objects that exist """
         return self._editors
+
+    @property
+    def editor_display(self):
+        """ dict: List of editors and any additional annotations they should display. """
+        return dict(View=["BoundingBox", "ExtractBox", "Landmarks", "Mesh"],
+                    BoundingBox=["Mesh"],
+                    ExtractBox=["Mesh"],
+                    Landmarks=["Mesh"],
+                    Mask=[])
 
     @property
     def offset(self):
