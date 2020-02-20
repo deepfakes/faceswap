@@ -712,13 +712,19 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def _update_active_display(self, *args):  # pylint:disable=unused-argument
         """ Update the display for the active editor.
 
-        Sets the editor's cursor tracking and annotation display based on which editor is active.
+        Hide the annotations that are not relevant for the selected editor.
+        Set the selected editor's cursor tracking.
 
         Parameters
         ----------
         args: tuple, unused
             Required for tkinter callback but unused
         """
+        to_display = [self.selected_action] + self.editor_display[self.selected_action]
+        to_hide = [editor for editor in self._editors if editor not in to_display]
+        for editor in to_hide:
+            self._editors[editor].hide_annotation()
+
         self.active_editor.bind_mouse_motion()
         self.active_editor.set_mouse_click_actions()
         self._frames.tk_update.set(True)
