@@ -614,7 +614,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                                     key_bindings=dict())
         self._editors = self._get_editors()
         self._add_callbacks()
-        self._update_active_display()
+        self._change_active_editor()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -654,7 +654,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         return dict(View=["BoundingBox", "ExtractBox", "Landmarks", "Mesh"],
                     BoundingBox=["Mesh"],
                     ExtractBox=["Mesh"],
-                    Landmarks=["Mesh"],
+                    Landmarks=["ExtractBox", "Mesh"],
                     Mask=[])
 
     @property
@@ -707,9 +707,9 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             :attr:`__tk_action_var` Update the mouse display tracking for current action
         """
         self._frames.tk_update.trace("w", self._update_display)
-        self._tk_action_var.trace("w", self._update_active_display)
+        self._tk_action_var.trace("w", self._change_active_editor)
 
-    def _update_active_display(self, *args):  # pylint:disable=unused-argument
+    def _change_active_editor(self, *args):  # pylint:disable=unused-argument
         """ Update the display for the active editor.
 
         Hide the annotations that are not relevant for the selected editor.
@@ -734,9 +734,10 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         if not self._frames.tk_update.get():
             return
         self.refresh_display_image()
-        for editor in self._editors.values():
-            editor.update_annotation()
-            editor.hide_additional_annotations()
+        to_display = [self.selected_action] + self.editor_display[self.selected_action]
+        for editor in to_display:
+            self._editors[editor].update_annotation()
+            self._editors[editor].hide_additional_annotations()
         self._bind_unbind_keys()
         self._frames.tk_update.set(False)
         self.update_idletasks()

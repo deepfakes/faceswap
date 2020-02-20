@@ -21,9 +21,6 @@ class ExtractBox(Editor):
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
-        # Extract box must show for landmarks for zooming
-        if not self._should_display and self._active_editor != "Landmarks":
-            return
         keys = ("text", "extractbox")
         color = self._control_color
         for idx, face in enumerate(self._alignments.current_faces):

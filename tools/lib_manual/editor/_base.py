@@ -130,14 +130,6 @@ class Editor():
         return self._colors[color]
 
     @property
-    def _should_display(self):
-        """ bool: Whether the control panel option for the current editor is set to display
-        or not. """
-        annotation = self.__class__.__name__
-        should_display = annotation in self._canvas.editor_display.get(self._active_editor, list())
-        return self._is_active or should_display
-
-    @property
     def _zoomed_dims(self):
         """ tuple: The (`width`, `height`) of the zoomed ROI """
         return (self._zoomed_roi[2] - self._zoomed_roi[0],

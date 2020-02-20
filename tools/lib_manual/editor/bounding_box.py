@@ -68,9 +68,6 @@ class BoundingBox(Editor):
 
     def update_annotation(self):
         """ Draw the bounding box around faces and set the object to :attr:`_object`"""
-        if not self._should_display:
-            return
-
         if self._drag_data:
             logger.trace("Object being edited. Not updating annotation")
             return

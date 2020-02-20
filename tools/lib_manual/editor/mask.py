@@ -101,11 +101,13 @@ class Mask(Editor):
             logger.trace("Appending to existing item list")
             self._meta[key][face_index] = item
 
+    def hide_annotation(self):
+        """ Clear the mask :attr:`_meta` dict when hiding the annotation. """
+        super().hide_annotation()
+        self._meta = dict()
+
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
-        if not self._should_display:
-            self._meta = dict()
-            return
         position = self._frames.tk_position.get()
         if position != self._meta.get("position", -1):
             # Reset meta information when moving to a new frame

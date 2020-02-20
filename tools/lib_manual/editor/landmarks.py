@@ -80,8 +80,6 @@ class Landmarks(Editor):
         object_index: int
             The index of the this item in :attr:`_objects`
         """
-        if not self._should_display:
-            return
         key = "lm_display"
         radius = 1
         color = self._control_color
@@ -289,8 +287,6 @@ class Mesh(Editor):
 
     def update_annotation(self):
         """ Draw the Landmarks Mesh and set the objects to :attr:`_object`"""
-        if not self._should_display:
-            return
         key = "mesh"
         color = self._control_color
         for face_idx, face in enumerate(self._alignments.current_faces):
