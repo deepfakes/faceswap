@@ -2,7 +2,7 @@
 """ The frame viewer section of the manual tool GUI """
 import logging
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, TclError
 
 from functools import partial
 from time import time
@@ -157,10 +157,17 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _set_frame_index(self, *args):  # pylint:disable=unused-argument
         """ Set the actual frame index based on current slider position and filter mode. """
-        slider_position = self._frames.tk_transport_position.get()
+        try:
+            slider_position = self._frames.tk_transport_position.get()
+        except TclError:
+            # don't update the slider when the entry box has been cleared of any value
+            return
         frames = self._alignments.get_filtered_frames_list()
-        frame_idx = frames[slider_position] if frames else 0
-        logger.trace("slider_position: %s, frame_idx: %s", slider_position, frame_idx)
+        actual_position = max(0, min(len(frames) - 1, slider_position))
+        if actual_position != slider_position:
+            self._frames.tk_transport_position.set(actual_position)
+        frame_idx = frames[actual_position] if frames else 0
+        logger.trace("slider_position: %s, frame_idx: %s", actual_position, frame_idx)
         self._frames.tk_position.set(frame_idx)
 
     def _add_transport(self):
@@ -187,7 +194,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _add_transport_tk_trace(self):
         """ Add the tkinter variable traces to buttons """
         self._frames.tk_is_playing.trace("w", self._play)
-        self._alignments.tk_updated.trace("w", self._toggle_save_state)
+        self._alignments.tk_unsaved.trace("w", self._toggle_save_state)
 
     def _add_navigation_mode_combo(self, frame):
         """ Add the navigation mode combo box to the transport frame """
@@ -267,7 +274,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _toggle_save_state(self, *args):  # pylint:disable=unused-argument
         """ Toggle the state of the save button when alignments are updated. """
-        state = ["!disabled"] if self._alignments.tk_updated.get() else ["disabled"]
+        state = ["!disabled"] if self._alignments.tk_unsaved.get() else ["disabled"]
         self._buttons["save"].state(state)
 
     def increment_frame(self, frame_count=None, is_playing=False):
@@ -356,7 +363,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def key_bindings(self):
         """ dict: {`key`: `action`}. The mapping of key presses to actions. Keyboard shortcut is
         the first letter of each action. """
-        return {str(idx + 1): action for idx, action in enumerate(self._actions)}
+        return {"F{}".format(idx + 1): action for idx, action in enumerate(self._actions)}
 
     @property
     def _helptext(self):
@@ -441,7 +448,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_static_buttons(self):
         """ Add the buttons to copy alignments from previous and next frames """
-        lookup = dict(copy_prev=("Previous", "C"), copy_next=("Next", "V"), reload=("", "F5"))
+        lookup = dict(copy_prev=("Previous", "C"), copy_next=("Next", "V"), reload=("", "R"))
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.Y)
         sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)

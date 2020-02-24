@@ -8,6 +8,8 @@ import tkinter as tk
 from tkinter import ttk
 from time import sleep
 
+import numpy as np
+
 from lib.gui.control_helper import ControlPanel
 from lib.gui.custom_widgets import Tooltip, StatusBar
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
@@ -15,8 +17,9 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
+from .lib_manual.display_face import FaceCache
 from .lib_manual.display_frame import DisplayFrame
-from .lib_manual.media import AlignmentsData, FrameNavigation, FaceCache
+from .lib_manual.media import AlignmentsData, FrameNavigation
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -182,15 +185,15 @@ class Manual(tk.Tk):
             "home": self._display.goto_first_frame,
             "end": self._display.goto_last_frame,
             "f": self._display.cycle_navigation_mode,
-            "1": lambda k=event.keysym: self._display.set_action(k),
-            "2": lambda k=event.keysym: self._display.set_action(k),
-            "3": lambda k=event.keysym: self._display.set_action(k),
-            "4": lambda k=event.keysym: self._display.set_action(k),
-            "5": lambda k=event.keysym: self._display.set_action(k),
+            "f1": lambda k=event.keysym: self._display.set_action(k),
+            "f2": lambda k=event.keysym: self._display.set_action(k),
+            "f3": lambda k=event.keysym: self._display.set_action(k),
+            "f4": lambda k=event.keysym: self._display.set_action(k),
+            "f5": lambda k=event.keysym: self._display.set_action(k),
             "c": lambda d="previous": self._alignments.copy_alignments(d),
             "v": lambda d="next": self._alignments.copy_alignments(d),
             "ctrl_s": self._alignments.save,
-            "f5": self._alignments.revert_to_saved}
+            "r": self._alignments.revert_to_saved}
 
         # Allow keypad keys to be used for numbers
         press = event.keysym.replace("KP_", "") if event.keysym.startswith("KP_") else event.keysym
@@ -460,6 +463,10 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self.parent = parent
         self._faces = faces
         self._frames = frames
+        self._hover_box = self.create_rectangle(0, 0, 1, 1,
+                                                outline="#FFFF00",
+                                                width=2,
+                                                state="hidden")
         self._bind_mouse()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -467,7 +474,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ Bind the mouse actions. """
         self.bind("<Motion>", self._update_cursor)
         self.bind("<ButtonPress-1>", self._select_frame)
-        self.bind("<Leave>", lambda e: self._faces.clear_hovered())
+        self.bind("<Leave>", lambda e: self._clear_hovered())
         if platform.system() == "Linux":
             self.bind("<Button-4>", self._scroll)
             self.bind("<Button-5>", self._scroll)
@@ -496,19 +503,41 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             The tkinter mouse event. Unused for default tracking, but available for specific editor
             tracking.
         """
-        item_ids = self.find_withtag("current")
+        coords = (self.canvasx(event.x), self.canvasy(event.y))
+        item_ids = [item_id
+                    for item_id in self.find_overlapping(*coords, *coords)
+                    if self.type(item_id) == "image"]
         if not item_ids:
-            self._faces.clear_hovered()
+            self._clear_hovered()
             self.config(cursor="")
             return
         object_id = item_ids[0]
         frame_id = self._faces.frame_index_from_object(object_id)
         if frame_id is None or frame_id == self._frames.tk_position.get():
             self.config(cursor="")
-            self._faces.clear_hovered()
+            self._clear_hovered()
             return
         self.config(cursor="hand1")
-        self._faces.highlight_hovered(frame_id, object_id)
+        self._highlight_hovered(object_id)
+
+    def _clear_hovered(self):
+        """ Hide the hovered box and clear the :attr:`_hovered` attribute """
+        if self.itemcget(self._hover_box, "state") != "hidden":
+            self.itemconfig(self._hover_box, state="hidden")
+
+    def _highlight_hovered(self, object_id):
+        """ Display the box around the face the mouse is over
+
+        Parameters
+        ----------
+        object_id: int
+            The tkinter canvas object id
+        """
+        top_left = np.array(self.coords(object_id))
+        coords = (*top_left, *top_left + self._faces.size)
+        self.coords(self._hover_box, *coords)
+        self.itemconfig(self._hover_box, state="normal")
+        self.tag_raise(self._hover_box)
 
     def _select_frame(self, event):  # pylint: disable=unused-argument
         """ Go to the frame corresponding to the mouse click location in the faces window.

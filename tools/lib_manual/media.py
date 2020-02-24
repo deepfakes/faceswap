@@ -5,7 +5,6 @@ import bisect
 import os
 import tkinter as tk
 from copy import deepcopy
-from threading import Event
 
 import cv2
 import numpy as np
@@ -266,8 +265,11 @@ class AlignmentsData():
         self._alignments = None
         self._get_alignments(alignments_path, input_location, is_video)
 
-        self._tk_updated = tk.BooleanVar()
-        self._tk_updated.set(False)
+        self._tk_unsaved = tk.BooleanVar()
+        self._tk_unsaved.set(False)
+        self._tk_edited = tk.BooleanVar()
+        self._tk_edited.set(False)
+
         self._tk_position = frames.tk_position
         self._face_index = 0
         self._face_count_modified = False
@@ -351,10 +353,16 @@ class AlignmentsData():
         return sum(1 for faces in self._latest_alignments.values() if len(faces) > 1)
 
     @property
-    def tk_updated(self):
+    def tk_unsaved(self):
         """ :class:`tkinter.BooleanVar`: The variable indicating whether the alignments have been
         updated since the last save. """
-        return self._tk_updated
+        return self._tk_unsaved
+
+    @property
+    def tk_edited(self):
+        """ :class:`tkinter.BooleanVar`: The variable indicating whether the alignments have been
+        edited since last Face Display update. """
+        return self._tk_edited
 
     @property
     def current_frame_updated(self):
@@ -423,7 +431,7 @@ class AlignmentsData():
 
     def save(self):
         """ Save the alignments file """
-        if not self._tk_updated.get():
+        if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
         to_save = {key: val["new"] for key, val in self._alignments.items() if "new" in val}
@@ -436,7 +444,7 @@ class AlignmentsData():
 
         self._alignments_file.backup()
         self._alignments_file.save()
-        self._tk_updated.set(False)
+        self._tk_unsaved.set(False)
 
     def _check_for_new_alignments(self):
         """ Checks whether there are already new alignments in :attr:`_alignments`. If not
@@ -445,8 +453,8 @@ class AlignmentsData():
         if self._alignments[filename].get("new", None) is None:
             new_faces = [deepcopy(face) for face in self._alignments[filename]["saved"]]
             self._alignments[filename]["new"] = new_faces
-            if not self._tk_updated.get():
-                self._tk_updated.set(True)
+            if not self._tk_unsaved.get():
+                self._tk_unsaved.set(True)
 
     def set_current_bounding_box(self, index, pnt_x, width, pnt_y, height):
         """ Update the bounding box for the current alignments.
@@ -479,6 +487,8 @@ class AlignmentsData():
         face.mask = dict()
         face.landmarks_xy = self._extractor.get_landmarks()
         face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        self._tk_edited.set(True)
+        # TODO Link this in to edited
         self.frames.tk_update.set(True)
 
     def shift_landmark(self, face_index, landmark_index, shift_x, shift_y, is_zoomed):
@@ -520,6 +530,7 @@ class AlignmentsData():
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        self._tk_edited.set(True)
         self.frames.tk_update.set(True)
 
     def shift_landmarks(self, index, shift_x, shift_y):
@@ -551,6 +562,7 @@ class AlignmentsData():
         face.mask = dict()
         face.landmarks_xy += (shift_x, shift_y)
         face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        self._tk_edited.set(True)
         self.frames.tk_update.set(True)
 
     def add_face(self, pnt_x, width, pnt_y, height):
@@ -587,6 +599,7 @@ class AlignmentsData():
         del self.current_faces[index]
         self._face_count_modified = True
         self._face_index = 0
+        self._tk_edited.set(True)
         self.frames.tk_update.set(True)
 
     def reset_face_count_modified(self):
@@ -653,6 +666,7 @@ class AlignmentsData():
         for face in self.current_faces:
             face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
         self._face_index = len(self.current_faces) - 1
+        self._tk_edited.set(True)
         self.frames.tk_update.set(True)
 
     def revert_to_saved(self):
@@ -663,429 +677,5 @@ class AlignmentsData():
             return
         logger.debug("Reverting alignments for '%s'", frame_name)
         del self._alignments[frame_name]["new"]
+        self._tk_edited.set(True)
         self.frames.tk_update.set(True)
-
-
-class FaceCache():
-    """ Holds the face images for display in the bottom GUI Panel """
-    def __init__(self, alignments, progress_bar):
-        self._alignments = alignments
-        self._pbar = progress_bar
-        self._size = 96
-        self._faces = dict()
-        self._canvas = None
-        self._columns = None
-        self._set_tk_trace()
-        self._initialized = Event()
-        self._selected = []
-        self._current_display = None
-        self._hovered = None
-        self._current_frame_id = 0
-        self._filter_mode = "All Faces"
-        self._face_count_modified = False
-        self._landmark_mapping = dict(mouth=(48, 68),
-                                      right_eyebrow=(17, 22),
-                                      left_eyebrow=(22, 27),
-                                      right_eye=(36, 42),
-                                      left_eye=(42, 48),
-                                      nose=(27, 36),
-                                      jaw=(0, 17),
-                                      chin=(8, 11))
-
-    @property
-    def faces(self):
-        """ dict: The filename as key with list of aligned faces in :class:`ImageTk.PhotoImage`
-        format for display in the GUI. """
-        return self._faces
-
-    @property
-    def frame_count(self):
-        """ int: The total number of frames in :attr:`_frames`. """
-        return self._frames.frame_count
-
-    @property
-    def _frames(self):
-        """ :class:`FrameNavigation`: The Frames for this manual session """
-        return self._alignments.frames
-
-    @property
-    def _colors(self):
-        """ dict: Colors for the annotations. """
-        return dict(border="#00ff00", mesh="#00ffff", border_half="#009900", mesh_half="#009999")
-
-    def frame_index_from_object(self, object_id):
-        """ Retrieve the frame index that an object belongs to from it's tag.
-
-        Parameters
-        ----------
-        object_id: int
-            The tkinter canvas object id
-
-        Returns
-        -------
-        int
-            The frame index that the object belongs to or ``None`` if the tag cannot be found
-        """
-        tags = [tag.replace("frame_id_", "")
-                for tag in self._canvas.itemcget(object_id, "tags").split()
-                if tag.startswith("frame_id_")]
-        retval = int(tags[0]) if tags else None
-        logger.trace("object_id: %s, frame_id: %s", object_id, retval)
-        return retval
-
-    def transport_index_from_frame_index(self, frame_index):
-        """ Retrieve the index in the filtered frame list for the given frame index. """
-        frames_list = self._alignments.get_filtered_frames_list()
-        retval = frames_list.index(frame_index) if frame_index in frames_list else None
-        logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
-        return retval
-
-    def clear_hovered(self):
-        """ Hide the hovered box and clear the :attr:`_hovered` attribute """
-        if self._hovered is None:
-            return
-        self._canvas.itemconfig(self._hovered, state="hidden")
-        self._hovered = None
-
-    def highlight_hovered(self, frame_id, object_id):
-        """ Display the box around the face the mouse is over
-
-        Parameters
-        ----------
-        object_id: int
-            The tkinter canvas object id
-        """
-        self.clear_hovered()
-        tags = [tag.replace("face_id_", "")
-                for tag in self._canvas.itemcget(object_id, "tags").split()
-                if tag.startswith("face_id_")]
-        if not tags:
-            return
-        self._hovered = self._faces[frame_id][int(tags[0])]["border"]
-        self._canvas.itemconfig(self._hovered, state="normal")
-
-    def _set_tk_trace(self):
-        """ Set the trace on tkinter variables:
-        self._frames.current_position
-        """
-        self._frames.tk_position.trace("w", self._highlight_selected)
-        self._frames.tk_update.trace("w", self._update_current)
-        self._frames.tk_navigation_mode.trace("w", self._filter_faces)
-
-    def load_faces(self, canvas, frame_width):
-        """ Launch a background thread to load the faces into cache and assign the canvas to
-        :attr:`_canvas` """
-        self._canvas = canvas
-        thread = MultiThread(self._load_faces,
-                             frame_width,
-                             thread_count=1,
-                             name="{}.load_faces".format(self.__class__.__name__))
-        thread.start()
-
-    def _load_faces(self, frame_width):
-        """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
-
-        Updates a GUI progress bar to show loading progress.
-        """
-        # TODO Make it so user can't save until faces are loaded (so alignments dict doesn't
-        # change)
-        try:
-            self._pbar.start(mode="determinate")
-            self._columns = frame_width // self._size
-            faces_seen = 0
-            loader = ImagesLoader(self._frames.location, count=self.frame_count)
-            for frame_idx, (filename, frame) in enumerate(loader.load()):
-                frame_name = os.path.basename(filename)
-                progress = int(round(((frame_idx + 1) / self.frame_count) * 100))
-                self._pbar.progress_update("Loading Faces: {}%".format(progress), progress)
-                frame_faces = []
-                faces = self._alignments.saved_alignments.get(frame_name, list())
-                for face_idx, face in enumerate(faces):
-                    face.load_aligned(frame, size=self._size, force=True)
-                    frame_faces.append(self._place_face(self._create_tag(frame_idx, face_idx),
-                                                        faces_seen,
-                                                        face))
-                    face.aligned["face"] = None
-                    faces_seen += 1
-                self._faces[frame_idx] = frame_faces
-            self._pbar.stop()
-        except Exception as err:  # pylint: disable=broad-except
-            logger.error("Error loading face. Error: %s", str(err))
-            # TODO Remove this
-            import sys; import traceback
-            exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
-        self._initialized.set()
-        self._highlight_selected()
-
-    @staticmethod
-    def _create_tag(frame_index, face_index):
-        """ Create an object tag from the frame and face index """
-        return ["frame_id_{}".format(frame_index), "face_id_{}".format(face_index)]
-
-    def _position_from_index(self, index):
-        """ Return the position an object should be placed on the canvas from it's index. """
-        return ((index % self._columns) * self._size, (index // self._columns) * self._size)
-
-    def _place_face(self, tags, idx, face, landmarks=None):
-        """ Places the aligned faces on the canvas and create invisible annotations.
-
-        Returns
-        -------
-        dict: The `image`, `border` and `mesh` objects
-        """
-        aligned_face = face.aligned_face[..., 2::-1]
-        if aligned_face.shape[0] != self._size:
-            aligned_face = cv2.resize(aligned_face,
-                                      (self._size, self._size),
-                                      interpolation=cv2.INTER_AREA)
-        dsp_face = ImageTk.PhotoImage(Image.fromarray(aligned_face))
-
-        pos = self._position_from_index(idx)
-        rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
-        image_id = self._canvas.create_image(*pos, image=dsp_face, anchor=tk.NW, tags=tags)
-        border = self._canvas.create_rectangle(*rect_dims,
-                                               outline=self._colors["border"],
-                                               width=2,
-                                               state="hidden",
-                                               tags=tags)
-        mesh = self._draw_mesh(face, pos, tags)
-        # Creating new object, the landmarks are scaled correctly. For existing objects
-        # the scaled landmarks are passed in.
-        landmarks = face.aligned_landmarks if landmarks is None else landmarks
-        objects = dict(image=dsp_face,
-                       image_id=image_id,
-                       border=border,
-                       mesh=mesh,
-                       position=pos,
-                       index=idx,
-                       landmarks=landmarks)
-        if pos[0] == 0:
-            self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-        return objects
-
-    def _draw_mesh(self, face, position, tags):
-        """ Draw an invisible landmarks mesh on the face that can be displayed when required """
-        mesh = []
-        for key in sorted(self._landmark_mapping):
-            val = self._landmark_mapping[key]
-            pts = (face.aligned_landmarks[val[0]:val[1]] + position).flatten()
-            if key in ("right_eye", "left_eye", "mouth"):
-                mesh.append(self._canvas.create_polygon(*pts,
-                                                        fill="",
-                                                        outline=self._colors["mesh"],
-                                                        state="hidden",
-                                                        width=1,
-                                                        tags=tags + ["mesh"]))
-            else:
-                mesh.append(self._canvas.create_line(*pts,
-                                                     fill=self._colors["mesh"],
-                                                     state="hidden",
-                                                     width=1,
-                                                     tags=tags + ["mesh"]))
-        return mesh
-
-    def _clear_selected(self):
-        """ Clear all the highlighted borders and landmarks """
-        for object_id in self._selected:
-            if self._current_display in self._canvas.itemcget(object_id, "tags").split():
-                self._display_annotations(self._current_display, [object_id])
-            else:
-                self._canvas.itemconfig(object_id, state="hidden")
-        self._selected = []
-
-    def _highlight_selected(self, *args, new_frame=True):  # pylint:disable=unused-argument
-        """ Place a border around current face and display landmarks """
-        if not self._initialized.is_set():
-            return
-        position = self._frames.tk_position.get()
-        self._clear_selected()
-        if new_frame:
-            self._filter_faces()
-        objects = self._faces.get(position, None)
-        if not objects or objects is None:
-            return
-        for obj in objects:
-            self._canvas.itemconfig(obj["border"], state="normal")
-            self._selected.append(obj["border"])
-            for mesh in obj["mesh"]:
-                color_attr = "outline" if self._canvas.type(mesh) == "polygon" else "fill"
-                kwargs = {color_attr: self._colors["mesh"], "state": "normal"}
-                self._canvas.itemconfig(mesh, **kwargs)
-                self._selected.append(mesh)
-
-        top = self._canvas.coords(self._selected[0])[1] / self._canvas.bbox("all")[3]
-        if top != self._canvas.yview()[0]:
-            self._canvas.yview_moveto(top)
-
-    def _update_current(self, *args):  # pylint:disable=unused-argument
-        """ Update the currently selected face on editor update """
-        if not self._initialized.is_set():
-            return
-
-        position = self._frames.tk_position.get()
-        if position != self._current_frame_id:
-            self._current_frame_id = position
-            self._alignments.reset_face_id()
-
-        self._add_remove_face()
-        face = self._alignments.current_face
-        if face is None:
-            return
-        if face.aligned_face is None:
-            # When in zoomed in mode the face isn't loaded, so get a copy
-            aligned_face = self._alignments.get_aligned_face_at_index(self._alignments.face_index)
-        else:
-            aligned_face = face.aligned_face
-
-        objects = self._faces[position][self._alignments.face_index]
-        display_face = cv2.resize(aligned_face[..., 2::-1],
-                                  (self._size, self._size),
-                                  interpolation=cv2.INTER_AREA)
-        objects["image"] = ImageTk.PhotoImage(Image.fromarray(display_face))
-        scale = self._size / face.aligned["size"]
-        landmarks = face.aligned_landmarks * scale
-        objects["landmarks"] = landmarks
-        self._canvas.itemconfig(objects["image_id"], image=objects["image"])
-
-        for idx, key in enumerate(sorted(self._landmark_mapping)):
-            val = self._landmark_mapping[key]
-            pts = (landmarks[val[0]:val[1]] + objects["position"]).flatten()
-            self._canvas.coords(objects["mesh"][idx], *pts)
-        face.aligned["face"] = None
-
-    def update_all(self, display):
-        """ Update all widgets with the for the given display type.
-
-        Parameters
-        ----------
-        display: {"landmarks", "mask" or "none"}
-            The annotation that should be displayed
-        """
-        if not self._initialized.is_set():
-            return
-        display = "mesh" if display == "landmarks" else display
-        for key, val in self._faces.items():
-            if key == self._current_frame_id:
-                continue
-            for face in val:
-                # TODO Add masks and change from a get to standard dict retrieval
-                current_object_ids = face.get(self._current_display, None)
-                new_object_ids = face.get(display, None)
-                self._clear_annotations(current_object_ids)
-                # TODO Remove when mask is in
-                if new_object_ids is None:
-                    continue
-                self._display_annotations(display, new_object_ids)
-        self._current_display = display
-
-    def _clear_annotations(self, object_ids):
-        """ Clear the annotations of now deselected objects """
-        if object_ids is not None:
-            for object_id in object_ids:
-                self._canvas.itemconfig(object_id, state="hidden")
-
-    def _display_annotations(self, display, object_ids):
-        """ Display the newly selected objects. """
-        for object_id in object_ids:
-            color_attr = "outline" if self._canvas.type(object_id) == "polygon" else "fill"
-            kwargs = {color_attr: self._colors["{}_half".format(display)], "state": "normal"}
-            self._canvas.itemconfig(object_id, **kwargs)
-
-    def _add_remove_face(self):
-        """ Add or remove a face into the viewer """
-        current_faces = self._faces.get(self._current_frame_id, [])
-        alignment_faces = len(self._alignments.current_faces)
-        display_faces = len(current_faces)
-        if alignment_faces > display_faces:
-            tags = self._create_tag(self._current_frame_id, alignment_faces - 1)
-            starting_idx = self._insert_new_face(current_faces, tags)
-            increment = True
-        elif alignment_faces < display_faces:
-            starting_idx = self._delete_face(current_faces)
-            increment = False
-        else:
-            return
-        self._update_following_faces(starting_idx, increment)
-        self._face_count_modified = True
-        self._highlight_selected(new_frame=False)
-
-    def _insert_new_face(self, current_faces, tags):
-        """ Insert a new face into the faces viewer. """
-        insert_index = current_faces[-1]["index"] + 1 if current_faces else 0
-        scale = self._size / self._alignments.current_face.aligned["size"]
-        landmarks = self._alignments.current_face.aligned_landmarks * scale
-        current_faces.append(self._place_face(tags,
-                                              insert_index,
-                                              self._alignments.current_face,
-                                              landmarks=landmarks))
-        return insert_index + 1
-
-    def _delete_face(self, current_faces):
-        """ Remove a face from the faces viewer. """
-        face_idx = self._alignments.get_removal_index()
-        rem_face = current_faces[face_idx]
-        removed_index = rem_face["index"]
-        indices = [rem_face["image_id"], rem_face["border"]] + rem_face["mesh"]
-        for idx in indices:
-            self._canvas.delete(idx)
-        del current_faces[face_idx]
-        return removed_index
-
-    def _update_following_faces(self, starting_idx, increment=True):
-        """ Update the face positions for all faces following an insert or delete. """
-        update_faces = [obj for k, v in self._faces.items() for obj in v
-                        if k > self._current_frame_id or (k == self._current_frame_id
-                                                          and obj["index"] >= starting_idx)]
-        for objects in update_faces:
-            idx = objects["index"] + 1 if increment else objects["index"] - 1
-            objects["index"] = idx
-            pos = self._position_from_index(idx)
-            rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
-            objects["position"] = pos
-            self._canvas.coords(objects["image_id"], *pos)
-            self._canvas.coords(objects["border"], *rect_dims)
-            for idx, key in enumerate(sorted(self._landmark_mapping)):
-                val = self._landmark_mapping[key]
-                pts = (objects["landmarks"][val[0]:val[1]] + objects["position"]).flatten()
-                self._canvas.coords(objects["mesh"][idx], *pts)
-
-    def _filter_faces(self, *args):  # pylint:disable=unused-argument
-        """ Filter the viewed faces based on currently selected navigation mode. """
-        if not self._initialized.is_set():
-            return
-        nav_mode = self._frames.tk_navigation_mode.get()
-        nav_mode = "All Frames" if nav_mode == "Has Face(s)" else nav_mode
-        if ((nav_mode == self._filter_mode and not self._face_count_modified) or
-                (self._face_count_modified and nav_mode == "All Frames")):
-            logger.trace("Not filtering faces: (nav_mode: %s, self._filter_mode: %s, "
-                         "self._face_count_modified: %s)", nav_mode, self._filter_mode,
-                         self._face_count_modified)
-            self._face_count_modified = False
-            return
-        frames_list = self._alignments.get_filtered_frames_list()
-        dsp_idx = 0
-        for frame_idx, faces in self._faces.items():
-            show_face = frame_idx in frames_list
-            state = "normal" if show_face else "hidden"
-            for objects in faces:
-                self._canvas.itemconfig(objects["image_id"], state=state)
-                if show_face:
-                    pos = self._position_from_index(dsp_idx)
-                    rect_dims = (pos[0], pos[1], pos[0] + self._size, pos[1] + self._size)
-                    self._canvas.coords(objects["image_id"], *pos)
-                    self._canvas.coords(objects["border"], *rect_dims)
-
-                for idx, key in enumerate(sorted(self._landmark_mapping)):
-                    if self._current_display == "mesh":
-                        self._canvas.itemconfig(objects["mesh"][idx], state=state)
-                    if show_face:
-                        val = self._landmark_mapping[key]
-                        pts = (objects["landmarks"][val[0]:val[1]] + pos).flatten()
-                        self._canvas.coords(objects["mesh"][idx], *pts)
-                if show_face:
-                    dsp_idx += 1
-
-        self._filter_mode = nav_mode
-        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-        self._canvas.yview_moveto(0.0)
-        self._face_count_modified = False
