@@ -441,7 +441,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 button.configure(style="display_deselected.TButton")
                 button.state(["!pressed", "!focus"])
         self._selected_display = display
-        self._faces.update_all(display)
+        self._faces.toggle_annotations(display)
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
