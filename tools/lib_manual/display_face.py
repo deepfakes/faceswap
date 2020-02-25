@@ -15,7 +15,6 @@ from lib.image import ImagesLoader
 from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
 _LANDMARK_MAPPING = dict(mouth=(48, 68),
                          right_eyebrow=(17, 22),
                          left_eyebrow=(22, 27),
@@ -37,42 +36,27 @@ def _get_mesh_points(landmarks):
 
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
-    def __init__(self, alignments, progress_bar):
+    def __init__(self, alignments, progress_bar, scaling_factor):
         self._alignments = alignments
         self._pbar = progress_bar
-        self._size = 96
+        self._size = int(round(96 * scaling_factor))
         self._selected = SelectedFrame(self._size, self._alignments)
 
         # Following set in self._load
-        self._annotations = []
+        self._canvas = None
+        self._columns = None
         self._tk_faces = []
+        self._tk_objects = []
+        self._mesh_landmarks = []
         self._displays = None
         self._current_display = None
 
-        self._faces = dict()
-        self._canvas = None
-        self._columns = None
         self._set_tk_trace()
         self._initialized = Event()
 
-        self._current_frame_id = 0
-        self._filter_mode = "All Faces"
-        self._face_count_modified = False
-        self._landmark_mapping = dict(mouth=(48, 68),
-                                      right_eyebrow=(17, 22),
-                                      left_eyebrow=(22, 27),
-                                      right_eye=(36, 42),
-                                      left_eye=(42, 48),
-                                      nose=(27, 36),
-                                      jaw=(0, 17),
-                                      chin=(8, 11))
-
-    @property
-    def annotations(self):
-        return self._annotations
-
     @property
     def size(self):
+        """ int: The size of the thumbnail """
         return self._size
 
     @property
@@ -81,15 +65,19 @@ class FaceCache():
         return [len(faces) for faces in self._tk_faces]
 
     @property
-    def faces(self):
-        """ dict: The filename as key with list of aligned faces in :class:`ImageTk.PhotoImage`
-        format for display in the GUI. """
-        return self._faces
+    def tk_objects(self):
+        """ dict: The tkinter objects in the face canvas """
+        return self._tk_objects
 
     @property
     def _frames(self):
         """ :class:`FrameNavigation`: The Frames for this manual session """
         return self._alignments.frames
+
+    @property
+    def _filtered_display(self):
+        """:class:`FaceFilter`: The currently selected filtered faces display. """
+        return self._displays[self._current_display]
 
     @property
     def _colors(self):
@@ -148,9 +136,9 @@ class FaceCache():
         if nav_mode == self._current_display:
             return
         if self._current_display is not None:
-            self._displays[self._current_display].de_initialize()
+            self._filtered_display.de_initialize()
         self._current_display = nav_mode
-        self._displays[self._current_display].initialize()
+        self._filtered_display.initialize(self._tk_objects, self._mesh_landmarks)
 
     def load_faces(self, canvas, frame_width):
         """ Launch a background thread to load the faces into cache and assign the canvas to
@@ -166,8 +154,8 @@ class FaceCache():
         thread.start()
 
     def _set_displays(self):
-        """ Set the different displayers """
-        self._displays = {dsp: eval(dsp)(self)
+        """ Set the different face viewers """
+        self._displays = {dsp: eval(dsp)(self)  # pylint:disable=eval-used
                           for dsp in ("AllFrames", "NoFaces", "MultipleFaces")}
 
     def _load_faces(self):
@@ -177,8 +165,6 @@ class FaceCache():
         """
         # TODO Make it so user can't save until faces are loaded (so alignments dict doesn't
         # change)
-        # TODO Test threading the calculation of faces from the frame to try to speed things
-        # up a little
         # TODO make loading faces a user selected action?
         # TODO Vid deets to alignments file
         try:
@@ -196,13 +182,10 @@ class FaceCache():
                 frame_faces = []
                 frame_landmarks = []
                 frame_objects = []
-                faces = self._alignments.saved_alignments.get(frame_name, list())
-
-                for face_idx, face in enumerate(faces):
+                for face in self._alignments.saved_alignments.get(frame_name, list()):
                     tk_face = self._load_face(frame, face)
                     tag = ["frame_id_{}".format(frame_idx)]
                     mesh_landmarks = _get_mesh_points(face.aligned_landmarks)
-
                     frame_faces.append(tk_face)
                     frame_landmarks.append(mesh_landmarks)
                     frame_objects.append(self._load_annotations(tk_face,
@@ -211,8 +194,8 @@ class FaceCache():
                                                                 tag))
                     faces_seen += 1
                 self._tk_faces.append(frame_faces)
-                self._annotations.append(dict(mesh_landmarks=frame_landmarks,
-                                              objects=frame_objects))
+                self._tk_objects.append(frame_objects)
+                self._mesh_landmarks.append(frame_landmarks)
             self._pbar.stop()
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Error loading face. Error: %s", str(err))
@@ -223,8 +206,10 @@ class FaceCache():
         self._initialized.set()
         # TODO Make this handle filtering after load
         position = self._frames.tk_position.get()
-        self._selected.set_selected(self._annotations[position],
-                                    self._tk_faces[position], position)
+        self._selected.set_selected(self._tk_objects[position],
+                                    self._tk_faces[position],
+                                    self._mesh_landmarks[position],
+                                    position)
 
     def _load_face(self, frame, face):
         """ Load the resized aligned face. """
@@ -269,8 +254,10 @@ class FaceCache():
         if not self._initialized.is_set():
             return
         position = self._frames.tk_position.get()
-        self._selected.set_selected(self._annotations[position],
-                                    self._tk_faces[position], position)
+        self._selected.set_selected(self._tk_objects[position],
+                                    self._tk_faces[position],
+                                    self._mesh_landmarks[position],
+                                    position)
 
     def _update_current(self, *args):  # pylint:disable=unused-argument
         """ Update the currently selected face on editor update """
@@ -296,13 +283,15 @@ class FaceCache():
 
     def _add_face(self):
         """ Insert a face into current frame """
+        logger.debug("Adding face")
         tk_face = self._selected.add_face()
-        self._displays[self._current_display].add_face(tk_face, self._selected.frame_id)
+        self._filtered_display.add_face(tk_face, self._selected.frame_id)
 
     def _remove_face(self):
         """ Remove a face from the current frame """
+        logger.debug("Removing face")
         self._selected.remove_face()
-        self._displays[self._current_display].remove_face(self._selected.frame_id)
+        self._filtered_display.remove_face(self._selected.frame_id)
 
     def update_all(self, display):
         """ Update all widgets with the for the given display type.
@@ -350,15 +339,13 @@ class SelectedFrame():
         self._size = image_size
 
         self._canvas = None
-        self._objects = None
-        self._faces = None
-        self._landmarks = None
+        self._tk_objects = None
+        self._tk_faces = None
+        self._mesh_landmarks = None
         self._highlighter = None
 
         self._frame_id = 0
         self._face_count = 0
-        self._highlight_boxes = []
-        self._highlight_meshes = []
 
     @property
     def _face_index(self):
@@ -380,33 +367,34 @@ class SelectedFrame():
         self._canvas = canvas
         self._highlighter = Highlighter(self._size, canvas)
 
-    def set_selected(self, annotations, tk_faces, frame_id):
+    def set_selected(self, tk_objects, tk_faces, mesh_landmarks, frame_id):
         """ Set the currently selected frame's objects """
-        self._faces = tk_faces
-        self._objects = annotations["objects"]
-        self._landmarks = annotations["mesh_landmarks"]
+        self._tk_faces = tk_faces
+        self._tk_objects = tk_objects
+        self._mesh_landmarks = mesh_landmarks
         self._frame_id = frame_id
-        self._face_count = len(self._objects)
+        self._face_count = len(self._tk_objects)
         self.refresh_highlighter()
 
     def refresh_highlighter(self):
         """ Refresh the highlighter on add/remove faces """
-        self._highlighter.highlight_selected(self._objects, self._landmarks)
+        self._highlighter.highlight_selected(self._tk_objects, self._mesh_landmarks)
 
     def update(self):
         """ Update the currently selected face on editor update """
         tk_face, landmarks = self._get_tk_face_and_landmarks()
-        self._faces[self._face_index] = tk_face
-        self._canvas.itemconfig(self._objects[self._face_index]["image_id"], image=tk_face)
-        self._landmarks[self._face_index] = _get_mesh_points(landmarks)
+        self._tk_faces[self._face_index] = tk_face
+        self._canvas.itemconfig(self._tk_objects[self._face_index]["image_id"], image=tk_face)
+        self._mesh_landmarks[self._face_index] = _get_mesh_points(landmarks)
+        self.refresh_highlighter()
 
     def add_face(self):
         """ Add a face to the currently selected frame, """
         logger.debug("Adding face to frame(frame_id: %s new face_count: %s)",
                      self._frame_id, self._face_count + 1)
         tk_face, landmarks = self._get_tk_face_and_landmarks()
-        self._faces.append(tk_face)
-        self._landmarks.append(_get_mesh_points(landmarks))
+        self._tk_faces.append(tk_face)
+        self._mesh_landmarks.append(_get_mesh_points(landmarks))
         self._face_count += 1
         return tk_face
 
@@ -414,10 +402,10 @@ class SelectedFrame():
         """ Remove a face from the currently selected frame. """
         face_idx = self._alignments.get_removal_index()
         logger.trace("Removing face for frame %s at index: %s", self._frame_id, face_idx)
-        self._canvas.delete(self._objects[face_idx]["image_id"])
-        del self._faces[face_idx]
-        del self._landmarks[face_idx]
-        del self._objects[face_idx]
+        self._canvas.delete(self._tk_objects[face_idx]["image_id"])
+        del self._tk_faces[face_idx]
+        del self._mesh_landmarks[face_idx]
+        del self._tk_objects[face_idx]
         self._face_count -= 1
 
     def _get_tk_face_and_landmarks(self):
@@ -457,15 +445,17 @@ class Highlighter():
         """ int: The number of highlighter objects currently available. """
         return len(self._boxes)
 
-    def highlight_selected(self, objects, landmarks):
+    def highlight_selected(self, objects, mesh_landmarks):
         """ Highlight the currently selected faces """
         self._face_count = len(objects)
-        self._create_new_highlighters(landmarks)
+        self._create_new_highlighters(mesh_landmarks)
         self._hide_unused_highlighters()
+        if self._face_count == 0:
+            return
 
         boxes = self._boxes[:self._face_count]
         meshes = self._meshes[:self._face_count]
-        for objs, landmarks, box, mesh in zip(objects, landmarks, boxes, meshes):
+        for objs, landmarks, box, mesh in zip(objects, mesh_landmarks, boxes, meshes):
             top_left = np.array(self._canvas.coords(objs["image_id"]))
             un_hide = self._highlight_box(box, top_left)
             self._highlight_mesh(mesh, landmarks["landmarks"], top_left, un_hide)
@@ -495,7 +485,7 @@ class Highlighter():
         self._boxes.append(box)
 
     def _create_highlight_mesh(self, landmarks):
-        """ Create new highlight mesh annotations and append to :attr:`_highlight_meshes`. """
+        """ Create new highlight mesh annotations and append to :attr:`_meshes`. """
         # TODO Global mesh colors
         kwargs = dict(polygon=dict(fill="", outline="#00ffff"),
                       line=dict(fill="#00ffff"))
@@ -540,36 +530,38 @@ class Highlighter():
 
     def _highlight_mesh(self, mesh_ids, landmarks, top_left, un_hide):
         """ Locate and display the given mesh annotations """
-        logger.trace("Highlighting mesh (id: %s, top_left: %s)", mesh_ids, top_left)
+        logger.trace("Highlighting mesh (id: %s, top_left: %s, unhide: %s)",
+                     mesh_ids, top_left, un_hide)
         for points, mesh_id in zip(landmarks, mesh_ids):
             self._canvas.coords(mesh_id, *(points + top_left).flatten())
             if un_hide:
                 self._canvas.itemconfig(mesh_id, state="normal")
 
 
-class FaceView():
+class FaceFilter():
     """ Base class for different faces view filters. """
     def __init__(self, face_cache):
         self._face_cache = face_cache
         self._canvas = face_cache._canvas
-
-        self._display_indices = None
-        self._annotations = []
-
         self._columns = face_cache._columns
         self._size = face_cache._size
+        self._display_indices = None
+
+    @property
+    def _tk_objects(self):
+        return self._face_cache.tk_objects
 
     @property
     def _face_indices_per_frame(self):
         return list(accumulate(self._face_cache.face_count_per_frame))
 
-    def initialize(self):
+    def initialize(self, tk_objects, mesh_landmarks):
         """ Initialize the viewer for the selected filter type """
         self._display_indices = self._get_filtered_frames_list()
         display_idx = 0
-        for idx, annotations in enumerate(self._face_cache.annotations):
+        for idx, (frame_landmarks, frame_objects) in enumerate(zip(mesh_landmarks, tk_objects)):
             state = "normal" if idx in self._display_indices else "hidden"
-            for landmarks, objects in zip(annotations["mesh_landmarks"], annotations["objects"]):
+            for landmarks, objects in zip(frame_landmarks, frame_objects):
                 if state == "hidden":
                     self._hide_displayed_face(objects)
                     continue
@@ -577,10 +569,9 @@ class FaceView():
                                    landmarks["landmarks"],
                                    self._coords_from_index(display_idx))
                 display_idx += 1
-            self._annotations.append(annotations)
 
     def _get_filtered_frames_list(self):
-        """ Overide for filter criteria for specific viewer """
+        """ Override for filter criteria for specific viewer """
         raise NotImplementedError
 
     def _hide_displayed_face(self, objects):
@@ -607,11 +598,13 @@ class FaceView():
 
     def add_face(self, tk_face, frame_id):
         """ Display a face in the correct location and update subsequent faces. """
-        insert_index = self._face_indices_per_frame[frame_id] - 1
+        insert_index = max(0, self._face_indices_per_frame[frame_id] - 1)
         coords = self._coords_from_index(insert_index)
         tag = ["frame_id_{}".format(frame_id)]
         new_face = self._canvas.create_image(*coords, image=tk_face, anchor=tk.NW, tags=tag)
-        self._face_cache.annotations[frame_id]["objects"].append(dict(image_id=new_face))
+        logger.trace("insert_index: %s, coords: %s, tag: %s, new_face: %s",
+                     insert_index, coords, tag, new_face)
+        self._tk_objects[frame_id].append(dict(image_id=new_face))
         self._update_layout(frame_id + 1, insert_index + 1)
 
     def remove_face(self, frame_id):
@@ -623,33 +616,77 @@ class FaceView():
     def _update_layout(self, frame_id, starting_object_index):
         """ Update the layout of faces when a face has been added or removed """
         idx = starting_object_index
-        for annotation in self._annotations[frame_id:]:
-            for obj in annotation["objects"]:
+        for faces in self._tk_objects[frame_id:]:
+            for obj in faces:
                 coords = self._coords_from_index(idx)
                 self._canvas.coords(obj["image_id"], *coords)
                 idx += 1
 
     def de_initialize(self):
+        """ Unload the Face Filter when changing filter type. """
         self._display_indices = None
-        self._annotations = []
 
 
-class AllFrames(FaceView):
+class AllFrames(FaceFilter):
     """ The Frames that have Faces viewer """
     def _get_filtered_frames_list(self):
         """ Return the full list of objects """
-        return range(len(self._face_cache.annotations))
+        return range(len(self._face_cache.face_count_per_frame))
 
 
-class NoFaces(FaceView):
+class NoFaces(FaceFilter):
     """ The Frames with No Faces viewer """
+    def __init__(self, face_cache):
+        self._added_objects = []
+        self._tk_position = face_cache._frames.tk_position
+        self._tk_position_callback = None
+        super().__init__(face_cache)
+
+    @property
+    def _face_indices_per_frame(self):
+        return [0 for _ in range(len(self._face_cache.face_count_per_frame))]
+
     def _get_filtered_frames_list(self):
         """ Return the full list of frame indices with no faces """
         return [idx for idx, face_count in enumerate(self._face_cache.face_count_per_frame)
                 if face_count == 0]
 
+    def initialize(self, tk_objects, mesh_landmarks):
+        """ Initialize the viewer for the selected filter type.
 
-class MultipleFaces(FaceView):
+        Additionally adds a callback on a frame change to hide any new faces that may have been
+        added from the viewer.
+        """
+        super().initialize(tk_objects, mesh_landmarks)
+        self._tk_position_callback = self._tk_position.trace("w", self._hide_new_faces)
+
+    def _hide_new_faces(self, *args):  # pylint:disable=unused-argument
+        """ Hide any new faces that have been added on a frame change. """
+        for item_id in self._added_objects:
+            logger.debug("Hiding newly created face: %s", item_id)
+            self._canvas.itemconfig(item_id, state="hidden")
+        self._added_objects = []
+
+    def add_face(self, tk_face, frame_id):
+        """ Display a face in the correct location and update subsequent faces.
+
+        Additionally adds the added object ids to :attr:`_added_objects` to be hidden on
+        a frame change.
+        """
+        super().add_face(tk_face, frame_id)
+        self._added_objects.extend(self._tk_objects[frame_id][-1].values())
+
+    def de_initialize(self):
+        """ Unload the Face Filter when changing filter type.
+
+        Additionally removes the callback to hide added faces on a frame change.
+        """
+        super().de_initialize()
+        self._tk_position.trace_vdelete("w", self._tk_position_callback)
+        self._tk_position_callback = None
+
+
+class MultipleFaces(FaceFilter):
     """ The Frames with Multiple Faces viewer """
     @property
     def _face_indices_per_frame(self):

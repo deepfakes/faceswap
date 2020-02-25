@@ -44,7 +44,8 @@ class Manual(tk.Tk):
         self._initialize_tkinter()
 
         extractor = Aligner()
-        self._frames = FrameNavigation(arguments.frames, get_config().scaling_factor)
+        scaling_factor = get_config().scaling_factor
+        self._frames = FrameNavigation(arguments.frames, scaling_factor)
         self._alignments = AlignmentsData(arguments.alignments_path,
                                           self._frames,
                                           extractor,
@@ -56,7 +57,7 @@ class Manual(tk.Tk):
         self._containers = self._create_containers()
 
         pbar = StatusBar(self._containers["bottom"], hide_status=True)
-        self._faces = FaceCache(self._alignments, pbar)
+        self._faces = FaceCache(self._alignments, pbar, scaling_factor)
 
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"], self._faces, self._frames)
