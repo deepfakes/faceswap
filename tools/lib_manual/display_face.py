@@ -190,6 +190,8 @@ class FaceCache():
         # change)
         # TODO make loading faces a user selected action?
         # TODO Vid deets to alignments file
+        # TODO Gray out additional annotations button during load
+        # TODO Optional annotations don't stick on display type change
         try:
             self._pbar.start(mode="determinate")
             faces_seen = 0
@@ -555,8 +557,13 @@ class FaceFilter():
         logger.debug("Initializing: %s: (face_cache: %s)", self.__class__.__name__, face_cache)
         self._face_cache = face_cache
         self._canvas = face_cache._canvas
-        self._coords_from_index = self._face_cache._coords_from_index
-        self._display_indices = None  # TODO update on add/remove?
+        self._coords_from_index = face_cache._coords_from_index
+        self._tk_position = face_cache._frames.tk_position
+
+        # Set and unset during :func:`initialize` and :func:`de-initialize`
+        self._display_indices = []
+        self._current_position = -1
+        self._tk_position_callback = None
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -589,6 +596,13 @@ class FaceFilter():
         """
         raise NotImplementedError
 
+    def _on_frame_change(self, *args):  # pylint:disable=unused-argument
+        """ Callback to be executed whenever the frame is changed.
+
+        Override for filter specific actions
+        """
+        raise NotImplementedError
+
     def initialize(self, tk_objects, mesh_landmarks):
         """ Initialize the viewer for the selected filter type.
 
@@ -616,6 +630,9 @@ class FaceFilter():
                                    landmarks["landmarks"],
                                    self._coords_from_index(display_idx))
                 display_idx += 1
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
+        self._current_position = self._display_indices[0] if self._display_indices else -1
 
     def _hide_displayed_face(self, objects):
         """ Hide faces and annotations that are displayed which should be hidden.
@@ -681,26 +698,30 @@ class FaceFilter():
         frame_id: int
             The frame index that the face has been removed from
         """
-        starting_index = (self._face_indices_per_frame[frame_id] -
-                          self._face_cache.face_count_per_frame[frame_id])
+        starting_index = max(0, (self._face_indices_per_frame[frame_id] -
+                                 self._face_cache.face_count_per_frame[frame_id]))
         self._update_layout(frame_id, starting_index)
 
-    def _update_layout(self, frame_id, starting_object_index):
+    def _update_layout(self, starting_frame_id, starting_object_index):
         """ Reposition faces and annotations on the canvas after a face has been added or removed.
 
         Parameters
         ----------
-        frame_id: int
+        starting_frame_id: int
             The starting frame index that new locations should be calculated for
         starting_object_index: int
             The starting absolute face index that new locations should be calculated for
         """
+        # TODO Optional Annotations
         idx = starting_object_index
-        for faces in self._tk_objects[frame_id:]:
-            for obj in faces:
+        logger.debug("starting_frame_id: %s, startng_object_index: %s",
+                     starting_frame_id, starting_object_index)
+        for frame_id in self._display_indices[self._display_indices.index(starting_frame_id):]:
+            for obj in self._tk_objects[frame_id]:
                 coords = self._coords_from_index(idx)
                 self._canvas.coords(obj["image_id"], *coords)
                 idx += 1
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
     def toggle_annotation(self, display):
         """ Toggle additional object annotations on or off.
@@ -748,7 +769,10 @@ class FaceFilter():
 
     def de_initialize(self):
         """ Unloads the Face Filter on filter type change. """
-        self._display_indices = None
+        self._display_indices = []
+        self._tk_position.trace_vdelete("w", self._tk_position_callback)
+        self._tk_position_callback = None
+        self._current_position = -1
 
 
 class AllFrames(FaceFilter):
@@ -778,6 +802,13 @@ class AllFrames(FaceFilter):
         """
         self._display_indices = range(len(self._face_cache.face_count_per_frame))
 
+    def _on_frame_change(self, *args):  # pylint:disable=unused-argument
+        """ Callback to be executed whenever the frame is changed.
+
+        All Frames has no frame change specific actions.
+        """
+        return
+
 
 class NoFaces(FaceFilter):
     """ The Frames with No Faces viewer.
@@ -792,8 +823,6 @@ class NoFaces(FaceFilter):
     """
     def __init__(self, face_cache):
         self._added_objects = []
-        self._tk_position = face_cache._frames.tk_position
-        self._tk_position_callback = None
         super().__init__(face_cache)
 
     @property
@@ -817,34 +846,23 @@ class NoFaces(FaceFilter):
             idx for idx, face_count in enumerate(self._face_cache.face_count_per_frame)
             if face_count == 0]
 
-    def initialize(self, tk_objects, mesh_landmarks):
-        """ Initialize the viewer for the selected filter type.
+    def _on_frame_change(self, *args):  # pylint:disable=unused-argument
+        """ Callback to be executed whenever the frame is changed.
 
-        Hides annotations and faces that should not be displayed for the current filter.
-        Displays and moves the faces to the correct position on the canvas based on which faces
-        should be displayed.
-
-        Additionally adds a callback on a frame change to hide any new faces that may have been
-        added to the viewer.
-
-        Parameters
-        ----------
-        tk_objects: list
-            The list of objects that exist for every frame in the source.
-        mesh_landmarks: list
-            The list of landmarks, split up into groups for creating mesh annotations for every
-            frame in the source
+        If faces have been added to the current frame, hide the new frame and remove
+        the frame id from :attr:`_object_indices`.
         """
-        super().initialize(tk_objects, mesh_landmarks)
-        self._tk_position_callback = self._tk_position.trace("w", self._hide_new_faces)
-
-    def _hide_new_faces(self, *args):  # pylint:disable=unused-argument
-        """ Callback function to be executed on a frame change to hide any new faces that have
-        been added. """
+        if not self._added_objects:
+            return
         for item_id in self._added_objects:
             logger.debug("Hiding newly created face: %s", item_id)
             self._canvas.itemconfig(item_id, state="hidden")
         self._added_objects = []
+        position = self._current_position
+        if position != -1 and self._face_cache.face_count_per_frame[position] != 0:
+            logger.debug("Removing display frame index: %s", position)
+            self._display_indices.remove(position)
+        self._current_position = self._tk_position.get()
 
     def add_face(self, tk_face, frame_id):
         """ Display a new face in the correct location and move subsequent faces to their new
@@ -863,15 +881,6 @@ class NoFaces(FaceFilter):
         """
         super().add_face(tk_face, frame_id)
         self._added_objects.extend(self._tk_objects[frame_id][-1].values())
-
-    def de_initialize(self):
-        """ Unloads the Face Filter on filter type change.
-
-        Additionally removes the callback to hide added faces on a frame change.
-        """
-        super().de_initialize()
-        self._tk_position.trace_vdelete("w", self._tk_position_callback)
-        self._tk_position_callback = None
 
 
 class MultipleFaces(FaceFilter):
@@ -903,3 +912,26 @@ class MultipleFaces(FaceFilter):
         self._display_indices = [
             idx for idx, face_count in enumerate(self._face_cache.face_count_per_frame)
             if face_count > 1]
+
+    def _on_frame_change(self, *args):  # pylint:disable=unused-argument
+        """ Callback to be executed whenever the frame is changed.
+
+        If the face count for the current frame is no longer 2 or more, remove the frame
+        from :attr:`_object_indices`, hide any existing sole faces and update the layout.
+        """
+        position = self._current_position
+        displayed_count = self._face_cache.face_count_per_frame[position]
+        if position != -1 and displayed_count < 2:
+            logger.debug("Removing display frame index: %s", position)
+            self._display_indices.remove(position)
+            if displayed_count == 1:
+                self._hide_leftover_face(position)
+            self.remove_face(self._tk_position.get())
+        self._current_position = self._tk_position.get()
+
+    def _hide_leftover_face(self, position):
+        """ If one face remains in a frame, hide it from view on a frame change. """
+        logger.debug("Hiding remaining face for frame index: %s", position)
+        for item_ids in self._tk_objects[position][0].values():
+            for item_id in item_ids if isinstance(item_ids, list) else [item_ids]:
+                self._canvas.itemconfig(item_id, state="hidden")
