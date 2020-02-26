@@ -328,7 +328,10 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self._canvas = FacesViewer(self._faces_frame, self._faces, frames)
+        self._canvas = FacesViewer(self._faces_frame,
+                                   self._actions_frame.tk_optional_annotation,
+                                   self._faces,
+                                   frames)
         scrollbar_width = self._add_scrollbar()
         self._canvas.load_faces(self.winfo_width() - scrollbar_width)
 
@@ -362,7 +365,8 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
         self._faces = faces
-        self._selected_display = None
+        self._tk_optional_annotation = tk.StringVar()
+        self._tk_optional_annotation.set(None)
         self._configure_styles()
         self._displays = ("landmarks", "mask")
         self._initial_display = "none"
@@ -375,6 +379,12 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         the first letter of each display. """
         # TODO Key bindings
         return {"#TODO {}".format(display): display for display in self._displays}
+
+    @property
+    def tk_optional_annotation(self):
+        """ :class:`tkinter.StringVar` The variable holding the currently selected
+        optional annotation """
+        return self._tk_optional_annotation
 
     @property
     def _helptext(self):
@@ -432,7 +442,9 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The display name for the button that has called this event as exists in
             attr:`_buttons`
         """
-        display = None if display == self._selected_display else display
+        if not self._faces.is_initialized:
+            return
+        display = None if display == self._tk_optional_annotation.get() else display
         for title, button in self._buttons.items():
             if display == title:
                 button.configure(style="display_selected.TButton")
@@ -440,7 +452,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             else:
                 button.configure(style="display_deselected.TButton")
                 button.state(["!pressed", "!focus"])
-        self._selected_display = display
+        self._tk_optional_annotation.set(display)
         self._faces.toggle_annotations(display)
 
 
@@ -456,12 +468,14 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, parent, faces, frames):
-        logger.debug("Initializing %s: (parent: %s, faces: %s)", self.__class__.__name__, parent,
-                     faces)
+    def __init__(self, parent, tk_optional_annotation, faces, frames):
+        logger.debug("Initializing %s: (parent: %s, tk_optional_annotation: %s, faces: %s, "
+                     "frames: %s)", self.__class__.__name__, parent, tk_optional_annotation, faces,
+                     frames)
         super().__init__(parent, bd=0, highlightthickness=0)
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self.parent = parent
+        self._tk_optional_annotation = tk_optional_annotation
         self._faces = faces
         self._frames = frames
         self._hover_box = self.create_rectangle(0, 0, 1, 1,
@@ -469,6 +483,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                                 width=2,
                                                 state="hidden")
         self._bind_mouse()
+
+        # Set in load_frames
+        self._columns = 0
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _bind_mouse(self):
@@ -483,13 +500,15 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             self.bind("<MouseWheel>", self._scroll)
 
     def load_faces(self, frame_width):
-        """ Load the faces into the Faces Canvas in a background thread.
+        """ Set the number of columns based on the holding frame width and face size.
+        Load the faces into the Faces Canvas in a background thread.
 
         Parameters
         ----------
         frame_width: int
             The width of the :class:`tkinter.ttk.Frame` that holds this canvas """
-        self._faces.load_faces(self, frame_width)
+        self._columns = frame_width // self._faces.size
+        self._faces.load_faces(self)
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -573,6 +592,37 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             adjust = 1
         self.yview_scroll(int(-1 * adjust), "units")
         self._update_cursor(event)
+
+    def coords_from_index(self, index):
+        """ Returns the top left coordinates location for the canvas object based on an object's
+        absolute index.
+
+        Parameters
+        ----------
+        index: int
+            The absolute display index of the face that the coordinates should be calculated from
+
+        Returns
+        -------
+        tuple
+            The top left co-ordinates that an object should be placed on the canvas calculated
+            from the given index.
+        """
+        return ((index % self._columns) * self._faces.size,
+                (index // self._columns) * self._faces.size)
+
+    def create_mesh_annotations(self, color, mesh_landmarks, offset, tag):
+        """ Create the coordinates for the face mesh. """
+        retval = []
+        state = "normal" if self._tk_optional_annotation.get() == "landmarks" else "hidden"
+        kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
+        for is_poly, landmarks in zip(mesh_landmarks["is_poly"], mesh_landmarks["landmarks"]):
+            key = "polygon" if is_poly else "line"
+            obj = getattr(self, "create_{}".format(key))
+            obj_kwargs = kwargs[key]
+            coords = (landmarks + offset).flatten()
+            retval.append(obj(*coords, state=state, width=1, tags=tag, **obj_kwargs))
+        return retval
 
 
 class Aligner():

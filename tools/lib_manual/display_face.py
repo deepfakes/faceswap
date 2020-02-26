@@ -44,7 +44,6 @@ class FaceCache():
 
         # Following set in self._load
         self._canvas = None
-        self._columns = None
         self._annotations = dict(tk_faces=[], tk_objects=[], mesh_landmarks=[])
         self._face_count_per_frame = []
         self._filters = dict(displays=dict(), current_display=None)
@@ -58,27 +57,33 @@ class FaceCache():
         return self._size
 
     @property
-    def face_count_per_frame(self):
-        """ list: The count of faces contained within each frame """
-        return self._face_count_per_frame
+    def is_initialized(self):
+        """ bool: ``True`` if the faces have completed the loading cycle otherwise ``False`` """
+        return self._initialized.is_set()
 
     @property
-    def tk_objects(self):
-        """ list: list of frame count length containing list of `dict` containing each faces
-        canvas object ids. """
+    def _tk_objects(self):
+        """ list: list of frame count length containing list of `dict` objects containing each
+        face's canvas object ids.
+
+        The index of each item in the list corresponds to the frame index.
+        Each item contains a list of dictionaries, one dictionary for every face that appears
+        in the frame.
+        The dictionary holds all the canvas annotation objects that can appear for each face.
+        """
         return self._annotations["tk_objects"]
-
-    @property
-    def _tk_faces(self):
-        """ list: list of frame count length containing lists of :class:`PIL.ImageTk.PhotoImage`
-            corresponding to each face in a frame. """
-        return self._annotations["tk_faces"]
 
     @property
     def _mesh_landmarks(self):
         """ list: list of frame count length containing lists of :class:`numpy.ndarray` split
         up into groups for creating mesh annotations for each face in the frame. """
         return self._annotations["mesh_landmarks"]
+
+    @property
+    def _tk_faces(self):
+        """ list: list of frame count length containing lists of :class:`PIL.ImageTk.PhotoImage`
+            corresponding to each face in a frame. """
+        return self._annotations["tk_faces"]
 
     @property
     def _frames(self):
@@ -94,24 +99,6 @@ class FaceCache():
     def _colors(self):
         """ dict: Colors for the annotations. """
         return dict(border="#00ff00", mesh="#00ffff", mesh_half="#009999")
-
-    # Utility Functions
-    def _coords_from_index(self, index):
-        """ Returns the top left coordinates location for the canvas object based on an object's
-        absolute index.
-
-        Parameters
-        ----------
-        index: int
-            The absolute display index of the face that the coordinates should be calculated from
-
-        Returns
-        -------
-        tuple
-            The top left co-ordinates that an object should be placed on the canvas calculated
-            from the given index.
-        """
-        return ((index % self._columns) * self._size, (index // self._columns) * self._size)
 
     def frame_index_from_object(self, object_id):
         """ Retrieve the frame index that an object belongs to from it's tag.
@@ -161,12 +148,11 @@ class FaceCache():
         if current_display is not None:
             self._filtered_display.de_initialize()
         self._filters["current_display"] = nav_mode
-        self._filtered_display.initialize(self.tk_objects, self._mesh_landmarks)
+        self._filtered_display.initialize(self._tk_objects, self._mesh_landmarks)
 
-    def load_faces(self, canvas, frame_width):
+    def load_faces(self, canvas):
         """ Launch a background thread to load the faces into cache and assign the canvas to
         :attr:`_canvas` """
-        self._columns = frame_width // self._size
         self._canvas = canvas
         self._selected.initialize(canvas)
         self._set_displays()
@@ -191,7 +177,7 @@ class FaceCache():
         # TODO make loading faces a user selected action?
         # TODO Vid deets to alignments file
         # TODO Gray out additional annotations button during load
-        # TODO Optional annotations don't stick on display type change
+        # TODO Optional annotations don't stick on display type change (?CONFIRM)
         try:
             self._pbar.start(mode="determinate")
             faces_seen = 0
@@ -215,14 +201,14 @@ class FaceCache():
                     faces_seen += 1
                 self._tk_faces.append(frame_items["faces"])
                 self._mesh_landmarks.append(frame_items["lmarks"])
-                self.tk_objects.append(frame_items["objects"])
+                self._tk_objects.append(frame_items["objects"])
             self._pbar.stop()
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Error loading face. Error: %s", str(err))
             # TODO Remove this
             import sys; import traceback
             exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
-        self._face_count_per_frame = [len(faces) for faces in self._tk_faces]
+        self._face_count_per_frame.extend([len(faces) for faces in self._tk_faces])
         self._initialized.set()
         self._switch_filter()
         self._set_selected()
@@ -241,30 +227,20 @@ class FaceCache():
     def _load_annotations(self, tk_face, mesh_landmarks, faces_seen, frame_idx):
         """ Load the resized aligned face. """
         objects = dict()
-        coords = self._coords_from_index(faces_seen)
+        coords = self._canvas.coords_from_index(faces_seen)
         tag = ["frame_id_{}".format(frame_idx)]
         objects["image_id"] = self._canvas.create_image(*coords,
                                                         image=tk_face,
                                                         anchor=tk.NW,
                                                         tags=tag)
-        objects["mesh"] = self._create_mesh_annotations(mesh_landmarks, coords, tag)
+        objects["mesh"] = self._canvas.create_mesh_annotations(self._colors["mesh_half"],
+                                                               mesh_landmarks,
+                                                               coords,
+                                                               tag)
 
         if coords[0] == 0:  # Resize canvas on new line
             self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         return objects
-
-    def _create_mesh_annotations(self, mesh_landmarks, offset, tag):
-        """ Create the coordinates for the face mesh. """
-        retval = []
-        kwargs = dict(polygon=dict(fill="", outline=self._colors["mesh_half"]),
-                      line=dict(fill=self._colors["mesh_half"]))
-        for is_poly, landmarks in zip(mesh_landmarks["is_poly"], mesh_landmarks["landmarks"]):
-            key = "polygon" if is_poly else "line"
-            obj = getattr(self._canvas, "create_{}".format(key))
-            obj_kwargs = kwargs[key]
-            coords = (landmarks + offset).flatten()
-            retval.append(obj(*coords, state="hidden", width=1, tags=tag, **obj_kwargs))
-        return retval
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Action to perform on a frame change """
@@ -275,7 +251,7 @@ class FaceCache():
     def _set_selected(self):
         """ Set the currently selected annotations. """
         position = self._frames.tk_position.get()
-        self._selected.set_selected(self.tk_objects[position],
+        self._selected.set_selected(self._tk_objects[position],
                                     self._tk_faces[position],
                                     self._mesh_landmarks[position],
                                     position)
@@ -432,6 +408,8 @@ class SelectedFrame():
 
 class Highlighter():
     """ Highlights the currently active frame's faces """
+    # TODO Highlight existing landmark mesh rather than creating new (existing doesn't update)
+
     def __init__(self, image_size, canvas):
         logger.debug("Initializing: %s: (image_size: %s, canvas: %s)",
                      self.__class__.__name__, image_size, canvas)
@@ -555,27 +533,17 @@ class FaceFilter():
     """
     def __init__(self, face_cache):
         logger.debug("Initializing: %s: (face_cache: %s)", self.__class__.__name__, face_cache)
-        self._face_cache = face_cache
         self._canvas = face_cache._canvas
-        self._coords_from_index = face_cache._coords_from_index
         self._tk_position = face_cache._frames.tk_position
+        self._tk_objects = face_cache._tk_objects
+        self._face_count_per_frame = face_cache._face_count_per_frame
+        self._mesh_landmarks = face_cache._mesh_landmarks
 
         # Set and unset during :func:`initialize` and :func:`de-initialize`
         self._display_indices = []
         self._current_position = -1
         self._tk_position_callback = None
         logger.debug("Initialized: %s", self.__class__.__name__)
-
-    @property
-    def _tk_objects(self):
-        """ list: The tkinter canvas objects that exist for each frame.
-
-        The index of each item in the list corresponds to the frame index.
-        Each item contains a list of dictionaries, one dictionary for every face that appears
-        in the frame.
-        The dictionary holds all the canvas annotation objects that can appear for each face.
-        """
-        return self._face_cache.tk_objects
 
     @property
     def _face_indices_per_frame(self):
@@ -628,7 +596,7 @@ class FaceFilter():
                     continue
                 self._display_face(objects,
                                    landmarks["landmarks"],
-                                   self._coords_from_index(display_idx))
+                                   self._canvas.coords_from_index(display_idx))
                 display_idx += 1
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
@@ -681,13 +649,18 @@ class FaceFilter():
             The frame index that the face is to be added to
         """
         insert_index = max(0, self._face_indices_per_frame[frame_id] - 1)
-        coords = self._coords_from_index(insert_index)
+        coords = self._canvas.coords_from_index(insert_index)
         tag = ["frame_id_{}".format(frame_id)]
         new_face = self._canvas.create_image(*coords, image=tk_face, anchor=tk.NW, tags=tag)
-        logger.trace("insert_index: %s, coords: %s, tag: %s, new_face: %s",
-                     insert_index, coords, tag, new_face)
-        self._canvas.tag_lower(new_face)
-        self._tk_objects[frame_id].append(dict(image_id=new_face))
+        # TODO Color to global lookup
+        mesh = self._canvas.create_mesh_annotations("#009999",
+                                                    self._mesh_landmarks[frame_id][-1],
+                                                    coords,
+                                                    tag)
+        logger.debug("insert_index: %s, coords: %s, tag: %s, new_face: %s, mesh: %s",
+                     insert_index, coords, tag, new_face, mesh)
+        self._canvas.tag_lower(tag)
+        self._tk_objects[frame_id].append(dict(image_id=new_face, mesh=mesh))
         self._update_layout(frame_id + 1, insert_index + 1)
 
     def remove_face(self, frame_id):
@@ -699,7 +672,7 @@ class FaceFilter():
             The frame index that the face has been removed from
         """
         starting_index = max(0, (self._face_indices_per_frame[frame_id] -
-                                 self._face_cache.face_count_per_frame[frame_id]))
+                                 self._face_count_per_frame[frame_id]))
         self._update_layout(frame_id, starting_index)
 
     def _update_layout(self, starting_frame_id, starting_object_index):
@@ -712,14 +685,15 @@ class FaceFilter():
         starting_object_index: int
             The starting absolute face index that new locations should be calculated for
         """
-        # TODO Optional Annotations
         idx = starting_object_index
         logger.debug("starting_frame_id: %s, startng_object_index: %s",
                      starting_frame_id, starting_object_index)
         for frame_id in self._display_indices[self._display_indices.index(starting_frame_id):]:
-            for obj in self._tk_objects[frame_id]:
-                coords = self._coords_from_index(idx)
+            for obj, landmarks in zip(self._tk_objects[frame_id], self._mesh_landmarks[frame_id]):
+                coords = self._canvas.coords_from_index(idx)
                 self._canvas.coords(obj["image_id"], *coords)
+                for points, mesh_id in zip(landmarks["landmarks"], obj["mesh"]):
+                    self._canvas.coords(mesh_id, *(points + coords).flatten())
                 idx += 1
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
@@ -792,7 +766,7 @@ class AllFrames(FaceFilter):
 
         For All Frames this is the absolute index for every face in all frames.
         """
-        return list(accumulate(self._face_cache.face_count_per_frame))
+        return list(accumulate(self._face_count_per_frame))
 
     def _set_display_indices(self):
         """ Set the the filtered list frame indices to :attr:`_display_indices` for the
@@ -800,7 +774,7 @@ class AllFrames(FaceFilter):
 
         For All Frames this is every frame index that exists, regardless of face count.
         """
-        self._display_indices = range(len(self._face_cache.face_count_per_frame))
+        self._display_indices = range(len(self._face_count_per_frame))
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
@@ -834,7 +808,7 @@ class NoFaces(FaceFilter):
 
         For No Faces this always zero for all frames.
         """
-        return [0 for _ in range(len(self._face_cache.face_count_per_frame))]
+        return [0 for _ in range(len(self._face_count_per_frame))]
 
     def _set_display_indices(self):
         """ Set the the filtered list of frame indices to :attr:`_display_indices` for the
@@ -843,7 +817,7 @@ class NoFaces(FaceFilter):
         For No Faces this is every frame index for each frame that has no face.
         """
         self._display_indices = [
-            idx for idx, face_count in enumerate(self._face_cache.face_count_per_frame)
+            idx for idx, face_count in enumerate(self._face_count_per_frame)
             if face_count == 0]
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
@@ -859,7 +833,7 @@ class NoFaces(FaceFilter):
             self._canvas.itemconfig(item_id, state="hidden")
         self._added_objects = []
         position = self._current_position
-        if position != -1 and self._face_cache.face_count_per_frame[position] != 0:
+        if position != -1 and self._face_count_per_frame[position] != 0:
             logger.debug("Removing display frame index: %s", position)
             self._display_indices.remove(position)
         self._current_position = self._tk_position.get()
@@ -899,9 +873,11 @@ class MultipleFaces(FaceFilter):
         current frame.
 
         For Multiple Faces indices are only incremented if 2 or more faces appear in a frame.
+        The value for the current frame's faces is incremented the actual number of faces appearing
+        regardless of threshold in case of deletions taking the value below the threshold.
         """
-        return list(accumulate(0 if face_count <= 1 else face_count
-                               for face_count in self._face_cache.face_count_per_frame))
+        return list(accumulate(0 if num_faces <= 1 and idx != self._current_position else num_faces
+                               for idx, num_faces in enumerate(self._face_count_per_frame)))
 
     def _set_display_indices(self):
         """ Set the the filtered list of frame indices to :attr:`_display_indices` for the
@@ -910,7 +886,7 @@ class MultipleFaces(FaceFilter):
         For Multiple Faces this is every frame index for each frame that contains 2 or more faces.
         """
         self._display_indices = [
-            idx for idx, face_count in enumerate(self._face_cache.face_count_per_frame)
+            idx for idx, face_count in enumerate(self._face_count_per_frame)
             if face_count > 1]
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
@@ -920,7 +896,7 @@ class MultipleFaces(FaceFilter):
         from :attr:`_object_indices`, hide any existing sole faces and update the layout.
         """
         position = self._current_position
-        displayed_count = self._face_cache.face_count_per_frame[position]
+        displayed_count = self._face_count_per_frame[position]
         if position != -1 and displayed_count < 2:
             logger.debug("Removing display frame index: %s", position)
             self._display_indices.remove(position)
