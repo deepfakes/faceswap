@@ -48,7 +48,7 @@ class Mask(Editor):
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
         color = self._control_vars[self.__class__.__name__]["brush"]["CursorColor"].get()
-        return self._colors[color.lower()]
+        return self._canvas.colors[color.lower()]
 
     def _add_actions(self):
         self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
@@ -76,7 +76,7 @@ class Mask(Editor):
         self._add_control(ControlPanelOption("Cursor Color",
                                              str,
                                              group="Brush",
-                                             choices=sorted(self._colors),
+                                             choices=sorted(self._canvas.colors),
                                              default="White",
                                              helptext="Select the brush cursor color."))
 
@@ -116,7 +116,7 @@ class Mask(Editor):
         mask_type = self._control_vars[key]["display"]["MaskType"].get().lower()
         color = self._control_color[1:]
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
-        roi_color = self._colors[self._annotation_formats["ExtractBox"]["color"].get()]
+        roi_color = self._canvas.colors[self._annotation_formats["ExtractBox"]["color"].get()]
         opacity = self._opacity
         for idx, face in enumerate(self._alignments.current_faces):
             mask = face.mask.get(mask_type, None)

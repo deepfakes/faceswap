@@ -60,7 +60,10 @@ class Manual(tk.Tk):
         self._faces = FaceCache(self._alignments, pbar, scaling_factor)
 
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
-        self._faces_frame = FacesFrame(self._containers["bottom"], self._faces, self._frames)
+        self._faces_frame = FacesFrame(self._containers["bottom"],
+                                       self._faces,
+                                       self._frames,
+                                       self._display)
 
         self._options = Options(self._containers["top"], self._display)
         self._display.tk_selected_action.set("View")
@@ -316,9 +319,9 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, parent, faces, frames):
-        logger.debug("Initializing %s: (parent: %s, faces: %s)",
-                     self.__class__.__name__, parent, faces)
+    def __init__(self, parent, faces, frames, display_frame):
+        logger.debug("Initializing %s: (parent: %s, faces: %s, display_frame: %s)",
+                     self.__class__.__name__, parent, faces, display_frame)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._faces = faces
@@ -331,7 +334,8 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._canvas = FacesViewer(self._faces_frame,
                                    self._actions_frame.tk_optional_annotation,
                                    self._faces,
-                                   frames)
+                                   frames,
+                                   display_frame)
         scrollbar_width = self._add_scrollbar()
         self._canvas.load_faces(self.winfo_width() - scrollbar_width,
                                 self._actions_frame.enable_buttons)
@@ -468,21 +472,23 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, parent, tk_optional_annotation, faces, frames):
+    def __init__(self, parent, tk_optional_annotation, faces, frames, display_frame):
         logger.debug("Initializing %s: (parent: %s, tk_optional_annotation: %s, faces: %s, "
-                     "frames: %s)", self.__class__.__name__, parent, tk_optional_annotation, faces,
-                     frames)
+                     "frames: %s, display_frame: %s)", self.__class__.__name__, parent,
+                     tk_optional_annotation, faces, frames, display_frame)
         super().__init__(parent, bd=0, highlightthickness=0)
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self.parent = parent
         self._tk_optional_annotation = tk_optional_annotation
         self._faces = faces
         self._frames = frames
+        self._display_frame = display_frame
         self._hover_box = self.create_rectangle(0, 0, 1, 1,
                                                 outline="#FFFF00",
                                                 width=2,
                                                 state="hidden")
         self._bind_mouse()
+        self._color_keys = dict(polygon="outline", line="fill")
 
         # Set in load_frames
         self._columns = 0
@@ -493,6 +499,18 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ str: The currently selected optional annotation. """
         retval = self._tk_optional_annotation.get()
         return None if retval == "None" else retval
+
+    @property
+    def tk_control_colors(self):
+        """ :dict: Editor key with :class:`tkinter.StringVar` containing the selected color hex
+        code for each annotation. """
+        return self._display_frame.tk_control_colors
+
+    @property
+    def control_colors(self):
+        """ :dict: Editor key with the currently selected hex code as value. """
+        return {key: self._display_frame.colors[val.get()]
+                for key, val in self.tk_control_colors.items()}
 
     def _bind_mouse(self):
         """ Bind the mouse actions. """
@@ -629,6 +647,18 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             coords = (landmarks + offset).flatten()
             retval.append(obj(*coords, state=state, width=1, tags=tag, **obj_kwargs))
         return retval
+
+    def get_muted_color(self, color_key):
+        """ Updates hex code F values to 9 for the given annotation color key """
+        return self.control_colors[color_key].replace("f", "9")
+
+    def update_object_colors(self, item_ids, color):
+        """ Update the color of the given list of object ids """
+        for item_id in item_ids:
+            color_key = self._color_keys[self.type(item_id)]
+            if self.itemcget(item_id, color_key) != color:
+                kwargs = {color_key: color}
+                self.itemconfig(item_id, **kwargs)
 
 
 class Aligner():

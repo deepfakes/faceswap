@@ -47,6 +47,7 @@ class FaceCache():
         self._annotations = dict(tk_faces=[], tk_objects=[], mesh_landmarks=[])
         self._face_count_per_frame = []
         self._filters = dict(displays=dict(), current_display=None)
+        self._annotation_colors = dict(mesh=None)
 
         self._set_tk_trace()
         self._initialized = Event()
@@ -154,9 +155,11 @@ class FaceCache():
         """ Launch a background thread to load the faces into cache and assign the canvas to
         :attr:`_canvas` """
         self._canvas = canvas
+        self._annotation_colors = dict(mesh=self._canvas.get_muted_color("Mesh"))
         self._selected.initialize(canvas)
         self._set_displays()
         self._frames.tk_navigation_mode.trace("w", self._switch_filter)
+
         thread = MultiThread(self._load_faces,
                              enable_buttons_callback,
                              thread_count=1,
@@ -208,6 +211,7 @@ class FaceCache():
             import sys; import traceback
             exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
         self._face_count_per_frame.extend([len(faces) for faces in self._tk_faces])
+        self._canvas.tk_control_colors["Mesh"].trace("w", self._update_mesh_color)
         self._initialized.set()
         self._switch_filter()
         self._set_selected()
@@ -233,7 +237,7 @@ class FaceCache():
                                                         image=tk_face,
                                                         anchor=tk.NW,
                                                         tags=tag)
-        objects["mesh"] = self._canvas.create_mesh_annotations(self._colors["mesh_half"],
+        objects["mesh"] = self._canvas.create_mesh_annotations(self._annotation_colors["mesh"],
                                                                mesh_landmarks,
                                                                coords,
                                                                tag)
@@ -266,6 +270,19 @@ class FaceCache():
         self._selected.update()
         self._alignments.tk_edited.set(False)
 
+    def _update_mesh_color(self, *args):  # pylint:disable=unused-argument
+        """ Update the mesh color on control panel change """
+        if not self._initialized.is_set():
+            return
+        color = self._canvas.get_muted_color("Mesh")
+        if self._annotation_colors["mesh"] == color:
+            return
+        self._selected.update_highlighter_color("mesh")
+        for frame in self._tk_objects:
+            for objects in frame:
+                self._canvas.update_object_colors(objects["mesh"], color)
+        self._annotation_colors["mesh"] = color
+
     def _add_remove_face(self):
         """ add or remove a face for the current frame """
         alignment_faces = len(self._alignments.current_faces)
@@ -297,13 +314,6 @@ class FaceCache():
         if not self._initialized.is_set():
             return
         self._filtered_display.toggle_annotation()
-
-    def _display_annotations(self, display, item_ids):
-        """ Display the newly selected objects. """
-        for item_id in item_ids:
-            color_attr = "outline" if self._canvas.type(item_id) == "polygon" else "fill"
-            kwargs = {color_attr: self._colors["{}_half".format(display)], "state": "normal"}
-            self._canvas.itemconfig(item_id, **kwargs)
 
 
 class SelectedFrame():
@@ -353,6 +363,10 @@ class SelectedFrame():
     def refresh_highlighter(self):
         """ Refresh the highlighter on add/remove faces """
         self._highlighter.highlight_selected(self._tk_objects, self._mesh_landmarks)
+
+    def update_highlighter_color(self, annotation_key):
+        """ Update the highlighter annotation color on a control panel update """
+        getattr(self._highlighter, "update_{}_color".format(annotation_key))()
 
     def update(self):
         """ Update the currently selected face on editor update """
@@ -473,9 +487,9 @@ class Highlighter():
 
     def _create_highlight_mesh(self, landmarks):
         """ Create new highlight mesh annotations and append to :attr:`_meshes`. """
-        # TODO Global mesh colors
-        kwargs = dict(polygon=dict(fill="", outline="#00ffff"),
-                      line=dict(fill="#00ffff"))
+        mesh_color = self._canvas.control_colors["Mesh"]
+        kwargs = dict(polygon=dict(fill="", outline=mesh_color),
+                      line=dict(fill=mesh_color))
         mesh_ids = []
         for is_poly, points in zip(landmarks["is_poly"], landmarks["landmarks"]):
             key = "polygon" if is_poly else "line"
@@ -523,6 +537,12 @@ class Highlighter():
             self._canvas.coords(mesh_id, *(points + top_left).flatten())
             if un_hide:
                 self._canvas.itemconfig(mesh_id, state="normal")
+
+    def update_mesh_color(self):
+        """ Update the highlighted mesh color on control panel update. """
+        color = self._canvas.control_colors["Mesh"]
+        for item_ids in self._meshes:
+            self._canvas.update_object_colors(item_ids, color)
 
 
 class FaceFilter():
@@ -660,8 +680,7 @@ class FaceFilter():
         coords = self._canvas.coords_from_index(insert_index)
         tag = ["frame_id_{}".format(frame_id)]
         new_face = self._canvas.create_image(*coords, image=tk_face, anchor=tk.NW, tags=tag)
-        # TODO Color to global lookup
-        mesh = self._canvas.create_mesh_annotations("#009999",
+        mesh = self._canvas.create_mesh_annotations(self._canvas.get_muted_color("Mesh"),
                                                     self._mesh_landmarks[frame_id][-1],
                                                     coords,
                                                     tag)

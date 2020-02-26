@@ -107,6 +107,17 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return self._canvas.editors
 
     @property
+    def tk_control_colors(self):
+        """ :dict: Editor key with :class:`tkinter.StringVar` containing the selected color hex
+        code for each annotation """
+        return {key: val["color"].tk_var for key, val in self._canvas.annotation_formats.items()}
+
+    @property
+    def colors(self):
+        """ :dict: color name to hex code mapping """
+        return self._canvas.colors
+
+    @property
     def _frames_count(self):
         """ int: The number of frames based on the current navigation mode """
         nav_mode = self._frames.tk_navigation_mode.get()
@@ -673,6 +684,18 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         offset_y = (self._frames.display_dims[1] - frame_dims[1]) / 2
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
         return offset_x, offset_y
+
+    @property
+    def colors(self):
+        """ dict: Available colors for annotations """
+        return dict(black="#000000",
+                    red="#ff0000",
+                    green="#00ff00",
+                    blue="#0000ff",
+                    cyan="#00ffff",
+                    yellow="#ffff00",
+                    magenta="#ff00ff",
+                    white="#ffffff")
 
     @property
     def image_is_hidden(self):

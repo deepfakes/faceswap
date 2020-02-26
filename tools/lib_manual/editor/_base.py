@@ -55,18 +55,6 @@ class Editor():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def _colors(self):
-        """ dict: Available colors for annotations """
-        return dict(black="#000000",
-                    red="#ff0000",
-                    green="#00ff00",
-                    blue="#0000ff",
-                    cyan="#00ffff",
-                    yellow="#ffff00",
-                    magenta="#ff00ff",
-                    white="#ffffff")
-
-    @property
     def _default_colors(self):
         """ dict: The default colors for each annotation """
         return {"BoundingBox": "blue",
@@ -125,9 +113,7 @@ class Editor():
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
         annotation = self.__class__.__name__
-        color = self._annotation_formats[annotation]["color"].get()
-        color = self._default_colors[annotation] if not color else color
-        return self._colors[color]
+        return self._canvas.colors[self._annotation_formats[annotation]["color"].get()]
 
     @property
     def _zoomed_dims(self):
@@ -510,11 +496,12 @@ class Editor():
                 colors = ControlPanelOption(editor,
                                             str,
                                             group="Color",
-                                            choices=sorted(self._colors),
+                                            choices=sorted(self._canvas.colors),
                                             default=self._default_colors[annotation_key],
                                             is_radio=False,
                                             state="readonly",
                                             helptext="Set the annotation color")
+                colors.set(self._default_colors[annotation_key])
                 self._annotation_formats.setdefault(annotation_key, dict())["color"] = colors
                 self._annotation_formats[annotation_key]["mask_opacity"] = opacity
 
