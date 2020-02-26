@@ -100,12 +100,12 @@ class FaceCache():
         """ dict: Colors for the annotations. """
         return dict(border="#00ff00", mesh="#00ffff", mesh_half="#009999")
 
-    def frame_index_from_object(self, object_id):
+    def frame_index_from_object(self, item_id):
         """ Retrieve the frame index that an object belongs to from it's tag.
 
         Parameters
         ----------
-        object_id: int
+        item_id: int
             The tkinter canvas object id
 
         Returns
@@ -114,10 +114,10 @@ class FaceCache():
             The frame index that the object belongs to or ``None`` if the tag cannot be found
         """
         tags = [tag.replace("frame_id_", "")
-                for tag in self._canvas.itemcget(object_id, "tags").split()
+                for tag in self._canvas.itemcget(item_id, "tags").split()
                 if tag.startswith("frame_id_")]
         retval = int(tags[0]) if tags else None
-        logger.trace("object_id: %s, frame_id: %s", object_id, retval)
+        logger.trace("item_id: %s, frame_id: %s", item_id, retval)
         return retval
 
     def transport_index_from_frame_index(self, frame_index):
@@ -150,7 +150,7 @@ class FaceCache():
         self._filters["current_display"] = nav_mode
         self._filtered_display.initialize(self._tk_objects, self._mesh_landmarks)
 
-    def load_faces(self, canvas):
+    def load_faces(self, canvas, enable_buttons_callback):
         """ Launch a background thread to load the faces into cache and assign the canvas to
         :attr:`_canvas` """
         self._canvas = canvas
@@ -158,6 +158,7 @@ class FaceCache():
         self._set_displays()
         self._frames.tk_navigation_mode.trace("w", self._switch_filter)
         thread = MultiThread(self._load_faces,
+                             enable_buttons_callback,
                              thread_count=1,
                              name="{}.load_faces".format(self.__class__.__name__))
         thread.start()
@@ -167,7 +168,7 @@ class FaceCache():
         self._filters["displays"] = {dsp: eval(dsp)(self)  # pylint:disable=eval-used
                                      for dsp in ("AllFrames", "NoFaces", "MultipleFaces")}
 
-    def _load_faces(self):
+    def _load_faces(self, enable_buttons_callback):
         """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
 
         Updates a GUI progress bar to show loading progress.
@@ -176,8 +177,6 @@ class FaceCache():
         # change)
         # TODO make loading faces a user selected action?
         # TODO Vid deets to alignments file
-        # TODO Gray out additional annotations button during load
-        # TODO Optional annotations don't stick on display type change (?CONFIRM)
         try:
             self._pbar.start(mode="determinate")
             faces_seen = 0
@@ -212,6 +211,7 @@ class FaceCache():
         self._initialized.set()
         self._switch_filter()
         self._set_selected()
+        enable_buttons_callback()
 
     def _load_face(self, frame, face):
         """ Load the resized aligned face. """
@@ -292,24 +292,18 @@ class FaceCache():
         self._face_count_per_frame[self._frames.tk_position.get()] -= 1
         self._filtered_display.remove_face(self._selected.frame_id)
 
-    def toggle_annotations(self, display):
-        """ Toggle additional annotations on or off.
-
-        Parameters
-        ----------
-        display: {"landmarks", "mask" or "none"}
-            The annotation that should be displayed
-        """
+    def toggle_annotations(self):
+        """ Toggle additional annotations on or off. """
         if not self._initialized.is_set():
             return
-        self._filtered_display.toggle_annotation(display)
+        self._filtered_display.toggle_annotation()
 
-    def _display_annotations(self, display, object_ids):
+    def _display_annotations(self, display, item_ids):
         """ Display the newly selected objects. """
-        for object_id in object_ids:
-            color_attr = "outline" if self._canvas.type(object_id) == "polygon" else "fill"
+        for item_id in item_ids:
+            color_attr = "outline" if self._canvas.type(item_id) == "polygon" else "fill"
             kwargs = {color_attr: self._colors["{}_half".format(display)], "state": "normal"}
-            self._canvas.itemconfig(object_id, **kwargs)
+            self._canvas.itemconfig(item_id, **kwargs)
 
 
 class SelectedFrame():
@@ -363,10 +357,23 @@ class SelectedFrame():
     def update(self):
         """ Update the currently selected face on editor update """
         tk_face, landmarks = self._get_tk_face_and_landmarks()
+        self._update_face(tk_face)
+        self._update_mesh(landmarks)
+        self.refresh_highlighter()
+
+    def _update_face(self, tk_face):
+        """ Update the face photo image and the face object id """
         self._tk_faces[self._face_index] = tk_face
         self._canvas.itemconfig(self._tk_objects[self._face_index]["image_id"], image=tk_face)
-        self._mesh_landmarks[self._face_index] = _get_mesh_points(landmarks)
-        self.refresh_highlighter()
+
+    def _update_mesh(self, landmarks):
+        """ Update the optional mesh annotation """
+        mesh_landmarks = _get_mesh_points(landmarks)
+        coords = self._canvas.coords(self._tk_objects[self._face_index]["image_id"])
+        for points, item_id in zip(mesh_landmarks["landmarks"],
+                                   self._tk_objects[self._face_index]["mesh"]):
+            self._canvas.coords(item_id, *(points + coords).flatten())
+        self._mesh_landmarks[self._face_index] = mesh_landmarks
 
     def add_face(self):
         """ Add a face to the currently selected frame, """
@@ -408,8 +415,6 @@ class SelectedFrame():
 
 class Highlighter():
     """ Highlights the currently active frame's faces """
-    # TODO Highlight existing landmark mesh rather than creating new (existing doesn't update)
-
     def __init__(self, image_size, canvas):
         logger.debug("Initializing: %s: (image_size: %s, canvas: %s)",
                      self.__class__.__name__, image_size, canvas)
@@ -633,9 +638,12 @@ class FaceFilter():
             self._canvas.itemconfig(objects["image_id"], state="normal")
         self._canvas.coords(objects["image_id"], *coordinates)
 
-        for points, object_id in zip(landmarks, objects["mesh"]):
+        annotation = self._canvas.optional_annotation
+        for points, item_id in zip(landmarks, objects["mesh"]):
             mesh_coords = (points + coordinates).flatten()
-            self._canvas.coords(object_id, *mesh_coords)
+            self._canvas.coords(item_id, *mesh_coords)
+            if annotation == "landmarks" and self._canvas.itemcget(item_id, "state") == "hidden":
+                self._canvas.itemconfig(item_id, state="normal")
 
     def add_face(self, tk_face, frame_id):
         """ Display a new face in the correct location and move subsequent faces to their new
@@ -697,15 +705,10 @@ class FaceFilter():
                 idx += 1
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
-    def toggle_annotation(self, display):
+    def toggle_annotation(self):
         """ Toggle additional object annotations on or off.
-
-        Parameters
-        ----------
-        display: {"landmarks", "mask" or ``None``}
-            The annotation that should be displayed. If ``None`` then all additional annotations
-            are disabled
         """
+        display = self._canvas.optional_annotation
         display = "mesh" if display == "landmarks" else display
         state = "hidden" if display is None else "normal"
         for frame_idx in self._display_indices:

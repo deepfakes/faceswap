@@ -333,7 +333,8 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    self._faces,
                                    frames)
         scrollbar_width = self._add_scrollbar()
-        self._canvas.load_faces(self.winfo_width() - scrollbar_width)
+        self._canvas.load_faces(self.winfo_width() - scrollbar_width,
+                                self._actions_frame.enable_buttons)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -369,7 +370,6 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._tk_optional_annotation.set(None)
         self._configure_styles()
         self._displays = ("landmarks", "mask")
-        self._initial_display = "none"
         self._buttons = self._add_buttons()
         self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
 
@@ -406,6 +406,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_buttons(self):
         """ Add the display buttons to the Faces window.
+            The buttons are not activated until the faces have completed loading
 
         Returns
         -------
@@ -416,18 +417,11 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame.pack(side=tk.TOP, fill=tk.Y)
         buttons = dict()
         for display in self.key_bindings.values():
-            if display == self._initial_display:
-                btn_style = "display_selected.TButton"
-                state = (["pressed", "focus"])
-            else:
-                btn_style = "display_deselected.TButton"
-                state = (["!pressed", "!focus"])
-
             button = ttk.Button(frame,
                                 image=get_images().icons[display],
                                 command=lambda t=display: self.on_click(t),
-                                style=btn_style)
-            button.state(state)
+                                style="display_deselected.TButton")
+            button.state(["!pressed", "!focus", "disabled"])
             button.pack()
             Tooltip(button, text=self._helptext[display])
             buttons[display] = button
@@ -453,7 +447,13 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 button.configure(style="display_deselected.TButton")
                 button.state(["!pressed", "!focus"])
         self._tk_optional_annotation.set(display)
-        self._faces.toggle_annotations(display)
+        self._faces.toggle_annotations()
+
+    def enable_buttons(self):
+        """ Enable buttons when the faces have completed loading """
+        logger.debug("Enabling optional annotation buttons")
+        for button in self._buttons.values():
+            button.state(["!pressed", "!focus", "!disabled"])
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
@@ -488,6 +488,12 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._columns = 0
         logger.debug("Initialized %s", self.__class__.__name__)
 
+    @property
+    def optional_annotation(self):
+        """ str: The currently selected optional annotation. """
+        retval = self._tk_optional_annotation.get()
+        return None if retval == "None" else retval
+
     def _bind_mouse(self):
         """ Bind the mouse actions. """
         self.bind("<Motion>", self._update_cursor)
@@ -499,7 +505,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         else:
             self.bind("<MouseWheel>", self._scroll)
 
-    def load_faces(self, frame_width):
+    def load_faces(self, frame_width, enable_buttons_callback):
         """ Set the number of columns based on the holding frame width and face size.
         Load the faces into the Faces Canvas in a background thread.
 
@@ -508,7 +514,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         frame_width: int
             The width of the :class:`tkinter.ttk.Frame` that holds this canvas """
         self._columns = frame_width // self._faces.size
-        self._faces.load_faces(self)
+        self._faces.load_faces(self, enable_buttons_callback)
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
