@@ -194,6 +194,8 @@ class Manual(tk.Tk):
             "f3": lambda k=event.keysym: self._display.set_action(k),
             "f4": lambda k=event.keysym: self._display.set_action(k),
             "f5": lambda k=event.keysym: self._display.set_action(k),
+            "f9": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
+            "f10": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
             "c": lambda d="previous": self._alignments.copy_alignments(d),
             "v": lambda d="next": self._alignments.copy_alignments(d),
             "ctrl_s": self._alignments.save,
@@ -357,6 +359,16 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Update the faces frame scrollbar """
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
+    def set_annotation_display(self, key):
+        """ Set the optional annotation overlay based on keyboard shortcut.
+
+        Parameters
+        ----------
+        key: str
+            The pressed key
+        """
+        self._actions_frame.on_click(self._actions_frame.key_bindings[key])
+
 
 class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ The left hand action frame holding the action buttons.
@@ -381,8 +393,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def key_bindings(self):
         """ dict: {`key`: `display`}. The mapping of key presses to displays. Keyboard shortcut is
         the first letter of each display. """
-        # TODO Key bindings
-        return {"#TODO {}".format(display): display for display in self._displays}
+        return {"F{}".format(idx + 9): display for idx, display in enumerate(self._displays)}
 
     @property
     def tk_optional_annotation(self):
