@@ -500,10 +500,24 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                                 state="hidden")
         self._bind_mouse()
         self._color_keys = dict(polygon="outline", line="fill")
+        self._landmark_mapping_dict = self._get_landmark_mapping()
 
         # Set in load_frames
         self._columns = 0
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @staticmethod
+    def _get_landmark_mapping():
+        """ Return the mapping points """
+        mapping = dict(mouth=(48, 68),
+                       right_eyebrow=(17, 22),
+                       left_eyebrow=(22, 27),
+                       right_eye=(36, 42),
+                       left_eye=(42, 48),
+                       nose=(27, 36),
+                       jaw=(0, 17),
+                       chin=(8, 11))
+        return dict(mapping=mapping, items_per_mesh=len(mapping))
 
     @property
     def optional_annotation(self):
@@ -522,6 +536,16 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ :dict: Editor key with the currently selected hex code as value. """
         return {key: self._display_frame.colors[val.get()]
                 for key, val in self.tk_control_colors.items()}
+
+    @property
+    def _landmark_mapping(self):
+        """ dict: The landmark indices mapped to different face parts. """
+        return self._landmark_mapping_dict["mapping"]
+
+    @property
+    def items_per_mesh(self):
+        """ int: The number of items that are used to create a full mesh annotation. """
+        return self._landmark_mapping_dict["items_per_mesh"]
 
     def _bind_mouse(self):
         """ Bind the mouse actions. """
@@ -567,7 +591,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             self.config(cursor="")
             return
         object_id = item_ids[0]
-        frame_id = self._faces.frame_index_from_object(object_id)
+        frame_id = self.frame_index_from_object(object_id)
         if frame_id is None or frame_id == self._frames.tk_position.get():
             self.config(cursor="")
             self._clear_hovered()
@@ -605,7 +629,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         item_ids = self.find_withtag("current")
         if not item_ids:
             return
-        frame_id = self._faces.frame_index_from_object(item_ids[0])
+        frame_id = self.frame_index_from_object(item_ids[0])
         if frame_id is None or frame_id == self._frames.tk_position.get():
             return
         transport_id = self._faces.transport_index_from_frame_index(frame_id)
@@ -628,6 +652,35 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self.yview_scroll(int(-1 * adjust), "units")
         self._update_cursor(event)
 
+    def get_mesh_points(self, landmarks):
+        """ Obtain the mesh annotation points for a given set of landmarks. """
+        is_poly = []
+        mesh_landmarks = []
+        for key, val in self._landmark_mapping.items():
+            is_poly.append(key in ("right_eye", "left_eye", "mouth"))
+            mesh_landmarks.append(landmarks[val[0]:val[1]])
+        return dict(is_poly=is_poly, landmarks=mesh_landmarks)
+
+    def frame_index_from_object(self, item_id):
+        """ Retrieve the frame index that an object belongs to from it's tag.
+
+        Parameters
+        ----------
+        item_id: int
+            The tkinter canvas object id
+
+        Returns
+        -------
+        int
+            The frame index that the object belongs to or ``None`` if the tag cannot be found
+        """
+        tags = [tag.replace("frame_id_", "")
+                for tag in self.itemcget(item_id, "tags").split()
+                if tag.startswith("frame_id_")]
+        retval = int(tags[0]) if tags else None
+        logger.trace("item_id: %s, frame_id: %s", item_id, retval)
+        return retval
+
     def coords_from_index(self, index):
         """ Returns the top left coordinates location for the canvas object based on an object's
         absolute index.
@@ -646,6 +699,90 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         return ((index % self._columns) * self._faces.size,
                 (index // self._columns) * self._faces.size)
 
+    def mesh_ids_for_face(self, face_index, mesh_ids):
+        """ Obtain all the item ids for a given face index's mesh annotation.
+
+        Parameters
+        ----------
+        face_index: int
+            The face index to retrieve the mesh ids for
+        mesh_ids: tuple or list
+            The mesh ids to extract the item ids from
+
+        Returns
+        -------
+        list
+            The list of item ids for the mesh annotation pertaining to the given face index
+        """
+        starting_idx = face_index * self.items_per_mesh
+        return mesh_ids[starting_idx: starting_idx + self.items_per_mesh]
+
+    def create_viewer_annotations(self, coordinates, tk_face, mesh_landmarks, frame_index,
+                                  is_multi=False):
+        """ Create all if the annotations for a single Face Viewer face.
+
+        Parameters
+        ----------
+        coordinates: tuple
+            The top left (x, y) coordinates for the annotations' position in the Faces Viewer
+        tk_face: :class:`PIL.ImageTk.PhotoImage`
+            The face to be used for the image annotation
+        mesh_landmarks: dict
+            A dictionary containing the keys `landmarks` holding a `list` of :class:`numpy.ndarray`
+            objects and `is_poly` containing a `list` of `bool` types corresponding to the
+            `landmarks`
+            indicating whether a line or polygon should be created for each mesh annotation.
+        mesh_color: str
+            The hex code holding the color that the mesh should be displayed as
+        frame_index: int
+            The frame index that this object appears in
+        is_multi: bool
+            ``True`` if there are multiple faces in the given frame, otherwise ``False``.
+            Default: ``False``
+
+        Returns
+        -------
+        image_id: int
+            The item id of the newly created face
+        mesh_ids: list
+            List of item ids for the newly created mesh
+
+        """
+        tags = {obj: self._get_viewer_tags(frame_index, obj, is_multi)
+                for obj in ("image", "mesh")}
+        image_id = self.create_image(*coordinates, image=tk_face, anchor=tk.NW, tags=tags["image"])
+        mesh_ids = self.create_mesh_annotations(self.get_muted_color("Mesh"),
+                                                mesh_landmarks,
+                                                coordinates,
+                                                tags["mesh"])
+        return image_id, mesh_ids
+
+    @staticmethod
+    def _get_viewer_tags(frame_index, object_type, is_multi):
+        """ Obtain the tags for a Faces Viewer object.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that this object appears in
+        object_type: str
+            The type of object that these tags will be associated with
+        is_multi: bool
+            ``True`` if there are multiple faces in the given frame, otherwise ``False``
+
+        Returns
+        -------
+        list
+            The list of tags for the Faces Viewer object
+        """
+        tags = ["viewer",
+                "viewer_{}".format(object_type),
+                "frame_id_{}".format(frame_index),
+                "{}_{}".format(object_type, frame_index)]
+        if is_multi:
+            tags.extend(["multi", "multi_{}".format(object_type)])
+        return tags
+
     def create_mesh_annotations(self, color, mesh_landmarks, offset, tag):
         """ Create the coordinates for the face mesh. """
         retval = []
@@ -653,23 +790,16 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
         for is_poly, landmarks in zip(mesh_landmarks["is_poly"], mesh_landmarks["landmarks"]):
             key = "polygon" if is_poly else "line"
+            tags = tag + ["mesh_{}".format(key)]
             obj = getattr(self, "create_{}".format(key))
             obj_kwargs = kwargs[key]
             coords = (landmarks + offset).flatten()
-            retval.append(obj(*coords, state=state, width=1, tags=tag, **obj_kwargs))
+            retval.append(obj(*coords, state=state, width=1, tags=tags, **obj_kwargs))
         return retval
 
     def get_muted_color(self, color_key):
-        """ Updates hex code F values to 9 for the given annotation color key """
-        return self.control_colors[color_key].replace("f", "9")
-
-    def update_object_colors(self, item_ids, color):
-        """ Update the color of the given list of object ids """
-        for item_id in item_ids:
-            color_key = self._color_keys[self.type(item_id)]
-            if self.itemcget(item_id, color_key) != color:
-                kwargs = {color_key: color}
-                self.itemconfig(item_id, **kwargs)
+        """ Updates hex code F values to A for the given annotation color key """
+        return self.control_colors[color_key].replace("f", "a")
 
 
 class Aligner():

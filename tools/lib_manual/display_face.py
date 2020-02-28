@@ -2,9 +2,7 @@
 """ Face viewer for the manual adjustments tool """
 import logging
 import os
-import tkinter as tk
 
-from itertools import accumulate
 from threading import Event
 
 import cv2
@@ -15,23 +13,8 @@ from lib.image import ImagesLoader
 from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_LANDMARK_MAPPING = dict(mouth=(48, 68),
-                         right_eyebrow=(17, 22),
-                         left_eyebrow=(22, 27),
-                         right_eye=(36, 42),
-                         left_eye=(42, 48),
-                         nose=(27, 36),
-                         jaw=(0, 17),
-                         chin=(8, 11))
 
-
-def _get_mesh_points(landmarks):
-    is_poly = []
-    mesh_landmarks = []
-    for key, val in _LANDMARK_MAPPING.items():
-        is_poly.append(key in ("right_eye", "left_eye", "mouth"))
-        mesh_landmarks.append(landmarks[val[0]:val[1]])
-    return dict(is_poly=is_poly, landmarks=mesh_landmarks)
+# TODO Check why next button doesn't work straight after an edit
 
 
 class FaceCache():
@@ -44,8 +27,8 @@ class FaceCache():
 
         # Following set in self._load
         self._canvas = None
-        self._annotations = dict(tk_faces=[], tk_objects=[], mesh_landmarks=[])
-        self._face_count_per_frame = []
+        self._tk_faces = []
+        self._mesh_landmarks = []
         self._filters = dict(displays=dict(), current_display=None)
         self._annotation_colors = dict(mesh=None)
 
@@ -63,30 +46,6 @@ class FaceCache():
         return self._initialized.is_set()
 
     @property
-    def _tk_objects(self):
-        """ list: list of frame count length containing list of `dict` objects containing each
-        face's canvas object ids.
-
-        The index of each item in the list corresponds to the frame index.
-        Each item contains a list of dictionaries, one dictionary for every face that appears
-        in the frame.
-        The dictionary holds all the canvas annotation objects that can appear for each face.
-        """
-        return self._annotations["tk_objects"]
-
-    @property
-    def _mesh_landmarks(self):
-        """ list: list of frame count length containing lists of :class:`numpy.ndarray` split
-        up into groups for creating mesh annotations for each face in the frame. """
-        return self._annotations["mesh_landmarks"]
-
-    @property
-    def _tk_faces(self):
-        """ list: list of frame count length containing lists of :class:`PIL.ImageTk.PhotoImage`
-            corresponding to each face in a frame. """
-        return self._annotations["tk_faces"]
-
-    @property
     def _frames(self):
         """ :class:`FrameNavigation`: The Frames for this manual session """
         return self._alignments.frames
@@ -100,26 +59,6 @@ class FaceCache():
     def _colors(self):
         """ dict: Colors for the annotations. """
         return dict(border="#00ff00", mesh="#00ffff", mesh_half="#009999")
-
-    def frame_index_from_object(self, item_id):
-        """ Retrieve the frame index that an object belongs to from it's tag.
-
-        Parameters
-        ----------
-        item_id: int
-            The tkinter canvas object id
-
-        Returns
-        -------
-        int
-            The frame index that the object belongs to or ``None`` if the tag cannot be found
-        """
-        tags = [tag.replace("frame_id_", "")
-                for tag in self._canvas.itemcget(item_id, "tags").split()
-                if tag.startswith("frame_id_")]
-        retval = int(tags[0]) if tags else None
-        logger.trace("item_id: %s, frame_id: %s", item_id, retval)
-        return retval
 
     def transport_index_from_frame_index(self, frame_index):
         """ Retrieve the index in the filtered frame list for the given frame index. """
@@ -149,7 +88,7 @@ class FaceCache():
         if current_display is not None:
             self._filtered_display.de_initialize()
         self._filters["current_display"] = nav_mode
-        self._filtered_display.initialize(self._tk_objects, self._mesh_landmarks)
+        self._filtered_display.initialize(self._mesh_landmarks)
 
     def load_faces(self, canvas, enable_buttons_callback):
         """ Launch a background thread to load the faces into cache and assign the canvas to
@@ -192,25 +131,29 @@ class FaceCache():
                     "Loading Faces: {}/{} - {}%".format(frame_idx + 1,
                                                         self._frames.frame_count,
                                                         progress), progress)
-                frame_items = dict(faces=[], lmarks=[], objects=[])
-                for face in self._alignments.saved_alignments.get(frame_name, list()):
-                    frame_items["faces"].append(self._load_face(frame, face))
-                    frame_items["lmarks"].append(_get_mesh_points(face.aligned_landmarks))
-                    frame_items["objects"].append(self._load_annotations(frame_items["faces"][-1],
-                                                                         frame_items["lmarks"][-1],
-                                                                         faces_seen,
-                                                                         frame_idx))
+                self._tk_faces.append([])
+                self._mesh_landmarks.append([])
+                faces = self._alignments.saved_alignments.get(frame_name, list())
+                is_multi = len(faces) > 1
+                for face in faces:
+                    self._tk_faces[-1].append(self._load_face(frame, face))
+                    mesh_landmarks = self._canvas.get_mesh_points(face.aligned_landmarks)
+                    self._mesh_landmarks[-1].append(mesh_landmarks)
+                    coords = self._canvas.coords_from_index(faces_seen)
+                    self._canvas.create_viewer_annotations(coords,
+                                                           self._tk_faces[-1][-1],
+                                                           self._mesh_landmarks[-1][-1],
+                                                           frame_idx,
+                                                           is_multi=is_multi)
+                    if coords[0] == 0:  # Resize canvas on new line
+                        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
                     faces_seen += 1
-                self._tk_faces.append(frame_items["faces"])
-                self._mesh_landmarks.append(frame_items["lmarks"])
-                self._tk_objects.append(frame_items["objects"])
             self._pbar.stop()
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Error loading face. Error: %s", str(err))
             # TODO Remove this
             import sys; import traceback
             exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
-        self._face_count_per_frame.extend([len(faces) for faces in self._tk_faces])
         self._canvas.tk_control_colors["Mesh"].trace("w", self._update_mesh_color)
         self._initialized.set()
         self._switch_filter()
@@ -228,24 +171,6 @@ class FaceCache():
         face.aligned["face"] = None
         return ImageTk.PhotoImage(Image.fromarray(aligned_face))
 
-    def _load_annotations(self, tk_face, mesh_landmarks, faces_seen, frame_idx):
-        """ Load the resized aligned face. """
-        objects = dict()
-        coords = self._canvas.coords_from_index(faces_seen)
-        tag = ["frame_id_{}".format(frame_idx)]
-        objects["image_id"] = self._canvas.create_image(*coords,
-                                                        image=tk_face,
-                                                        anchor=tk.NW,
-                                                        tags=tag)
-        objects["mesh"] = self._canvas.create_mesh_annotations(self._annotation_colors["mesh"],
-                                                               mesh_landmarks,
-                                                               coords,
-                                                               tag)
-
-        if coords[0] == 0:  # Resize canvas on new line
-            self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-        return objects
-
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Action to perform on a frame change """
         if not self._initialized.is_set():
@@ -255,20 +180,9 @@ class FaceCache():
     def _set_selected(self):
         """ Set the currently selected annotations. """
         position = self._frames.tk_position.get()
-        self._selected.set_selected(self._tk_objects[position],
-                                    self._tk_faces[position],
+        self._selected.set_selected(self._tk_faces[position],
                                     self._mesh_landmarks[position],
                                     position)
-
-    def _update_current(self, *args):  # pylint:disable=unused-argument
-        """ Update the currently selected face on editor update """
-        if not self._alignments.tk_edited.get():
-            return
-        if self._add_remove_face():
-            self._selected.refresh_highlighter()
-            return
-        self._selected.update()
-        self._alignments.tk_edited.set(False)
 
     def _update_mesh_color(self, *args):  # pylint:disable=unused-argument
         """ Update the mesh color on control panel change """
@@ -277,37 +191,47 @@ class FaceCache():
         color = self._canvas.get_muted_color("Mesh")
         if self._annotation_colors["mesh"] == color:
             return
-        self._selected.update_highlighter_color("mesh")
-        for frame in self._tk_objects:
-            for objects in frame:
-                self._canvas.update_object_colors(objects["mesh"], color)
+        highlight_color = self._canvas.control_colors["Mesh"]
+        self._canvas.itemconfig("mesh_polygon", outline=color)
+        self._canvas.itemconfig("mesh_line", fill=color)
+        self._canvas.itemconfig("highlight_mesh_polygon", outline=highlight_color)
+        self._canvas.itemconfig("highlight_mesh_line", fill=highlight_color)
         self._annotation_colors["mesh"] = color
+
+    def _update_current(self, *args):  # pylint:disable=unused-argument
+        """ Update the currently selected face on editor update """
+        if not self._alignments.tk_edited.get():
+            return
+        if self._add_remove_face():
+            self._selected.reload_annotations()
+            return
+        self._selected.update()
+        self._alignments.tk_edited.set(False)
 
     def _add_remove_face(self):
         """ add or remove a face for the current frame """
         alignment_faces = len(self._alignments.current_faces)
-        retval = False
         if alignment_faces > self._selected.face_count:
             self._add_face()
             retval = True
         elif alignment_faces < self._selected.face_count:
             self._remove_face()
             retval = True
+        else:
+            retval = False
         return retval
 
     def _add_face(self):
         """ Insert a face into current frame """
         logger.debug("Adding face")
         tk_face = self._selected.add_face()
-        self._face_count_per_frame[self._frames.tk_position.get()] += 1
-        self._filtered_display.add_face(tk_face, self._selected.frame_id)
+        self._filtered_display.add_face(tk_face, self._selected.frame_index)
 
     def _remove_face(self):
         """ Remove a face from the current frame """
         logger.debug("Removing face")
-        self._selected.remove_face()
-        self._face_count_per_frame[self._frames.tk_position.get()] -= 1
-        self._filtered_display.remove_face(self._selected.frame_id)
+        face_idx = self._selected.remove_face()
+        self._filtered_display.remove_face(self._selected.frame_index, face_idx)
 
     def toggle_annotations(self):
         """ Toggle additional annotations on or off. """
@@ -321,14 +245,13 @@ class SelectedFrame():
     def __init__(self, image_size, alignments):
         self._alignments = alignments
         self._size = image_size
-
         self._canvas = None
-        self._tk_objects = None
         self._tk_faces = None
         self._mesh_landmarks = None
+        self._image_ids = None
+        self._mesh_ids = None
         self._highlighter = None
-
-        self._frame_id = 0
+        self._frame_index = 0
         self._face_count = 0
 
     @property
@@ -342,72 +265,70 @@ class SelectedFrame():
         return self._face_count
 
     @property
-    def frame_id(self):
+    def frame_index(self):
         """ int: The current frame index. """
-        return self._frame_id
+        return self._frame_index
 
     def initialize(self, canvas):
         """ Set the canvas object to :attr:`_canvas`. """
         self._canvas = canvas
         self._highlighter = Highlighter(self._size, canvas)
 
-    def set_selected(self, tk_objects, tk_faces, mesh_landmarks, frame_id):
+    def set_selected(self, tk_faces, mesh_landmarks, frame_index):
         """ Set the currently selected frame's objects """
         self._tk_faces = tk_faces
-        self._tk_objects = tk_objects
         self._mesh_landmarks = mesh_landmarks
-        self._frame_id = frame_id
-        self._face_count = len(self._tk_objects)
-        self.refresh_highlighter()
+        self._image_ids = list(self._canvas.find_withtag("image_{}".format(frame_index)))
+        self._mesh_ids = list(self._canvas.find_withtag("mesh_{}".format(frame_index)))
+        self._frame_index = frame_index
+        self._face_count = len(self._image_ids)
+        self._highlighter.highlight_selected(self._image_ids, self._mesh_landmarks)
 
-    def refresh_highlighter(self):
-        """ Refresh the highlighter on add/remove faces """
-        self._highlighter.highlight_selected(self._tk_objects, self._mesh_landmarks)
-
-    def update_highlighter_color(self, annotation_key):
-        """ Update the highlighter annotation color on a control panel update """
-        getattr(self._highlighter, "update_{}_color".format(annotation_key))()
+    def reload_annotations(self):
+        """ Reload the currently selected annotations on an add/remove face. """
+        self._image_ids = list(self._canvas.find_withtag("image_{}".format(self._frame_index)))
+        self._mesh_ids = list(self._canvas.find_withtag("mesh_{}".format(self._frame_index)))
+        self.update()
 
     def update(self):
         """ Update the currently selected face on editor update """
-        tk_face, landmarks = self._get_tk_face_and_landmarks()
-        self._update_face(tk_face)
-        self._update_mesh(landmarks)
-        self.refresh_highlighter()
+        if self._face_count != 0:
+            tk_face, landmarks = self._get_tk_face_and_landmarks()
+            self._update_face(tk_face)
+            self._update_mesh(landmarks)
+        self._highlighter.highlight_selected(self._image_ids, self._mesh_landmarks)
 
     def _update_face(self, tk_face):
         """ Update the face photo image and the face object id """
         self._tk_faces[self._face_index] = tk_face
-        self._canvas.itemconfig(self._tk_objects[self._face_index]["image_id"], image=tk_face)
+        self._canvas.itemconfig(self._image_ids[self._face_index], image=tk_face)
 
     def _update_mesh(self, landmarks):
         """ Update the optional mesh annotation """
-        mesh_landmarks = _get_mesh_points(landmarks)
-        coords = self._canvas.coords(self._tk_objects[self._face_index]["image_id"])
-        for points, item_id in zip(mesh_landmarks["landmarks"],
-                                   self._tk_objects[self._face_index]["mesh"]):
+        mesh_landmarks = self._canvas.get_mesh_points(landmarks)
+        coords = self._canvas.coords(self._image_ids[self._face_index])
+        mesh_ids = self._canvas.mesh_ids_for_face(self._face_index, self._mesh_ids)
+        for points, item_id in zip(mesh_landmarks["landmarks"], mesh_ids):
             self._canvas.coords(item_id, *(points + coords).flatten())
         self._mesh_landmarks[self._face_index] = mesh_landmarks
 
     def add_face(self):
         """ Add a face to the currently selected frame, """
         logger.debug("Adding face to frame(frame_id: %s new face_count: %s)",
-                     self._frame_id, self._face_count + 1)
+                     self._frame_index, self._face_count + 1)
         tk_face, landmarks = self._get_tk_face_and_landmarks()
         self._tk_faces.append(tk_face)
-        self._mesh_landmarks.append(_get_mesh_points(landmarks))
+        self._mesh_landmarks.append(self._canvas.get_mesh_points(landmarks))
         self._face_count += 1
         return tk_face
 
     def remove_face(self):
         """ Remove a face from the currently selected frame. """
         face_idx = self._alignments.get_removal_index()
-        logger.trace("Removing face for frame %s at index: %s", self._frame_id, face_idx)
-        self._canvas.delete(self._tk_objects[face_idx]["image_id"])
+        logger.debug("Removing face for frame %s at index: %s", self._frame_index, face_idx)
         del self._tk_faces[face_idx]
-        del self._mesh_landmarks[face_idx]
-        del self._tk_objects[face_idx]
         self._face_count -= 1
+        return face_idx
 
     def _get_tk_face_and_landmarks(self):
         """ Obtain the resized photo image face and scaled landmarks """
@@ -446,9 +367,9 @@ class Highlighter():
         """ int: The number of highlighter objects currently available. """
         return len(self._boxes)
 
-    def highlight_selected(self, objects, mesh_landmarks):
+    def highlight_selected(self, image_ids, mesh_landmarks):
         """ Highlight the currently selected faces """
-        self._face_count = len(objects)
+        self._face_count = len(image_ids)
         self._create_new_highlighters(mesh_landmarks)
         self._hide_unused_highlighters()
         if self._face_count == 0:
@@ -456,8 +377,8 @@ class Highlighter():
 
         boxes = self._boxes[:self._face_count]
         meshes = self._meshes[:self._face_count]
-        for objs, landmarks, box, mesh in zip(objects, mesh_landmarks, boxes, meshes):
-            top_left = np.array(self._canvas.coords(objs["image_id"]))
+        for image_id, landmarks, box, mesh in zip(image_ids, mesh_landmarks, boxes, meshes):
+            top_left = np.array(self._canvas.coords(image_id))
             un_hide = self._highlight_box(box, top_left)
             self._highlight_mesh(mesh, landmarks["landmarks"], top_left, un_hide)
             self._hidden_highlighters_count -= 1 if un_hide else 0
@@ -491,11 +412,12 @@ class Highlighter():
         kwargs = dict(polygon=dict(fill="", outline=mesh_color),
                       line=dict(fill=mesh_color))
         mesh_ids = []
-        for is_poly, points in zip(landmarks["is_poly"], landmarks["landmarks"]):
+        for is_poly, pts in zip(landmarks["is_poly"], landmarks["landmarks"]):
             key = "polygon" if is_poly else "line"
+            tag = ["highlight_mesh_{}".format(key)]
             obj = getattr(self._canvas, "create_{}".format(key))
             obj_kwargs = kwargs[key]
-            mesh_ids.append(obj(*points.flatten(), state="hidden", width=1, **obj_kwargs))
+            mesh_ids.append(obj(*pts.flatten(), state="hidden", width=1, tags=tag, **obj_kwargs))
         logger.trace("Created new highlight_mesh: %s", mesh_ids)
         self._meshes.append(mesh_ids)
 
@@ -538,12 +460,6 @@ class Highlighter():
             if un_hide:
                 self._canvas.itemconfig(mesh_id, state="normal")
 
-    def update_mesh_color(self):
-        """ Update the highlighted mesh color on control panel update. """
-        color = self._canvas.control_colors["Mesh"]
-        for item_ids in self._meshes:
-            self._canvas.update_object_colors(item_ids, color)
-
 
 class FaceFilter():
     """ Base class for different faces view filters.
@@ -555,37 +471,39 @@ class FaceFilter():
     ----------
     face_cache: :class:`FaceCache`
         The main Face Viewers face cache, that holds all of the display items and annotations
+    toggle_tags: dict or ``None``, optional
+        Tags for toggling optional annotations. Set to ``None`` if there are no annotations to
+        be toggled for the selected filter. Default: ``None``
     """
-    def __init__(self, face_cache):
-        logger.debug("Initializing: %s: (face_cache: %s)", self.__class__.__name__, face_cache)
+    def __init__(self, face_cache, toggle_tags=None):
+        logger.debug("Initializing: %s: (face_cache: %s, toggle_tags: %s)",
+                     self.__class__.__name__, face_cache, toggle_tags)
+        self._toggle_tags = toggle_tags
         self._canvas = face_cache._canvas
         self._tk_position = face_cache._frames.tk_position
-        self._tk_objects = face_cache._tk_objects
-        self._face_count_per_frame = face_cache._face_count_per_frame
+        self._image_ids = []
+        self._mesh_ids = []
+        self._removed_image_index = -1
+        self._frame_faces_change = 0
+
         self._mesh_landmarks = face_cache._mesh_landmarks
 
         # Set and unset during :func:`initialize` and :func:`de-initialize`
-        self._display_indices = []
         self._current_position = -1
         self._tk_position_callback = None
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    @property
-    def _face_indices_per_frame(self):
-        """ list: The absolute display indices for each face that should be displayed for the
-        current filter. The list is of length total frames with each item in the list containing an
-        `int` indicating the number of faces that are to be displayed up to and including the
-        current frame.
+    def _set_object_display_state(self):
+        """ Hide annotations that are not relevant for this filter type and show those that are
 
-        Override for filter specific list.
+        Override for filter specific hiding criteria.
         """
         raise NotImplementedError
 
-    def _set_display_indices(self):
-        """ Set the the filtered list of frame indices to :attr:`_display_indices` for the
-        current filter.
+    def _set_display_objects(self):
+        """ Set the :attr:`_image_ids` and :attr:`_mesh_ids` for the current filter
 
-        Override for criteria specific to each filter.
+        Override for filter specific hiding criteria.
         """
         raise NotImplementedError
 
@@ -596,7 +514,7 @@ class FaceFilter():
         """
         raise NotImplementedError
 
-    def initialize(self, tk_objects, mesh_landmarks):
+    def initialize(self, mesh_landmarks):
         """ Initialize the viewer for the selected filter type.
 
         Hides annotations and faces that should not be displayed for the current filter.
@@ -605,67 +523,61 @@ class FaceFilter():
 
         Parameters
         ----------
-        tk_objects: list
-            The list of objects that exist for every frame in the source.
         mesh_landmarks: list
             The list of landmarks, split up into groups for creating mesh annotations for every
             frame in the source
         """
-        self._set_display_indices()
-        display_idx = 0
-        for idx, (frame_landmarks, frame_objects) in enumerate(zip(mesh_landmarks, tk_objects)):
-            state = "normal" if idx in self._display_indices else "hidden"
-            for landmarks, objects in zip(frame_landmarks, frame_objects):
-                if state == "hidden":
-                    self._hide_displayed_face(objects)
-                    continue
-                self._display_face(objects,
-                                   landmarks["landmarks"],
-                                   self._canvas.coords_from_index(display_idx))
-                display_idx += 1
+        self._set_object_display_state()
+        self._set_display_objects()
+        face_idx = 0
+        current_frame_idx = -1
+        for idx, image_id in enumerate(self._image_ids):
+            # TODO Add tag with frame number and face number to be able to get tag quicker?
+            frame_idx = self._canvas.frame_index_from_object(image_id)
+            if frame_idx != current_frame_idx:
+                current_frame_idx = frame_idx
+                face_idx = 0
+            else:
+                face_idx += 1
+            mesh_ids = self._canvas.mesh_ids_for_face(idx, self._mesh_ids)
+            # TODO Remove is_poly from landmarks and convert to single list once we have
+            # created the objects?
+            landmarks = mesh_landmarks[frame_idx][face_idx]["landmarks"]
+            self._position_annotations(image_id, mesh_ids, landmarks, idx, is_init=True)
+
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
-        self._current_position = self._display_indices[0] if self._display_indices else -1
+        self._current_position = self._tk_position.get()
 
-    def _hide_displayed_face(self, objects):
-        """ Hide faces and annotations that are displayed which should be hidden.
-
-        Parameters
-        ----------
-        objects: dict
-            The object ids that are to be hidden
-        """
-        for item_ids in objects.values():
-            item_ids = item_ids if isinstance(item_ids, list) else [item_ids]
-            for item_id in item_ids:
-                if self._canvas.itemcget(item_id, "state") != "hidden":
-                    self._canvas.itemconfig(item_id, state="hidden")
-
-    def _display_face(self, objects, landmarks, coordinates):
+    def _position_annotations(self, image_id, mesh_ids, landmarks, absolute_index, is_init=False):
         """ Display faces and annotations that should be shown and locates the objects correctly
         on the canvas.
 
         Parameters
         ----------
-        objects: dict
-            The object ids that are to be displayed
+        image_id: int
+            The object id of the face image
+        mesh_ids: list
+            List of the mesh annotation object ids for the face
         landmarks: :class:`numpy.ndarray`
             The base landmark mesh points corresponding to point (0, 0)
-        coordinates: tuple
-            The top left corner location of the face to be displayed
+        absolute_index: int
+            The absolute display index for the annotations to be displayed
+        is_init: bool, optional
+            ``True`` if this is the initial set up of this filter otherwise ``False``
         """
-        if self._canvas.itemcget(objects["image_id"], "state") == "hidden":
-            self._canvas.itemconfig(objects["image_id"], state="normal")
-        self._canvas.coords(objects["image_id"], *coordinates)
-
+        coords = self._canvas.coords_from_index(absolute_index)
+        self._canvas.coords(image_id, *coords)
         annotation = self._canvas.optional_annotation
-        for points, item_id in zip(landmarks, objects["mesh"]):
-            mesh_coords = (points + coordinates).flatten()
-            self._canvas.coords(item_id, *mesh_coords)
-            if annotation == "landmarks" and self._canvas.itemcget(item_id, "state") == "hidden":
+        for points, item_id in zip(landmarks, mesh_ids):
+            self._canvas.coords(item_id, *(points + coords).flatten())
+            if (is_init and annotation == "landmarks" and
+                    self._canvas.itemcget(item_id, "state") == "hidden"):
                 self._canvas.itemconfig(item_id, state="normal")
 
-    def add_face(self, tk_face, frame_id):
+    # TODO Check adding/removing faces before faces have loaded
+
+    def add_face(self, tk_face, frame_index):
         """ Display a new face in the correct location and move subsequent faces to their new
         location.
 
@@ -673,67 +585,148 @@ class FaceFilter():
         ----------
         tk_face: :class:`PIL.ImageTk.PhotoImage`
             The new face that is to be added to the canvas
-        frame_id: int
+        frame_index: int
             The frame index that the face is to be added to
         """
-        insert_index = max(0, self._face_indices_per_frame[frame_id] - 1)
-        coords = self._canvas.coords_from_index(insert_index)
-        tag = ["frame_id_{}".format(frame_id)]
-        new_face = self._canvas.create_image(*coords, image=tk_face, anchor=tk.NW, tags=tag)
-        mesh = self._canvas.create_mesh_annotations(self._canvas.get_muted_color("Mesh"),
-                                                    self._mesh_landmarks[frame_id][-1],
-                                                    coords,
-                                                    tag)
-        logger.debug("insert_index: %s, coords: %s, tag: %s, new_face: %s, mesh: %s",
-                     insert_index, coords, tag, new_face, mesh)
-        self._canvas.tag_lower(tag)
-        self._tk_objects[frame_id].append(dict(image_id=new_face, mesh=mesh))
-        self._update_layout(frame_id + 1, insert_index + 1)
+        if not self._image_ids:
+            display_idx = 0
+        else:
+            image_ids = self._canvas.find_withtag("image_{}".format(frame_index))
+            if image_ids:
+                display_idx = self._image_ids.index(image_ids[-1]) + 1
+            else:
+                display_idx = self._removed_image_index
+        coords = self._canvas.coords_from_index(display_idx)
+        logger.debug("display_idx: %s, coords: %s", display_idx, coords)
+        # Create new annotations
+        image_id, mesh_ids = self._canvas.create_viewer_annotations(
+            coords,
+            tk_face,
+            self._mesh_landmarks[frame_index][-1],
+            frame_index)
+        # Insert annotations into correct position in object tracking
+        self._image_ids.insert(display_idx, image_id)
+        mesh_idx_offset = display_idx * self._canvas.items_per_mesh
+        self._mesh_ids[mesh_idx_offset:mesh_idx_offset] = mesh_ids
+        # Update multi tags
+        lookup_tag = self._update_multi_tags_on_add(frame_index, image_id, mesh_ids)
+        self._canvas.tag_lower(lookup_tag)
+        # Update layout
+        self._update_layout(display_idx + 1)
+        self._frame_faces_change += 1
 
-    def remove_face(self, frame_id):
-        """ Relocate all faces after the removed face to the new location.
+    def _update_multi_tags_on_add(self, frame_index, image_id, mesh_ids):
+        """ Update the tags indicating whether this frame contains multiple faces.
 
         Parameters
         ----------
-        frame_id: int
-            The frame index that the face has been removed from
+        frame_index: int
+            The frame index that the tags are to be updated for
+        image_id: int
+            The item id of the newly added face
+        mesh_ids: list
+            The item ids of the newly added mesh annotations
         """
-        starting_index = max(0, (self._face_indices_per_frame[frame_id] -
-                                 self._face_count_per_frame[frame_id]))
-        self._update_layout(frame_id, starting_index)
+        lookup_tag = "frame_id_{}".format(frame_index)
+        num_faces = len(self._canvas.find_withtag(lookup_tag))
+        if num_faces == 2:
+            self._canvas.dtag(lookup_tag, tag="not_multi")
+        if num_faces == 1:
+            self._canvas.addtag_withtag(lookup_tag, "not_multi")
+        else:
+            self._canvas.addtag_withtag(lookup_tag, "multi")
+            self._canvas.addtag_withtag(image_id, "multi_image")
+            for mesh_id in mesh_ids:
+                self._canvas.addtag_withtag(mesh_id, "multi_mesh")
+        return lookup_tag
 
-    def _update_layout(self, starting_frame_id, starting_object_index):
+    def remove_face(self, frame_index, face_index):
+        """ Remove a face at the given location and update subsequent faces to the
+        correct location.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the face has been removed from
+        face_index: int
+            The index of the face within the given frame that is to be removed
+        """
+        image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
+        display_idx = self._image_ids.index(image_id)
+        logger.debug("image_id: %s, display_idx: %s", image_id, display_idx)
+
+        # Delete the objects
+        self._canvas.delete(image_id)
+        for mesh_id in self._canvas.mesh_ids_for_face(display_idx, self._mesh_ids):
+            self._canvas.delete(mesh_id)
+        # Remove items from object tracking
+        del self._image_ids[display_idx]
+        mesh_idx_offset = display_idx * self._canvas.items_per_mesh
+        self._mesh_ids[mesh_idx_offset:mesh_idx_offset + self._canvas.items_per_mesh] = []
+        # Update multi tags
+        self._update_multi_tags_on_remove(frame_index)
+        # Update layout
+        self._update_layout(display_idx)
+        # Track the last removal index in case of adding faces back in after removing all faces
+        self._removed_image_index = display_idx
+        self._frame_faces_change -= 1
+
+    def _update_multi_tags_on_remove(self, frame_index):
+        """ Update the tags indicating whether this frame contains multiple faces on face removal
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the tags are to be updated for
+        """
+        lookup_tag = "frame_id_{}".format(frame_index)
+        num_faces = len(self._canvas.find_withtag(lookup_tag))
+        if num_faces == 1:
+            self._canvas.dtag(lookup_tag, tag="multi")
+            self._canvas.dtag("image_{}".format(frame_index), tag="multi_image")
+            self._canvas.dtag("mesh_{}".format(frame_index), tag="multi_mesh")
+            self._canvas.addtag_withtag(lookup_tag, "not_multi")
+
+    def _update_layout(self, starting_object_index):
         """ Reposition faces and annotations on the canvas after a face has been added or removed.
 
         Parameters
         ----------
-        starting_frame_id: int
-            The starting frame index that new locations should be calculated for
         starting_object_index: int
             The starting absolute face index that new locations should be calculated for
         """
+        # TODO Flatten mesh landmarks on load?
+
         idx = starting_object_index
-        logger.debug("starting_frame_id: %s, startng_object_index: %s",
-                     starting_frame_id, starting_object_index)
-        for frame_id in self._display_indices[self._display_indices.index(starting_frame_id):]:
-            for obj, landmarks in zip(self._tk_objects[frame_id], self._mesh_landmarks[frame_id]):
-                coords = self._canvas.coords_from_index(idx)
-                self._canvas.coords(obj["image_id"], *coords)
-                for points, mesh_id in zip(landmarks["landmarks"], obj["mesh"]):
-                    self._canvas.coords(mesh_id, *(points + coords).flatten())
-                idx += 1
+        logger.debug("startng_object_index: %s", starting_object_index)
+        current_frame_idx = -1
+        face_idx = 0
+        for idx, image_id in enumerate(self._image_ids[starting_object_index:]):
+            frame_idx = self._canvas.frame_index_from_object(image_id)
+            if frame_idx != current_frame_idx:
+                current_frame_idx = frame_idx
+                face_idx = 0
+            else:
+                face_idx += 1
+
+            display_idx = starting_object_index + idx
+            mesh_ids = self._canvas.mesh_ids_for_face(display_idx, self._mesh_ids)
+            landmarks = self._mesh_landmarks[frame_idx][face_idx]["landmarks"]
+            self._position_annotations(image_id, mesh_ids, landmarks, display_idx)
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
     def toggle_annotation(self):
         """ Toggle additional object annotations on or off.
         """
+        if self._toggle_tags is None:
+            return
         display = self._canvas.optional_annotation
-        display = "mesh" if display == "landmarks" else display
-        state = "hidden" if display is None else "normal"
-        for frame_idx in self._display_indices:
-            for face in self._tk_objects[frame_idx]:
-                for item_id in self._get_toggle_item_ids(face, display):
-                    self._canvas.itemconfig(item_id, state=state)
+        if display is not None:
+            self._canvas.itemconfig(self._toggle_tags[display], state="normal")
+        else:
+            # TODO Flag what is currently displayed rather than brute forcing all to hidden
+            for tag in self._toggle_tags.values():
+                self._canvas.itemconfig(tag, state="hidden")
 
     @staticmethod
     def _get_toggle_item_ids(objects, display):
@@ -765,7 +758,6 @@ class FaceFilter():
 
     def de_initialize(self):
         """ Unloads the Face Filter on filter type change. """
-        self._display_indices = []
         self._tk_position.trace_vdelete("w", self._tk_position_callback)
         self._tk_position_callback = None
         self._current_position = -1
@@ -779,24 +771,27 @@ class AllFrames(FaceFilter):
     face_cache: :class:`FaceCache`
         The main Face Viewers face cache, that holds all of the display items and annotations
     """
-    @property
-    def _face_indices_per_frame(self):
-        """ list: The absolute display indices for each face that should be displayed for the
-        current filter. The list is of length total frames with each item in the list containing an
-        `int` indicating the number of faces that are to be displayed up to and including the
-        current frame.
+    def __init__(self, face_cache):
+        super().__init__(face_cache, dict(landmarks="viewer_mesh"))
 
-        For All Frames this is the absolute index for every face in all frames.
+    def _set_object_display_state(self):
+        """ Hide annotations that are not relevant for this filter type and show those that are
+
+        All viewer annotations should be show
         """
-        return list(accumulate(self._face_count_per_frame))
+        annotation = self._canvas.optional_annotation
+        if annotation == "landmarks":
+            self._canvas.itemconfig("viewer", state="normal")
+        else:
+            self._canvas.itemconfig("viewer_image", state="normal")
 
-    def _set_display_indices(self):
-        """ Set the the filtered list frame indices to :attr:`_display_indices` for the
-        current filter.
+    def _set_display_objects(self):
+        """ Set the :attr:`_image_ids` and :attr:`_mesh_ids` for the current filter
 
-        For All Frames this is every frame index that exists, regardless of face count.
+        All image and mesh annotations should be loaded
         """
-        self._display_indices = range(len(self._face_count_per_frame))
+        self._image_ids = list(self._canvas.find_withtag("viewer_image"))
+        self._mesh_ids = list(self._canvas.find_withtag("viewer_mesh"))
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
@@ -821,62 +816,33 @@ class NoFaces(FaceFilter):
         self._added_objects = []
         super().__init__(face_cache)
 
-    @property
-    def _face_indices_per_frame(self):
-        """ list: The absolute display indices for each face that should be displayed for the
-        current filter. The list is of length total frames with each item in the list containing an
-        `int` indicating the number of faces that are to be displayed up to and including the
-        current frame.
+    def _set_object_display_state(self):
+        """ Hide annotations that are not relevant for this filter type and show those that are
 
-        For No Faces this always zero for all frames.
+        All viewer annotations should be show
         """
-        return [0 for _ in range(len(self._face_count_per_frame))]
+        self._canvas.itemconfig("viewer", state="hidden")
 
-    def _set_display_indices(self):
-        """ Set the the filtered list of frame indices to :attr:`_display_indices` for the
-        current filter.
+    def _set_display_objects(self):
+        """ Set the :attr:`_image_ids` and :attr:`_mesh_ids` for the current filter
 
-        For No Faces this is every frame index for each frame that has no face.
+        Empty lists are set as no annotations will meet criteria
         """
-        self._display_indices = [
-            idx for idx, face_count in enumerate(self._face_count_per_frame)
-            if face_count == 0]
+        self._image_ids = []
+        self._mesh_ids = []
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
 
-        If faces have been added to the current frame, hide the new frame and remove
-        the frame id from :attr:`_object_indices`.
+        If faces have been added to the current frame, hide the new faces and clear
+        the viewer objects.
         """
-        if not self._added_objects:
-            return
-        for item_id in self._added_objects:
-            logger.debug("Hiding newly created face: %s", item_id)
-            self._canvas.itemconfig(item_id, state="hidden")
-        self._added_objects = []
-        position = self._current_position
-        if position != -1 and self._face_count_per_frame[position] != 0:
-            logger.debug("Removing display frame index: %s", position)
-            self._display_indices.remove(position)
+        if self._frame_faces_change != 0:
+            self._canvas.itemconfig("frame_id_{}".format(self._current_position), state="hidden")
+            self._image_ids = []
+            self._mesh_ids = []
+        self._frame_faces_change = 0
         self._current_position = self._tk_position.get()
-
-    def add_face(self, tk_face, frame_id):
-        """ Display a new face in the correct location and move subsequent faces to their new
-        location.
-
-        Additionally adds the added object ids to :attr:`_added_objects` to be hidden on
-        a frame change.
-
-        Parameters
-        ----------
-        tk_face: :class:`PIL.ImageTk.PhotoImage`
-            The new face that is to be added to the canvas
-        frame_id: int
-            The frame index that the face is to be added to
-
-        """
-        super().add_face(tk_face, frame_id)
-        self._added_objects.extend(self._tk_objects[frame_id][-1].values())
 
 
 class MultipleFaces(FaceFilter):
@@ -887,29 +853,28 @@ class MultipleFaces(FaceFilter):
     face_cache: :class:`FaceCache`
         The main Face Viewers face cache, that holds all of the display items and annotations
     """
-    @property
-    def _face_indices_per_frame(self):
-        """ list: The absolute display indices for each face that should be displayed for the
-        current filter. The list is of length total frames with each item in the list containing an
-        `int` indicating the number of faces that are to be displayed up to and including the
-        current frame.
+    def __init__(self, face_cache):
+        super().__init__(face_cache, dict(landmarks="multi_mesh"))
 
-        For Multiple Faces indices are only incremented if 2 or more faces appear in a frame.
-        The value for the current frame's faces is incremented the actual number of faces appearing
-        regardless of threshold in case of deletions taking the value below the threshold.
+    def _set_object_display_state(self):
+        """ Hide annotations that are not relevant for this filter type and show those that are
+
+        All viewer annotations should be show
         """
-        return list(accumulate(0 if num_faces <= 1 and idx != self._current_position else num_faces
-                               for idx, num_faces in enumerate(self._face_count_per_frame)))
+        self._canvas.itemconfig("not_multi", state="hidden")
+        annotation = self._canvas.optional_annotation
+        if annotation == "landmarks":
+            self._canvas.itemconfig("multi", state="normal")
+        else:
+            self._canvas.itemconfig("multi_image", state="normal")
 
-    def _set_display_indices(self):
-        """ Set the the filtered list of frame indices to :attr:`_display_indices` for the
-        current filter.
+    def _set_display_objects(self):
+        """ Set the :attr:`_image_ids` and :attr:`_mesh_ids` for the current filter
 
-        For Multiple Faces this is every frame index for each frame that contains 2 or more faces.
+        All image and mesh annotations should be loaded
         """
-        self._display_indices = [
-            idx for idx, face_count in enumerate(self._face_count_per_frame)
-            if face_count > 1]
+        self._image_ids = list(self._canvas.find_withtag("multi_image"))
+        self._mesh_ids = list(self._canvas.find_withtag("multi_mesh"))
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
@@ -917,19 +882,18 @@ class MultipleFaces(FaceFilter):
         If the face count for the current frame is no longer 2 or more, remove the frame
         from :attr:`_object_indices`, hide any existing sole faces and update the layout.
         """
-        position = self._current_position
-        displayed_count = self._face_count_per_frame[position]
-        if position != -1 and displayed_count < 2:
-            logger.debug("Removing display frame index: %s", position)
-            self._display_indices.remove(position)
-            if displayed_count == 1:
-                self._hide_leftover_face(position)
-            self.remove_face(self._tk_position.get())
+        if self._frame_faces_change == 0:
+            self._current_position = self._tk_position.get()
+            return
+        image_ids = self._canvas.find_withtag("image_{}".format(self._current_position))
+        if len(image_ids) < 2:
+            self._canvas.itemconfig("frame_id_{}".format(self._current_position, state="hidden"))
+        if len(image_ids) == 1:
+            # Remove the final face from the display and update
+            display_idx = self._image_ids.index(image_ids[0])
+            del self._image_ids[display_idx]
+            mesh_idx_offset = display_idx * self._canvas.items_per_mesh
+            self._mesh_ids[mesh_idx_offset:mesh_idx_offset + self._canvas.items_per_mesh] = []
+            self._update_layout(display_idx)
+        self._frame_faces_change = 0
         self._current_position = self._tk_position.get()
-
-    def _hide_leftover_face(self, position):
-        """ If one face remains in a frame, hide it from view on a frame change. """
-        logger.debug("Hiding remaining face for frame index: %s", position)
-        for item_ids in self._tk_objects[position][0].values():
-            for item_id in item_ids if isinstance(item_ids, list) else [item_ids]:
-                self._canvas.itemconfig(item_id, state="hidden")
