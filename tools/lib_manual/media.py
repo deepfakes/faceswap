@@ -27,9 +27,11 @@ class FrameNavigation():
     frames_location: str
         The path to the input frames
     """
-    def __init__(self, frames_location, scaling_factor):
-        logger.debug("Initializing %s: (frames_location: '%s', scaling_factor: %s)",
-                     self.__class__.__name__, frames_location, scaling_factor)
+    def __init__(self, frames_location, scaling_factor, video_meta_data):
+        logger.debug("Initializing %s: (frames_location: '%s', scaling_factor: %s, "
+                     "video_meta_data: %s)", self.__class__.__name__, frames_location,
+                     scaling_factor, video_meta_data)
+        self._video_meta_data = video_meta_data
         self._loader = None
         self._meta = dict()
         self._needs_update = False
@@ -73,6 +75,11 @@ class FrameNavigation():
     def frame_count(self):
         """ int: The total number of frames """
         return self._loader.count
+
+    @property
+    def video_meta_data(self):
+        """ dict: The pts_time and key frames for the loader. """
+        return self._loader.video_meta_data
 
     @property
     def current_meta_data(self):
@@ -169,14 +176,18 @@ class FrameNavigation():
         waiting for initialization. """
         thread = MultiThread(self._load_images,
                              frames_location,
+                             self._video_meta_data,
                              thread_count=1,
                              name="{}.init_frames".format(self.__class__.__name__))
         thread.start()
         return thread
 
-    def _load_images(self, frames_location):
+    def _load_images(self, frames_location, video_meta_data):
         """ Load the images in a background thread. """
-        self._loader = ImagesLoader(frames_location, queue_size=1, single_frame_reader=True)
+        self._loader = ImagesLoader(frames_location,
+                                    queue_size=1,
+                                    single_frame_reader=True,
+                                    video_meta_data=video_meta_data)
 
     def _set_current_frame(self, *args,  # pylint:disable=unused-argument
                            initialize=False):
@@ -249,32 +260,31 @@ class AlignmentsData():
     alignments_path: str
         Full path to the alignments file. If empty string is passed then location is calculated
         from the source folder
-    frames: :class:`FrameNavigation`
-        The object that holds the cache of frames.
     """
-    def __init__(self, alignments_path, frames, extractor, input_location, is_video):
-        logger.debug("Initializing %s: (alignments_path: '%s', frames: %s, extractor: %s, "
-                     "input_location: %s, is_video: %s)", self.__class__.__name__, alignments_path,
-                     frames, extractor, input_location, is_video)
-        self.frames = frames
+    def __init__(self, alignments_path, extractor, input_location, is_video):
+        logger.debug("Initializing %s: (alignments_path: '%s', extractor: %s, input_location: %s, "
+                     "is_video: %s)", self.__class__.__name__, alignments_path, extractor,
+                     input_location, is_video)
+        self._frames = None
         self._remove_idx = None
-        self._face_size = min(self.frames.display_dims)
+        self._is_video = is_video
 
         self._alignments_file = None
         self._mask_names = None
         self._alignments = None
-        self._get_alignments(alignments_path, input_location, is_video)
+        self._get_alignments_file(alignments_path, input_location)
+
+        self._face_size = None  # Set in load_faces
+        self._alignments = dict()  # Populated in load_faces
 
         self._tk_unsaved = tk.BooleanVar()
         self._tk_unsaved.set(False)
         self._tk_edited = tk.BooleanVar()
         self._tk_edited.set(False)
 
-        self._tk_position = frames.tk_position
         self._face_index = 0
         self._face_count_modified = False
         self._extractor = extractor
-        self._extractor.link_alignments(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -288,6 +298,24 @@ class AlignmentsData():
         return self._mask_names
 
     @property
+    def video_meta_data(self):
+        """ dict: The frame meta data stored in the alignments file. """
+        retval = dict(pts_time=None, keyframes=None)
+        if not self._is_video:
+            return retval
+        pts_time = []
+        keyframes = []
+        for idx, key in enumerate(sorted(self._alignments_file.data)):
+            if "video_meta" not in self._alignments_file.data[key]:
+                return retval
+            meta = self._alignments_file.data[key]["video_meta"]
+            pts_time.append(meta["pts_time"])
+            if meta["keyframe"]:
+                keyframes.append(idx)
+        retval = dict(pts_time=pts_time, keyframes=keyframes)
+        return retval
+
+    @property
     def _latest_alignments(self):
         """ dict: The filename as key, and either the modified alignments as values (if they exist)
         or the saved alignments """
@@ -298,7 +326,7 @@ class AlignmentsData():
         """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects. Returns
         modified alignments if they are modified, otherwise original saved alignments. """
         # TODO use get and return a default for when the frame don't exist
-        return self._latest_alignments[self.frames.current_meta_data["filename"]]
+        return self._latest_alignments[self._frames.current_meta_data["filename"]]
 
     @property
     def saved_alignments(self):
@@ -367,7 +395,28 @@ class AlignmentsData():
     @property
     def current_frame_updated(self):
         """ bool: ``True`` if the current frame has been updated otherwise ``False`` """
-        return "new" in self._alignments[self.frames.current_meta_data["filename"]]
+        return "new" in self._alignments[self._frames.current_meta_data["filename"]]
+
+    def link_frames(self, frames):
+        """ Add the :class:`FrameNavigation` object as a property of the AlignmentsData.
+
+        Parameters
+        ----------
+        frames: :class:`~tools.lib_manual.media.FrameNavigation`
+            The Frame Navigation object for the manual tool
+        """
+        self._frames = frames
+
+    def save_video_meta_data(self):
+        """ Save the calculated video meta data to the alignments file. """
+        if not self._is_video:
+            return
+        logger.info("Saving video meta information to Alignments file")
+        for idx, key in enumerate(sorted(self._alignments_file.data)):
+            meta = dict(pts_time=self._frames.video_meta_data["pts_time"][idx],
+                        keyframe=idx in self._frames.video_meta_data["keyframes"])
+            self._alignments_file.data[key]["video_meta"] = meta
+        self._alignments_file.save()
 
     def reset_face_id(self):
         """ Reset the attribute :attr:`_face_index` to 0 """
@@ -375,7 +424,7 @@ class AlignmentsData():
 
     def get_filtered_frames_list(self):
         """ Return a list of filtered faces based on navigation mode """
-        nav_mode = self.frames.tk_navigation_mode.get()
+        nav_mode = self._frames.tk_navigation_mode.get()
         if nav_mode == "No Faces":
             retval = [idx for idx, count in enumerate(self.face_count_per_index) if count == 0]
         elif nav_mode == "Multiple Faces":
@@ -383,20 +432,18 @@ class AlignmentsData():
         elif nav_mode == "Has Face(s)":
             retval = [idx for idx, count in enumerate(self.face_count_per_index) if count != 0]
         else:
-            retval = range(self.frames.frame_count)
+            retval = range(self._frames.frame_count)
         logger.trace("nav_mode: %s, number_frames: %s", nav_mode, len(retval))
         return retval
 
-    def _get_alignments(self, alignments_path, input_location, is_video):
-        """ Get the alignments object.
+    def _get_alignments_file(self, alignments_path, input_location):
+        """ Get the alignments file.
 
         Parameters
         ----------
         alignments_path: str
             Full path to the alignments file. If empty string is passed then location is calculated
             from the source folder
-        is_video: bool
-            ``True`` if the input file is a video otherwise ``False``
 
         Returns
         -------
@@ -407,27 +454,28 @@ class AlignmentsData():
             folder, filename = os.path.split(alignments_path)
         else:
             filename = "alignments.fsa"
-            if is_video:
+            if self._is_video:
                 folder, vid = os.path.split(os.path.splitext(input_location)[0])
                 filename = "{}_{}".format(vid, filename)
             else:
                 folder = input_location
         alignments = Alignments(folder, filename)
         mask_names = set(alignments.mask_summary)
-        faces = dict()
-        for framename, items in alignments.data.items():
-            faces[framename] = []
+        self._alignments_file = alignments
+        self._mask_names = mask_names
+
+    def load_faces(self):
+        """ Load the faces at correct size. """
+        self._face_size = min(self._frames.display_dims)
+        for framename, val in self._alignments_file.data.items():
             this_frame_faces = []
-            for item in items:
+            for item in val["faces"]:
                 face = DetectedFace()
                 face.from_alignment(item)
                 # Size is set so attributes are correct for zooming into a face in the frame viewer
                 face.load_aligned(None, size=self._face_size)
                 this_frame_faces.append(face)
-            faces[framename] = dict(saved=this_frame_faces)
-        self._alignments_file = alignments
-        self._mask_names = mask_names
-        self._alignments = faces
+            self._alignments[framename] = dict(saved=this_frame_faces)
 
     def save(self):
         """ Save the alignments file """
@@ -438,7 +486,7 @@ class AlignmentsData():
         logger.info("Saving alignments for frames: '%s'", list(to_save.keys()))
 
         for frame, faces in to_save.items():
-            self._alignments_file.data[frame] = [face.to_alignment() for face in faces]
+            self._alignments_file.data[frame]["faces"] = [face.to_alignment() for face in faces]
             self._alignments[frame]["saved"] = faces
             del self._alignments[frame]["new"]
 
@@ -449,7 +497,7 @@ class AlignmentsData():
     def _check_for_new_alignments(self):
         """ Checks whether there are already new alignments in :attr:`_alignments`. If not
         then saved alignments are copied to new ready for update """
-        filename = self.frames.current_meta_data["filename"]
+        filename = self._frames.current_meta_data["filename"]
         if self._alignments[filename].get("new", None) is None:
             new_faces = [deepcopy(face) for face in self._alignments[filename]["saved"]]
             self._alignments[filename]["new"] = new_faces
@@ -486,10 +534,10 @@ class AlignmentsData():
         face.h = height
         face.mask = dict()
         face.landmarks_xy = self._extractor.get_landmarks()
-        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._tk_edited.set(True)
         # TODO Link this in to edited
-        self.frames.tk_update.set(True)
+        self._frames.tk_update.set(True)
 
     def shift_landmark(self, face_index, landmark_index, shift_x, shift_y, is_zoomed):
         """ Shift a single landmark point the given face index and landmark index by the given x and
@@ -529,9 +577,9 @@ class AlignmentsData():
             face.landmarks_xy[landmark_index] = landmark
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
-        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._tk_edited.set(True)
-        self.frames.tk_update.set(True)
+        self._frames.tk_update.set(True)
 
     def shift_landmarks(self, index, shift_x, shift_y):
         """ Shift the landmarks and bounding box for the given face index by the given x and y
@@ -561,9 +609,9 @@ class AlignmentsData():
         face.y += shift_y
         face.mask = dict()
         face.landmarks_xy += (shift_x, shift_y)
-        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._tk_edited.set(True)
-        self.frames.tk_update.set(True)
+        self._frames.tk_update.set(True)
 
     def add_face(self, pnt_x, width, pnt_y, height):
         """ Add a face to the current frame with the given dimensions.
@@ -600,7 +648,7 @@ class AlignmentsData():
         self._face_count_modified = True
         self._face_index = 0
         self._tk_edited.set(True)
-        self.frames.tk_update.set(True)
+        self._frames.tk_update.set(True)
 
     def reset_face_count_modified(self):
         """ Reset :attr:`_face_count_modified` to ``False``. """
@@ -634,7 +682,7 @@ class AlignmentsData():
             The aligned face
         """
         face = self.current_faces[index]
-        face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+        face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         retval = face.aligned_face.copy()
         face.aligned["face"] = None
         return retval
@@ -650,7 +698,7 @@ class AlignmentsData():
         """
         self._check_for_new_alignments()
         frames_with_faces = self._frames_with_faces
-        frame_name = self.frames.current_meta_data["filename"]
+        frame_name = self._frames.current_meta_data["filename"]
 
         if direction == "previous":
             idx = bisect.bisect_left(frames_with_faces, frame_name) - 1
@@ -664,18 +712,18 @@ class AlignmentsData():
         logger.debug("Copying frame: %s", frame_idx)
         self.current_faces.extend(deepcopy(self._latest_alignments[frame_idx]))
         for face in self.current_faces:
-            face.load_aligned(self.frames.current_frame, size=self._face_size, force=True)
+            face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._face_index = len(self.current_faces) - 1
         self._tk_edited.set(True)
-        self.frames.tk_update.set(True)
+        self._frames.tk_update.set(True)
 
     def revert_to_saved(self):
         """ Revert the current frame's alignments to their saved version """
-        frame_name = self.frames.current_meta_data["filename"]
+        frame_name = self._frames.current_meta_data["filename"]
         if "new" not in self._alignments[frame_name]:
             logger.info("Alignments not amended. Returning")
             return
         logger.debug("Reverting alignments for '%s'", frame_name)
         del self._alignments[frame_name]["new"]
         self._tk_edited.set(True)
-        self.frames.tk_update.set(True)
+        self._frames.tk_update.set(True)

@@ -37,11 +37,28 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
         self._frame_pts = None
         self._keyframes = None
 
-    def get_frame_info(self):
+    def get_frame_info(self, frame_pts=None, keyframes=None):
         """ Store the source video's keyframes in :attr:`_frame_info" for the current video for use
-        in :func:`initialize`. """
-        assert isinstance(self._filename, str), "Video path must be a string"
+        in :func:`initialize`.
 
+        Parameters
+        ----------
+        frame_pts: list, optional
+            A list corresponding to the video frame count of the pts_time per frame. If this and
+            `keyframes` are provided, then analyzing the video is skipped and the values from the
+            given lists are used. Default: ``None``
+        keyframes: list, optional
+            A list containing the frame numbers of each key frame. if this and `frame_pts` are
+            provided, then analyzing the video is skipped and the values from the given lists are
+            used. Default: ``None``
+        """
+        if frame_pts is not None and keyframes is not None:
+            logger.debug("Video meta information provided. Not analyzing video")
+            self._frame_pts = frame_pts
+            self._keyframes = keyframes
+            return len(frame_pts), dict(pts_time=self._frame_pts, keyframes=self._keyframes)
+
+        assert isinstance(self._filename, str), "Video path must be a string"
         cmd = [im_ffm.get_ffmpeg_exe(),
                "-hide_banner",
                "-copyts",
@@ -92,7 +109,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
 
         self._frame_pts = frame_pts
         self._keyframes = key_frames
-        return frame_count
+        return frame_count, dict(pts_time=self._frame_pts, keyframes=self._keyframes)
 
     def _previous_keyframe_info(self, index=0):
         """ Return the previous keyframe's pts_time and frame number """
@@ -644,6 +661,14 @@ class ImagesLoader(ImageIO):
         If the number of images that the loader will encounter is already known, it can be passed
         in here to skip the image counting step, which can save time at launch. Set to ``None`` if
         the count is not already known. Default: ``None``
+    single_frame_reader: bool, optional
+        ``True`` if a random frame access reader should be added to the loader, otherwise
+        ``False``. Default: ``False``
+    video_meta_data: dict, optional
+        Existing video meta information containing the pts_time and iskey flags for the given
+        video. Used in conjunction with single_frame_reader for faster seeks. Providing this means
+        that the video does not need to be scanned again. Set to ``None`` if the video is to be
+        scanned. Default: ``None``
 
     Examples
     --------
@@ -667,14 +692,18 @@ class ImagesLoader(ImageIO):
                  fast_count=True,
                  skip_list=None,
                  count=None,
-                 single_frame_reader=False):
+                 single_frame_reader=False,
+                 video_meta_data=None):
         logger.debug("Initializing %s: (path: %s, queue_size: %s, load_with_hash: %s, "
-                     "fast_count: %s, skip_list: %s count: %s)", self.__class__.__name__, path,
-                     queue_size, load_with_hash, fast_count, skip_list, count)
+                     "fast_count: %s, skip_list: %s count: %s, single_frame_reader: %s, "
+                     "video_meta_data: %s)", self.__class__.__name__, path, queue_size,
+                     load_with_hash, fast_count, skip_list, count, single_frame_reader,
+                     video_meta_data)
 
         args = (load_with_hash, )
         super().__init__(path, queue_size=queue_size, args=args)
         self._skip_list = set() if skip_list is None else set(skip_list)
+        self._video_meta_data = video_meta_data
 
         self._is_video = self._check_for_video()
 
@@ -716,6 +745,18 @@ class ImagesLoader(ImageIO):
         ultimately be skipped if a :attr:`skip_list` has been provided. If the input is a video
         then this is a list of dummy filenames as corresponding to an alignments file """
         return self._file_list
+
+    @property
+    def video_meta_data(self):
+        """ dict: For videos contains the keys `frame_pts` holding a list of time stamps for each
+        frame and `keyframes` holding the frame index of each key frame.
+
+        Notes
+        -----
+        Only populated if the input is a video and single frame reader is being used, otherwise
+        returns ``None``.
+        """
+        return self._video_meta_data
 
     def add_skip_list(self, skip_list):
         """ Add a skip list to this :class:`ImagesLoader`
@@ -791,7 +832,9 @@ class ImagesLoader(ImageIO):
         if self._is_video:
             if single_frame_reader:
                 retval = imageio.get_reader(self.location, "ffmpeg")
-                count = retval.get_frame_info()
+                count, meta = retval.get_frame_info(frame_pts=self._video_meta_data["pts_time"],
+                                                    keyframes=self._video_meta_data["keyframes"])
+                self._video_meta_data = meta
             self._count = int(count_frames(self.location,
                                            fast=fast_count)) if count is None else count
             self._file_list = [self._dummy_video_framename(i) for i in range(self.count)]

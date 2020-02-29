@@ -294,6 +294,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
         if self._alignments.face_count_modified:
+            # TODO This always freezes a frame when face added/removed. Do better logic
+            # for filtered views
             self._nav_scale_callback(reset_progress=False)
             self._alignments.reset_face_count_modified()
             position -= 1

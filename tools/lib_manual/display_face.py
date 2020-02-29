@@ -14,13 +14,12 @@ from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Check why next button doesn't work straight after an edit
-
 
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
-    def __init__(self, alignments, progress_bar, scaling_factor):
+    def __init__(self, alignments, frames, progress_bar, scaling_factor):
         self._alignments = alignments
+        self._frames = frames
         self._pbar = progress_bar
         self._size = int(round(96 * scaling_factor))
         self._selected = SelectedFrame(self._size, self._alignments)
@@ -44,11 +43,6 @@ class FaceCache():
     def is_initialized(self):
         """ bool: ``True`` if the faces have completed the loading cycle otherwise ``False`` """
         return self._initialized.is_set()
-
-    @property
-    def _frames(self):
-        """ :class:`FrameNavigation`: The Frames for this manual session """
-        return self._alignments.frames
 
     @property
     def _filtered_display(self):
@@ -118,7 +112,6 @@ class FaceCache():
         # TODO Make it so user can't save until faces are loaded (so alignments dict doesn't
         # change)
         # TODO make loading faces a user selected action?
-        # TODO Vid deets to alignments file
         try:
             self._pbar.start(mode="determinate")
             faces_seen = 0
@@ -696,7 +689,8 @@ class FaceFilter():
             The starting absolute face index that new locations should be calculated for
         """
         # TODO Flatten mesh landmarks on load?
-
+        # TODO Use select and move to move faces on mass rather than iterate
+        # Should require 3 moves last/first column, remaining columns, first row
         idx = starting_object_index
         logger.debug("startng_object_index: %s", starting_object_index)
         current_frame_idx = -1

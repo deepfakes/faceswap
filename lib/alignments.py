@@ -46,7 +46,7 @@ class Alignments():
     @property
     def faces_count(self):
         """ Return current faces count """
-        retval = sum(len(faces) for faces in self.data.values())
+        retval = sum(len(val["faces"]) for val in self.data.values())
         logger.trace(retval)
         return retval
 
@@ -65,8 +65,8 @@ class Alignments():
         """
         if not self._hashes_to_frame:
             logger.debug("Generating hashes to frame")
-            for frame_name, faces in self.data.items():
-                for idx, face in enumerate(faces):
+            for frame_name, val in self.data.items():
+                for idx, face in enumerate(val["faces"]):
                     self._hashes_to_frame.setdefault(face["hash"], dict())[frame_name] = idx
         return self._hashes_to_frame
 
@@ -147,7 +147,7 @@ class Alignments():
 
     def frame_has_faces(self, frame):
         """ Return true if frame exists and has faces """
-        retval = bool(self.data.get(frame, list()))
+        retval = bool(self.data.get(frame, dict()).get("faces", []))
         logger.trace("'%s': %s", frame, retval)
         return retval
 
@@ -156,7 +156,7 @@ class Alignments():
         if not frame:
             retval = False
         else:
-            retval = bool(len(self.data.get(frame, list())) > 1)
+            retval = bool(len(self.data.get(frame, dict()).get("faces", [])) > 1)
         logger.trace("'%s': %s", frame, retval)
         return retval
 
@@ -179,8 +179,8 @@ class Alignments():
         """
         retval = any([(face.get("mask", None) is not None and
                        face["mask"].get(mask_type, None) is not None)
-                      for faces in self.data.values()
-                      for face in faces])
+                      for val in self.data.values()
+                      for face in val["faces"]])
         logger.debug(retval)
         return retval
 
@@ -189,8 +189,8 @@ class Alignments():
         """ Dict: The mask types and the number of faces which have each type that exist with in
         the loaded alignments """
         masks = dict()
-        for faces in self.data.values():
-            for face in faces:
+        for val in self.data.values():
+            for face in val["faces"]:
                 if face.get("mask", None) is None:
                     masks["none"] = masks.get("none", 0) + 1
                 for key in face.get("mask", dict):
@@ -202,7 +202,7 @@ class Alignments():
     def get_faces_in_frame(self, frame):
         """ Return the alignments for the selected frame """
         logger.trace("Getting faces for frame: '%s'", frame)
-        return self.data.get(frame, list())
+        return self.data.get(frame, dict()).get("faces", [])
 
     def get_full_frame_name(self, frame):
         """ Return a frame with extension for when the extension is
@@ -214,7 +214,7 @@ class Alignments():
 
     def count_faces_in_frame(self, frame):
         """ Return number of alignments within frame """
-        retval = len(self.data.get(frame, list()))
+        retval = len(self.data.get(frame, dict()).get("faces", []))
         logger.trace(retval)
         return retval
 
@@ -227,7 +227,7 @@ class Alignments():
         if idx + 1 > self.count_faces_in_frame(frame):
             logger.debug("No face to delete: (frame: '%s', idx %s)", frame, idx)
             return False
-        del self.data[frame][idx]
+        del self.data[frame]["faces"][idx]
         logger.debug("Deleted face: (frame: '%s', idx %s)", frame, idx)
         return True
 
@@ -235,8 +235,8 @@ class Alignments():
         """ Add a new face for a frame and return it's index """
         logger.debug("Adding face to frame: '%s'", frame)
         if frame not in self.data:
-            self.data[frame] = []
-        self.data[frame].append(alignment)
+            self.data[frame] = dict(faces=[])
+        self.data[frame]["faces"].append(alignment)
         retval = self.count_faces_in_frame(frame) - 1
         logger.debug("Returning new face index: %s", retval)
         return retval
@@ -244,7 +244,7 @@ class Alignments():
     def update_face(self, frame, idx, alignment):
         """ Replace a face for given frame and index """
         logger.debug("Updating face %s for frame '%s'", idx, frame)
-        self.data[frame][idx] = alignment
+        self.data[frame]["faces"][idx] = alignment
 
     def filter_hashes(self, hashlist, filter_out=False):
         """ Filter in or out faces that match the hash list
@@ -253,12 +253,12 @@ class Alignments():
             filter_out=False: Remove faces that are not in the hash list
         """
         hashset = set(hashlist)
-        for filename, frame in self.data.items():
-            for idx, face in reversed(list(enumerate(frame))):
+        for filename, val in self.data.items():
+            for idx, face in reversed(list(enumerate(val["faces"]))):
                 if ((filter_out and face.get("hash", None) in hashset) or
                         (not filter_out and face.get("hash", None) not in hashset)):
                     logger.verbose("Filtering out face: (filename: %s, index: %s)", filename, idx)
-                    del frame[idx]
+                    del val["faces"][idx]
                 else:
                     logger.trace("Not filtering out face: (filename: %s, index: %s)",
                                  filename, idx)
@@ -267,27 +267,21 @@ class Alignments():
 
     def yield_faces(self):
         """ Yield face alignments for one image """
-        for frame_fullname, alignments in self.data.items():
+        for frame_fullname, val in self.data.items():
             frame_name = os.path.splitext(frame_fullname)[0]
-            face_count = len(alignments)
+            face_count = len(val["faces"])
             logger.trace("Yielding: (frame: '%s', faces: %s, frame_fullname: '%s')",
                          frame_name, face_count, frame_fullname)
-            yield frame_name, alignments, face_count, frame_fullname
-
-    @staticmethod
-    def yield_original_index_reverse(image_alignments, number_alignments):
-        """ Return the correct original index for
-            alignment in reverse order """
-        for idx, _ in enumerate(reversed(image_alignments)):
-            original_idx = number_alignments - 1 - idx
-            logger.trace("Yielding: face index %s", original_idx)
-            yield original_idx
+            yield frame_name, val["faces"], face_count, frame_fullname
 
     # << LEGACY FUNCTIONS >> #
 
     def update_legacy(self):
         """ Update legacy alignments """
         updated = False
+        if self._has_legacy_structure():
+            self._update_legacy_structure()
+
         if self.has_legacy_landmarksxy():
             logger.info("Updating legacy landmarksXY to landmarks_xy")
             self.update_legacy_landmarksxy()
@@ -300,7 +294,7 @@ class Alignments():
             self.save()
 
     # <File Format> #
-    # Serializer is now a compressed pickle .fsa format. This used to be any number of serializers
+    # Serializer is now a compressed pickle custom format. This used to be any number of serializers
     def test_for_legacy(self, location):
         """ For alignments filenames passed in with out an extension, test for legacy formats """
         logger.debug("Checking for legacy alignments file formats: '%s'", location)
@@ -331,14 +325,37 @@ class Alignments():
                 self.serializer.save(new_location, data)
         return os.path.basename(new_location)
 
+    # <Structure> #
+    # Alignments were structured: {frame_name: <list of faces>}. We need to be able to store
+    # information at the frame level, so new structure is:  {frame_name: {faces: <list of faces>}}
+    def _has_legacy_structure(self):
+        """ Test whether the alignments file is laid out in the old structure of
+        `{frame_name: {faces: <list of faces>}}`
+
+        Returns
+        -------
+        bool
+            ``True`` if the file has legacy structure otherwise ``False``
+        """
+        retval = any(isinstance(val, list) for val in self.data.values())
+        logger.debug("legacy structure: %s", retval)
+        return retval
+
+    def _update_legacy_structure(self):
+        """ Update legacy alignments files from the format `{frame_name: <list of faces>}` to the
+        format `{frame_name: {faces: <list of faces>}}`."""
+        for key, val in self.data.items():
+            self.data[key] = dict(faces=val)
+        logger.debug("Updated alignments file structure")
+
     # <landmarks> #
     # Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance
     def has_legacy_landmarksxy(self):
         """ check for legacy landmarksXY keys """
         logger.debug("checking legacy landmarksXY")
         retval = (any(key == "landmarksXY"
-                      for alignments in self.data.values()
-                      for alignment in alignments
+                      for val in self.data.values()
+                      for alignment in val["faces"]
                       for key in alignment))
         logger.debug("legacy landmarksXY: %s", retval)
         return retval
@@ -346,8 +363,8 @@ class Alignments():
     def update_legacy_landmarksxy(self):
         """ Update landmarksXY to landmarks_xy and save alignments """
         update_count = 0
-        for alignments in self.data.values():
-            for alignment in alignments:
+        for val in self.data.values():
+            for alignment in val["faces"]:
                 alignment["landmarks_xy"] = alignment.pop("landmarksXY")
                 update_count += 1
         logger.debug("Updated landmarks_xy: %s", update_count)
@@ -357,15 +374,15 @@ class Alignments():
         """ check for legacy landmarks stored as list """
         logger.debug("checking legacy landmarks as list")
         retval = not all(isinstance(face["landmarks_xy"], np.ndarray)
-                         for faces in self.data.values()
-                         for face in faces)
+                         for val in self.data.values()
+                         for face in val["faces"])
         return retval
 
     def update_legacy_landmarks_list(self):
         """ Update landmarksXY to landmarks_xy and save alignments """
         update_count = 0
-        for alignments in self.data.values():
-            for alignment in alignments:
+        for val in self.data.values():
+            for alignment in val["faces"]:
                 test = alignment["landmarks_xy"]
                 if not isinstance(test, np.ndarray):
                     alignment["landmarks_xy"] = np.array(test, dtype="float32")

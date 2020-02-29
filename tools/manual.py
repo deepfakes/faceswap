@@ -44,20 +44,27 @@ class Manual(tk.Tk):
         self._initialize_tkinter()
 
         extractor = Aligner()
-        scaling_factor = get_config().scaling_factor
-        self._frames = FrameNavigation(arguments.frames, scaling_factor)
         self._alignments = AlignmentsData(arguments.alignments_path,
-                                          self._frames,
                                           extractor,
                                           arguments.frames,
                                           is_video)
 
+        scaling_factor = get_config().scaling_factor
+        video_meta_data = self._alignments.video_meta_data
+        self._frames = FrameNavigation(arguments.frames,
+                                       scaling_factor,
+                                       video_meta_data)
+        extractor.link_alignments_and_frames(self._alignments, self._frames)
+        self._alignments.link_frames(self._frames)
+        self._alignments.load_faces()
         self._wait_for_threads(extractor)
+        if any(val is None for val in video_meta_data.values()):
+            self._alignments.save_video_meta_data()
 
         self._containers = self._create_containers()
 
         pbar = StatusBar(self._containers["bottom"], hide_status=True)
-        self._faces = FaceCache(self._alignments, pbar, scaling_factor)
+        self._faces = FaceCache(self._alignments, self._frames, pbar, scaling_factor)
 
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"],
@@ -811,8 +818,9 @@ class Aligner():
         The alignments cache object for the manual tool
     """
     def __init__(self):
-        self._alignments = None
         self._aligner = None
+        self._alignments = None
+        self._frames = None
         self._init_thread = self._background_init_aligner()
 
     @property
@@ -824,8 +832,8 @@ class Aligner():
     def _feed_face(self):
         """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
         aligner, formatted for the pipeline """
-        return ExtractMedia(self._alignments.frames.current_meta_data["filename"],
-                            self._alignments.frames.current_frame,
+        return ExtractMedia(self._frames.current_meta_data["filename"],
+                            self._frames.current_frame,
                             detected_faces=[self._alignments.current_face])
 
     @property
@@ -857,15 +865,18 @@ class Aligner():
         logger.debug("Initialized Extractor")
         self._aligner = aligner
 
-    def link_alignments(self, alignments):
+    def link_alignments_and_frames(self, alignments, frames):
         """ Add the :class:`AlignmentsData` object as a property of the aligner.
 
         Parameters
         ----------
-        alignments: :class:`AlignmentsData`
+        alignments: :class:`~tools.lib_manual.media.AlignmentsData`
             The alignments cache object for the manual tool
+        frames: :class:`~tools.lib_manual.media.FrameNavigation`
+            The Frame Navigation object for the manual tool
         """
         self._alignments = alignments
+        self._frames = frames
 
     def get_landmarks(self):
         """ Feed the detected face into the alignment pipeline and retrieve the landmarks
