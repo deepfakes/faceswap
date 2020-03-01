@@ -13,6 +13,7 @@ from lib.image import ImagesLoader
 from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+# TODO Right click Menu
 
 
 class FaceCache():
@@ -474,6 +475,7 @@ class FaceFilter():
         self._toggle_tags = toggle_tags
         self._canvas = face_cache._canvas
         self._tk_position = face_cache._frames.tk_position
+        self._size = face_cache.size
         self._image_ids = []
         self._mesh_ids = []
         self._removed_image_index = -1
@@ -581,6 +583,7 @@ class FaceFilter():
         frame_index: int
             The frame index that the face is to be added to
         """
+        # TODO tag_lower ensure we're placing faces into correct place in the stack
         if not self._image_ids:
             display_idx = 0
         else:
@@ -589,6 +592,9 @@ class FaceFilter():
                 display_idx = self._image_ids.index(image_ids[-1]) + 1
             else:
                 display_idx = self._removed_image_index
+        # Update layout - Layout must be updated first so space is made for the new face
+        self._update_layout(display_idx - 1, is_insert=True)
+
         coords = self._canvas.coords_from_index(display_idx)
         logger.debug("display_idx: %s, coords: %s", display_idx, coords)
         # Create new annotations
@@ -604,8 +610,6 @@ class FaceFilter():
         # Update multi tags
         lookup_tag = self._update_multi_tags_on_add(frame_index, image_id, mesh_ids)
         self._canvas.tag_lower(lookup_tag)
-        # Update layout
-        self._update_layout(display_idx + 1)
         self._frame_faces_change += 1
 
     def _update_multi_tags_on_add(self, frame_index, image_id, mesh_ids):
@@ -659,7 +663,7 @@ class FaceFilter():
         # Update multi tags
         self._update_multi_tags_on_remove(frame_index)
         # Update layout
-        self._update_layout(display_idx)
+        self._update_layout(display_idx, is_insert=False)
         # Track the last removal index in case of adding faces back in after removing all faces
         self._removed_image_index = display_idx
         self._frame_faces_change -= 1
@@ -680,34 +684,62 @@ class FaceFilter():
             self._canvas.dtag("mesh_{}".format(frame_index), tag="multi_mesh")
             self._canvas.addtag_withtag(lookup_tag, "not_multi")
 
-    def _update_layout(self, starting_object_index):
+    def _update_layout(self, starting_object_index, is_insert=True):
         """ Reposition faces and annotations on the canvas after a face has been added or removed.
 
         Parameters
         ----------
         starting_object_index: int
             The starting absolute face index that new locations should be calculated for
-        """
-        # TODO Flatten mesh landmarks on load?
-        # TODO Use select and move to move faces on mass rather than iterate
-        # Should require 3 moves last/first column, remaining columns, first row
-        idx = starting_object_index
-        logger.debug("startng_object_index: %s", starting_object_index)
-        current_frame_idx = -1
-        face_idx = 0
-        for idx, image_id in enumerate(self._image_ids[starting_object_index:]):
-            frame_idx = self._canvas.frame_index_from_object(image_id)
-            if frame_idx != current_frame_idx:
-                current_frame_idx = frame_idx
-                face_idx = 0
-            else:
-                face_idx += 1
+        is_insert: bool, optional
+            ``True`` if adjusting display for an added face, ``False`` if adjusting for a removed
+            face. Default: ``True``
 
-            display_idx = starting_object_index + idx
-            mesh_ids = self._canvas.mesh_ids_for_face(display_idx, self._mesh_ids)
-            landmarks = self._mesh_landmarks[frame_idx][face_idx]["landmarks"]
-            self._position_annotations(image_id, mesh_ids, landmarks, display_idx)
+        """
+        # TODO addtag_enclosed vs addtag_overlapping - The mesh going out of face box problem
+        # TODO Hidden annotations are not found.
+        self._tag_update_objects(starting_object_index, is_insert)
+
+        top_bulk_delta = np.array((self._size, 0))
+        col_delta = np.array((-(self._canvas.column_count - 1) * self._size, self._size))
+        if not is_insert:
+            top_bulk_delta *= -1
+            col_delta *= -1
+
+        self._canvas.move("move_top", *top_bulk_delta)
+        self._canvas.move("move_col", *col_delta)
+        self._canvas.move("move_bulk", *top_bulk_delta)
+
+        self._canvas.dtag("move_top", "move_top")
+        self._canvas.dtag("move_col", "move_col")
+        self._canvas.dtag("move_bulk", "move_bulk")
+
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+    def _tag_update_objects(self, start_index, is_insert):
+        """ Tag the 3 object groups that require moving """
+        start_index += 1 if is_insert else 0
+        start_xy = self._canvas.coords(self._image_ids[start_index])
+        last_x = (self._canvas.column_count - 1) * self._size
+
+        # Top Row
+        end_x = last_x if is_insert else self._canvas.bbox("all")[2]
+        top_coords = (*start_xy, end_x, start_xy[1] + self._size)
+        self._canvas.addtag_enclosed("move_top", *top_coords)
+
+        # First or last column (depending on delete or insert)
+        col_x = last_x if is_insert else 0.0
+        col_y = start_xy[1] if is_insert else start_xy[1] + self._size
+        col_coords = (col_x, col_y, col_x + self._size, self._canvas.bbox("all")[3])
+        self._canvas.addtag_enclosed("move_col", *col_coords)
+
+        # Bulk faces
+        bulk_x = 0.0 if is_insert else self._size
+        bulk_x2 = last_x if is_insert else self._canvas.bbox("all")[2]
+        bulk_coords = (bulk_x, start_xy[1] + self._size, bulk_x2, self._canvas.bbox("all")[3])
+        self._canvas.addtag_enclosed("move_bulk", *bulk_coords)
+        logger.debug("top_coords: %s, col_coords: %s bulk_coords: %s",
+                     top_coords, col_coords, bulk_coords)
 
     def toggle_annotation(self):
         """ Toggle additional object annotations on or off.
@@ -888,6 +920,6 @@ class MultipleFaces(FaceFilter):
             del self._image_ids[display_idx]
             mesh_idx_offset = display_idx * self._canvas.items_per_mesh
             self._mesh_ids[mesh_idx_offset:mesh_idx_offset + self._canvas.items_per_mesh] = []
-            self._update_layout(display_idx)
+            self._update_layout(display_idx, is_insert=False)
         self._frame_faces_change = 0
         self._current_position = self._tk_position.get()

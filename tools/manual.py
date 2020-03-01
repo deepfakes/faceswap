@@ -554,6 +554,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ int: The number of items that are used to create a full mesh annotation. """
         return self._landmark_mapping_dict["items_per_mesh"]
 
+    @property
+    def column_count(self):
+        """ int: The number of columns in use in the face canvas. """
+        return self._columns
+
     def _bind_mouse(self):
         """ Bind the mouse actions. """
         self.bind("<Motion>", self._update_cursor)
