@@ -476,8 +476,7 @@ class FaceFilter():
         self._canvas = face_cache._canvas
         self._tk_position = face_cache._frames.tk_position
         self._size = face_cache.size
-        self._image_ids = []
-        self._mesh_ids = []
+        self._item_ids = dict(image_ids=[], mesh_ids=[])
         self._removed_image_index = -1
         self._frame_faces_change = 0
 
@@ -487,6 +486,16 @@ class FaceFilter():
         self._current_position = -1
         self._tk_position_callback = None
         logger.debug("Initialized: %s", self.__class__.__name__)
+
+    @property
+    def _image_ids(self):
+        """ list: The canvas item ids for the face images. """
+        return self._item_ids["image_ids"]
+
+    @property
+    def _mesh_ids(self):
+        """ list: The canvas item ids for the optional mesh annotations. """
+        return self._item_ids["mesh_ids"]
 
     def _set_object_display_state(self):
         """ Hide annotations that are not relevant for this filter type and show those that are
@@ -593,7 +602,7 @@ class FaceFilter():
             else:
                 display_idx = self._removed_image_index
         # Update layout - Layout must be updated first so space is made for the new face
-        self._update_layout(display_idx - 1, is_insert=True)
+        self._update_layout(display_idx, is_insert=True)
 
         coords = self._canvas.coords_from_index(display_idx)
         logger.debug("display_idx: %s, coords: %s", display_idx, coords)
@@ -687,6 +696,11 @@ class FaceFilter():
     def _update_layout(self, starting_object_index, is_insert=True):
         """ Reposition faces and annotations on the canvas after a face has been added or removed.
 
+        The faces are moved in bulk in 3 groups: The row that the face is being added to or removed
+        from is shifted left or right. The first or last column is shifted to the other side of the
+        viewer and 1 row up or down. Finally the block of faces that have not been covered by the
+        previous shifts are moved left or right one face.
+
         Parameters
         ----------
         starting_object_index: int
@@ -694,18 +708,14 @@ class FaceFilter():
         is_insert: bool, optional
             ``True`` if adjusting display for an added face, ``False`` if adjusting for a removed
             face. Default: ``True``
-
         """
         # TODO addtag_enclosed vs addtag_overlapping - The mesh going out of face box problem
-        # TODO Hidden annotations are not found.
-        self._tag_update_objects(starting_object_index, is_insert)
-
         top_bulk_delta = np.array((self._size, 0))
         col_delta = np.array((-(self._canvas.column_count - 1) * self._size, self._size))
         if not is_insert:
             top_bulk_delta *= -1
             col_delta *= -1
-
+        self._tag_objects_to_move(starting_object_index, is_insert)
         self._canvas.move("move_top", *top_bulk_delta)
         self._canvas.move("move_col", *col_delta)
         self._canvas.move("move_bulk", *top_bulk_delta)
@@ -716,34 +726,49 @@ class FaceFilter():
 
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
-    def _tag_update_objects(self, start_index, is_insert):
-        """ Tag the 3 object groups that require moving """
-        start_index += 1 if is_insert else 0
-        start_xy = self._canvas.coords(self._image_ids[start_index])
-        last_x = (self._canvas.column_count - 1) * self._size
+    def _tag_objects_to_move(self, start_index, is_insert):
+        """ Tag the 3 object groups that require moving.
+
+        Any hidden annotations are set to normal so that the :func:`tkinter.Canvas.find_enclosed`
+        function picks them up for moving. They are immediately hidden again.
+
+        Parameters
+        ----------
+        starting_index: int
+            The starting absolute face index that new locations should be calculated for
+        is_insert: bool
+            ``True`` if adjusting display for an added face, ``False`` if adjusting for a removed
+            face.
+         """
+        # Unhide hidden annotations so they get tagged
+        hidden_tags = [val for key, val in self._toggle_tags.items()
+                       if key != self._canvas.optional_annotation]
+        for tag in hidden_tags:
+            self._canvas.itemconfig(tag, state="normal")
+
+        first_face_xy = self._canvas.coords(self._image_ids[start_index])
+        last_face_x = (self._canvas.column_count - 1) * self._size
 
         # Top Row
-        end_x = last_x if is_insert else self._canvas.bbox("all")[2]
-        top_coords = (*start_xy, end_x, start_xy[1] + self._size)
-        self._canvas.addtag_enclosed("move_top", *top_coords)
-
+        to_top_xy = (last_face_x if is_insert else last_face_x + self._size,
+                     first_face_xy[1] + self._size)
+        self._canvas.addtag_enclosed("move_top", *first_face_xy, *to_top_xy)
         # First or last column (depending on delete or insert)
-        col_x = last_x if is_insert else 0.0
-        col_y = start_xy[1] if is_insert else start_xy[1] + self._size
-        col_coords = (col_x, col_y, col_x + self._size, self._canvas.bbox("all")[3])
-        self._canvas.addtag_enclosed("move_col", *col_coords)
-
+        from_col_xy = (last_face_x if is_insert else 0,
+                       first_face_xy[1] if is_insert else first_face_xy[1] + self._size)
+        to_col_xy = (from_col_xy[0] + self._size, self._canvas.bbox("all")[3])
+        self._canvas.addtag_enclosed("move_col", *from_col_xy, *to_col_xy)
         # Bulk faces
-        bulk_x = 0.0 if is_insert else self._size
-        bulk_x2 = last_x if is_insert else self._canvas.bbox("all")[2]
-        bulk_coords = (bulk_x, start_xy[1] + self._size, bulk_x2, self._canvas.bbox("all")[3])
-        self._canvas.addtag_enclosed("move_bulk", *bulk_coords)
-        logger.debug("top_coords: %s, col_coords: %s bulk_coords: %s",
-                     top_coords, col_coords, bulk_coords)
+        from_bulk_xy = (0 if is_insert else self._size, first_face_xy[1] + self._size)
+        to_bulk_xy = (last_face_x if is_insert else last_face_x + self._size,
+                      self._canvas.bbox("all")[3])
+        self._canvas.addtag_enclosed("move_bulk", *from_bulk_xy, *to_bulk_xy)
+        # Rehide hidden annotations
+        for tag in hidden_tags:
+            self._canvas.itemconfig(tag, state="hidden")
 
     def toggle_annotation(self):
-        """ Toggle additional object annotations on or off.
-        """
+        """ Toggle additional object annotations on or off. """
         if self._toggle_tags is None:
             return
         display = self._canvas.optional_annotation
@@ -816,8 +841,8 @@ class AllFrames(FaceFilter):
 
         All image and mesh annotations should be loaded
         """
-        self._image_ids = list(self._canvas.find_withtag("viewer_image"))
-        self._mesh_ids = list(self._canvas.find_withtag("viewer_mesh"))
+        self._item_ids["image_ids"] = list(self._canvas.find_withtag("viewer_image"))
+        self._item_ids["mesh_ids"] = list(self._canvas.find_withtag("viewer_mesh"))
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
@@ -854,8 +879,8 @@ class NoFaces(FaceFilter):
 
         Empty lists are set as no annotations will meet criteria
         """
-        self._image_ids = []
-        self._mesh_ids = []
+        self._item_ids["image_ids"] = []
+        self._item_ids["mesh_ids"] = []
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
@@ -865,8 +890,8 @@ class NoFaces(FaceFilter):
         """
         if self._frame_faces_change != 0:
             self._canvas.itemconfig("frame_id_{}".format(self._current_position), state="hidden")
-            self._image_ids = []
-            self._mesh_ids = []
+            self._item_ids["image_ids"] = []
+            self._item_ids["mesh_ids"] = []
         self._frame_faces_change = 0
         self._current_position = self._tk_position.get()
 
@@ -899,8 +924,8 @@ class MultipleFaces(FaceFilter):
 
         All image and mesh annotations should be loaded
         """
-        self._image_ids = list(self._canvas.find_withtag("multi_image"))
-        self._mesh_ids = list(self._canvas.find_withtag("multi_mesh"))
+        self._item_ids["image_ids"] = list(self._canvas.find_withtag("multi_image"))
+        self._item_ids["mesh_ids"] = list(self._canvas.find_withtag("multi_mesh"))
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
