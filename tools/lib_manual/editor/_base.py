@@ -2,7 +2,6 @@
 """ Editor objects for the manual adjustments tool """
 
 import logging
-import platform
 import tkinter as tk
 
 from collections import OrderedDict
@@ -50,7 +49,6 @@ class Editor():
         self._mouse_location = None
         self._drag_data = dict()
         self._drag_callback = None
-        self._right_click_button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         self.bind_mouse_motion()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -518,48 +516,3 @@ class View(Editor):
     def __init__(self, canvas, alignments, frames):
         control_text = "Viewer\nPreview the frame's annotations."
         super().__init__(canvas, alignments, frames, control_text)
-
-
-class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
-    """ A Pop up menu that can be bound to a right click mouse event to bring up a context menu
-
-    Parameters
-    ----------
-    labels: list
-        A list of label titles that will appear in the right click menu
-    actions: list
-        A list of python functions that are called when the corresponding label is clicked on
-    hotkeys: list, optional
-        The hotkeys corresponding to the labels. If using hotkeys, then there must be an entry in
-        the list for every label even if they don't all use hotkeys. Labels without a hotkey can be
-        an empty string or ``None``. Passing ``None`` instead of a list means that no actions will
-        be given hotkeys. NB: The hotkey is not bound by this class, that needs to be done in code.
-        Giving hotkeys here means that they will be displayed in the menu though. Default: ``None``
-    """
-    def __init__(self, labels, actions, hotkeys=None):
-        logger.debug("Initializing %s: (labels: %s, actions: %s)", self.__class__.__name__, labels,
-                     actions)
-        super().__init__(tearoff=0)
-        self._labels = labels
-        self._actions = actions
-        self._hotkeys = hotkeys
-        self._create_menu()
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def _create_menu(self):
-        """ Create the menu based on :attr:`_labels` and :attr:`_actions`. """
-        for idx, (label, action) in enumerate(zip(self._labels, self._actions)):
-            kwargs = dict(label=label, command=action)
-            if isinstance(self._hotkeys, (list, tuple)) and self._hotkeys[idx]:
-                kwargs["accelerator"] = self._hotkeys[idx]
-            self.add_command(**kwargs)
-
-    def popup(self, event):
-        """ Pop up the right click menu.
-
-        Parameters
-        ----------
-        event: class:`tkinter.Event`
-            The tkinter mouse event calling this popup
-        """
-        self.tk_popup(event.x_root, event.y_root)

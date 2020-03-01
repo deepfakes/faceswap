@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """ Bounding Box Editor for the manual adjustments tool """
 
+import platform
 from functools import partial
 
 import numpy as np
 
-from ._base import ControlPanelOption, Editor, RightClickMenu, logger
+from lib.gui.custom_widgets import RightClickMenu
+from ._base import ControlPanelOption, Editor, logger
 
 
 class BoundingBox(Editor):
@@ -253,7 +255,8 @@ class BoundingBox(Editor):
     def set_mouse_click_actions(self):
         """ Add right click context menu to default mouse click bindings """
         super().set_mouse_click_actions()
-        self._canvas.bind(self._right_click_button, self._context_menu)
+        self._canvas.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
+                          self._context_menu)
 
     def _drag_start(self, event):
         """ The action to perform when the user starts clicking and dragging the mouse.
