@@ -13,7 +13,6 @@ from lib.image import ImagesLoader
 from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-# TODO Right click Menu
 
 
 class FaceCache():
@@ -69,9 +68,9 @@ class FaceCache():
         self._alignments.tk_edited.trace("w", self._update_current)
         self._frames.tk_position.trace("w", self._on_frame_change)
 
-    def _switch_filter(self, *args):  # pylint: disable=unused-argument
+    def _switch_filter(self, *args, init=False):  # pylint: disable=unused-argument
         """ Change the active display """
-        if not self._initialized.is_set():
+        if not init and not self._initialized.is_set():
             return
 
         nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "")
@@ -149,9 +148,9 @@ class FaceCache():
             import sys; import traceback
             exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
         self._canvas.tk_control_colors["Mesh"].trace("w", self._update_mesh_color)
-        self._initialized.set()
-        self._switch_filter()
+        self._switch_filter(init=True)
         self._set_selected()
+        self._initialized.set()
         enable_buttons_callback()
 
     def _load_face(self, frame, face):
@@ -201,6 +200,24 @@ class FaceCache():
             return
         self._selected.update()
         self._alignments.tk_edited.set(False)
+
+    def delete_face(self, item_id):
+        """ Delete a face for the given frame and face indices """
+        logger.debug("Deleting face: (item_id: %s)", item_id)
+        frame_idx = self._canvas.frame_index_from_object(item_id)
+        frame_faces = self._canvas.find_withtag("image_{}".format(frame_idx))
+        face_idx = frame_faces.index(item_id)
+        logger.debug("frame_idx: %s, frame_faces: %s, face_idx: %s",
+                     frame_idx, frame_faces, face_idx)
+        transport_index = self.transport_index_from_frame_index(frame_idx)
+        self._frames.tk_transport_position.set(transport_index)
+        self._alignments.delete_face_at_index(face_idx)
+        # Execute transport index again in case the removal of the face has altered filter criteria
+        # TODO Make sure this is working properly on multi faces. It looks like it's not, as
+        # sometimes it appears to be displaying frames with only one face in it.
+        # TODO Check what happens when we get to the end of the transport index/there are
+        # no faces left
+        self._frames.tk_transport_position.set(transport_index)
 
     def _add_remove_face(self):
         """ add or remove a face for the current frame """
@@ -740,7 +757,7 @@ class FaceFilter():
             ``True`` if adjusting display for an added face, ``False`` if adjusting for a removed
             face.
          """
-        # Unhide hidden annotations so they get tagged
+        # Display hidden annotations so they get tagged
         hidden_tags = [val for key, val in self._toggle_tags.items()
                        if key != self._canvas.optional_annotation]
         for tag in hidden_tags:
@@ -763,7 +780,7 @@ class FaceFilter():
         to_bulk_xy = (last_face_x if is_insert else last_face_x + self._size,
                       self._canvas.bbox("all")[3])
         self._canvas.addtag_enclosed("move_bulk", *from_bulk_xy, *to_bulk_xy)
-        # Rehide hidden annotations
+        # Re-hide hidden annotations
         for tag in hidden_tags:
             self._canvas.itemconfig(tag, state="hidden")
 

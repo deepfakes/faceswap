@@ -11,7 +11,7 @@ from time import sleep
 import numpy as np
 
 from lib.gui.control_helper import ControlPanel
-from lib.gui.custom_widgets import Tooltip, StatusBar
+from lib.gui.custom_widgets import RightClickMenu, StatusBar, Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
@@ -505,6 +505,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                                 outline="#FFFF00",
                                                 width=2,
                                                 state="hidden")
+        self._right_click_menu = RightClickMenu(["Delete Face"], [self._delete_current_face])
+        self._right_click_face_id = None
         self._bind_mouse()
         self._color_keys = dict(polygon="outline", line="fill")
         self._landmark_mapping_dict = self._get_landmark_mapping()
@@ -564,11 +566,35 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self.bind("<Motion>", self._update_cursor)
         self.bind("<ButtonPress-1>", self._select_frame)
         self.bind("<Leave>", lambda e: self._clear_hovered())
+        self.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
+                  self._context_menu)
+
         if platform.system() == "Linux":
             self.bind("<Button-4>", self._scroll)
             self.bind("<Button-5>", self._scroll)
         else:
             self.bind("<MouseWheel>", self._scroll)
+
+    def _context_menu(self, event):
+        """ Right click menu for faces viewer """
+        if not self._faces.is_initialized:
+            return
+        canvas_xy = (self.canvasx(event.x), self.canvasy(event.y))
+        self._right_click_face_id = None
+        face_id = [item_id
+                   for item_id in self.find_overlapping(*canvas_xy, *canvas_xy)
+                   for tag in self.gettags(item_id) if tag.startswith("image_")]
+        if not face_id:
+            logger.trace("No valid item under mouse")
+            return
+        self._right_click_face_id = face_id[0]
+        logger.trace("Popping right click menu")
+        self._right_click_menu.popup(event)
+
+    def _delete_current_face(self):
+        """ Delete the selected face on a right click mouse delete action. """
+        self._faces.delete_face(self._right_click_face_id)
+        self._right_click_face_id = dict()
 
     def load_faces(self, frame_width, enable_buttons_callback):
         """ Set the number of columns based on the holding frame width and face size.
@@ -793,6 +819,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                 "{}_{}".format(object_type, frame_index)]
         if is_multi:
             tags.extend(["multi", "multi_{}".format(object_type)])
+        else:
+            tags.append("not_multi")
         return tags
 
     def create_mesh_annotations(self, color, mesh_landmarks, offset, tag):
