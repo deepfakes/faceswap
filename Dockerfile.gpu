@@ -1,4 +1,6 @@
-FROM tensorflow/tensorflow:1.12.0-gpu-py3
+FROM tensorflow/tensorflow:1.15.0-gpu-py3
+
+ENV DEBIAN_FRONTEND noninteractive
 
 RUN add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
  && apt-get update -qq -y \
@@ -12,11 +14,6 @@ RUN pip3 --no-cache-dir install -r /opt/requirements.txt && rm /opt/requirements
 RUN pip3 install jupyter matplotlib
 RUN pip3 install jupyter_http_over_ws
 RUN jupyter serverextension enable --py jupyter_http_over_ws
-# patch for tensorflow:latest-gpu-py3 image
-RUN cd /usr/local/cuda/lib64 \
- && mv stubs/libcuda.so ./ \
- && ln -s libcuda.so libcuda.so.1 \
- && ldconfig
 
 WORKDIR "/notebooks"
 CMD ["jupyter-notebook", "--allow-root" ,"--port=8888" ,"--no-browser" ,"--ip=0.0.0.0"]
