@@ -550,6 +550,7 @@ class FaceFilter():
         current_frame_idx = -1
         for idx, image_id in enumerate(self._image_ids):
             # TODO Add tag with frame number and face number to be able to get tag quicker?
+            # TODO Add tag with column and rows, then bulk move columns and rows?
             frame_idx = self._canvas.frame_index_from_object(image_id)
             if frame_idx != current_frame_idx:
                 current_frame_idx = frame_idx
@@ -767,26 +768,32 @@ class FaceFilter():
                        if key != self._canvas.optional_annotation]
         for tag in hidden_tags:
             self._canvas.itemconfig(tag, state="normal")
-
+        new_row_start = start_index == self._canvas.column_count - 1
         first_face_xy = self._canvas.coords(self._image_ids[start_index])
-        last_face_x = (self._canvas.column_count - 1) * self._size
-        logger.debug("start_index: %s, first_face_xy: %s, last_face_x: %s",
-                     start_index, first_face_xy, last_face_x)
-
+        first_row_y = first_face_xy[1] - self._size if new_row_start else first_face_xy[1]
+        last_col_x = (self._canvas.column_count - 1) * self._size
+        logger.debug("is_insert: %s, start_index: %s, new_row_start: %s, first_face_xy: %s, "
+                     "first_row_y: %s, last_col_x: %s", is_insert, start_index, new_row_start,
+                     first_face_xy, first_row_y, last_col_x)
         # Top Row
-        to_top_xy = (last_face_x if is_insert else last_face_x + self._size,
-                     first_face_xy[1] + self._size)
-        self._canvas.addtag_enclosed("move_top", *first_face_xy, *to_top_xy)
+        if not new_row_start:
+            # Skip top row shift if starting index is a new row
+            br_top_xy = (last_col_x if is_insert else last_col_x + self._size,
+                         first_row_y + self._size)
+            logger.debug("first row: (top left: %s, bottom right:%s)", first_face_xy, br_top_xy)
+            self._canvas.addtag_enclosed("move_top", *first_face_xy, *br_top_xy)
         # First or last column (depending on delete or insert)
-        from_col_xy = (last_face_x if is_insert else 0,
-                       first_face_xy[1] if is_insert else first_face_xy[1] + self._size)
-        to_col_xy = (from_col_xy[0] + self._size, self._canvas.bbox("all")[3])
-        self._canvas.addtag_enclosed("move_col", *from_col_xy, *to_col_xy)
+        tl_col_xy = (last_col_x if is_insert else 0,
+                     first_row_y if is_insert else first_row_y + self._size)
+        br_col_xy = (tl_col_xy[0] + self._size, self._canvas.bbox("all")[3])
+        logger.debug("end column: (top left: %s, bottom right:%s)", tl_col_xy, br_col_xy)
+        self._canvas.addtag_enclosed("move_col", *tl_col_xy, *br_col_xy)
         # Bulk faces
-        from_bulk_xy = (0 if is_insert else self._size, first_face_xy[1] + self._size)
-        to_bulk_xy = (last_face_x if is_insert else last_face_x + self._size,
+        tl_bulk_xy = (0 if is_insert else self._size, first_row_y + self._size)
+        br_bulk_xy = (last_col_x if is_insert else last_col_x + self._size,
                       self._canvas.bbox("all")[3])
-        self._canvas.addtag_enclosed("move_bulk", *from_bulk_xy, *to_bulk_xy)
+        logger.debug("bulk: (top left: %s, bottom right:%s)", tl_bulk_xy, br_bulk_xy)
+        self._canvas.addtag_enclosed("move_bulk", *tl_bulk_xy, *br_bulk_xy)
         # Re-hide hidden annotations
         for tag in hidden_tags:
             self._canvas.itemconfig(tag, state="hidden")
