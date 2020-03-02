@@ -194,7 +194,7 @@ class TrainingDataGenerator():
         """ Performs the augmentation and compiles target images and samples. See
         :func:`minibatch_ab` for more details on the output. """
         logger.trace("Process batch: (filenames: '%s', side: '%s')", filenames, side)
-        filenames, batch = read_image_batch(filenames)
+        batch = read_image_batch(filenames)
         batch = self._apply_mask(filenames, batch, side)
         processed = dict()
 

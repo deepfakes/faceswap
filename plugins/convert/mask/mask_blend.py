@@ -49,10 +49,8 @@ class Mask(Adjustment):
         raw_mask = mask.copy()
         if not self.skip and self._do_erode:
             mask = self._erode(mask)
-        raw_mask = np.expand_dims(raw_mask, axis=-1) if raw_mask.ndim != 3 else raw_mask
-        mask = np.expand_dims(mask, axis=-1) if mask.ndim != 3 else mask
         logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
-        return mask.astype("float32") / 255.0, raw_mask.astype("float32") / 255.0
+        return mask, raw_mask
 
     def _get_mask(self, detected_face, predicted_mask):
         """ Return the requested mask with any requested blurring applied.
@@ -72,9 +70,9 @@ class Mask(Adjustment):
         """
         if self.mask_type == "none":
             # Return a dummy mask if not using a mask
-            mask = np.ones_like(self.dummy[:, :, 1], dtype="uint8") * 255
+            mask = np.ones_like(self.dummy[:, :, 1], dtype="float32")[..., None]
         elif self.mask_type == "predicted":
-            mask = predicted_mask
+            mask = predicted_mask[..., None]
         else:
             mask = detected_face.mask[self.mask_type]
             mask.set_blur_and_threshold(blur_kernel=self.config["kernel_size"],
@@ -82,7 +80,6 @@ class Mask(Adjustment):
                                         blur_passes=self.config["passes"],
                                         threshold=self.config["threshold"])
             mask = self._crop_to_coverage(mask.mask)
-
             mask_size = mask.shape[0]
             face_size = self.dummy.shape[0]
             if mask_size != face_size:
@@ -90,6 +87,7 @@ class Mask(Adjustment):
                 mask = cv2.resize(mask,
                                   self.dummy.shape[:2],
                                   interpolation=interp)[..., None]
+            mask = mask.astype("float32") / 255.0
         logger.trace(mask.shape)
         return mask
 
