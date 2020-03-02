@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-""" Alignments file functions for reading, writing and manipulating
-    a serialized alignments file """
+""" Alignments file functions for reading, writing and manipulating the data stored in a
+serialized alignments file. """
 
 import logging
 import os
@@ -15,22 +15,31 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Alignments():
-    """ Holds processes pertaining to the alignments file.
+    """ The alignments file is a custom serialized ``.fsa`` file that holds information for each
+    frame for a video or series of images.
 
-        folder:     folder alignments file is stored in
-        filename:   Filename of alignments file. If a
-                    valid extension is provided, then it will be used to
-                    decide the serializer otherwise compressed pickle is used.
+    Specifically, it holds a list of faces that appear in each frame. Each face contains
+    information detailing their detected bounding box location within the frame, the 68 point
+    facial landmarks and any masks that have been extracted.
+
+    Additionally it can also hold video meta information (timestamp and whether a frame is a
+    key frame.)
+
+    Parameters
+    ----------
+    folder: str
+        The folder that contains the alignments ``.fsa`` file
+    filename: str, optional
+        The filename of the ``.fsa`` alignments file. If not provided then the given folder will be
+        checked for a default alignments file filename. Default: "alignments"
     """
-    # pylint: disable=too-many-public-methods
     def __init__(self, folder, filename="alignments"):
         logger.debug("Initializing %s: (folder: '%s', filename: '%s')",
                      self.__class__.__name__, folder, filename)
-        self.serializer = get_serializer("compressed")
-        self.file = self.get_location(folder, filename)
-
-        self.data = self.load()
-        self.update_legacy()
+        self._serializer = get_serializer("compressed")
+        self._file = self._get_location(folder, filename)
+        self._data = self._load()
+        self._update_legacy()
         self._hashes_to_frame = dict()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -38,99 +47,150 @@ class Alignments():
 
     @property
     def frames_count(self):
-        """ Return current frames count """
-        retval = len(self.data)
+        """ int: The number of frames that appear in the alignments :attr:`data`. """
+        retval = len(self._data)
         logger.trace(retval)
         return retval
 
     @property
     def faces_count(self):
-        """ Return current faces count """
-        retval = sum(len(faces) for faces in self.data.values())
+        """ int: The total number of faces that appear in the alignments :attr:`data`. """
+        retval = sum(len(val["faces"]) for val in self._data.values())
         logger.trace(retval)
         return retval
 
     @property
+    def file(self):
+        """ str: The full path to the currently loaded alignments file. """
+        return self._file
+
+    @property
+    def data(self):
+        """ dict: The loaded alignments :attr:`file` in dictionary form. """
+        return self._data
+
+    @property
     def have_alignments_file(self):
-        """ Return whether an alignments file exists """
-        retval = os.path.exists(self.file)
+        """ bool: ``True`` if an alignments file exists at location :attr:`file` otherwise
+        ``False``. """
+        retval = os.path.exists(self._file)
         logger.trace(retval)
         return retval
 
     @property
     def hashes_to_frame(self):
-        """ Return :attr:`_hashes_to_frame`. Generate it if it does not exist.
-            The dict is of each face_hash with their parent frame name(s) and their index
-            in the frame
+        """ dict: The SHA1 hash of the face mapped to the frame(s) and face index within the frame
+        that the hash corresponds to. The structure of the dictionary is:
+
+        {**SHA1_hash** (`str`): {**filename** (`str`): **face_index** (`int`)}}.
+
+        Notes
+        -----
+        The first time this property is referenced, the dictionary will be created and cached.
+        Subsequent references will be made to this cached dictionary.
         """
         if not self._hashes_to_frame:
             logger.debug("Generating hashes to frame")
-            for frame_name, faces in self.data.items():
-                for idx, face in enumerate(faces):
+            for frame_name, val in self._data.items():
+                for idx, face in enumerate(val["faces"]):
                     self._hashes_to_frame.setdefault(face["hash"], dict())[frame_name] = idx
         return self._hashes_to_frame
 
+    @property
+    def mask_summary(self):
+        """ dict: The mask type names stored in the alignments :attr:`data` as key with the number
+        of faces which possess the mask type as value. """
+        masks = dict()
+        for val in self._data.values():
+            for face in val["faces"]:
+                if face.get("mask", None) is None:
+                    masks["none"] = masks.get("none", 0) + 1
+                for key in face.get("mask", dict()):
+                    masks[key] = masks.get(key, 0) + 1
+        return masks
+
     # << INIT FUNCTIONS >> #
 
-    def get_location(self, folder, filename):
-        """ Return the path to alignments file """
+    def _get_location(self, folder, filename):
+        """ Obtains the location of an alignments file.
+
+        If a legacy alignments file is provided/discovered, then the alignments file will be
+        updated to the custom ``.fsa`` format and saved.
+
+        Parameters
+        ----------
+        folder: str
+            The folder that the alignments file is located in
+        filename: str
+            The filename of the alignments file
+
+        Returns
+        -------
+        str
+            The full path to the alignments file
+        """
         logger.debug("Getting location: (folder: '%s', filename: '%s')", folder, filename)
         noext_name, extension = os.path.splitext(filename)
         if extension in (".json", ".p", ".pickle", ".yaml", ".yml"):
             # Reformat legacy alignments file
-            filename = self.update_file_format(folder, filename)
+            filename = self._update_file_format(folder, filename)
             logger.debug("Updated legacy alignments. New filename: '%s'", filename)
-        if extension[1:] == self.serializer.file_extension:
+        if extension[1:] == self._serializer.file_extension:
             logger.debug("Valid Alignments filename provided: '%s'", filename)
         else:
-            filename = "{}.{}".format(noext_name, self.serializer.file_extension)
+            filename = "{}.{}".format(noext_name, self._serializer.file_extension)
             logger.debug("File extension set from serializer: '%s'",
-                         self.serializer.file_extension)
+                         self._serializer.file_extension)
         location = os.path.join(str(folder), filename)
         if not os.path.exists(location):
-            # Test for old format alignments files and reformat if they exist
-            # This will be executed if an alignments file has not been explicitly provided
-            # therefore it will not have been picked up in the extension test
-            self.test_for_legacy(location)
+            # Test for old format alignments files and reformat if they exist. This will be
+            # executed if an alignments file has not been explicitly provided therefore it will not
+            # have been picked up in the extension test
+            self._test_for_legacy(location)
         logger.verbose("Alignments filepath: '%s'", location)
         return location
 
     # << I/O >> #
 
-    def load(self):
-        """ Load the alignments data
-            Override for custom loading logic """
+    def _load(self):
+        """ Load the alignments data from the serialized alignments :attr:`file`.
+
+        Returns
+        -------
+        dict:
+            The loaded alignments data
+        """
         logger.debug("Loading alignments")
         if not self.have_alignments_file:
             raise FaceswapError("Error: Alignments file not found at "
-                                "{}".format(self.file))
+                                "{}".format(self._file))
 
-        logger.info("Reading alignments from: '%s'", self.file)
-        data = self.serializer.load(self.file)
+        logger.info("Reading alignments from: '%s'", self._file)
+        data = self._serializer.load(self._file)
         logger.debug("Loaded alignments")
         return data
 
-    def reload(self):
-        """ Read the alignments data from the correct format """
-        logger.debug("Re-loading alignments")
-        self.data = self.load()
-        logger.debug("Re-loaded alignments")
-
     def save(self):
-        """ Write the serialized alignments file """
+        """ Write the contents of :attr:`data` to a serialized ``.fsa`` file at the location
+        :attr:`file`. """
         logger.debug("Saving alignments")
-        logger.info("Writing alignments to: '%s'", self.file)
-        self.serializer.save(self.file, self.data)
+        logger.info("Writing alignments to: '%s'", self._file)
+        self._serializer.save(self._file, self._data)
         logger.debug("Saved alignments")
 
     def backup(self):
-        """ Backup copy of old alignments """
+        """ Create a backup copy of the alignments :attr:`file`.
+
+        Creates a copy of the serialized alignments :attr:`file` appending a
+        timestamp onto the end of the file name and storing in the same folder as
+        the original :attr:`file`.
+        """
         logger.debug("Backing up alignments")
-        if not os.path.isfile(self.file):
+        if not os.path.isfile(self._file):
             logger.debug("No alignments to back up")
             return
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        src = self.file
+        src = self._file
         split = os.path.splitext(src)
         dst = split[0] + "_" + now + split[1]
         logger.info("Backing up original alignments to '%s'", dst)
@@ -139,37 +199,76 @@ class Alignments():
 
     # << VALIDATION >> #
 
-    def frame_exists(self, frame):
-        """ return path of images that have faces """
-        retval = frame in self.data.keys()
-        logger.trace("'%s': %s", frame, retval)
+    def frame_exists(self, frame_name):
+        """ Check whether a given frame_name exists within the alignments :attr:`data`.
+
+        Parameters
+        ----------
+        frame_name: str
+            The frame name to check. This should be the base name of the frame, not the full path
+
+        Returns
+        -------
+        bool
+            ``True`` if the given frame_name exists within the alignments :attr:`data`
+            otherwise ``False``
+        """
+        retval = frame_name in self._data.keys()
+        logger.trace("'%s': %s", frame_name, retval)
         return retval
 
-    def frame_has_faces(self, frame):
-        """ Return true if frame exists and has faces """
-        retval = bool(self.data.get(frame, list()))
-        logger.trace("'%s': %s", frame, retval)
+    def frame_has_faces(self, frame_name):
+        """ Check whether a given frame_name exists within the alignments :attr:`data` and contains
+        at least 1 face.
+
+        Parameters
+        ----------
+        frame_name: str
+            The frame name to check. This should be the base name of the frame, not the full path
+
+        Returns
+        -------
+        bool
+            ``True`` if the given frame_name exists within the alignments :attr:`data` and has at
+            least 1 face associated with it, otherwise ``False``
+        """
+        retval = bool(self._data.get(frame_name, dict()).get("faces", []))
+        logger.trace("'%s': %s", frame_name, retval)
         return retval
 
-    def frame_has_multiple_faces(self, frame):
-        """ Return true if frame exists and has faces """
-        if not frame:
+    def frame_has_multiple_faces(self, frame_name):
+        """ Check whether a given frame_name exists within the alignments :attr:`data` and contains
+        more than 1 face.
+
+        Parameters
+        ----------
+        frame_name: str
+            The frame_name name to check. This should be the base name of the frame, not the full
+            path
+
+        Returns
+        -------
+        bool
+            ``True`` if the given frame_name exists within the alignments :attr:`data` and has more
+            than 1 face associated with it, otherwise ``False``
+        """
+        if not frame_name:
             retval = False
         else:
-            retval = bool(len(self.data.get(frame, list())) > 1)
-        logger.trace("'%s': %s", frame, retval)
+            retval = bool(len(self._data.get(frame_name, dict()).get("faces", [])) > 1)
+        logger.trace("'%s': %s", frame_name, retval)
         return retval
 
     def mask_is_valid(self, mask_type):
-        """ Ensure the given ``mask_type`` is valid for this alignments file.
+        """ Ensure the given ``mask_type`` is valid for the alignments :attr:`data`.
 
-        Every face in the alignments file must have the given mask type to successfully
+        Every face in the alignments :attr:`data` must have the given mask type to successfully
         pass the test.
 
         Parameters
         ----------
         mask_type: str
-            The mask type to check against the current alignments
+            The mask type to check against the current alignments :attr:`data`
 
         Returns
         -------
@@ -179,86 +278,138 @@ class Alignments():
         """
         retval = any([(face.get("mask", None) is not None and
                        face["mask"].get(mask_type, None) is not None)
-                      for faces in self.data.values()
-                      for face in faces])
+                      for val in self._data.values()
+                      for face in val["faces"]])
         logger.debug(retval)
         return retval
 
-    @property
-    def mask_summary(self):
-        """ Dict: The mask types and the number of faces which have each type that exist with in
-        the loaded alignments """
-        masks = dict()
-        for faces in self.data.values():
-            for face in faces:
-                if face.get("mask", None) is None:
-                    masks["none"] = masks.get("none", 0) + 1
-                for key in face.get("mask", dict()):
-                    masks[key] = masks.get(key, 0) + 1
-        return masks
-
     # << DATA >> #
 
-    def get_faces_in_frame(self, frame):
-        """ Return the alignments for the selected frame """
-        logger.trace("Getting faces for frame: '%s'", frame)
-        return self.data.get(frame, list())
+    def get_faces_in_frame(self, frame_name):
+        """ Obtain the faces from :attr:`data` associated with a given frame_name.
 
-    def get_full_frame_name(self, frame):
-        """ Return a frame with extension for when the extension is
-            not known """
-        retval = next(key for key in self.data.keys()
-                      if key.startswith(frame))
-        logger.trace("Requested: '%s', Returning: '%s'", frame, retval)
-        return retval
+        Parameters
+        ----------
+        frame_name: str
+            The frame name to return faces for. This should be the base name of the frame, not the
+            full path
 
-    def count_faces_in_frame(self, frame):
-        """ Return number of alignments within frame """
-        retval = len(self.data.get(frame, list()))
+        Returns
+        -------
+        list
+            The list of face dictionaries that appear within the requested frame_name
+        """
+        logger.trace("Getting faces for frame_name: '%s'", frame_name)
+        return self._data.get(frame_name, dict()).get("faces", [])
+
+    def _count_faces_in_frame(self, frame_name):
+        """ Return number of faces that appear within :attr:`data` for the given frame_name.
+
+        Parameters
+        ----------
+        frame_name: str
+            The frame name to return the count for. This should be the base name of the frame, not
+            the full path
+
+        Returns
+        -------
+        int
+            The number of faces that appear in the given frame_name
+        """
+        retval = len(self._data.get(frame_name, dict()).get("faces", []))
         logger.trace(retval)
         return retval
 
     # << MANIPULATION >> #
 
-    def delete_face_at_index(self, frame, idx):
-        """ Delete the face alignment for given frame at given index """
-        logger.debug("Deleting face %s for frame '%s'", idx, frame)
-        idx = int(idx)
-        if idx + 1 > self.count_faces_in_frame(frame):
-            logger.debug("No face to delete: (frame: '%s', idx %s)", frame, idx)
+    def delete_face_at_index(self, frame_name, face_index):
+        """ Delete the face for the given frame_name at the given face index from :attr:`data`.
+
+        Parameters
+        ----------
+        frame_name: str
+            The frame name to remove the face from. This should be the base name of the frame, not
+            the full path
+        face_index: int
+            The index number of the face within the given frame_name to remove
+
+        Returns
+        -------
+        bool
+            ``True`` if a face was successfully deleted otherwise ``False``
+        """
+        logger.debug("Deleting face %s for frame_name '%s'", face_index, frame_name)
+        face_index = int(face_index)
+        if face_index + 1 > self._count_faces_in_frame(frame_name):
+            logger.debug("No face to delete: (frame_name: '%s', face_index %s)",
+                         frame_name, face_index)
             return False
-        del self.data[frame][idx]
-        logger.debug("Deleted face: (frame: '%s', idx %s)", frame, idx)
+        del self._data[frame_name]["faces"][face_index]
+        logger.debug("Deleted face: (frame_name: '%s', face_index %s)", frame_name, face_index)
         return True
 
-    def add_face(self, frame, alignment):
-        """ Add a new face for a frame and return it's index """
-        logger.debug("Adding face to frame: '%s'", frame)
-        if frame not in self.data:
-            self.data[frame] = []
-        self.data[frame].append(alignment)
-        retval = self.count_faces_in_frame(frame) - 1
+    def add_face(self, frame_name, face):
+        """ Add a new face for the given frame_name in :attr:`data` and return it's index.
+
+        Parameters
+        ----------
+        frame_name: str
+            The frame name to add the face to. This should be the base name of the frame, not the
+            full path
+        face: dict
+            The face information to add to the given frame_name, correctly formatted for storing in
+            :attr:`data`
+
+        Returns
+        -------
+        int
+            The index of the newly added face within :attr:`data` for the given frame_name
+        """
+        logger.debug("Adding face to frame_name: '%s'", frame_name)
+        if frame_name not in self._data:
+            self._data[frame_name] = dict(faces=[])
+        self._data[frame_name]["faces"].append(face)
+        retval = self._count_faces_in_frame(frame_name) - 1
         logger.debug("Returning new face index: %s", retval)
         return retval
 
-    def update_face(self, frame, idx, alignment):
-        """ Replace a face for given frame and index """
-        logger.debug("Updating face %s for frame '%s'", idx, frame)
-        self.data[frame][idx] = alignment
+    def update_face(self, frame_name, face_index, face):
+        """ Update the face for the given frame_name at the given face index in :attr:`data`.
 
-    def filter_hashes(self, hashlist, filter_out=False):
-        """ Filter in or out faces that match the hash list
-
-            filter_out=True: Remove faces that match in the hash list
-            filter_out=False: Remove faces that are not in the hash list
+        Parameters
+        ----------
+        frame_name: str
+            The frame name to update the face for. This should be the base name of the frame, not
+            the full path
+        face_index: int
+            The index number of the face within the given frame_name to update
+        face: dict
+            The face information to update to the given frame_name at the given face_index,
+            correctly formatted for storing in :attr:`data`
         """
-        hashset = set(hashlist)
-        for filename, frame in self.data.items():
-            for idx, face in reversed(list(enumerate(frame))):
+        logger.debug("Updating face %s for frame_name '%s'", face_index, frame_name)
+        self._data[frame_name]["faces"][face_index] = face
+
+    def filter_hashes(self, hash_list, filter_out=False):
+        """ Remove faces from :attr:`data` based on a given hash list.
+
+        Parameters
+        ----------
+        hash_list: list
+            List of SHA1 hashes in `str` format to use as a filter against :attr:`data`
+        filter_out: bool, optional
+            ``True`` if faces should be removed from :attr:`data` when there is a corresponding
+            match in the given hash_list. ``False`` if faces should be kept in :attr:`data` when
+            there is a corresponding match in the given hash_list, but removed if there is no
+            match. Default: ``False``
+        """
+        hashset = set(hash_list)
+        for filename, val in self._data.items():
+            for idx, face in reversed(list(enumerate(val["faces"]))):
                 if ((filter_out and face.get("hash", None) in hashset) or
                         (not filter_out and face.get("hash", None) not in hashset)):
                     logger.verbose("Filtering out face: (filename: %s, index: %s)", filename, idx)
-                    del frame[idx]
+                    del val["faces"][idx]
                 else:
                     logger.trace("Not filtering out face: (filename: %s, index: %s)",
                                  filename, idx)
@@ -266,59 +417,93 @@ class Alignments():
     # << GENERATORS >> #
 
     def yield_faces(self):
-        """ Yield face alignments for one image """
-        for frame_fullname, alignments in self.data.items():
+        """ Generator to obtain all faces with meta information from :attr:`data`. The results
+        are yielded by frame.
+
+        Notes
+        -----
+        The yielded order is non-deterministic.
+
+        Yields
+        ------
+        frame_name: str
+            The frame name that the face belongs to. This is the base name of the frame, as it
+            appears in :attr:`data`, not the full path
+        faces: list
+            The list of face `dict` objects that exist for this frame
+        face_count: int
+            The number of faces that exist within :attr:`data` for this frame
+        frame_fullname: str
+            The full path (folder and filename) for the yielded frame
+        """
+        for frame_fullname, val in self._data.items():
             frame_name = os.path.splitext(frame_fullname)[0]
-            face_count = len(alignments)
+            face_count = len(val["faces"])
             logger.trace("Yielding: (frame: '%s', faces: %s, frame_fullname: '%s')",
                          frame_name, face_count, frame_fullname)
-            yield frame_name, alignments, face_count, frame_fullname
-
-    @staticmethod
-    def yield_original_index_reverse(image_alignments, number_alignments):
-        """ Return the correct original index for
-            alignment in reverse order """
-        for idx, _ in enumerate(reversed(image_alignments)):
-            original_idx = number_alignments - 1 - idx
-            logger.trace("Yielding: face index %s", original_idx)
-            yield original_idx
+            yield frame_name, val["faces"], face_count, frame_fullname
 
     # << LEGACY FUNCTIONS >> #
 
-    def update_legacy(self):
-        """ Update legacy alignments """
+    def _update_legacy(self):
+        """ Check whether the alignments are legacy, and if so update them to current alignments
+        format. """
         updated = False
-        if self.has_legacy_landmarksxy():
+        if self._has_legacy_structure():
+            self._update_legacy_structure()
+
+        if self._has_legacy_landmarksxy():
             logger.info("Updating legacy landmarksXY to landmarks_xy")
-            self.update_legacy_landmarksxy()
+            self._update_legacy_landmarksxy()
             updated = True
-        if self.has_legacy_landmarks_list():
+        if self._has_legacy_landmarks_list():
             logger.info("Updating legacy landmarks from list to numpy array")
-            self.update_legacy_landmarks_list()
+            self._update_legacy_landmarks_list()
             updated = True
         if updated:
             self.save()
 
     # <File Format> #
-    # Serializer is now a compressed pickle .fsa format. This used to be any number of serializers
-    def test_for_legacy(self, location):
-        """ For alignments filenames passed in with out an extension, test for legacy formats """
+    # Serializer is now a compressed pickle custom format. This used to be any number
+    # of serializers
+    def _test_for_legacy(self, location):
+        """ For alignments filenames passed in without an extension, test for legacy
+        serialization formats and update to current ``.fsa`` format if any are found.
+
+        Parameters
+        ----------
+        location: str
+            The folder location to check for legacy alignments
+        """
         logger.debug("Checking for legacy alignments file formats: '%s'", location)
         filename = os.path.splitext(location)[0]
         for ext in (".json", ".p", ".pickle", ".yaml"):
             legacy_filename = "{}{}".format(filename, ext)
             if os.path.exists(legacy_filename):
                 logger.debug("Legacy alignments file exists: '%s'", legacy_filename)
-                _ = self.update_file_format(*os.path.split(legacy_filename))
+                _ = self._update_file_format(*os.path.split(legacy_filename))
                 break
             logger.debug("Legacy alignments file does not exist: '%s'", legacy_filename)
 
-    def update_file_format(self, folder, filename):
-        """ Convert old style alignments format to new style format """
+    def _update_file_format(self, folder, filename):
+        """ Convert old style serialized alignments to new ``.fsa`` format.
+
+        Parameters
+        ----------
+        folder: str
+            The folder that the legacy alignments exist in
+        filename: str
+            The file name of the legacy alignments
+
+        Returns
+        -------
+        str
+            The full path to the newly created ``.fsa`` alignments file
+        """
         logger.info("Reformatting legacy alignments file...")
         old_location = os.path.join(str(folder), filename)
         new_location = "{}.{}".format(os.path.splitext(old_location)[0],
-                                      self.serializer.file_extension)
+                                      self._serializer.file_extension)
         if os.path.exists(old_location):
             if os.path.exists(new_location):
                 logger.info("Using existing updated alignments file found at '%s'. If you do not "
@@ -328,44 +513,79 @@ class Alignments():
                 logger.info("Old location: '%s', New location: '%s'", old_location, new_location)
                 load_serializer = get_serializer_from_filename(old_location)
                 data = load_serializer.load(old_location)
-                self.serializer.save(new_location, data)
+                self._serializer.save(new_location, data)
         return os.path.basename(new_location)
+
+    # <Structure> #
+    # Alignments were structured: {frame_name: <list of faces>}. We need to be able to store
+    # information at the frame level, so new structure is:  {frame_name: {faces: <list of faces>}}
+    def _has_legacy_structure(self):
+        """ Test whether the alignments file is laid out in the old structure of
+        `{frame_name: [faces]}`
+
+        Returns
+        -------
+        bool
+            ``True`` if the file has legacy structure otherwise ``False``
+        """
+        retval = any(isinstance(val, list) for val in self._data.values())
+        logger.debug("legacy structure: %s", retval)
+        return retval
+
+    def _update_legacy_structure(self):
+        """ Update legacy alignments files from the format `{frame_name: [faces}` to the
+        format `{frame_name: {faces: [faces]}`."""
+        for key, val in self._data.items():
+            self._data[key] = dict(faces=val)
+        logger.debug("Updated alignments file structure")
 
     # <landmarks> #
     # Landmarks renamed from landmarksXY to landmarks_xy for PEP compliance
-    def has_legacy_landmarksxy(self):
-        """ check for legacy landmarksXY keys """
+    def _has_legacy_landmarksxy(self):
+        """ check for legacy landmarksXY keys.
+
+        Returns
+        -------
+        bool
+            ``True`` if the alignments file contains legacy `landmarksXY` keys otherwise ``False``
+        """
         logger.debug("checking legacy landmarksXY")
         retval = (any(key == "landmarksXY"
-                      for alignments in self.data.values()
-                      for alignment in alignments
+                      for val in self._data.values()
+                      for alignment in val["faces"]
                       for key in alignment))
         logger.debug("legacy landmarksXY: %s", retval)
         return retval
 
-    def update_legacy_landmarksxy(self):
-        """ Update landmarksXY to landmarks_xy and save alignments """
+    def _update_legacy_landmarksxy(self):
+        """ Update legacy `landmarksXY` keys to PEP compliant `landmarks_xy` keys. """
         update_count = 0
-        for alignments in self.data.values():
-            for alignment in alignments:
+        for val in self._data.values():
+            for alignment in val["faces"]:
                 alignment["landmarks_xy"] = alignment.pop("landmarksXY")
                 update_count += 1
         logger.debug("Updated landmarks_xy: %s", update_count)
 
     # Landmarks stored as list instead of numpy array
-    def has_legacy_landmarks_list(self):
-        """ check for legacy landmarks stored as list """
+    def _has_legacy_landmarks_list(self):
+        """ check for legacy landmarks stored as `list` rather than :class:`numpy.ndarray`.
+
+        Returns
+        -------
+        bool
+            ``True`` if not all landmarks are :class:`numpy.ndarray` otherwise ``False``
+        """
         logger.debug("checking legacy landmarks as list")
         retval = not all(isinstance(face["landmarks_xy"], np.ndarray)
-                         for faces in self.data.values()
-                         for face in faces)
+                         for val in self._data.values()
+                         for face in val["faces"])
         return retval
 
-    def update_legacy_landmarks_list(self):
-        """ Update landmarksXY to landmarks_xy and save alignments """
+    def _update_legacy_landmarks_list(self):
+        """ Update landmarks stored as `list` to :class:`numpy.ndarray`. """
         update_count = 0
-        for alignments in self.data.values():
-            for alignment in alignments:
+        for val in self._data.values():
+            for alignment in val["faces"]:
                 test = alignment["landmarks_xy"]
                 if not isinstance(test, np.ndarray):
                     alignment["landmarks_xy"] = np.array(test, dtype="float32")

@@ -106,8 +106,8 @@ class Alignments(AlignmentsBase):
         logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
 
-    def load(self):
-        """ Override the parent :func:`~lib.alignments.Alignments.load` to handle skip existing
+    def _load(self):
+        """ Override the parent :func:`~lib.alignments.Alignments._load` to handle skip existing
         frames and faces on extract.
 
         If skip existing has been selected, existing alignments are loaded and returned to the
@@ -123,7 +123,7 @@ class Alignments(AlignmentsBase):
         if not self._is_extract:
             if not self.have_alignments_file:
                 return data
-            data = super().load()
+            data = super()._load()
             return data
 
         skip_existing = hasattr(self._args, 'skip_existing') and self._args.skip_existing
@@ -137,7 +137,7 @@ class Alignments(AlignmentsBase):
             logger.warning("Skip Existing/Skip Faces selected, but no alignments file found!")
             return data
 
-        data = self.serializer.load(self.file)
+        data = self._serializer.load(self.file)
 
         if skip_faces:
             # Remove items from alignments that have no faces so they will

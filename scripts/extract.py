@@ -281,5 +281,5 @@ class Extract():  # pylint:disable=too-few-public-methods
 
             saver.save(output_filename, image)
             final_faces.append(face.to_alignment())
-        self._alignments.data[os.path.basename(extract_media.filename)] = final_faces
+        self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces)
         del extract_media

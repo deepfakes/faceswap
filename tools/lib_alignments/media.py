@@ -32,8 +32,8 @@ class AlignmentData(Alignments):
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
         if filename.lower() == "dfl":
-            self.serializer = get_serializer("compressed")
-            self.file = "{}.{}".format(filename.lower(), self.serializer.file_extension)
+            self._serializer = get_serializer("compressed")
+            self.file = "{}.{}".format(filename.lower(), self._serializer.file_extension)
             return
         super().__init__(folder, filename=filename)
         logger.verbose("%s items loaded", self.frames_count)
@@ -59,6 +59,12 @@ class AlignmentData(Alignments):
         self.backup()
         super().save()
 
+    def reload(self):
+        """ Read the alignments data from the correct format """
+        logger.debug("Re-loading alignments")
+        self._data = self._load()
+        logger.debug("Re-loaded alignments")
+
     def add_face_hashes(self, frame_name, hashes):
         """ Recalculate face hashes """
         logger.trace("Adding face hash: (frame: '%s', hashes: %s)", frame_name, hashes)
@@ -71,6 +77,20 @@ class AlignmentData(Alignments):
                            abs(count_match), msg, frame_name)
         for idx, i_hash in hashes.items():
             faces[idx]["hash"] = i_hash
+
+    def data_from_dfl(self, alignments, faces_folder):
+        """ Set :attr:`data` from alignments extracted from a Deep Face Lab face set.
+
+        Parameters
+        ----------
+        alignments: dict
+            The extracted alignments from a Deep Face Lab face set
+        faces_folder: str
+            The folder that the faces are in, where the newly generated alignments file will
+            be saved
+        """
+        self._data = alignments
+        self._file = self._get_location(faces_folder, "alignments")
 
 
 class MediaLoader():
