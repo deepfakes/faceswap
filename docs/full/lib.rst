@@ -3,6 +3,7 @@ lib package
 
 .. toctree::
 
+   lib.alignments
    lib.convert
    lib.faces_detect
    lib.image
