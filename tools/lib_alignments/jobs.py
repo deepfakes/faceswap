@@ -271,8 +271,7 @@ class Dfl():
     def process(self):
         """ Run reformat """
         logger.info("[REFORMAT DFL ALIGNMENTS]")  # Tidy up cli output
-        self.alignments.data = self.load_dfl()
-        self.alignments.file = self.alignments.get_location(self.faces.folder, "alignments")
+        self.alignments.data_from_dfl(self.load_dfl(), self.faces.folder)
         self.alignments.save()
 
     def load_dfl(self):
