@@ -40,7 +40,7 @@ class Check():
         if (hasattr(arguments, "faces_dir") and arguments.faces_dir and
                 hasattr(arguments, "frames_dir") and arguments.frames_dir):
             logger.error("Only select a source frames (-fr) or source faces (-fc) folder")
-            exit(0)
+            sys.exit(1)
         elif hasattr(arguments, "faces_dir") and arguments.faces_dir:
             self.type = "faces"
             source_dir = arguments.faces_dir
@@ -49,7 +49,7 @@ class Check():
             source_dir = arguments.frames_dir
         else:
             logger.error("No source folder (-fr or -fc) was provided")
-            exit(0)
+            sys.exit(1)
         logger.debug("type: '%s', source_dir: '%s'", self.type, source_dir)
         return source_dir
 
@@ -75,7 +75,7 @@ class Check():
         if self.type == "faces" and self.job not in ("multi-faces", "leftover-faces"):
             logger.warning("The selected folder is not valid. Faces folder (-fc) is only "
                            "supported for 'multi-faces' and 'leftover-faces'")
-            exit(0)
+            sys.exit(1)
 
     def compile_output(self):
         """ Compile list of frames that meet criteria """
@@ -186,7 +186,7 @@ class Check():
         output_message += " {} ({})\r\n".format(self.output_message,
                                                 len(items_output))
         output_message += "-----------------------------------------------\r\n"
-        output_message += "\r\n".join([frame for frame in items_output])
+        output_message += "\r\n".join(items_output)
         if self.output == "console":
             for line in output_message.splitlines():
                 logger.info(line)
@@ -263,7 +263,7 @@ class Dfl():
         self.alignments = alignments
         if self.alignments.file != "dfl.fsa":
             logger.error("Alignments file must be specified as 'dfl' to reformat dfl alignmnets")
-            exit(0)
+            sys.exit(1)
         logger.debug("Loading DFL faces")
         self.faces = Faces(arguments.faces_dir)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -271,8 +271,7 @@ class Dfl():
     def process(self):
         """ Run reformat """
         logger.info("[REFORMAT DFL ALIGNMENTS]")  # Tidy up cli output
-        self.alignments.data = self.load_dfl()
-        self.alignments.file = self.alignments.get_location(self.faces.folder, "alignments")
+        self.alignments.data_from_dfl(self.load_dfl(), self.faces.folder)
         self.alignments.save()
 
     def load_dfl(self):
@@ -330,7 +329,7 @@ class Dfl():
 
     @staticmethod
     def convert_dfl_alignment(dfl_alignments, f_hash, alignments):
-        """ Add DFL Alignments to alignments in Faceswap format """
+        """ Add Deep Face Lab Alignments to alignments in Faceswap format """
         sourcefile = dfl_alignments["source_filename"]
         left, top, right, bottom = dfl_alignments["source_rect"]
         alignment = {"x": left,
@@ -340,7 +339,7 @@ class Dfl():
                      "hash": f_hash,
                      "landmarks_xy": np.array(dfl_alignments["source_landmarks"], dtype="float32")}
         logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
-        alignments.setdefault(sourcefile, list()).append(alignment)
+        alignments.setdefault(sourcefile, dict()).setdefault("faces", []).append(alignment)
 
 
 class Draw():
@@ -441,7 +440,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             err = "ERROR: Output faces folder should be empty: '{}'".format(self._faces_dir)
         if err:
             logger.error(err)
-            exit(0)
+            sys.exit(0)
         logger.verbose("Creating output folder at '%s'", self._faces_dir)
 
     def _export_faces(self):
@@ -513,7 +512,7 @@ class Extract():  # pylint:disable=too-few-public-methods
                 f_hash = self._extracted_faces.save_face_with_hash(output,
                                                                    extension,
                                                                    face.aligned_face)
-                self._alignments.data[filename][idx]["hash"] = f_hash
+                self._alignments.data[filename]["faces"][idx]["hash"] = f_hash
             face_count += 1
         return face_count
 
@@ -685,7 +684,8 @@ class Merge():
         logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
                      frame, idx, alignment["hash"])
         self._hashes_to_frame.setdefault(alignment["hash"], dict())[frame] = idx
-        self.final_alignments.data.setdefault(frame, list()).append(alignment)
+        self.final_alignments.data.setdefault(frame,
+                                              dict()).setdefault("faces", []).append(alignment)
 
     def set_destination_filename(self):
         """ Set the destination filename """
@@ -825,7 +825,7 @@ class Rename():
                          "the `remove-faces` job. To get a list of faces missing alignments "
                          "entries, run with VERBOSE logging")
             logger.verbose("Files in faces folder not in alignments file: %s", errors)
-            exit(1)
+            sys.exit(1)
         return self._sort_mappings(source_filenames, dest_filenames)
 
     @staticmethod
@@ -990,7 +990,7 @@ class Sort():
                 logger.trace("Alignments already in correct order. Not sorting: '%s'", frame)
                 continue
             logger.trace("Sorting alignments for frame: '%s'", frame)
-            self.alignments.data[key] = sorted_alignments
+            self.alignments.data[key]["faces"] = sorted_alignments
             reindexed += 1
         logger.info("%s Frames had their faces reindexed", reindexed)
         return reindexed
@@ -1067,12 +1067,12 @@ class Spatial():
     def normalize(self):
         """ Compile all original and normalized alignments """
         logger.debug("Normalize")
-        count = sum(1 for val in self.alignments.data.values() if val)
+        count = sum(1 for val in self.alignments.data.values() if val["faces"])
         landmarks_all = np.zeros((68, 2, int(count)))
 
         end = 0
         for key in tqdm(sorted(self.alignments.data.keys()), desc="Compiling"):
-            val = self.alignments.data[key]
+            val = self.alignments.data[key]["faces"]
             if not val:
                 continue
             # We should only be normalizing a single face, so just take
@@ -1150,7 +1150,7 @@ class Spatial():
             logger.trace("Updating: (frame: %s)", frame)
             landmarks_update = landmarks[:, :, idx]
             landmarks_xy = landmarks_update.reshape(68, 2).tolist()
-            self.alignments.data[frame][0]["landmarks_xy"] = landmarks_xy
+            self.alignments.data[frame]["faces"][0]["landmarks_xy"] = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
         logger.debug("Updated alignments")
 
