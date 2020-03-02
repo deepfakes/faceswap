@@ -593,8 +593,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
     def _delete_current_face(self):
         """ Delete the selected face on a right click mouse delete action. """
-        self._faces.delete_face(self._right_click_face_id)
-        self._right_click_face_id = dict()
+        self._faces.delete_face_from_viewer(self._right_click_face_id)
+        self._right_click_face_id = None
 
     def load_faces(self, frame_width, enable_buttons_callback):
         """ Set the number of columns based on the holding frame width and face size.

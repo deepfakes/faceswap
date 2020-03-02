@@ -201,7 +201,7 @@ class FaceCache():
         self._selected.update()
         self._alignments.tk_edited.set(False)
 
-    def delete_face(self, item_id):
+    def delete_face_from_viewer(self, item_id):
         """ Delete a face for the given frame and face indices """
         logger.debug("Deleting face: (item_id: %s)", item_id)
         frame_idx = self._canvas.frame_index_from_object(item_id)
@@ -209,15 +209,10 @@ class FaceCache():
         face_idx = frame_faces.index(item_id)
         logger.debug("frame_idx: %s, frame_faces: %s, face_idx: %s",
                      frame_idx, frame_faces, face_idx)
-        transport_index = self.transport_index_from_frame_index(frame_idx)
-        self._frames.tk_transport_position.set(transport_index)
-        self._alignments.delete_face_at_index(face_idx)
-        # Execute transport index again in case the removal of the face has altered filter criteria
-        # TODO Make sure this is working properly on multi faces. It looks like it's not, as
-        # sometimes it appears to be displaying frames with only one face in it.
-        # TODO Check what happens when we get to the end of the transport index/there are
-        # no faces left
-        self._frames.tk_transport_position.set(transport_index)
+        self._alignments.delete_face_at_index_by_frame(frame_idx, face_idx)
+        del self._tk_faces[frame_idx][face_idx]
+        del self._mesh_landmarks[frame_idx][face_idx]
+        self._filtered_display.delete_face_from_viewer(frame_idx, face_idx)
 
     def _add_remove_face(self):
         """ add or remove a face for the current frame """
@@ -338,6 +333,7 @@ class SelectedFrame():
         face_idx = self._alignments.get_removal_index()
         logger.debug("Removing face for frame %s at index: %s", self._frame_index, face_idx)
         del self._tk_faces[face_idx]
+        del self._mesh_landmarks[face_idx]
         self._face_count -= 1
         return face_idx
 
@@ -500,7 +496,7 @@ class FaceFilter():
         self._mesh_landmarks = face_cache._mesh_landmarks
 
         # Set and unset during :func:`initialize` and :func:`de-initialize`
-        self._current_position = -1
+        self._updated_frames = []
         self._tk_position_callback = None
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -568,7 +564,7 @@ class FaceFilter():
 
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
-        self._current_position = self._tk_position.get()
+        self._updated_frames = [self._tk_position.get()]
 
     def _position_annotations(self, image_id, mesh_ids, landmarks, absolute_index, is_init=False):
         """ Display faces and annotations that should be shown and locates the objects correctly
@@ -667,6 +663,17 @@ class FaceFilter():
         """ Remove a face at the given location and update subsequent faces to the
         correct location.
 
+        """
+        display_idx = self._delete_annotations_and_update(frame_index, face_index)
+        # Track the last removal index in case of adding faces back in after removing all faces
+        # TODO Check this logic
+        self._removed_image_index = display_idx
+        self._frame_faces_change -= 1
+
+    def _delete_annotations_and_update(self, frame_index, face_index):
+        """ Delete the face annotations for the given frame and face indices and update the display
+        to reflect the existing faces.
+
         Parameters
         ----------
         frame_index: int
@@ -690,9 +697,7 @@ class FaceFilter():
         self._update_multi_tags_on_remove(frame_index)
         # Update layout
         self._update_layout(display_idx, is_insert=False)
-        # Track the last removal index in case of adding faces back in after removing all faces
-        self._removed_image_index = display_idx
-        self._frame_faces_change -= 1
+        return display_idx
 
     def _update_multi_tags_on_remove(self, frame_index):
         """ Update the tags indicating whether this frame contains multiple faces on face removal
@@ -765,6 +770,8 @@ class FaceFilter():
 
         first_face_xy = self._canvas.coords(self._image_ids[start_index])
         last_face_x = (self._canvas.column_count - 1) * self._size
+        logger.debug("start_index: %s, first_face_xy: %s, last_face_x: %s",
+                     start_index, first_face_xy, last_face_x)
 
         # Top Row
         to_top_xy = (last_face_x if is_insert else last_face_x + self._size,
@@ -783,6 +790,22 @@ class FaceFilter():
         # Re-hide hidden annotations
         for tag in hidden_tags:
             self._canvas.itemconfig(tag, state="hidden")
+
+    def delete_face_from_viewer(self, frame_index, face_index):
+        """ Delete a face when called from the face viewer.
+
+        It is highly likely that this is called when not displaying the frame that the face is
+        deleted from, so updates are run immediately rather than on a frame change.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the face should be deleted for
+        face_index: int
+            The face index to remove the face for
+        """
+        self._delete_annotations_and_update(frame_index, face_index)
+        self._updated_frames.append(frame_index)
 
     def toggle_annotation(self):
         """ Toggle additional object annotations on or off. """
@@ -828,7 +851,7 @@ class FaceFilter():
         """ Unloads the Face Filter on filter type change. """
         self._tk_position.trace_vdelete("w", self._tk_position_callback)
         self._tk_position_callback = None
-        self._current_position = -1
+        self._updated_frames = []
 
 
 class AllFrames(FaceFilter):
@@ -866,7 +889,7 @@ class AllFrames(FaceFilter):
 
         All Frames has no frame change specific actions.
         """
-        return
+        self._updated_frames = [self._tk_position.get()]
 
 
 class NoFaces(FaceFilter):
@@ -906,11 +929,11 @@ class NoFaces(FaceFilter):
         the viewer objects.
         """
         if self._frame_faces_change != 0:
-            self._canvas.itemconfig("frame_id_{}".format(self._current_position), state="hidden")
+            self._canvas.itemconfig("frame_id_{}".format(self._updated_frames[0]), state="hidden")
             self._item_ids["image_ids"] = []
             self._item_ids["mesh_ids"] = []
         self._frame_faces_change = 0
-        self._current_position = self._tk_position.get()
+        self._updated_frames = [self._tk_position.get()]
 
 
 class MultipleFaces(FaceFilter):
@@ -947,21 +970,29 @@ class MultipleFaces(FaceFilter):
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
 
-        If the face count for the current frame is no longer 2 or more, remove the frame
+        Multiple faces display can be impacted by either deleting faces in the frame or by deleting
+        faces from the frame viewer. Frames which have had faces deleted from the face viewer will
+        have been added to :attr:`update_frames`, so an additional check has to be made here when
+        changing frames to ensure that the display is updated accordingly.
+
+        If the face count for any of the impacted frames is no longer 2 or more, remove the frame
         from :attr:`_object_indices`, hide any existing sole faces and update the layout.
         """
-        if self._frame_faces_change == 0:
-            self._current_position = self._tk_position.get()
+        logger.trace("frame_faces_change: %s, updated_frames: %s",
+                     self._frame_faces_change, self._updated_frames)
+        if self._frame_faces_change == 0 and len(self._updated_frames) == 1:
+            self._updated_frames = [self._tk_position.get()]
             return
-        image_ids = self._canvas.find_withtag("image_{}".format(self._current_position))
-        if len(image_ids) < 2:
-            self._canvas.itemconfig("frame_id_{}".format(self._current_position, state="hidden"))
-        if len(image_ids) == 1:
-            # Remove the final face from the display and update
-            display_idx = self._image_ids.index(image_ids[0])
-            del self._image_ids[display_idx]
-            mesh_idx_offset = display_idx * self._canvas.items_per_mesh
-            self._mesh_ids[mesh_idx_offset:mesh_idx_offset + self._canvas.items_per_mesh] = []
-            self._update_layout(display_idx, is_insert=False)
+        for frame_index in self._updated_frames:
+            image_ids = self._canvas.find_withtag("image_{}".format(frame_index))
+            if len(image_ids) < 2:
+                self._canvas.itemconfig("frame_id_{}".format(frame_index, state="hidden"))
+            if len(image_ids) == 1:
+                # Remove the final face from the display and update
+                display_idx = self._image_ids.index(image_ids[0])
+                del self._image_ids[display_idx]
+                mesh_idx_offset = display_idx * self._canvas.items_per_mesh
+                self._mesh_ids[mesh_idx_offset:mesh_idx_offset + self._canvas.items_per_mesh] = []
+                self._update_layout(display_idx, is_insert=False)
+        self._updated_frames = [self._tk_position.get()]
         self._frame_faces_change = 0
-        self._current_position = self._tk_position.get()

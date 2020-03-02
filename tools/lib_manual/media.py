@@ -494,10 +494,16 @@ class AlignmentsData():
         self._alignments_file.save()
         self._tk_unsaved.set(False)
 
-    def _check_for_new_alignments(self):
+    def _check_for_new_alignments(self, filename=None):
         """ Checks whether there are already new alignments in :attr:`_alignments`. If not
-        then saved alignments are copied to new ready for update """
-        filename = self._frames.current_meta_data["filename"]
+        then saved alignments are copied to new ready for update.
+
+        Parameters
+        filename: str, optional
+            The filename of the frame to check for new alignments. If ``None`` then the current
+            frame is checked. Default: ``None``
+        """
+        filename = self._frames.current_meta_data["filename"] if filename is None else filename
         if self._alignments[filename].get("new", None) is None:
             new_faces = [deepcopy(face) for face in self._alignments[filename]["saved"]]
             self._alignments[filename]["new"] = new_faces
@@ -649,6 +655,26 @@ class AlignmentsData():
         self._face_index = 0
         self._tk_edited.set(True)
         self._frames.tk_update.set(True)
+
+    def delete_face_at_index_by_frame(self, frame_index, face_index):
+        """ Delete the :class:`DetectedFace` object for the given face index and frame index.
+
+        Is called from the Faces Viewer, so no frame specific settings should be modified or
+        updates executed.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the face should be deleted for
+        face_index: int
+            The face index to remove the face for
+        """
+        logger.debug("Deleting face at index: %s for frame: %s", face_index, frame_index)
+
+        filename = sorted(self._alignments)[frame_index]
+        self._check_for_new_alignments(filename=filename)
+        del self._latest_alignments[filename][face_index]
+        self._face_count_modified = True
 
     def reset_face_count_modified(self):
         """ Reset :attr:`_face_count_modified` to ``False``. """
