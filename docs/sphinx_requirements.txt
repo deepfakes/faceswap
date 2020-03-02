@@ -22,4 +22,4 @@ h5py==2.9.0
 Keras==2.2.4
 pywin32 ; sys_platform == "win32"
 pynvx==0.0.4 ; sys_platform == "darwin"
-tensorflow==1.13.1
+tensorflow==1.15.2
