@@ -79,12 +79,12 @@ class AlignmentData(Alignments):
             faces[idx]["hash"] = i_hash
 
     def data_from_dfl(self, alignments, faces_folder):
-        """ Set :attr:`data` from alignments extracted from a dfl face set.
+        """ Set :attr:`data` from alignments extracted from a Deep Face Lab face set.
 
         Parameters
         ----------
         alignments: dict
-            The extracted alignments from a dfl face set
+            The extracted alignments from a Deep Face Lab face set
         faces_folder: str
             The folder that the faces are in, where the newly generated alignments file will
             be saved

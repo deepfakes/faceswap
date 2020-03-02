@@ -106,7 +106,7 @@ class Alignments(AlignmentsBase):
         logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
 
-    def load(self):
+    def _load(self):
         """ Override the parent :func:`~lib.alignments.Alignments._load` to handle skip existing
         frames and faces on extract.
 
