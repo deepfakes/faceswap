@@ -82,7 +82,7 @@ class FaceCache():
         if current_display is not None:
             self._filtered_display.de_initialize()
         self._filters["current_display"] = nav_mode
-        self._filtered_display.initialize(self._mesh_landmarks)
+        self._filtered_display.initialize()
 
     def load_faces(self, canvas, enable_buttons_callback):
         """ Launch a background thread to load the faces into cache and assign the canvas to
@@ -137,6 +137,7 @@ class FaceCache():
                                                            self._tk_faces[-1][-1],
                                                            self._mesh_landmarks[-1][-1],
                                                            frame_idx,
+                                                           faces_seen,
                                                            is_multi=is_multi)
                     if coords[0] == 0:  # Resize canvas on new line
                         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
@@ -354,6 +355,8 @@ class SelectedFrame():
         scaled_landmarks = detected_face.aligned_landmarks * scale
         return tk_face, scaled_landmarks
 
+# TODO Deleting by right click on selected face doesn't update highlighter
+
 
 class Highlighter():
     """ Highlights the currently active frame's faces """
@@ -531,67 +534,35 @@ class FaceFilter():
         """
         raise NotImplementedError
 
-    def initialize(self, mesh_landmarks):
+    def initialize(self):
         """ Initialize the viewer for the selected filter type.
 
         Hides annotations and faces that should not be displayed for the current filter.
         Displays and moves the faces to the correct position on the canvas based on which faces
         should be displayed.
-
-        Parameters
-        ----------
-        mesh_landmarks: list
-            The list of landmarks, split up into groups for creating mesh annotations for every
-            frame in the source
         """
         self._set_object_display_state()
         self._set_display_objects()
-        face_idx = 0
-        current_frame_idx = -1
+        offsets = dict()
         for idx, image_id in enumerate(self._image_ids):
-            # TODO Add tag with frame number and face number to be able to get tag quicker?
-            # TODO Add tag with column and rows, then bulk move columns and rows?
-            frame_idx = self._canvas.frame_index_from_object(image_id)
-            if frame_idx != current_frame_idx:
-                current_frame_idx = frame_idx
-                face_idx = 0
-            else:
-                face_idx += 1
-            mesh_ids = self._canvas.mesh_ids_for_face(idx, self._mesh_ids)
-            # TODO Remove is_poly from landmarks and convert to single list once we have
-            # created the objects?
-            landmarks = mesh_landmarks[frame_idx][face_idx]["landmarks"]
-            self._position_annotations(image_id, mesh_ids, landmarks, idx, is_init=True)
+            # TODO This can probably be optimized further?
+            old_position = np.array(self._canvas.coords(image_id), dtype="int")
+            new_position = np.array(self._canvas.coords_from_index(idx), dtype="int")
+            offset = new_position - old_position
+            if not offset.any():
+                continue
+            offset_str = "move_{}".format(np.array_str(offset).replace(" ", "_"))
+            self._canvas.addtag_withtag(offset_str,
+                                        self._canvas.face_group_tag_from_object(image_id))
+            if offset_str not in offsets:
+                offsets[offset_str] = offset
+        for tag, offset in offsets.items():
+            self._canvas.move(tag, *offset)
+            self._canvas.dtag(tag, tag)
 
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
         self._updated_frames = [self._tk_position.get()]
-
-    def _position_annotations(self, image_id, mesh_ids, landmarks, absolute_index, is_init=False):
-        """ Display faces and annotations that should be shown and locates the objects correctly
-        on the canvas.
-
-        Parameters
-        ----------
-        image_id: int
-            The object id of the face image
-        mesh_ids: list
-            List of the mesh annotation object ids for the face
-        landmarks: :class:`numpy.ndarray`
-            The base landmark mesh points corresponding to point (0, 0)
-        absolute_index: int
-            The absolute display index for the annotations to be displayed
-        is_init: bool, optional
-            ``True`` if this is the initial set up of this filter otherwise ``False``
-        """
-        coords = self._canvas.coords_from_index(absolute_index)
-        self._canvas.coords(image_id, *coords)
-        annotation = self._canvas.optional_annotation
-        for points, item_id in zip(landmarks, mesh_ids):
-            self._canvas.coords(item_id, *(points + coords).flatten())
-            if (is_init and annotation == "landmarks" and
-                    self._canvas.itemcget(item_id, "state") == "hidden"):
-                self._canvas.itemconfig(item_id, state="normal")
 
     # TODO Check adding/removing faces before faces have loaded
 
@@ -686,17 +657,11 @@ class FaceFilter():
         display_idx = self._image_ids.index(image_id)
         logger.debug("image_id: %s, display_idx: %s", image_id, display_idx)
 
-        # Delete the objects
-        self._canvas.delete(image_id)
-        for mesh_id in self._canvas.mesh_ids_for_face(display_idx, self._mesh_ids):
-            self._canvas.delete(mesh_id)
-        # Remove items from object tracking
+        self._canvas.delete(self._canvas.face_tag_from_object(image_id))
         del self._image_ids[display_idx]
         mesh_idx_offset = display_idx * self._canvas.items_per_mesh
         self._mesh_ids[mesh_idx_offset:mesh_idx_offset + self._canvas.items_per_mesh] = []
-        # Update multi tags
         self._update_multi_tags_on_remove(frame_index)
-        # Update layout
         self._update_layout(display_idx, is_insert=False)
         return display_idx
 
