@@ -509,6 +509,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._right_click_face_id = None
         self._bind_mouse()
         self._color_keys = dict(polygon="outline", line="fill")
+        self._current_face_group_id = 0
         self._landmark_mapping_dict = self._get_landmark_mapping()
 
         # Set in load_frames
@@ -719,7 +720,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         logger.trace("item_id: %s, frame_id: %s", item_id, retval)
         return retval
 
-    def face_group_tag_from_object(self, item_id):
+    def face_group_from_object(self, item_id):
         """ Retrieve the face group id tag for the given canvas item id.
 
         Parameters
@@ -733,7 +734,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             The face group tag for the given object, or ``None`` if a tag can't be found
         """
         tags = [tag for tag in self.gettags(item_id)
-                if tag.startswith("face_group_id_")]
+                if tag.startswith("face_group_")]
         retval = tags[0] if tags else None
         logger.trace("item_id: %s, tag: %s", item_id, retval)
         return retval
@@ -749,12 +750,13 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
         Returns
         -------
-        tuple
-            The top left co-ordinates that an object should be placed on the canvas calculated
-            from the given index.
+        :class:`numpy.ndarray`
+            The top left (x, y) co-ordinates that an object should be placed on the canvas
+            calculated from the given index.
         """
-        return ((index % self._columns) * self._faces.size,
-                (index // self._columns) * self._faces.size)
+        return np.array(((index % self._columns) * self._faces.size,
+                         (index // self._columns) * self._faces.size),
+                        dtype="int")
 
     def mesh_ids_for_face(self, face_index, mesh_ids):
         """ Obtain all the item ids for a given face index's mesh annotation.
@@ -775,7 +777,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         return mesh_ids[starting_idx: starting_idx + self.items_per_mesh]
 
     def create_viewer_annotations(self, coordinates, tk_face, mesh_landmarks, frame_index,
-                                  face_group_index, is_multi=False):
+                                  is_multi=False):
         """ Create all if the annotations for a single Face Viewer face.
 
         Parameters
@@ -793,8 +795,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             The hex code holding the color that the mesh should be displayed as
         frame_index: int
             The frame index that this object appears in
-        face_group_index: int
-            The unique identifier for this face
         is_multi: bool
             ``True`` if there are multiple faces in the given frame, otherwise ``False``.
             Default: ``False``
@@ -807,25 +807,23 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             List of item ids for the newly created mesh
 
         """
-        tags = {obj: self._get_viewer_tags(frame_index, face_group_index, obj, is_multi)
+        tags = {obj: self._get_viewer_tags(frame_index, obj, is_multi)
                 for obj in ("image", "mesh")}
         image_id = self.create_image(*coordinates, image=tk_face, anchor=tk.NW, tags=tags["image"])
         mesh_ids = self.create_mesh_annotations(self.get_muted_color("Mesh"),
                                                 mesh_landmarks,
                                                 coordinates,
                                                 tags["mesh"])
+        self._current_face_group_id += 1
         return image_id, mesh_ids
 
-    @staticmethod
-    def _get_viewer_tags(frame_index, face_group_index, object_type, is_multi):
+    def _get_viewer_tags(self, frame_index, object_type, is_multi):
         """ Obtain the tags for a Faces Viewer object.
 
         Parameters
         ----------
         frame_index: int
             The frame index that this object appears in
-        face_group_index: int
-            The unique identifier for this face
         object_type: str
             The type of object that these tags will be associated with
         is_multi: bool
@@ -839,12 +837,13 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         tags = ["viewer",
                 "viewer_{}".format(object_type),
                 "frame_id_{}".format(frame_index),
-                "face_group_id_{}".format(face_group_index),
+                "face_group_{}".format(self._current_face_group_id),
                 "{}_{}".format(object_type, frame_index)]
         if is_multi:
             tags.extend(["multi", "multi_{}".format(object_type)])
         else:
             tags.append("not_multi")
+        logger.trace(tags)
         return tags
 
     def create_mesh_annotations(self, color, mesh_landmarks, offset, tag):

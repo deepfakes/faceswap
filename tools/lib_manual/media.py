@@ -397,6 +397,11 @@ class AlignmentsData():
         """ bool: ``True`` if the current frame has been updated otherwise ``False`` """
         return "new" in self._alignments[self._frames.current_meta_data["filename"]]
 
+    @property
+    def updated_alignments(self):
+        """ dict: The full frame list, with `None` as the value if alignments not updated. """
+        return [self._alignments[frame].get("new", None) for frame in sorted(self._alignments)]
+
     def link_frames(self, frames):
         """ Add the :class:`FrameNavigation` object as a property of the AlignmentsData.
 
@@ -694,7 +699,7 @@ class AlignmentsData():
         self._remove_idx = None
         return retval
 
-    def get_aligned_face_at_index(self, index):
+    def get_aligned_face_at_index(self, index, frame_index=None):
         """ Return the aligned face sized for frame viewer.
 
         Parameters
@@ -707,7 +712,11 @@ class AlignmentsData():
         :class:`numpy.ndarray`
             The aligned face
         """
-        face = self.current_faces[index]
+        if frame_index is None:
+            face = self.current_faces[index]
+        else:
+            frame_name = sorted(self._alignments)[frame_index]
+            face = self._latest_alignments[frame_name][index]
         face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         retval = face.aligned_face.copy()
         face.aligned["face"] = None
