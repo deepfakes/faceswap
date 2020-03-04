@@ -199,19 +199,20 @@ class FaceCache():
         if existing_count <= new_count:
             return
         for face_idx in range(new_count, existing_count):
-            logger.info("Deleting face at index %s for frame %s", face_idx, frame_index)
+            logger.debug("Deleting face at index %s for frame %s", face_idx, frame_index)
             self.delete_face_at_index_by_frame(frame_index, face_idx)
 
     def _on_load_add_face(self, frame_index, tk_face, mesh_landmarks):
         """ Add a face that has been been added face viewer was loading. """
-        logger.info("Adding new face for frame %s", frame_index)
+        logger.debug("Adding new face for frame %s", frame_index)
         self._tk_faces[frame_index].append(tk_face)
         self._mesh_landmarks[frame_index].append(mesh_landmarks)
-        self._filtered_display.add_face(tk_face, frame_index)
+        next_frame_idx = self._get_next_frame_idx(frame_index)
+        self._filtered_display.add_face(tk_face, frame_index, next_frame_idx)
 
     def _on_load_update_face(self, image_id, frame_index, face_index, tk_face, mesh_landmarks):
         """ Add a face that has been been added face viewer was loading. """
-        logger.info("Updating face id %s for frame %s", face_index, frame_index)
+        logger.debug("Updating face id %s for frame %s", face_index, frame_index)
         self._tk_faces[frame_index][face_index] = tk_face
         self._mesh_landmarks[frame_index][face_index] = mesh_landmarks
         self._canvas.itemconfig(image_id, image=tk_face)
@@ -314,7 +315,21 @@ class FaceCache():
         logger.debug("Adding face")
         tk_face, mesh_landmarks = self._get_tk_face_and_landmarks()
         self._selected.add_face(tk_face, mesh_landmarks)
-        self._filtered_display.add_face(tk_face, self._selected.frame_index)
+        next_frame_idx = self._get_next_frame_idx(self._selected.frame_index)
+        self._filtered_display.add_face(tk_face, self._selected.frame_index, next_frame_idx)
+
+    def _get_next_frame_idx(self, frame_index):
+        """ Get the index of the next frame that has faces for placing newly added faces
+        in the stack. """
+        next_frame_idx = next((
+            idx for idx, f_count in enumerate(self._alignments.face_count_per_index[frame_index:])
+            if f_count > 0), None)
+        if next_frame_idx is None:
+            return None
+        next_frame_idx += frame_index + 1
+        logger.debug("Returning next frame with faces: %s for frame index: %s",
+                     next_frame_idx, frame_index)
+        return next_frame_idx
 
     def _remove_face(self):
         """ Remove a face from the current frame """
@@ -414,6 +429,8 @@ class SelectedFrame():
         del self._tk_faces[face_idx]
         del self._mesh_landmarks[face_idx]
         return face_idx
+
+# TODO Split Update, Add, Remove to own class
 
 
 class Highlighter():
@@ -612,7 +629,7 @@ class FaceFilter():
         self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
         self._updated_frames = [self._tk_position.get()]
 
-    def add_face(self, tk_face, frame_index):
+    def add_face(self, tk_face, frame_index, next_frame_index):
         """ Display a new face in the correct location and move subsequent faces to their new
         location.
 
@@ -623,7 +640,6 @@ class FaceFilter():
         frame_index: int
             The frame index that the face is to be added to
         """
-        # TODO tag_lower ensure we're placing faces into correct place in the stack
         if not self._image_ids:
             display_idx = 0
         else:
@@ -648,8 +664,11 @@ class FaceFilter():
         mesh_idx_offset = display_idx * self._canvas.items_per_mesh
         self._mesh_ids[mesh_idx_offset:mesh_idx_offset] = mesh_ids
         # Update multi tags
-        lookup_tag = self._update_multi_tags_on_add(frame_index, image_id, mesh_ids)
-        self._canvas.tag_lower(lookup_tag)
+        self._update_multi_tags_on_add(frame_index, image_id, mesh_ids)
+        # Place faces in correct position in stack
+        if next_frame_index is not None:
+            self._canvas.tag_lower("frame_id_{}".format(frame_index),
+                                   "frame_id_{}".format(next_frame_index))
         self._frame_faces_change += 1
 
     def _update_multi_tags_on_add(self, frame_index, image_id, mesh_ids):
@@ -760,6 +779,7 @@ class FaceFilter():
 
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
+    # TODO Adding faces to last frame breaks this
     def _tag_objects_to_move(self, start_index, is_insert):
         """ Tag the 3 object groups that require moving.
 
