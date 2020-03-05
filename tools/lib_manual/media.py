@@ -762,3 +762,95 @@ class AlignmentsData():
         del self._alignments[frame_name]["new"]
         self._tk_edited.set(True)
         self._frames.tk_update.set(True)
+
+
+class FaceCache():
+    """ Holds the face images for display in the bottom GUI Panel """
+    def __init__(self, alignments, frames, scaling_factor):
+        logger.debug("Initializing %s: (alignments: %s, frames: %s, scaling_factor: %s)",
+                     self.__class__.__name__, alignments, frames, scaling_factor)
+        self._alignments = alignments
+        self._frames = frames
+        self._tk_load_complete = self._set_load_complete_var()
+        self._face_size = int(round(96 * scaling_factor))
+        self._landmark_mapping = dict(mouth=(48, 68),
+                                      right_eyebrow=(17, 22),
+                                      left_eyebrow=(22, 27),
+                                      right_eye=(36, 42),
+                                      left_eye=(42, 48),
+                                      nose=(27, 36),
+                                      jaw=(0, 17),
+                                      chin=(8, 11))
+        self._tk_faces = []
+        self._mesh_landmarks = []
+        self._background_load_faces()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @staticmethod
+    def _set_load_complete_var():
+        """ Set the load completion variable. """
+        var = tk.BooleanVar()
+        var.set(False)
+        return var
+
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the faces have completed the loading cycle otherwise ``False`` """
+        return self._tk_load_complete.get()
+
+    @property
+    def tk_faces(self):
+        """ list: Item for each frame containing a list of :class:`PIL.ImageTK.PhotoImage` objects
+        for each face. """
+        return self._tk_faces
+
+    @property
+    def mesh_landmarks(self):
+        """ list: Item for each frame containing a dictionary for each face. """
+        return self._mesh_landmarks
+
+    @property
+    def size(self):
+        """ int: The size of each individual face in pixels. """
+        return self._face_size
+
+    def _background_load_faces(self):
+        """ Launch a background thread to load the faces into cache and assign the canvas to
+        :attr:`_canvas` """
+        thread = MultiThread(self._load_faces,
+                             thread_count=1,
+                             name="{}.load_faces".format(self.__class__.__name__))
+        thread.start()
+
+    def _load_faces(self):
+        """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
+        """
+        loader = ImagesLoader(self._frames.location, count=self._frames.frame_count)
+        for filename, frame in loader.load():
+            tk_faces = []
+            mesh_landmarks = []
+            faces = self._alignments.saved_alignments.get(os.path.basename(filename), list())
+            for face in faces:
+                tk_faces.append(self._load_face(frame, face))
+                mesh_landmarks.append(self.get_mesh_points(face.aligned_landmarks))
+            self._tk_faces.append(tk_faces)
+            self._mesh_landmarks.append(mesh_landmarks)
+        self._tk_load_complete.set(True)
+
+    def _load_face(self, frame, face):
+        """ Load the resized aligned face. """
+        face.load_aligned(frame, size=self._face_size, force=True)
+        aligned_face = face.aligned_face[..., 2::-1]
+        face.aligned["face"] = None
+        # TODO Document that this is set to a photo image from the canvas.
+        # Lists are thread safe (for our purposes) PhotoImage is not.
+        return aligned_face
+
+    def get_mesh_points(self, landmarks):
+        """ Obtain the mesh annotation points for a given set of landmarks. """
+        is_poly = []
+        mesh_landmarks = []
+        for key, val in self._landmark_mapping.items():
+            is_poly.append(key in ("right_eye", "left_eye", "mouth"))
+            mesh_landmarks.append(landmarks[val[0]:val[1]])
+        return dict(is_poly=is_poly, landmarks=mesh_landmarks)

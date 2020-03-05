@@ -238,7 +238,6 @@ class DetectedFace():
         force: bool, optional
             Force an updated of the aligned face, even if it is already loaded. Default: ``False``
 
-
         Notes
         -----
         This method must be executed to get access to the following `properties`:

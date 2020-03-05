@@ -8,18 +8,22 @@ import tkinter as tk
 from tkinter import ttk
 from time import sleep
 
+import cv2
 import numpy as np
 
+from PIL import Image, ImageTk
+
 from lib.gui.control_helper import ControlPanel
-from lib.gui.custom_widgets import RightClickMenu, StatusBar, Tooltip
+from lib.gui.custom_widgets import StatusBar, Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .lib_manual.display_face import FaceCache
+from .lib_manual.display_face import (ActiveFrame, ContextMenu, FacesViewerLoader, FilterAllFrames,
+                                      FilterNoFaces, FilterMultipleFaces, HoverBox, ObjectCreator)
 from .lib_manual.display_frame import DisplayFrame
-from .lib_manual.media import AlignmentsData, FrameNavigation
+from .lib_manual.media import AlignmentsData, FaceCache, FrameNavigation
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -51,25 +55,21 @@ class Manual(tk.Tk):
 
         scaling_factor = get_config().scaling_factor
         video_meta_data = self._alignments.video_meta_data
+
         self._frames = FrameNavigation(arguments.frames,
                                        scaling_factor,
                                        video_meta_data)
-        extractor.link_alignments_and_frames(self._alignments, self._frames)
         self._alignments.link_frames(self._frames)
         self._alignments.load_faces()
-        self._wait_for_threads(extractor)
-        if any(val is None for val in video_meta_data.values()):
-            self._alignments.save_video_meta_data()
+        faces_cache = FaceCache(self._alignments, self._frames, scaling_factor)
+        self._wait_for_threads(extractor, video_meta_data)
 
         self._containers = self._create_containers()
-
-        pbar = StatusBar(self._containers["bottom"], hide_status=True)
-        self._faces = FaceCache(self._alignments, self._frames, pbar, scaling_factor)
-
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"],
-                                       self._faces,
+                                       faces_cache,
                                        self._frames,
+                                       self._alignments,
                                        self._display)
 
         self._options = Options(self._containers["top"], self._display)
@@ -108,7 +108,7 @@ class Manual(tk.Tk):
         logger.debug("Input '%s' is_video: %s", frames_location, retval)
         return retval
 
-    def _wait_for_threads(self, extractor):
+    def _wait_for_threads(self, extractor, video_meta_data):
         """ The :class:`Aligner` is launched in a background thread. Wait for it to be initialized
         prior to proceeding
 
@@ -128,6 +128,10 @@ class Manual(tk.Tk):
                 return
             logger.debug("Threads not initialized. Waiting...")
             sleep(1)
+
+        extractor.link_alignments_and_frames(self._alignments, self._frames)
+        if any(val is None for val in video_meta_data.values()):
+            self._alignments.save_video_meta_data()
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -323,32 +327,37 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the faces frame resides in
-    faces: :class:`tools.manual.lib_manual.FaceCache`
+    faces_cache: :class:`tools.manual.lib_manual.FaceCache`
         The faces cache that holds the aligned faces
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, parent, faces, frames, display_frame):
+    def __init__(self, parent, faces_cache, frames, alignments, display_frame):
         logger.debug("Initializing %s: (parent: %s, faces: %s, display_frame: %s)",
-                     self.__class__.__name__, parent, faces, display_frame)
+                     self.__class__.__name__, parent, faces_cache, display_frame)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self._faces = faces
-
-        self._actions_frame = FacesActionsFrame(self, self._faces)
+        self._faces_cache = faces_cache
+        self._actions_frame = FacesActionsFrame(self, faces_cache)
 
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self._canvas = FacesViewer(self._faces_frame,
                                    self._actions_frame.tk_optional_annotation,
-                                   self._faces,
+                                   faces_cache,
                                    frames,
+                                   alignments,
                                    display_frame)
         scrollbar_width = self._add_scrollbar()
-        self._canvas.load_faces(self.winfo_width() - scrollbar_width,
-                                self._actions_frame.enable_buttons)
+        self._canvas.set_column_count(self.winfo_width() - scrollbar_width)
 
+        progress_bar = StatusBar(parent, hide_status=True)
+        FacesViewerLoader(self._canvas,
+                          faces_cache,
+                          frames.frame_count,
+                          progress_bar,
+                          self._actions_frame.enable_buttons)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -385,10 +394,10 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     parent: :class:`FacesFrame`
         The Faces frame that the Actions reside in
     """
-    def __init__(self, parent, faces):
+    def __init__(self, parent, faces_cache):
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
-        self._faces = faces
+        self._faces_cache = faces_cache
         self._tk_optional_annotation = tk.StringVar()
         self._tk_optional_annotation.set(None)
         self._configure_styles()
@@ -458,7 +467,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The display name for the button that has called this event as exists in
             attr:`_buttons`
         """
-        if not self._faces.is_initialized:
+        if not self._faces_cache.is_initialized:
             return
         display = None if display == self._tk_optional_annotation.get() else display
         for title, button in self._buttons.items():
@@ -469,13 +478,14 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 button.configure(style="display_deselected.TButton")
                 button.state(["!pressed", "!focus"])
         self._tk_optional_annotation.set(display)
-        self._faces.toggle_annotations()
 
     def enable_buttons(self):
         """ Enable buttons when the faces have completed loading """
         logger.debug("Enabling optional annotation buttons")
         for button in self._buttons.values():
             button.state(["!pressed", "!focus", "!disabled"])
+
+# TODO Split Update, Add, Remove to own class
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
@@ -490,31 +500,38 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, parent, tk_optional_annotation, faces, frames, display_frame):
-        logger.debug("Initializing %s: (parent: %s, tk_optional_annotation: %s, faces: %s, "
+    def __init__(self, parent, tk_optional_annotation, faces_cache,
+                 frames, alignments, display_frame):
+        logger.debug("Initializing %s: (parent: %s, tk_optional_annotation: %s, faces_cache: %s, "
                      "frames: %s, display_frame: %s)", self.__class__.__name__, parent,
-                     tk_optional_annotation, faces, frames, display_frame)
+                     tk_optional_annotation, faces_cache, frames, display_frame)
         super().__init__(parent, bd=0, highlightthickness=0)
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
-        self.parent = parent
         self._tk_optional_annotation = tk_optional_annotation
-        self._faces = faces
+        self._faces_cache = faces_cache
         self._frames = frames
+        self._alignments = alignments
         self._display_frame = display_frame
-        self._hover_box = self.create_rectangle(0, 0, 1, 1,
-                                                outline="#FFFF00",
-                                                width=2,
-                                                state="hidden")
-        self._right_click_menu = RightClickMenu(["Delete Face"], [self._delete_current_face])
-        self._right_click_face_id = None
-        self._bind_mouse()
-        self._color_keys = dict(polygon="outline", line="fill")
-        self._current_face_group_id = 0
-        self._landmark_mapping_dict = self._get_landmark_mapping()
 
+        self._object_creator = ObjectCreator(self)
+        self._hover_box = HoverBox(self, faces_cache.size)
+        ContextMenu(self)
+        self._filters = dict(displays=dict(AllFrames=FilterAllFrames(self),
+                                           NoFaces=FilterNoFaces(self),
+                                           MultipleFaces=FilterMultipleFaces(self)),
+                             current_display=None)
+        self._active_frame = ActiveFrame(self)
+
+        self._bind_mouse_wheel_scrolling()
+        self._color_keys = dict(polygon="outline", line="fill")
+        self._landmark_mapping_dict = self._get_landmark_mapping()
         # Set in load_frames
-        self._columns = 0
+        self._columns = None
+        self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
+        self._set_tk_callbacks()
+
         logger.debug("Initialized %s", self.__class__.__name__)
+        self._frames.tk_navigation_mode.trace("w", self.switch_filter)
 
     @staticmethod
     def _get_landmark_mapping():
@@ -562,120 +579,111 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ int: The number of columns in use in the face canvas. """
         return self._columns
 
-    def _bind_mouse(self):
-        """ Bind the mouse actions. """
-        self.bind("<Motion>", self._update_cursor)
-        self.bind("<ButtonPress-1>", self._select_frame)
-        self.bind("<Leave>", lambda e: self._clear_hovered())
-        self.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
-                  self._context_menu)
+    @property
+    def new_objects(self):
+        """ :class:`ObjectCreator`: Class to add new objects to the :class:`FacesViewer`
+        canvas. Call the :func:`create` method to add new annotations. """
+        return self._object_creator
 
+    @property
+    def active_display(self):
+        """:class:`FaceFilter`: The currently selected filtered faces display. """
+        return self._filters["displays"][self._filters["current_display"]]
+
+    def _set_tk_callbacks(self):
+        """ Set the tkinter variable call backs """
+        self._frames.tk_navigation_mode.trace("w", self.switch_filter)
+        self._alignments.tk_edited.trace("w", self._update_current)
+        self._frames.tk_position.trace("w", self._on_frame_change)
+        self._tk_optional_annotation.trace("w", self._toggle_annotations)
+
+    def _update_current(self, *args):  # pylint:disable=unused-argument
+        """ Update the currently selected face on editor update """
+        if not self._alignments.tk_edited.get() or not self._faces_cache.is_initialized:
+            return
+        if self._add_remove_face():
+            self._active_frame.reload_annotations()
+            return
+        tk_face, mesh_landmarks = self.get_tk_face_and_landmarks()
+        self._active_frame.update(tk_face, mesh_landmarks)
+        self._alignments.tk_edited.set(False)
+
+    # TODO moving to new frame and adding faces seems to mess up the tk_face of the existing face
+
+    def _add_remove_face(self):
+        """ add or remove a face for the current frame """
+        alignment_faces = len(self._alignments.current_faces)
+        if alignment_faces > self._active_frame.face_count:
+            self._add_face()
+            retval = True
+        elif alignment_faces < self._active_frame.face_count:
+            self._remove_face()
+            retval = True
+        else:
+            retval = False
+        return retval
+
+    def _add_face(self):
+        """ Insert a face into current frame """
+        logger.debug("Adding face")
+        tk_face, mesh_landmarks = self.get_tk_face_and_landmarks()
+        self._active_frame.add_face(tk_face, mesh_landmarks)
+        next_frame_idx = self.get_next_frame_idx(self._active_frame.frame_index)
+        self.active_display.add_face(tk_face, self._active_frame.frame_index, next_frame_idx)
+
+    def _remove_face(self):
+        """ Remove a face from the current frame """
+        logger.debug("Removing face")
+        face_idx = self._active_frame.remove_face()
+        self.active_display.remove_face(self._active_frame.frame_index, face_idx)
+
+    def _on_frame_change(self, *args):  # pylint:disable=unused-argument
+        """ Action to perform on a frame change """
+        if not self._faces_cache.is_initialized:
+            return
+        self.set_selected()
+
+    def set_selected(self):
+        """ Set the currently selected annotations. """
+        position = self._frames.tk_position.get()
+        self._active_frame.set_selected(self._faces_cache.tk_faces[position],
+                                        self._faces_cache.mesh_landmarks[position],
+                                        position)
+
+    def delete_face_from_viewer(self, item_id):
+        """ Delete a face for the given frame and face indices """
+        logger.debug("Deleting face: (item_id: %s)", item_id)
+        frame_idx = self.frame_index_from_object(item_id)
+        frame_faces = self.find_withtag("image_{}".format(frame_idx))
+        face_idx = frame_faces.index(item_id)
+        logger.debug("frame_idx: %s, frame_faces: %s, face_idx: %s",
+                     frame_idx, frame_faces, face_idx)
+        self._alignments.delete_face_at_index_by_frame(frame_idx, face_idx)
+        self.delete_face_at_index_by_frame(frame_idx, face_idx)
+        if frame_idx == self._frames.tk_position.get():
+            self._frames.tk_update.set(True)
+            self._active_frame.reload_annotations()
+
+    def delete_face_at_index_by_frame(self, frame_index, face_index):
+        """ Remove a face from the viewer for a given frame index and face index. """
+        del self._faces_cache.tk_faces[frame_index][face_index]
+        del self._faces_cache.mesh_landmarks[frame_index][face_index]
+        self.active_display.delete_face_from_viewer(frame_index, face_index)
+
+    # << POST INIT FUNCTIONS >> #
+    def set_column_count(self, frame_width):
+        """ Set the column count for the displayed canvas. Must be done after
+        the canvas has been packed and the scrollbar added. """
+        self._columns = frame_width // self._faces_cache.size
+
+    # << MOUSE HANDLING >>
+    def _bind_mouse_wheel_scrolling(self):
+        """ Bind the mouse actions. """
         if platform.system() == "Linux":
             self.bind("<Button-4>", self._scroll)
             self.bind("<Button-5>", self._scroll)
         else:
             self.bind("<MouseWheel>", self._scroll)
-
-    def _context_menu(self, event):
-        """ Right click menu for faces viewer """
-        if not self._faces.is_initialized:
-            return
-        canvas_xy = (self.canvasx(event.x), self.canvasy(event.y))
-        self._right_click_face_id = None
-        face_id = [item_id
-                   for item_id in self.find_overlapping(*canvas_xy, *canvas_xy)
-                   for tag in self.gettags(item_id) if tag.startswith("image_")]
-        if not face_id:
-            logger.trace("No valid item under mouse")
-            return
-        self._right_click_face_id = face_id[0]
-        logger.trace("Popping right click menu")
-        self._right_click_menu.popup(event)
-
-    def _delete_current_face(self):
-        """ Delete the selected face on a right click mouse delete action. """
-        self._faces.delete_face_from_viewer(self._right_click_face_id)
-        self._right_click_face_id = None
-
-    def load_faces(self, frame_width, enable_buttons_callback):
-        """ Set the number of columns based on the holding frame width and face size.
-        Load the faces into the Faces Canvas in a background thread.
-
-        Parameters
-        ----------
-        frame_width: int
-            The width of the :class:`tkinter.ttk.Frame` that holds this canvas """
-        self._columns = frame_width // self._faces.size
-        self._faces.load_faces(self, enable_buttons_callback)
-
-    # << MOUSE HANDLING >>
-    # Mouse cursor display
-    def _update_cursor(self, event):  # pylint: disable=unused-argument
-        """ The mouse cursor display as bound to the mouses <Motion> event.
-        The canvas only displays faces, so if the mouse is over an object change the cursor
-        otherwise use default.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event. Unused for default tracking, but available for specific editor
-            tracking.
-        """
-        coords = (self.canvasx(event.x), self.canvasy(event.y))
-        item_ids = [item_id
-                    for item_id in self.find_overlapping(*coords, *coords)
-                    if self.type(item_id) == "image"]
-        if not item_ids:
-            self._clear_hovered()
-            self.config(cursor="")
-            return
-        object_id = item_ids[0]
-        frame_id = self.frame_index_from_object(object_id)
-        if frame_id is None or frame_id == self._frames.tk_position.get():
-            self.config(cursor="")
-            self._clear_hovered()
-            return
-        self.config(cursor="hand1")
-        self._highlight_hovered(object_id)
-
-    def _clear_hovered(self):
-        """ Hide the hovered box and clear the :attr:`_hovered` attribute """
-        if self.itemcget(self._hover_box, "state") != "hidden":
-            self.itemconfig(self._hover_box, state="hidden")
-
-    def _highlight_hovered(self, object_id):
-        """ Display the box around the face the mouse is over
-
-        Parameters
-        ----------
-        object_id: int
-            The tkinter canvas object id
-        """
-        top_left = np.array(self.coords(object_id))
-        coords = (*top_left, *top_left + self._faces.size)
-        self.coords(self._hover_box, *coords)
-        self.itemconfig(self._hover_box, state="normal")
-        self.tag_raise(self._hover_box)
-
-    def _select_frame(self, event):  # pylint: disable=unused-argument
-        """ Go to the frame corresponding to the mouse click location in the faces window.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event. Unused but required.
-        """
-        item_ids = self.find_withtag("current")
-        if not item_ids:
-            return
-        frame_id = self.frame_index_from_object(item_ids[0])
-        if frame_id is None or frame_id == self._frames.tk_position.get():
-            return
-        transport_id = self._faces.transport_index_from_frame_index(frame_id)
-        if transport_id is None:
-            return
-        self._frames.stop_playback()
-        self._frames.tk_transport_position.set(transport_id)
 
     def _scroll(self, event):
         """ Handle mouse wheel scrolling over the faces canvas """
@@ -689,9 +697,61 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         else:
             adjust = 1
         self.yview_scroll(int(-1 * adjust), "units")
-        self._update_cursor(event)
+        self._hover_box.on_hover(event)
+
+    # << OPTIONAL ANNOTATION METHODS >> #
+    def update_mesh_color(self, *args):  # pylint:disable=unused-argument
+        """ Update the mesh color on control panel change """
+        if not self._faces_cache.is_initialized:
+            return
+        color = self.get_muted_color("Mesh")
+        if self._annotation_colors["mesh"] == color:
+            return
+        highlight_color = self.control_colors["Mesh"]
+        self.itemconfig("mesh_polygon", outline=color)
+        self.itemconfig("mesh_line", fill=color)
+        self.itemconfig("highlight_mesh_polygon", outline=highlight_color)
+        self.itemconfig("highlight_mesh_line", fill=highlight_color)
+        self._annotation_colors["mesh"] = color
+
+    def get_muted_color(self, color_key):
+        """ Updates hex code F values to A for the given annotation color key """
+        return self.control_colors[color_key].replace("f", "a")
+
+    def _toggle_annotations(self):
+        """ Toggle additional annotations on or off. """
+        if not self._faces_cache.is_initialized:
+            return
+        self.active_display.toggle_annotation()
+
+    # << FILTERS >> #
+    def switch_filter(self, *args):  # pylint: disable=unused-argument
+        """ Change the active display """
+        if not self._faces_cache.is_initialized:
+            return
+        nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "")
+        nav_mode = "AllFrames" if nav_mode == "HasFace(s)" else nav_mode
+        current_display = self._filters["current_display"]
+        logger.debug("Current Display: '%s', Requested Display: '%s'", current_display, nav_mode)
+        if nav_mode == current_display:
+            return
+        if current_display is not None:
+            self.active_display.de_initialize()
+        self._filters["current_display"] = nav_mode
+        self.active_display.initialize()
+
+    # << UTILS >> #
+    def transport_index_from_frame_index(self, frame_index):
+        """ Retrieve the index in the filtered frame list for the given frame index. """
+        # TODO Move this?
+        # TODO Cache the filtered frames so it updates quicker on hover
+        frames_list = self._alignments.get_filtered_frames_list()
+        retval = frames_list.index(frame_index) if frame_index in frames_list else None
+        logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
+        return retval
 
     def get_mesh_points(self, landmarks):
+        # TODO THIS IS DUPED. LOOK TO CENTRALIZE SOMEHOW
         """ Obtain the mesh annotation points for a given set of landmarks. """
         is_poly = []
         mesh_landmarks = []
@@ -713,14 +773,12 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         int
             The frame index that the object belongs to or ``None`` if the tag cannot be found
         """
-        tags = [tag.replace("frame_id_", "")
-                for tag in self.itemcget(item_id, "tags").split()
-                if tag.startswith("frame_id_")]
-        retval = int(tags[0]) if tags else None
+        retval = next((int(tag.replace("frame_id_", ""))
+                       for tag in self.gettags(item_id) if tag.startswith("frame_id_")), None)
         logger.trace("item_id: %s, frame_id: %s", item_id, retval)
         return retval
 
-    def face_group_from_object(self, item_id):
+    def face_id_from_object(self, item_id):
         """ Retrieve the face group id tag for the given canvas item id.
 
         Parameters
@@ -733,9 +791,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         str
             The face group tag for the given object, or ``None`` if a tag can't be found
         """
-        tags = [tag for tag in self.gettags(item_id)
-                if tag.startswith("face_group_")]
-        retval = tags[0] if tags else None
+        retval = next((tag for tag in self.gettags(item_id)
+                       if tag.startswith("face_id_")), None)
         logger.trace("item_id: %s, tag: %s", item_id, retval)
         return retval
 
@@ -754,9 +811,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             The top left (x, y) co-ordinates that an object should be placed on the canvas
             calculated from the given index.
         """
-        return np.array(((index % self._columns) * self._faces.size,
-                         (index // self._columns) * self._faces.size),
-                        dtype="int")
+        return np.array(((index % self._columns) * self._faces_cache.size,
+                         (index // self._columns) * self._faces_cache.size), dtype="int")
 
     def mesh_ids_for_face(self, face_index, mesh_ids):
         """ Obtain all the item ids for a given face index's mesh annotation.
@@ -776,93 +832,36 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         starting_idx = face_index * self.items_per_mesh
         return mesh_ids[starting_idx: starting_idx + self.items_per_mesh]
 
-    def create_viewer_annotations(self, coordinates, tk_face, mesh_landmarks, frame_index,
-                                  is_multi=False):
-        """ Create all if the annotations for a single Face Viewer face.
-
-        Parameters
-        ----------
-        coordinates: tuple
-            The top left (x, y) coordinates for the annotations' position in the Faces Viewer
-        tk_face: :class:`PIL.ImageTk.PhotoImage`
-            The face to be used for the image annotation
-        mesh_landmarks: dict
-            A dictionary containing the keys `landmarks` holding a `list` of :class:`numpy.ndarray`
-            objects and `is_poly` containing a `list` of `bool` types corresponding to the
-            `landmarks`
-            indicating whether a line or polygon should be created for each mesh annotation.
-        mesh_color: str
-            The hex code holding the color that the mesh should be displayed as
-        frame_index: int
-            The frame index that this object appears in
-        is_multi: bool
-            ``True`` if there are multiple faces in the given frame, otherwise ``False``.
-            Default: ``False``
-
-        Returns
-        -------
-        image_id: int
-            The item id of the newly created face
-        mesh_ids: list
-            List of item ids for the newly created mesh
-
-        """
-        tags = {obj: self._get_viewer_tags(frame_index, obj, is_multi)
-                for obj in ("image", "mesh")}
-        image_id = self.create_image(*coordinates, image=tk_face, anchor=tk.NW, tags=tags["image"])
-        mesh_ids = self.create_mesh_annotations(self.get_muted_color("Mesh"),
-                                                mesh_landmarks,
-                                                coordinates,
-                                                tags["mesh"])
-        self._current_face_group_id += 1
-        return image_id, mesh_ids
-
-    def _get_viewer_tags(self, frame_index, object_type, is_multi):
-        """ Obtain the tags for a Faces Viewer object.
-
-        Parameters
-        ----------
-        frame_index: int
-            The frame index that this object appears in
-        object_type: str
-            The type of object that these tags will be associated with
-        is_multi: bool
-            ``True`` if there are multiple faces in the given frame, otherwise ``False``
-
-        Returns
-        -------
-        list
-            The list of tags for the Faces Viewer object
-        """
-        tags = ["viewer",
-                "viewer_{}".format(object_type),
-                "frame_id_{}".format(frame_index),
-                "face_group_{}".format(self._current_face_group_id),
-                "{}_{}".format(object_type, frame_index)]
-        if is_multi:
-            tags.extend(["multi", "multi_{}".format(object_type)])
+    def get_tk_face_and_landmarks(self, detected_face=None):
+        """ Obtain the resized photo image face and scaled landmarks """
+        detected_face = self._alignments.current_face if detected_face is None else detected_face
+        if detected_face.aligned_face is None:
+            # When in zoomed in mode the face isn't loaded, so get a copy
+            # TODO Force size rather than resizing
+            aligned_face = self._alignments.get_aligned_face_at_index(self._alignments.face_index)
         else:
-            tags.append("not_multi")
-        logger.trace(tags)
-        return tags
+            aligned_face = detected_face.aligned_face
 
-    def create_mesh_annotations(self, color, mesh_landmarks, offset, tag):
-        """ Create the coordinates for the face mesh. """
-        retval = []
-        state = "normal" if self._tk_optional_annotation.get() == "landmarks" else "hidden"
-        kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
-        for is_poly, landmarks in zip(mesh_landmarks["is_poly"], mesh_landmarks["landmarks"]):
-            key = "polygon" if is_poly else "line"
-            tags = tag + ["mesh_{}".format(key)]
-            obj = getattr(self, "create_{}".format(key))
-            obj_kwargs = kwargs[key]
-            coords = (landmarks + offset).flatten()
-            retval.append(obj(*coords, state=state, width=1, tags=tags, **obj_kwargs))
-        return retval
+        display_face = cv2.resize(aligned_face[..., 2::-1],
+                                  (self._faces_cache, self._faces_cache),
+                                  interpolation=cv2.INTER_AREA)
+        tk_face = ImageTk.PhotoImage(Image.fromarray(display_face))
+        scale = self._faces_cache / detected_face.aligned["size"]
+        mesh_landmarks = self.get_mesh_points(detected_face.aligned_landmarks * scale)
+        return tk_face, mesh_landmarks
 
-    def get_muted_color(self, color_key):
-        """ Updates hex code F values to A for the given annotation color key """
-        return self.control_colors[color_key].replace("f", "a")
+    def get_next_frame_idx(self, frame_index):
+        """ Get the index of the next frame that has faces for placing newly added faces
+        in the stack. """
+        next_frame_idx = next((
+            idx for idx, f_count in enumerate(self._alignments.face_count_per_index[frame_index:])
+            if f_count > 0), None)
+        if next_frame_idx is None:
+            return None
+        next_frame_idx += frame_index + 1
+        logger.debug("Returning next frame with faces: %s for frame index: %s",
+                     next_frame_idx, frame_index)
+        return next_frame_idx
 
 
 class Aligner():
