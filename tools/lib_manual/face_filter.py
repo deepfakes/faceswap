@@ -21,14 +21,14 @@ class FaceFilter():
         Tags for toggling optional annotations. Set to ``None`` if there are no annotations to
         be toggled for the selected filter. Default: ``None``
     """
-    def __init__(self, canvas, image_tag, toggle_tags=None):
-        logger.debug("Initializing: %s: (canvas: %s, toggle_tags: %s)",
-                     self.__class__.__name__, canvas, toggle_tags)
-        self._toggle_tags = toggle_tags
+    def __init__(self, canvas, tag_prefix):
+        logger.debug("Initializing: %s: (canvas: %s, tag_prefix: %s)",
+                     self.__class__.__name__, canvas, tag_prefix)
         self._canvas = canvas
-        self._image_tag = image_tag
+        self._tag_prefix = tag_prefix
         self._tk_position = canvas._frames.tk_position
         self._size = canvas._faces_cache.size
+        self._temporary_image_ids = []
         self._frame_faces_change = 0
 
         self._mesh_landmarks = canvas._faces_cache.mesh_landmarks
@@ -41,8 +41,17 @@ class FaceFilter():
     @property
     def image_ids(self):
         """ list: The canvas item ids for the face images. """
-        retval = [] if self._image_tag is None else self._canvas.find_withtag(self._image_tag)
-        return retval
+        if self._tag_prefix is None:
+            return self._temporary_image_ids
+        return self._canvas.find_withtag("{}_image".format(self._tag_prefix))
+
+    @property
+    def _optional_tags(self):
+        """ list: The tags for the optional annotations. """
+        options = ["mesh"]
+        if self._tag_prefix is None:
+            return dict()
+        return {opt: "{}_{}".format(self._tag_prefix, opt) for opt in options}
 
     def _set_object_display_state(self):
         """ Hide annotations that are not relevant for this filter type and show those that are
@@ -77,8 +86,6 @@ class FaceFilter():
         self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
         self._updated_frames = [self._tk_position.get()]
 
-    # TODO Update layout when adding faces at end (check with lots) goes wonky
-    # TODO Adding face on No Faces filter broken
     # TODO Deleting faces on multi face filter is broken
     def add_face(self, image_id, mesh_ids, mesh_landmarks):
         """ Place a newly added face in the correct location and move subsequent faces to their new
@@ -89,7 +96,9 @@ class FaceFilter():
         frame_index: int
             The frame index that the face is to be added to
         """
-        display_idx = 0 if not self.image_ids else self.image_ids.index(image_id)
+        if self._tag_prefix is None:
+            self.image_ids.append(image_id)
+        display_idx = self.image_ids.index(image_id)
         # Update layout - Layout must be updated first so space is made for the new face
         self._update_layout(display_idx + 1, is_insert=True)
 
@@ -105,6 +114,9 @@ class FaceFilter():
         """ Remove a face at the given location and update subsequent faces to the
         correct location.
         """
+        logger.deug("frame_index: %s, display_index: %s", frame_index, display_index)
+        if self._tag_prefix is None:
+            del self.image_ids[display_index]
         self._update_layout(display_index, is_insert=False)
         if frame_index == self._tk_position.get():
             self._frame_faces_change -= 1
@@ -129,6 +141,9 @@ class FaceFilter():
             face. Default: ``True``
         """
         # TODO addtag_enclosed vs addtag_overlapping - The mesh going out of face box problem
+        if len(self.image_ids) == starting_object_index:
+            logger.debug("Update is last face. Not changing layout")
+            return
         top_bulk_delta = np.array((self._size, 0))
         col_delta = np.array((-(self._canvas.column_count - 1) * self._size, self._size))
         if not is_insert:
@@ -161,11 +176,11 @@ class FaceFilter():
             face.
          """
         # Display hidden annotations so they get tagged
-        hidden_tags = [val for key, val in self._toggle_tags.items()
+        hidden_tags = [tag for key, tag in self._optional_tags.items()
                        if key != self._canvas.optional_annotation]
         for tag in hidden_tags:
             self._canvas.itemconfig(tag, state="normal")
-        new_row_start = (start_index + 1) % self._canvas.column_count == 0
+        new_row_start = not is_insert and (start_index + 1) % self._canvas.column_count == 0
         first_face_xy = self._canvas.coords(self.image_ids[start_index])
         first_row_y = first_face_xy[1] - self._size if new_row_start else first_face_xy[1]
         last_col_x = (self._canvas.column_count - 1) * self._size
@@ -197,13 +212,13 @@ class FaceFilter():
 
     def toggle_annotation(self):
         """ Toggle additional object annotations on or off. """
-        if self._toggle_tags is None:
+        if not self._optional_tags:
             return
         display = self._canvas.optional_annotation
         if display is not None:
-            self._canvas.itemconfig(self._toggle_tags[display], state="normal")
+            self._canvas.itemconfig(self._optional_tags[display], state="normal")
         else:
-            for tag in self._toggle_tags.values():
+            for tag in self._optional_tags.values():
                 self._canvas.itemconfig(tag, state="hidden")
 
     @staticmethod
@@ -250,7 +265,7 @@ class FilterAllFrames(FaceFilter):
         The main Face Viewers face cache, that holds all of the display items and annotations
     """
     def __init__(self, canvas):
-        super().__init__(canvas, "viewer_image", dict(landmarks="viewer_mesh"))
+        super().__init__(canvas, "viewer")
 
     def _set_object_display_state(self):
         """ Hide annotations that are not relevant for this filter type and show those that are
@@ -283,7 +298,6 @@ class FilterNoFaces(FaceFilter):
         The main Face Viewers face cache, that holds all of the display items and annotations
     """
     def __init__(self, canvas):
-        self._added_objects = []
         super().__init__(canvas, None)
 
     def _set_object_display_state(self):
@@ -299,8 +313,10 @@ class FilterNoFaces(FaceFilter):
         If faces have been added to the current frame, hide the new faces and clear
         the viewer objects.
         """
-        if self._frame_faces_change != 0:
-            self._canvas.itemconfig("frame_id_{}".format(self._updated_frames[0]), state="hidden")
+        if self._temporary_image_ids:
+            for image_id in self._temporary_image_ids:
+                self._canvas.itemconfig(self._canvas.face_id_from_object(image_id), state="hidden")
+        self._temporary_image_ids = []
         self._frame_faces_change = 0
         self._updated_frames = [self._tk_position.get()]
 
@@ -314,12 +330,12 @@ class FilterMultipleFaces(FaceFilter):
         The main Face Viewers face cache, that holds all of the display items and annotations
     """
     def __init__(self, canvas):
-        super().__init__(canvas, "multi_image", dict(landmarks="multi_mesh"))
+        super().__init__(canvas, "multi")
 
     def _set_object_display_state(self):
         """ Hide annotations that are not relevant for this filter type and show those that are
 
-        All viewer annotations should be show
+        All viewer annotations should be shown
         """
         self._canvas.itemconfig("not_multi", state="hidden")
         annotation = self._canvas.optional_annotation

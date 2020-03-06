@@ -401,7 +401,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._tk_optional_annotation = tk.StringVar()
         self._tk_optional_annotation.set(None)
         self._configure_styles()
-        self._displays = ("landmarks", "mask")
+        self._displays = ("mesh", "mask")
         self._buttons = self._add_buttons()
         self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
 
@@ -421,7 +421,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _helptext(self):
         """ dict: `button key`: `button helptext`. The help text to display for each button. """
         inverse_keybindings = {val: key for key, val in self.key_bindings.items()}
-        retval = dict(landmarks="Display the landmarks mesh",
+        retval = dict(mesh="Display the landmarks mesh",
                       mask="Display the mask")
         for item in retval:
             retval[item] += " ({})".format(inverse_keybindings[item])
@@ -448,8 +448,9 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame.pack(side=tk.TOP, fill=tk.Y)
         buttons = dict()
         for display in self.key_bindings.values():
+            lookup = "landmarks" if display == "mesh" else display
             button = ttk.Button(frame,
-                                image=get_images().icons[display],
+                                image=get_images().icons[lookup],
                                 command=lambda t=display: self.on_click(t),
                                 style="display_deselected.TButton")
             button.state(["!pressed", "!focus", "disabled"])
