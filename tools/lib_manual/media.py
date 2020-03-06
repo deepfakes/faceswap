@@ -699,7 +699,7 @@ class AlignmentsData():
         self._remove_idx = None
         return retval
 
-    def get_aligned_face_at_index(self, index, frame_index=None):
+    def get_aligned_face_at_index(self, index, frame_index=None, size=None, with_landmarks=False):
         """ Return the aligned face sized for frame viewer.
 
         Parameters
@@ -712,14 +712,17 @@ class AlignmentsData():
         :class:`numpy.ndarray`
             The aligned face
         """
+        size = self._face_size if size is None else size
         if frame_index is None:
             face = self.current_faces[index]
         else:
             frame_name = sorted(self._alignments)[frame_index]
             face = self._latest_alignments[frame_name][index]
-        face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
+        face.load_aligned(self._frames.current_frame, size=size, force=True)
         retval = face.aligned_face.copy()
         face.aligned["face"] = None
+        if with_landmarks:
+            retval = (retval, face.aligned_landmarks)
         return retval
 
     def copy_alignments(self, direction):
@@ -854,3 +857,24 @@ class FaceCache():
             is_poly.append(key in ("right_eye", "left_eye", "mouth"))
             mesh_landmarks.append(landmarks[val[0]:val[1]])
         return dict(is_poly=is_poly, landmarks=mesh_landmarks)
+
+    def add(self, frame_index, tk_face, mesh_landmarks):
+        """ Add new objects to the faces cache. """
+        logger.debug("Adding objects: (frame_index: %s, tk_face: %s, mesh_landmarks: %s)",
+                     frame_index, tk_face, mesh_landmarks)
+        self._tk_faces[frame_index].append(tk_face)
+        self._mesh_landmarks[frame_index].append(mesh_landmarks)
+
+    def remove(self, frame_index, face_index):
+        """ Remove objects from the faces cache. """
+        logger.debug("Removing objects: (frame_index: %s, face_index: %s)",
+                     frame_index, face_index)
+        del self._tk_faces[frame_index][face_index]
+        del self._mesh_landmarks[frame_index][face_index]
+
+    def update(self, frame_index, face_index, tk_face, mesh_landmarks):
+        """ Update existing objects in the faces cache. """
+        logger.trace("Updating objects: (frame_index: %s, face_index: %s, tk_face: %s, "
+                     "mesh_landmarks: %s)", frame_index, face_index, tk_face, mesh_landmarks)
+        self._tk_faces[frame_index][face_index] = tk_face
+        self._mesh_landmarks[frame_index][face_index] = mesh_landmarks

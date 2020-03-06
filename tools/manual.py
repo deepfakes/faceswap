@@ -8,7 +8,6 @@ import tkinter as tk
 from tkinter import ttk
 from time import sleep
 
-import cv2
 import numpy as np
 
 from PIL import Image, ImageTk
@@ -20,8 +19,9 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .lib_manual.display_face import (ActiveFrame, ContextMenu, FacesViewerLoader, FilterAllFrames,
-                                      FilterNoFaces, FilterMultipleFaces, HoverBox, ObjectCreator)
+from .lib_manual.display_face import (ActiveFrame, ContextMenu, FacesViewerLoader,
+                                      HoverBox, ObjectCreator, UpdateFace)
+from .lib_manual.face_filter import FilterAllFrames, FilterNoFaces, FilterMultipleFaces
 from .lib_manual.display_frame import DisplayFrame
 from .lib_manual.media import AlignmentsData, FaceCache, FrameNavigation
 
@@ -125,7 +125,7 @@ class Manual(tk.Tk):
             frames_init = frames_init if frames_init else self._frames.is_initialized
             if extractor_init and frames_init:
                 logger.debug("Threads inialized")
-                return
+                break
             logger.debug("Threads not initialized. Waiting...")
             sleep(1)
 
@@ -485,8 +485,6 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for button in self._buttons.values():
             button.state(["!pressed", "!focus", "!disabled"])
 
-# TODO Split Update, Add, Remove to own class
-
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     """ Annotation onto tkInter Canvas.
@@ -521,6 +519,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                            MultipleFaces=FilterMultipleFaces(self)),
                              current_display=None)
         self._active_frame = ActiveFrame(self)
+        self._update_face = UpdateFace(self)
 
         self._bind_mouse_wheel_scrolling()
         self._color_keys = dict(polygon="outline", line="fill")
@@ -590,52 +589,21 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """:class:`FaceFilter`: The currently selected filtered faces display. """
         return self._filters["displays"][self._filters["current_display"]]
 
+    @property
+    def active_frame(self):
+        """:class:`ActiveFrame`: The currently active frame. """
+        return self._active_frame
+
+    @property
+    def update_face(self):
+        """:class:`UpdateFace`: Actions to add, remove or update a face in the viewer. """
+        return self._update_face
+
     def _set_tk_callbacks(self):
         """ Set the tkinter variable call backs """
         self._frames.tk_navigation_mode.trace("w", self.switch_filter)
-        self._alignments.tk_edited.trace("w", self._update_current)
         self._frames.tk_position.trace("w", self._on_frame_change)
         self._tk_optional_annotation.trace("w", self._toggle_annotations)
-
-    def _update_current(self, *args):  # pylint:disable=unused-argument
-        """ Update the currently selected face on editor update """
-        if not self._alignments.tk_edited.get() or not self._faces_cache.is_initialized:
-            return
-        if self._add_remove_face():
-            self._active_frame.reload_annotations()
-            return
-        tk_face, mesh_landmarks = self.get_tk_face_and_landmarks()
-        self._active_frame.update(tk_face, mesh_landmarks)
-        self._alignments.tk_edited.set(False)
-
-    # TODO moving to new frame and adding faces seems to mess up the tk_face of the existing face
-
-    def _add_remove_face(self):
-        """ add or remove a face for the current frame """
-        alignment_faces = len(self._alignments.current_faces)
-        if alignment_faces > self._active_frame.face_count:
-            self._add_face()
-            retval = True
-        elif alignment_faces < self._active_frame.face_count:
-            self._remove_face()
-            retval = True
-        else:
-            retval = False
-        return retval
-
-    def _add_face(self):
-        """ Insert a face into current frame """
-        logger.debug("Adding face")
-        tk_face, mesh_landmarks = self.get_tk_face_and_landmarks()
-        self._active_frame.add_face(tk_face, mesh_landmarks)
-        next_frame_idx = self.get_next_frame_idx(self._active_frame.frame_index)
-        self.active_display.add_face(tk_face, self._active_frame.frame_index, next_frame_idx)
-
-    def _remove_face(self):
-        """ Remove a face from the current frame """
-        logger.debug("Removing face")
-        face_idx = self._active_frame.remove_face()
-        self.active_display.remove_face(self._active_frame.frame_index, face_idx)
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Action to perform on a frame change """
@@ -649,26 +617,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._active_frame.set_selected(self._faces_cache.tk_faces[position],
                                         self._faces_cache.mesh_landmarks[position],
                                         position)
-
-    def delete_face_from_viewer(self, item_id):
-        """ Delete a face for the given frame and face indices """
-        logger.debug("Deleting face: (item_id: %s)", item_id)
-        frame_idx = self.frame_index_from_object(item_id)
-        frame_faces = self.find_withtag("image_{}".format(frame_idx))
-        face_idx = frame_faces.index(item_id)
-        logger.debug("frame_idx: %s, frame_faces: %s, face_idx: %s",
-                     frame_idx, frame_faces, face_idx)
-        self._alignments.delete_face_at_index_by_frame(frame_idx, face_idx)
-        self.delete_face_at_index_by_frame(frame_idx, face_idx)
-        if frame_idx == self._frames.tk_position.get():
-            self._frames.tk_update.set(True)
-            self._active_frame.reload_annotations()
-
-    def delete_face_at_index_by_frame(self, frame_index, face_index):
-        """ Remove a face from the viewer for a given frame index and face index. """
-        del self._faces_cache.tk_faces[frame_index][face_index]
-        del self._faces_cache.mesh_landmarks[frame_index][face_index]
-        self.active_display.delete_face_from_viewer(frame_index, face_index)
 
     # << POST INIT FUNCTIONS >> #
     def set_column_count(self, frame_width):
@@ -718,7 +666,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ Updates hex code F values to A for the given annotation color key """
         return self.control_colors[color_key].replace("f", "a")
 
-    def _toggle_annotations(self):
+    def _toggle_annotations(self, *args):  # pylint: disable=unused-argument
         """ Toggle additional annotations on or off. """
         if not self._faces_cache.is_initialized:
             return
@@ -741,15 +689,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self.active_display.initialize()
 
     # << UTILS >> #
-    def transport_index_from_frame_index(self, frame_index):
-        """ Retrieve the index in the filtered frame list for the given frame index. """
-        # TODO Move this?
-        # TODO Cache the filtered frames so it updates quicker on hover
-        frames_list = self._alignments.get_filtered_frames_list()
-        retval = frames_list.index(frame_index) if frame_index in frames_list else None
-        logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
-        return retval
-
     def get_mesh_points(self, landmarks):
         # TODO THIS IS DUPED. LOOK TO CENTRALIZE SOMEHOW
         """ Obtain the mesh annotation points for a given set of landmarks. """
@@ -796,6 +735,26 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         logger.trace("item_id: %s, tag: %s", item_id, retval)
         return retval
 
+    def mesh_ids_for_face_id(self, item_id):
+        """ Obtain all the item ids for a given face index's mesh annotation.
+
+        Parameters
+        ----------
+        face_index: int
+            The face index to retrieve the mesh ids for
+
+        Returns
+        -------
+        list
+            The list of item ids for the mesh annotation pertaining to the given face index
+        """
+        face_id = next((tag for tag in self.gettags(item_id) if tag.startswith("face_id_")), None)
+        if face_id is None:
+            return None
+        retval = self.find_withtag("mesh_{}".format(face_id))
+        logger.trace("item_id: %s, face_id: %s, mesh ids: %s", item_id, face_id, retval)
+        return retval
+
     def coords_from_index(self, index):
         """ Returns the top left coordinates location for the canvas object based on an object's
         absolute index.
@@ -814,54 +773,15 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         return np.array(((index % self._columns) * self._faces_cache.size,
                          (index // self._columns) * self._faces_cache.size), dtype="int")
 
-    def mesh_ids_for_face(self, face_index, mesh_ids):
-        """ Obtain all the item ids for a given face index's mesh annotation.
-
-        Parameters
-        ----------
-        face_index: int
-            The face index to retrieve the mesh ids for
-        mesh_ids: tuple or list
-            The mesh ids to extract the item ids from
-
-        Returns
-        -------
-        list
-            The list of item ids for the mesh annotation pertaining to the given face index
-        """
-        starting_idx = face_index * self.items_per_mesh
-        return mesh_ids[starting_idx: starting_idx + self.items_per_mesh]
-
-    def get_tk_face_and_landmarks(self, detected_face=None):
+    def get_tk_face_and_landmarks(self, frame_index, face_index):
         """ Obtain the resized photo image face and scaled landmarks """
-        detected_face = self._alignments.current_face if detected_face is None else detected_face
-        if detected_face.aligned_face is None:
-            # When in zoomed in mode the face isn't loaded, so get a copy
-            # TODO Force size rather than resizing
-            aligned_face = self._alignments.get_aligned_face_at_index(self._alignments.face_index)
-        else:
-            aligned_face = detected_face.aligned_face
-
-        display_face = cv2.resize(aligned_face[..., 2::-1],
-                                  (self._faces_cache, self._faces_cache),
-                                  interpolation=cv2.INTER_AREA)
-        tk_face = ImageTk.PhotoImage(Image.fromarray(display_face))
-        scale = self._faces_cache / detected_face.aligned["size"]
-        mesh_landmarks = self.get_mesh_points(detected_face.aligned_landmarks * scale)
+        face, landmarks = self._alignments.get_aligned_face_at_index(face_index,
+                                                                     frame_index=frame_index,
+                                                                     size=self._faces_cache.size,
+                                                                     with_landmarks=True)
+        tk_face = ImageTk.PhotoImage(Image.fromarray(face[..., 2::-1]))
+        mesh_landmarks = self.get_mesh_points(landmarks)
         return tk_face, mesh_landmarks
-
-    def get_next_frame_idx(self, frame_index):
-        """ Get the index of the next frame that has faces for placing newly added faces
-        in the stack. """
-        next_frame_idx = next((
-            idx for idx, f_count in enumerate(self._alignments.face_count_per_index[frame_index:])
-            if f_count > 0), None)
-        if next_frame_idx is None:
-            return None
-        next_frame_idx += frame_index + 1
-        logger.debug("Returning next frame with faces: %s for frame index: %s",
-                     next_frame_idx, frame_index)
-        return next_frame_idx
 
 
 class Aligner():
