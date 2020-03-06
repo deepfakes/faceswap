@@ -21,7 +21,7 @@ from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .lib_manual.display_face import (ActiveFrame, ContextMenu, FacesViewerLoader,
                                       HoverBox, ObjectCreator, UpdateFace)
-from .lib_manual.face_filter import FilterAllFrames, FilterNoFaces, FilterMultipleFaces
+from .lib_manual.face_filter import FaceFilter
 from .lib_manual.display_frame import DisplayFrame
 from .lib_manual.media import AlignmentsData, FaceCache, FrameNavigation
 
@@ -515,10 +515,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._object_creator = ObjectCreator(self)
         self._hover_box = HoverBox(self, faces_cache.size)
         ContextMenu(self)
-        self._filters = dict(displays=dict(AllFrames=FilterAllFrames(self),
-                                           NoFaces=FilterNoFaces(self),
-                                           MultipleFaces=FilterMultipleFaces(self)),
-                             current_display=None)
+        self._active_filter = FaceFilter(self, "all_frames")
         self._active_frame = ActiveFrame(self)
         self._update_face = UpdateFace(self)
 
@@ -586,9 +583,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         return self._object_creator
 
     @property
-    def active_display(self):
+    def active_filter(self):
         """:class:`FaceFilter`: The currently selected filtered faces display. """
-        return self._filters["displays"][self._filters["current_display"]]
+        return self._active_filter
 
     @property
     def active_frame(self):
@@ -671,23 +668,23 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ Toggle additional annotations on or off. """
         if not self._faces_cache.is_initialized:
             return
-        self.active_display.toggle_annotation()
+        self.active_filter.toggle_annotation()
 
     # << FILTERS >> #
     def switch_filter(self, *args):  # pylint: disable=unused-argument
         """ Change the active display """
         if not self._faces_cache.is_initialized:
             return
-        nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "")
-        nav_mode = "AllFrames" if nav_mode == "HasFace(s)" else nav_mode
-        current_display = self._filters["current_display"]
-        logger.debug("Current Display: '%s', Requested Display: '%s'", current_display, nav_mode)
-        if nav_mode == current_display:
+        nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "_").lower()
+        # TODO Find out why this is executing twice
+        # print(nav_mode)
+        nav_mode = "all_frames" if nav_mode == "has_face(s)" else nav_mode
+        current_dsp = self._active_filter.filter_type
+        logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, nav_mode)
+        if nav_mode == current_dsp:
             return
-        if current_display is not None:
-            self.active_display.de_initialize()
-        self._filters["current_display"] = nav_mode
-        self.active_display.initialize()
+        self._active_filter.de_initialize()
+        self._active_filter = FaceFilter(self, nav_mode)
 
     # << UTILS >> #
     def get_mesh_points(self, landmarks):

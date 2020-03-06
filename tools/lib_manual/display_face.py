@@ -71,8 +71,6 @@ class FacesViewerLoader():
     def _on_load_complete(self):
         """ Actions to perform once the faces have finished loading into the canvas """
         # TODO Enable saving
-        self._canvas._filters["current_display"] = "AllFrames"
-        self._canvas.active_display.initialize()
         for frame_idx, faces in enumerate(self._canvas._alignments.updated_alignments):
             if faces is None:
                 continue
@@ -525,7 +523,7 @@ class UpdateFace():
         frame_tag = self._update_multi_tags(frame_index)
         self._place_in_stack(frame_index, frame_tag)
         # Update viewer
-        self._canvas.active_display.add_face(image_id, mesh_ids, mesh_landmarks["landmarks"])
+        self._canvas.active_filter.add_face(image_id, mesh_ids, mesh_landmarks["landmarks"])
 
     def _place_in_stack(self, frame_index, frame_tag):
         """ Place newly added faces in the correct location in the stack """
@@ -566,10 +564,10 @@ class UpdateFace():
         self._faces_cache.remove(frame_index, face_index)
         image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
         # Retrieve the position of the face in the current viewer prior to deletion
-        display_index = self._canvas.active_display.image_ids.index(image_id)
+        display_index = self._canvas.active_filter.image_ids.index(image_id)
         self._canvas.delete(self._canvas.face_id_from_object(image_id))
         self._update_multi_tags(frame_index)
-        self._canvas.active_display.remove_face(frame_index, display_index)
+        self._canvas.active_filter.remove_face(frame_index, face_index, display_index)
 
     # << ADD AND REMOVE METHODS >> #
     def _update_multi_tags(self, frame_index):
