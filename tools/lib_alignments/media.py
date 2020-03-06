@@ -90,7 +90,17 @@ class AlignmentData(Alignments):
             be saved
         """
         self._data = alignments
-        self._file = self._get_location(faces_folder, "alignments")
+        self.set_filename(self._get_location(faces_folder, "alignments"))
+
+    def set_filename(self, filename):
+        """ Set the :attr:`_file` to the given filename.
+
+        Parameters
+        ----------
+        filename: str
+            The full path and filename to se the alignments file name to
+        """
+        self._file = filename
 
 
 class MediaLoader():

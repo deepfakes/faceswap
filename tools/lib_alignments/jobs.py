@@ -694,7 +694,7 @@ class Merge():
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(folder, "alignments_merged_{}{}".format(now, ext))
         logger.debug("Output set to: '%s'", filename)
-        self.final_alignments.file = filename
+        self.final_alignments.set_filename(filename)
 
 
 class RemoveAlignments():
