@@ -600,21 +600,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     def _set_tk_callbacks(self):
         """ Set the tkinter variable call backs """
         self._frames.tk_navigation_mode.trace("w", self.switch_filter)
-        self._frames.tk_position.trace("w", self._on_frame_change)
         self._tk_optional_annotation.trace("w", self._toggle_annotations)
-
-    def _on_frame_change(self, *args):  # pylint:disable=unused-argument
-        """ Action to perform on a frame change """
-        if not self._faces_cache.is_initialized:
-            return
-        self.set_selected()
-
-    def set_selected(self):
-        """ Set the currently selected annotations. """
-        position = self._frames.tk_position.get()
-        self._active_frame.set_selected(self._faces_cache.tk_faces[position],
-                                        self._faces_cache.mesh_landmarks[position],
-                                        position)
+        self.tk_control_colors["Mesh"].trace("w", self.update_mesh_color)
 
     # << POST INIT FUNCTIONS >> #
     def set_column_count(self, frame_width):

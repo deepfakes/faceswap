@@ -19,6 +19,7 @@ class FacesViewerLoader():
     def __init__(self, canvas, faces_cache, frame_count, progress_bar, enable_buttons_callback):
         self._canvas = canvas
         self._faces_cache = faces_cache
+        self._alignments = canvas._alignments
         self._frame_count = frame_count
         self._progress_bar = progress_bar
         self._enable_buttons_callback = enable_buttons_callback
@@ -46,7 +47,8 @@ class FacesViewerLoader():
                     self._canvas.configure(scrollregion=self._canvas.bbox("all"))
                 faces_seen += 1
             frame_index += 1
-
+        # TODO sometimes this gets stuck, so leave this debug
+        print(self._faces_cache.is_initialized, frame_index, self._frame_count)
         if self._faces_cache.is_initialized and frame_index == self._frame_count:
             self._on_load_complete()
         else:
@@ -71,25 +73,24 @@ class FacesViewerLoader():
     def _on_load_complete(self):
         """ Actions to perform once the faces have finished loading into the canvas """
         # TODO Enable saving
-        for frame_idx, faces in enumerate(self._canvas._alignments.updated_alignments):
+        for frame_idx, faces in enumerate(self._alignments.updated_alignments):
             if faces is None:
                 continue
             image_ids = self._canvas.find_withtag("image_{}".format(frame_idx))
             existing_count = len(image_ids)
             new_count = len(faces)
             self._on_load_remove_faces(existing_count, new_count, frame_idx)
-
             for face_idx in range(new_count):
                 if face_idx + 1 > existing_count:
                     self._canvas.update_face.add(frame_idx)
                 else:
                     self._canvas.update_face.update(frame_idx, face_idx)
+        self._alignments.tk_edited.set(False)
         self._enable_buttons_callback()
-        # TODO Move this to canvas, as it checks whether it's still loading anyway?
-        self._canvas.tk_control_colors["Mesh"].trace("w", self._canvas.update_mesh_color)
+        self._canvas.update_mesh_color()
         self._progress_bar.stop()
         self._canvas.switch_filter()
-        self._canvas.set_selected()
+        self._canvas.active_frame.reload_annotations()
 
     def _on_load_remove_faces(self, existing_count, new_count, frame_index):
         """ Remove any faces that have been deleted whilst face viewer was loading. """
@@ -315,13 +316,9 @@ class ActiveFrame():
         self._alignments = canvas._alignments
         self._faces_cache = canvas._faces_cache
         self._size = canvas._faces_cache.size
+        self._tk_position = canvas._frames.tk_position
         self._highlighter = Highlighter(canvas)
-        self._tk_faces = None
-        self._mesh_landmarks = None
-        self._image_ids = None
-        self._mesh_ids = None
-        self._frame_index = 0
-        self._face_count = 0
+        self._tk_position.trace("w", lambda *e: self.reload_annotations())
         self._alignments.tk_edited.trace("w", lambda *e: self._update())
 
     @property
@@ -339,21 +336,40 @@ class ActiveFrame():
         """ int: The current frame index. """
         return self._frame_index
 
-    def set_selected(self, tk_faces, mesh_landmarks, frame_index):
-        """ Set the currently selected frame's objects """
-        self._tk_faces = tk_faces
-        self._mesh_landmarks = mesh_landmarks
-        self._image_ids = list(self._canvas.find_withtag("image_{}".format(frame_index)))
-        self._mesh_ids = list(self._canvas.find_withtag("mesh_{}".format(frame_index)))
-        self._frame_index = frame_index
-        self._face_count = len(self._image_ids)
-        self._highlighter.highlight_selected(self._image_ids, self._mesh_landmarks)
+    @property
+    def _image_ids(self):
+        """ tuple: The tkinter canvas image ids for the current frame's faces. """
+        return self._canvas.find_withtag("image_{}".format(self._frame_index))
+
+    @property
+    def _mesh_ids(self):
+        """ tuple: The tkinter canvas mesh ids for the current frame's faces. """
+        return self._canvas.find_withtag("mesh_{}".format(self._frame_index))
+
+    @property
+    def _face_count(self):
+        """ int: The number of faces in the current frame """
+        return len(self._image_ids)
+
+    @property
+    def _tk_faces(self):
+        """ list: The photoimage faces for the current frame """
+        return self._faces_cache.tk_faces[self._frame_index]
+
+    @property
+    def _mesh_landmarks(self):
+        """ TODO check if we can just get the landmarks here """
+        return self._faces_cache.mesh_landmarks[self._frame_index]
+
+    @property
+    def _frame_index(self):
+        """ int: The current frame position """
+        return self._tk_position.get()
 
     def reload_annotations(self):
         """ Reload the currently selected annotations on an add/remove face. """
-        self._image_ids = list(self._canvas.find_withtag("image_{}".format(self._frame_index)))
-        self._mesh_ids = list(self._canvas.find_withtag("mesh_{}".format(self._frame_index)))
-        self._face_count = len(self._image_ids)
+        if not self._faces_cache.is_initialized:
+            return
         self._highlighter.highlight_selected(self._image_ids, self._mesh_landmarks)
 
     def _update(self):
@@ -364,7 +380,6 @@ class ActiveFrame():
             self.reload_annotations()
             return
         self._canvas.update_face.update(self._frame_index, self._face_index)
-        # TODO This can probably be better? Use tags!
         self._highlighter.highlight_selected(self._image_ids, self._mesh_landmarks)
         self._alignments.tk_edited.set(False)
 
