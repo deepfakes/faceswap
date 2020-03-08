@@ -349,7 +349,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self._canvas = FacesViewer(self._faces_frame,
-                                   self._actions_frame.tk_optional_annotation,
+                                   self._actions_frame._tk_optional_annotations,
                                    faces_cache,
                                    frames,
                                    alignments,
@@ -391,7 +391,6 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._actions_frame.on_click(self._actions_frame.key_bindings[key])
 
 
-# TODO Make it so that mesh + masks are not inter-connected
 class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ The left hand action frame holding the action buttons.
 
@@ -404,8 +403,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
         self._faces_cache = faces_cache
-        self._tk_optional_annotation = tk.StringVar()
-        self._tk_optional_annotation.set(None)
+        self._tk_optional_annotations = dict()
         self._configure_styles()
         self._displays = ("mesh", "mask")
         self._buttons = self._add_buttons()
@@ -416,12 +414,6 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ dict: {`key`: `display`}. The mapping of key presses to displays. Keyboard shortcut is
         the first letter of each display. """
         return {"F{}".format(idx + 9): display for idx, display in enumerate(self._displays)}
-
-    @property
-    def tk_optional_annotation(self):
-        """ :class:`tkinter.StringVar` The variable holding the currently selected
-        optional annotation """
-        return self._tk_optional_annotation
 
     @property
     def _helptext(self):
@@ -454,6 +446,10 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame.pack(side=tk.TOP, fill=tk.Y)
         buttons = dict()
         for display in self.key_bindings.values():
+            var = tk.BooleanVar()
+            var.set(False)
+            self._tk_optional_annotations[display] = var
+
             lookup = "landmarks" if display == "mesh" else display
             button = ttk.Button(frame,
                                 image=get_images().icons[lookup],
@@ -476,15 +472,13 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         if not self._faces_cache.is_initialized:
             return
-        display = None if display == self._tk_optional_annotation.get() else display
-        for title, button in self._buttons.items():
-            if display == title:
-                button.configure(style="display_selected.TButton")
-                button.state(["pressed", "focus"])
-            else:
-                button.configure(style="display_deselected.TButton")
-                button.state(["!pressed", "!focus"])
-        self._tk_optional_annotation.set(display)
+        is_pressed = not self._tk_optional_annotations[display].get()
+        style = "display_selected.TButton" if is_pressed else "display_deselected.TButton"
+        state = ["pressed", "focus"] if is_pressed else ["!pressed", "!focus"]
+        btn = self._buttons[display]
+        btn.configure(style=style)
+        btn.state(state)
+        self._tk_optional_annotations[display].set(is_pressed)
 
     def enable_buttons(self):
         """ Enable buttons when the faces have completed loading """
@@ -505,14 +499,14 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, parent, tk_optional_annotation, faces_cache,
+    def __init__(self, parent, tk_optional_annotations, faces_cache,
                  frames, alignments, display_frame, progress_bar):
-        logger.debug("Initializing %s: (parent: %s, tk_optional_annotation: %s, faces_cache: %s, "
+        logger.debug("Initializing %s: (parent: %s, tk_optional_annotations: %s, faces_cache: %s, "
                      "frames: %s, display_frame: %s)", self.__class__.__name__, parent,
-                     tk_optional_annotation, faces_cache, frames, display_frame)
+                     tk_optional_annotations, faces_cache, frames, display_frame)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
-        self._tk_optional_annotation = tk_optional_annotation
+        self._tk_optional_annotations = tk_optional_annotations
         self._progress_bar = progress_bar
         self._faces_cache = faces_cache
         self._frames = frames
@@ -551,10 +545,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         return dict(mapping=mapping, items_per_mesh=len(mapping))
 
     @property
-    def optional_annotation(self):
+    def optional_annotations(self):
         """ str: The currently selected optional annotation. """
-        retval = self._tk_optional_annotation.get()
-        return None if retval == "None" else retval
+        return {opt: val.get() for opt, val in self._tk_optional_annotations.items()}
 
     @property
     def tk_control_colors(self):
@@ -607,8 +600,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     def _set_tk_callbacks(self):
         """ Set the tkinter variable call backs """
         self._frames.tk_navigation_mode.trace("w", self.switch_filter)
-        self._tk_optional_annotation.trace("w", self._toggle_annotations)
         self.tk_control_colors["Mesh"].trace("w", self.update_mesh_color)
+        for opt, var in self._tk_optional_annotations.items():
+            var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
 
     # << POST INIT FUNCTIONS >> #
     def set_column_count(self, frame_width):
@@ -658,13 +652,16 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ Updates hex code F values to A for the given annotation color key """
         return self.control_colors[color_key].replace("f", "a")
 
-    def _toggle_annotations(self, *args):  # pylint: disable=unused-argument
+    def _toggle_annotations(self, annotation):
         """ Toggle additional annotations on or off. """
         if not self._faces_cache.is_initialized:
             return
-        self._faces_cache.update_tk_face_for_masks(self._display_frame.tk_selected_mask.get(),
-                                                   self.optional_annotation == "mask")
-        self.active_filter.toggle_annotation()
+        state = self._tk_optional_annotations[annotation].get()
+        if annotation == "mask":
+            self._faces_cache.update_tk_face_for_masks(self._display_frame.tk_selected_mask.get(),
+                                                       state)
+        else:
+            self.active_filter.toggle_annotation(state)
 
     # << FILTERS >> #
     def switch_filter(self, *args):  # pylint: disable=unused-argument
@@ -681,17 +678,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             return
         self._active_filter.de_initialize()
         self._active_filter = FaceFilter(self, nav_mode)
-
-    # << UTILS >> #
-    def get_mesh_points(self, landmarks):
-        # TODO THIS IS DUPED. LOOK TO CENTRALIZE SOMEHOW
-        """ Obtain the mesh annotation points for a given set of landmarks. """
-        is_poly = []
-        mesh_landmarks = []
-        for key, val in self._landmark_mapping.items():
-            is_poly.append(key in ("right_eye", "left_eye", "mouth"))
-            mesh_landmarks.append(landmarks[val[0]:val[1]])
-        return dict(is_poly=is_poly, landmarks=mesh_landmarks)
 
     def frame_index_from_object(self, item_id):
         """ Retrieve the frame index that an object belongs to from it's tag.
@@ -774,7 +760,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                                                      size=self._faces_cache.size,
                                                                      with_landmarks=True)
         tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face))
-        mesh_landmarks = self.get_mesh_points(landmarks)
+        mesh_landmarks = self._faces_cache.get_mesh_points(landmarks)
         return tk_face, mesh_landmarks
 
 

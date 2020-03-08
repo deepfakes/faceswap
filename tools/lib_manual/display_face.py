@@ -183,7 +183,7 @@ class ObjectCreator():
     def create_mesh_annotations(self, color, mesh_landmarks, offset, tag):
         """ Create the coordinates for the face mesh. """
         retval = []
-        state = "normal" if self._canvas.optional_annotation == "landmarks" else "hidden"
+        state = "normal" if self._canvas.optional_annotations["mesh"] else "hidden"
         kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
         for is_poly, landmarks in zip(mesh_landmarks["is_poly"], mesh_landmarks["landmarks"]):
             key = "polygon" if is_poly else "line"

@@ -74,10 +74,10 @@ class FaceFilter():
     def _set_object_display_state(self):
         """ Hide annotations that are not relevant for this filter type and show those
         that are. """
-        opt = self._canvas.optional_annotation
+        mesh_state = self._canvas.optional_annotations["mesh"]
         for state, tag in self._view_states[self._filter_type].items():
             # TODO When mask comes in this will need to be more complex
-            tag += "_image" if state == "normal" and opt is None else ""
+            tag += "_image" if state == "normal" and not mesh_state else ""
             logger.debug("Setting state to '%s' for tag '%s' in filter_type: '%s'",
                          state, tag, self._filter_type)
             self._canvas.itemconfig(tag, state=state)
@@ -193,8 +193,8 @@ class FaceFilter():
             face.
          """
         # Display hidden annotations so they get tagged
-        hidden_tags = [tag for key, tag in self._optional_tags.items()
-                       if key != self._canvas.optional_annotation]
+        mesh_state = self._canvas.optional_annotations["mesh"]
+        hidden_tags = [tag for key, tag in self._optional_tags.items()] if not mesh_state else []
         for tag in hidden_tags:
             self._canvas.itemconfig(tag, state="normal")
         first_face_xy = self._canvas.coords(self.image_ids[start_index])
@@ -227,13 +227,12 @@ class FaceFilter():
         for tag in hidden_tags:
             self._canvas.itemconfig(tag, state="hidden")
 
-    def toggle_annotation(self):
+    def toggle_annotation(self, mesh_state):
         """ Toggle additional object annotations on or off. """
         if not self._optional_tags:
             return
-        display = self._canvas.optional_annotation
-        if display == "mesh":
-            self._canvas.itemconfig(self._optional_tags[display], state="normal")
+        if mesh_state:
+            self._canvas.itemconfig(self._optional_tags["mesh"], state="normal")
         else:
             for tag in self._optional_tags.values():
                 self._canvas.itemconfig(tag, state="hidden")
