@@ -613,6 +613,7 @@ class UpdateFace():
     # << UPDATE METHODS >> #
     def update(self, frame_index, face_index):
         """ Update the currently selected face on editor update """
+        # TODO Decide what to update based on current edit mode
         tk_face, mesh_landmarks = self._canvas.get_tk_face_and_landmarks(frame_index, face_index)
         self._faces_cache.update(frame_index, face_index, tk_face, mesh_landmarks)
         image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]

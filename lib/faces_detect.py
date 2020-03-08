@@ -613,6 +613,17 @@ class Mask():
                      affine_matrix, mask.max(), interpolator)
         self._affine_matrix = self._adjust_affine_matrix(mask.shape[0], affine_matrix)
         self._interpolator = interpolator
+        self.replace_mask(mask)
+
+    def replace_mask(self, mask):
+        """ Replace the existing :attr:`_mask` with the given mask.
+
+        Parameters
+        ----------
+        mask: numpy.ndarray
+            The mask that is to be added as output from :mod:`plugins.extract.mask`
+        """
+        # TODO Check for dtype and max
         mask = (cv2.resize(mask,
                            (self.stored_size, self.stored_size),
                            interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")

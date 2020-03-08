@@ -624,6 +624,14 @@ class AlignmentsData():
         self._tk_edited.set(True)
         self._frames.tk_update.set(True)
 
+    def update_mask(self, mask, mask_type, index):
+        """ Update the mask on an edit """
+        self._check_for_new_alignments()
+        self._face_index = index
+        self.current_face.mask[mask_type].replace_mask(mask)
+        self._tk_edited.set(True)
+        self._frames.tk_update.set(True)
+
     def add_face(self, pnt_x, width, pnt_y, height):
         """ Add a face to the current frame with the given dimensions.
 
@@ -699,7 +707,12 @@ class AlignmentsData():
         self._remove_idx = None
         return retval
 
-    def get_aligned_face_at_index(self, index, frame_index=None, size=None, with_landmarks=False):
+    def get_aligned_face_at_index(self,
+                                  index,
+                                  frame_index=None,
+                                  size=None,
+                                  with_landmarks=False,
+                                  with_mask=False):
         """ Return the aligned face sized for frame viewer.
 
         Parameters
@@ -720,9 +733,12 @@ class AlignmentsData():
             face = self.latest_alignments[frame_name][index]
         face.load_aligned(self._frames.current_frame, size=size, force=True)
         retval = face.aligned_face.copy()
+        retval = [retval] if with_landmarks or with_mask else retval
         face.aligned["face"] = None
         if with_landmarks:
-            retval = (retval, face.aligned_landmarks)
+            retval.append(face.aligned_landmarks)
+        if with_mask:
+            retval.append(face.mask)
         return retval
 
     def copy_alignments(self, direction):
@@ -852,9 +868,15 @@ class FaceCache():
         # Lists are thread safe (for our purposes) PhotoImage is not.
         return bytes_string
 
-    def generate_tk_face_data(self, image):
+    def generate_tk_face_data(self, image, mask=None):
         """ Generate a new :tkinter:`PhotoImage` object with an empty mask in the 4th channel. """
-        face = np.concatenate((image[..., :3], self._alpha[..., None]), axis=-1)
+        mask = self._alpha if mask is None else mask
+        if mask.shape[0] != self._face_size:
+            mask = cv2.resize(mask,
+                              (self._face_size, self._face_size),
+                              interpolation=cv2.INTER_AREA)
+
+        face = np.concatenate((image[..., :3], mask[..., None]), axis=-1)
         return cv2.imencode(".png", face, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring()
 
     def set_load_complete(self):

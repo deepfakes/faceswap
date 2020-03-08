@@ -755,11 +755,15 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
     def get_tk_face_and_landmarks(self, frame_index, face_index):
         """ Obtain the resized photo image face and scaled landmarks """
-        face, landmarks = self._alignments.get_aligned_face_at_index(face_index,
-                                                                     frame_index=frame_index,
-                                                                     size=self._faces_cache.size,
-                                                                     with_landmarks=True)
-        tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face))
+        face, landmarks, mask = self._alignments.get_aligned_face_at_index(
+            face_index,
+            frame_index=frame_index,
+            size=self._faces_cache.size,
+            with_landmarks=True,
+            with_mask=True)
+        mask = mask.get(self._display_frame.tk_selected_mask.get().lower(), None)
+        mask = mask if mask is None else mask.mask.squeeze()
+        tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face, mask))
         mesh_landmarks = self._faces_cache.get_mesh_points(landmarks)
         return tk_face, mesh_landmarks
 

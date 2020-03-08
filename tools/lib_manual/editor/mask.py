@@ -394,10 +394,15 @@ class Mask(Editor):
                  tuple(line[1]),
                  0 if self._edit_mode == "erase" else 255,
                  brush_radius * 2)
-
+        self._mask_to_alignments(face_idx)
         self._drag_data["starting_location"] = np.array((event.x, event.y))
-        self._frames.tk_update.set(True)
         self._update_cursor(event)
+
+    def _mask_to_alignments(self, face_index):
+        """ Update the annotated mask to alignments. """
+        mask_type = self._control_vars["Mask"]["display"]["MaskType"].get().lower()
+        mask = self._meta["mask"][face_index].astype("float32") / 255.0
+        self._alignments.update_mask(mask, mask_type, face_index)
 
     def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
         """ Adjust the brush radius up or down by 1px.
