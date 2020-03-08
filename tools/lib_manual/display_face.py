@@ -62,7 +62,7 @@ class FacesViewerLoader():
         """ Retrieve latest loaded faces and convert to :class:`PIL.ImakeTk.PhotoImage`. """
         update_faces = self._faces_cache.tk_faces[frame_index:]
         frames_count = len(update_faces)
-        tk_faces = [[tk.PhotoImage(data=b64_face) for b64_face in faces] for faces in update_faces]
+        tk_faces = [[tk.PhotoImage(data=strbyte) for strbyte in faces] for faces in update_faces]
         self._faces_cache.tk_faces[frame_index:frames_count + frame_index] = tk_faces
         return tk_faces, frames_count
 
@@ -112,7 +112,7 @@ class ObjectCreator():
         ----------
         coordinates: tuple
             The top left (x, y) coordinates for the annotations' position in the Faces Viewer
-        tk_face: :class:`PIL.ImageTk.PhotoImage`
+        tk_face: :class:`tkinter.PhotoImage`
             The face to be used for the image annotation
         mesh_landmarks: dict
             A dictionary containing the keys `landmarks` holding a `list` of :class:`numpy.ndarray`

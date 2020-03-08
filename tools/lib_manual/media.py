@@ -4,7 +4,6 @@ import logging
 import bisect
 import os
 import tkinter as tk
-from base64 import b64encode, b64decode
 from copy import deepcopy
 
 import cv2
@@ -808,7 +807,7 @@ class FaceCache():
 
     @property
     def tk_faces(self):
-        """ list: Item for each frame containing a list of :class:`PIL.ImageTK.PhotoImage` objects
+        """ list: Item for each frame containing a list of :class:`tkinter.PhotoImage` objects
         for each face. """
         return self._tk_faces
 
@@ -847,12 +846,16 @@ class FaceCache():
     def _load_face(self, frame, face):
         """ Load the resized aligned face. """
         face.load_aligned(frame, size=self._face_size, force=True)
-        aligned_face = np.concatenate((face.aligned_face, self._alpha[..., None]), axis=-1)
+        bytes_string = self.generate_tk_face_data(face.aligned_face)
         face.aligned["face"] = None
         # TODO Document that this is set to a photo image from the canvas.
         # Lists are thread safe (for our purposes) PhotoImage is not.
-        face_string = b64encode(cv2.imencode(".png", aligned_face)[1])
-        return face_string
+        return bytes_string
+
+    def generate_tk_face_data(self, image):
+        """ Generate a new :tkinter:`PhotoImage` object with an empty mask in the 4th channel. """
+        face = np.concatenate((image[..., :3], self._alpha[..., None]), axis=-1)
+        return cv2.imencode(".png", face, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring()
 
     def set_load_complete(self):
         """ TODO """
@@ -929,12 +932,13 @@ class FaceCache():
                               interpolation=cv2.INTER_AREA)
         return mask
 
-    def _update_mask_to_photoimage(self, tk_face, mask):
+    @staticmethod
+    def _update_mask_to_photoimage(tk_face, mask):
         """ Adjust the mask of the current tk_face """
-        img = cv2.imdecode(np.frombuffer(b64decode(tk_face.cget("data")), dtype="uint8"),
+        img = cv2.imdecode(np.fromstring(tk_face.cget("data"), dtype="uint8"),
                            cv2.IMREAD_UNCHANGED)
         img[..., -1] = mask
-        tk_face.put(b64encode(cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1]))
+        tk_face.put(cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring())
 
     def _start_progress(self):
         """ Start the progress bar. """

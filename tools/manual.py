@@ -10,8 +10,6 @@ from time import sleep
 
 import numpy as np
 
-from PIL import Image, ImageTk
-
 from lib.gui.control_helper import ControlPanel
 from lib.gui.custom_widgets import StatusBar, Tooltip
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
@@ -771,12 +769,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
     def get_tk_face_and_landmarks(self, frame_index, face_index):
         """ Obtain the resized photo image face and scaled landmarks """
-        # TODO Switch to base64 photoimage data
         face, landmarks = self._alignments.get_aligned_face_at_index(face_index,
                                                                      frame_index=frame_index,
                                                                      size=self._faces_cache.size,
                                                                      with_landmarks=True)
-        tk_face = ImageTk.PhotoImage(Image.fromarray(face[..., 2::-1]))
+        tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face))
         mesh_landmarks = self.get_mesh_points(landmarks)
         return tk_face, mesh_landmarks
 
