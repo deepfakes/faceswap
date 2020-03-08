@@ -61,16 +61,23 @@ class Manual(tk.Tk):
                                        video_meta_data)
         self._alignments.link_frames(self._frames)
         self._alignments.load_faces()
-        faces_cache = FaceCache(self._alignments, self._frames, scaling_factor)
-        self._wait_for_threads(extractor, video_meta_data)
 
         self._containers = self._create_containers()
+        progress_bar = StatusBar(self._containers["bottom"], hide_status=True)
+        faces_cache = FaceCache(self._alignments,
+                                self._frames,
+                                scaling_factor,
+                                progress_bar,
+                                self._containers["main"])
+        self._wait_for_threads(extractor, video_meta_data)
+
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        faces_cache,
                                        self._frames,
                                        self._alignments,
-                                       self._display)
+                                       self._display,
+                                       progress_bar)
 
         self._options = Options(self._containers["top"], self._display)
         self._display.tk_selected_action.set("View")
@@ -332,7 +339,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     """
-    def __init__(self, parent, faces_cache, frames, alignments, display_frame):
+    def __init__(self, parent, faces_cache, frames, alignments, display_frame, progress_bar):
         logger.debug("Initializing %s: (parent: %s, faces: %s, display_frame: %s)",
                      self.__class__.__name__, parent, faces_cache, display_frame)
         super().__init__(parent)
@@ -348,11 +355,11 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    faces_cache,
                                    frames,
                                    alignments,
-                                   display_frame)
+                                   display_frame,
+                                   progress_bar)
         scrollbar_width = self._add_scrollbar()
         self._canvas.set_column_count(self.winfo_width() - scrollbar_width)
 
-        progress_bar = StatusBar(parent, hide_status=True)
         FacesViewerLoader(self._canvas,
                           faces_cache,
                           frames.frame_count,
@@ -386,6 +393,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._actions_frame.on_click(self._actions_frame.key_bindings[key])
 
 
+# TODO Make it so that mesh + masks are not inter-connected
 class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ The left hand action frame holding the action buttons.
 
@@ -500,13 +508,14 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         The object that holds the cache of frames.
     """
     def __init__(self, parent, tk_optional_annotation, faces_cache,
-                 frames, alignments, display_frame):
+                 frames, alignments, display_frame, progress_bar):
         logger.debug("Initializing %s: (parent: %s, tk_optional_annotation: %s, faces_cache: %s, "
                      "frames: %s, display_frame: %s)", self.__class__.__name__, parent,
                      tk_optional_annotation, faces_cache, frames, display_frame)
-        super().__init__(parent, bd=0, highlightthickness=0)
+        super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._tk_optional_annotation = tk_optional_annotation
+        self._progress_bar = progress_bar
         self._faces_cache = faces_cache
         self._frames = frames
         self._alignments = alignments
@@ -655,6 +664,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ Toggle additional annotations on or off. """
         if not self._faces_cache.is_initialized:
             return
+        self._faces_cache.update_tk_face_for_masks(self._display_frame.tk_selected_mask.get(),
+                                                   self.optional_annotation == "mask")
         self.active_filter.toggle_annotation()
 
     # << FILTERS >> #
@@ -760,6 +771,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
     def get_tk_face_and_landmarks(self, frame_index, face_index):
         """ Obtain the resized photo image face and scaled landmarks """
+        # TODO Switch to base64 photoimage data
         face, landmarks = self._alignments.get_aligned_face_at_index(face_index,
                                                                      frame_index=frame_index,
                                                                      size=self._faces_cache.size,

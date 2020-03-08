@@ -113,6 +113,12 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return {key: val["color"].tk_var for key, val in self._canvas.annotation_formats.items()}
 
     @property
+    def tk_selected_mask(self):
+        """ :dict: Editor key with :class:`tkinter.StringVar` containing the selected color hex
+        code for each annotation """
+        return self._canvas.control_tk_vars["Mask"]["display"]["MaskType"]
+
+    @property
     def colors(self):
         """ :dict: color name to hex code mapping """
         return self._canvas.colors

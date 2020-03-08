@@ -5,13 +5,13 @@ import platform
 import tkinter as tk
 
 import numpy as np
-from PIL import Image, ImageTk
 
 from lib.gui.custom_widgets import RightClickMenu
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO Make it so user can't save until faces are loaded (so alignments dict doesn't change)
+# TODO Adding lots of faces during load leads to faces duplicating
 
 
 class FacesViewerLoader():
@@ -37,7 +37,6 @@ class FacesViewerLoader():
         self._update_progress(frame_index)
         tk_faces, frames_count = self._convert_faces_to_photoimage(frame_index)
         frame_landmarks = self._faces_cache.mesh_landmarks[frame_index:frames_count + frame_index]
-
         for faces, mesh_landmarks in zip(tk_faces, frame_landmarks):
             for face, landmarks in zip(faces, mesh_landmarks):
                 coords = self._canvas.coords_from_index(faces_seen)
@@ -47,9 +46,7 @@ class FacesViewerLoader():
                     self._canvas.configure(scrollregion=self._canvas.bbox("all"))
                 faces_seen += 1
             frame_index += 1
-        # TODO sometimes this gets stuck, so leave this debug
-        print(self._faces_cache.is_initialized, frame_index, self._frame_count)
-        if self._faces_cache.is_initialized and frame_index == self._frame_count:
+        if frame_index == self._frame_count:
             self._on_load_complete()
         else:
             self._canvas.after(1000, self._load_faces, faces_seen, frame_index)
@@ -65,8 +62,7 @@ class FacesViewerLoader():
         """ Retrieve latest loaded faces and convert to :class:`PIL.ImakeTk.PhotoImage`. """
         update_faces = self._faces_cache.tk_faces[frame_index:]
         frames_count = len(update_faces)
-        tk_faces = [[ImageTk.PhotoImage(Image.fromarray(img)) for img in faces]
-                    for faces in update_faces]
+        tk_faces = [[tk.PhotoImage(data=b64_face) for b64_face in faces] for faces in update_faces]
         self._faces_cache.tk_faces[frame_index:frames_count + frame_index] = tk_faces
         return tk_faces, frames_count
 
@@ -91,6 +87,7 @@ class FacesViewerLoader():
         self._progress_bar.stop()
         self._canvas.switch_filter()
         self._canvas.active_frame.reload_annotations()
+        self._faces_cache.set_load_complete()
 
     def _on_load_remove_faces(self, existing_count, new_count, frame_index):
         """ Remove any faces that have been deleted whilst face viewer was loading. """
@@ -353,7 +350,7 @@ class ActiveFrame():
 
     @property
     def _tk_faces(self):
-        """ list: The photoimage faces for the current frame """
+        """ list: The :class:`tkinter.PhotoImage` faces for the current frame """
         return self._faces_cache.tk_faces[self._frame_index]
 
     @property

@@ -43,7 +43,7 @@ class ExtractBox(Editor):
             self._object_tracker(keys[1], "polygon", idx, 0, box, kwargs)
             # Ensure extract box is above other annotations for mouse grabber
             self._canvas.tag_raise(self._objects[keys[1]][idx][0])
-        logger.trace("Updated extract box annotations: %s", {key: self._objects[key]
+        logger.trace("Updated extract box annotations: %s", {key: self._objects.get(key, None)
                                                              for key in keys})
 
     # << MOUSE HANDLING >>

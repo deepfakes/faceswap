@@ -232,7 +232,7 @@ class FaceFilter():
         if not self._optional_tags:
             return
         display = self._canvas.optional_annotation
-        if display is not None:
+        if display == "mesh":
             self._canvas.itemconfig(self._optional_tags[display], state="normal")
         else:
             for tag in self._optional_tags.values():

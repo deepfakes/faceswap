@@ -4,6 +4,7 @@ import logging
 import bisect
 import os
 import tkinter as tk
+from base64 import b64encode, b64decode
 from copy import deepcopy
 
 import cv2
@@ -316,7 +317,7 @@ class AlignmentsData():
         return retval
 
     @property
-    def _latest_alignments(self):
+    def latest_alignments(self):
         """ dict: The filename as key, and either the modified alignments as values (if they exist)
         or the saved alignments """
         return {key: val.get("new", val["saved"]) for key, val in self._alignments.items()}
@@ -326,7 +327,7 @@ class AlignmentsData():
         """ list: list of the current :class:`lib.faces_detect.DetectedFace` objects. Returns
         modified alignments if they are modified, otherwise original saved alignments. """
         # TODO use get and return a default for when the frame don't exist
-        return self._latest_alignments[self._frames.current_meta_data["filename"]]
+        return self.latest_alignments[self._frames.current_meta_data["filename"]]
 
     @property
     def saved_alignments(self):
@@ -350,7 +351,7 @@ class AlignmentsData():
 
         The list needs to be calculated on the fly as the number of faces in a frame
         can change based on user actions. """
-        alignments = self._latest_alignments
+        alignments = self.latest_alignments
         return [len(alignments[key]) for key in sorted(alignments)]
 
     @property
@@ -362,23 +363,23 @@ class AlignmentsData():
     @property
     def _frames_with_faces(self):
         """ list: A list of frame numbers that contain faces. """
-        alignments = self._latest_alignments
+        alignments = self.latest_alignments
         return [key for key in sorted(alignments) if len(alignments[key]) != 0]
 
     @property
     def with_face_count(self):
         """ int: The count of frames that contain no faces """
-        return sum(1 for faces in self._latest_alignments.values() if len(faces) != 0)
+        return sum(1 for faces in self.latest_alignments.values() if len(faces) != 0)
 
     @property
     def no_face_count(self):
         """ int: The count of frames that contain no faces """
-        return sum(1 for faces in self._latest_alignments.values() if len(faces) == 0)
+        return sum(1 for faces in self.latest_alignments.values() if len(faces) == 0)
 
     @property
     def multi_face_count(self):
         """ int: The count of frames that contain multiple faces """
-        return sum(1 for faces in self._latest_alignments.values() if len(faces) > 1)
+        return sum(1 for faces in self.latest_alignments.values() if len(faces) > 1)
 
     @property
     def tk_unsaved(self):
@@ -678,7 +679,7 @@ class AlignmentsData():
 
         filename = sorted(self._alignments)[frame_index]
         self._check_for_new_alignments(filename=filename)
-        del self._latest_alignments[filename][face_index]
+        del self.latest_alignments[filename][face_index]
         self._face_count_modified = True
 
     def reset_face_count_modified(self):
@@ -717,7 +718,7 @@ class AlignmentsData():
             face = self.current_faces[index]
         else:
             frame_name = sorted(self._alignments)[frame_index]
-            face = self._latest_alignments[frame_name][index]
+            face = self.latest_alignments[frame_name][index]
         face.load_aligned(self._frames.current_frame, size=size, force=True)
         retval = face.aligned_face.copy()
         face.aligned["face"] = None
@@ -748,7 +749,7 @@ class AlignmentsData():
                 return
         frame_idx = frames_with_faces[idx]
         logger.debug("Copying frame: %s", frame_idx)
-        self.current_faces.extend(deepcopy(self._latest_alignments[frame_idx]))
+        self.current_faces.extend(deepcopy(self.latest_alignments[frame_idx]))
         for face in self.current_faces:
             face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._face_index = len(self.current_faces) - 1
@@ -769,13 +770,16 @@ class AlignmentsData():
 
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
-    def __init__(self, alignments, frames, scaling_factor):
+    def __init__(self, alignments, frames, scaling_factor, progress_bar, root):
         logger.debug("Initializing %s: (alignments: %s, frames: %s, scaling_factor: %s)",
                      self.__class__.__name__, alignments, frames, scaling_factor)
         self._alignments = alignments
         self._frames = frames
-        self._tk_load_complete = self._set_load_complete_var()
         self._face_size = int(round(96 * scaling_factor))
+        self._root = root
+        self._progress_bar = progress_bar
+        self._tk_load_complete = self._set_load_complete_var()
+        self._alpha = np.ones((self._face_size, self._face_size), dtype="uint8") * 255
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -784,6 +788,7 @@ class FaceCache():
                                       nose=(27, 36),
                                       jaw=(0, 17),
                                       chin=(8, 11))
+        self._current_mask_type = None
         self._tk_faces = []
         self._mesh_landmarks = []
         self._background_load_faces()
@@ -838,16 +843,20 @@ class FaceCache():
                 mesh_landmarks.append(self.get_mesh_points(face.aligned_landmarks))
             self._tk_faces.append(tk_faces)
             self._mesh_landmarks.append(mesh_landmarks)
-        self._tk_load_complete.set(True)
 
     def _load_face(self, frame, face):
         """ Load the resized aligned face. """
         face.load_aligned(frame, size=self._face_size, force=True)
-        aligned_face = face.aligned_face[..., 2::-1]
+        aligned_face = np.concatenate((face.aligned_face, self._alpha[..., None]), axis=-1)
         face.aligned["face"] = None
         # TODO Document that this is set to a photo image from the canvas.
         # Lists are thread safe (for our purposes) PhotoImage is not.
-        return aligned_face
+        face_string = b64encode(cv2.imencode(".png", aligned_face)[1])
+        return face_string
+
+    def set_load_complete(self):
+        """ TODO """
+        self._tk_load_complete.set(True)
 
     def get_mesh_points(self, landmarks):
         """ Obtain the mesh annotation points for a given set of landmarks. """
@@ -878,3 +887,70 @@ class FaceCache():
                      "mesh_landmarks: %s)", frame_index, face_index, tk_face, mesh_landmarks)
         self._tk_faces[frame_index][face_index] = tk_face
         self._mesh_landmarks[frame_index][face_index] = mesh_landmarks
+
+    def update_tk_face_for_masks(self, mask_type, is_enabled):
+        """ Load the selected masks """
+        mask_type = None if not is_enabled or mask_type == "" else mask_type.lower()
+        if not self.is_initialized or mask_type == self._current_mask_type:
+            return
+        self._start_progress()
+        if mask_type is None:
+            self._unload_masks()
+        else:
+            self._load_masks(mask_type)
+        self._stop_progress()
+        self._current_mask_type = mask_type
+
+    def _unload_masks(self):
+        """ Remove mask from stored face. """
+        for frame_idx, tk_faces in enumerate(self._tk_faces):
+            self._update_progress(None, frame_idx)
+            for tk_face in tk_faces:
+                self._update_mask_to_photoimage(tk_face, self._alpha)
+
+    def _load_masks(self, mask_type):
+        """ Load the selected masks """
+        latest_alignments = self._alignments.latest_alignments
+        for frame_idx, (key, tk_faces) in enumerate(zip(sorted(latest_alignments),
+                                                        self._tk_faces)):
+            self._update_progress(mask_type, frame_idx)
+            for face, tk_face in zip(latest_alignments[key], tk_faces):
+                self._update_mask_to_photoimage(tk_face, self._get_mask(mask_type, face))
+
+    def _get_mask(self, mask_type, detected_face):
+        """ Obtain the mask from the alignments file. """
+        if mask_type is None:
+            return self._alpha
+        mask_class = detected_face.mask.get(mask_type, None)
+        mask = self._alpha if mask_class is None else mask_class.mask.squeeze()
+        if mask.shape[0] != self._face_size:
+            mask = cv2.resize(mask,
+                              (self._face_size, self._face_size),
+                              interpolation=cv2.INTER_AREA)
+        return mask
+
+    def _update_mask_to_photoimage(self, tk_face, mask):
+        """ Adjust the mask of the current tk_face """
+        img = cv2.imdecode(np.frombuffer(b64decode(tk_face.cget("data")), dtype="uint8"),
+                           cv2.IMREAD_UNCHANGED)
+        img[..., -1] = mask
+        tk_face.put(b64encode(cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1]))
+
+    def _start_progress(self):
+        """ Start the progress bar. """
+        self._progress_bar.start(mode="determinate")
+        self._root.config(cursor="watch")
+
+    def _update_progress(self, mask_type, frame_index):
+        """ Update the progress bar. """
+        position = frame_index + 1
+        progress = int(round((position / self._frames.frame_count) * 100))
+        msg = "Removing Mask: " if mask_type is None else "Loading {} Mask: ".format(mask_type)
+        msg += "{}/{} - {}%".format(position, self._frames.frame_count, progress)
+        self._progress_bar.progress_update(msg, progress)
+        self._root.update_idletasks()
+
+    def _stop_progress(self):
+        """ Stop the progress bar. """
+        self._progress_bar.stop()
+        self._root.config(cursor="")
