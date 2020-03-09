@@ -404,14 +404,17 @@ class Highlighter():
         self._size = canvas._faces_cache.size
         self._canvas = canvas
         self._faces_cache = canvas._faces_cache
-        self._tk_selected_editor = canvas._display_frame.tk_selected_action
-        self._tk_selected_mask = canvas._display_frame.tk_selected_mask
-        self._tk_optional_annotations = canvas._tk_optional_annotations
+        self._tk_vars = dict(selected_editor=canvas._display_frame.tk_selected_action,
+                             selected_mask=canvas._display_frame.tk_selected_mask,
+                             optional_annotations=canvas._tk_optional_annotations)
+        self._objects = dict(image_ids=[], mesh_ids=[])
         self._face_count = 0
         self._frame_index = 0
         self._hidden_boxes_count = 0
         self._boxes = []
+        self._current_mask_state = False
         self._prev_objects = dict()
+        self._tk_vars["selected_editor"].trace("w", lambda *e: self._highlight_annotations())
         logger.debug("Initialized: %s", self.__class__.__name__,)
 
     @property
@@ -423,22 +426,29 @@ class Highlighter():
         """ Highlight the currently selected faces """
         self._face_count = len(image_ids)
         self._frame_index = frame_index
+        self._objects = dict(image_ids=image_ids, mesh_ids=mesh_ids)
+        self._current_mask_state = self._tk_vars["optional_annotations"]["mask"].get()
         self._create_new_boxes()
-        self._revert_last_mask()
-        self._hide_unused_boxes()
-        self._revert_last_mesh()
+        self._revert_last_frame()
         if self._face_count == 0:
             return
-
-        self._highlight_mask()
-        for image_id, box in zip(image_ids, self._boxes[:self._face_count]):
-            top_left = np.array(self._canvas.coords(image_id))
-            self._highlight_box(box, top_left)
-        self._highlight_mesh(mesh_ids)
+        self._highlight_annotations()
 
         top = self._canvas.coords(self._boxes[0])[1] / self._canvas.bbox("all")[3]
         if top != self._canvas.yview()[0]:
             self._canvas.yview_moveto(top)
+
+    def _revert_last_frame(self):
+        self._revert_last_mask()
+        self._hide_unused_boxes()
+        self._revert_last_mesh()
+
+    def _highlight_annotations(self):
+        self._highlight_mask()
+        for image_id, box in zip(self._objects["image_ids"], self._boxes[:self._face_count]):
+            top_left = np.array(self._canvas.coords(image_id))
+            self._highlight_box(box, top_left)
+        self._highlight_mesh()
 
     # << Add new highlighters >> #
     def _create_new_boxes(self):
@@ -474,14 +484,14 @@ class Highlighter():
             return
         color = self._canvas.get_muted_color("Mesh")
         kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
-        state = "normal" if self._tk_optional_annotations["mesh"].get() else "hidden"
+        state = "normal" if self._tk_vars["optional_annotations"]["mesh"].get() else "hidden"
         for mesh_id in self._prev_objects["mesh"]:
             self._canvas.itemconfig(mesh_id, state=state, **kwargs[self._canvas.type(mesh_id)])
         self._prev_objects["mesh"] = None
 
     def _revert_last_mask(self):
         if (self._prev_objects.get("mask", None) is None
-                or self._tk_optional_annotations["mask"].get()):
+                or self._tk_vars["optional_annotations"]["mask"].get()):
             return
         self._faces_cache.update_selected(self._prev_objects["mask"], None)
         self._prev_objects["mask"] = None
@@ -496,21 +506,26 @@ class Highlighter():
             self._hidden_boxes_count -= 1
             self._canvas.itemconfig(box, state="normal")
 
-    def _highlight_mesh(self, mesh_ids):
-        if self._tk_selected_editor.get() == "Mask":
-            return
+    def _highlight_mesh(self):
+        show_mesh = (self._tk_vars["selected_editor"].get() != "Mask"
+                     or self._tk_vars["optional_annotations"]["mesh"].get())
         color = self._canvas.control_colors["Mesh"]
         kwargs = dict(polygon=dict(fill="", outline=color),
                       line=dict(fill=color))
-        for mesh_id in mesh_ids:
-            self._canvas.itemconfig(mesh_id, **kwargs[self._canvas.type(mesh_id)], state="normal")
-        self._prev_objects["mesh"] = mesh_ids
+        state = "normal" if show_mesh else "hidden"
+        self._prev_objects["mesh"] = []
+        for mesh_id in self._objects["mesh_ids"]:
+            self._canvas.itemconfig(mesh_id, **kwargs[self._canvas.type(mesh_id)], state=state)
+            self._prev_objects["mesh"].append(mesh_id)
 
     def _highlight_mask(self):
-        if self._tk_selected_editor.get() != "Mask" or self._tk_optional_annotations["mask"].get():
+        show_mask = self._tk_vars["selected_editor"].get() == "Mask"
+        if show_mask == self._current_mask_state:
             return
-        self._faces_cache.update_selected(self._frame_index, self._tk_selected_mask.get())
+        mask_type = self._tk_vars["selected_mask"].get() if show_mask else None
+        self._faces_cache.update_selected(self._frame_index, mask_type)
         self._prev_objects["mask"] = self._frame_index
+        self._current_mask_state = show_mask
 
 
 class UpdateFace():

@@ -23,6 +23,8 @@ class Mask(Editor):
                         "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
         super().__init__(canvas, alignments, frames,
                          control_text=control_text, key_bindings=key_bindings)
+        # Bind control click for reverse painting
+        self._canvas.bind("<Control-ButtonPress-1>", self._control_click)
         self._mask_type = self._set_tk_mask_change_callback()
         self._mouse_location = [
             self._canvas.create_oval(0, 0, 0, 0, outline="black", state="hidden"), False]
@@ -348,7 +350,18 @@ class Mask(Editor):
         self._mouse_location[1] = obj_idx
         self._canvas.update_idletasks()
 
-    def _drag_start(self, event):
+    def _control_click(self, event):
+        """ The action to perform when the user starts clicking and dragging the mouse whilst
+        down the control button
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        self._drag_start(event, control_click=True)
+
+    def _drag_start(self, event, control_click=False):  # pylint:disable=arguments-differ
         """ The action to perform when the user starts clicking and dragging the mouse.
 
         Collect information about the object being clicked on and add to :attr:`_drag_data`
@@ -366,6 +379,7 @@ class Mask(Editor):
             self._zoom_face(face_idx)
         else:
             self._drag_data["starting_location"] = np.array((event.x, event.y))
+            self._drag_data["control_click"] = control_click
             self._drag_callback = self._paint
 
     def _zoom_face(self, face_index):
@@ -388,10 +402,13 @@ class Mask(Editor):
         line = np.array((self._drag_data["starting_location"], (event.x, event.y)))
         line, scale = self._transform_points(face_idx, line)
         brush_radius = int(round(self._brush_radius * scale))
+        color = 0 if self._edit_mode == "erase" else 255
+        # Reverse action on control click
+        color = abs(color - 255) if self._drag_data["control_click"] else color
         cv2.line(self._meta["mask"][face_idx],
                  tuple(line[0]),
                  tuple(line[1]),
-                 0 if self._edit_mode == "erase" else 255,
+                 color,
                  brush_radius * 2)
         self._drag_data["starting_location"] = np.array((event.x, event.y))
         self._frames.tk_update.set(True)
@@ -430,13 +447,13 @@ class Mask(Editor):
             return
         face_idx = self._mouse_location[1]
         location = np.array(((event.x, event.y), ))
+        color = 0 if self._edit_mode == "erase" else 255
+        # Reverse action on control click
+        color = abs(color - 255) if self._drag_data["control_click"] else color
         if np.array_equal(self._drag_data["starting_location"], location[0]):
             points, scale = self._transform_points(face_idx, location)
             brush_radius = int(round(self._brush_radius * scale))
-            cv2.circle(self._meta["mask"][face_idx],
-                       tuple(points),
-                       brush_radius,
-                       0 if self._edit_mode == "erase" else 255,
+            cv2.circle(self._meta["mask"][face_idx], tuple(points), brush_radius, color,
                        thickness=-1)
         self._mask_to_alignments(face_idx)
         self._drag_data = dict()
