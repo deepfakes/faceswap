@@ -368,7 +368,7 @@ class ActiveFrame():
         """ Reload the currently selected annotations on an add/remove face. """
         if not self._faces_cache.is_initialized:
             return
-        self._highlighter.highlight_selected(self._image_ids, self._mesh_landmarks)
+        self._highlighter.highlight_selected(self._image_ids, self._mesh_ids, self._frame_index)
 
     def _update(self):
         """ Update the currently selected face in the active frame """
@@ -378,7 +378,7 @@ class ActiveFrame():
             self.reload_annotations()
             return
         self._canvas.update_face.update(self._frame_index, self._face_index)
-        self._highlighter.highlight_selected(self._image_ids, self._mesh_landmarks)
+        self._highlighter.highlight_selected(self._image_ids, self._mesh_ids, self._frame_index)
         self._alignments.tk_edited.set(False)
 
     def _add_remove_face(self):
@@ -403,109 +403,114 @@ class Highlighter():
                      self.__class__.__name__, canvas)
         self._size = canvas._faces_cache.size
         self._canvas = canvas
-
+        self._faces_cache = canvas._faces_cache
+        self._tk_selected_editor = canvas._display_frame.tk_selected_action
+        self._tk_selected_mask = canvas._display_frame.tk_selected_mask
+        self._tk_optional_annotations = canvas._tk_optional_annotations
         self._face_count = 0
-        self._hidden_highlighters_count = 0
+        self._frame_index = 0
+        self._hidden_boxes_count = 0
         self._boxes = []
-        self._meshes = []
+        self._prev_objects = dict()
         logger.debug("Initialized: %s", self.__class__.__name__,)
 
     @property
-    def _highlighter_count(self):
+    def _boxes_count(self):
         """ int: The number of highlighter objects currently available. """
         return len(self._boxes)
 
-    def highlight_selected(self, image_ids, mesh_landmarks):
+    def highlight_selected(self, image_ids, mesh_ids, frame_index):
         """ Highlight the currently selected faces """
         self._face_count = len(image_ids)
-        self._create_new_highlighters(mesh_landmarks)
-        self._hide_unused_highlighters()
+        self._frame_index = frame_index
+        self._create_new_boxes()
+        self._revert_last_mask()
+        self._hide_unused_boxes()
+        self._revert_last_mesh()
         if self._face_count == 0:
             return
 
-        boxes = self._boxes[:self._face_count]
-        meshes = self._meshes[:self._face_count]
-        for image_id, landmarks, box, mesh in zip(image_ids, mesh_landmarks, boxes, meshes):
+        self._highlight_mask()
+        for image_id, box in zip(image_ids, self._boxes[:self._face_count]):
             top_left = np.array(self._canvas.coords(image_id))
-            un_hide = self._highlight_box(box, top_left)
-            self._highlight_mesh(mesh, landmarks["landmarks"], top_left, un_hide)
-            self._hidden_highlighters_count -= 1 if un_hide else 0
+            self._highlight_box(box, top_left)
+        self._highlight_mesh(mesh_ids)
 
         top = self._canvas.coords(self._boxes[0])[1] / self._canvas.bbox("all")[3]
         if top != self._canvas.yview()[0]:
             self._canvas.yview_moveto(top)
 
     # << Add new highlighters >> #
-    def _create_new_highlighters(self, landmarks):
+    def _create_new_boxes(self):
         """ Add new highlight annotations if there are more faces in the frame than
         current highlighters. """
-        new_highlighter_count = max(0, self._face_count - self._highlighter_count)
-        logger.trace("new_highlighter_count: %s", new_highlighter_count)
-        if new_highlighter_count == 0:
+        new_boxes_count = max(0, self._face_count - self._boxes_count)
+        logger.trace("new_boxes_count: %s", new_boxes_count)
+        if new_boxes_count == 0:
             return
-        for idx in range(new_highlighter_count):
-            self._create_highlight_box()
-            self._create_highlight_mesh(landmarks[idx])
-            self._hidden_highlighters_count += 1
-
-    def _create_highlight_box(self):
-        """ Create a new highlight box and append to :attr:`_boxes`. """
-        box = self._canvas.create_rectangle(0, 0, 1, 1, outline="#00FF00", width=2, state="hidden")
-        logger.trace("Created new highlight_box: %s", box)
-        self._boxes.append(box)
-
-    def _create_highlight_mesh(self, landmarks):
-        """ Create new highlight mesh annotations and append to :attr:`_meshes`. """
-        mesh_color = self._canvas.control_colors["Mesh"]
-        kwargs = dict(polygon=dict(fill="", outline=mesh_color),
-                      line=dict(fill=mesh_color))
-        mesh_ids = []
-        for is_poly, pts in zip(landmarks["is_poly"], landmarks["landmarks"]):
-            key = "polygon" if is_poly else "line"
-            tag = ["highlight_mesh_{}".format(key)]
-            obj = getattr(self._canvas, "create_{}".format(key))
-            obj_kwargs = kwargs[key]
-            mesh_ids.append(obj(*pts.flatten(), state="hidden", width=1, tags=tag, **obj_kwargs))
-        logger.trace("Created new highlight_mesh: %s", mesh_ids)
-        self._meshes.append(mesh_ids)
+        for _ in range(new_boxes_count):
+            box = self._canvas.create_rectangle(0, 0, 1, 1,
+                                                outline="#00FF00", width=2, state="hidden")
+            logger.trace("Created new highlight_box: %s", box)
+            self._boxes.append(box)
+            self._hidden_boxes_count += 1
 
     # << Hide unused highlighters >> #
-    def _hide_unused_highlighters(self):
+    def _hide_unused_boxes(self):
         """ Hide any highlighters that are not required for the current frame """
-        hide_count = self._highlighter_count - self._face_count - self._hidden_highlighters_count
+        hide_count = self._boxes_count - self._face_count - self._hidden_boxes_count
         hide_count = max(0, hide_count)
-        logger.trace("hide_highlighter_count: %s", hide_count)
+        logger.trace("hide_boxes_count: %s", hide_count)
         if hide_count == 0:
             return
         hide_slice = slice(self._face_count, self._face_count + hide_count)
-        for box, mesh in zip(self._boxes[hide_slice], self._meshes[hide_slice]):
+        for box in self._boxes[hide_slice]:
             logger.trace("Hiding highlight box: %s", box)
             self._canvas.itemconfig(box, state="hidden")
-            logger.trace("Hiding highlight mesh: %s", mesh)
-            for mesh_id in mesh:
-                self._canvas.itemconfig(mesh_id, state="hidden")
-            self._hidden_highlighters_count += 1
+            self._hidden_boxes_count += 1
+
+    def _revert_last_mesh(self):
+        if self._prev_objects.get("mesh", None) is None:
+            return
+        color = self._canvas.get_muted_color("Mesh")
+        kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
+        state = "normal" if self._tk_optional_annotations["mesh"].get() else "hidden"
+        for mesh_id in self._prev_objects["mesh"]:
+            self._canvas.itemconfig(mesh_id, state=state, **kwargs[self._canvas.type(mesh_id)])
+        self._prev_objects["mesh"] = None
+
+    def _revert_last_mask(self):
+        if (self._prev_objects.get("mask", None) is None
+                or self._tk_optional_annotations["mask"].get()):
+            return
+        self._faces_cache.update_selected(self._prev_objects["mask"], None)
+        self._prev_objects["mask"] = None
 
     # << Highlight current faces >> #
     def _highlight_box(self, box, top_left):
         """ Locate and display the given highlight box """
-        un_hide = False
         coords = (*top_left, *top_left + self._size)
         logger.trace("Highlighting box (id: %s, coords: %s)", box, coords)
         self._canvas.coords(box, *coords)
         if self._canvas.itemcget(box, "state") == "hidden":
-            un_hide = True
+            self._hidden_boxes_count -= 1
             self._canvas.itemconfig(box, state="normal")
-        return un_hide
 
-    def _highlight_mesh(self, mesh_ids, landmarks, top_left, un_hide):
-        """ Locate and display the given mesh annotations """
-        logger.trace("Highlighting mesh (id: %s, top_left: %s, unhide: %s)",
-                     mesh_ids, top_left, un_hide)
-        for points, mesh_id in zip(landmarks, mesh_ids):
-            self._canvas.coords(mesh_id, *(points + top_left).flatten())
-            if un_hide:
-                self._canvas.itemconfig(mesh_id, state="normal")
+    def _highlight_mesh(self, mesh_ids):
+        if self._tk_selected_editor.get() == "Mask":
+            return
+        color = self._canvas.control_colors["Mesh"]
+        kwargs = dict(polygon=dict(fill="", outline=color),
+                      line=dict(fill=color))
+        for mesh_id in mesh_ids:
+            self._canvas.itemconfig(mesh_id, **kwargs[self._canvas.type(mesh_id)], state="normal")
+        self._prev_objects["mesh"] = mesh_ids
+
+    def _highlight_mask(self):
+        if self._tk_selected_editor.get() != "Mask" or self._tk_optional_annotations["mask"].get():
+            return
+        self._faces_cache.update_selected(self._frame_index, self._tk_selected_mask.get())
+        self._prev_objects["mask"] = self._frame_index
 
 
 class UpdateFace():
@@ -522,8 +527,8 @@ class UpdateFace():
     def add(self, frame_index):
         """ Add a face to the faces_viewer """
         face_idx = self._alignments.face_count_per_index[frame_index] - 1
-        logger.info("Adding face to frame: (frame_index: %s, face_index: %s)",
-                    frame_index, face_idx)
+        logger.debug("Adding face to frame: (frame_index: %s, face_index: %s)",
+                     frame_index, face_idx)
         # Add objects to cache
         tk_face, mesh_landmarks = self._canvas.get_tk_face_and_landmarks(frame_index, face_idx)
         self._faces_cache.add(frame_index, tk_face, mesh_landmarks)
@@ -543,7 +548,7 @@ class UpdateFace():
         next_frame_idx = self._get_next_frame_idx(frame_index)
         if next_frame_idx is not None:
             next_tag = "frame_id_{}".format(next_frame_idx)
-            logger.info("Lowering annotations for frame %s below frame %s", frame_tag, next_tag)
+            logger.debug("Lowering annotations for frame %s below frame %s", frame_tag, next_tag)
             self._canvas.tag_lower(frame_tag, next_tag)
 
     def _get_next_frame_idx(self, frame_index):

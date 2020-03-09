@@ -276,6 +276,7 @@ class AlignmentsData():
 
         self._face_size = None  # Set in load_faces
         self._alignments = dict()  # Populated in load_faces
+        self._sorted_keys = []  # Set in load_faces
 
         self._tk_unsaved = tk.BooleanVar()
         self._tk_unsaved.set(False)
@@ -316,6 +317,11 @@ class AlignmentsData():
         return retval
 
     @property
+    def sorted_keys(self):
+        """list: the keys for alignments file sorted into index order """
+        return self._sorted_keys
+
+    @property
     def latest_alignments(self):
         """ dict: The filename as key, and either the modified alignments as values (if they exist)
         or the saved alignments """
@@ -351,7 +357,7 @@ class AlignmentsData():
         The list needs to be calculated on the fly as the number of faces in a frame
         can change based on user actions. """
         alignments = self.latest_alignments
-        return [len(alignments[key]) for key in sorted(alignments)]
+        return [len(alignments[key]) for key in self._sorted_keys]
 
     @property
     def current_face(self):
@@ -363,7 +369,7 @@ class AlignmentsData():
     def _frames_with_faces(self):
         """ list: A list of frame numbers that contain faces. """
         alignments = self.latest_alignments
-        return [key for key in sorted(alignments) if len(alignments[key]) != 0]
+        return [key for key in self._sorted_keys if len(alignments[key]) != 0]
 
     @property
     def with_face_count(self):
@@ -400,7 +406,7 @@ class AlignmentsData():
     @property
     def updated_alignments(self):
         """ dict: The full frame list, with `None` as the value if alignments not updated. """
-        return [self._alignments[frame].get("new", None) for frame in sorted(self._alignments)]
+        return [self._alignments[frame].get("new", None) for frame in self._sorted_keys]
 
     def link_frames(self, frames):
         """ Add the :class:`FrameNavigation` object as a property of the AlignmentsData.
@@ -481,6 +487,7 @@ class AlignmentsData():
                 face.load_aligned(None, size=self._face_size)
                 this_frame_faces.append(face)
             self._alignments[framename] = dict(saved=this_frame_faces)
+        self._sorted_keys = list(sorted(self._alignments))
 
     def save(self):
         """ Save the alignments file """
@@ -684,7 +691,7 @@ class AlignmentsData():
         """
         logger.debug("Deleting face at index: %s for frame: %s", face_index, frame_index)
 
-        filename = sorted(self._alignments)[frame_index]
+        filename = self._sorted_keys[frame_index]
         self._check_for_new_alignments(filename=filename)
         del self.latest_alignments[filename][face_index]
         self._face_count_modified = True
@@ -729,7 +736,7 @@ class AlignmentsData():
         if frame_index is None:
             face = self.current_faces[index]
         else:
-            frame_name = sorted(self._alignments)[frame_index]
+            frame_name = self._sorted_keys[frame_index]
             face = self.latest_alignments[frame_name][index]
         face.load_aligned(self._frames.current_frame, size=size, force=True)
         retval = face.aligned_face.copy()
@@ -936,7 +943,7 @@ class FaceCache():
     def _load_masks(self, mask_type):
         """ Load the selected masks """
         latest_alignments = self._alignments.latest_alignments
-        for frame_idx, (key, tk_faces) in enumerate(zip(sorted(latest_alignments),
+        for frame_idx, (key, tk_faces) in enumerate(zip(self._alignments.sorted_keys,
                                                         self._tk_faces)):
             self._update_progress(mask_type, frame_idx)
             for face, tk_face in zip(latest_alignments[key], tk_faces):
@@ -980,3 +987,12 @@ class FaceCache():
         """ Stop the progress bar. """
         self._progress_bar.stop()
         self._root.config(cursor="")
+
+    def update_selected(self, frame_index, mask_type):
+        """ Update the mask image for the faces in the given frame index. """
+        logger.trace("Updating selected faces: (frame_index: %s, mask_type: %s)",
+                     frame_index, mask_type)
+        mask_type = mask_type if mask_type is None else mask_type.lower()
+        faces = self._alignments.latest_alignments[self._alignments.sorted_keys[frame_index]]
+        for face, tk_face in zip(faces, self._tk_faces[frame_index]):
+            self._update_mask_to_photoimage(tk_face, self._get_mask(mask_type, face))
