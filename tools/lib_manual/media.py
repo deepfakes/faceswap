@@ -543,7 +543,7 @@ class AlignmentsData():
         face.w = width
         face.y = pnt_y
         face.h = height
-        face.mask = dict()
+        # TODO face.mask = dict()
         face.landmarks_xy = self._extractor.get_landmarks()
         face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._tk_edited.set(True)
@@ -575,7 +575,7 @@ class AlignmentsData():
         self._check_for_new_alignments()
         self._face_index = face_index
         face = self.current_face
-        face.mask = dict()  # TODO Something with masks that doesn't involve clearing them
+        # face.mask = dict()  # TODO Something with masks that doesn't involve clearing them
         if is_zoomed:
             landmark = face.aligned_landmarks[landmark_index]
             landmark += (shift_x, shift_y)
@@ -618,7 +618,7 @@ class AlignmentsData():
         face = self.current_face
         face.x += shift_x
         face.y += shift_y
-        face.mask = dict()
+        # TODO face.mask = dict()
         face.landmarks_xy += (shift_x, shift_y)
         face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._tk_edited.set(True)

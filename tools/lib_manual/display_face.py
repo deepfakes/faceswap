@@ -49,6 +49,7 @@ class FacesViewerLoader():
         if frame_index == self._frame_count:
             self._on_load_complete()
         else:
+            logger.trace("Refreshing...")
             self._canvas.after(1000, self._load_faces, faces_seen, frame_index)
 
     def _update_progress(self, frame_index):

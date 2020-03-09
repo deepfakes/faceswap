@@ -351,8 +351,6 @@ class Mask(Editor):
             self._drag_data = dict()
             self._drag_callback = None
         elif self._edit_mode == "zoom":
-            self._drag_data = dict()
-            self._drag_callback = None
             self._zoom_face(face_idx)
         else:
             self._drag_data["starting_location"] = np.array((event.x, event.y))
@@ -375,27 +373,61 @@ class Mask(Editor):
     def _paint(self, event):
         """ Paint or erase from Mask and update cursor on click and drag """
         face_idx = self._mouse_location[1]
-        mask = self._meta["mask"][face_idx]
         line = np.array((self._drag_data["starting_location"], (event.x, event.y)))
-
-        if self._is_zoomed:
-            offset = self._zoomed_roi[:2]
-            scale = mask.shape[0] / self._zoomed_dims[0]
-            line = np.rint((line - offset) * scale).astype("int32")
-        else:
-            scale = mask.shape[0] / self._meta["mask_roi_size"][face_idx]
-            line = np.expand_dims(line - self._canvas.offset, axis=0)
-            line = cv2.transform(line, self._meta["affine_matrix"][face_idx]).squeeze()
-            line = np.rint(line).astype("int32")
-
+        line, scale = self._transform_points(face_idx, line)
         brush_radius = int(round(self._brush_radius * scale))
         cv2.line(self._meta["mask"][face_idx],
                  tuple(line[0]),
                  tuple(line[1]),
                  0 if self._edit_mode == "erase" else 255,
                  brush_radius * 2)
-        self._mask_to_alignments(face_idx)
         self._drag_data["starting_location"] = np.array((event.x, event.y))
+        self._frames.tk_update.set(True)
+        self._update_cursor(event)
+
+    def _transform_points(self, face_index, points):
+        """ Transform the edit points from a full frame or zoomed view back to the mask. """
+        if self._is_zoomed:
+            offset = self._zoomed_roi[:2]
+            scale = self._internal_size / self._zoomed_dims[0]
+            t_points = np.rint((points - offset) * scale).astype("int32").squeeze()
+        else:
+            scale = self._internal_size / self._meta["mask_roi_size"][face_index]
+            t_points = np.expand_dims(points - self._canvas.offset, axis=0)
+            t_points = cv2.transform(t_points, self._meta["affine_matrix"][face_index]).squeeze()
+            t_points = np.rint(t_points).astype("int32")
+        logger.trace("original points: %s, transformed points: %s, scale: %s",
+                     points, t_points, scale)
+        return t_points, scale
+
+    def _drag_stop(self, event):
+        """ The action to perform when the user stops clicking and dragging the mouse.
+
+        If a line hasn't been drawn then draw a circle. Update alignments.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused but required
+        """
+        if not self._drag_data:
+            return
+        if self._edit_mode == "zoom":
+            self._drag_data = dict()
+            self._drag_callback = None
+            return
+        face_idx = self._mouse_location[1]
+        location = np.array(((event.x, event.y), ))
+        if np.array_equal(self._drag_data["starting_location"], location[0]):
+            points, scale = self._transform_points(face_idx, location)
+            brush_radius = int(round(self._brush_radius * scale))
+            cv2.circle(self._meta["mask"][face_idx],
+                       tuple(points),
+                       brush_radius,
+                       0 if self._edit_mode == "erase" else 255,
+                       thickness=-1)
+        self._mask_to_alignments(face_idx)
+        self._drag_data = dict()
         self._update_cursor(event)
 
     def _mask_to_alignments(self, face_index):
