@@ -85,7 +85,8 @@ class Editor():
 
     @property
     def _control_vars(self):
-        return self._canvas.control_tk_vars
+        """ dict: The tk control panel variables for the currently selected editor. """
+        return self._canvas.control_tk_vars.get(self.__class__.__name__, dict())
 
     @property
     def _annotation_formats(self):
@@ -471,7 +472,7 @@ class Editor():
         group_key = option.group.replace(" ", "").lower()
         group_key = "none" if group_key == "_master" else group_key
         annotation_key = option.title.replace(" ", "")
-        self._control_vars.setdefault(
+        self._canvas.control_tk_vars.setdefault(
             editor_key, dict()).setdefault(group_key, dict())[annotation_key] = option.tk_var
 
     def _add_annotation_format_controls(self):

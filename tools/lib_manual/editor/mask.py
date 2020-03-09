@@ -23,6 +23,7 @@ class Mask(Editor):
                         "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
         super().__init__(canvas, alignments, frames,
                          control_text=control_text, key_bindings=key_bindings)
+        self._mask_type = self._set_tk_mask_change_callback()
         self._mouse_location = [
             self._canvas.create_oval(0, 0, 0, 0, outline="black", state="hidden"), False]
 
@@ -35,7 +36,7 @@ class Mask(Editor):
     @property
     def _brush_radius(self):
         """ int: The radius of the brush to use as set in control panel options """
-        return self._control_vars[self.__class__.__name__]["brush"]["BrushSize"].get()
+        return self._control_vars["brush"]["BrushSize"].get()
 
     @property
     def _edit_mode(self):
@@ -47,8 +48,7 @@ class Mask(Editor):
     @property
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
-        color = self._control_vars[self.__class__.__name__]["brush"]["CursorColor"].get()
-        return self._canvas.colors[color.lower()]
+        return self._canvas.colors[self._control_vars["brush"]["CursorColor"].get().lower()]
 
     def _add_actions(self):
         self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
@@ -79,6 +79,21 @@ class Mask(Editor):
                                              choices=sorted(self._canvas.colors),
                                              default="White",
                                              helptext="Select the brush cursor color."))
+
+    def _set_tk_mask_change_callback(self):
+        """ Update the displayed mask on a mask type change. """
+        var = self._control_vars["display"]["MaskType"]
+        var.trace("w", self._on_mask_type_change)
+        return var.get()
+
+    def _on_mask_type_change(self, *args):  # pylint:disable=unused-argument
+        """ Update the mask displayed mask on a mask type change """
+        mask_type = self._control_vars["display"]["MaskType"].get()
+        if mask_type == self._mask_type:
+            return
+        self._meta = dict(position=self._frames.tk_position.get())
+        self._mask_type = mask_type
+        self._frames.tk_update.set(True)
 
     def _update_meta(self, key, item, face_index):
         """ Update the meta information for the given object.
@@ -113,7 +128,7 @@ class Mask(Editor):
             # Reset meta information when moving to a new frame
             self._meta = dict(position=position)
         key = self.__class__.__name__
-        mask_type = self._control_vars[key]["display"]["MaskType"].get().lower()
+        mask_type = self._control_vars["display"]["MaskType"].get().lower()
         color = self._control_color[1:]
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
         roi_color = self._canvas.colors[self._annotation_formats["ExtractBox"]["color"].get()]
@@ -139,7 +154,6 @@ class Mask(Editor):
         face_index: int
             The index pertaining to the current face
         """
-        # TODO Update when mask type changes
         masks = self._meta.get("mask", None)
         if masks is not None and len(masks) - 1 == face_index:
             logger.trace("Meta information already defined for face: %s", face_index)
@@ -185,36 +199,34 @@ class Mask(Editor):
         # Create a bounding box rectangle ROI
         roi_dims = np.rint((min_max["max"][1] - min_max["min"][1],
                             min_max["max"][0] - min_max["min"][0])).astype("uint16")
-        roi_mask = np.zeros(roi_dims, dtype="uint8")[..., None]
-
+        roi = dict(mask=np.zeros(roi_dims, dtype="uint8")[..., None],
+                   corners=np.expand_dims(scaled_mask_roi - min_max["min"], axis=0))
         # Block out areas outside of the actual mask ROI polygon
-        roi_corners = np.expand_dims(scaled_mask_roi - min_max["min"], axis=0)
-        cv2.fillPoly(roi_mask, roi_corners, 255)
-        logger.trace("Setting Full Frame mask ROI. shape: %s", roi_mask.shape)
+        cv2.fillPoly(roi["mask"], roi["corners"], 255)
+        logger.trace("Setting Full Frame mask ROI. shape: %s", roi["mask"].shape)
 
         # obtain the slices for cropping mask from full frame
-        xslice = slice(int(round(min_max["min"][1])), int(round(min_max["max"][1])))
-        yslice = slice(int(round(min_max["min"][0])), int(round(min_max["max"][0])))
+        xy_slices = (slice(int(round(min_max["min"][1])), int(round(min_max["max"][1]))),
+                     slice(int(round(min_max["min"][0])), int(round(min_max["max"][0]))))
 
         # Adjust affine matrix for internal mask size and display dimensions
-        in_adjustment = np.array([[mask_scale, 0., 0.], [0., mask_scale, 0.]])
-        out_adjustment = np.array([[1 / self._frames.current_scale, 0., 0.],
-                                   [0., 1 / self._frames.current_scale, 0.],
-                                   [0., 0., 1.]])
-
-        in_matrix = np.dot(in_adjustment,
+        adjustments = (np.array([[mask_scale, 0., 0.], [0., mask_scale, 0.]]),
+                       np.array([[1 / self._frames.current_scale, 0., 0.],
+                                 [0., 1 / self._frames.current_scale, 0.],
+                                 [0., 0., 1.]]))
+        in_matrix = np.dot(adjustments[0],
                            np.concatenate((mask.affine_matrix, np.array([[0., 0., 1.]]))))
-        affine_matrix = np.dot(in_matrix, out_adjustment)
+        affine_matrix = np.dot(in_matrix, adjustments[1])
 
         # Get the size of the mask roi box in the frame
-        side_a = scaled_mask_roi[1][0] - scaled_mask_roi[0][0]
-        side_b = scaled_mask_roi[1][1] - scaled_mask_roi[0][1]
-        mask_roi_size = (side_a ** 2 + side_b ** 2) ** 0.5
+        side_sizes = (scaled_mask_roi[1][0] - scaled_mask_roi[0][0],
+                      scaled_mask_roi[1][1] - scaled_mask_roi[0][1])
+        mask_roi_size = (side_sizes[0] ** 2 + side_sizes[1] ** 2) ** 0.5
 
-        self._meta.setdefault("roi_mask", []).append(roi_mask)
+        self._meta.setdefault("roi_mask", []).append(roi["mask"])
         self._meta.setdefault("affine_matrix", []).append(affine_matrix)
         self._meta.setdefault("interpolator", []).append(mask.interpolator)
-        self._meta.setdefault("slices", []).append((xslice, yslice))
+        self._meta.setdefault("slices", []).append(xy_slices)
         self._meta.setdefault("top_left", []).append(min_max["min"] + self._canvas.offset)
         self._meta.setdefault("mask_roi_size", []).append(mask_roi_size)
 
@@ -432,7 +444,7 @@ class Mask(Editor):
 
     def _mask_to_alignments(self, face_index):
         """ Update the annotated mask to alignments. """
-        mask_type = self._control_vars["Mask"]["display"]["MaskType"].get().lower()
+        mask_type = self._control_vars["display"]["MaskType"].get().lower()
         mask = self._meta["mask"][face_index].astype("float32") / 255.0
         self._alignments.update_mask(mask, mask_type, face_index)
 
@@ -446,7 +458,7 @@ class Mask(Editor):
         increase: bool, optional
             ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
         """
-        radius_var = self._control_vars[self.__class__.__name__]["brush"]["BrushSize"]
+        radius_var = self._control_vars["brush"]["BrushSize"]
         current_val = radius_var.get()
         new_val = min(100, current_val + 2) if increase else max(1, current_val - 2)
         logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)
