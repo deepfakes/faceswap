@@ -95,9 +95,6 @@ class ControlPanelOption():
         Used for combo boxes and radio control option setting
     is_radio: bool, optional
         Specifies to use a Radio control instead of combobox if choices are passed
-    state: {"normal", "readonly", "disabled"}, optional
-        Combo boxes only. Dictates whether the entry in the combo box is directly editable.
-        Default: "normal"
     rounding: int or float, optional
         For slider controls. Sets the stepping
     min_max: int or float, optional
@@ -116,14 +113,13 @@ class ControlPanelOption():
 
     def __init__(self, title, dtype,  # pylint:disable=too-many-arguments
                  group=None, default=None, initial_value=None, choices=None, is_radio=False,
-                 state="readonly", rounding=None, min_max=None, sysbrowser=None, helptext=None,
+                 rounding=None, min_max=None, sysbrowser=None, helptext=None,
                  track_modified=False, command=None):
         logger.debug("Initializing %s: (title: '%s', dtype: %s, group: %s, default: %s, "
-                     "initial_value: %s, choices: %s, is_radio: %s, state: %s, rounding: %s, "
-                     "min_max: %s, sysbrowser: %s, helptext: '%s', track_modified: %s, "
-                     "command: '%s')", self.__class__.__name__, title, dtype, group, default,
-                     initial_value, choices, is_radio, state, rounding, min_max, sysbrowser,
-                     helptext, track_modified, command)
+                     "initial_value: %s, choices: %s, is_radio: %s, rounding: %s, min_max: %s, "
+                     "sysbrowser: %s, helptext: '%s', track_modified: %s, command: '%s')",
+                     self.__class__.__name__, title, dtype, group, default, initial_value, choices,
+                     is_radio, rounding, min_max, sysbrowser, helptext, track_modified, command)
 
         self.dtype = dtype
         self.sysbrowser = sysbrowser
@@ -134,7 +130,6 @@ class ControlPanelOption():
                              initial_value=initial_value,
                              choices=choices,
                              is_radio=is_radio,
-                             state=state,
                              rounding=rounding,
                              min_max=min_max,
                              helptext=helptext)
@@ -180,11 +175,6 @@ class ControlPanelOption():
     def is_radio(self):
         """ Return is_radio """
         return self._options["is_radio"]
-
-    @property
-    def state(self):
-        """ Return state """
-        return self._options["state"]
 
     @property
     def rounding(self):
