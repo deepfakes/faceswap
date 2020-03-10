@@ -321,10 +321,12 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         The width that labels for controls should be set to.
         Defaults to 20
     columns: int, optional
+        The initial number of columns to set the layout for. Default: 1
+    max_columns: int, optional
         The maximum number of columns that this control panel should be able
         to accommodate. Setting to 1 means that there will only be 1 column
         regardless of how wide the control panel is. Higher numbers will
-        dynamically fill extra columns if space permits. Defaults to 1
+        dynamically fill extra columns if space permits. Defaults to 4
     option_columns: int, optional
         For check-button and radio-button containers, how many options should
         be displayed on each row. Defaults to 4
@@ -334,14 +336,19 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
     blank_nones: bool, optional
         How the control panel should handle None values. If set to True then None values will be
         converted to empty strings. Default: False
+    scrollbar: bool, optional
+        ``True`` if a scrollbar should be added to the control panel, otherwise ``False``.
+        Default: ``True``
     """
 
     def __init__(self, parent, options,  # pylint:disable=too-many-arguments
-                 label_width=20, columns=1, option_columns=4, header_text=None, blank_nones=True):
+                 label_width=20, columns=1, max_columns=4, option_columns=4, header_text=None,
+                 blank_nones=True, scrollbar=True):
         logger.debug("Initializing %s: (parent: '%s', options: %s, label_width: %s, columns: %s, "
-                     "option_columns: %s, header_text: %s, blank_nones: %s)",
-                     self.__class__.__name__, parent, options, label_width, columns,
-                     option_columns, header_text, blank_nones)
+                     "max_columns: %s, option_columns: %s, header_text: %s, blank_nones: %s, "
+                     "scrollbar: %s)",
+                     self.__class__.__name__, parent, options, label_width, columns, max_columns,
+                     option_columns, header_text, blank_nones, scrollbar)
         super().__init__(parent)
 
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -350,18 +357,18 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.controls = []
         self.label_width = label_width
         self.columns = columns
+        self.max_columns = max_columns
         self.option_columns = option_columns
 
         self.header_text = header_text
         self.group_frames = dict()
 
-        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.mainframe, self.optsframe = self.get_opts_frame()
-        self.optscanvas = self.canvas.create_window((0, 0), window=self.mainframe, anchor=tk.NW)
-
-        self.build_panel(blank_nones)
+        self._optscanvas = self._canvas.create_window((0, 0), window=self.mainframe, anchor=tk.NW)
+        self.build_panel(blank_nones, scrollbar)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -373,12 +380,12 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def get_opts_frame(self):
         """ Return an auto-fill container for the options inside a main frame """
-        mainframe = ttk.Frame(self.canvas)
+        mainframe = ttk.Frame(self._canvas)
         if self.header_text is not None:
             self.add_info(mainframe)
         optsframe = ttk.Frame(mainframe, name="opts_frame")
         optsframe.pack(expand=True, fill=tk.BOTH)
-        holder = AutoFillContainer(optsframe, self.columns)
+        holder = AutoFillContainer(optsframe, self.columns, self.max_columns)
         logger.debug("Opts frames: '%s'", holder)
         return mainframe, holder
 
@@ -404,11 +411,12 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             info.bind("<Configure>", self._adjust_wraplength)
             info.pack(fill=tk.X, padx=0, pady=0, expand=True, side=tk.TOP)
 
-    def build_panel(self, blank_nones):
+    def build_panel(self, blank_nones, scrollbar):
         """ Build the options frame for this command """
         logger.debug("Add Config Frame")
-        self.add_scrollbar()
-        self.canvas.bind("<Configure>", self.resize_frame)
+        if scrollbar:
+            self.add_scrollbar()
+        self._canvas.bind("<Configure>", self.resize_frame)
 
         for option in self.options:
             group_frame = self.get_group_frame(option.group)
@@ -452,21 +460,21 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
     def add_scrollbar(self):
         """ Add a scrollbar to the options frame """
         logger.debug("Add Config Scrollbar")
-        scrollbar = ttk.Scrollbar(self, command=self.canvas.yview)
+        scrollbar = ttk.Scrollbar(self, command=self._canvas.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.canvas.config(yscrollcommand=scrollbar.set)
+        self._canvas.config(yscrollcommand=scrollbar.set)
         self.mainframe.bind("<Configure>", self.update_scrollbar)
         logger.debug("Added Config Scrollbar")
 
     def update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the options frame scrollbar """
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
     def resize_frame(self, event):
         """ Resize the options frame to fit the canvas """
         logger.debug("Resize Config Frame")
         canvas_width = event.width
-        self.canvas.itemconfig(self.optscanvas, width=canvas_width)
+        self._canvas.itemconfig(self._optscanvas, width=canvas_width)
         self.optsframe.rearrange_columns(canvas_width)
         logger.debug("Resized Config Frame")
 
@@ -476,21 +484,22 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             otherwise in a standard frame """
         logger.debug("Add Options CheckButtons Frame")
         chk_frame = ttk.Frame(frame, name="chkbuttons")
-        holder = AutoFillContainer(chk_frame, self.option_columns)
+        holder = AutoFillContainer(chk_frame, self.option_columns, self.option_columns)
         logger.debug("Added Options CheckButtons Frame")
         return holder
 
 
 class AutoFillContainer():
     """ A container object that auto-fills columns """
-    def __init__(self, parent, columns):
-        logger.debug("Initializing: %s: (parent: %s, columns: %s)", self.__class__.__name__,
-                     parent, columns)
-        self.max_columns = 4
+    def __init__(self, parent, initial_columns, max_columns):
+        logger.debug("Initializing: %s: (parent: %s, initial_columns: %s, max_columns: %s)",
+                     self.__class__.__name__, parent, initial_columns, max_columns)
+        self.max_columns = max_columns
+        self.columns = initial_columns
+        self.parent = parent
+#        self.columns = min(columns, self.max_columns)
         self.single_column_width = self.scale_column_width(288, 9)
         self.max_width = self.max_columns * self.single_column_width
-        self.parent = parent
-        self.columns = min(columns, self.max_columns)
         self._items = 0
         self._idx = 0
         self._widget_config = []  # Master list of all children in order
@@ -783,7 +792,7 @@ class ControlBuilder():
         ctl = ttk.LabelFrame(self.frame,
                              text=self.option.title,
                              name="radio_labelframe")
-        radio_holder = AutoFillContainer(ctl, self.option_columns)
+        radio_holder = AutoFillContainer(ctl, self.option_columns, self.option_columns)
         for choice in self.option.choices:
             radio = ttk.Radiobutton(radio_holder.subframe,
                                     text=choice.replace("_", " ").title(),
@@ -845,6 +854,7 @@ class ControlBuilder():
         if self.option.choices:
             logger.debug("Adding combo choices: %s", self.option.choices)
             ctl["values"] = [choice for choice in self.option.choices]
+            ctl["state"] = "readonly"
         logger.debug("Added control to Options Frame: %s", self.option.name)
         return ctl
 
