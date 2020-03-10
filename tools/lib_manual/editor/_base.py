@@ -498,7 +498,6 @@ class Editor():
                                             choices=sorted(self._canvas.colors),
                                             default=self._default_colors[annotation_key],
                                             is_radio=False,
-                                            state="readonly",
                                             helptext="Set the annotation color")
                 colors.set(self._default_colors[annotation_key])
                 self._annotation_formats.setdefault(annotation_key, dict())["color"] = colors

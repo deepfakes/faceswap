@@ -4,6 +4,7 @@ import logging
 import bisect
 import os
 import tkinter as tk
+from concurrent import futures
 from copy import deepcopy
 
 import cv2
@@ -926,28 +927,46 @@ class FaceCache():
         if not self.is_initialized or mask_type == self._current_mask_type:
             return
         self._start_progress()
-        if mask_type is None:
-            self._unload_masks()
-        else:
-            self._load_masks(mask_type)
+        self._load_unload_masks(mask_type)
         self._stop_progress()
         self._current_mask_type = mask_type
 
-    def _unload_masks(self):
-        """ Remove mask from stored face. """
-        for frame_idx, tk_faces in enumerate(self._tk_faces):
-            self._update_progress(None, frame_idx)
-            for tk_face in tk_faces:
-                self._update_mask_to_photoimage(tk_face, self._alpha)
+    def _load_unload_masks(self, mask_type):
+        """ Load or unload masks from the tkinter PhotoImage, performing manipulations
+        in threads.
 
-    def _load_masks(self, mask_type):
+        Notes
+        -----
+        Removing the data and re-adding from the PhotoImage inside a thread/process doesn't work,
+        so the compilation of face images is done in a thread whilst the PhotoImage data handling
+        happens here. This is unfortunately a fairly slow process but doing it this way does lead
+        to about 2x speed up vs doing it all in main. There is no speed up to be had from raising
+        max_worker count. Also, multiprocessing is slower for this task.
+        """
+        iterator = self._unload_masks_iterator if mask_type is None else self._load_masks_iterator
+        total_faces = sum(1 for tk_faces in self._tk_faces for tk_face in tk_faces)
+        with futures.ThreadPoolExecutor(max_workers=2) as executor:
+            face_strings = {executor.submit(self._update_binary_mask,
+                                            tk_face.cget("data"),
+                                            mask_type,
+                                            face): tk_face
+                            for tk_face, face in iterator()}
+            for idx, future in enumerate(futures.as_completed(face_strings)):
+                tk_face = face_strings[future]
+                tk_face.put(future.result())
+                if idx % 100 == 0:
+                    self._update_progress(mask_type, idx, total_faces)
+
+    def _unload_masks_iterator(self):
+        """ Remove mask from stored face. """
+        return ((tk_face, None) for tk_faces in self._tk_faces for tk_face in tk_faces)
+
+    def _load_masks_iterator(self):
         """ Load the selected masks """
         latest_alignments = self._alignments.latest_alignments
-        for frame_idx, (key, tk_faces) in enumerate(zip(self._alignments.sorted_keys,
-                                                        self._tk_faces)):
-            self._update_progress(mask_type, frame_idx)
-            for face, tk_face in zip(latest_alignments[key], tk_faces):
-                self._update_mask_to_photoimage(tk_face, self._get_mask(mask_type, face))
+        return ((tk_face, face)
+                for key, tk_faces in zip(self._alignments.sorted_keys, self._tk_faces)
+                for face, tk_face in zip(latest_alignments[key], tk_faces))
 
     def _get_mask(self, mask_type, detected_face):
         """ Obtain the mask from the alignments file. """
@@ -969,17 +988,24 @@ class FaceCache():
         img[..., -1] = mask
         tk_face.put(cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring())
 
+    def _update_binary_mask(self, face_string, mask_type, detected_face=None):
+        """ Update the string version of the face image to include the given mask. """
+        mask = self._alpha if detected_face is None else self._get_mask(mask_type, detected_face)
+        img = cv2.imdecode(np.fromstring(face_string, dtype="uint8"), cv2.IMREAD_UNCHANGED)
+        img[..., -1] = mask
+        retval = cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring()
+        return retval
+
     def _start_progress(self):
         """ Start the progress bar. """
         self._progress_bar.start(mode="determinate")
         self._root.config(cursor="watch")
 
-    def _update_progress(self, mask_type, frame_index):
+    def _update_progress(self, mask_type, position, total_count):
         """ Update the progress bar. """
-        position = frame_index + 1
-        progress = int(round((position / self._frames.frame_count) * 100))
+        progress = int(round((position / total_count) * 100))
         msg = "Removing Mask: " if mask_type is None else "Loading {} Mask: ".format(mask_type)
-        msg += "{}/{} - {}%".format(position, self._frames.frame_count, progress)
+        msg += "{}/{} - {}%".format(position, total_count, progress)
         self._progress_bar.progress_update(msg, progress)
         self._root.update_idletasks()
 
