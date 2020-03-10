@@ -236,7 +236,7 @@ class DetectedFace():
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
         force: bool, optional
-            Force an updated of the aligned face, even if it is already loaded. Default: ``False``
+            Force an update of the aligned face, even if it is already loaded. Default: ``False``
 
         Notes
         -----
@@ -621,9 +621,9 @@ class Mask():
         Parameters
         ----------
         mask: numpy.ndarray
-            The mask that is to be added as output from :mod:`plugins.extract.mask`
+            The mask that is to be added as output from :mod:`plugins.extract.mask`.
+            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
         """
-        # TODO Check for dtype and max
         mask = (cv2.resize(mask,
                            (self.stored_size, self.stored_size),
                            interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
