@@ -455,6 +455,17 @@ class Extractor():
                 available_vram = vram_free - vram_required
                 self._set_plugin_batchsize(plugin, available_vram)
 
+    def set_aligner_normalization_method(self, method):
+        """ Change the normalization method for faces fed into the aligner.
+
+        Parameters
+        ----------
+        method: {"none", "clahe", "hist", "mean"}
+            The normalization method to apply to faces prior to feeding into the aligner's model
+        """
+        logger.debug("Setting to: '%s'", method)
+        self._align.set_normalize_method(method)
+
     @staticmethod
     def _set_plugin_batchsize(plugin, available_vram):
         """ Set the batch size for the given plugin based on given available vram.
@@ -525,21 +536,21 @@ class ExtractMedia():
         :attr:`image`. """
         return self._detected_faces
 
-    def get_image_copy(self, colorformat):
+    def get_image_copy(self, color_format):
         """ Get a copy of the image in the requested color format.
 
         Parameters
         ----------
-        colorformat: ['BGR', 'RGB', 'GRAY']
+        color_format: ['BGR', 'RGB', 'GRAY']
             The requested color format of :attr:`image`
 
         Returns
         -------
         :class:`numpy.ndarray`:
-            A copy of :attr:`image` in the requested :attr:`colorformat`
+            A copy of :attr:`image` in the requested :attr:`color_format`
         """
-        logger.trace("Requested color format '%s' for frame '%s'", colorformat, self._filename)
-        image = getattr(self, "_image_as_{}".format(colorformat.lower()))()
+        logger.trace("Requested color format '%s' for frame '%s'", color_format, self._filename)
+        image = getattr(self, "_image_as_{}".format(color_format.lower()))()
         return image
 
     def add_detected_faces(self, faces):
