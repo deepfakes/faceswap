@@ -216,7 +216,7 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, dtype=None):
+    def load_aligned(self, image, size=256, dtype=None, force=False):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
@@ -235,6 +235,8 @@ class DetectedFace():
             The size of the output face in pixels
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+        force: bool, optional
+            Force an update of the aligned face, even if it is already loaded. Default: ``False``
 
         Notes
         -----
@@ -244,7 +246,7 @@ class DetectedFace():
             - :func:`aligned_face`
             - :func:`adjusted_interpolators`
         """
-        if self.aligned:
+        if self.aligned and not force:
             # Don't reload an already aligned face
             logger.trace("Skipping alignment calculation for already aligned face")
         else:
@@ -254,7 +256,7 @@ class DetectedFace():
             self.aligned["padding"] = padding
             self.aligned["matrix"] = get_align_mat(self)
             self.aligned["face"] = None
-        if image is not None and self.aligned["face"] is None:
+        if image is not None and (self.aligned["face"] is None or force):
             logger.trace("Getting aligned face")
             face = AlignerExtract().transform(image, self.aligned["matrix"], size, padding)
             self.aligned["face"] = face if dtype is None else face.astype(dtype)
@@ -522,6 +524,7 @@ class Mask():
         self._blur = dict()
         self._blur_kernel = 0
         self._threshold = 0.0
+        self.set_blur_and_threshold()
 
     @property
     def mask(self):
@@ -541,6 +544,29 @@ class Mask():
                             passes=self._blur["passes"]).blurred
         logger.trace("mask shape: %s", mask.shape)
         return mask
+
+    @property
+    def original_roi(self):
+        """ :class: `numpy.ndarray`: The original region of interest of the mask in the
+        source frame. """
+        points = np.array([[0, 0],
+                           [0, self.stored_size - 1],
+                           [self.stored_size - 1, self.stored_size - 1],
+                           [self.stored_size - 1, 0]], np.int32).reshape((-1, 1, 2))
+        matrix = cv2.invertAffineTransform(self._affine_matrix)
+        roi = cv2.transform(points, matrix).reshape((4, 2))
+        logger.trace("Returning: %s", roi)
+        return roi
+
+    @property
+    def affine_matrix(self):
+        """ :class: `numpy.ndarray`: The affine matrix to transpose the mask to a full frame. """
+        return self._affine_matrix
+
+    @property
+    def interpolator(self):
+        """ int: The cv2 interpolator required to transpose the mask to a full frame. """
+        return self._interpolator
 
     def get_full_frame_mask(self, width, height):
         """ Return the stored mask in a full size frame of the given dimensions
@@ -587,6 +613,17 @@ class Mask():
                      affine_matrix, mask.max(), interpolator)
         self._affine_matrix = self._adjust_affine_matrix(mask.shape[0], affine_matrix)
         self._interpolator = interpolator
+        self.replace_mask(mask)
+
+    def replace_mask(self, mask):
+        """ Replace the existing :attr:`_mask` with the given mask.
+
+        Parameters
+        ----------
+        mask: numpy.ndarray
+            The mask that is to be added as output from :mod:`plugins.extract.mask`.
+            It should be in the range 0.0 - 1.0 ideally with a ``dtype`` of ``float32``
+        """
         mask = (cv2.resize(mask,
                            (self.stored_size, self.stored_size),
                            interpolation=cv2.INTER_AREA) * 255.0).astype("uint8")
