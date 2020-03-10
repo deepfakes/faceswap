@@ -73,7 +73,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         method: {"none", "clahe", "hist", "mean"}
             The normalization method to apply to faces prior to feeding into the model
         """
-        method = None if method.lower() == "none" else method
+        method = None if method is None or method.lower() == "none" else method
         self._normalize_method = method
 
     # << QUEUE METHODS >>> #
