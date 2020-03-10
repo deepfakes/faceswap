@@ -631,11 +631,9 @@ class Tooltip:
 
             if offscreen_again:
                 # No further checks will be done.
-
                 # TIP:
-                # A further mod might auto-magically augment the
-                # wrap length when the tooltip is too high to be
-                # kept inside the screen.
+                # A further mod might auto-magically augment the wrap length when the tooltip is
+                # too high to be kept inside the screen.
                 y_1 = 0
 
             return x_1, y_1
@@ -644,7 +642,7 @@ class Tooltip:
         pad = self._pad
         widget = self._widget
 
-        # creates a top level window
+        # Creates a top level window
         self._topwidget = tk.Toplevel(widget)
         if platform.system() == "Darwin":
             # For Mac OS

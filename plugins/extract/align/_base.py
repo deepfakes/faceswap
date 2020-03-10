@@ -66,8 +66,14 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_normalize_method(self, method):
-        """ Set the normalization method for feeding faces into the aligner """
-        method = None if method.lower() == "none" else method
+        """ Set the normalization method for feeding faces into the aligner.
+
+        Parameters
+        ----------
+        method: {"none", "clahe", "hist", "mean"}
+            The normalization method to apply to faces prior to feeding into the model
+        """
+        method = None if method is None or method.lower() == "none" else method
         self._normalize_method = method
 
     # << QUEUE METHODS >>> #

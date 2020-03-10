@@ -864,7 +864,7 @@ class ControlBuilder():
         if self.option.choices:
             logger.debug("Adding combo choices: %s", self.option.choices)
             ctl["values"] = [choice for choice in self.option.choices]
-            ctl["state"] = self.option.state
+            ctl["state"] = "readonly"
         logger.debug("Added control to Options Frame: %s", self.option.name)
         return ctl
 
