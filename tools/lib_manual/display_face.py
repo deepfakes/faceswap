@@ -24,9 +24,11 @@ class FacesViewerLoader():
         self._progress_bar = progress_bar
         self._enable_buttons_callback = enable_buttons_callback
         self._progress_bar.start(mode="determinate")
-        self._load_faces(0, 0)
+        from time import time
+        face_count = self._alignments.face_count_per_index
+        self._load_faces(0, face_count, time())
 
-    def _load_faces(self, faces_seen, frame_index):
+    def _load_faces(self, load_index, faces_count, start):
         """ Set the number of columns based on the holding frame width and face size.
         Load the faces into the Faces Canvas in a background thread.
 
@@ -34,23 +36,30 @@ class FacesViewerLoader():
         ----------
         frame_width: int
             The width of the :class:`tkinter.ttk.Frame` that holds this canvas """
-        self._update_progress(frame_index)
-        tk_faces, frames_count = self._convert_faces_to_photoimage(frame_index)
-        frame_landmarks = self._faces_cache.mesh_landmarks[frame_index:frames_count + frame_index]
-        for faces, mesh_landmarks in zip(tk_faces, frame_landmarks):
-            for face, landmarks in zip(faces, mesh_landmarks):
-                coords = self._canvas.coords_from_index(faces_seen)
-                self._canvas.new_objects.create(coords, face, landmarks, frame_index,
+        from time import time
+        self._update_progress(load_index)
+        #print("LI", load_index)
+        #print("CONV", time() - start, len(self._faces_cache._load_cache))
+        #print(len(tk_faces), len(frame_landmarks), load_count)
+        self._update_progress(load_index)
+        update_indices = self._faces_cache._load_cache[load_index:]
+        tk_faces = self._faces_cache.tk_faces[update_indices]
+        frame_landmarks = self._faces_cache._mesh_landmarks[update_indices]
+        for frame_idx, faces, mesh_landmarks in zip(update_indices, tk_faces, frame_landmarks):
+            starting_idx = sum(faces_count[:frame_idx])
+            for idx, (face, landmarks) in enumerate(zip(faces, mesh_landmarks)):
+                coords = self._canvas.coords_from_index(starting_idx + idx)
+                self._canvas.new_objects.create(coords, face, landmarks, frame_idx,
                                                 is_multi=len(faces) > 1)
                 if coords[0] == 0:  # Resize canvas on new line
                     self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-                faces_seen += 1
-            frame_index += 1
-        if frame_index == self._frame_count:
+        load_index += len(update_indices)
+        if load_index == self._frame_count:
+            print("total", time() - start)
             self._on_load_complete()
         else:
             logger.trace("Refreshing...")
-            self._canvas.after(1000, self._load_faces, faces_seen, frame_index)
+            self._canvas.after(1000, self._load_faces, load_index, faces_count, start)
 
     def _update_progress(self, frame_index):
         """ Update the progress on load. """
@@ -59,13 +68,13 @@ class FacesViewerLoader():
         msg = "Loading Faces: {}/{} - {}%".format(position, self._frame_count, progress)
         self._progress_bar.progress_update(msg, progress)
 
-    def _convert_faces_to_photoimage(self, frame_index):
+    def _convert_faces_to_photoimage(self, load_index):
         """ Retrieve latest loaded faces and convert to :class:`PIL.ImakeTk.PhotoImage`. """
-        update_faces = self._faces_cache.tk_faces[frame_index:]
-        frames_count = len(update_faces)
-        tk_faces = [[tk.PhotoImage(data=strbyte) for strbyte in faces] for faces in update_faces]
-        self._faces_cache.tk_faces[frame_index:frames_count + frame_index] = tk_faces
-        return tk_faces, frames_count
+        to_update = self._faces_cache._load_cache[load_index:]
+        load_count = len(to_update)
+        tk_faces = self._faces_cache.tk_faces[to_update]
+        mesh_landmarks = self._faces_cache._mesh_landmarks[to_update]
+        return tk_faces, mesh_landmarks, load_count
 
     def _on_load_complete(self):
         """ Actions to perform once the faces have finished loading into the canvas """
