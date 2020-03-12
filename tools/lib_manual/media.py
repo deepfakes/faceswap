@@ -6,8 +6,10 @@ import os
 import tkinter as tk
 from concurrent import futures
 from copy import deepcopy
+from time import sleep
 
 import cv2
+import imageio
 import numpy as np
 from PIL import Image, ImageTk
 
@@ -815,7 +817,7 @@ class FaceCache():
         self._tk_faces = []
         self._load_cache = []
         self._mesh_landmarks = []
-        self._background_load_faces()
+        self._load_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
@@ -846,14 +848,6 @@ class FaceCache():
         """ int: The size of each individual face in pixels. """
         return self._face_size
 
-    def _background_load_faces(self):
-        """ Launch a background thread to load the faces into cache and assign the canvas to
-        :attr:`_canvas` """
-        thread = MultiThread(self._load_faces,
-                             thread_count=1,
-                             name="{}.load_faces".format(self.__class__.__name__))
-        thread.start()
-
     def _load_faces(self):
         """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
         """
@@ -861,7 +855,7 @@ class FaceCache():
         self._mesh_landmarks = np.array([None for _ in range(self._frames.frame_count)])
         key_frames = self._alignments.video_meta_data["keyframes"]
         pts_times = self._alignments.video_meta_data["pts_time"]
-        #num_cpus = os.cpu_count()
+        # num_cpus = os.cpu_count()
         num_cpus = 6
         key_frame_split = len(key_frames) // num_cpus
         pts_groups = []
@@ -869,18 +863,17 @@ class FaceCache():
             start_idx = idx * key_frame_split
             end_pts = -1 if idx == num_cpus - 1 else key_frames[start_idx + key_frame_split]
             pts_groups.append((pts_times[key_frames[start_idx]], pts_times[end_pts]))
-        #for pts_start, pts_end in pts_groups:
-        #    print(pts_start, pts_end)
-        #    self._load_threads(pts_start, pts_end, pts_times.index(pts_start), pts_end==pts_groups[-1][1])
         executor = futures.ThreadPoolExecutor(max_workers=num_cpus)
         for pts_start, pts_end in pts_groups:
-            executor.submit(self._load_threads, pts_start, pts_end, pts_times.index(pts_start), pts_end==pts_groups[-1][1])
-
+            executor.submit(self._load_threads,
+                            pts_start,
+                            pts_end,
+                            pts_times.index(pts_start),
+                            pts_end == pts_groups[-1][1])
 
     def _load_threads(self, pts_start, pts_end, start_index, is_end):
         try:
             print(start_index, "start")
-            import imageio
             vidname = os.path.splitext(os.path.basename(self._frames.location))[0]
             input_params = ["-ss", str(pts_start)]
             if not is_end:
@@ -891,35 +884,30 @@ class FaceCache():
             for idx, frame in enumerate(reader):
                 real_idx = idx + start_index
                 filename = "{}_{:06d}.png".format(vidname, real_idx + 1)
-                tk_faces = []
-                mesh_landmarks = []
-                faces = self._alignments.saved_alignments.get(os.path.basename(filename), list())
-                for face in faces:
-                    tk_faces.append(self._load_face(frame, face))
-                    mesh_landmarks.append(self.get_mesh_points(face.aligned_landmarks))
 
-                tk_faces = [tk.PhotoImage(data=strbyte, master=self._root) for strbyte in tk_faces]
+                faces = self._alignments.saved_alignments.get(os.path.basename(filename), list())
+                for attempt in range(10):
+                    try:
+                        tk_faces = [tk.PhotoImage(data=self._load_face(frame[..., ::-1], face))
+                                    for face in faces]
+                        break
+                    except RuntimeError as err:
+                        if attempt == 9 or str(err) != "main thread is not in main loop":
+                            raise
+                        logger.debug("attempt: %s: %s", attempt + 1, str(err))
+                        sleep(0.25)
+
+                mesh_landmarks = [self.get_mesh_points(face.aligned_landmarks) for face in faces]
+
                 self.tk_faces[real_idx] = tk_faces
                 self._mesh_landmarks[real_idx] = mesh_landmarks
                 self._load_cache.append(real_idx)
             reader.close()
         except:
-            import sys ; import traceback
-            exc_info = sys.exc_info() ; traceback.print_exception(*exc_info)
+            # TODO Remove this
+            import sys; import traceback
+            exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
             raise
-
-
-
-#        loader = ImagesLoader(self._frames.location, count=self._frames.frame_count)
-#        for filename, frame in loader.load():
-#            tk_faces = []
-#            mesh_landmarks = []
-#            faces = self._alignments.saved_alignments.get(os.path.basename(filename), list())
-#            for face in faces:
-#                tk_faces.append(self._load_face(frame, face))
-#                mesh_landmarks.append(self.get_mesh_points(face.aligned_landmarks))
-#            self._tk_faces.append(tk_faces)
-#            self._mesh_landmarks.append(mesh_landmarks)#
 
     def _load_face(self, frame, face):
         """ Load the resized aligned face. """
@@ -997,14 +985,14 @@ class FaceCache():
         if not face_futures:
             self._stop_progress()
             return
-        self._root.after(50, self._update_display, face_futures, mask_type, total_faces, processed_count)
-
+        self._root.after(50,
+                         self._update_display,
+                         face_futures,
+                         mask_type,
+                         total_faces,
+                         processed_count)
 
     def _load_unload_masks(self, mask_type):
-        # TODO May be able to get around the photoimage lock up by doing a direct tk.call?
-        # TODO Read the output of threadpool executor in another func so we can use update after
-        # TODO Also try launching dedicated threads rather than threadpool to see if we can update
-        # the tk_face there
         """ Load or unload masks from the tkinter PhotoImage, performing manipulations
         in threads.
 
