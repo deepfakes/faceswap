@@ -802,6 +802,7 @@ class FaceCache():
         self._frames = frames
         self._face_size = int(round(96 * scaling_factor))
         self._root = root
+        self._loader = FaceCacheLoader(self)
         self._progress_bar = progress_bar
         self._tk_load_complete = self._set_load_complete_var()
         self._alpha = np.ones((self._face_size, self._face_size), dtype="uint8") * 255
@@ -814,10 +815,9 @@ class FaceCache():
                                       jaw=(0, 17),
                                       chin=(8, 11))
         self._current_mask_type = None
-        self._tk_faces = []
+        self._tk_faces = np.array([None for _ in range(frames.frame_count)])
+        self._mesh_landmarks = np.array([None for _ in range(frames.frame_count)])
         self._load_cache = []
-        self._mesh_landmarks = []
-        self._load_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
@@ -844,79 +844,23 @@ class FaceCache():
         return self._mesh_landmarks
 
     @property
+    def load_cache(self):
+        """ list: Item for each frame containing a dictionary for each face. """
+        return self._load_cache
+
+    @property
     def size(self):
         """ int: The size of each individual face in pixels. """
         return self._face_size
 
-    def _load_faces(self):
+    def load_faces(self):
         """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
         """
-        self._tk_faces = np.array([None for _ in range(self._frames.frame_count)])
-        self._mesh_landmarks = np.array([None for _ in range(self._frames.frame_count)])
-        key_frames = self._alignments.video_meta_data["keyframes"]
-        pts_times = self._alignments.video_meta_data["pts_time"]
-        # num_cpus = os.cpu_count()
-        num_cpus = 6
-        key_frame_split = len(key_frames) // num_cpus
-        pts_groups = []
-        for idx in range(num_cpus):
-            start_idx = idx * key_frame_split
-            end_pts = -1 if idx == num_cpus - 1 else key_frames[start_idx + key_frame_split]
-            pts_groups.append((pts_times[key_frames[start_idx]], pts_times[end_pts]))
-        executor = futures.ThreadPoolExecutor(max_workers=num_cpus)
-        for pts_start, pts_end in pts_groups:
-            executor.submit(self._load_threads,
-                            pts_start,
-                            pts_end,
-                            pts_times.index(pts_start),
-                            pts_end == pts_groups[-1][1])
+        self._loader.launch()
 
-    def _load_threads(self, pts_start, pts_end, start_index, is_end):
-        try:
-            print(start_index, "start")
-            vidname = os.path.splitext(os.path.basename(self._frames.location))[0]
-            input_params = ["-ss", str(pts_start)]
-            if not is_end:
-                input_params.extend(["-to", str(pts_end)])
-            reader = imageio.get_reader(self._frames.location,
-                                        "ffmpeg",
-                                        input_params=input_params)
-            for idx, frame in enumerate(reader):
-                real_idx = idx + start_index
-                filename = "{}_{:06d}.png".format(vidname, real_idx + 1)
-
-                faces = self._alignments.saved_alignments.get(os.path.basename(filename), list())
-                for attempt in range(10):
-                    try:
-                        tk_faces = [tk.PhotoImage(data=self._load_face(frame[..., ::-1], face))
-                                    for face in faces]
-                        break
-                    except RuntimeError as err:
-                        if attempt == 9 or str(err) != "main thread is not in main loop":
-                            raise
-                        logger.debug("attempt: %s: %s", attempt + 1, str(err))
-                        sleep(0.25)
-
-                mesh_landmarks = [self.get_mesh_points(face.aligned_landmarks) for face in faces]
-
-                self.tk_faces[real_idx] = tk_faces
-                self._mesh_landmarks[real_idx] = mesh_landmarks
-                self._load_cache.append(real_idx)
-            reader.close()
-        except:
-            # TODO Remove this
-            import sys; import traceback
-            exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
-            raise
-
-    def _load_face(self, frame, face):
-        """ Load the resized aligned face. """
-        face.load_aligned(frame, size=self._face_size, force=True)
-        bytes_string = self.generate_tk_face_data(face.aligned_face)
-        face.aligned["face"] = None
-        # TODO Document that this is set to a photo image from the canvas.
-        # Lists are thread safe (for our purposes) PhotoImage is not.
-        return bytes_string
+    def set_load_complete(self):
+        """ TODO """
+        self._tk_load_complete.set(True)
 
     def generate_tk_face_data(self, image, mask=None):
         """ Generate a new :tkinter:`PhotoImage` object with an empty mask in the 4th channel. """
@@ -928,10 +872,6 @@ class FaceCache():
 
         face = np.concatenate((image[..., :3], mask[..., None]), axis=-1)
         return cv2.imencode(".png", face, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring()
-
-    def set_load_complete(self):
-        """ TODO """
-        self._tk_load_complete.set(True)
 
     def get_mesh_points(self, landmarks):
         """ Obtain the mesh annotation points for a given set of landmarks. """
@@ -968,24 +908,26 @@ class FaceCache():
         mask_type = None if not is_enabled or mask_type == "" else mask_type.lower()
         if not self.is_initialized or mask_type == self._current_mask_type:
             return
-        self._start_progress()
+        self._progress_bar.start(mode="determinate")
         executor = self._load_unload_masks(mask_type)
         total_faces = sum(1 for tk_faces in self._tk_faces for tk_face in tk_faces)
         self._update_display(executor, mask_type, total_faces)
         self._current_mask_type = mask_type
 
     def _update_display(self, face_futures, mask_type, total_faces, processed_count=0):
-        to_process = {future: face_futures.pop(future) for future in list(face_futures)
-                      if future.done()}
-        for future, tk_face in to_process.items():
-            tk_face.put(future.result())
-            if processed_count % 100 == 0:
-                self._update_progress(mask_type, processed_count, total_faces)
-            processed_count += 1
+        # TODO Move this
+        to_process = [face_futures.pop(face_futures.index(future)) for future in list(face_futures)
+                      if future.done()]
+        processed_count += len(to_process)
+        self._update_progress(mask_type, processed_count, total_faces)
+        #for _ in range(len(to_process)):
+        #    if processed_count % 100 == 0:
+        #        self._update_progress(mask_type, processed_count, total_faces)
+        #    processed_count += 1
         if not face_futures:
-            self._stop_progress()
+            self._progress_bar.stop()
             return
-        self._root.after(50,
+        self._root.after(500,
                          self._update_display,
                          face_futures,
                          mask_type,
@@ -1006,12 +948,12 @@ class FaceCache():
         """
         iterator = self._unload_masks_iterator if mask_type is None else self._load_masks_iterator
         executor = futures.ThreadPoolExecutor(max_workers=2)
-        face_strings = {executor.submit(self._update_binary_mask,
-                                        tk_face.cget("data"),
-                                        mask_type,
-                                        face): tk_face
-                        for tk_face, face in iterator()}
-        return face_strings
+        futures_update = [executor.submit(self._update_bytes_mask,
+                                          tk_face,
+                                          mask_type,
+                                          face)
+                          for tk_face, face in iterator()]
+        return futures_update
 
     def _unload_masks_iterator(self):
         """ Remove mask from stored face. """
@@ -1036,6 +978,11 @@ class FaceCache():
                               interpolation=cv2.INTER_AREA)
         return mask
 
+    def _update_bytes_mask(self, tk_face, mask_type, detected_face=None):
+        """ Update the string version of the face image to include the given mask. """
+        mask = self._alpha if detected_face is None else self._get_mask(mask_type, detected_face)
+        self._update_mask_to_photoimage(tk_face, mask)
+
     @staticmethod
     def _update_mask_to_photoimage(tk_face, mask):
         """ Adjust the mask of the current tk_face """
@@ -1044,31 +991,12 @@ class FaceCache():
         img[..., -1] = mask
         tk_face.put(cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring())
 
-    def _update_binary_mask(self, face_string, mask_type, detected_face=None):
-        """ Update the string version of the face image to include the given mask. """
-        mask = self._alpha if detected_face is None else self._get_mask(mask_type, detected_face)
-        img = cv2.imdecode(np.fromstring(face_string, dtype="uint8"), cv2.IMREAD_UNCHANGED)
-        img[..., -1] = mask
-        retval = cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring()
-        return retval
-
-    def _start_progress(self):
-        """ Start the progress bar. """
-        self._progress_bar.start(mode="determinate")
-        self._root.config(cursor="watch")
-
     def _update_progress(self, mask_type, position, total_count):
         """ Update the progress bar. """
         progress = int(round((position / total_count) * 100))
         msg = "Removing Mask: " if mask_type is None else "Loading {} Mask: ".format(mask_type)
         msg += "{}/{} - {}%".format(position, total_count, progress)
         self._progress_bar.progress_update(msg, progress)
-        self._root.update_idletasks()
-
-    def _stop_progress(self):
-        """ Stop the progress bar. """
-        self._progress_bar.stop()
-        self._root.config(cursor="")
 
     def update_selected(self, frame_index, mask_type):
         """ Update the mask image for the faces in the given frame index. """
@@ -1078,3 +1006,102 @@ class FaceCache():
         faces = self._alignments.latest_alignments[self._alignments.sorted_keys[frame_index]]
         for face, tk_face in zip(faces, self._tk_faces[frame_index]):
             self._update_mask_to_photoimage(tk_face, self._get_mask(mask_type, face))
+
+
+class FaceCacheLoader():
+    """ Background loads the faces and mesh landmarks into the face cache. """
+    def __init__(self, faces_cache):
+        self._faces_cache = faces_cache
+        self._alignments = faces_cache._alignments
+        self._location = faces_cache._frames.location
+        self._key_frames = faces_cache._alignments.video_meta_data.get("keyframes", None)
+        self._pts_times = faces_cache._alignments.video_meta_data.get("pts_time", None)
+        self._num_threads = min(os.cpu_count() - 2, len(self._key_frames) - 1)
+        self._key_frame_split = len(self._key_frames) // self._num_threads
+        self._executor = futures.ThreadPoolExecutor(max_workers=self._num_threads)
+
+    def launch(self):
+        """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
+        """
+        for idx in range(self._num_threads):
+            start_idx = idx * self._key_frame_split
+            end_idx = self._key_frames[start_idx + self._key_frame_split]
+            start_pts = self._pts_times[self._key_frames[start_idx]]
+            end_pts = False if idx + 1 == self._num_threads else self._pts_times[end_idx]
+            starting_index = self._pts_times.index(start_pts)
+            if end_pts:
+                segment_count = len(self._pts_times[self._key_frames[start_idx]:end_idx])
+            else:
+                segment_count = len(self._pts_times[self._key_frames[start_idx]:])
+            self._executor.submit(self._load_threads,
+                                  start_pts,
+                                  end_pts,
+                                  starting_index,
+                                  segment_count)
+
+    def _load_threads(self, pts_start, pts_end, start_index, segment_count):
+        try:
+            logger.debug("pts_start: %s, pts_end: %s, start_frame_index: %s, segment_count: %s",
+                         pts_start, pts_end, start_index, segment_count)
+            reader = self._get_reader(pts_start, pts_end)
+            idx = 0
+            for idx, frame in enumerate(reader):
+                frame_idx = idx + start_index
+                faces = self._alignments.saved_alignments[self._alignments.sorted_keys[frame_idx]]
+                tk_faces = self._create_photoimages_for_frame(frame[..., ::-1], faces)
+                if tk_faces is None:
+                    break
+
+                mesh_landmarks = [self._faces_cache.get_mesh_points(face.aligned_landmarks)
+                                  for face in faces]
+                self._faces_cache.tk_faces[frame_idx] = tk_faces
+                self._faces_cache.mesh_landmarks[frame_idx] = mesh_landmarks
+                self._faces_cache.load_cache.append(frame_idx)
+                if idx == segment_count - 1:
+                    # Sometimes extra frames are picked up at the end of a segment, so stop
+                    # processing when segment frame count has been hit.
+                    break
+            reader.close()
+            logger.debug("Segment complete: (starting_frame_index: %s, processed_count: %s)",
+                         start_index, idx)
+        except:
+            # TODO Remove this
+            import sys; import traceback
+            exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
+            raise
+
+    def _get_reader(self, pts_start, pts_end):
+        """ Get an imageio reader for this thread's segment. """
+        input_params = ["-ss", str(pts_start)]
+        if pts_end:
+            input_params.extend(["-to", str(pts_end)])
+        logger.debug("pts_start: %s, pts_end: %s, input_params: %s",
+                     pts_start, pts_end, input_params)
+        return imageio.get_reader(self._location, "ffmpeg", input_params=input_params)
+
+    def _create_photoimages_for_frame(self, frame, faces):
+        """ Attempt to create the tk photoimages for the frame. """
+        for attempt in range(10):
+            try:
+                tk_faces = [tk.PhotoImage(data=self._load_face(frame, face))
+                            for face in faces]
+                break
+            except RuntimeError as err:
+                if attempt == 9 or str(err) not in ("main thread is not in main loop",
+                                                    "Too early to create image"):
+                    raise
+                if str(err) == "Too early to create image":
+                    # GUI has gone away. Probably quit during load
+                    return None
+                logger.info("attempt: %s: %s", attempt + 1, str(err))
+                sleep(0.25)
+        return tk_faces
+
+    def _load_face(self, frame, face):
+        """ Load the resized aligned face. """
+        face.load_aligned(frame, size=self._faces_cache.size, force=True)
+        bytes_string = self._faces_cache.generate_tk_face_data(face.aligned_face)
+        face.aligned["face"] = None
+        # TODO Document that this is set to a photo image from the canvas.
+        # Lists are thread safe (for our purposes) PhotoImage is not.
+        return bytes_string

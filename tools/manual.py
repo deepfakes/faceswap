@@ -62,13 +62,13 @@ class Manual(tk.Tk):
 
         self._containers = self._create_containers()
         progress_bar = StatusBar(self._containers["bottom"], hide_status=True)
+
+        self._wait_for_threads(extractor, video_meta_data)
         faces_cache = FaceCache(self._alignments,
                                 self._frames,
                                 scaling_factor,
                                 progress_bar,
                                 self._containers["main"])
-        self._wait_for_threads(extractor, video_meta_data)
-
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        faces_cache,
