@@ -189,7 +189,7 @@ def read_image_hash_batch(filenames):
         logger.debug("Submitting %s items to executor", len(filenames))
         read_hashes = {executor.submit(read_image_hash, filename): filename
                        for filename in filenames}
-        logger.debug("Succesfully submitted %s items to executor", len(filenames))
+        logger.debug("Successfully submitted %s items to executor", len(filenames))
         for future in futures.as_completed(read_hashes):
             retval = (read_hashes[future], future.result())
             logger.trace("Yielding: %s", retval)

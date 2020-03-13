@@ -354,7 +354,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             logger.error("Unable to switch branch. return code: %s, message: %s",
                          retcode, stdout.decode().strip().replace("\n", " - "))
             return
-        logger.info("Succesfully switched to '%s'. You may want to check for updates to make sure "
+        logger.info("Successfully switched to '%s'. You may want to check for updates to make sure "
                     "that you have the latest code.", branch)
         logger.info("Please restart Faceswap to complete the switch.")
 

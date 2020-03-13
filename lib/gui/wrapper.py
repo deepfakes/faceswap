@@ -276,7 +276,7 @@ class FaceswapControl():
             elapsed,
             self.train_stats["iterations"], message)
         self.statusbar.progress_update(message, 0, False)
-        logger.trace("Succesfully captured loss: %s", message)
+        logger.trace("Successfully captured loss: %s", message)
         return True
 
     def calc_elapsed(self):
@@ -319,7 +319,7 @@ class FaceswapControl():
         position = int(position) if position.isdigit() else 0
 
         self.statusbar.progress_update(message, position, True)
-        logger.trace("Succesfully captured tqdm message: %s", message)
+        logger.trace("Successfully captured tqdm message: %s", message)
         return True
 
     def capture_ffmpeg(self, string):
@@ -338,7 +338,7 @@ class FaceswapControl():
             return False
 
         self.statusbar.progress_update(message, 0, False)
-        logger.trace("Succesfully captured ffmpeg message: %s", message)
+        logger.trace("Successfully captured ffmpeg message: %s", message)
         return True
 
     def terminate(self):
