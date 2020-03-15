@@ -362,11 +362,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         scrollbar_width = self._add_scrollbar()
         self._canvas.set_column_count(self.winfo_width() - scrollbar_width)
 
-        FacesViewerLoader(self._canvas,
-                          faces_cache,
-                          frames.frame_count,
-                          progress_bar,
-                          self._actions_frame.enable_buttons)
+        FacesViewerLoader(self._canvas, progress_bar, self._actions_frame.enable_buttons)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -395,6 +391,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         amount = 1 if direction.endswith("down") else -1
         units = "pages" if direction.startswith("page") else "units"
         self._canvas.yview_scroll(int(amount), units)
+        self._canvas._hover_box.on_hover(None)
 
     def set_annotation_display(self, key):
         """ Set the optional annotation overlay based on keyboard shortcut.
@@ -530,33 +527,18 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._display_frame = display_frame
 
         self._object_creator = ObjectCreator(self)
-        self._hover_box = HoverBox(self, faces_cache.size)
+        self._hover_box = HoverBox(self)
         ContextMenu(self)
         self._active_filter = FaceFilter(self, "all_frames")
         self._active_frame = ActiveFrame(self)
         self._update_face = UpdateFace(self)
 
         self._bind_mouse_wheel_scrolling()
-        self._color_keys = dict(polygon="outline", line="fill")
-        self._landmark_mapping_dict = self._get_landmark_mapping()
         # Set in load_frames
         self._columns = None
         self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
         self._set_tk_callbacks()
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @staticmethod
-    def _get_landmark_mapping():
-        """ Return the mapping points """
-        mapping = dict(mouth=(48, 68),
-                       right_eyebrow=(17, 22),
-                       left_eyebrow=(22, 27),
-                       right_eye=(36, 42),
-                       left_eye=(42, 48),
-                       nose=(27, 36),
-                       jaw=(0, 17),
-                       chin=(8, 11))
-        return dict(mapping=mapping, items_per_mesh=len(mapping))
 
     @property
     def optional_annotations(self):
@@ -574,16 +556,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ :dict: Editor key with the currently selected hex code as value. """
         return {key: self._display_frame.colors[val.get()]
                 for key, val in self.tk_control_colors.items()}
-
-    @property
-    def _landmark_mapping(self):
-        """ dict: The landmark indices mapped to different face parts. """
-        return self._landmark_mapping_dict["mapping"]
-
-    @property
-    def items_per_mesh(self):
-        """ int: The number of items that are used to create a full mesh annotation. """
-        return self._landmark_mapping_dict["items_per_mesh"]
 
     @property
     def column_count(self):
