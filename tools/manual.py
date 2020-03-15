@@ -204,6 +204,10 @@ class Manual(tk.Tk):
             "space": self._display.handle_play_button,
             "home": self._display.goto_first_frame,
             "end": self._display.goto_last_frame,
+            "down": lambda d="down": self._faces_frame.canvas_scroll(d),
+            "up": lambda d="up": self._faces_frame.canvas_scroll(d),
+            "next": lambda d="page-down": self._faces_frame.canvas_scroll(d),
+            "prior": lambda d="page-up": self._faces_frame.canvas_scroll(d),
             "f": self._display.cycle_navigation_mode,
             "f1": lambda k=event.keysym: self._display.set_action(k),
             "f2": lambda k=event.keysym: self._display.set_action(k),
@@ -380,6 +384,18 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Update the faces frame scrollbar """
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
+    def canvas_scroll(self, direction):
+        """ Scroll the canvas on an up/down or page-up/page-down key press.
+
+        Parameters
+        ----------
+        direction: ["up", "down", "page-up", "page-down"]
+            The request page scroll direction.
+        """
+        amount = 1 if direction.endswith("down") else -1
+        units = "pages" if direction.startswith("page") else "units"
+        self._canvas.yview_scroll(int(amount), units)
+
     def set_annotation_display(self, key):
         """ Set the optional annotation overlay based on keyboard shortcut.
 
@@ -527,9 +543,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._columns = None
         self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
         self._set_tk_callbacks()
-
         logger.debug("Initialized %s", self.__class__.__name__)
-        self._frames.tk_navigation_mode.trace("w", self.switch_filter)
 
     @staticmethod
     def _get_landmark_mapping():
@@ -669,8 +683,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         if not self._faces_cache.is_initialized:
             return
         nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "_").lower()
-        # TODO Find out why this is executing twice
-        # print(nav_mode)
         nav_mode = "all_frames" if nav_mode == "has_face(s)" else nav_mode
         current_dsp = self._active_filter.filter_type
         logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, nav_mode)
