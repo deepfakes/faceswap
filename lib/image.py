@@ -642,9 +642,6 @@ class ImagesLoader(ImageIO):
         list of image files.
     queue_size: int, optional
         The amount of images to hold in the internal buffer. Default: 8.
-    load_with_hash: bool, optional
-        Set to ``True`` to return the sha1 hash of the image along with the image.
-        Default: ``False``.
     fast_count: bool, optional
         When loading from video, the video needs to be parsed frame by frame to get an accurate
         count. This can be done quite quickly without guaranteed accuracy, or slower with
@@ -657,14 +654,6 @@ class ImagesLoader(ImageIO):
         If the number of images that the loader will encounter is already known, it can be passed
         in here to skip the image counting step, which can save time at launch. Set to ``None`` if
         the count is not already known. Default: ``None``
-    single_frame_reader: bool, optional
-        ``True`` if a random frame access reader should be added to the loader, otherwise
-        ``False``. Default: ``False``
-    video_meta_data: dict, optional
-        Existing video meta information containing the pts_time and iskey flags for the given
-        video. Used in conjunction with single_frame_reader for faster seeks. Providing this means
-        that the video does not need to be scanned again. Set to ``None`` if the video is to be
-        scanned. Default: ``None``
 
     Examples
     --------
@@ -673,43 +662,26 @@ class ImagesLoader(ImageIO):
     >>> loader = ImagesLoader('/path/to/video.mp4')
     >>> for filename, image in loader.load():
     >>>     <do processing>
-
-    Loading faces with their sha1 hash:
-
-    >>> loader = ImagesLoader('/path/to/faces/folder', load_with_hash=True)
-    >>> for filename, image, sha1_hash in loader.load():
-    >>>     <do processing>
     """
 
     def __init__(self,
                  path,
                  queue_size=8,
-                 load_with_hash=False,
                  fast_count=True,
                  skip_list=None,
-                 count=None,
-                 single_frame_reader=False,
-                 video_meta_data=None):
-        logger.debug("Initializing %s: (path: %s, queue_size: %s, load_with_hash: %s, "
-                     "fast_count: %s, skip_list: %s count: %s, single_frame_reader: %s, "
-                     "video_meta_data: %s)", self.__class__.__name__, path, queue_size,
-                     load_with_hash, fast_count, skip_list, count, single_frame_reader,
-                     video_meta_data)
+                 count=None):
+        logger.debug("Initializing %s: (path: %s, queue_size: %s, fast_count: %s, skip_list: %s, "
+                     "count: %s)", self.__class__.__name__, path, queue_size, fast_count,
+                     skip_list, count)
 
-        args = (load_with_hash, )
-        super().__init__(path, queue_size=queue_size, args=args)
+        super().__init__(path, queue_size=queue_size)
         self._skip_list = set() if skip_list is None else set(skip_list)
-        self._video_meta_data = video_meta_data
-
         self._is_video = self._check_for_video()
-
         self._fps = self._get_fps()
 
         self._count = None
         self._file_list = None
-        self._single_frame_reader = self._get_count_and_filelist(fast_count,
-                                                                 count,
-                                                                 single_frame_reader)
+        self._get_count_and_filelist(fast_count, count)
 
     @property
     def count(self):
@@ -741,18 +713,6 @@ class ImagesLoader(ImageIO):
         ultimately be skipped if a :attr:`skip_list` has been provided. If the input is a video
         then this is a list of dummy filenames as corresponding to an alignments file """
         return self._file_list
-
-    @property
-    def video_meta_data(self):
-        """ dict: For videos contains the keys `frame_pts` holding a list of time stamps for each
-        frame and `keyframes` holding the frame index of each key frame.
-
-        Notes
-        -----
-        Only populated if the input is a video and single frame reader is being used, otherwise
-        returns ``None``.
-        """
-        return self._video_meta_data
 
     def add_skip_list(self, skip_list):
         """ Add a skip list to this :class:`ImagesLoader`
@@ -807,7 +767,7 @@ class ImagesLoader(ImageIO):
         logger.debug(retval)
         return retval
 
-    def _get_count_and_filelist(self, fast_count, count, single_frame_reader):
+    def _get_count_and_filelist(self, fast_count, count):
         """ Set the count of images to be processed and set the file list
 
             If the input is a video, a dummy file list is created for checking against an
@@ -824,13 +784,7 @@ class ImagesLoader(ImageIO):
             The number of images that the loader will encounter if already known, otherwise
             ``None``
         """
-        retval = None
         if self._is_video:
-            if single_frame_reader:
-                retval = imageio.get_reader(self.location, "ffmpeg")
-                count, meta = retval.get_frame_info(frame_pts=self._video_meta_data["pts_time"],
-                                                    keyframes=self._video_meta_data["keyframes"])
-                self._video_meta_data = meta
             self._count = int(count_frames(self.location,
                                            fast=fast_count)) if count is None else count
             self._file_list = [self._dummy_video_framename(i) for i in range(self.count)]
@@ -843,7 +797,6 @@ class ImagesLoader(ImageIO):
 
         logger.debug("count: %s", self.count)
         logger.trace("filelist: %s", self.file_list)
-        return retval
 
     def _process(self, queue):
         """ The load thread.
@@ -920,32 +873,24 @@ class ImagesLoader(ImageIO):
             The filename of the loaded image.
         image: numpy.ndarray
             The loaded image.
-        sha1_hash: str, optional
-            The sha1 hash of the loaded image. Only yielded if :class:`ImageIO` was
-            initialized with :attr:`load_with_hash` set to ``True`` and the :attr:`location`
-            is a folder of images.
         """
-        with_hash = self._args[0]
-        logger.debug("Loading images from folder: '%s'. with_hash: %s", self.location, with_hash)
+        logger.debug("Loading frames from folder: '%s'", self.location)
         for idx, filename in enumerate(self.file_list):
             if idx in self._skip_list:
                 logger.trace("Skipping frame %s due to skip list")
                 continue
-            image_read = read_image(filename, raise_error=False, with_hash=with_hash)
-            if with_hash:
-                retval = filename, *image_read
-            else:
-                retval = filename, image_read
+            image_read = read_image(filename, raise_error=False, with_hash=False)
+            retval = filename, image_read
             if retval[1] is None:
-                logger.debug("Image not loaded: '%s'", filename)
+                logger.warning("Frame not loaded: '%s'", filename)
                 continue
             yield retval
 
     def load(self):
         """ Generator for loading images from the given :attr:`location`
 
-        If :class:`ImageIO` was initialized with :attr:`load_with_hash` set to ``True`` then
-        the sha1 hash of the image is added as the final item in the output `tuple`.
+        If :class:`FacesLoader` is in use then the sha1 hash of the image is added as the final
+        item in the output `tuple`.
 
         Yields
         ------
@@ -953,10 +898,9 @@ class ImagesLoader(ImageIO):
             The filename of the loaded image.
         image: numpy.ndarray
             The loaded image.
-        sha1_hash: str, optional
-            The sha1 hash of the loaded image. Only yielded if :class:`ImageIO` was
-            initialized with :attr:`load_with_hash` set to ``True`` and the :attr:`location`
-            is a folder of images.
+        sha1_hash: str, (:class:`FacesLoader` only)
+            The sha1 hash of the loaded image. Only yielded if :class:`FacesLoader` is being
+            executed.
         """
         logger.debug("Initializing Load Generator")
         self._set_thread()
@@ -974,6 +918,92 @@ class ImagesLoader(ImageIO):
             yield retval
         logger.debug("Closing Load Generator")
         self.close()
+
+
+class FacesLoader(ImagesLoader):
+    """ Loads faces from a faces folder along with the face's hash.
+
+    Examples
+    --------
+    Loading faces with their sha1 hash:
+
+    >>> loader = FacesLoader('/path/to/faces/folder')
+    >>> for filename, face, sha1_hash in loader.load():
+    >>>     <do processing>
+    """
+    def __init__(self, path, skip_list=None, count=None):
+        logger.debug("Initializing %s: (path: %s, count: %s)", self.__class__.__name__,
+                     path, count)
+        super().__init__(path, queue_size=8, skip_list=skip_list, count=count)
+
+    def _from_folder(self):
+        """ Generator for loading images from a folder
+        Faces will only ever be loaded from a folder, so this is the only function requiring
+        an override
+
+        Yields
+        ------
+        filename: str
+            The filename of the loaded image.
+        image: numpy.ndarray
+            The loaded image.
+        sha1_hash: str
+            The sha1 hash of the loaded image.
+        """
+        logger.debug("Loading images from folder: '%s'", self.location)
+        for idx, filename in enumerate(self.file_list):
+            if idx in self._skip_list:
+                logger.trace("Skipping face %s due to skip list")
+                continue
+            image_read = read_image(filename, raise_error=False, with_hash=True)
+            retval = filename, *image_read
+            if retval[1] is None:
+                logger.warning("Face not loaded: '%s'", filename)
+                continue
+            yield retval
+
+
+class SingleFrameLoader(ImagesLoader):
+    """ Allows direct access to a frame by filename or frame index.
+
+    As we are interested in instant access to frames, there is no requirement to process in a
+    background thread, as either way we need to wait for the frame to load.
+
+    Parameters
+    ----------
+    video_meta_data: dict, optional
+        Existing video meta information containing the pts_time and iskey flags for the given
+        video. Used in conjunction with single_frame_reader for faster seeks. Providing this means
+        that the video does not need to be scanned again. Set to ``None`` if the video is to be
+        scanned. Default: ``None``
+     """
+    def __init__(self, path, video_meta_data=None):
+        logger.debug("Initializing %s: (path: %s, video_meta_data: %s)",
+                     self.__class__.__name__, path, video_meta_data)
+        self._video_meta_data = dict() if video_meta_data is None else video_meta_data
+        self._reader = None
+        super().__init__(path, queue_size=1, fast_count=False)
+
+    @property
+    def video_meta_data(self):
+        """ dict: For videos contains the keys `frame_pts` holding a list of time stamps for each
+        frame and `keyframes` holding the frame index of each key frame.
+
+        Notes
+        -----
+        Only populated if the input is a video and single frame reader is being used, otherwise
+        returns ``None``.
+        """
+        return self._video_meta_data
+
+    def _get_count_and_filelist(self, fast_count, count):
+        if self._is_video:
+            self._reader = imageio.get_reader(self.location, "ffmpeg")
+            count, video_meta_data = self._reader.get_frame_info(
+                frame_pts=self._video_meta_data.get("pts_time", None),
+                keyframes=self._video_meta_data.get("keyframes", None))
+            self._video_meta_data = video_meta_data
+        super()._get_count_and_filelist(fast_count, count)
 
     def image_from_index(self, index):
         """ Return a single image from :attr:`file_list` for the given index.
@@ -1002,7 +1032,7 @@ class ImagesLoader(ImageIO):
         by index will be done when required.
         """
         if self.is_video:
-            image = self._single_frame_reader.get_data(index)[..., ::-1]
+            image = self._reader.get_data(index)[..., ::-1]
             filename = self._dummy_video_framename(index)
         else:
             filename = self.file_list[index]

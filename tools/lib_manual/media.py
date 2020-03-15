@@ -16,7 +16,7 @@ from PIL import Image, ImageTk
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.image import ImagesLoader
+from lib.image import SingleFrameLoader
 from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -187,10 +187,7 @@ class FrameNavigation():
 
     def _load_images(self, frames_location, video_meta_data):
         """ Load the images in a background thread. """
-        self._loader = ImagesLoader(frames_location,
-                                    queue_size=1,
-                                    single_frame_reader=True,
-                                    video_meta_data=video_meta_data)
+        self._loader = SingleFrameLoader(frames_location, video_meta_data=video_meta_data)
 
     def _set_current_frame(self, *args,  # pylint:disable=unused-argument
                            initialize=False):
@@ -498,7 +495,7 @@ class AlignmentsData():
             logger.debug("Alignments not updated. Returning")
             return
         to_save = {key: val["new"] for key, val in self._alignments.items() if "new" in val}
-        logger.info("Saving alignments for frames: '%s'", list(to_save.keys()))
+        logger.verbose("Saving alignments for frames: '%s'", list(to_save.keys()))
 
         for frame, faces in to_save.items():
             self._alignments_file.data[frame]["faces"] = [face.to_alignment() for face in faces]
@@ -553,7 +550,6 @@ class AlignmentsData():
         face.w = width
         face.y = pnt_y
         face.h = height
-        # TODO face.mask = dict()
         face.landmarks_xy = self._extractor.get_landmarks()
         face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._tk_edited.set(True)
@@ -585,7 +581,6 @@ class AlignmentsData():
         self._check_for_new_alignments()
         self._face_index = face_index
         face = self.current_face
-        # face.mask = dict()  # TODO Something with masks that doesn't involve clearing them
         if is_zoomed:
             landmark = face.aligned_landmarks[landmark_index]
             landmark += (shift_x, shift_y)
@@ -628,7 +623,6 @@ class AlignmentsData():
         face = self.current_face
         face.x += shift_x
         face.y += shift_y
-        # TODO face.mask = dict()
         face.landmarks_xy += (shift_x, shift_y)
         face.load_aligned(self._frames.current_frame, size=self._face_size, force=True)
         self._tk_edited.set(True)
@@ -920,10 +914,6 @@ class FaceCache():
                       if future.done()]
         processed_count += len(to_process)
         self._update_progress(mask_type, processed_count, total_faces)
-        #for _ in range(len(to_process)):
-        #    if processed_count % 100 == 0:
-        #        self._update_progress(mask_type, processed_count, total_faces)
-        #    processed_count += 1
         if not face_futures:
             self._progress_bar.stop()
             return
@@ -947,7 +937,7 @@ class FaceCache():
         max_worker count. Also, multiprocessing is slower for this task.
         """
         iterator = self._unload_masks_iterator if mask_type is None else self._load_masks_iterator
-        executor = futures.ThreadPoolExecutor(max_workers=2)
+        executor = futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 1)
         futures_update = [executor.submit(self._update_bytes_mask,
                                           tk_face,
                                           mask_type,
@@ -1016,16 +1006,25 @@ class FaceCacheLoader():
         self._location = faces_cache._frames.location
         self._key_frames = faces_cache._alignments.video_meta_data.get("keyframes", None)
         self._pts_times = faces_cache._alignments.video_meta_data.get("pts_time", None)
-        self._num_threads = min(os.cpu_count() - 2, len(self._key_frames) - 1)
-        self._key_frame_split = len(self._key_frames) // self._num_threads
+        self._is_video = self._key_frames is not None and self._pts_times is not None
+        self._num_threads = os.cpu_count() - 2
+        if self._is_video:
+            self._num_threads = min(self._num_threads, len(self._key_frames) - 1)
         self._executor = futures.ThreadPoolExecutor(max_workers=self._num_threads)
 
     def launch(self):
         """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
         """
+        if self._is_video:
+            self._launch_video()
+        else:
+            self._launch_folder()
+
+    def _launch_video(self):
+        key_frame_split = len(self._key_frames) // self._num_threads
         for idx in range(self._num_threads):
-            start_idx = idx * self._key_frame_split
-            end_idx = self._key_frames[start_idx + self._key_frame_split]
+            start_idx = idx * key_frame_split
+            end_idx = self._key_frames[start_idx + key_frame_split]
             start_pts = self._pts_times[self._key_frames[start_idx]]
             end_pts = False if idx + 1 == self._num_threads else self._pts_times[end_idx]
             starting_index = self._pts_times.index(start_pts)
@@ -1033,42 +1032,32 @@ class FaceCacheLoader():
                 segment_count = len(self._pts_times[self._key_frames[start_idx]:end_idx])
             else:
                 segment_count = len(self._pts_times[self._key_frames[start_idx]:])
-            self._executor.submit(self._load_threads,
+            self._executor.submit(self._load_from_video,
                                   start_pts,
                                   end_pts,
                                   starting_index,
                                   segment_count)
 
-    def _load_threads(self, pts_start, pts_end, start_index, segment_count):
-        try:
-            logger.debug("pts_start: %s, pts_end: %s, start_frame_index: %s, segment_count: %s",
-                         pts_start, pts_end, start_index, segment_count)
-            reader = self._get_reader(pts_start, pts_end)
-            idx = 0
-            for idx, frame in enumerate(reader):
-                frame_idx = idx + start_index
-                faces = self._alignments.saved_alignments[self._alignments.sorted_keys[frame_idx]]
-                tk_faces = self._create_photoimages_for_frame(frame[..., ::-1], faces)
-                if tk_faces is None:
-                    break
+    def _launch_folder(self):
+        reader = SingleFrameLoader(self._location)
+        for idx in range(reader.count):
+            self._executor.submit(self._load_from_folder, reader, idx)
 
-                mesh_landmarks = [self._faces_cache.get_mesh_points(face.aligned_landmarks)
-                                  for face in faces]
-                self._faces_cache.tk_faces[frame_idx] = tk_faces
-                self._faces_cache.mesh_landmarks[frame_idx] = mesh_landmarks
-                self._faces_cache.load_cache.append(frame_idx)
-                if idx == segment_count - 1:
-                    # Sometimes extra frames are picked up at the end of a segment, so stop
-                    # processing when segment frame count has been hit.
-                    break
-            reader.close()
-            logger.debug("Segment complete: (starting_frame_index: %s, processed_count: %s)",
-                         start_index, idx)
-        except:
-            # TODO Remove this
-            import sys; import traceback
-            exc_info = sys.exc_info(); traceback.print_exception(*exc_info)
-            raise
+    def _load_from_video(self, pts_start, pts_end, start_index, segment_count):
+        logger.debug("pts_start: %s, pts_end: %s, start_frame_index: %s, segment_count: %s",
+                     pts_start, pts_end, start_index, segment_count)
+        reader = self._get_reader(pts_start, pts_end)
+        idx = 0
+        for idx, frame in enumerate(reader):
+            frame_idx = idx + start_index
+            self._set_face_cache_objects(frame[..., ::-1], frame_idx)
+            if idx == segment_count - 1:
+                # Sometimes extra frames are picked up at the end of a segment, so stop
+                # processing when segment frame count has been hit.
+                break
+        reader.close()
+        logger.debug("Segment complete: (starting_frame_index: %s, processed_count: %s)",
+                     start_index, idx)
 
     def _get_reader(self, pts_start, pts_end):
         """ Get an imageio reader for this thread's segment. """
@@ -1079,8 +1068,41 @@ class FaceCacheLoader():
                      pts_start, pts_end, input_params)
         return imageio.get_reader(self._location, "ffmpeg", input_params=input_params)
 
+    def _load_from_folder(self, reader, frame_index):
+        _, frame = reader.image_from_index(frame_index)
+        self._set_face_cache_objects(frame, frame_index)
+
+    def _set_face_cache_objects(self, frame, frame_index):
+        faces = self._alignments.saved_alignments[self._alignments.sorted_keys[frame_index]]
+        tk_faces = self._create_photoimages_for_frame(frame, faces)
+        if tk_faces is None:
+            return
+        mesh_landmarks = [self._faces_cache.get_mesh_points(face.aligned_landmarks)
+                          for face in faces]
+        self._faces_cache.tk_faces[frame_index] = tk_faces
+        self._faces_cache.mesh_landmarks[frame_index] = mesh_landmarks
+        self._faces_cache.load_cache.append(frame_index)
+
     def _create_photoimages_for_frame(self, frame, faces):
-        """ Attempt to create the tk photoimages for the frame. """
+        """ Create the :class:`tkinter.PhotoImage` faces for a given frame.
+
+        Notes
+        -----
+        Updating :class:`tkinter.PhotoImage` objects outside of the main loop can lead to issues.
+        To protect against this, we run several attempts before failing.
+
+        Parameters
+        ----------
+        frame: :class:`numpy.ndarray`:
+            The frame that is to be used for creating a face object
+        faces: list
+            list of :class:`~lib.faces_detect.detected_face` objects for the faces in the given
+            frame
+
+        Returns
+        list
+            The list of :class:`tkinter.PhotoImage` face objects for the given frame
+        """
         for attempt in range(10):
             try:
                 tk_faces = [tk.PhotoImage(data=self._load_face(frame, face))

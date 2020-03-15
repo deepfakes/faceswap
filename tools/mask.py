@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.image import ImagesLoader, ImagesSaver
+from lib.image import FacesLoader, ImagesLoader, ImagesSaver
 
 from lib.multithreading import MultiThread
 from lib.utils import get_folder
@@ -48,7 +48,8 @@ class Mask():
 
         self._check_input(arguments.input)
         self._saver = self._set_saver(arguments)
-        self._loader = ImagesLoader(arguments.input, load_with_hash=self._input_is_faces)
+        loader = FacesLoader if self._input_is_faces else ImagesLoader
+        self._loader = loader(arguments.input)
         self._alignments = Alignments(os.path.dirname(arguments.alignments),
                                       filename=os.path.basename(arguments.alignments))
 
