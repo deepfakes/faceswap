@@ -14,7 +14,8 @@ from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
-from . import Annotate, ExtractedFaces, Faces, Frames
+from .annotate import Annotate
+from .media import ExtractedFaces, Faces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

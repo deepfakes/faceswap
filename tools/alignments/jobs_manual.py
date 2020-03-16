@@ -10,7 +10,8 @@ import numpy as np
 from lib.faces_detect import DetectedFace
 from lib.queue_manager import queue_manager
 from plugins.extract.pipeline import Extractor, ExtractMedia
-from . import Annotate, ExtractedFaces, Frames
+from .annotate import Annotate
+from .media import ExtractedFaces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

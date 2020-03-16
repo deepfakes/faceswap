@@ -32,8 +32,7 @@
 !plugins/convert/*
 !.pylintrc
 !tools
-!tools/lib*
-!tools/lib*/*
+!tools/*
 !_travis
 !_travis/*
 !.travis.yml
