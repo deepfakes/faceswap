@@ -33,6 +33,7 @@ class FaceFilter():
         self._set_initial_layout()
         if self._filter_type == "no_faces":
             self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -78,7 +79,6 @@ class FaceFilter():
         not be displayed. """
         mesh_state = self._canvas.optional_annotations["mesh"]
         for state, tag in self._view_states[self._filter_type].items():
-            # TODO When mask comes in this will need to be more complex
             tag += "_image" if state == "normal" and not mesh_state else ""
             logger.debug("Setting state to '%s' for tag '%s' in filter_type: '%s'",
                          state, tag, self._filter_type)
@@ -99,9 +99,7 @@ class FaceFilter():
             if not offset.any():
                 continue
             self._canvas.move(self._canvas.face_id_from_object(image_id), *offset)
-        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
-    # TODO Deleting faces on multi face filter is broken
     def add_face(self, image_id, mesh_ids, mesh_landmarks):
         """ Place a newly added face in the correct location for the current :attr:`filter_type`
         and shift subsequent faces to their new locations.
@@ -212,7 +210,6 @@ class FaceFilter():
 
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
-    # TODO Adding faces to last frame breaks this
     def _tag_objects_to_move(self, start_index, is_insert):
         """ Tag the 3 object groups that require moving.
 

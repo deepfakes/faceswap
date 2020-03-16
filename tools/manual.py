@@ -510,9 +510,9 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.trace("Face cache not initialized. Waiting 1 second...")
             self.after(1000, self._enable_buttons)
             return
-        logger.info("Enabling optional annotation buttons")
+        logger.debug("Enabling optional annotation buttons")
         for button in self._buttons.values():
-            button.debug(["!pressed", "!focus", "!disabled"])
+            button.state(["!pressed", "!focus", "!disabled"])
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
