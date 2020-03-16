@@ -6,7 +6,7 @@ from lib.cli import DirOrFileFullPaths, DirFullPaths, FilesFullPaths, Radio, Sli
 _HELPTEXT = "This command lets you perform various tasks pertaining to an alignments file."
 
 
-class CliArgs(FaceSwapArgs):
+class AlignmentsArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Alignments tool """
 
     @staticmethod

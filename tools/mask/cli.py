@@ -7,7 +7,7 @@ from plugins.plugin_loader import PluginLoader
 _HELPTEXT = "This command lets you generate masks for existing alignments."
 
 
-class CliArgs(FaceSwapArgs):
+class MaskArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Mask tool """
 
     @staticmethod

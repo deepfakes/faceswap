@@ -9,7 +9,7 @@ from lib.utils import _image_extensions
 _HELPTEXT = "This command allows you to easily execute common ffmpeg tasks."
 
 
-class CliArgs(FaceSwapArgs):
+class EffmpegArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for EFFMPEG tool """
 
     @staticmethod

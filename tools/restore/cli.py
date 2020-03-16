@@ -6,7 +6,7 @@ from lib.cli import DirFullPaths
 _HELPTEXT = "This command lets you restore models from backup."
 
 
-class CliArgs(FaceSwapArgs):
+class RestoreArgs(FaceSwapArgs):
     """ Class to restore model files from backup """
 
     @staticmethod

@@ -6,7 +6,7 @@ from lib.cli import DirFullPaths, SaveFileFullPaths, Radio, Slider
 _HELPTEXT = "This command lets you sort images using various methods."
 
 
-class CliArgs(FaceSwapArgs):
+class SortArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for sort tool """
 
     @staticmethod

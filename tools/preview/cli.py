@@ -6,7 +6,7 @@ from lib.cli import DirOrFileFullPaths, DirFullPaths, FileFullPaths
 _HELPTEXT = "This command allows you to preview swaps to tweak convert settings."
 
 
-class CliArgs(FaceSwapArgs):
+class PreviewArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Preview (Convert Settings) tool """
 
     @staticmethod

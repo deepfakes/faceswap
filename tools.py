@@ -18,7 +18,8 @@ if sys.version_info[0] == 3 and sys.version_info[1] < 2:
 def bad_args(args):  # pylint:disable=unused-argument
     """ Print help on bad arguments """
     PARSER.print_help()
-    exit(0)
+    sys.exit(0)
+
 
 def _get_cli_opts():
     """ Optain the subparsers and cli options for available tools """
@@ -29,9 +30,10 @@ def _get_cli_opts():
         if os.path.exists(cli_file):
             mod = ".".join(("tools", tool_name, "cli"))
             module = import_module(mod)
-            cliarg_class = getattr(module, "CliArgs")
+            cliarg_class = getattr(module, "{}Args".format(tool_name.title()))
             help_text = getattr(module, "_HELPTEXT")
             yield tool_name, help_text, cliarg_class
+
 
 if __name__ == "__main__":
     _TOOLS_WARNING = "Please backup your data and/or test the tool you want "
