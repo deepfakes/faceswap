@@ -35,7 +35,7 @@ class ScriptExecutor():
         self.test_for_tf_version()
         self.test_for_gui()
         cmd = os.path.basename(sys.argv[0])
-        src = "tools" if cmd == "tools.py" else "scripts"
+        src = "tools.{}".format(self.command.lower()) if cmd == "tools.py" else "scripts"
         mod = ".".join((src, self.command.lower()))
         module = import_module(mod)
         script = getattr(module, self.command.title())
