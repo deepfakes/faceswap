@@ -11,7 +11,6 @@ from lib.gui.custom_widgets import RightClickMenu
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO Make it so user can't save until faces are loaded (so alignments dict doesn't change)
-# TODO Adding lots of faces during load leads to faces duplicating
 
 
 class FacesViewerLoader():  # pylint:disable=too-few-public-methods
@@ -45,10 +44,11 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         self._progress_bar.start(mode="determinate")
         face_count = self._alignments.face_count_per_index
         self._faces_cache.load_faces()
-        self._load_faces(0, face_count)
+        frame_faces_loaded = [False for _ in range(self._frame_count)]
+        self._load_faces(0, face_count, frame_faces_loaded)
         logger.debug("Initialized: %s ", self.__class__.__name__,)
 
-    def _load_faces(self, load_index, faces_count):
+    def _load_faces(self, load_index, faces_count, frame_faces_loaded):
         """ Load the currently available faces from :class:`tools.lib_manual.media.FacesCache`
         into the Faces Viewer.
 
@@ -62,6 +62,9 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         faces_count: list
             The number of faces that appear in each frame. List is of length :attr:`_frame_count`
             with each value being the number of faces that appear for the given index.
+        frame_faces_loaded: list
+            List of length :attr:`_frame_count` containing `bool` values indicating whether
+            annotations have been created for each frame or not.
         """
         self._update_progress(load_index)
         update_indices = self._faces_cache.load_cache[load_index:]
@@ -75,6 +78,9 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
                 self._canvas.new_objects.create(coords, face, landmarks, frame_idx,
                                                 is_multi=len(faces) > 1)
                 self._reshape_canvas(coords)
+            if faces:
+                self._place_in_stack(frame_idx, frame_faces_loaded)
+
         load_index += len(update_indices)
         if load_index == self._frame_count:
             logger.debug("Load complete")
@@ -82,7 +88,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         else:
             logger.debug("Refreshing... (load_index: %s, frame_count: %s",
                          load_index, self._frame_count)
-            self._canvas.after(500, self._load_faces, load_index, faces_count)
+            self._canvas.after(500, self._load_faces, load_index, faces_count, frame_faces_loaded)
 
     def _reshape_canvas(self, coordinates):
         """ Scroll the canvas to the first row, when the first row has been received from the
@@ -101,6 +107,29 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         if coordinates[0] == 0:  # Resize canvas on new line
             logger.trace("Extending canvas")
             self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+    def _place_in_stack(self, frame_index, frame_faces_loaded):
+        """ Place any out of order objects into their correct position in the stack.
+        As the images are loaded in parallel, the faces do not created in order on the stack.
+        For the viewer to work correctly, out of order items are placed back in the correct place.
+
+        Parameters
+        ----------
+        frame_index: int
+            The index that the currently loading objects belong to
+        frame_faces_loaded: list
+            List of length :attr:`_frame_count` containing `bool` values indicating whether
+            annotations have been created for each frame or not.
+        """
+        frame_faces_loaded[frame_index] = True
+        offset = frame_index + 1
+        higher_frames = frame_faces_loaded[offset:]
+        if not any(higher_frames):
+            return
+        below_frame = next(idx for idx, loaded in enumerate(higher_frames) if loaded) + offset
+        logger.trace("Placing frame %s in stack below frame %s", frame_index, below_frame)
+        self._canvas.tag_lower("frame_id_{}".format(frame_index),
+                               "frame_id_{}".format(below_frame))
 
     def _update_progress(self, load_index):
         """ Update the progress bar prior to loading the latest faces.
@@ -132,8 +161,6 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
             image_ids = self._canvas.find_withtag("image_{}".format(frame_idx))
             existing_count = len(image_ids)
             new_count = len(faces)
-            logger.debug("Updating, frame index: %s, old_count: %s, new_count: %s",
-                         frame_idx, existing_count, new_count)
             self._on_load_remove_faces(existing_count, new_count, frame_idx)
             for face_idx in range(new_count):
                 if face_idx + 1 > existing_count:
@@ -161,6 +188,8 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         frame_index: int
             The frame index to remove faces for
         """
+        logger.debug("existing_count: %s. new_count: %s, frame_index: %s",
+                     existing_count, new_count, frame_index)
         if existing_count <= new_count:
             return
         for face_idx in range(new_count, existing_count):
@@ -659,6 +688,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         color = self._canvas.get_muted_color("Mesh")
         kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
         state = "normal" if self._tk_vars["optional_annotations"]["mesh"].get() else "hidden"
+        # TODO None type error on face deletion
         for mesh_id in self._prev_objects["mesh"]:
             self._canvas.itemconfig(mesh_id, state=state, **kwargs[self._canvas.type(mesh_id)])
         self._prev_objects["mesh"] = None
@@ -741,7 +771,7 @@ class UpdateFace():
         frame_index: int
             The frame index to add the face for
         """
-        face_idx = self._alignments.face_count_per_index[frame_index] - 1
+        face_idx = len(self._canvas.find_withtag("image_{}".format(frame_index)))
         logger.debug("Adding face to frame: (frame_index: %s, face_index: %s)",
                      frame_index, face_idx)
         # Add objects to cache
