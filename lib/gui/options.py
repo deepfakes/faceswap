@@ -2,12 +2,14 @@
 """ Cli Options for the GUI """
 import inspect
 from argparse import SUPPRESS
+from importlib import import_module
 import logging
+import os
 import re
+import sys
 from collections import OrderedDict
 
 from lib import cli
-import tools.cli as ToolsCli
 from .utils import get_images
 from .control_helper import ControlPanelOption
 
@@ -28,16 +30,21 @@ class CliOptions():
         """ Get the commands that belong to each category """
         for category in self.categories:
             logger.debug("Building '%s'", category)
-            src = ToolsCli if category == "tools" else cli
-            mod_classes = self.get_cli_classes(src)
-            self.commands[category] = self.sort_commands(category, mod_classes)
-            self.opts.update(self.extract_options(src, mod_classes))
+            if category == "tools":
+                mod_classes = self._get_tools_cli_classes()
+                self.commands[category] = self.sort_commands(category, mod_classes)
+                for tool in sorted(mod_classes):
+                    self.opts.update(self.extract_options(mod_classes[tool], [tool]))
+            else:
+                mod_classes = self.get_cli_classes(cli)
+                self.commands[category] = self.sort_commands(category, mod_classes)
+                self.opts.update(self.extract_options(cli, mod_classes))
             logger.debug("Built '%s'", category)
 
     @staticmethod
     def get_cli_classes(cli_source):
         """ Parse the cli scripts for the argument classes """
-        mod_classes = list()
+        mod_classes = []
         for name, obj in inspect.getmembers(cli_source):
             if inspect.isclass(obj) and name.lower().endswith("args") \
                     and name.lower() not in (("faceswapargs",
@@ -45,6 +52,19 @@ class CliOptions():
                                               "guiargs")):
                 mod_classes.append(name)
         logger.debug(mod_classes)
+        return mod_classes
+
+    @staticmethod
+    def _get_tools_cli_classes():
+        """ Parse the tools cli scripts for the argument classes """
+        base_path = os.path.realpath(os.path.dirname(sys.argv[0]))
+        tools_dir = os.path.join(base_path, "tools")
+        mod_classes = dict()
+        for tool_name in sorted(os.listdir(tools_dir)):
+            cli_file = os.path.join(tools_dir, tool_name, "cli.py")
+            if os.path.exists(cli_file):
+                mod = ".".join(("tools", tool_name, "cli"))
+                mod_classes["{}Args".format(tool_name.title())] = import_module(mod)
         return mod_classes
 
     def sort_commands(self, category, classes):
@@ -263,7 +283,7 @@ class CliOptions():
                 get_images().set_faceswap_output_path(optval)
             if optval in ("False", ""):
                 continue
-            elif optval == "True":
+            if optval == "True":
                 yield (opt, )
             else:
                 if option.get("nargs", None):

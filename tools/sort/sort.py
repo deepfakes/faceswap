@@ -14,14 +14,11 @@ import cv2
 from tqdm import tqdm
 
 # faceswap imports
-from lib.cli import FullHelpArgumentParser
 from lib.serializer import get_serializer_from_filename
 from lib.faces_detect import DetectedFace
 from lib.image import ImagesLoader, read_image
 from lib.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.extract.pipeline import Extractor, ExtractMedia
-
-from . import cli
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -740,25 +737,3 @@ class Sort():
             score = np.sum(np.absolute((fl2 - fl1).flatten()))
             scores.append(score)
         return sum(scores) / len(scores)
-
-
-def bad_args(args):  # pylint: disable=unused-argument
-    """ Print help on bad arguments """
-    PARSER.print_help()
-    sys.exit(0)
-
-
-if __name__ == "__main__":
-    __WARNING_STRING = "Important: face-cnn method will cause an error when "
-    __WARNING_STRING += "this tool is called directly instead of through the "
-    __WARNING_STRING += "tools.py command script."
-    print(__WARNING_STRING)
-    print("Images sort tool.\n")
-
-    PARSER = FullHelpArgumentParser()
-    SUBPARSER = PARSER.add_subparsers()
-    SORT = cli.SortArgs(
-        SUBPARSER, "sort", "Sort images using various methods.")
-    PARSER.set_defaults(func=bad_args)
-    ARGUMENTS = PARSER.parse_args()
-    ARGUMENTS.func(ARGUMENTS)
