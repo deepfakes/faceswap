@@ -46,10 +46,12 @@ class Manual(tk.Tk):
         self._initialize_tkinter()
 
         extractor = Aligner()
+        tk_face_load_complete = self._create_load_complete_var()
         self._alignments = AlignmentsData(arguments.alignments_path,
                                           extractor,
                                           arguments.frames,
-                                          is_video)
+                                          is_video,
+                                          tk_face_load_complete)
 
         scaling_factor = get_config().scaling_factor
         video_meta_data = self._alignments.video_meta_data
@@ -64,11 +66,12 @@ class Manual(tk.Tk):
         progress_bar = StatusBar(self._containers["bottom"], hide_status=True)
 
         self._wait_for_threads(extractor, video_meta_data)
-        faces_cache = FaceCache(self._alignments,
+        faces_cache = FaceCache(self._containers["main"],
+                                self._alignments,
                                 self._frames,
                                 scaling_factor,
                                 progress_bar,
-                                self._containers["main"])
+                                tk_face_load_complete)
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        faces_cache,
@@ -152,6 +155,13 @@ class Manual(tk.Tk):
             "iconphoto",
             self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
+
+    @staticmethod
+    def _create_load_complete_var():
+        """ Create a Boolean var to indicate when the Faces Frame has completed loading """
+        var = tk.BooleanVar()
+        var.set(False)
+        return var
 
     def _create_containers(self):
         """ Create the paned window containers for various GUI elements
@@ -347,7 +357,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._faces_cache = faces_cache
-        self._actions_frame = FacesActionsFrame(self, faces_cache)
+        self._actions_frame = FacesActionsFrame(self)
 
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -362,7 +372,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         scrollbar_width = self._add_scrollbar()
         self._canvas.set_column_count(self.winfo_width() - scrollbar_width)
 
-        FacesViewerLoader(self._canvas, progress_bar, self._actions_frame.enable_buttons)
+        FacesViewerLoader(self._canvas, progress_bar)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -412,15 +422,16 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     parent: :class:`FacesFrame`
         The Faces frame that the Actions reside in
     """
-    def __init__(self, parent, faces_cache):
+    def __init__(self, parent):
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
-        self._faces_cache = faces_cache
+        self._faces_cache = parent._faces_cache
         self._tk_optional_annotations = dict()
         self._configure_styles()
         self._displays = ("mesh", "mask")
         self._buttons = self._add_buttons()
         self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
+        self._enable_buttons()
 
     @property
     def key_bindings(self):
@@ -493,11 +504,15 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         btn.state(state)
         self._tk_optional_annotations[display].set(is_pressed)
 
-    def enable_buttons(self):
+    def _enable_buttons(self):
         """ Enable buttons when the faces have completed loading """
-        logger.debug("Enabling optional annotation buttons")
+        if not self._faces_cache.is_initialized:
+            logger.trace("Face cache not initialized. Waiting 1 second...")
+            self.after(1000, self._enable_buttons)
+            return
+        logger.info("Enabling optional annotation buttons")
         for button in self._buttons.values():
-            button.state(["!pressed", "!focus", "!disabled"])
+            button.debug(["!pressed", "!focus", "!disabled"])
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors

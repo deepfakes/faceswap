@@ -10,8 +10,6 @@ from lib.gui.custom_widgets import RightClickMenu
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Make it so user can't save until faces are loaded (so alignments dict doesn't change)
-
 
 class FacesViewerLoader():  # pylint:disable=too-few-public-methods
     """ Loads the faces into the :class:`tools.manual.FacesViewer` as they become available
@@ -27,20 +25,15 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         The :class:`~tools.manual.FacesViewer` canvas
     progress_bar: :class:~lib.gui.custom_widgets.StatusBar`
         The bottom right progress bar
-    enable_buttons_callback: python function
-        The callback to trigger, once faces have completed loading, to enable the
-        Faces Viewer optional annotations buttons
     """
-    def __init__(self, canvas, progress_bar, enable_buttons_callback):
-        logger.debug("Initializing: %s (canvas: %s, progress_bar: %s, "
-                     "enable_buttons_callback: %s)", self.__class__.__name__, canvas, progress_bar,
-                     enable_buttons_callback)
+    def __init__(self, canvas, progress_bar):
+        logger.debug("Initializing: %s (canvas: %s, progress_bar: %s)", self.__class__.__name__,
+                     canvas, progress_bar)
         self._canvas = canvas
         self._faces_cache = canvas._faces_cache
         self._alignments = canvas._alignments
         self._frame_count = canvas._frames.frame_count
         self._progress_bar = progress_bar
-        self._enable_buttons_callback = enable_buttons_callback
         self._progress_bar.start(mode="determinate")
         face_count = self._alignments.face_count_per_index
         self._faces_cache.load_faces()
@@ -149,12 +142,11 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         """ Final actions to perform once the faces have finished loading into the Faces Viewer.
 
         Updates any faces where edits have been made whilst the faces were loading.
-        Enables the optional annotations buttons.
         Updates any color settings that were changed during load.
         Sets the display to the currently selected filter.
-        Highlights the active face,
+        Sets the load complete variable to ``True``
+        Highlights the active face.
         """
-        # TODO Enable saving
         for frame_idx, faces in enumerate(self._alignments.updated_alignments):
             if faces is None:
                 continue
@@ -168,7 +160,6 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
                 else:
                     self._canvas.update_face.update(frame_idx, face_idx)
         self._alignments.tk_edited.set(False)
-        self._enable_buttons_callback()
         self._canvas.update_mesh_color()
         self._progress_bar.stop()
         self._canvas.switch_filter()
@@ -688,8 +679,11 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         color = self._canvas.get_muted_color("Mesh")
         kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
         state = "normal" if self._tk_vars["optional_annotations"]["mesh"].get() else "hidden"
-        # TODO None type error on face deletion
         for mesh_id in self._prev_objects["mesh"]:
+            lookup = self._canvas.type(mesh_id)
+            if lookup is None:  # Item deleted
+                logger.debug("Skipping deleted mesh annotation: %s", mesh_id)
+                continue
             self._canvas.itemconfig(mesh_id, state=state, **kwargs[self._canvas.type(mesh_id)])
         self._prev_objects["mesh"] = None
 
@@ -757,8 +751,6 @@ class UpdateFace():
         self._frames = canvas._frames
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    # TODO moving to new frame and adding faces seems to mess up the tk_face of the existing face
-
     # << ADD FACE METHODS >> #
     def add(self, frame_index):
         """ Add a face to the :class:`~tools.manual.FacesViewer` canvas for the given frame.
@@ -820,12 +812,13 @@ class UpdateFace():
             The frame index for the next frame that contains faces. ``None`` is returned if the
             given frame index is already at the end of the stack
         """
+        offset = frame_index + 1
         next_frame_idx = next((
-            idx for idx, f_count in enumerate(self._alignments.face_count_per_index[frame_index:])
+            idx for idx, f_count in enumerate(self._alignments.face_count_per_index[offset:])
             if f_count > 0), None)
         if next_frame_idx is None:
             return None
-        next_frame_idx += frame_index + 1
+        next_frame_idx += offset
         logger.debug("Returning next frame with faces: %s for frame index: %s",
                      next_frame_idx, frame_index)
         return next_frame_idx
@@ -917,7 +910,6 @@ class UpdateFace():
         face_index: int
             The index of the face within the given frame that is to have its objects updated
         """
-        # TODO Decide what to update based on current edit mode
         tk_face, mesh_landmarks = self._canvas.get_tk_face_and_landmarks(frame_index, face_index)
         self._faces_cache.update(frame_index, face_index, tk_face, mesh_landmarks)
         image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]

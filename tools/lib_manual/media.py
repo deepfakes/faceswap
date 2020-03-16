@@ -261,13 +261,15 @@ class AlignmentsData():
         Full path to the alignments file. If empty string is passed then location is calculated
         from the source folder
     """
-    def __init__(self, alignments_path, extractor, input_location, is_video):
+    def __init__(self, alignments_path, extractor,
+                 input_location, is_video, tk_faces_load_complete):
         logger.debug("Initializing %s: (alignments_path: '%s', extractor: %s, input_location: %s, "
                      "is_video: %s)", self.__class__.__name__, alignments_path, extractor,
                      input_location, is_video)
         self._frames = None
         self._remove_idx = None
         self._is_video = is_video
+        self._tk_faces_load_complete = tk_faces_load_complete
 
         self._alignments_file = None
         self._mask_names = None
@@ -493,6 +495,11 @@ class AlignmentsData():
         """ Save the alignments file """
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
+            return
+        if not self._tk_faces_load_complete.get():
+            tk.messagebox.showinfo(title="Save Alignments...",
+                                   message="Please wait for faces to completely load before "
+                                           "saving the alignments file.")
             return
         to_save = {key: val["new"] for key, val in self._alignments.items() if "new" in val}
         logger.verbose("Saving alignments for frames: '%s'", list(to_save.keys()))
@@ -789,7 +796,8 @@ class AlignmentsData():
 
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
-    def __init__(self, alignments, frames, scaling_factor, progress_bar, root):
+    def __init__(self, root, alignments, frames, scaling_factor,
+                 progress_bar, tk_faces_load_complete):
         logger.debug("Initializing %s: (alignments: %s, frames: %s, scaling_factor: %s)",
                      self.__class__.__name__, alignments, frames, scaling_factor)
         self._alignments = alignments
@@ -798,7 +806,7 @@ class FaceCache():
         self._root = root
         self._loader = FaceCacheLoader(self)
         self._progress_bar = progress_bar
-        self._tk_load_complete = self._set_load_complete_var()
+        self._tk_load_complete = tk_faces_load_complete
         self._alpha = np.ones((self._face_size, self._face_size), dtype="uint8") * 255
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
@@ -813,13 +821,6 @@ class FaceCache():
         self._mesh_landmarks = np.array([None for _ in range(frames.frame_count)])
         self._load_cache = []
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @staticmethod
-    def _set_load_complete_var():
-        """ Set the load completion variable. """
-        var = tk.BooleanVar()
-        var.set(False)
-        return var
 
     @property
     def is_initialized(self):
@@ -887,6 +888,12 @@ class FaceCache():
         """ Remove objects from the faces cache. """
         logger.debug("Removing objects: (frame_index: %s, face_index: %s)",
                      frame_index, face_index)
+        # TODO Deleting faces on load error. Traceback:
+        #   File "/home/matt/fake/faceswap_torzdf/tools/lib_manual/display_face.py", line 871, in remove
+        #       self._faces_cache.remove(frame_index, face_index)
+        #   File "/home/matt/fake/faceswap_torzdf/tools/lib_manual/media.py", line 891, in remove
+        #       del self._tk_faces[frame_index][face_index]
+        #   IndexError: list assignment index out of range
         del self._tk_faces[frame_index][face_index]
         del self._mesh_landmarks[frame_index][face_index]
 
