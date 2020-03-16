@@ -17,11 +17,11 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .lib_manual.display_face import (ActiveFrame, ContextMenu, FacesViewerLoader,
-                                      HoverBox, ObjectCreator, UpdateFace)
-from .lib_manual.face_filter import FaceFilter
-from .lib_manual.display_frame import DisplayFrame
-from .lib_manual.media import AlignmentsData, FaceCache, FrameNavigation
+from .display_face import (ActiveFrame, ContextMenu, FacesViewerLoader,
+                           HoverBox, ObjectCreator, UpdateFace)
+from .face_filter import FaceFilter
+from .display_frame import DisplayFrame
+from .media import AlignmentsData, FaceCache, FrameNavigation
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
