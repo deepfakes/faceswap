@@ -7,21 +7,17 @@ import numpy as np
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-# TODO Right click erase on mask editor
-
 class FaceFilter():
-    """ Base class for different faces view filters.
+    """ Filters the face viewer based on the selection in the Filter pull down menu.
 
-    All Filter views inherit from this class. Handles the layout of faces and annotations in the
-    face viewer.
+    The layout of faces and annotations in the face viewer are handled by this class.
 
     Parameters
     ----------
-    face_cache: :class:`FaceCache`
-        The main Face Viewers face cache, that holds all of the display items and annotations
-    toggle_tags: dict or ``None``, optional
-        Tags for toggling optional annotations. Set to ``None`` if there are no annotations to
-        be toggled for the selected filter. Default: ``None``
+    canvas: :class:`tkinter.Canvas`
+        The :class:`~tools.manual.FacesViewer` canvas
+    filter_type: ["all_frames", "no_faces", "multiple_faces"]
+        The currently selected filter type from the pull down menu.
     """
     def __init__(self, canvas, filter_type):
         logger.debug("Initializing: %s: (canvas: %s, filter_type: %s)",
@@ -41,26 +37,30 @@ class FaceFilter():
 
     @property
     def _view_states(self):
-        """ dict: The Filter type mapped to tag hidden states. """
+        """ dict: The :attr:`filter_type` mapped to the object display state for tag prefixes
+        that meet the criteria for displaying or hiding objects for the required filter type. """
         return dict(all_frames=dict(normal="viewer"),
                     no_faces=dict(hidden="viewer"),
                     multiple_faces=dict(hidden="not_multi", normal="multi"))
 
     @property
     def _tag_prefix(self):
-        """ The tag prefix for the current filter """
+        """ str: The tag prefix for objects that should be displayed based on the currently
+        selected :attr:`filter_type` """
         return self._view_states[self._filter_type].get("normal", None)
 
     @property
     def image_ids(self):
-        """ list: The canvas item ids for the face images. """
+        """ list: The canvas item ids for the face images that are currently displayed based on
+        the selected :attr`_filter_type`. """
         if self._filter_type == "no_faces":
             return self._temporary_image_ids
         return self._canvas.find_withtag("{}_image".format(self._tag_prefix))
 
     @property
     def _optional_tags(self):
-        """ list: The tags for the optional annotations. """
+        """ list: The optional annotation tags that should be displayed based on "
+        :attr:`_filter_type. """
         options = ["mesh"]
         if self._filter_type == "no_faces":
             return dict()
@@ -68,12 +68,14 @@ class FaceFilter():
 
     @property
     def filter_type(self):
-        """ str: The currently selected filter type """
+        """ str: The currently selected filter type (one of "all_frames", "no_faces",
+        multiple_faces"). """
         return self._filter_type
 
     def _set_object_display_state(self):
-        """ Hide annotations that are not relevant for this filter type and show those
-        that are. """
+        """ On a filter change, displays items that should be shown for the requested
+        :attr:`filter_type` and optional annotations and hides those annotations that should
+        not be displayed. """
         mesh_state = self._canvas.optional_annotations["mesh"]
         for state, tag in self._view_states[self._filter_type].items():
             # TODO When mask comes in this will need to be more complex
@@ -83,7 +85,13 @@ class FaceFilter():
             self._canvas.itemconfig(tag, state=state)
 
     def _set_initial_layout(self):
-        """ Layout the faces on the canvas for the current filter type. """
+        """ Layout the faces on the canvas for the selected :attr:`filter_type`.
+
+        The position of each face on the canvas can vary significantly between different
+        filter views. Unfortunately there is no getting away from the fact that a lot of
+        faces may need to be moved, and this may take some time. Some time is attempted
+        to be saved by only moving those faces that require moving.
+        """
         for idx, image_id in enumerate(self.image_ids):
             old_position = np.array(self._canvas.coords(image_id), dtype="int")
             new_position = self._canvas.coords_from_index(idx)
@@ -95,13 +103,17 @@ class FaceFilter():
 
     # TODO Deleting faces on multi face filter is broken
     def add_face(self, image_id, mesh_ids, mesh_landmarks):
-        """ Place a newly added face in the correct location and move subsequent faces to their new
-        location.
+        """ Place a newly added face in the correct location for the current :attr:`filter_type`
+        and shift subsequent faces to their new locations.
 
         Parameters
         ----------
-        frame_index: int
-            The frame index that the face is to be added to
+        image_id: int
+            The tkinter canvas object id of the image that is being added
+        mesh_ids: list
+            The tkinter canvas object ids of the mesh annotation that is being added
+        mesh_landmarks: list
+            The co-ordinates of each of the mesh annotations based from (0, 0)
         """
         if self._filter_type == "no_faces":
             self.image_ids.append(image_id)
@@ -117,8 +129,17 @@ class FaceFilter():
             self._canvas.coords(mesh_id, *(landmarks + coords).flatten())
 
     def remove_face(self, frame_index, face_index, display_index):
-        """ Remove a face at the given location and update subsequent faces to the
-        correct location.
+        """ Remove a face at the given location for the current :attr:`filter_type` and update
+        subsequent faces to their correct locations.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the face is to be removed from
+        face_index: int
+            The index of the face within the frame
+        display_index: int
+            The absolute index within the faces viewer that the face is to be deleted from
         """
         logger.debug("frame_index: %s, display_index: %s", frame_index, display_index)
         if self._filter_type == "no_faces":
@@ -128,7 +149,17 @@ class FaceFilter():
 
     def _check_last_multi(self, frame_index, face_index, display_index):
         """ For multi faces viewer, if a deletion has taken us down to 1 face then hide the last
-        face and set the display index to the correct position for hiding 2 faces. """
+        face and set the display index to the correct position for hiding 2 faces.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the face is to be removed from
+        face_index: int
+            The index of the face within the frame
+        display_index: int
+            The absolute index within the faces viewer that the face is to be deleted from
+        """
         if self._filter_type != "multiple_faces":
             retval = (display_index, False)
         elif len(self._canvas.find_withtag("image_{}".format(frame_index))) != 1:
@@ -154,6 +185,10 @@ class FaceFilter():
         is_insert: bool, optional
             ``True`` if adjusting display for an added face, ``False`` if adjusting for a removed
             face. Default: ``True``
+        last_multi_face: bool, optional
+            Only used for multi-face view. ``True`` if the current frame is moving from having
+            multiple faces in the frame to having a single face in the frame, otherwise ``False``.
+            Default: ``False``
         """
         # TODO addtag_enclosed vs addtag_overlapping - The mesh going out of face box problem
         if len(self.image_ids) == starting_object_index:
@@ -186,7 +221,7 @@ class FaceFilter():
 
         Parameters
         ----------
-        starting_index: int
+        start_index: int
             The starting absolute face index that new locations should be calculated for
         is_insert: bool
             ``True`` if adjusting display for an added face, ``False`` if adjusting for a removed
@@ -228,48 +263,33 @@ class FaceFilter():
             self._canvas.itemconfig(tag, state="hidden")
 
     def toggle_annotation(self, mesh_state):
-        """ Toggle additional object annotations on or off. """
-        if not self._optional_tags:
-            return
-        if mesh_state:
-            self._canvas.itemconfig(self._optional_tags["mesh"], state="normal")
-        else:
-            for tag in self._optional_tags.values():
-                self._canvas.itemconfig(tag, state="hidden")
-
-    @staticmethod
-    def _get_toggle_item_ids(objects, display):
-        """ Return the item_ids in a single list for items that are to be toggled.
+        """ Toggle additional object annotations on or off.
 
         Parameters
         ----------
-        objects: dict
-            The objects dictionary for the current face
-        display: str or ``None``
-            The key for the object annotation that is to be toggled or ``None`` if annotations
-            are to be hidden
-
-        Returns
-        -------
-        list
-            The list of canvas object ids that are to be toggled
+        mesh_state: bool
+            ``True`` if optional mesh annotations button is checked otherwise ``False``
         """
-        if display is not None:
-            retval = objects[display] if isinstance(objects[display], list) else [objects[display]]
+        if not self._optional_tags:
+            return
+        if mesh_state:
+            logger.debug("Toggling mesh annotations on")
+            self._canvas.itemconfig(self._optional_tags["mesh"], state="normal")
         else:
-            retval = []
-            for key, val in objects.items():
-                if key == "image_id":
-                    continue
-                retval.extend(val if isinstance(val, list) else [val])
-        logger.trace(retval)
-        return retval
+            for tag in self._optional_tags.values():
+                logger.debug("Toggling %s annotations off", tag)
+                self._canvas.itemconfig(tag, state="hidden")
 
     def _on_frame_change(self, *args):  # pylint:disable=unused-argument
         """ Callback to be executed whenever the frame is changed.
 
         For no-faces filter, if faces have been added to the current frame, hide the new faces
         and remove the image_ids from tracking.
+
+        Parameters
+        ----------
+        args: tuple
+            Unused but required for tkinter trace callback
         """
         if self._filter_type != "no_faces":
             return
@@ -278,7 +298,7 @@ class FaceFilter():
         self._temporary_image_ids = []
 
     def de_initialize(self):
-        """ Remove the trace variable on de-initialization """
+        """ Remove the trace variable on when changing filter. """
         if self._filter_type == "no_faces":
             logger.debug("Removing on_frame_change_var")
             self._tk_position.trace_vdelete("w", self._tk_position_callback)
