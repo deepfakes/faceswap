@@ -17,9 +17,8 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .display_face import (ActiveFrame, ContextMenu, FacesViewerLoader,
-                           HoverBox, ObjectCreator, UpdateFace)
-from .face_filter import FaceFilter
+from .faceviewer.assets import FacesViewerLoader, ObjectCreator, UpdateFace
+from .faceviewer.display import ActiveFrame, ContextMenu, FaceFilter, HoverBox
 from .display_frame import DisplayFrame
 from .media import AlignmentsData, FaceCache, FrameNavigation
 
@@ -762,9 +761,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             with_landmarks=True,
             with_mask=True)
 
-        mask = None
-        if self.optional_annotations["mask"]:
-            mask = mask.get(self._display_frame.tk_selected_mask.get().lower(), None)
+        mask = mask.get(self._display_frame.tk_selected_mask.get().lower(),
+                        None) if self.optional_annotations["mask"] else None
         mask = mask if mask is None else mask.mask.squeeze()
         tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face, mask))
         mesh_landmarks = self._faces_cache.get_mesh_points(landmarks)

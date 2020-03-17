@@ -33,6 +33,7 @@
 !.pylintrc
 !tools
 !tools/*
+!tools/*/*
 !_travis
 !_travis/*
 !.travis.yml
