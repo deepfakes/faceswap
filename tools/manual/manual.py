@@ -349,14 +349,20 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         The faces cache that holds the aligned faces
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
+    alignments: :class:`~tool.manual.media.AlignmentsData`
+        The alignments data for the currently loaded frames
+    display_frame: :class:`DisplayFrame`
+        The section of the Manual Tool that holds the frames viewer
+    progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
+        The progress bar object that displays in the bottom right of the GUI
     """
     def __init__(self, parent, faces_cache, frames, alignments, display_frame, progress_bar):
-        logger.debug("Initializing %s: (parent: %s, faces: %s, display_frame: %s)",
-                     self.__class__.__name__, parent, faces_cache, display_frame)
+        logger.debug("Initializing %s: (parent: %s, faces_cache: %s, frames: %s, alignments: %s, "
+                     "display_frame: %s, progress_bar: %s)", self.__class__.__name__, parent,
+                     faces_cache, frames, alignments, display_frame, progress_bar)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self._faces_cache = faces_cache
-        self._actions_frame = FacesActionsFrame(self)
+        self._actions_frame = FacesActionsFrame(self, faces_cache)
 
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -375,17 +381,23 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_scrollbar(self):
         """ Add a scrollbar to the faces frame """
-        logger.debug("Add Config Scrollbar")
+        logger.debug("Add Faces Viewer Scrollbar")
         scrollbar = ttk.Scrollbar(self._faces_frame, command=self._canvas.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self._canvas.config(yscrollcommand=scrollbar.set)
         self.bind("<Configure>", self._update_scrollbar)
-        logger.debug("Added Config Scrollbar")
+        logger.debug("Added Faces Viewer Scrollbar")
         self.update_idletasks()  # Update so scrollbar width is correct
         return scrollbar.winfo_width()
 
     def _update_scrollbar(self, event):  # pylint: disable=unused-argument
-        """ Update the faces frame scrollbar """
+        """ Update the faces frame scrollbar.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            Unused but required
+        """
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
     def canvas_scroll(self, direction):
@@ -394,7 +406,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         Parameters
         ----------
         direction: ["up", "down", "page-up", "page-down"]
-            The request page scroll direction.
+            The request page scroll direction and amount.
         """
         amount = 1 if direction.endswith("down") else -1
         units = "pages" if direction.startswith("page") else "units"
@@ -411,6 +423,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._actions_frame.on_click(self._actions_frame.key_bindings[key])
 
 
+# TODO Disable annotation buttons when mask is loading
 class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     """ The left hand action frame holding the action buttons.
 
@@ -419,22 +432,22 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     parent: :class:`FacesFrame`
         The Faces frame that the Actions reside in
     """
-    def __init__(self, parent):
+    def __init__(self, parent, faces_cache):
+        logger.debug("Initializing %s: (parent: %s)", self.__class__.__name__, parent)
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
-        self._faces_cache = parent._faces_cache
+        self._faces_cache = faces_cache
         self._tk_optional_annotations = dict()
         self._configure_styles()
-        self._displays = ("mesh", "mask")
         self._buttons = self._add_buttons()
-        self._optional_buttons = dict()  # Has to be set from parent after canvas is initialized
         self._enable_buttons()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def key_bindings(self):
-        """ dict: {`key`: `display`}. The mapping of key presses to displays. Keyboard shortcut is
-        the first letter of each display. """
-        return {"F{}".format(idx + 9): display for idx, display in enumerate(self._displays)}
+        """ dict: {`key`: `display`}. The mapping of key presses to optional annotations to display.
+        Keyboard shortcuts utilize the function keys. """
+        return {"F{}".format(idx + 9): display for idx, display in enumerate(("mesh", "mask"))}
 
     @property
     def _helptext(self):
@@ -447,7 +460,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return retval
 
     def _configure_styles(self):
-        """ Configure background color for Displays widget """
+        """ Configure the background color for button frame and the button styles. """
         style = ttk.Style()
         style.configure("display.TFrame", background='#d3d3d3')
         style.configure("display_selected.TButton", relief="flat", background="#bedaf1")
@@ -483,7 +496,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return buttons
 
     def on_click(self, display):
-        """ Click event for all of the main buttons.
+        """ Click event for the optional annotation buttons.
 
         Parameters
         ----------
@@ -502,7 +515,11 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._tk_optional_annotations[display].set(is_pressed)
 
     def _enable_buttons(self):
-        """ Enable buttons when the faces have completed loading """
+        """ Enable buttons when the faces have completed loading.
+
+        Performs a check whether the face cache has completed loading.
+        Repeats every 1 second until the cache has finished, enables buttons then exits.
+        """
         if not self._faces_cache.is_initialized:
             logger.trace("Face cache not initialized. Waiting 1 second...")
             self.after(1000, self._enable_buttons)
