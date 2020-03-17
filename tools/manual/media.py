@@ -262,14 +262,14 @@ class AlignmentsData():
         from the source folder
     """
     def __init__(self, alignments_path, extractor,
-                 input_location, is_video, tk_faces_load_complete):
+                 input_location, is_video, tk_face_loading):
         logger.debug("Initializing %s: (alignments_path: '%s', extractor: %s, input_location: %s, "
                      "is_video: %s)", self.__class__.__name__, alignments_path, extractor,
                      input_location, is_video)
         self._frames = None
         self._remove_idx = None
         self._is_video = is_video
-        self._tk_faces_load_complete = tk_faces_load_complete
+        self._tk_face_loading = tk_face_loading
 
         self._alignments_file = None
         self._mask_names = None
@@ -496,7 +496,7 @@ class AlignmentsData():
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
-        if not self._tk_faces_load_complete.get():
+        if self._tk_face_loading.get():
             tk.messagebox.showinfo(title="Save Alignments...",
                                    message="Please wait for faces to completely load before "
                                            "saving the alignments file.")
@@ -786,7 +786,7 @@ class AlignmentsData():
         """ Revert the current frame's alignments to their saved version """
         frame_name = self._frames.current_meta_data["filename"]
         if "new" not in self._alignments[frame_name]:
-            logger.info("Alignments not amended. Returning")
+            logger.debug("Alignments not amended. Returning")
             return
         logger.debug("Reverting alignments for '%s'", frame_name)
         del self._alignments[frame_name]["new"]
@@ -797,7 +797,7 @@ class AlignmentsData():
 class FaceCache():
     """ Holds the face images for display in the bottom GUI Panel """
     def __init__(self, root, alignments, frames, scaling_factor,
-                 progress_bar, tk_faces_load_complete):
+                 progress_bar, tk_face_loading):
         logger.debug("Initializing %s: (alignments: %s, frames: %s, scaling_factor: %s)",
                      self.__class__.__name__, alignments, frames, scaling_factor)
         self._alignments = alignments
@@ -806,7 +806,7 @@ class FaceCache():
         self._root = root
         self._loader = FaceCacheLoader(self)
         self._progress_bar = progress_bar
-        self._tk_load_complete = tk_faces_load_complete
+        self._tk_loading = tk_face_loading
         self._alpha = np.ones((self._face_size, self._face_size), dtype="uint8") * 255
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
@@ -820,12 +820,18 @@ class FaceCache():
         self._tk_faces = np.array([None for _ in range(frames.frame_count)])
         self._mesh_landmarks = np.array([None for _ in range(frames.frame_count)])
         self._load_cache = []
+        self._initialized = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def is_initialized(self):
+    def is_loading(self):
         """ bool: ``True`` if the faces have completed the loading cycle otherwise ``False`` """
-        return self._tk_load_complete.get()
+        return self._tk_loading.get()
+
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the faces have completed initial loading otherwise ``False``. """
+        return self._initialized
 
     @property
     def tk_faces(self):
@@ -855,7 +861,8 @@ class FaceCache():
 
     def set_load_complete(self):
         """ TODO """
-        self._tk_load_complete.set(True)
+        self._tk_loading.set(False)
+        self._initialized = True
 
     def generate_tk_face_data(self, image, mask=None):
         """ Generate a new :tkinter:`PhotoImage` object with an empty mask in the 4th channel. """
@@ -907,8 +914,9 @@ class FaceCache():
     def update_tk_face_for_masks(self, mask_type, is_enabled):
         """ Load the selected masks """
         mask_type = None if not is_enabled or mask_type == "" else mask_type.lower()
-        if not self.is_initialized or mask_type == self._current_mask_type:
+        if self.is_loading or mask_type == self._current_mask_type:
             return
+        self._tk_loading.set(True)
         self._progress_bar.start(mode="determinate")
         executor = self._load_unload_masks(mask_type)
         total_faces = sum(1 for tk_faces in self._tk_faces for tk_face in tk_faces)
@@ -923,6 +931,7 @@ class FaceCache():
         self._update_progress(mask_type, processed_count, total_faces)
         if not face_futures:
             self._progress_bar.stop()
+            self._tk_loading.set(False)
             return
         self._root.after(500,
                          self._update_display,
