@@ -599,19 +599,43 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """:class:`UpdateFace`: Actions to add, remove or update a face in the viewer. """
         return self._utilities["update_face"]
 
-    # TODO Update masks on mask type change
+    # << CALLBACK FUNCTIONS >> #
     def _set_tk_callbacks(self):
         """ Set the tkinter variable call backs.
 
         Switches the Filter view when the filter drop down is updated.
         Updates the Mesh annotation color when user amends the color drop down.
+        Updates the mask type when the user changes the selected mask types
         Toggles the face viewer annotations on an optional annotation button press.
         """
         self._frames.tk_navigation_mode.trace("w", lambda *e: self.switch_filter())
         self._display_frame.tk_control_colors["Mesh"].trace("w",
                                                             lambda *e: self.update_mesh_color())
+        self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
         for opt, var in self._tk_optional_annotations.items():
             var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
+
+    def switch_filter(self):
+        """ Update the :class:`FacesViewer` canvas for the active filter.
+            Executed when the user changes the selected filter pull down.
+         """
+        if not self._faces_cache.is_initialized:
+            return
+        nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "_").lower()
+        nav_mode = "all_frames" if nav_mode == "has_face(s)" else nav_mode
+        current_dsp = self.active_filter.filter_type
+        logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, nav_mode)
+        if nav_mode == current_dsp:
+            return
+        self.active_filter.de_initialize()
+        self._utilities["active_filter"] = FaceFilter(self, nav_mode)
+
+    def _update_mask_type(self):
+        """ Update the displayed mask in the :class:`FacesViewer` canvas when the user changes
+        the mask type. """
+        self._faces_cache.update_tk_face_for_masks(self.selected_mask,
+                                                   self.optional_annotations["mask"])
+        self.active_frame.reload_annotations()
 
     # << POST INIT FUNCTIONS >> #
     def set_column_count(self, frame_width):
@@ -711,22 +735,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                                        self.optional_annotations[annotation])
         else:
             self.active_filter.toggle_annotation(self.optional_annotations[annotation])
-
-    # << FILTERS >> #
-    def switch_filter(self):
-        """ Update the :class:`FacesViewer` canvas for the active filter.
-            Executed when the user changes the selected filter pull down.
-         """
-        if not self._faces_cache.is_initialized:
-            return
-        nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "_").lower()
-        nav_mode = "all_frames" if nav_mode == "has_face(s)" else nav_mode
-        current_dsp = self.active_filter.filter_type
-        logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, nav_mode)
-        if nav_mode == current_dsp:
-            return
-        self.active_filter.de_initialize()
-        self._utilities["active_filter"] = FaceFilter(self, nav_mode)
 
     def frame_index_from_object(self, item_id):
         """ Retrieve the frame index that an object belongs to from it's tag.
