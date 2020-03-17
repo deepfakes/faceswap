@@ -21,12 +21,14 @@ class HoverBox():  # pylint:disable=too-few-public-methods
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
+    alignments: :class:`~tool.manual.media.AlignmentsData`
+        The alignments data for the currently loaded frames
     """
-    def __init__(self, canvas):
+    def __init__(self, canvas, alignments):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
         self._frames = canvas._frames
-        self._alignments = canvas._alignments
+        self._alignments = alignments
         self._face_size = canvas._faces_cache.size
         self._box = self._canvas.create_rectangle(0, 0, self._face_size, self._face_size,
                                                   outline="#0000ff",
@@ -178,11 +180,13 @@ class ActiveFrame():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
+    alignments: :class:`~tool.manual.media.AlignmentsData`
+        The alignments data for the currently loaded frames
     """
-    def __init__(self, canvas):
+    def __init__(self, canvas, alignments):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
-        self._alignments = canvas._alignments
+        self._alignments = alignments
         self._faces_cache = canvas._faces_cache
         self._size = canvas._faces_cache.size
         self._tk_position = canvas._frames.tk_position
@@ -262,8 +266,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         self._faces_cache = active_frame._canvas._faces_cache
         self._active_frame = active_frame
         self._tk_vars = dict(selected_editor=self._canvas._display_frame.tk_selected_action,
-                             selected_mask=self._canvas._display_frame.tk_selected_mask,
-                             optional_annotations=self._canvas._tk_optional_annotations)
+                             selected_mask=self._canvas._display_frame.tk_selected_mask)
         self._objects = dict(image_ids=[], mesh_ids=[], boxes=[])
         self._hidden_boxes_count = 0
         self._prev_objects = dict()
@@ -339,7 +342,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
 
     def _revert_last_mask(self):
         """ Revert the highlighted mask from the previously selected frame. """
-        mask_view = self._tk_vars["optional_annotations"]["mask"].get()
+        mask_view = self._canvas.optional_annotations["mask"]
         mask_edit = self._tk_vars["selected_editor"].get() == "Mask"
         if self._prev_objects.get("mask", None) is None or mask_view == mask_edit:
             self._prev_objects["mask"] = None
@@ -368,7 +371,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
             return
         color = self._canvas.get_muted_color("Mesh")
         kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
-        state = "normal" if self._tk_vars["optional_annotations"]["mesh"].get() else "hidden"
+        state = "normal" if self._canvas.optional_annotations["mesh"] else "hidden"
         for mesh_id in self._prev_objects["mesh"]:
             lookup = self._canvas.type(mesh_id)
             if lookup is None:  # Item deleted
@@ -391,7 +394,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         """ Displays either the full face of the masked face, depending on the currently selected
         editor. """
         mask_edit = self._tk_vars["selected_editor"].get() == "Mask"
-        mask_view = self._tk_vars["optional_annotations"]["mask"].get()
+        mask_view = self._canvas.optional_annotations["mask"]
         if mask_edit == mask_view:
             return
         mask_type = self._tk_vars["selected_mask"].get() if mask_edit else None
@@ -412,7 +415,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         """ Depending on the selected editor, highlights the landmarks mesh for the currently
         selected frame. """
         show_mesh = (self._tk_vars["selected_editor"].get() != "Mask"
-                     or self._tk_vars["optional_annotations"]["mesh"].get())
+                     or self._canvas.optional_annotations["mesh"])
         color = self._canvas.control_colors["Mesh"]
         kwargs = dict(polygon=dict(fill="", outline=color),
                       line=dict(fill=color))

@@ -366,12 +366,11 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    faces_cache,
                                    frames,
                                    alignments,
-                                   display_frame,
-                                   progress_bar)
+                                   display_frame)
         scrollbar_width = self._add_scrollbar()
         self._canvas.set_column_count(self.winfo_width() - scrollbar_width)
 
-        FacesViewerLoader(self._canvas, progress_bar)
+        FacesViewerLoader(self._canvas, alignments, progress_bar)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -399,8 +398,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         amount = 1 if direction.endswith("down") else -1
         units = "pages" if direction.startswith("page") else "units"
-        self._canvas.yview_scroll(int(amount), units)
-        self._canvas._hover_box.on_hover(None)
+        self._canvas.canvas_scroll(amount, units)
 
     def set_annotation_display(self, key):
         """ Set the optional annotation overlay based on keyboard shortcut.
@@ -515,104 +513,121 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
-    """ Annotation onto tkInter Canvas.
+    """ The :class:`tkinter.Canvas` that holds the faces viewer part of the Manual Tool.
 
     Parameters
     ----------
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the canvas
-    faces: :class:`tools.manual.lib_manual.FaceCache`
-        The faces cache that holds the aligned faces
-    frames: :class:`FrameNavigation`
-        The object that holds the cache of frames.
+    tk_optional_annotations: dict
+        The :class:`tkinter.BooleanVar` objects for selectable optional annotations
+        as set by the buttons in the :class:`FacesActionsFrame`
+    faces_cache: :class:`~tools.manual.media.FacesCache`
+        The cache that holds the :class:`tkinter.PhotoImage` faces and the mesh landmarks
+        for the Faces Viewer.
+    frames: :class:`~tools.manual.media.FrameNavigation`
+        The object that holds the cache of frames and handles frame navigation.
+    alignments: :class:`~tool.manual.media.AlignmentsData`
+        The alignments data for the currently loaded frames
+    display_frame: :class:`DisplayFrame`
+        The section of the Manual Tool that holds the frames viewer
     """
-    def __init__(self, parent, tk_optional_annotations, faces_cache,
-                 frames, alignments, display_frame, progress_bar):
+    def __init__(self, parent, tk_optional_annotations, faces_cache, frames, alignments,
+                 display_frame):
         logger.debug("Initializing %s: (parent: %s, tk_optional_annotations: %s, faces_cache: %s, "
-                     "frames: %s, display_frame: %s)", self.__class__.__name__, parent,
-                     tk_optional_annotations, faces_cache, frames, display_frame)
+                     "frames: %s, alignments: %s, display_frame: %s)", self.__class__.__name__,
+                     parent, tk_optional_annotations, faces_cache, frames, alignments,
+                     display_frame)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._tk_optional_annotations = tk_optional_annotations
-        self._progress_bar = progress_bar
         self._faces_cache = faces_cache
         self._frames = frames
-        self._alignments = alignments
         self._display_frame = display_frame
-
-        self._object_creator = ObjectCreator(self)
-        self._hover_box = HoverBox(self)
+        self._utilities = dict(object_creator=ObjectCreator(self),
+                               hover_box=HoverBox(self, alignments),
+                               active_filter=FaceFilter(self, "all_frames"),
+                               active_frame=ActiveFrame(self, alignments),
+                               update_face=UpdateFace(self, alignments))
         ContextMenu(self)
-        self._active_filter = FaceFilter(self, "all_frames")
-        self._active_frame = ActiveFrame(self)
-        self._update_face = UpdateFace(self)
-
         self._bind_mouse_wheel_scrolling()
         # Set in load_frames
-        self._columns = None
+        self._column_count = None
         self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
         self._set_tk_callbacks()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def optional_annotations(self):
-        """ str: The currently selected optional annotation. """
+        """ dict: The values currently set for the selectable optional annotations. """
         return {opt: val.get() for opt, val in self._tk_optional_annotations.items()}
 
     @property
-    def tk_control_colors(self):
-        """ :dict: Editor key with :class:`tkinter.StringVar` containing the selected color hex
-        code for each annotation. """
-        return self._display_frame.tk_control_colors
+    def selected_mask(self):
+        """ str: The currently selected mask from the display frame control panel. """
+        return self._display_frame.tk_selected_mask.get().lower()
 
     @property
     def control_colors(self):
-        """ :dict: Editor key with the currently selected hex code as value. """
+        """ :dict: Editor key with the current user selected hex code as value. """
         return {key: self._display_frame.colors[val.get()]
-                for key, val in self.tk_control_colors.items()}
+                for key, val in self._display_frame.tk_control_colors.items()}
 
     @property
     def column_count(self):
-        """ int: The number of columns in use in the face canvas. """
-        return self._columns
+        """ int: The number of columns in use in the :class:`FacesViewer` canvas. """
+        return self._column_count
 
     @property
     def new_objects(self):
         """ :class:`ObjectCreator`: Class to add new objects to the :class:`FacesViewer`
         canvas. Call the :func:`create` method to add new annotations. """
-        return self._object_creator
+        return self._utilities["object_creator"]
 
     @property
     def active_filter(self):
         """:class:`FaceFilter`: The currently selected filtered faces display. """
-        return self._active_filter
+        return self._utilities["active_filter"]
 
     @property
     def active_frame(self):
         """:class:`ActiveFrame`: The currently active frame. """
-        return self._active_frame
+        return self._utilities["active_frame"]
 
     @property
     def update_face(self):
         """:class:`UpdateFace`: Actions to add, remove or update a face in the viewer. """
-        return self._update_face
+        return self._utilities["update_face"]
 
+    # TODO Update masks on mask type change
     def _set_tk_callbacks(self):
-        """ Set the tkinter variable call backs """
-        self._frames.tk_navigation_mode.trace("w", self.switch_filter)
-        self.tk_control_colors["Mesh"].trace("w", self.update_mesh_color)
+        """ Set the tkinter variable call backs.
+
+        Switches the Filter view when the filter drop down is updated.
+        Updates the Mesh annotation color when user amends the color drop down.
+        Toggles the face viewer annotations on an optional annotation button press.
+        """
+        self._frames.tk_navigation_mode.trace("w", lambda *e: self.switch_filter())
+        self._display_frame.tk_control_colors["Mesh"].trace("w",
+                                                            lambda *e: self.update_mesh_color())
         for opt, var in self._tk_optional_annotations.items():
             var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
 
     # << POST INIT FUNCTIONS >> #
     def set_column_count(self, frame_width):
         """ Set the column count for the displayed canvas. Must be done after
-        the canvas has been packed and the scrollbar added. """
-        self._columns = frame_width // self._faces_cache.size
+        the canvas has been packed and the scrollbar added.
+
+        Parameters
+        ----------
+        frame_width: int
+            The amount of space that the canvas has available for placing faces
+        """
+        self._column_count = frame_width // self._faces_cache.size
 
     # << MOUSE HANDLING >>
     def _bind_mouse_wheel_scrolling(self):
-        """ Bind the mouse actions. """
+        """ Bind mouse wheel to scroll the :class:`FacesViewer` canvas. """
         if platform.system() == "Linux":
             self.bind("<Button-4>", self._scroll)
             self.bind("<Button-5>", self._scroll)
@@ -620,8 +635,13 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             self.bind("<MouseWheel>", self._scroll)
 
     def _scroll(self, event):
-        """ Handle mouse wheel scrolling over the faces canvas """
-        # TODO Test Windows + macOS
+        """ Handle mouse wheel scrolling over the :class:`FacesViewer` canvas.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The event fired by the mouse scrolling
+        """
         if platform.system() == "Darwin":
             adjust = event.delta
         elif platform.system() == "Windows":
@@ -630,12 +650,27 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             adjust = -1
         else:
             adjust = 1
-        self.yview_scroll(int(-1 * adjust), "units")
-        self._hover_box.on_hover(event)
+        self.canvas_scroll(-1 * adjust, "units", event)
+
+    def canvas_scroll(self, amount, units, event=None):
+        """ Scroll the canvas on an up/down or page-up/page-down key press.
+
+        Parameters
+        ----------
+        amount: int
+            The number of units to scroll the canvas
+        units: ["page", "units"]
+            The unit type to scroll by
+        event: :class:`tkinter.Event` or ``None``, optional
+            The tkinter event (if scrolling by mouse wheel) or ``None`` if the scroll action
+            has been triggered by a keyboard shortcut
+        """
+        self.yview_scroll(int(amount), units)
+        self._utilities["hover_box"].on_hover(event)
 
     # << OPTIONAL ANNOTATION METHODS >> #
-    def update_mesh_color(self, *args):  # pylint:disable=unused-argument
-        """ Update the mesh color on control panel change """
+    def update_mesh_color(self):
+        """ Update the mesh color when user updates the control panel. """
         if not self._faces_cache.is_initialized:
             return
         color = self.get_muted_color("Mesh")
@@ -649,33 +684,49 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._annotation_colors["mesh"] = color
 
     def get_muted_color(self, color_key):
-        """ Updates hex code F values to A for the given annotation color key """
+        """ Creates a muted version of the given annotation color for non-active faces.
+
+        It is assumed that hex codes for annotations will always contain "ff" in one of the
+        R, G or B channels, so the given hex code has all of the F values updated to A.
+
+        Parameters
+        ----------
+        color_key: str
+            The annotation key to obtain the color for from :attr:`control_colors`
+        """
         return self.control_colors[color_key].replace("f", "a")
 
     def _toggle_annotations(self, annotation):
-        """ Toggle additional annotations on or off. """
+        """ Toggle optional annotations on or off after the user depresses an optional button.
+
+        Parameters
+        ----------
+        annotation: ["mesh", "mask"]
+            The optional annotation to toggle on or off
+        """
         if not self._faces_cache.is_initialized:
             return
-        state = self._tk_optional_annotations[annotation].get()
         if annotation == "mask":
-            self._faces_cache.update_tk_face_for_masks(self._display_frame.tk_selected_mask.get(),
-                                                       state)
+            self._faces_cache.update_tk_face_for_masks(self.selected_mask,
+                                                       self.optional_annotations[annotation])
         else:
-            self.active_filter.toggle_annotation(state)
+            self.active_filter.toggle_annotation(self.optional_annotations[annotation])
 
     # << FILTERS >> #
-    def switch_filter(self, *args):  # pylint: disable=unused-argument
-        """ Change the active display """
+    def switch_filter(self):
+        """ Update the :class:`FacesViewer` canvas for the active filter.
+            Executed when the user changes the selected filter pull down.
+         """
         if not self._faces_cache.is_initialized:
             return
         nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "_").lower()
         nav_mode = "all_frames" if nav_mode == "has_face(s)" else nav_mode
-        current_dsp = self._active_filter.filter_type
+        current_dsp = self.active_filter.filter_type
         logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, nav_mode)
         if nav_mode == current_dsp:
             return
-        self._active_filter.de_initialize()
-        self._active_filter = FaceFilter(self, nav_mode)
+        self.active_filter.de_initialize()
+        self._utilities["active_filter"] = FaceFilter(self, nav_mode)
 
     def frame_index_from_object(self, item_id):
         """ Retrieve the frame index that an object belongs to from it's tag.
@@ -713,26 +764,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         logger.trace("item_id: %s, tag: %s", item_id, retval)
         return retval
 
-    def mesh_ids_for_face_id(self, item_id):
-        """ Obtain all the item ids for a given face index's mesh annotation.
-
-        Parameters
-        ----------
-        face_index: int
-            The face index to retrieve the mesh ids for
-
-        Returns
-        -------
-        list
-            The list of item ids for the mesh annotation pertaining to the given face index
-        """
-        face_id = next((tag for tag in self.gettags(item_id) if tag.startswith("face_id_")), None)
-        if face_id is None:
-            return None
-        retval = self.find_withtag("mesh_{}".format(face_id))
-        logger.trace("item_id: %s, face_id: %s, mesh ids: %s", item_id, face_id, retval)
-        return retval
-
     def coords_from_index(self, index):
         """ Returns the top left coordinates location for the canvas object based on an object's
         absolute index.
@@ -748,25 +779,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             The top left (x, y) co-ordinates that an object should be placed on the canvas
             calculated from the given index.
         """
-        return np.array(((index % self._columns) * self._faces_cache.size,
-                         (index // self._columns) * self._faces_cache.size), dtype="int")
-
-    def get_tk_face_and_landmarks(self, frame_index, face_index):
-        """ Obtain the resized photo image face and scaled landmarks """
-        logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
-        face, landmarks, mask = self._alignments.get_aligned_face_at_index(
-            face_index,
-            frame_index=frame_index,
-            size=self._faces_cache.size,
-            with_landmarks=True,
-            with_mask=True)
-
-        mask = mask.get(self._display_frame.tk_selected_mask.get().lower(),
-                        None) if self.optional_annotations["mask"] else None
-        mask = mask if mask is None else mask.mask.squeeze()
-        tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face, mask))
-        mesh_landmarks = self._faces_cache.get_mesh_points(landmarks)
-        return tk_face, mesh_landmarks
+        return np.array(((index % self._column_count) * self._faces_cache.size,
+                         (index // self._column_count) * self._faces_cache.size), dtype="int")
 
 
 class Aligner():

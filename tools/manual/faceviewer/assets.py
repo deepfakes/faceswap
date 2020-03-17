@@ -19,22 +19,24 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
+    alignments: :class:`~tool.manual.media.AlignmentsData`
+        The alignments data for the currently loaded frames
     progress_bar: :class:~lib.gui.custom_widgets.StatusBar`
         The bottom right progress bar
     """
-    def __init__(self, canvas, progress_bar):
+    def __init__(self, canvas, alignments, progress_bar):
         logger.debug("Initializing: %s (canvas: %s, progress_bar: %s)", self.__class__.__name__,
                      canvas, progress_bar)
         self._canvas = canvas
+        self._alignments = alignments
         self._faces_cache = canvas._faces_cache
-        self._alignments = canvas._alignments
         self._frame_count = canvas._frames.frame_count
         self._progress_bar = progress_bar
         self._progress_bar.start(mode="determinate")
         face_count = self._alignments.face_count_per_index
-        self._faces_cache.load_faces()
         frame_faces_loaded = [False for _ in range(self._frame_count)]
         self._load_faces(0, face_count, frame_faces_loaded)
+        self._faces_cache.load_faces()
         logger.debug("Initialized: %s ", self.__class__.__name__,)
 
     def _load_faces(self, faces_seen, faces_count, frame_faces_loaded):
@@ -328,15 +330,52 @@ class UpdateFace():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
+    alignments: :class:`~tool.manual.media.AlignmentsData`
+        The alignments data for the currently loaded frames
     """
 
-    def __init__(self, canvas):
+    def __init__(self, canvas, alignments):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
-        self._alignments = canvas._alignments
+        self._alignments = alignments
         self._faces_cache = canvas._faces_cache
         self._frames = canvas._frames
         logger.debug("Initialized: %s", self.__class__.__name__)
+
+    def _get_tk_face_and_landmarks(self, frame_index, face_index):
+        """ Obtain the resized photo image face and scaled landmarks for the requested face.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame to obtain the face and landmarks for
+        face_index: int
+            The index of the face within the requested frame
+
+        Returns
+        -------
+        :class:`tkinter.PhotoImage`
+            The masked or unmasked face formatted for canvas placement
+        dict
+            A dictionary containing the keys `landmarks` holding a `list` of :class:`numpy.ndarray`
+            objects and `is_poly` containing a `list` of `bool` types corresponding to the
+            `landmarks` indicating whether a line or polygon should be created for each mesh
+            annotation
+         """
+        logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
+        face, landmarks, mask = self._alignments.get_aligned_face_at_index(
+            face_index,
+            frame_index=frame_index,
+            size=self._faces_cache.size,
+            with_landmarks=True,
+            with_mask=True)
+
+        mask = mask.get(self._canvas.selected_mask,
+                        None) if self._canvas.optional_annotations["mask"] else None
+        mask = mask if mask is None else mask.mask.squeeze()
+        tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face, mask))
+        mesh_landmarks = self._faces_cache.get_mesh_points(landmarks)
+        return tk_face, mesh_landmarks
 
     # << ADD FACE METHODS >> #
     def add(self, frame_index):
@@ -354,7 +393,7 @@ class UpdateFace():
         logger.debug("Adding face to frame: (frame_index: %s, face_index: %s)",
                      frame_index, face_idx)
         # Add objects to cache
-        tk_face, mesh_landmarks = self._canvas.get_tk_face_and_landmarks(frame_index, face_idx)
+        tk_face, mesh_landmarks = self._get_tk_face_and_landmarks(frame_index, face_idx)
         self._faces_cache.add(frame_index, tk_face, mesh_landmarks)
         # Create new annotations
         image_id, mesh_ids = self._canvas.new_objects.create((0, 0),
@@ -497,14 +536,35 @@ class UpdateFace():
         face_index: int
             The index of the face within the given frame that is to have its objects updated
         """
-        tk_face, mesh_landmarks = self._canvas.get_tk_face_and_landmarks(frame_index, face_index)
+        tk_face, mesh_landmarks = self._get_tk_face_and_landmarks(frame_index, face_index)
         self._faces_cache.update(frame_index, face_index, tk_face, mesh_landmarks)
         image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
         self._canvas.itemconfig(image_id, image=tk_face)
         coords = self._canvas.coords(image_id)
-        mesh_ids = self._canvas.mesh_ids_for_face_id(image_id)
+        mesh_ids = self._mesh_ids_for_face_id(image_id)
         logger.trace("frame_index: %s, face_index: %s, image_id: %s, coords: %s, mesh_ids: %s, "
                      "tk_face: %s, mesh_landmarks: %s", frame_index, face_index, image_id, coords,
                      mesh_ids, tk_face, mesh_landmarks)
         for points, item_id in zip(mesh_landmarks["landmarks"], mesh_ids):
             self._canvas.coords(item_id, *(points + coords).flatten())
+
+    def _mesh_ids_for_face_id(self, item_id):
+        """ Obtain all the item ids for a given face index's mesh annotation.
+
+        Parameters
+        ----------
+        face_index: int
+            The face index to retrieve the mesh ids for
+
+        Returns
+        -------
+        list
+            The list of item ids for the mesh annotation pertaining to the given face index
+        """
+        face_id = next((tag for tag in self._canvas.gettags(item_id)
+                        if tag.startswith("face_id_")), None)
+        if face_id is None:
+            return None
+        retval = self._canvas.find_withtag("mesh_{}".format(face_id))
+        logger.trace("item_id: %s, face_id: %s, mesh ids: %s", item_id, face_id, retval)
+        return retval
