@@ -348,7 +348,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
             self._prev_objects["mask"] = None
             return
         mask_type = self._tk_vars["selected_mask"].get() if mask_view else None
-        self._faces_cache.update_selected(self._prev_objects["mask"], mask_type)
+        self._faces_cache.mask_loader.update_selected(self._prev_objects["mask"], mask_type)
         self._prev_objects["mask"] = None
 
     def _hide_unused_boxes(self):
@@ -398,7 +398,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         if mask_edit == mask_view:
             return
         mask_type = self._tk_vars["selected_mask"].get() if mask_edit else None
-        self._faces_cache.update_selected(self._frame_index, mask_type)
+        self._faces_cache.mask_loader.update_selected(self._frame_index, mask_type)
         self._prev_objects["mask"] = self._frame_index
 
     def _highlight_box(self, box, top_left):

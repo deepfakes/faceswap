@@ -4,12 +4,10 @@ import logging
 import bisect
 import os
 import tkinter as tk
-from concurrent import futures
+
 from copy import deepcopy
-from time import sleep
 
 import cv2
-import imageio
 import numpy as np
 from PIL import Image, ImageTk
 
@@ -262,14 +260,13 @@ class AlignmentsData():
         from the source folder
     """
     def __init__(self, alignments_path, extractor,
-                 input_location, is_video, tk_face_loading):
+                 input_location, is_video):
         logger.debug("Initializing %s: (alignments_path: '%s', extractor: %s, input_location: %s, "
                      "is_video: %s)", self.__class__.__name__, alignments_path, extractor,
                      input_location, is_video)
         self._frames = None
         self._remove_idx = None
         self._is_video = is_video
-        self._tk_face_loading = tk_face_loading
 
         self._alignments_file = None
         self._mask_names = None
@@ -280,6 +277,7 @@ class AlignmentsData():
         self._alignments = dict()  # Populated in load_faces
         self._sorted_keys = []  # Set in load_faces
 
+        self._save_enabled = False
         self._tk_unsaved = tk.BooleanVar()
         self._tk_unsaved.set(False)
         self._tk_edited = tk.BooleanVar()
@@ -410,6 +408,11 @@ class AlignmentsData():
         """ dict: The full frame list, with `None` as the value if alignments not updated. """
         return [self._alignments[frame].get("new", None) for frame in self._sorted_keys]
 
+    def enable_save(self):
+        """ Allow alignments files to be saved. Triggered once
+        :class:`~tools.manual.faceviewer.cache.FacesCache` has loaded """
+        self._save_enabled = True
+
     def link_frames(self, frames):
         """ Add the :class:`FrameNavigation` object as a property of the AlignmentsData.
 
@@ -496,7 +499,7 @@ class AlignmentsData():
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
-        if self._tk_face_loading.get():
+        if not self._save_enabled:
             tk.messagebox.showinfo(title="Save Alignments...",
                                    message="Please wait for faces to completely load before "
                                            "saving the alignments file.")
@@ -792,354 +795,3 @@ class AlignmentsData():
         del self._alignments[frame_name]["new"]
         self._tk_edited.set(True)
         self._frames.tk_update.set(True)
-
-
-class FaceCache():
-    """ Holds the face images for display in the bottom GUI Panel """
-    def __init__(self, root, alignments, frames, scaling_factor,
-                 progress_bar, tk_face_loading):
-        logger.debug("Initializing %s: (alignments: %s, frames: %s, scaling_factor: %s)",
-                     self.__class__.__name__, alignments, frames, scaling_factor)
-        self._alignments = alignments
-        self._frames = frames
-        self._face_size = int(round(96 * scaling_factor))
-        self._root = root
-        self._loader = FaceCacheLoader(self)
-        self._progress_bar = progress_bar
-        self._tk_loading = tk_face_loading
-        self._alpha = np.ones((self._face_size, self._face_size), dtype="uint8") * 255
-        self._landmark_mapping = dict(mouth=(48, 68),
-                                      right_eyebrow=(17, 22),
-                                      left_eyebrow=(22, 27),
-                                      right_eye=(36, 42),
-                                      left_eye=(42, 48),
-                                      nose=(27, 36),
-                                      jaw=(0, 17),
-                                      chin=(8, 11))
-        self._current_mask_type = None
-        self._tk_faces = np.array([None for _ in range(frames.frame_count)])
-        self._mesh_landmarks = np.array([None for _ in range(frames.frame_count)])
-        self._load_cache = []
-        self._initialized = False
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def is_loading(self):
-        """ bool: ``True`` if the faces have completed the loading cycle otherwise ``False`` """
-        return self._tk_loading.get()
-
-    @property
-    def is_initialized(self):
-        """ bool: ``True`` if the faces have completed initial loading otherwise ``False``. """
-        return self._initialized
-
-    @property
-    def tk_faces(self):
-        """ list: Item for each frame containing a list of :class:`tkinter.PhotoImage` objects
-        for each face. """
-        return self._tk_faces
-
-    @property
-    def mesh_landmarks(self):
-        """ list: Item for each frame containing a dictionary for each face. """
-        return self._mesh_landmarks
-
-    @property
-    def load_cache(self):
-        """ list: Item for each frame containing a dictionary for each face. """
-        return self._load_cache
-
-    @property
-    def size(self):
-        """ int: The size of each individual face in pixels. """
-        return self._face_size
-
-    def load_faces(self):
-        """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
-        """
-        self._loader.launch()
-
-    def set_load_complete(self):
-        """ TODO """
-        self._tk_loading.set(False)
-        self._initialized = True
-
-    def generate_tk_face_data(self, image, mask=None):
-        """ Generate a new :tkinter:`PhotoImage` object with an empty mask in the 4th channel. """
-        mask = self._alpha if mask is None else mask
-        if mask.shape[0] != self._face_size:
-            mask = cv2.resize(mask,
-                              (self._face_size, self._face_size),
-                              interpolation=cv2.INTER_AREA)
-
-        face = np.concatenate((image[..., :3], mask[..., None]), axis=-1)
-        return cv2.imencode(".png", face, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring()
-
-    def get_mesh_points(self, landmarks):
-        """ Obtain the mesh annotation points for a given set of landmarks. """
-        is_poly = []
-        mesh_landmarks = []
-        for key, val in self._landmark_mapping.items():
-            is_poly.append(key in ("right_eye", "left_eye", "mouth"))
-            mesh_landmarks.append(landmarks[val[0]:val[1]])
-        return dict(is_poly=is_poly, landmarks=mesh_landmarks)
-
-    def add(self, frame_index, tk_face, mesh_landmarks):
-        """ Add new objects to the faces cache. """
-        logger.debug("Adding objects: (frame_index: %s, tk_face: %s, mesh_landmarks: %s)",
-                     frame_index, tk_face, mesh_landmarks)
-        self._tk_faces[frame_index].append(tk_face)
-        self._mesh_landmarks[frame_index].append(mesh_landmarks)
-
-    def remove(self, frame_index, face_index):
-        """ Remove objects from the faces cache. """
-        logger.debug("Removing objects: (frame_index: %s, face_index: %s)",
-                     frame_index, face_index)
-        # TODO Deleting faces on load error. Traceback:
-        #   File "/home/matt/fake/faceswap_torzdf/tools/lib_manual/display_face.py", line 871, in remove
-        #       self._faces_cache.remove(frame_index, face_index)
-        #   File "/home/matt/fake/faceswap_torzdf/tools/lib_manual/media.py", line 891, in remove
-        #       del self._tk_faces[frame_index][face_index]
-        #   IndexError: list assignment index out of range
-        del self._tk_faces[frame_index][face_index]
-        del self._mesh_landmarks[frame_index][face_index]
-
-    def update(self, frame_index, face_index, tk_face, mesh_landmarks):
-        """ Update existing objects in the faces cache. """
-        logger.trace("Updating objects: (frame_index: %s, face_index: %s, tk_face: %s, "
-                     "mesh_landmarks: %s)", frame_index, face_index, tk_face, mesh_landmarks)
-        self._tk_faces[frame_index][face_index] = tk_face
-        self._mesh_landmarks[frame_index][face_index] = mesh_landmarks
-
-    def update_tk_face_for_masks(self, mask_type, is_enabled):
-        """ Load the selected masks """
-        mask_type = None if not is_enabled or mask_type == "" else mask_type.lower()
-        if self.is_loading or mask_type == self._current_mask_type:
-            return
-        self._tk_loading.set(True)
-        self._progress_bar.start(mode="determinate")
-        executor = self._load_unload_masks(mask_type)
-        total_faces = sum(1 for tk_faces in self._tk_faces for tk_face in tk_faces)
-        self._update_display(executor, mask_type, total_faces)
-        self._current_mask_type = mask_type
-
-    def _update_display(self, face_futures, mask_type, total_faces, processed_count=0):
-        # TODO Move this
-        to_process = [face_futures.pop(face_futures.index(future)) for future in list(face_futures)
-                      if future.done()]
-        processed_count += len(to_process)
-        self._update_progress(mask_type, processed_count, total_faces)
-        if not face_futures:
-            self._progress_bar.stop()
-            self._tk_loading.set(False)
-            return
-        self._root.after(500,
-                         self._update_display,
-                         face_futures,
-                         mask_type,
-                         total_faces,
-                         processed_count)
-
-    def _load_unload_masks(self, mask_type):
-        """ Load or unload masks from the tkinter PhotoImage, performing manipulations
-        in threads.
-
-        Notes
-        -----
-        Removing the data and re-adding from the PhotoImage inside a thread/process doesn't work,
-        so the compilation of face images is done in a thread whilst the PhotoImage data handling
-        happens here. This is unfortunately a fairly slow process but doing it this way does lead
-        to about 2x speed up vs doing it all in main. There is no speed up to be had from raising
-        max_worker count. Also, multiprocessing is slower for this task.
-        """
-        iterator = self._unload_masks_iterator if mask_type is None else self._load_masks_iterator
-        executor = futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 1)
-        futures_update = [executor.submit(self._update_bytes_mask,
-                                          tk_face,
-                                          mask_type,
-                                          face)
-                          for tk_face, face in iterator()]
-        return futures_update
-
-    def _unload_masks_iterator(self):
-        """ Remove mask from stored face. """
-        return ((tk_face, None) for tk_faces in self._tk_faces for tk_face in tk_faces)
-
-    def _load_masks_iterator(self):
-        """ Load the selected masks """
-        latest_alignments = self._alignments.latest_alignments
-        return ((tk_face, face)
-                for key, tk_faces in zip(self._alignments.sorted_keys, self._tk_faces)
-                for face, tk_face in zip(latest_alignments[key], tk_faces))
-
-    def _get_mask(self, mask_type, detected_face):
-        """ Obtain the mask from the alignments file. """
-        if mask_type is None:
-            return self._alpha
-        mask_class = detected_face.mask.get(mask_type, None)
-        mask = self._alpha if mask_class is None else mask_class.mask.squeeze()
-        if mask.shape[0] != self._face_size:
-            mask = cv2.resize(mask,
-                              (self._face_size, self._face_size),
-                              interpolation=cv2.INTER_AREA)
-        return mask
-
-    def _update_bytes_mask(self, tk_face, mask_type, detected_face=None):
-        """ Update the string version of the face image to include the given mask. """
-        mask = self._alpha if detected_face is None else self._get_mask(mask_type, detected_face)
-        self._update_mask_to_photoimage(tk_face, mask)
-
-    @staticmethod
-    def _update_mask_to_photoimage(tk_face, mask):
-        """ Adjust the mask of the current tk_face """
-        img = cv2.imdecode(np.fromstring(tk_face.cget("data"), dtype="uint8"),
-                           cv2.IMREAD_UNCHANGED)
-        img[..., -1] = mask
-        tk_face.put(cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring())
-
-    def _update_progress(self, mask_type, position, total_count):
-        """ Update the progress bar. """
-        progress = int(round((position / total_count) * 100))
-        msg = "Removing Mask: " if mask_type is None else "Loading {} Mask: ".format(mask_type)
-        msg += "{}/{} - {}%".format(position, total_count, progress)
-        self._progress_bar.progress_update(msg, progress)
-
-    def update_selected(self, frame_index, mask_type):
-        """ Update the mask image for the faces in the given frame index. """
-        logger.trace("Updating selected faces: (frame_index: %s, mask_type: %s)",
-                     frame_index, mask_type)
-        mask_type = mask_type if mask_type is None else mask_type.lower()
-        faces = self._alignments.latest_alignments[self._alignments.sorted_keys[frame_index]]
-        for face, tk_face in zip(faces, self._tk_faces[frame_index]):
-            self._update_mask_to_photoimage(tk_face, self._get_mask(mask_type, face))
-
-
-class FaceCacheLoader():
-    """ Background loads the faces and mesh landmarks into the face cache. """
-    def __init__(self, faces_cache):
-        self._faces_cache = faces_cache
-        self._alignments = faces_cache._alignments
-        self._location = faces_cache._frames.location
-        self._key_frames = faces_cache._alignments.video_meta_data.get("keyframes", None)
-        self._pts_times = faces_cache._alignments.video_meta_data.get("pts_time", None)
-        self._is_video = self._key_frames is not None and self._pts_times is not None
-        self._num_threads = os.cpu_count() - 2
-        if self._is_video:
-            self._num_threads = min(self._num_threads, len(self._key_frames) - 1)
-        self._executor = futures.ThreadPoolExecutor(max_workers=self._num_threads)
-
-    def launch(self):
-        """ Loads the faces into the :attr:`_faces` dict at 96px size formatted for GUI display.
-        """
-        if self._is_video:
-            self._launch_video()
-        else:
-            self._launch_folder()
-
-    def _launch_video(self):
-        key_frame_split = len(self._key_frames) // self._num_threads
-        for idx in range(self._num_threads):
-            start_idx = idx * key_frame_split
-            end_idx = self._key_frames[start_idx + key_frame_split]
-            start_pts = self._pts_times[self._key_frames[start_idx]]
-            end_pts = False if idx + 1 == self._num_threads else self._pts_times[end_idx]
-            starting_index = self._pts_times.index(start_pts)
-            if end_pts:
-                segment_count = len(self._pts_times[self._key_frames[start_idx]:end_idx])
-            else:
-                segment_count = len(self._pts_times[self._key_frames[start_idx]:])
-            self._executor.submit(self._load_from_video,
-                                  start_pts,
-                                  end_pts,
-                                  starting_index,
-                                  segment_count)
-
-    def _launch_folder(self):
-        reader = SingleFrameLoader(self._location)
-        for idx in range(reader.count):
-            self._executor.submit(self._load_from_folder, reader, idx)
-
-    def _load_from_video(self, pts_start, pts_end, start_index, segment_count):
-        logger.debug("pts_start: %s, pts_end: %s, start_frame_index: %s, segment_count: %s",
-                     pts_start, pts_end, start_index, segment_count)
-        reader = self._get_reader(pts_start, pts_end)
-        idx = 0
-        for idx, frame in enumerate(reader):
-            frame_idx = idx + start_index
-            self._set_face_cache_objects(frame[..., ::-1], frame_idx)
-            if idx == segment_count - 1:
-                # Sometimes extra frames are picked up at the end of a segment, so stop
-                # processing when segment frame count has been hit.
-                break
-        reader.close()
-        logger.debug("Segment complete: (starting_frame_index: %s, processed_count: %s)",
-                     start_index, idx)
-
-    def _get_reader(self, pts_start, pts_end):
-        """ Get an imageio reader for this thread's segment. """
-        input_params = ["-ss", str(pts_start)]
-        if pts_end:
-            input_params.extend(["-to", str(pts_end)])
-        logger.debug("pts_start: %s, pts_end: %s, input_params: %s",
-                     pts_start, pts_end, input_params)
-        return imageio.get_reader(self._location, "ffmpeg", input_params=input_params)
-
-    def _load_from_folder(self, reader, frame_index):
-        _, frame = reader.image_from_index(frame_index)
-        self._set_face_cache_objects(frame, frame_index)
-
-    def _set_face_cache_objects(self, frame, frame_index):
-        faces = self._alignments.saved_alignments[self._alignments.sorted_keys[frame_index]]
-        tk_faces = self._create_photoimages_for_frame(frame, faces)
-        if tk_faces is None:
-            return
-        mesh_landmarks = [self._faces_cache.get_mesh_points(face.aligned_landmarks)
-                          for face in faces]
-        self._faces_cache.tk_faces[frame_index] = tk_faces
-        self._faces_cache.mesh_landmarks[frame_index] = mesh_landmarks
-        self._faces_cache.load_cache.append(frame_index)
-
-    def _create_photoimages_for_frame(self, frame, faces):
-        """ Create the :class:`tkinter.PhotoImage` faces for a given frame.
-
-        Notes
-        -----
-        Updating :class:`tkinter.PhotoImage` objects outside of the main loop can lead to issues.
-        To protect against this, we run several attempts before failing.
-
-        Parameters
-        ----------
-        frame: :class:`numpy.ndarray`:
-            The frame that is to be used for creating a face object
-        faces: list
-            list of :class:`~lib.faces_detect.detected_face` objects for the faces in the given
-            frame
-
-        Returns
-        list
-            The list of :class:`tkinter.PhotoImage` face objects for the given frame
-        """
-        for attempt in range(10):
-            try:
-                tk_faces = [tk.PhotoImage(data=self._load_face(frame, face))
-                            for face in faces]
-                break
-            except RuntimeError as err:
-                if attempt == 9 or str(err) not in ("main thread is not in main loop",
-                                                    "Too early to create image"):
-                    raise
-                if str(err) == "Too early to create image":
-                    # GUI has gone away. Probably quit during load
-                    return None
-                logger.info("attempt: %s: %s", attempt + 1, str(err))
-                sleep(0.25)
-        return tk_faces
-
-    def _load_face(self, frame, face):
-        """ Load the resized aligned face. """
-        face.load_aligned(frame, size=self._faces_cache.size, force=True)
-        bytes_string = self._faces_cache.generate_tk_face_data(face.aligned_face)
-        face.aligned["face"] = None
-        # TODO Document that this is set to a photo image from the canvas.
-        # Lists are thread safe (for our purposes) PhotoImage is not.
-        return bytes_string

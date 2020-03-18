@@ -21,22 +21,19 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         The :class:`~tools.manual.FacesViewer` canvas
     alignments: :class:`~tool.manual.media.AlignmentsData`
         The alignments data for the currently loaded frames
-    progress_bar: :class:~lib.gui.custom_widgets.StatusBar`
-        The bottom right progress bar
     """
-    def __init__(self, canvas, alignments, progress_bar):
-        logger.debug("Initializing: %s (canvas: %s, progress_bar: %s)", self.__class__.__name__,
-                     canvas, progress_bar)
+    def __init__(self, canvas, alignments):
+        logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
         self._alignments = alignments
         self._faces_cache = canvas._faces_cache
         self._frame_count = canvas._frames.frame_count
-        self._progress_bar = progress_bar
+        self._progress_bar = canvas._progress_bar
         self._progress_bar.start(mode="determinate")
         face_count = self._alignments.face_count_per_index
         frame_faces_loaded = [False for _ in range(self._frame_count)]
         self._load_faces(0, face_count, frame_faces_loaded)
-        self._faces_cache.load_faces()
+        self._faces_cache.loader.launch()
         logger.debug("Initialized: %s ", self.__class__.__name__,)
 
     def _load_faces(self, faces_seen, faces_count, frame_faces_loaded):
@@ -58,15 +55,14 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
             annotations have been created for each frame or not.
         """
         self._update_progress(faces_seen)
-        update_indices = self._faces_cache.load_cache[faces_seen:]
+        update_indices = self._faces_cache.loader.loaded_frame_indices[faces_seen:]
         logger.debug("faces_seen: %s, update count: %s", faces_seen, len(update_indices))
         tk_faces = self._faces_cache.tk_faces[update_indices]
-        frame_landmarks = self._faces_cache.mesh_landmarks[update_indices]
-        for frame_idx, faces, mesh_landmarks in zip(update_indices, tk_faces, frame_landmarks):
+        for frame_idx, faces in zip(update_indices, tk_faces):
             starting_idx = sum(faces_count[:frame_idx])
-            for idx, (face, landmarks) in enumerate(zip(faces, mesh_landmarks)):
+            for idx, tk_face in enumerate(faces):
                 coords = self._canvas.coords_from_index(starting_idx + idx)
-                self._canvas.new_objects.create(coords, face, landmarks, frame_idx,
+                self._canvas.new_objects.create(coords, tk_face, frame_idx,
                                                 is_multi=len(faces) > 1)
                 self._reshape_canvas(coords)
             if faces:
@@ -145,6 +141,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         Sets the display to the currently selected filter.
         Sets the load complete variable to ``True``
         Highlights the active face.
+        Enables saving of an alignments file
         """
         for frame_idx, faces in enumerate(self._alignments.updated_alignments):
             if faces is None:
@@ -160,9 +157,10 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
                     self._canvas.update_face.update(frame_idx, face_idx)
         self._alignments.tk_edited.set(False)
         self._canvas.update_mesh_color()
-        self._progress_bar.stop()
         self._canvas.switch_filter()
-        self._faces_cache.set_load_complete()
+        self._progress_bar.stop()
+        self._faces_cache.loader.set_load_complete()
+        self._alignments.enable_save()
         self._canvas.active_frame.reload_annotations()
 
     def _on_load_remove_faces(self, existing_count, new_count, frame_index):
@@ -203,20 +201,16 @@ class ObjectCreator():
         self._current_face_id = 0
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def create(self, coordinates, tk_face, mesh_landmarks, frame_index, is_multi=False):
+    def create(self, coordinates, tk_face, frame_index, is_multi=False):
         """ Create all of the annotations for a single Face Viewer face.
 
         Parameters
         ----------
         coordinates: tuple
             The top left (x, y) coordinates for the annotations' position in the Faces Viewer
-        tk_face: :class:`tkinter.PhotoImage`
-            The face to be used for the image annotation
-        mesh_landmarks: dict
-            A dictionary containing the keys `landmarks` holding a `list` of :class:`numpy.ndarray`
-            objects and `is_poly` containing a `list` of `bool` types corresponding to the
-            `landmarks` indicating whether a line or polygon should be created for each mesh
-            annotation
+        tk_face: :class:`~manual.facesviewer.cache.TKFace`
+            The tk face object containing the face to be used for the image annotation and the
+            mesh landmarks
         mesh_color: str
             The hex code holding the color that the mesh should be displayed as
         frame_index: int
@@ -237,11 +231,11 @@ class ObjectCreator():
         tags = {obj: self._get_viewer_tags(obj, frame_index, is_multi)
                 for obj in self._object_types}
         image_id = self._canvas.create_image(*coordinates,
-                                             image=tk_face,
+                                             image=tk_face.face,
                                              anchor=tk.NW,
                                              tags=tags["image"])
         mesh_ids = self.create_mesh_annotations(self._canvas.get_muted_color("Mesh"),
-                                                mesh_landmarks,
+                                                tk_face,
                                                 coordinates,
                                                 tags["mesh"])
         self._current_face_id += 1
@@ -281,7 +275,7 @@ class ObjectCreator():
         logger.trace("tags: %s", tags)
         return tags
 
-    def create_mesh_annotations(self, color, mesh_landmarks, offset, tag):
+    def create_mesh_annotations(self, color, tk_face, offset, tag):
         """ Creates the mesh annotation for the landmarks. This is made up of a series
         of polygons or lines, depending on which part of the face is being annotated.
 
@@ -289,11 +283,9 @@ class ObjectCreator():
         ----------
         color: str
             The hex code for the color that the mesh should be displayed as
-        mesh_landmarks: dict
-            A dictionary containing the keys `landmarks` holding a `list` of :class:`numpy.ndarray`
-            objects and `is_poly` containing a `list` of `bool` types corresponding to the
-            `landmarks` indicating whether a line or polygon should be created for each mesh
-            annotation
+        tk_face: :class:`~manual.facesviewer.cache.TKFace`
+            The tk face object containing the face to be used for the image annotation and the
+            mesh landmarks
         offset: :class:`numpy.ndarray`
             The top left co-ordinates of the face that corresponds to the given landmarks.
             The mesh annotations will be offset by this amount, to place them in the correct
@@ -312,7 +304,7 @@ class ObjectCreator():
         kwargs = dict(polygon=dict(fill="", outline=color), line=dict(fill=color))
         logger.trace("color: %s, offset: %s, tag: %s, state: %s, kwargs: %s",
                      color, offset, tag, state, kwargs)
-        for is_poly, landmarks in zip(mesh_landmarks["is_poly"], mesh_landmarks["landmarks"]):
+        for is_poly, landmarks in zip(tk_face.mesh_is_poly, tk_face.mesh_points):
             key = "polygon" if is_poly else "line"
             tags = tag + ["mesh_{}".format(key)]
             obj = getattr(self._canvas, "create_{}".format(key))
@@ -342,7 +334,7 @@ class UpdateFace():
         self._frames = canvas._frames
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _get_tk_face_and_landmarks(self, frame_index, face_index):
+    def _get_aligned_face(self, frame_index, face_index):
         """ Obtain the resized photo image face and scaled landmarks for the requested face.
 
         Parameters
@@ -373,9 +365,7 @@ class UpdateFace():
         mask = mask.get(self._canvas.selected_mask,
                         None) if self._canvas.optional_annotations["mask"] else None
         mask = mask if mask is None else mask.mask.squeeze()
-        tk_face = tk.PhotoImage(data=self._faces_cache.generate_tk_face_data(face, mask))
-        mesh_landmarks = self._faces_cache.get_mesh_points(landmarks)
-        return tk_face, mesh_landmarks
+        return face, landmarks, mask
 
     # << ADD FACE METHODS >> #
     def add(self, frame_index):
@@ -393,18 +383,16 @@ class UpdateFace():
         logger.debug("Adding face to frame: (frame_index: %s, face_index: %s)",
                      frame_index, face_idx)
         # Add objects to cache
-        tk_face, mesh_landmarks = self._get_tk_face_and_landmarks(frame_index, face_idx)
-        self._faces_cache.add(frame_index, tk_face, mesh_landmarks)
+        face, landmarks, mask = self._get_aligned_face(frame_index, face_idx)
+        tk_face = self._faces_cache.add(frame_index, face, landmarks, mask)
+
         # Create new annotations
-        image_id, mesh_ids = self._canvas.new_objects.create((0, 0),
-                                                             tk_face,
-                                                             mesh_landmarks,
-                                                             frame_index)
+        image_id, mesh_ids = self._canvas.new_objects.create((0, 0), tk_face, frame_index)
         # Place in stack
         frame_tag = self._update_multi_tags(frame_index)
         self._place_in_stack(frame_index, frame_tag)
         # Update viewer
-        self._canvas.active_filter.add_face(image_id, mesh_ids, mesh_landmarks["landmarks"])
+        self._canvas.active_filter.add_face(image_id, mesh_ids, tk_face.mesh_points["landmarks"])
 
     def _place_in_stack(self, frame_index, frame_tag):
         """ Place newly added faces in the correct location in the object stack.
@@ -536,16 +524,17 @@ class UpdateFace():
         face_index: int
             The index of the face within the given frame that is to have its objects updated
         """
-        tk_face, mesh_landmarks = self._get_tk_face_and_landmarks(frame_index, face_index)
-        self._faces_cache.update(frame_index, face_index, tk_face, mesh_landmarks)
+        tk_face = self._faces_cache.tk_faces[frame_index][face_index]
+        face, landmarks, mask = self._get_aligned_face(frame_index, face_index)
+        tk_face.update_face(face, landmarks, mask=mask)
+
         image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
-        self._canvas.itemconfig(image_id, image=tk_face)
+        self._canvas.itemconfig(image_id, image=tk_face.face)
         coords = self._canvas.coords(image_id)
         mesh_ids = self._mesh_ids_for_face_id(image_id)
         logger.trace("frame_index: %s, face_index: %s, image_id: %s, coords: %s, mesh_ids: %s, "
-                     "tk_face: %s, mesh_landmarks: %s", frame_index, face_index, image_id, coords,
-                     mesh_ids, tk_face, mesh_landmarks)
-        for points, item_id in zip(mesh_landmarks["landmarks"], mesh_ids):
+                     "tk_face: %s", frame_index, face_index, image_id, coords, mesh_ids, tk_face)
+        for points, item_id in zip(tk_face.mesh_points, mesh_ids):
             self._canvas.coords(item_id, *(points + coords).flatten())
 
     def _mesh_ids_for_face_id(self, item_id):

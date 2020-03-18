@@ -18,9 +18,10 @@ from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .faceviewer.assets import FacesViewerLoader, ObjectCreator, UpdateFace
+from .faceviewer.cache import FaceCache
 from .faceviewer.display import ActiveFrame, ContextMenu, FaceFilter, HoverBox
 from .display_frame import DisplayFrame
-from .media import AlignmentsData, FaceCache, FrameNavigation
+from .media import AlignmentsData, FrameNavigation
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -45,39 +46,27 @@ class Manual(tk.Tk):
         self._initialize_tkinter()
 
         extractor = Aligner()
-        tk_face_loading = self._create_tk_face_loading_var()
         self._alignments = AlignmentsData(arguments.alignments_path,
                                           extractor,
                                           arguments.frames,
-                                          is_video,
-                                          tk_face_loading)
+                                          is_video)
 
-        scaling_factor = get_config().scaling_factor
         video_meta_data = self._alignments.video_meta_data
-
         self._frames = FrameNavigation(arguments.frames,
-                                       scaling_factor,
+                                       get_config().scaling_factor,
                                        video_meta_data)
         self._alignments.link_frames(self._frames)
         self._alignments.load_faces()
 
         self._containers = self._create_containers()
-        progress_bar = StatusBar(self._containers["bottom"], hide_status=True)
 
         self._wait_for_threads(extractor, video_meta_data)
-        faces_cache = FaceCache(self._containers["main"],
-                                self._alignments,
-                                self._frames,
-                                scaling_factor,
-                                progress_bar,
-                                tk_face_loading)
+
         self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
         self._faces_frame = FacesFrame(self._containers["bottom"],
-                                       faces_cache,
                                        self._frames,
                                        self._alignments,
-                                       self._display,
-                                       progress_bar)
+                                       self._display)
 
         self._options = Options(self._containers["top"], self._display)
         self._display.tk_selected_action.set("View")
@@ -154,13 +143,6 @@ class Manual(tk.Tk):
             "iconphoto",
             self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
-
-    @staticmethod
-    def _create_tk_face_loading_var():
-        """ Create a Boolean var to indicate when the Faces Frame has completed loading """
-        var = tk.BooleanVar()
-        var.set(False)
-        return var
 
     def _create_containers(self):
         """ Create the paned window containers for various GUI elements
@@ -345,38 +327,35 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the faces frame resides in
-    faces_cache: :class:`tools.manual.lib_manual.FaceCache`
-        The faces cache that holds the aligned faces
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     alignments: :class:`~tool.manual.media.AlignmentsData`
         The alignments data for the currently loaded frames
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
-    progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
-        The progress bar object that displays in the bottom right of the GUI
     """
-    def __init__(self, parent, faces_cache, frames, alignments, display_frame, progress_bar):
-        logger.debug("Initializing %s: (parent: %s, faces_cache: %s, frames: %s, alignments: %s, "
-                     "display_frame: %s, progress_bar: %s)", self.__class__.__name__, parent,
-                     faces_cache, frames, alignments, display_frame, progress_bar)
+    def __init__(self, parent, frames, alignments, display_frame):
+        logger.debug("Initializing %s: (parent: %s, frames: %s, alignments: %s, "
+                     "display_frame: %s)", self.__class__.__name__, parent, frames, alignments,
+                     display_frame)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self._actions_frame = FacesActionsFrame(self, faces_cache._tk_loading)
+        self._actions_frame = FacesActionsFrame(self)
 
+        progress_bar = StatusBar(parent, hide_status=True)
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self._canvas = FacesViewer(self._faces_frame,
-                                   self._actions_frame._tk_optional_annotations,
-                                   faces_cache,
+                                   self._actions_frame._tk_vars,
                                    frames,
                                    alignments,
-                                   display_frame)
+                                   display_frame,
+                                   progress_bar)
         scrollbar_width = self._add_scrollbar()
         self._canvas.set_column_count(self.winfo_width() - scrollbar_width)
 
-        FacesViewerLoader(self._canvas, alignments, progress_bar)
+        FacesViewerLoader(self._canvas, alignments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -430,19 +409,19 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`FacesFrame`
         The Faces frame that the Actions reside in
-    tk_face_loading: :class:`tkinter.BooleanVar`
-        The tkinter variable indicating whether the face cache is currently being updated or not
     """
-    def __init__(self, parent, tk_face_loading):
-        logger.debug("Initializing %s: (parent: %s, tk_face_loading: %s)",
-                     self.__class__.__name__, parent, tk_face_loading)
+    def __init__(self, parent):
+        logger.debug("Initializing %s: (parent: %s)",
+                     self.__class__.__name__, parent)
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
-        self._tk_optional_annotations = dict()
+        self._tk_vars = dict()
         self._configure_styles()
         self._buttons = self._add_buttons()
-        tk_face_loading.trace("w",
-                              lambda *e, v=tk_face_loading: self._enable_disable_buttons(v))
+        lockout = tk.BooleanVar()
+        lockout.set(True)
+        lockout.trace("w", lambda *e: self._enable_disable_buttons())
+        self._tk_vars["lockout"] = lockout
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -484,7 +463,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for display in self.key_bindings.values():
             var = tk.BooleanVar()
             var.set(False)
-            self._tk_optional_annotations[display] = var
+            self._tk_vars[display] = var
 
             lookup = "landmarks" if display == "mesh" else display
             button = ttk.Button(frame,
@@ -506,26 +485,21 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The display name for the button that has called this event as exists in
             attr:`_buttons`
         """
-        is_pressed = not self._tk_optional_annotations[display].get()
+        is_pressed = not self._tk_vars[display].get()
         style = "display_selected.TButton" if is_pressed else "display_deselected.TButton"
         state = ["pressed", "focus"] if is_pressed else ["!pressed", "!focus"]
         btn = self._buttons[display]
         btn.configure(style=style)
         btn.state(state)
-        self._tk_optional_annotations[display].set(is_pressed)
+        self._tk_vars[display].set(is_pressed)
 
-    def _enable_disable_buttons(self, tk_face_loading):
+    def _enable_disable_buttons(self):
         """ Enable or disable the optional annotation buttons when the face cache is idle or
         loading.
-
-        Parameters
-        ----------
-        loading_state: bool
-            ``True`` if the :class:`~tools.manual.media.FacesCache` is updating otherwise ``False``
         """
-        loading_state = tk_face_loading.get()
-        state = "disabled" if loading_state else "!disabled"
-        logger.debug("loading_state: %s, button state: %s", loading_state, state)
+        lockout_state = self._tk_vars["lockout"].get()
+        state = "disabled" if lockout_state else "!disabled"
+        logger.debug("lockout_state: %s, button state: %s", lockout_state, state)
         for button in self._buttons.values():
             button.state([state])
 
@@ -537,30 +511,33 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the canvas
-    tk_optional_annotations: dict
+    tk_action_vars: dict
         The :class:`tkinter.BooleanVar` objects for selectable optional annotations
         as set by the buttons in the :class:`FacesActionsFrame`
-    faces_cache: :class:`~tools.manual.media.FacesCache`
-        The cache that holds the :class:`tkinter.PhotoImage` faces and the mesh landmarks
-        for the Faces Viewer.
     frames: :class:`~tools.manual.media.FrameNavigation`
         The object that holds the cache of frames and handles frame navigation.
     alignments: :class:`~tool.manual.media.AlignmentsData`
         The alignments data for the currently loaded frames
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
+    progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
+        The progress bar object that displays in the bottom right of the GUI
     """
-    def __init__(self, parent, tk_optional_annotations, faces_cache, frames, alignments,
-                 display_frame):
-        logger.debug("Initializing %s: (parent: %s, tk_optional_annotations: %s, faces_cache: %s, "
-                     "frames: %s, alignments: %s, display_frame: %s)", self.__class__.__name__,
-                     parent, tk_optional_annotations, faces_cache, frames, alignments,
-                     display_frame)
+    def __init__(self, parent, tk_action_vars, frames, alignments, display_frame, progress_bar):
+        logger.debug("Initializing %s: (parent: %s, tk_action_vars: %s, frames: %s, "
+                     "alignments: %s, display_frame: %s, progress_bar: %s)",
+                     self.__class__.__name__, parent, tk_action_vars, frames, alignments,
+                     display_frame, progress_bar)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
-        self._tk_optional_annotations = tk_optional_annotations
-        self._faces_cache = faces_cache
+        self._progress_bar = progress_bar
+        self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
+                                         if key != "lockout"}
         self._frames = frames
+        self._faces_cache = FaceCache(self,
+                                      get_config().scaling_factor,
+                                      alignments,
+                                      tk_action_vars["lockout"])
         self._display_frame = display_frame
         self._utilities = dict(object_creator=ObjectCreator(self),
                                hover_box=HoverBox(self, alignments),
@@ -651,8 +628,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     def _update_mask_type(self):
         """ Update the displayed mask in the :class:`FacesViewer` canvas when the user changes
         the mask type. """
-        self._faces_cache.update_tk_face_for_masks(self.selected_mask,
-                                                   self.optional_annotations["mask"])
+        self._faces_cache.mask_loader.update_all(self.selected_mask,
+                                                 self.optional_annotations["mask"])
         self.active_frame.reload_annotations()
 
     # << POST INIT FUNCTIONS >> #
@@ -749,8 +726,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         if self._faces_cache.is_loading:
             return
         if annotation == "mask":
-            self._faces_cache.update_tk_face_for_masks(self.selected_mask,
-                                                       self.optional_annotations[annotation])
+            self._faces_cache.mask_loader.update_all(self.selected_mask,
+                                                     self.optional_annotations[annotation])
         else:
             self.active_filter.toggle_annotation(self.optional_annotations[annotation])
 
