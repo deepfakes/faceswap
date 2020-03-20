@@ -21,14 +21,14 @@ class HoverBox():  # pylint:disable=too-few-public-methods
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
-    def __init__(self, canvas, alignments):
+    def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
         self._frames = canvas._frames
-        self._alignments = alignments
+        self._det_faces = detected_faces
         self._face_size = canvas._faces_cache.size
         self._box = self._canvas.create_rectangle(0, 0, self._face_size, self._face_size,
                                                   outline="#0000ff",
@@ -124,7 +124,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         int
             The index of the requested frame within the filtered frames view.
         """
-        frames_list = self._alignments.get_filtered_frames_list()
+        frames_list = self._det_faces.filter.frames_list
         retval = frames_list.index(frame_index) if frame_index in frames_list else None
         logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
         return retval
@@ -180,19 +180,19 @@ class ActiveFrame():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
-    def __init__(self, canvas, alignments):
+    def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
-        self._alignments = alignments
+        self._det_faces = detected_faces
         self._faces_cache = canvas._faces_cache
         self._size = canvas._faces_cache.size
         self._tk_position = canvas._frames.tk_position
         self._highlighter = Highlighter(self)
         self._tk_position.trace("w", lambda *e: self.reload_annotations())
-        self._alignments.tk_edited.trace("w", lambda *e: self._update())
+        self._det_faces.tk_edited.trace("w", lambda *e: self._update())
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -225,25 +225,24 @@ class ActiveFrame():
     def _update(self):
         """ Update the highlighted annotations for faces in the currently selected frame on an
         update, add or remove. """
-        if not self._alignments.tk_edited.get() or not self._faces_cache.is_initialized:
+        if not self._det_faces.tk_edited.get() or not self._faces_cache.is_initialized:
             return
         if self._add_remove_face():
             self.reload_annotations()
             return
-        self._canvas.update_face.update(self.frame_index, self._alignments.face_index)
+        self._canvas.update_face.update(*self._det_faces.update.last_updated_face)
         self._highlighter.highlight_selected()
-        self._alignments.tk_edited.set(False)
+        self._det_faces.tk_edited.set(False)
 
     def _add_remove_face(self):
         """ Check the number of displayed faces against the number of faces stored in the
         alignments data for the currently selected frame, and add or remove if appropriate. """
-        alignment_faces = len(self._alignments.current_faces)
-        if alignment_faces > self._canvas.active_frame.face_count:
+        alignment_faces = len(self._det_faces.current_faces[self.frame_index])
+        if alignment_faces > self.face_count:
             self._canvas.update_face.add(self._canvas.active_frame.frame_index)
             retval = True
         elif alignment_faces < self._canvas.active_frame.face_count:
-            self._canvas.update_face.remove(self._canvas.active_frame.frame_index,
-                                            self._alignments.get_removal_index())
+            self._canvas.update_face.remove(*self._det_faces.update.last_updated_face)
             retval = True
         else:
             retval = False

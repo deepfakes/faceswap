@@ -19,22 +19,27 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
-    def __init__(self, canvas, alignments):
+    def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
-        self._alignments = alignments
+        self._det_faces = detected_faces
+        self._updated_faces = detected_faces._updated_faces
         self._faces_cache = canvas._faces_cache
         self._frame_count = canvas._frames.frame_count
         self._progress_bar = canvas._progress_bar
-        self._progress_bar.start(mode="determinate")
-        face_count = self._alignments.face_count_per_index
-        frame_faces_loaded = [False for _ in range(self._frame_count)]
-        self._load_faces(0, face_count, frame_faces_loaded)
+        self._launch_face_loader()
         self._faces_cache.loader.launch()
         logger.debug("Initialized: %s ", self.__class__.__name__,)
+
+    def _launch_face_loader(self):
+        """ Launch the canvas face loader loop. """
+        self._progress_bar.start(mode="determinate")
+        face_count = self._det_faces.face_count_per_index
+        frame_faces_loaded = [False for _ in range(self._frame_count)]
+        self._load_faces(0, face_count, frame_faces_loaded)
 
     def _load_faces(self, faces_seen, faces_count, frame_faces_loaded):
         """ Load the currently available faces from :class:`tools.lib_manual.media.FacesCache`
@@ -143,7 +148,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         Highlights the active face.
         Enables saving of an alignments file
         """
-        for frame_idx, faces in enumerate(self._alignments.updated_alignments):
+        for frame_idx, faces in enumerate(self._updated_faces):
             if faces is None:
                 continue
             image_ids = self._canvas.find_withtag("image_{}".format(frame_idx))
@@ -155,12 +160,12 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
                     self._canvas.update_face.add(frame_idx)
                 else:
                     self._canvas.update_face.update(frame_idx, face_idx)
-        self._alignments.tk_edited.set(False)
+        self._det_faces.tk_edited.set(False)
         self._canvas.update_mesh_color()
         self._canvas.switch_filter()
         self._progress_bar.stop()
         self._faces_cache.loader.set_load_complete()
-        self._alignments.enable_save()
+        self._det_faces.enable_save()
         self._canvas.active_frame.reload_annotations()
 
     def _on_load_remove_faces(self, existing_count, new_count, frame_index):
@@ -322,14 +327,14 @@ class UpdateFace():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
 
-    def __init__(self, canvas, alignments):
+    def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
-        self._alignments = alignments
+        self._det_faces = detected_faces
         self._faces_cache = canvas._faces_cache
         self._frames = canvas._frames
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -355,12 +360,11 @@ class UpdateFace():
             annotation
          """
         logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
-        face, landmarks, mask = self._alignments.get_aligned_face_at_index(
-            face_index,
-            frame_index=frame_index,
-            size=self._faces_cache.size,
-            with_landmarks=True,
-            with_mask=True)
+        face, landmarks, mask = self._det_faces.get_face_at_index(face_index,
+                                                                  frame_index,
+                                                                  self._faces_cache.size,
+                                                                  with_landmarks=True,
+                                                                  with_mask=True)
 
         mask = mask.get(self._canvas.selected_mask,
                         None) if self._canvas.optional_annotations["mask"] else None
@@ -392,7 +396,7 @@ class UpdateFace():
         frame_tag = self._update_multi_tags(frame_index)
         self._place_in_stack(frame_index, frame_tag)
         # Update viewer
-        self._canvas.active_filter.add_face(image_id, mesh_ids, tk_face.mesh_points["landmarks"])
+        self._canvas.active_filter.add_face(image_id, mesh_ids, tk_face.mesh_points)
 
     def _place_in_stack(self, frame_index, frame_tag):
         """ Place newly added faces in the correct location in the object stack.
@@ -428,7 +432,7 @@ class UpdateFace():
         """
         offset = frame_index + 1
         next_frame_idx = next((
-            idx for idx, f_count in enumerate(self._alignments.face_count_per_index[offset:])
+            idx for idx, f_count in enumerate(self._det_faces.face_count_per_index[offset:])
             if f_count > 0), None)
         if next_frame_idx is None:
             return None
@@ -454,7 +458,7 @@ class UpdateFace():
         frame_idx = self._canvas.frame_index_from_object(item_id)
         face_idx = self._canvas.find_withtag("image_{}".format(frame_idx)).index(item_id)
         logger.debug("item_id: %s, frame_index: %s, face_index: %s", item_id, frame_idx, face_idx)
-        self._alignments.delete_face_at_index_by_frame(frame_idx, face_idx)
+        self._det_faces.update.delete(frame_idx, face_idx)
         self.remove(frame_idx, face_idx)
         if frame_idx == self._frames.tk_position.get():
             self._frames.tk_update.set(True)
@@ -526,7 +530,7 @@ class UpdateFace():
         """
         tk_face = self._faces_cache.tk_faces[frame_index][face_index]
         face, landmarks, mask = self._get_aligned_face(frame_index, face_index)
-        tk_face.update_face(face, landmarks, mask=mask)
+        tk_face.update(face, landmarks, mask=mask)
 
         image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
         self._canvas.itemconfig(image_id, image=tk_face.face)

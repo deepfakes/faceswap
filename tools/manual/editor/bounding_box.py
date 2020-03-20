@@ -12,7 +12,7 @@ from ._base import ControlPanelOption, Editor, logger
 
 class BoundingBox(Editor):
     """ The Bounding Box Editor. """
-    def __init__(self, canvas, alignments, frames):
+    def __init__(self, canvas, detected_faces, frames):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
@@ -23,7 +23,7 @@ class BoundingBox(Editor):
                         " - Click in empty space to create a new bounding box.\n"
                         " - Right click a bounding box to delete a face.")
         key_bindings = {"<Delete>": self._delete_current_face}
-        super().__init__(canvas, alignments, frames,
+        super().__init__(canvas, detected_faces, frames,
                          control_text=control_text, key_bindings=key_bindings)
 
     @property
@@ -65,7 +65,7 @@ class BoundingBox(Editor):
                      "\n\thist: Equalize the histograms on the RGB channels."
                      "\n\tmean: Normalize the face colors to the mean.")
         var = norm_ctl.tk_var
-        var.trace("w", lambda *e, v=var: self._alignments.extractor.set_normalization_method(v))
+        var.trace("w", lambda *e, v=var: self._det_faces.extractor.set_normalization_method(v))
         self._add_control(norm_ctl)
 
     def update_annotation(self):
@@ -76,7 +76,7 @@ class BoundingBox(Editor):
 
         key = "boundingbox"
         color = self._control_color
-        for idx, face in enumerate(self._alignments.current_faces):
+        for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
             kwargs = dict(outline=color, width=1)
@@ -299,7 +299,7 @@ class BoundingBox(Editor):
         size = min(self._frames.current_meta_data["display_dims"]) // 8
         box = (event.x - size, event.y - size, event.x + size, event.y + size)
         logger.debug("Creating new bounding box: %s ", box)
-        self._alignments.add_face(*self._coords_to_bounding_box(box))
+        self._det_faces.update.add(self._frame_index, *self._coords_to_bounding_box(box))
 
     def _resize(self, event):
         """ Resizes a bounding box on an anchor drag event
@@ -326,7 +326,9 @@ class BoundingBox(Editor):
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*self._get_anchor_points(corners))):
             self._canvas.coords(self._objects["anchor_display"][face_idx][idx], *anc_dsp)
             self._canvas.coords(self._objects["anchor_grab"][face_idx][idx], *anc_grb)
-        self._alignments.set_current_bounding_box(face_idx, *self._coords_to_bounding_box(box))
+        self._det_faces.update.bounding_box(self._frame_index,
+                                            face_idx,
+                                            *self._coords_to_bounding_box(box))
 
     def _move(self, event):
         """ Moves the bounding box on a bounding box drag event.
@@ -349,7 +351,9 @@ class BoundingBox(Editor):
         for obj in objects:
             self._canvas.move(obj, shift_x, shift_y)
         coords = self._canvas.coords(item_id)
-        self._alignments.set_current_bounding_box(face_idx, *self._coords_to_bounding_box(coords))
+        self._det_faces.update.bounding_box(self._frame_index,
+                                            face_idx,
+                                            *self._coords_to_bounding_box(coords))
         self._drag_data["current_location"] = (event.x, event.y)
 
     def _coords_to_bounding_box(self, coords):
@@ -383,4 +387,4 @@ class BoundingBox(Editor):
         """
         if self._mouse_location is None or self._mouse_location[0] != "box":
             return
-        self._alignments.delete_face_at_index(int(self._mouse_location[1]))
+        self._det_faces.update.delete(self._frame_index, int(self._mouse_location[1]))

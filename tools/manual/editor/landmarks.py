@@ -10,12 +10,12 @@ from ._base import Editor, logger
 
 class Landmarks(Editor):
     """ The Landmarks Editor. """
-    def __init__(self, canvas, alignments, frames):
+    def __init__(self, canvas, detected_faces, frames):
         self._zoomed_face = None
         self._zoomed_face_index = None
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
                         " - Click and drag individual landmark points to relocate.")
-        super().__init__(canvas, alignments, frames, control_text)
+        super().__init__(canvas, detected_faces, frames, control_text)
 
     @property
     def _edit_mode(self):
@@ -57,7 +57,7 @@ class Landmarks(Editor):
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
-        for face_idx, face in enumerate(self._alignments.current_faces):
+        for face_idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             if self._is_zoomed:
                 landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
             else:
@@ -232,7 +232,10 @@ class Landmarks(Editor):
             self._canvas.toggle_image_display()
         coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
         if self._is_zoomed:
-            face = self._alignments.get_aligned_face_at_index(face_index)[..., 2::-1]
+            face = self._det_faces.get_face_at_index(
+                self._frame_index,
+                face_index,
+                min(self._frames.display_dims))[..., 2::-1]
             display = ImageTk.PhotoImage(Image.fromarray(face))
             self._zoomed_face = display
             kwargs = dict(image=self._zoomed_face, anchor=tk.CENTER)
@@ -268,13 +271,17 @@ class Landmarks(Editor):
             scaled_shift = np.array((shift_x, shift_y))
         else:
             scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
-        self._alignments.shift_landmark(face_idx, lm_idx, *scaled_shift, self._is_zoomed)
+        self._det_faces.update.landmark(self._frame_index,
+                                        face_idx,
+                                        lm_idx,
+                                        *scaled_shift,
+                                        self._is_zoomed)
         self._drag_data["current_location"] = (event.x, event.y)
 
 
 class Mesh(Editor):
     """ The Landmarks Mesh Display. """
-    def __init__(self, canvas, alignments, frames):
+    def __init__(self, canvas, detected_faces, frames):
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -283,13 +290,13 @@ class Mesh(Editor):
                                       nose=(27, 36),
                                       jaw=(0, 17),
                                       chin=(8, 11))
-        super().__init__(canvas, alignments, frames, None)
+        super().__init__(canvas, detected_faces, frames, None)
 
     def update_annotation(self):
         """ Draw the Landmarks Mesh and set the objects to :attr:`_object`"""
         key = "mesh"
         color = self._control_color
-        for face_idx, face in enumerate(self._alignments.current_faces):
+        for face_idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             if self._is_zoomed:
                 landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
             else:

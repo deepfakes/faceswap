@@ -11,7 +11,7 @@ from ._base import ControlPanelOption, Editor, logger
 
 class Mask(Editor):
     """ The mask Editor """
-    def __init__(self, canvas, alignments, frames):
+    def __init__(self, canvas, detected_faces, frames):
         self._meta = []
         self._internal_size = 512
         control_text = ("Mask Editor\nEdit the mask."
@@ -21,7 +21,7 @@ class Mask(Editor):
                         "override your manual edits.")
         key_bindings = {"[": lambda *e, i=False: self._adjust_brush_radius(increase=i),
                         "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
-        super().__init__(canvas, alignments, frames,
+        super().__init__(canvas, detected_faces, frames,
                          control_text=control_text, key_bindings=key_bindings)
         # Bind control click for reverse painting
         self._canvas.bind("<Control-ButtonPress-1>", self._control_click)
@@ -58,7 +58,7 @@ class Mask(Editor):
         self._add_action("erase", "erase", "Erase Tool", hotkey="E")
 
     def _add_controls(self):
-        masks = sorted(msk.title() for msk in list(self._alignments.available_masks) + ["None"])
+        masks = sorted(msk.title() for msk in list(self._det_faces.available_masks) + ["None"])
         default = masks[0] if len(masks) == 1 else [mask for mask in masks if mask != "None"][0]
         self._add_control(ControlPanelOption("Mask type",
                                              str,
@@ -135,7 +135,7 @@ class Mask(Editor):
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
         roi_color = self._canvas.colors[self._annotation_formats["ExtractBox"]["color"].get()]
         opacity = self._opacity
-        for idx, face in enumerate(self._alignments.current_faces):
+        for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             mask = face.mask.get(mask_type, None)
             if mask is None:
                 continue
@@ -386,7 +386,10 @@ class Mask(Editor):
         self._canvas.toggle_image_display()
         coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
         if self._is_zoomed:
-            face = self._alignments.get_aligned_face_at_index(face_index)[..., 2::-1]
+            face = self._det_faces.get_face_at_index(
+                self._frame_index,
+                face_index,
+                min(self._frames.display_dims))[..., 2::-1]
             display = ImageTk.PhotoImage(Image.fromarray(face))
             self._update_meta("zoomed", display, face_index)
             kwargs = dict(image=display, anchor=tk.CENTER)
@@ -463,7 +466,7 @@ class Mask(Editor):
         """ Update the annotated mask to alignments. """
         mask_type = self._control_vars["display"]["MaskType"].get().lower()
         mask = self._meta["mask"][face_index].astype("float32") / 255.0
-        self._alignments.update_mask(mask, mask_type, face_index)
+        self._det_faces.update.mask(self._frame_index, face_index, mask, mask_type)
 
     def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
         """ Adjust the brush radius up or down by 1px.

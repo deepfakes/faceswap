@@ -17,11 +17,12 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
+from .detected_faces import DetectedFaces
 from .faceviewer.assets import FacesViewerLoader, ObjectCreator, UpdateFace
 from .faceviewer.cache import FaceCache
 from .faceviewer.display import ActiveFrame, ContextMenu, FaceFilter, HoverBox
 from .display_frame import DisplayFrame
-from .media import AlignmentsData, FrameNavigation
+from .media import FrameNavigation
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -46,26 +47,25 @@ class Manual(tk.Tk):
         self._initialize_tkinter()
 
         extractor = Aligner()
-        self._alignments = AlignmentsData(arguments.alignments_path,
-                                          extractor,
-                                          arguments.frames,
-                                          is_video)
+        self._det_faces = DetectedFaces(arguments.alignments_path,
+                                        arguments.frames,
+                                        extractor,
+                                        is_video)
 
-        video_meta_data = self._alignments.video_meta_data
+        video_meta_data = self._det_faces.video_meta_data
         self._frames = FrameNavigation(arguments.frames,
                                        get_config().scaling_factor,
                                        video_meta_data)
-        self._alignments.link_frames(self._frames)
-        self._alignments.load_faces()
+        self._det_faces.load_faces(self._frames)
 
         self._containers = self._create_containers()
 
         self._wait_for_threads(extractor, video_meta_data)
 
-        self._display = DisplayFrame(self._containers["top"], self._frames, self._alignments)
+        self._display = DisplayFrame(self._containers["top"], self._frames, self._det_faces)
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        self._frames,
-                                       self._alignments,
+                                       self._det_faces,
                                        self._display)
 
         self._options = Options(self._containers["top"], self._display)
@@ -125,9 +125,9 @@ class Manual(tk.Tk):
             logger.debug("Threads not initialized. Waiting...")
             sleep(1)
 
-        extractor.link_alignments_and_frames(self._alignments, self._frames)
+        extractor.link_faces_and_frames(self._det_faces, self._frames)
         if any(val is None for val in video_meta_data.values()):
-            self._alignments.save_video_meta_data()
+            self._det_faces.save_video_meta_data(**self._frames.video_meta_data)
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -189,6 +189,7 @@ class Manual(tk.Tk):
                      0x0008: 'alt',
                      0x0080: 'alt'}
 
+        tk_pos = self._frames.tk_position
         bindings = {
             "left": self._display.decrement_frame,
             "right": self._display.increment_frame,
@@ -207,10 +208,10 @@ class Manual(tk.Tk):
             "f5": lambda k=event.keysym: self._display.set_action(k),
             "f9": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
             "f10": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
-            "c": lambda d="previous": self._alignments.copy_alignments(d),
-            "v": lambda d="next": self._alignments.copy_alignments(d),
-            "ctrl_s": self._alignments.save,
-            "r": self._alignments.revert_to_saved}
+            "c": lambda f=tk_pos.get(), d="previous": self._det_faces.update.copy(f, d),
+            "v": lambda f=tk_pos.get(), d="next": self._det_faces.update.copy(f, d),
+            "ctrl_s": self._det_faces.save,
+            "r": lambda f=tk_pos.get(): self._det_faces.update.revert_to_saved(f)}
 
         # Allow keypad keys to be used for numbers
         press = event.keysym.replace("KP_", "") if event.keysym.startswith("KP_") else event.keysym
@@ -329,14 +330,14 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         The paned window that the faces frame resides in
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
     """
-    def __init__(self, parent, frames, alignments, display_frame):
-        logger.debug("Initializing %s: (parent: %s, frames: %s, alignments: %s, "
-                     "display_frame: %s)", self.__class__.__name__, parent, frames, alignments,
+    def __init__(self, parent, frames, detected_faces, display_frame):
+        logger.debug("Initializing %s: (parent: %s, frames: %s, detected_faces: %s, "
+                     "display_frame: %s)", self.__class__.__name__, parent, frames, detected_faces,
                      display_frame)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -349,13 +350,13 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._canvas = FacesViewer(self._faces_frame,
                                    self._actions_frame._tk_vars,
                                    frames,
-                                   alignments,
+                                   detected_faces,
                                    display_frame,
                                    progress_bar)
         scrollbar_width = self._add_scrollbar()
         self._canvas.set_column_count(self.winfo_width() - scrollbar_width)
 
-        FacesViewerLoader(self._canvas, alignments)
+        FacesViewerLoader(self._canvas, detected_faces)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -516,17 +517,18 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         as set by the buttons in the :class:`FacesActionsFrame`
     frames: :class:`~tools.manual.media.FrameNavigation`
         The object that holds the cache of frames and handles frame navigation.
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
     progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
         The progress bar object that displays in the bottom right of the GUI
     """
-    def __init__(self, parent, tk_action_vars, frames, alignments, display_frame, progress_bar):
+    def __init__(self, parent, tk_action_vars, frames,
+                 detected_faces, display_frame, progress_bar):
         logger.debug("Initializing %s: (parent: %s, tk_action_vars: %s, frames: %s, "
-                     "alignments: %s, display_frame: %s, progress_bar: %s)",
-                     self.__class__.__name__, parent, tk_action_vars, frames, alignments,
+                     "detected_faces: %s, display_frame: %s, progress_bar: %s)",
+                     self.__class__.__name__, parent, tk_action_vars, frames, detected_faces,
                      display_frame, progress_bar)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
@@ -536,14 +538,14 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._frames = frames
         self._faces_cache = FaceCache(self,
                                       get_config().scaling_factor,
-                                      alignments,
+                                      detected_faces,
                                       tk_action_vars["lockout"])
         self._display_frame = display_frame
         self._utilities = dict(object_creator=ObjectCreator(self),
-                               hover_box=HoverBox(self, alignments),
+                               hover_box=HoverBox(self, detected_faces),
                                active_filter=FaceFilter(self, "all_frames"),
-                               active_frame=ActiveFrame(self, alignments),
-                               update_face=UpdateFace(self, alignments))
+                               active_frame=ActiveFrame(self, detected_faces),
+                               update_face=UpdateFace(self, detected_faces))
         ContextMenu(self)
         self._bind_mouse_wheel_scrolling()
         # Set in load_frames
@@ -787,17 +789,13 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
 
 class Aligner():
-    """ Handles the extraction pipeline for retrieving the alignment landmarks
-
-    Parameters
-    ----------
-    alignments: :class:`Aligner`
-        The alignments cache object for the manual tool
-    """
+    """ Handles the extraction pipeline for retrieving the alignment landmarks. """
     def __init__(self):
         self._aligner = None
-        self._alignments = None
+        self._det_faces = None
         self._frames = None
+        self._frame_index = None
+        self._face_index = None
         self._init_thread = self._background_init_aligner()
 
     @property
@@ -809,9 +807,12 @@ class Aligner():
     def _feed_face(self):
         """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
         aligner, formatted for the pipeline """
-        return ExtractMedia(self._frames.current_meta_data["filename"],
-                            self._frames.current_frame,
-                            detected_faces=[self._alignments.current_face])
+        # TODO Try to remove requirement for frames here. Ultimately need a better way to access
+        # a frame's image
+        return ExtractMedia(
+            self._frames.current_meta_data["filename"],
+            self._frames.current_frame,
+            detected_faces=[self._det_faces.current_faces[self._frame_index][self._face_index]])
 
     @property
     def is_initialized(self):
@@ -842,20 +843,20 @@ class Aligner():
         logger.debug("Initialized Extractor")
         self._aligner = aligner
 
-    def link_alignments_and_frames(self, alignments, frames):
+    def link_faces_and_frames(self, detected_faces, frames):
         """ Add the :class:`AlignmentsData` object as a property of the aligner.
 
         Parameters
         ----------
-        alignments: :class:`~tools.lib_manual.media.AlignmentsData`
-            The alignments cache object for the manual tool
+        detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+            The :class:`~lib.faces_detect.DetectedFace` objects for this video
         frames: :class:`~tools.lib_manual.media.FrameNavigation`
             The Frame Navigation object for the manual tool
         """
-        self._alignments = alignments
+        self._det_faces = detected_faces
         self._frames = frames
 
-    def get_landmarks(self):
+    def get_landmarks(self, frame_index, face_index):
         """ Feed the detected face into the alignment pipeline and retrieve the landmarks
 
         Returns
@@ -863,6 +864,8 @@ class Aligner():
         :class:`numpy.ndarray`
             The 68 point landmark alignments
         """
+        self._frame_index = frame_index
+        self._face_index = face_index
         self._in_queue.put(self._feed_face)
         detected_face = next(self._aligner.detected_faces()).detected_faces[0]
         return detected_face.landmarks_xy

@@ -20,19 +20,19 @@ class Editor():
     ----------
     canvas: :class:`tkinter.Canvas`
         The canvas that holds the image and annotations
-    alignments: :class:`AlignmentsData`
-        The alignments data for this manual session
+    detected_faces: :class:`AlignmentsData`
+        The _detected_faces data for this manual session
     frames: :class:`FrameNavigation`
         The frames navigator for this manual session
     control_text: str
         The text that is to be displayed at the top of the Editor's control panel.
     """
-    def __init__(self, canvas, alignments, frames, control_text="", key_bindings=None):
-        logger.debug("Initializing %s: (canvas: '%s', alignments: %s, frames: %s, "
-                     "control_text: %s)", self.__class__.__name__, canvas, alignments, frames,
+    def __init__(self, canvas, detected_faces, frames, control_text="", key_bindings=None):
+        logger.debug("Initializing %s: (canvas: '%s', detected_faces: %s, frames: %s, "
+                     "control_text: %s)", self.__class__.__name__, canvas, detected_faces, frames,
                      control_text)
         self._canvas = canvas
-        self._alignments = alignments
+        self._det_faces = detected_faces
         self._frames = frames
 
         self._current_color = dict()
@@ -120,6 +120,10 @@ class Editor():
         return (self._zoomed_roi[2] - self._zoomed_roi[0],
                 self._zoomed_roi[3] - self._zoomed_roi[1])
 
+    @property
+    def _frame_index(self):
+        return self._frames.tk_position.get()
+
     def _add_key_bindings(self, key_bindings):
         if key_bindings is None:
             return
@@ -162,7 +166,7 @@ class Editor():
 
     def hide_additional_annotations(self):
         """ Hide any excess face annotations """
-        current_face_count = len(self._alignments.current_faces)
+        current_face_count = len(self._det_faces.current_faces[self._frame_index])
         hide_objects = [self._flatten_list(face[-(len(face) - current_face_count):])
                         for face in self._objects.values()
                         if len(face) > current_face_count]
@@ -513,6 +517,6 @@ class Editor():
 
 class View(Editor):
     """ The view Editor """
-    def __init__(self, canvas, alignments, frames):
+    def __init__(self, canvas, detected_faces, frames):
         control_text = "Viewer\nPreview the frame's annotations."
-        super().__init__(canvas, alignments, frames, control_text)
+        super().__init__(canvas, detected_faces, frames, control_text)

@@ -25,22 +25,22 @@ class FaceCache():
         The :class:`~tools.manual.FacesViewer` canvas
     scaling_factor: float
         The scaling factor, based on DPI, to apply to the stored objects
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     tk_face_loading: :class:`tkinter.BooleanVar`
         Variable to indicate whether faces are currently loading into the cache or not
     """
-    def __init__(self, canvas, scaling_factor, alignments, tk_face_loading):
-        logger.debug("Initializing %s: (canvas: %s, scaling_factor: %s, alignments: %s, "
+    def __init__(self, canvas, scaling_factor, detected_faces, tk_face_loading):
+        logger.debug("Initializing %s: (canvas: %s, scaling_factor: %s, detected_faces: %s, "
                      "tk_face_loading: %s)", self.__class__.__name__, canvas, scaling_factor,
-                     alignments, tk_face_loading)
+                     detected_faces, tk_face_loading)
         self._frames = canvas._frames
         self._face_size = int(round(96 * scaling_factor))
         self._canvas = canvas
         self._tk_loading = tk_face_loading
 
-        self._loader = FaceCacheLoader(self, alignments)
-        self._mask_loader = MaskLoader(self, alignments)
+        self._loader = FaceCacheLoader(self, detected_faces)
+        self._mask_loader = MaskLoader(self, detected_faces)
 
         self._tk_faces = np.array([None for _ in range(self._frames.frame_count)])
         self._initialized = False
@@ -345,20 +345,21 @@ class FaceCacheLoader():
     ----------
     faces_cache: :class:`FacesCache`
         The face cache that this loader will be populating faces for.
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
-    def __init__(self, faces_cache, alignments):
-        logger.debug("Initializing %s: (faces_cache: %s, alignments: %s)", self.__class__.__name__,
-                     faces_cache, alignments)
+    def __init__(self, faces_cache, detected_faces):
+        logger.debug("Initializing %s: (faces_cache: %s, detected_faces: %s)",
+                     self.__class__.__name__, faces_cache, detected_faces)
         self._faces_cache = faces_cache
         self._location = faces_cache._frames.location
         self._tk_loading = faces_cache._tk_loading
-        self._alignments = alignments
         self._loaded_frame_indices = []
 
-        self._key_frames = alignments.video_meta_data.get("keyframes", None)
-        self._pts_times = alignments.video_meta_data.get("pts_time", None)
+        self._key_frames = detected_faces.video_meta_data.get("keyframes", None)
+        self._pts_times = detected_faces.video_meta_data.get("pts_time", None)
+        self._saved_faces = detected_faces._saved_faces
+
         self._is_video = self._key_frames is not None and self._pts_times is not None
         self._num_threads = os.cpu_count() - 2
         if self._is_video:
@@ -503,9 +504,8 @@ class FaceCacheLoader():
         Appends the current frame index to :attr:`loaded_frame_indices` so that the viewer
         can pick up the latest loaded faces and display them.
         """
-        faces = self._alignments.saved_alignments[self._alignments.sorted_keys[frame_index]]
         tk_faces = []
-        for face in faces:
+        for face in self._saved_faces[frame_index]:
             face.load_aligned(frame, size=self._faces_cache.size, force=True)
             tk_faces.append(TKFace(face.aligned_face, face.aligned_landmarks, mask=None))
             face.aligned["face"] = None
@@ -521,20 +521,19 @@ class MaskLoader():
     ----------
     faces_cache: :class:`FacesCache`
         The face cache that this loader will be populating faces for.
-    alignments: :class:`~tool.manual.media.AlignmentsData`
-        The alignments data for the currently loaded frames
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
-    def __init__(self, faces_cache, alignments):
-        logger.debug("Initializing %s: (faces_cache: %s, alignments: %s)", self.__class__.__name__,
-                     faces_cache, alignments)
+    def __init__(self, faces_cache, detected_faces):
+        logger.debug("Initializing %s: (faces_cache: %s, detected_faces: %s)",
+                     self.__class__.__name__, faces_cache, detected_faces)
         self._faces_cache = faces_cache
         self._tk_loading = faces_cache._tk_loading
         self._canvas = faces_cache._canvas
         self._progress_bar = faces_cache._canvas._progress_bar
-        self._alignments = alignments
+        self._det_faces = detected_faces
         self._current_mask_type = None
-        logger.debug("Initialized %s: (faces_cache: %s, alignments: %s)", self.__class__.__name__,
-                     faces_cache, alignments)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def _unload_masks_iterator(self):
@@ -546,10 +545,10 @@ class MaskLoader():
     def _load_masks_iterator(self):
         """ generator: Iterator for passing through all of the faces stored in
         :attr:`_faces_cache.tk_faces` for mask application """
-        latest_alignments = self._alignments.latest_alignments
+        latest_faces = self._det_faces.current_faces
         return ((tk_face, face)
-                for key, tk_faces in zip(self._alignments.sorted_keys, self._faces_cache.tk_faces)
-                for face, tk_face in zip(latest_alignments[key], tk_faces))
+                for faces, tk_faces in zip(latest_faces, self._faces_cache.tk_faces)
+                for face, tk_face in zip(faces, tk_faces))
 
     # << PUBLIC METHODS >> #
     def update_all(self, mask_type, is_enabled):
@@ -585,7 +584,7 @@ class MaskLoader():
         logger.trace("Updating selected faces: (frame_index: %s, mask_type: %s)",
                      frame_index, mask_type)
         mask_type = mask_type if mask_type is None else mask_type.lower()
-        faces = self._alignments.latest_alignments[self._alignments.sorted_keys[frame_index]]
+        faces = self._det_faces.current_faces[frame_index]
         for face, tk_face in zip(faces, self._faces_cache.tk_faces[frame_index]):
             tk_face.update_mask(self._get_mask(mask_type, face))
 

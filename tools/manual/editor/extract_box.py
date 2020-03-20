@@ -11,7 +11,7 @@ from ._base import Editor, logger
 
 class ExtractBox(Editor):
     """ The Extract Box Editor. """
-    def __init__(self, canvas, alignments, frames):
+    def __init__(self, canvas, detected_faces, frames):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
@@ -20,14 +20,14 @@ class ExtractBox(Editor):
                         " - Click and drag the bounding box to relocate the landmarks without "
                         "recalculating them.")
         key_bindings = {"<Delete>": self._delete_current_face}
-        super().__init__(canvas, alignments, frames,
+        super().__init__(canvas, detected_faces, frames,
                          control_text=control_text, key_bindings=key_bindings)
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
         keys = ("text", "extractbox")
         color = self._control_color
-        for idx, face in enumerate(self._alignments.current_faces):
+        for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
             if self._is_zoomed:
                 box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
@@ -35,6 +35,7 @@ class ExtractBox(Editor):
                                 self._zoomed_roi[2], self._zoomed_roi[3],
                                 self._zoomed_roi[0], self._zoomed_roi[3]))
             else:
+                face.load_aligned(None)
                 box = self._scale_to_display(face.original_roi).flatten()
             top_left = box[:2] - 10
             kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
@@ -102,7 +103,7 @@ class ExtractBox(Editor):
         for obj in self._objects.values():
             self._canvas.move(obj[self._mouse_location][0], shift_x, shift_y)
         scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
-        self._alignments.shift_landmarks(self._mouse_location, *scaled_shift)
+        self._det_faces.update.landmarks(self._frame_index, self._mouse_location, *scaled_shift)
         self._drag_data["current_location"] = (event.x, event.y)
 
     def _context_menu(self, event):
@@ -123,4 +124,4 @@ class ExtractBox(Editor):
         """
         if self._mouse_location is None:
             return
-        self._alignments.delete_face_at_index(self._mouse_location)
+        self._det_faces.update.delete(self._frame_index, self._mouse_location)
