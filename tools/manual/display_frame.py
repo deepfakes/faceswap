@@ -290,7 +290,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
         # TODO. This old way was buggy and the storage of face_count_modified has been
-        # removed in refactor. Find a solution for updating the nav scale on a face count change
+        # removed in refactor. Find a solution for updating the navigation scale on a face count
+        # change
 #        if self._alignments.face_count_modified:
 #            # TODO This always freezes a frame when face added/removed. Do better logic
 #            # for filtered views
@@ -639,6 +640,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._editor_globals = dict(control_tk_vars=dict(),
                                     annotation_formats=dict(),
                                     key_bindings=dict())
+        self._max_face_count = 0
         self._editors = self._get_editors()
         self._add_callbacks()
         self._change_active_editor()
@@ -769,17 +771,39 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._frames.tk_update.set(True)
 
     def _update_display(self, *args):  # pylint:disable=unused-argument
-        """ Update the display on frame cache update """
+        """ Update the display on frame cache update
+
+        Notes
+        -----
+        A little hacky, but the editors to display or hide are processed in alphabetical
+        order, so that they are always processed in the same order (for tag lowering and raising)
+        """
         if not self._frames.tk_update.get():
             return
         self.refresh_display_image()
-        to_display = [self.selected_action] + self.editor_display[self.selected_action]
+        to_display = sorted([self.selected_action] + self.editor_display[self.selected_action])
+        self._hide_additional_faces()
         for editor in to_display:
             self._editors[editor].update_annotation()
-            self._editors[editor].hide_additional_annotations()
         self._bind_unbind_keys()
         self._frames.tk_update.set(False)
         self.update_idletasks()
+
+    def _hide_additional_faces(self):
+        """ Hide additional faces if the number of faces on the canvas reduces on a frame
+        change. """
+        current_face_count = len(self._det_faces.current_faces[self._frames.tk_position.get()])
+        if current_face_count > self._max_face_count:
+            # Most faces seen to date so nothing to hide. Update max count and return
+            logger.debug("Incrementing max face count from: %s to: %s",
+                         self._max_face_count, current_face_count)
+            self._max_face_count = current_face_count
+            return
+        for idx in range(current_face_count, self._max_face_count):
+            tag = "face_{}".format(idx)
+            if self.itemcget(tag, "state") != "hidden":
+                logger.debug("Hiding face tag '%s'", tag)
+                self.itemconfig(tag, state="hidden")
 
     def refresh_display_image(self):
         """ Update the displayed frame """

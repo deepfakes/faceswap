@@ -45,7 +45,6 @@ class Editor():
         self._add_annotation_format_controls()
 
         self._zoomed_roi = self._get_zoomed_roi()
-        self._objects = dict()
         self._mouse_location = None
         self._drag_data = dict()
         self._drag_callback = None
@@ -104,11 +103,6 @@ class Editor():
         return self._controls
 
     @property
-    def objects(self):
-        """ dict: The objects currently stored for this editor """
-        return self._objects
-
-    @property
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
         annotation = self.__class__.__name__
@@ -159,27 +153,22 @@ class Editor():
 
     def hide_annotation(self):
         """ Hide annotations for this editor. """
-        for item_id in self._flatten_list(list(self._objects.values())):
-            if self._canvas.itemcget(item_id, "state") != "hidden":
-                logger.debug("Hiding: %s, id: %s", self._canvas.type(item_id), item_id)
-                self._canvas.itemconfig(item_id, state="hidden")
+        self._canvas.itemconfig(self.__class__.__name__, state="hidden")
 
-    def hide_additional_annotations(self):
-        """ Hide any excess face annotations """
-        current_face_count = len(self._det_faces.current_faces[self._frame_index])
-        hide_objects = [self._flatten_list(face[-(len(face) - current_face_count):])
-                        for face in self._objects.values()
-                        if len(face) > current_face_count]
-        if not hide_objects:
-            return
-        for item_id in self._flatten_list(hide_objects):
-            if self._canvas.itemcget(item_id, "state") == "hidden":
-                continue
-            logger.trace("Hiding annotation %s for type: %s", item_id, self._canvas.type(item_id))
-            self._canvas.itemconfig(item_id, state="hidden")
+    def _set_object_tags(self, face_index, key):
+        """ Set the tags for the incoming object """
+        tags = ["face_{}".format(face_index),
+                self.__class__.__name__,
+                key,
+                "{}_face_{}".format(key, face_index)]
+        if "_" in key:
+            split_key = key.split("_")
+            if split_key[-1].isdigit():
+                tags.append("_".join(split_key[:-1]))
+        return tags
 
     def _object_tracker(self, key, object_type, face_index,
-                        object_index, coordinates, object_kwargs):
+                        coordinates, object_kwargs):
         """ Create an annotation object and add it to :attr:`_objects` or update an existing
         annotation if it has already been created.
 
@@ -189,30 +178,37 @@ class Editor():
             The key for this annotation in :attr:`_objects`
         object_type: str
             This can be any string that is a natural extension to :class:`tkinter.Canvas.create_`
-        object_index: int
-            The object_index for this item for the list returned from :attr:`_objects`[`key`]
         coordinates: tuple or list
             The bounding box coordinates for this object
         object_kwargs: dict
             The keyword arguments for this object
         """
         object_color_keys = self._get_object_color_keys(key, object_type)
-        tracking_id = "_".join((key, str(face_index), str(object_index)))
-
-        if (key not in self._objects
-                or len(self.objects[key]) - 1 < face_index
-                or len(self._objects[key][face_index]) - 1 < object_index):
-            self._add_new_object(key, object_type, face_index, coordinates, object_kwargs)
+        tracking_id = "_".join((key, str(face_index)))
+        tags = self._set_object_tags(face_index, key)
+        face_tag = "face_{}".format(face_index)
+        face_objects = set(self._canvas.find_withtag(face_tag))
+        annotation_objects = set(self._canvas.find_withtag(key))
+        existing_object = tuple(face_objects.intersection(annotation_objects))
+        if not existing_object:
+            object_kwargs["tags"] = tags
+            item_id = self._add_new_object(key,
+                                           object_type,
+                                           face_index,
+                                           coordinates,
+                                           object_kwargs)
             update_color = bool(object_color_keys)
         else:
+            item_id = existing_object[0]
             update_color = self._update_existing_object(
-                self._objects[key][face_index][object_index],
+                existing_object[0],
                 coordinates,
                 object_kwargs,
                 tracking_id,
                 object_color_keys)
         if update_color:
             self._current_color[tracking_id] = object_kwargs[object_color_keys[0]]
+        return item_id
 
     @staticmethod
     def _get_object_color_keys(key, object_type):
@@ -257,31 +253,27 @@ class Editor():
         object_kwargs: dict
             The keyword arguments for this object
         """
-        logger.trace("Adding object: (key: '%s', object_type: '%s', face_index: %s, "
+        logger.debug("Adding object: (key: '%s', object_type: '%s', face_index: %s, "
                      "coordinates: %s, object_kwargs: %s)", key, object_type, face_index,
                      coordinates, object_kwargs)
-        obj = getattr(self._canvas, "create_{}".format(object_type))(*coordinates, **object_kwargs)
-        if key not in self._objects:
-            self._objects[key] = []
-        if len(self._objects[key]) - 1 < face_index:
-            self._objects[key].append([obj])
-        else:
-            self._objects[key][face_index].append(obj)
+        item_id = getattr(self._canvas,
+                          "create_{}".format(object_type))(*coordinates, **object_kwargs)
+        return item_id
 
-    def _update_existing_object(self, tk_object, coordinates, object_kwargs,
+    def _update_existing_object(self, item_id, coordinates, object_kwargs,
                                 tracking_id, object_color_keys):
         """ Update an existing tracked object.
 
         Parameters
         ----------
-        tk_object: tkinter canvas object
-            The canvas object to be updated
+        item_id: int
+            The canvas object item_id to be updated
         coordinates: tuple or list
             The bounding box coordinates for this object
         object_kwargs: dict
             The keyword arguments for this object
         tracking_id: str
-            The tracking identifier for this object
+            The tracking identifier for this object's color
         object_color_keys: list
             The list of keyword arguments for this object to update for color
 
@@ -296,22 +288,14 @@ class Editor():
         if update_color:
             for key in object_color_keys:
                 update_kwargs[key] = object_kwargs[object_color_keys[0]]
-        if self._canvas.type(tk_object) == "image" and "image" in object_kwargs:
+        if self._canvas.type(item_id) == "image" and "image" in object_kwargs:
             update_kwargs["image"] = object_kwargs["image"]
-        logger.trace("Updating coordinates: (tracking_id: %s, tk_object: '%s', object_kwargs: %s, "
-                     "coordinates: %s, update_kwargs: %s", tracking_id, tk_object, object_kwargs,
+        logger.trace("Updating coordinates: (item_id: '%s', object_kwargs: %s, "
+                     "coordinates: %s, update_kwargs: %s", item_id, object_kwargs,
                      coordinates, update_kwargs)
-        self._canvas.itemconfig(tk_object, **update_kwargs)
-        self._canvas.coords(tk_object, *coordinates)
+        self._canvas.itemconfig(item_id, **update_kwargs)
+        self._canvas.coords(item_id, *coordinates)
         return update_color
-
-    def _flatten_list(self, input_list):
-        """ Recursively Flatten a list of lists to a single list """
-        if input_list == []:
-            return input_list
-        if isinstance(input_list[0], list):
-            return self._flatten_list(input_list[0]) + self._flatten_list(input_list[1:])
-        return input_list[:1] + self._flatten_list(input_list[1:])
 
     # << MOUSE CALLBACKS >>
     # Mouse cursor display

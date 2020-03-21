@@ -360,8 +360,8 @@ class UpdateFace():
             annotation
          """
         logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
-        face, landmarks, mask = self._det_faces.get_face_at_index(face_index,
-                                                                  frame_index,
+        face, landmarks, mask = self._det_faces.get_face_at_index(frame_index,
+                                                                  face_index,
                                                                   self._faces_cache.size,
                                                                   with_landmarks=True,
                                                                   with_mask=True)

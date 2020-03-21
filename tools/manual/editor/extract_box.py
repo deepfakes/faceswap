@@ -25,7 +25,6 @@ class ExtractBox(Editor):
 
     def update_annotation(self):
         """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
-        keys = ("text", "extractbox")
         color = self._control_color
         for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
@@ -39,20 +38,17 @@ class ExtractBox(Editor):
                 box = self._scale_to_display(face.original_roi).flatten()
             top_left = box[:2] - 10
             kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
-            self._object_tracker(keys[0], "text", idx, 0, top_left, kwargs)
+            self._object_tracker("eb_text", "text", idx, top_left, kwargs)
             kwargs = dict(fill="", outline=color, width=1)
-            self._object_tracker(keys[1], "polygon", idx, 0, box, kwargs)
-            # Ensure extract box is above other annotations for mouse grabber
-            self._canvas.tag_raise(self._objects[keys[1]][idx][0])
-        logger.trace("Updated extract box annotations: %s", {key: self._objects.get(key, None)
-                                                             for key in keys})
+            self._object_tracker("eb_box", "polygon", idx, box, kwargs)
+        logger.trace("Updated extract box annotations")
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
     def _update_cursor(self, event):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
-        extract_boxes = self._flatten_list(self._objects.get("extractbox", []))
+        extract_boxes = set(self._canvas.find_withtag("eb_box"))
         item_ids = set(self._canvas.find_withtag("current")).intersection(extract_boxes)
         if not item_ids:
             self._canvas.config(cursor="")
@@ -60,9 +56,9 @@ class ExtractBox(Editor):
         else:
             item_id = list(item_ids)[0]
             self._canvas.config(cursor="fleur")
-            self._mouse_location = [face_idx
-                                    for face_idx, face in enumerate(self._objects["extractbox"])
-                                    if item_id in face][0]
+            self._mouse_location = next(int(tag.split("_")[-1])
+                                        for tag in self._canvas.gettags(item_id)
+                                        if tag.startswith("face_"))
 
     # Mouse click actions
     def set_mouse_click_actions(self):
@@ -88,7 +84,8 @@ class ExtractBox(Editor):
         self._drag_callback = self._move
 
     def _move(self, event):
-        """ Moves the Extract box and the underlying landmarks on an extract box drag event.
+        """ Updates the underlying detected faces landmarks, which moves the Extract box
+        on a drag event.
 
         Parameters
         ----------
@@ -100,8 +97,6 @@ class ExtractBox(Editor):
             return
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        for obj in self._objects.values():
-            self._canvas.move(obj[self._mouse_location][0], shift_x, shift_y)
         scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
         self._det_faces.update.landmarks(self._frame_index, self._mouse_location, *scaled_shift)
         self._drag_data["current_location"] = (event.x, event.y)

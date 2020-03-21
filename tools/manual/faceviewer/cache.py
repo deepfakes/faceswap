@@ -127,12 +127,6 @@ class FaceCache():
         """
         logger.debug("Removing objects: (frame_index: %s, face_index: %s)",
                      frame_index, face_index)
-        # TODO Deleting faces on load error. Traceback:
-        #   File "/home/matt/fake/faceswap_torzdf/tools/lib_manual/display_face.py", line 871, in remove
-        #       self._faces_cache.remove(frame_index, face_index)
-        #   File "/home/matt/fake/faceswap_torzdf/tools/lib_manual/media.py", line 891, in remove
-        #       del self._tk_faces[frame_index][face_index]
-        #   IndexError: list assignment index out of range
         del self._tk_faces[frame_index][face_index]
 
     def update(self, frame_index, face_index, face, landmarks, mask=None):
@@ -278,6 +272,7 @@ class TKFace():
                 if str(err) == "Too early to create image":
                     # GUI has gone away. Probably quit during load
                     return None
+                # TODO Set to debug
                 logger.info("attempt: %s: %s", attempt + 1, str(err))
                 sleep(0.25)
         return tk_face

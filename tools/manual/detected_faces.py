@@ -33,6 +33,7 @@ class DetectedFaces():
     def __init__(self, alignments_path, input_location, extractor, is_video):
         self._saved_faces = []
         self._updated_faces = []  # Updated to correct size in when data is loaded
+        self._zoomed_size = None  # TODO Look to remove and pass in explicitly
         self._is_video = is_video
 
         self._alignments = self._get_alignments(alignments_path, input_location)
@@ -136,6 +137,7 @@ class DetectedFaces():
         """
         # TODO Lose this requirement on frames
         self._frames = frames
+        self._zoomed_size = min(frames.display_dims)
         self._tk_vars["update"] = frames.tk_update
         self._tk_vars["nav_mode"] = frames.tk_navigation_mode
         self._io.load()
@@ -194,6 +196,8 @@ class DetectedFaces():
             aligned face in position 0 and the requested additional data populated in the following
             order (`aligned face`, `aligned landmarks`, `mask objects`)
         """
+        logger.debug("frame_index: %s, face_index: %s, size: %s, with_landmarks: %s, "
+                     "with_mask: %s", frame_index, face_index, size, with_landmarks, with_mask)
         face = self.current_faces[frame_index][face_index]
         # TODO self._frames is not currently referenced.
         face.load_aligned(self._frames.current_frame, size=size, force=True)
@@ -204,6 +208,8 @@ class DetectedFaces():
             retval.append(face.aligned_landmarks)
         if with_mask:
             retval.append(face.mask)
+        logger.debug("returning: %s", [item.shape if isinstance(item, np.ndarray) else item
+                                       for item in retval])
         return retval
 
     # <<<< PRIVATE METHODS >>> #
@@ -409,6 +415,12 @@ class FaceUpdate():
         return self._det_faces.tk_update
 
     @property
+    def _zoomed_size(self):
+        """ int: The size of the face when the editor is in zoomed in mode
+        """
+        return self._det_faces._zoomed_size  # pylint:disable=protected-access
+
+    @property
     def last_updated_face(self):
         """ tuple: (`frame index`, `face index`) of the last face to be updated.
 
@@ -524,6 +536,8 @@ class FaceUpdate():
         """
         face = self._current_faces_at_index(frame_index)[face_index]
         if is_zoomed:
+            if face.aligned["size"] != self._zoomed_size:
+                face.load_aligned(None, self._zoomed_size, force=True)
             landmark = face.aligned_landmarks[landmark_index]
             landmark += (shift_x, shift_y)
             matrix = AlignerExtract.transform_matrix(face.aligned["matrix"],

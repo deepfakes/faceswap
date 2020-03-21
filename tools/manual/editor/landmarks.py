@@ -34,26 +34,18 @@ class Landmarks(Editor):
         landmark grab points (in drag) mode) for mouse tracking """
         for key, option in self._actions.items():
             tk_var = option["tk_var"]
-            tk_var.trace("w", lambda *e, k=key, v=tk_var: self._raise_object(k, v))
+            tk_var.trace("w", lambda *e, k=key, v=tk_var: self._edit_mode_callback(k, v))
 
-    def _raise_object(self, key, tk_var):
-        """ Raise the extract box to the top (if in zoom mode) otherwise raise the landmark
-        grab points """
+    def _edit_mode_callback(self, key, tk_var):
+        """ Hide landmark grab points when in zoom mode, otherwise display. """
         if not tk_var.get():
             logger.debug("Action %s is not active. Returning", key)
             return
-        objects = (self._get_extract_boxes() if key == "zoom"
-                   else self._flatten_list(self._objects.get("lm_grab", [])))
-        if not objects:
-            logger.debug("Objects for %s not yet created. Returning", key)
-            return
-        logger.debug("Raising objects for '%s': %s", key, objects)
-        for item_id in objects:
-            self._canvas.tag_raise(item_id)
-
-    def _get_extract_boxes(self):
-        """ Get flattened list of extract box ids """
-        return self._flatten_list(self._canvas.editors["ExtractBox"].objects.get("extractbox", []))
+        tags = ("ExtractBox", self.__class__.__name__)
+        tags = tuple(reversed(tags)) if key == "zoom" else tags
+        if self._canvas.find_withtag("ExtractBox"):
+            self._canvas.lower(*tags)
+            logger.debug("Lowering tag %s below tag %s for edit mode: %s", *tags, key)
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
@@ -68,7 +60,7 @@ class Landmarks(Editor):
                 self._label_landmark(landmark, face_idx, lm_idx)
         if self._is_zoomed:
             self._zoom_face(update_only=True)
-        logger.trace("Updated landmark annotations: %s", self._objects)
+        logger.trace("Updated landmark annotations")
 
     def _display_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a display landmark to the canvas.
@@ -80,13 +72,13 @@ class Landmarks(Editor):
         object_index: int
             The index of the this item in :attr:`_objects`
         """
-        key = "lm_display"
         radius = 1
         color = self._control_color
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
+        key = "lm_dsp_{}".format(landmark_index)
         kwargs = dict(outline=color, fill=color, width=radius)
-        self._object_tracker(key, "oval", face_index, landmark_index, bbox, kwargs)
+        self._object_tracker(key, "oval", face_index, bbox, kwargs)
 
     def _grab_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a grab landmark to the canvas.
@@ -100,20 +92,16 @@ class Landmarks(Editor):
         """
         if not self._is_active:
             return
-        key = "lm_grab"
         radius = 6
-        activeoutline_color = "black" if self._is_active else ""
-        activefill_color = "white" if self._is_active else ""
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
+        key = "lm_grb_{}".format(landmark_index)
         kwargs = dict(outline="",
                       fill="",
                       width=radius,
-                      activeoutline=activeoutline_color,
-                      activefill=activefill_color)
-        self._object_tracker(key, "oval", face_index, landmark_index, bbox, kwargs)
-        # Bring the grabbers above the extract box
-        self._canvas.tag_raise(self._objects[key][face_index][landmark_index])
+                      activeoutline="black",
+                      activefill="white")
+        self._object_tracker(key, "oval", face_index, bbox, kwargs)
 
     def _label_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a text label for a landmark to the canvas.
@@ -129,26 +117,21 @@ class Landmarks(Editor):
         """
         if not self._is_active:
             return
-        keys = ["lm_label", "lm_label_bg"]
         top_left = np.array(bounding_box[:2]) - 16
         # NB The text must be visible to be able to get the bounding box, so set to hidden
         # after the bounding box has been retrieved
 
+        keys = ["lm_lbl_{}".format(landmark_index), "lm_lbl_bg_{}".format(landmark_index)]
         text_kwargs = dict(fill="black", font=("Default", 10), text=str(landmark_index + 1))
-        self._object_tracker(keys[0], "text", face_index, landmark_index, top_left, text_kwargs)
+        bg_kwargs = dict(fill="#ffffea", outline="black")
 
-        bbox = self._canvas.bbox(self._objects[keys[0]][face_index][landmark_index])
+        text_id = self._object_tracker(keys[0], "text", face_index, top_left, text_kwargs)
+        bbox = self._canvas.bbox(text_id)
         bbox = [bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2]
-        self._object_tracker(keys[1],
-                             "rectangle",
-                             face_index,
-                             landmark_index,
-                             bbox,
-                             dict(fill="#ffffea", outline="black"))
-        self._canvas.lower(self._objects[keys[1]][face_index][landmark_index],
-                           self._objects[keys[0]][face_index][landmark_index])
-        self._canvas.itemconfig(self._objects[keys[0]][face_index][landmark_index], state="hidden")
-        self._canvas.itemconfig(self._objects[keys[1]][face_index][landmark_index], state="hidden")
+        bg_id = self._object_tracker(keys[1], "rectangle", face_index, bbox, bg_kwargs)
+        self._canvas.tag_lower(bg_id, text_id)
+        self._canvas.itemconfig(text_id, state="hidden")
+        self._canvas.itemconfig(bg_id, state="hidden")
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -156,44 +139,35 @@ class Landmarks(Editor):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
         self._hide_labels()
-        objs = (self._get_extract_boxes() if self._edit_mode == "zoom"
-                else self._flatten_list(self._objects.get("lm_grab", [])))
+        objs = (self._canvas.find_withtag("ExtractBox") if self._edit_mode == "zoom"
+                else self._canvas.find_withtag("lm_grb"))
         item_ids = set(self._canvas.find_withtag("current")).intersection(objs)
         if not item_ids:
             self._canvas.config(cursor="")
             self._mouse_location = None
             return
         item_id = list(item_ids)[0]
+        tags = self._canvas.gettags(item_id)
+        face_idx = int(next(tag for tag in tags if tag.startswith("face_")).split("_")[-1])
 
         obj_idx = objs.index(list(item_ids)[0])
         if self._edit_mode == "zoom":
-            # Lazy lookup, but flattened list will have same face_index
-            # as standard object list for extract boxes
-            obj_idx = objs.index(item_id)
-            self._canvas.config(cursor="sizing")
+            obj_idx = face_idx
+            self._canvas.config(cursor="exchange")
         else:
-            obj_idx = [(face_idx, face.index(item_id))
-                       for face_idx, face in enumerate(self._objects["lm_grab"])
-                       if item_id in face][0]
+            lm_idx = int(next(tag for tag in tags if tag.startswith("lm_grb_")).split("_")[-1])
+            obj_idx = (face_idx, lm_idx)
             self._canvas.config(cursor="fleur")
-            for label in [self._objects["lm_label"][obj_idx[0]][obj_idx[1]],
-                          self._objects["lm_label_bg"][obj_idx[0]][obj_idx[1]]]:
-                logger.trace("Displaying: %s id: %s", self._canvas.type(label), label)
-                self._canvas.itemconfig(label, state="normal")
+            for prefix in ("lm_lbl_", "lm_lbl_bg_"):
+                tag = "{}{}_face_{}".format(prefix, lm_idx, face_idx)
+                logger.trace("Displaying: %s tag: %s", self._canvas.type(tag), tag)
+                self._canvas.itemconfig(tag, state="normal")
         self._mouse_location = obj_idx
 
     def _hide_labels(self):
         """ Clear all landmark text labels from display """
-        lbl_items = self._flatten_list(self._objects["lm_label"] + self._objects["lm_label_bg"])
-        labels = [idx for idx in lbl_items
-                  if self._canvas.itemcget(idx, "state") == "normal"]
-        if not labels:
-            return
-        logger.trace("Clearing labels")
-        for item_id in labels:
-            logger.trace("hiding: %s id: %s", self._canvas.type(item_id), item_id)
-            self._canvas.itemconfig(item_id, state="hidden")
-        logger.trace("Cleared labels")
+        self._canvas.itemconfig("lm_lbl", state="hidden")
+        self._canvas.itemconfig("lm_lbl_bg", state="hidden")
 
     # Mouse actions
     def _drag_start(self, event):
@@ -242,12 +216,9 @@ class Landmarks(Editor):
         else:
             kwargs = dict(state="hidden")
             self._zoomed_face_index = None
-        self._object_tracker("zoom", "image", face_index, 0, coords, kwargs)
-        self._canvas.tag_lower(self._objects["zoom"][face_index][0])
+        item_id = self._object_tracker("zoom", "image", face_index, coords, kwargs)
+        self._canvas.tag_lower(item_id)  # Send zoomed image to the back
         self._frames.tk_update.set(True)
-        if not update_only:
-            for obj in self._get_extract_boxes():
-                self._canvas.tag_raise(obj)
 
     def _move(self, event):
         """ Moves the selected landmark point box and updates the underlying landmark on a point
@@ -261,12 +232,7 @@ class Landmarks(Editor):
         face_idx, lm_idx = self._mouse_location
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
-        objects = [self._objects[key][face_idx][lm_idx] for key in self._objects
-                   if key != "zoom"]
-        for obj in objects:
-            logger.trace("Moving: %s id: %s", self._canvas.type(obj), obj)
-            logger.trace(self._canvas.itemcget(obj, "state"))
-            self._canvas.move(obj, shift_x, shift_y)
+
         if self._is_zoomed:
             scaled_shift = np.array((shift_x, shift_y))
         else:
@@ -303,14 +269,13 @@ class Mesh(Editor):
                 landmarks = self._scale_to_display(face.landmarks_xy)
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s)", landmarks, color)
             for idx, (segment, val) in enumerate(self._landmark_mapping.items()):
+                key = "mesh_{}".format(idx)
                 pts = landmarks[val[0]:val[1]].flatten()
                 if segment in ("right_eye", "left_eye", "mouth"):
                     kwargs = dict(fill="", outline=color, width=1)
-                    self._object_tracker(key, "polygon", face_idx, idx, pts, kwargs)
+                    self._object_tracker(key, "polygon", face_idx, pts, kwargs)
                 else:
-                    self._object_tracker(key,
-                                         "line",
-                                         face_idx,
-                                         idx,
-                                         pts,
-                                         dict(fill=color, width=1))
+                    self._object_tracker(key, "line", face_idx, pts, dict(fill=color, width=1))
+        # Place mesh beneath landmarks
+        if self._canvas.find_withtag("Landmarks"):
+            self._canvas.tag_lower(self.__class__.__name__, "Landmarks")
