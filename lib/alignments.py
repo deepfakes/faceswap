@@ -109,6 +109,23 @@ class Alignments():
                     masks[key] = masks.get(key, 0) + 1
         return masks
 
+    @property
+    def video_meta_data(self):
+        """ dict: The frame meta data stored in the alignments file. If data does not exist in the
+        alignments file then ``None`` is returned for each Key """
+        retval = dict(pts_time=None, keyframes=None)
+        pts_time = []
+        keyframes = []
+        for idx, key in enumerate(sorted(self.data)):
+            if "video_meta" not in self.data[key]:
+                return retval
+            meta = self.data[key]["video_meta"]
+            pts_time.append(meta["pts_time"])
+            if meta["keyframe"]:
+                keyframes.append(idx)
+        retval = dict(pts_time=pts_time, keyframes=keyframes)
+        return retval
+
     # << INIT FUNCTIONS >> #
 
     def _get_location(self, folder, filename):
@@ -196,6 +213,23 @@ class Alignments():
         logger.info("Backing up original alignments to '%s'", dst)
         os.rename(src, dst)
         logger.debug("Backed up alignments")
+
+    def save_video_meta_data(self, pts_time, keyframes):
+        """ Save video meta data to the alignments file.
+        Parameters
+        ----------
+        pts_time: list
+            A list of presentation timestamps (`float`) in frame index order for every frame in
+            the input video
+        keyframes: list
+            A list of frame indices corresponding to the key frames in the input video
+        """
+        logger.info("Saving video meta information to Alignments file")
+        for idx, key in enumerate(sorted(self.data)):
+            meta = dict(pts_time=pts_time[idx],
+                        keyframe=idx in keyframes)
+            self.data[key]["video_meta"] = meta
+        self.save()
 
     # << VALIDATION >> #
 
