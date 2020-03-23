@@ -216,7 +216,6 @@ class Alignments():
 
     def save_video_meta_data(self, pts_time, keyframes):
         """ Save video meta data to the alignments file.
-
         Parameters
         ----------
         pts_time: list
