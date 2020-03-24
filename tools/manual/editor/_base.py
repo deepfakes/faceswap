@@ -78,11 +78,6 @@ class Editor():
         return self._canvas.image_is_hidden
 
     @property
-    def _active_editor(self):
-        """ str: The name of the currently active editor """
-        return self._canvas.selected_action
-
-    @property
     def _control_vars(self):
         """ dict: The tk control panel variables for the currently selected editor. """
         return self._canvas.control_tk_vars.get(self.__class__.__name__, dict())

@@ -185,7 +185,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
                      existing_count, new_count, frame_index)
         if existing_count <= new_count:
             return
-        for face_idx in range(new_count, existing_count):
+        for face_idx in reversed(range(new_count, existing_count)):
             logger.debug("Deleting face at index %s for frame %s", face_idx, frame_index)
             self._canvas.update_face.remove(frame_index, face_idx)
 

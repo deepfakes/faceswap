@@ -93,7 +93,7 @@ class Mask(Editor):
         mask_type = self._control_vars["display"]["MaskType"].get()
         if mask_type == self._mask_type:
             return
-        self._meta = dict(position=self._frames.tk_position.get())
+        self._meta = dict(position=self._frame_index)
         self._mask_type = mask_type
         self._frames.tk_update.set(True)
 
@@ -125,7 +125,7 @@ class Mask(Editor):
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
-        position = self._frames.tk_position.get()
+        position = self._frame_index
         if position != self._meta.get("position", -1):
             # Reset meta information when moving to a new frame
             self._meta = dict(position=position)

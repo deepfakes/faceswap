@@ -43,7 +43,7 @@ class BoundingBox(Editor):
     def _bounding_boxes(self):
         """ list: Flattened List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed
         face's bounding box. """
-        item_ids = self._canvas.find_withtag(self.__class__.__name__)
+        item_ids = self._canvas.find_withtag("bb_box")
         return [self._canvas.coords(item_id) for item_id in item_ids
                 if self._canvas.itemcget(item_id, "state") != "hidden"]
 
@@ -342,6 +342,7 @@ class BoundingBox(Editor):
         event: :class:`tkinter.Event`
             The tkinter mouse event.
         """
+        logger.trace("event: %s, mouse_location: %s", event, self._mouse_location)
         face_idx = int(self._mouse_location[1])
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
@@ -350,6 +351,7 @@ class BoundingBox(Editor):
         for tag in tags:
             self._canvas.move(tag, shift_x, shift_y)
         coords = self._canvas.coords(tags[0])
+        logger.trace("tags: %s, co-ords: %s", tags, coords)
         self._det_faces.update.bounding_box(self._frame_index,
                                             face_idx,
                                             *self._coords_to_bounding_box(coords))
@@ -364,8 +366,10 @@ class BoundingBox(Editor):
         tuple
             The (`x`, `width`, `y`, `height`) integer points of the bounding box.
         """
+        logger.trace("in: %s", coords)
         coords = self.scale_from_display(
             np.array(coords).reshape((2, 2))).flatten().astype("int32")
+        logger.trace("out: %s", coords)
         return (coords[0], coords[2] - coords[0], coords[1], coords[3] - coords[1])
 
     def _context_menu(self, event):
