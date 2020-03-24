@@ -148,9 +148,13 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         Highlights the active face.
         Enables saving of an alignments file
         """
-        for frame_idx, faces in enumerate(self._updated_faces):
+        # NB: Reversed as new assets are lowered into the correct place, so subsequent faces
+        # must be placed first
+        index_offset = len(self._updated_faces) - 1
+        for idx, faces in enumerate(reversed(self._updated_faces)):
             if faces is None:
                 continue
+            frame_idx = index_offset - idx
             image_ids = self._canvas.find_withtag("image_{}".format(frame_idx))
             existing_count = len(image_ids)
             new_count = len(faces)

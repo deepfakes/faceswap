@@ -154,12 +154,15 @@ class Editor():
         """ Set the tags for the incoming object """
         tags = ["face_{}".format(face_index),
                 self.__class__.__name__,
+                "{}_face_{}".format(self.__class__.__name__, face_index),
                 key,
                 "{}_face_{}".format(key, face_index)]
         if "_" in key:
             split_key = key.split("_")
             if split_key[-1].isdigit():
-                tags.append("_".join(split_key[:-1]))
+                base_tag = "_".join(split_key[:-1])
+                tags.append(base_tag)
+                tags.append("{}_face_{}".format(base_tag, face_index))
         return tags
 
     def _object_tracker(self, key, object_type, face_index,
@@ -426,7 +429,9 @@ class Editor():
         actions frame to the left hand side of the frames viewer.
         """
         var = tk.BooleanVar()
-        self._actions[title] = dict(icon=icon, helptext=helptext, tk_var=var, hotkey=hotkey)
+        action = dict(icon=icon, helptext=helptext, tk_var=var, hotkey=hotkey)
+        logger.debug("Adding action: %s", action)
+        self._actions[title] = action
 
     def _add_controls(self):
         """ Add the controls for this editor's control panel.
@@ -449,8 +454,11 @@ class Editor():
         """
         self._controls["controls"].append(option)
         if global_control:
+            logger.debug("Added global control: '%s' for editor: '%s'",
+                         option.title, self.__class__.__name__)
             return
-
+        logger.debug("Added local control: '%s' for editor: '%s'",
+                     option.title, self.__class__.__name__)
         editor_key = self.__class__.__name__
         group_key = option.group.replace(" ", "").lower()
         group_key = "none" if group_key == "_master" else group_key

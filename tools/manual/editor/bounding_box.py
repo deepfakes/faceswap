@@ -195,7 +195,9 @@ class BoundingBox(Editor):
         item_id = list(item_ids)[0]
         tags = self._canvas.gettags(item_id)
         face_idx = int(next(tag for tag in tags if tag.startswith("face_")).split("_")[-1])
-        corner_idx = int(next(tag for tag in tags if tag.startswith("bb_anc_grb_")).split("_")[-1])
+        corner_idx = int(next(tag for tag in tags
+                              if tag.startswith("bb_anc_grb_")
+                              and "face_" not in tag).split("_")[-1])
         self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
         self._mouse_location = ("anchor", "{}_{}".format(face_idx, corner_idx))
         return True
@@ -310,8 +312,10 @@ class BoundingBox(Editor):
             The tkinter mouse event.
         """
         face_idx = int(self._mouse_location[1].split("_")[0])
-        item_id = self._canvas.find_withtag("bb_box_face_{}".format(face_idx))[0]
-        box = self._canvas.coords(item_id)
+        face_tag = "bb_box_face_{}".format(face_idx)
+        box = self._canvas.coords(face_tag)
+        logger.trace("Face Index: %s, Corner Index: %s. Original ROI: %s",
+                     face_idx, self._drag_data["corner"], box)
         # Switch top/bottom and left/right and set partial so indices match and we don't
         # need branching logic for min/max.
         limits = (partial(min, box[2] - 20),
@@ -321,10 +325,12 @@ class BoundingBox(Editor):
         rect_xy_indices = [self._coords_layout.index(pnt) for pnt in self._drag_data["corner"]]
         box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
         box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
-        self._canvas.coords(item_id, *box)
         corners = self._corners_from_coords(box)
         dsp_ids = self._canvas.find_withtag("bb_anc_dsp_face_{}".format(face_idx))
         grb_ids = self._canvas.find_withtag("bb_anc_grb_face_{}".format(face_idx))
+        logger.trace("New ROI: %s, corners: %s, dsp_ids: %s, grb_ids: %s",
+                     box, corners, dsp_ids, grb_ids)
+        self._canvas.coords(face_tag, *box)
         for dsp_pts, grb_pts, dsp_id, grp_id in zip(*self._get_anchor_points(corners),
                                                     dsp_ids,
                                                     grb_ids):
@@ -344,14 +350,12 @@ class BoundingBox(Editor):
         """
         logger.trace("event: %s, mouse_location: %s", event, self._mouse_location)
         face_idx = int(self._mouse_location[1])
-        shift_x = event.x - self._drag_data["current_location"][0]
-        shift_y = event.y - self._drag_data["current_location"][1]
-        tags = ["{}_face_{}".format(tag, face_idx)
-                for tag in ("bb_box", "bb_anc_dsp", "bb_anc_grb")]
-        for tag in tags:
-            self._canvas.move(tag, shift_x, shift_y)
-        coords = self._canvas.coords(tags[0])
-        logger.trace("tags: %s, co-ords: %s", tags, coords)
+        shift = (event.x - self._drag_data["current_location"][0],
+                 event.y - self._drag_data["current_location"][1])
+
+        self._canvas.move("{}_face_{}".format(self.__class__.__name__, face_idx), *shift)
+        coords = self._canvas.coords("bb_box_face_{}".format(face_idx))
+        logger.trace("face_idx: %s, shift: %s, new co-ords: %s", face_idx, shift, coords)
         self._det_faces.update.bounding_box(self._frame_index,
                                             face_idx,
                                             *self._coords_to_bounding_box(coords))
