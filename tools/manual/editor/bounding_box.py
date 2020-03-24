@@ -70,16 +70,14 @@ class BoundingBox(Editor):
 
     def update_annotation(self):
         """ Draw the bounding box around faces and set the object to :attr:`_object`"""
-        if self._drag_data:
-            logger.trace("Object being edited. Not updating annotation")
-            return
-
         key = "bb_box"
         color = self._control_color
         for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
             kwargs = dict(outline=color, width=1)
+            logger.trace("frame_index: %s, face_index: %s, box: %s, kwargs: %s",
+                         self._frame_index, idx, box, kwargs)
             self._object_tracker(key, "rectangle", idx, box, kwargs)
             self._update_anchor_annotation(idx, box, color)
         logger.trace("Updated bounding box annotations")
@@ -325,17 +323,7 @@ class BoundingBox(Editor):
         rect_xy_indices = [self._coords_layout.index(pnt) for pnt in self._drag_data["corner"]]
         box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
         box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
-        corners = self._corners_from_coords(box)
-        dsp_ids = self._canvas.find_withtag("bb_anc_dsp_face_{}".format(face_idx))
-        grb_ids = self._canvas.find_withtag("bb_anc_grb_face_{}".format(face_idx))
-        logger.trace("New ROI: %s, corners: %s, dsp_ids: %s, grb_ids: %s",
-                     box, corners, dsp_ids, grb_ids)
-        self._canvas.coords(face_tag, *box)
-        for dsp_pts, grb_pts, dsp_id, grp_id in zip(*self._get_anchor_points(corners),
-                                                    dsp_ids,
-                                                    grb_ids):
-            self._canvas.coords(dsp_id, *dsp_pts)
-            self._canvas.coords(grp_id, *grb_pts)
+        logger.trace("New ROI: %s", box)
         self._det_faces.update.bounding_box(self._frame_index,
                                             face_idx,
                                             *self._coords_to_bounding_box(box))
@@ -352,10 +340,9 @@ class BoundingBox(Editor):
         face_idx = int(self._mouse_location[1])
         shift = (event.x - self._drag_data["current_location"][0],
                  event.y - self._drag_data["current_location"][1])
-
-        self._canvas.move("{}_face_{}".format(self.__class__.__name__, face_idx), *shift)
-        coords = self._canvas.coords("bb_box_face_{}".format(face_idx))
-        logger.trace("face_idx: %s, shift: %s, new co-ords: %s", face_idx, shift, coords)
+        face_tag = "bb_box_face_{}".format(face_idx)
+        coords = np.array(self._canvas.coords(face_tag)) + (*shift, *shift)
+        logger.trace("face_tag: %s, shift: %s, new co-ords: %s", face_tag, shift, coords)
         self._det_faces.update.bounding_box(self._frame_index,
                                             face_idx,
                                             *self._coords_to_bounding_box(coords))
