@@ -21,8 +21,9 @@ class Landmarks(Editor):
     def _edit_mode(self):
         """ str: The currently selected edit mode based on optional action button.
         One of "draw" or "zoom" """
-        action = [name for name, option in self._actions.items() if option["tk_var"].get()]
-        return "move" if not action else action[0]
+        action = next((name for name, option in self._actions.items()
+                       if option["tk_var"].get()), "")
+        return action
 
     def _add_actions(self):
         self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
@@ -32,20 +33,22 @@ class Landmarks(Editor):
     def _add_edit_mode_callback(self):
         """ Add a callback to change the top most object to be extract box (in zoom mode) or
         landmark grab points (in drag) mode) for mouse tracking """
-        for key, option in self._actions.items():
+        for option in self._actions.values():
             tk_var = option["tk_var"]
-            tk_var.trace("w", lambda *e, k=key, v=tk_var: self._edit_mode_callback(k, v))
+            tk_var.trace("w", lambda *e: self._edit_mode_callback())
 
-    def _edit_mode_callback(self, key, tk_var):
-        """ Hide landmark grab points when in zoom mode, otherwise display. """
-        if not tk_var.get():
-            logger.debug("Action %s is not active. Returning", key)
+    def _edit_mode_callback(self):
+        """ Raise extract box above landmark grab points when in zoom mode, otherwise raise
+        landmark grab points. """
+        if not self._edit_mode:
+            logger.debug("No edit mode currently set. Returning")
             return
         tags = ("ExtractBox", self.__class__.__name__)
-        tags = tuple(reversed(tags)) if key == "zoom" else tags
+        tags = tuple(reversed(tags)) if self._edit_mode == "zoom" else tags
         if self._canvas.find_withtag("ExtractBox"):
-            self._canvas.lower(*tags)
-            logger.debug("Lowering tag %s below tag %s for edit mode: %s", *tags, key)
+            self._canvas.tag_lower(*tags)
+            logger.debug("Lowering tag '%s' below tag %s for edit mode: '%s'",
+                         *tags, self._edit_mode)
 
     def update_annotation(self):
         """ Draw the Landmarks and set the objects to :attr:`_object`"""
@@ -56,8 +59,12 @@ class Landmarks(Editor):
                 landmarks = self._scale_to_display(face.landmarks_xy)
             for lm_idx, landmark in enumerate(landmarks):
                 self._display_landmark(landmark, face_idx, lm_idx)
-                self._grab_landmark(landmark, face_idx, lm_idx)
                 self._label_landmark(landmark, face_idx, lm_idx)
+                self._grab_landmark(landmark, face_idx, lm_idx)
+        if self._is_active and self._edit_mode == "zoom":
+            self._canvas.tag_lower("Landmarks", "ExtractBox")
+        elif self._is_active and self._edit_mode == "drag":
+            self._canvas.tag_lower("ExtractBox", "Landmarks")
         if self._is_zoomed:
             self._zoom_face(update_only=True)
         logger.trace("Updated landmark annotations")
@@ -139,7 +146,7 @@ class Landmarks(Editor):
         """ Update the cursors for hovering over extract boxes and update
         :attr:`_mouse_location`. """
         self._hide_labels()
-        objs = (self._canvas.find_withtag("ExtractBox") if self._edit_mode == "zoom"
+        objs = (self._canvas.find_withtag("eb_box") if self._edit_mode == "zoom"
                 else self._canvas.find_withtag("lm_grb"))
         item_ids = set(self._canvas.find_withtag("current")).intersection(objs)
         if not item_ids:
@@ -276,6 +283,5 @@ class Mesh(Editor):
                     self._object_tracker(key, "polygon", face_idx, pts, kwargs)
                 else:
                     self._object_tracker(key, "line", face_idx, pts, dict(fill=color, width=1))
-        # Place mesh beneath landmarks
-        if self._canvas.find_withtag("Landmarks"):
-            self._canvas.tag_lower(self.__class__.__name__, "Landmarks")
+        # Place mesh as bottom annotation
+        self._canvas.tag_raise(self.__class__.__name__, "main_image")

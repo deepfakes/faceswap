@@ -636,7 +636,8 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._image = self.create_image(self._frames.display_dims[0] / 2,
                                         self._frames.display_dims[1] / 2,
                                         image=self._frames.current_display_frame,
-                                        anchor=tk.CENTER)
+                                        anchor=tk.CENTER,
+                                        tags="main_image")
         self._editor_globals = dict(control_tk_vars=dict(),
                                     annotation_formats=dict(),
                                     key_bindings=dict())
