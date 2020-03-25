@@ -16,11 +16,14 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class Editor():
     """ Parent Class for Object Editors.
 
+    Editors allow the user to use a variety of tools to manipulate alignments from the main
+    display frame.
+
     Parameters
     ----------
     canvas: :class:`tkinter.Canvas`
         The canvas that holds the image and annotations
-    detected_faces: :class:`AlignmentsData`
+    detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
         The _detected_faces data for this manual session
     frames: :class:`FrameNavigation`
         The frames navigator for this manual session
@@ -78,19 +81,15 @@ class Editor():
         return self._canvas.image_is_hidden
 
     @property
+    def _zoomed_dims(self):
+        """ tuple: The (`width`, `height`) of the zoomed ROI """
+        return (self._zoomed_roi[2] - self._zoomed_roi[0],
+                self._zoomed_roi[3] - self._zoomed_roi[1])
+
+    @property
     def _control_vars(self):
         """ dict: The tk control panel variables for the currently selected editor. """
         return self._canvas.control_tk_vars.get(self.__class__.__name__, dict())
-
-    @property
-    def _annotation_formats(self):
-        return self._canvas.annotation_formats
-
-    @property
-    def actions(self):
-        """ list: The optional action buttons for the actions frame in the GUI for the
-        current editor """
-        return self._actions
 
     @property
     def controls(self):
@@ -104,16 +103,29 @@ class Editor():
         return self._canvas.colors[self._annotation_formats[annotation]["color"].get()]
 
     @property
-    def _zoomed_dims(self):
-        """ tuple: The (`width`, `height`) of the zoomed ROI """
-        return (self._zoomed_roi[2] - self._zoomed_roi[0],
-                self._zoomed_roi[3] - self._zoomed_roi[1])
+    def _annotation_formats(self):
+        """ dict: The format (color, opacity etc.) of each editor's annotation display. """
+        return self._canvas.annotation_formats
+
+    @property
+    def actions(self):
+        """ list: The optional action buttons for the actions frame in the GUI for the
+        current editor """
+        return self._actions
 
     @property
     def _frame_index(self):
+        """ int: The currently displayed frame index. """
         return self._frames.tk_position.get()
 
     def _add_key_bindings(self, key_bindings):
+        """ Add the editor specific key bindings for the currently viewed editor.
+
+        Parameters
+        ----------
+        key_bindings: dict
+            The key binding to method dictionary for this editor.
+        """
         if key_bindings is None:
             return
         for key, method in key_bindings.items():
@@ -150,21 +162,6 @@ class Editor():
         """ Hide annotations for this editor. """
         self._canvas.itemconfig(self.__class__.__name__, state="hidden")
 
-    def _set_object_tags(self, face_index, key):
-        """ Set the tags for the incoming object """
-        tags = ["face_{}".format(face_index),
-                self.__class__.__name__,
-                "{}_face_{}".format(self.__class__.__name__, face_index),
-                key,
-                "{}_face_{}".format(key, face_index)]
-        if "_" in key:
-            split_key = key.split("_")
-            if split_key[-1].isdigit():
-                base_tag = "_".join(split_key[:-1])
-                tags.append(base_tag)
-                tags.append("{}_face_{}".format(base_tag, face_index))
-        return tags
-
     def _object_tracker(self, key, object_type, face_index,
                         coordinates, object_kwargs):
         """ Create an annotation object and add it to :attr:`_objects` or update an existing
@@ -176,20 +173,25 @@ class Editor():
             The key for this annotation in :attr:`_objects`
         object_type: str
             This can be any string that is a natural extension to :class:`tkinter.Canvas.create_`
+        face_index: int
+            The index of the face within the current frame
         coordinates: tuple or list
             The bounding box coordinates for this object
         object_kwargs: dict
             The keyword arguments for this object
+
+        Returns
+        -------
+        int:
+            The tkinter canvas item identifier for the created object
         """
         object_color_keys = self._get_object_color_keys(key, object_type)
         tracking_id = "_".join((key, str(face_index)))
-        tags = self._set_object_tags(face_index, key)
         face_tag = "face_{}".format(face_index)
         face_objects = set(self._canvas.find_withtag(face_tag))
         annotation_objects = set(self._canvas.find_withtag(key))
         existing_object = tuple(face_objects.intersection(annotation_objects))
         if not existing_object:
-            object_kwargs["tags"] = tags
             item_id = self._add_new_object(key,
                                            object_type,
                                            face_index,
@@ -216,7 +218,7 @@ class Editor():
         Parameters
         ----------
         key: str
-            The key for this annotation in :attr:`_objects`
+            The key for this annotation's tag creation
         object_type: str
             This can be any string that is a natural extension to :class:`tkinter.Canvas.create_`
 
@@ -230,33 +232,69 @@ class Editor():
             retval = ["fill"]
         elif object_type == "image":
             retval = []
-        elif object_type == "oval" and key == "lm_display":
+        elif object_type == "oval" and key.startswith("lm_dsp_"):
             retval = ["fill", "outline"]
         else:
             retval = ["outline"]
-        logger.trace("returning %s for key: %s, object_type: %s", retval, key, object_type)
+        logger.info("returning %s for key: %s, object_type: %s", retval, key, object_type)
         return retval
 
     def _add_new_object(self, key, object_type, face_index, coordinates, object_kwargs):
-        """ Add a new object to :attr:'_objects' for tracking.
+        """ Add a new object to the canvas.
 
         Parameters
         ----------
         key: str
-            The key for this annotation in :attr:`_objects`
+            The key for this annotation's tag creation
         object_type: str
             This can be any string that is a natural extension to :class:`tkinter.Canvas.create_`
+        face_index: int
+            The index of the face within the current frame
         coordinates: tuple or list
             The bounding box coordinates for this object
         object_kwargs: dict
             The keyword arguments for this object
+
+        Returns
+        -------
+        int:
+            The tkinter canvas item identifier for the created object
         """
         logger.debug("Adding object: (key: '%s', object_type: '%s', face_index: %s, "
                      "coordinates: %s, object_kwargs: %s)", key, object_type, face_index,
                      coordinates, object_kwargs)
+        object_kwargs["tags"] = self._set_object_tags(face_index, key)
         item_id = getattr(self._canvas,
                           "create_{}".format(object_type))(*coordinates, **object_kwargs)
         return item_id
+
+    def _set_object_tags(self, face_index, key):
+        """ Create the tkinter object tags for the incoming object.
+
+        Parameters
+        ----------
+        face_index: int
+            The face index within the current frame for the face that tags are being created for
+        key: str
+            The base tag for this object, for which additional tags will be generated
+
+        Returns
+        -------
+        list
+            The generated tags for the current object
+        """
+        tags = ["face_{}".format(face_index),
+                self.__class__.__name__,
+                "{}_face_{}".format(self.__class__.__name__, face_index),
+                key,
+                "{}_face_{}".format(key, face_index)]
+        if "_" in key:
+            split_key = key.split("_")
+            if split_key[-1].isdigit():
+                base_tag = "_".join(split_key[:-1])
+                tags.append(base_tag)
+                tags.append("{}_face_{}".format(base_tag, face_index))
+        return tags
 
     def _update_existing_object(self, item_id, coordinates, object_kwargs,
                                 tracking_id, object_color_keys):
@@ -278,7 +316,7 @@ class Editor():
         Returns
         -------
         bool
-            ``True`` if :att:`_current_color` should be updated otherwise ``False``
+            ``True`` if :attr:`_current_color` should be updated otherwise ``False``
         """
         update_color = (object_color_keys and
                         object_kwargs[object_color_keys[0]] != self._current_color[tracking_id])
@@ -298,14 +336,15 @@ class Editor():
     # << MOUSE CALLBACKS >>
     # Mouse cursor display
     def bind_mouse_motion(self):
-        """ Binds the mouse motion to the current editor's mouse <Motion> event.
+        """ Binds the mouse motion for the current editor's mouse <Motion> event to the editor's
+        :func:`_update_cursor` function.
 
         Called on initialization and active editor update.
         """
         self._canvas.bind("<Motion>", self._update_cursor)
 
     def _update_cursor(self, event):  # pylint: disable=unused-argument
-        """ The mouse cursor display as bound to the mouses <Motion> event..
+        """ The mouse cursor display as bound to the mouse's <Motion> event..
 
         The default is to always return a standard cursor, so this method should be overridden for
         editor specific cursor update.
@@ -427,6 +466,18 @@ class Editor():
     def _add_action(self, title, icon, helptext, hotkey=None):
         """ Add an action dictionary to :attr:`_actions`. This will create a button in the optional
         actions frame to the left hand side of the frames viewer.
+
+        Parameters
+        ----------
+        title: str
+            The title of the action to be generated
+        icon: str
+            The name of the icon that is used to display this action's button
+        helptext: str
+            The tooltip text to display for this action
+        hotkey: str, optional
+            The hotkey binding for this action. Set to ``None`` if there is no hotkey binding.
+            Default: ``None``
         """
         var = tk.BooleanVar()
         action = dict(icon=icon, helptext=helptext, tk_var=var, hotkey=hotkey)
@@ -467,7 +518,7 @@ class Editor():
             editor_key, dict()).setdefault(group_key, dict())[annotation_key] = option.tk_var
 
     def _add_annotation_format_controls(self):
-        """ Add the annotation display (color/size) controls.
+        """ Add the annotation display (color/size) controls to :attr:`_annotation_formats`.
 
         These should be universal and available for all editors.
         """
@@ -503,7 +554,12 @@ class Editor():
 
 
 class View(Editor):
-    """ The view Editor """
+    """ The view Editor.
+
+    Does not allow any editing, just used for previewing annotations.
+
+    This is the default start-up editor.
+    """
     def __init__(self, canvas, detected_faces, frames):
         control_text = "Viewer\nPreview the frame's annotations."
         super().__init__(canvas, detected_faces, frames, control_text)

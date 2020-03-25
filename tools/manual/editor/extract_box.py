@@ -10,7 +10,19 @@ from ._base import Editor, logger
 
 
 class ExtractBox(Editor):
-    """ The Extract Box Editor. """
+    """ The Extract Box Editor.
+
+    Adjust the calculated Extract Box to shift all of the 68 point landmarks in place.
+
+    Parameters
+    ----------
+    canvas: :class:`tkinter.Canvas`
+        The canvas that holds the image and annotations
+    detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
+        The _detected_faces data for this manual session
+    frames: :class:`FrameNavigation`
+        The frames navigator for this manual session
+    """
     def __init__(self, canvas, detected_faces, frames):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
@@ -24,7 +36,7 @@ class ExtractBox(Editor):
                          control_text=control_text, key_bindings=key_bindings)
 
     def update_annotation(self):
-        """ Draw the Extract Box around faces and set the object to :attr:`_object`"""
+        """ Draw the latest Extract Boxes around the faces. """
         color = self._control_color
         for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
@@ -46,8 +58,14 @@ class ExtractBox(Editor):
     # << MOUSE HANDLING >>
     # Mouse cursor display
     def _update_cursor(self, event):
-        """ Update the cursors for hovering over extract boxes and update
-        :attr:`_mouse_location`. """
+        """ Update the cursor when it is hovering over an extract box and update
+        :attr:`_mouse_location` with the current cursor position.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The current tkinter mouse event
+        """
         extract_boxes = set(self._canvas.find_withtag("eb_box"))
         item_ids = set(self._canvas.find_withtag("current")).intersection(extract_boxes)
         if not item_ids:
@@ -62,7 +80,7 @@ class ExtractBox(Editor):
 
     # Mouse click actions
     def set_mouse_click_actions(self):
-        """ Add right click context menu to default mouse click bindings """
+        """ Add context menu to OS specific right click action. """
         super().set_mouse_click_actions()
         self._canvas.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
                           self._context_menu)
@@ -70,7 +88,8 @@ class ExtractBox(Editor):
     def _drag_start(self, event):
         """ The action to perform when the user starts clicking and dragging the mouse.
 
-        Collect information about the object being clicked on and add to :attr:`_drag_data`
+        Moves the extract box and the underlying 68 point landmarks to the dragged to
+        location.
 
         Parameters
         ----------
@@ -84,14 +103,13 @@ class ExtractBox(Editor):
         self._drag_callback = self._move
 
     def _move(self, event):
-        """ Updates the underlying detected faces landmarks, which moves the Extract box
-        on a drag event.
+        """ Updates the underlying detected faces landmarks based on mouse dragging delta,
+        which moves the Extract box on a drag event.
 
         Parameters
         ----------
         event: :class:`tkinter.Event`
             The tkinter mouse event.
-
         """
         if not self._drag_data:
             return

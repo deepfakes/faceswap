@@ -11,7 +11,19 @@ from ._base import ControlPanelOption, Editor, logger
 
 
 class BoundingBox(Editor):
-    """ The Bounding Box Editor. """
+    """ The Bounding Box Editor.
+
+    Adjusting the bounding box feeds the aligner to generate new 68 point landmarks.
+
+    Parameters
+    ----------
+    canvas: :class:`tkinter.Canvas`
+        The canvas that holds the image and annotations
+    detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
+        The _detected_faces data for this manual session
+    frames: :class:`FrameNavigation`
+        The frames navigator for this manual session
+    """
     def __init__(self, canvas, detected_faces, frames):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
@@ -41,13 +53,13 @@ class BoundingBox(Editor):
 
     @property
     def _bounding_boxes(self):
-        """ list: Flattened List of (`Left`, `Top`, `Right`, `Bottom`) tuples for each displayed
-        face's bounding box. """
+        """ list: The :func:`tkinter.Canvas.coords` for all displayed bounding boxes. """
         item_ids = self._canvas.find_withtag("bb_box")
         return [self._canvas.coords(item_id) for item_id in item_ids
                 if self._canvas.itemcget(item_id, "state") != "hidden"]
 
     def _add_controls(self):
+        """ Controls for feeding the Aligner. Exposes Normalization Method as a parameter. """
         norm_ctl = ControlPanelOption(
             "Normalization method",
             str,
@@ -69,7 +81,7 @@ class BoundingBox(Editor):
         self._add_control(norm_ctl)
 
     def update_annotation(self):
-        """ Draw the bounding box around faces and set the object to :attr:`_object`"""
+        """ Get the latest bounding box data from alignments and update. """
         key = "bb_box"
         color = self._control_color
         for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
@@ -158,9 +170,21 @@ class BoundingBox(Editor):
     # << MOUSE HANDLING >>
     # Mouse cursor display
     def _update_cursor(self, event):
-        """ Update the cursors for hovering over bounding boxes or bounding box corner anchors and
-        update :attr:`_mouse_location`. """
-        if self._check_cursor_anchors(event):
+        """ Set the cursor action.
+
+        Update :attr:`_mouse_location` with the current cursor position and display appropriate
+        icon.
+
+        If the cursor is over a corner anchor, then pop resize icon.
+        If the cursor is over a bounding box, then pop move icon.
+        If the cursor is over the image, then pop add icon.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The current tkinter mouse event
+        """
+        if self._check_cursor_anchors():
             return
         if self._check_cursor_bounding_box(event):
             return
@@ -170,16 +194,11 @@ class BoundingBox(Editor):
         self._canvas.config(cursor="")
         self._mouse_location = None
 
-    def _check_cursor_anchors(self, event):  # pylint:disable=unused-argument
-        """ Check whether the cursor is over an anchor.
+    def _check_cursor_anchors(self):
+        """ Check whether the cursor is over a corner anchor.
 
-        If it is, set the appropriate cursor type and set :attr:`_mouse_location` to:
-            ("anchor", (`face index`, `anchor index`)
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`, unused
-            The tkinter mouse event, required for callback but unused
+        If it is, set the appropriate cursor type and set :attr:`_mouse_location` to
+        ("anchor", (`face index`, `anchor index`)
 
         Returns
         -------
@@ -231,7 +250,7 @@ class BoundingBox(Editor):
         """ Check whether the cursor is over the image.
 
         If it is, set the appropriate cursor type and set :attr:`_mouse_location` to:
-            ("image", )
+        ("image", )
 
         Parameters
         ----------
@@ -253,7 +272,7 @@ class BoundingBox(Editor):
 
     # Mouse Actions
     def set_mouse_click_actions(self):
-        """ Add right click context menu to default mouse click bindings """
+        """ Add context menu to OS specific right click action. """
         super().set_mouse_click_actions()
         self._canvas.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
                           self._context_menu)
@@ -261,7 +280,14 @@ class BoundingBox(Editor):
     def _drag_start(self, event):
         """ The action to perform when the user starts clicking and dragging the mouse.
 
-        Collect information about the object being clicked on and add to :attr:`_drag_data`
+        If :attr:`_mouse_location` indicates a corner anchor, then the bounding box is resized
+        based on the adjusted corner, and the alignments re-generated.
+
+        If :attr:`_mouse_location` indicates a bounding box, then the bounding box is moved, and
+        the alignments re-generated.
+
+        If :attr:`_mouse_location` indicates being over the main image, then a new bounding box is
+        created, and alignments generated.
 
         Parameters
         ----------
@@ -302,7 +328,7 @@ class BoundingBox(Editor):
         self._det_faces.update.add(self._frame_index, *self._coords_to_bounding_box(box))
 
     def _resize(self, event):
-        """ Resizes a bounding box on an anchor drag event
+        """ Resizes a bounding box on a corner anchor drag event.
 
         Parameters
         ----------
