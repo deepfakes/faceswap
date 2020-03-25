@@ -179,7 +179,9 @@ class DetectedFaces():
         face_index: int
             The face index within the frame to retrieve the face for
         size: int
-            The required pixel size of the aligned face
+            The required pixel size of the aligned face. NB The default size is set for a zoomed
+            display frame image. Rather than resize the underlying Detected Face object, the
+            returned results are adjusted for the requested size
         with_landmarks: bool, optional
             Set to `True` if the aligned landmarks should be returned with the aligned face.
             Default: ``False``
@@ -196,19 +198,24 @@ class DetectedFaces():
             aligned face in position 0 and the requested additional data populated in the following
             order (`aligned face`, `aligned landmarks`, `mask objects`)
         """
-        logger.debug("frame_index: %s, face_index: %s, size: %s, with_landmarks: %s, "
+        logger.trace("frame_index: %s, face_index: %s, size: %s, with_landmarks: %s, "
                      "with_mask: %s", frame_index, face_index, size, with_landmarks, with_mask)
         face = self.current_faces[frame_index][face_index]
+        resize = self._zoomed_size != size
+        logger.trace("Requires resize: %s", resize)
         # TODO self._frames is not currently referenced.
-        face.load_aligned(self._frames.current_frame, size=size, force=True)
-        retval = face.aligned_face.copy()
+        face.load_aligned(self._frames.current_frame, size=self._zoomed_size, force=True)
+
+        retval = cv2.resize(face.aligned_face,
+                            (size, size)) if resize else face.aligned_face.copy()
         retval = [retval] if with_landmarks or with_mask else retval
         face.aligned["face"] = None
         if with_landmarks:
-            retval.append(face.aligned_landmarks)
+            retval.append(face.aligned_landmarks * (size / self._zoomed_size)
+                          if resize else face.aligned_landmarks)
         if with_mask:
             retval.append(face.mask)
-        logger.debug("returning: %s", [item.shape if isinstance(item, np.ndarray) else item
+        logger.trace("returning: %s", [item.shape if isinstance(item, np.ndarray) else item
                                        for item in retval])
         return retval
 

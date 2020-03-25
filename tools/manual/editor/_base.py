@@ -236,7 +236,7 @@ class Editor():
             retval = ["fill", "outline"]
         else:
             retval = ["outline"]
-        logger.info("returning %s for key: %s, object_type: %s", retval, key, object_type)
+        logger.trace("returning %s for key: %s, object_type: %s", retval, key, object_type)
         return retval
 
     def _add_new_object(self, key, object_type, face_index, coordinates, object_kwargs):

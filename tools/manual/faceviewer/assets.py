@@ -4,6 +4,8 @@ the manual adjustments tool """
 import logging
 import tkinter as tk
 
+import cv2
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -373,6 +375,9 @@ class UpdateFace():
         mask = mask.get(self._canvas.selected_mask,
                         None) if self._canvas.optional_annotations["mask"] else None
         mask = mask if mask is None else mask.mask.squeeze()
+        if mask is not None and mask.shape[0] != self._faces_cache.size:
+            logger.info("Resizing mask from %spx to %spx", mask.shape[0], self._faces_cache.size)
+            mask = cv2.resize(mask, (self._faces_cache.size, self._faces_cache.size))
         return face, landmarks, mask
 
     # << ADD FACE METHODS >> #

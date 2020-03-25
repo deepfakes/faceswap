@@ -20,7 +20,7 @@ class Landmarks(Editor):
     @property
     def _edit_mode(self):
         """ str: The currently selected edit mode based on optional action button.
-        One of "draw" or "zoom" """
+        One of "drag" or "zoom" """
         action = next((name for name, option in self._actions.items()
                        if option["tk_var"].get()), "")
         return action
