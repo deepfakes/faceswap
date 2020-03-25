@@ -9,7 +9,19 @@ from ._base import Editor, logger
 
 
 class Landmarks(Editor):
-    """ The Landmarks Editor. """
+    """ The Landmarks Editor.
+
+    Adjust individual landmark points and re-generate Extract Box.
+
+    Parameters
+    ----------
+    canvas: :class:`tkinter.Canvas`
+        The canvas that holds the image and annotations
+    detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
+        The _detected_faces data for this manual session
+    frames: :class:`FrameNavigation`
+        The frames navigator for this manual session
+    """
     def __init__(self, canvas, detected_faces, frames):
         self._zoomed_face = None
         self._zoomed_face_index = None
@@ -26,6 +38,7 @@ class Landmarks(Editor):
         return action
 
     def _add_actions(self):
+        """ Add the optional action buttons to the viewer. Current actions are Drag and Zoom. """
         self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
         self._add_action("drag", "move", "Drag Tool", hotkey="D")
         self._add_edit_mode_callback()
@@ -39,7 +52,7 @@ class Landmarks(Editor):
 
     def _edit_mode_callback(self):
         """ Raise extract box above landmark grab points when in zoom mode, otherwise raise
-        landmark grab points. """
+        landmark grab points above extract box. """
         if not self._edit_mode:
             logger.debug("No edit mode currently set. Returning")
             return
@@ -51,7 +64,7 @@ class Landmarks(Editor):
                          *tags, self._edit_mode)
 
     def update_annotation(self):
-        """ Draw the Landmarks and set the objects to :attr:`_object`"""
+        """ Get the latest Landmarks points and update. """
         for face_idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
             if self._is_zoomed:
                 landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
@@ -70,14 +83,17 @@ class Landmarks(Editor):
         logger.trace("Updated landmark annotations")
 
     def _display_landmark(self, bounding_box, face_index, landmark_index):
-        """ Add a display landmark to the canvas.
+        """ Add an individual landmark display annotation to the canvas.
 
         Parameters
         ----------
-        box: :class:`numpy.ndarray`
-            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
-        object_index: int
-            The index of the this item in :attr:`_objects`
+        bounding_box: :class:`numpy.ndarray`
+            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box for this
+            landmark
+        face_index: int
+            The index of the face within the current frame
+        landmark_index: int
+            The index point of this landmark
         """
         radius = 1
         color = self._control_color
@@ -87,40 +103,18 @@ class Landmarks(Editor):
         kwargs = dict(outline=color, fill=color, width=radius)
         self._object_tracker(key, "oval", face_index, bbox, kwargs)
 
-    def _grab_landmark(self, bounding_box, face_index, landmark_index):
-        """ Add a grab landmark to the canvas.
-
-        Parameters
-        ----------
-        box: :class:`numpy.ndarray`
-            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
-        object_index: int
-            The index of the this item in :attr:`_objects`
-        """
-        if not self._is_active:
-            return
-        radius = 6
-        bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
-                bounding_box[0] + radius, bounding_box[1] + radius)
-        key = "lm_grb_{}".format(landmark_index)
-        kwargs = dict(outline="",
-                      fill="",
-                      width=radius,
-                      activeoutline="black",
-                      activefill="white")
-        self._object_tracker(key, "oval", face_index, bbox, kwargs)
-
     def _label_landmark(self, bounding_box, face_index, landmark_index):
         """ Add a text label for a landmark to the canvas.
 
         Parameters
         ----------
-        box: :class:`numpy.ndarray`
-            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box
-        object_index: int
-            The index of the this item in :attr:`_objects`
-        landmark_index
-            The index of the landmark being annotated
+        bounding_box: :class:`numpy.ndarray`
+            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box for this
+            landmark
+        face_index: int
+            The index of the face within the current frame
+        landmark_index: int
+            The index point of this landmark
         """
         if not self._is_active:
             return
@@ -140,11 +134,49 @@ class Landmarks(Editor):
         self._canvas.itemconfig(text_id, state="hidden")
         self._canvas.itemconfig(bg_id, state="hidden")
 
+    def _grab_landmark(self, bounding_box, face_index, landmark_index):
+        """ Add an individual landmark grab anchor to the canvas.
+
+        Parameters
+        ----------
+        bounding_box: :class:`numpy.ndarray`
+            The (left, top), (right, bottom) (x, y) coordinates of the oval bounding box for this
+            landmark
+        face_index: int
+            The index of the face within the current frame
+        landmark_index: int
+            The index point of this landmark
+        """
+        if not self._is_active:
+            return
+        radius = 6
+        bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
+                bounding_box[0] + radius, bounding_box[1] + radius)
+        key = "lm_grb_{}".format(landmark_index)
+        kwargs = dict(outline="",
+                      fill="",
+                      width=radius,
+                      activeoutline="black",
+                      activefill="white")
+        self._object_tracker(key, "oval", face_index, bbox, kwargs)
+
     # << MOUSE HANDLING >>
     # Mouse cursor display
     def _update_cursor(self, event):
-        """ Update the cursors for hovering over extract boxes and update
-        :attr:`_mouse_location`. """
+        """ Set the cursor action.
+
+        Update :attr:`_mouse_location` with the current cursor position and display appropriate
+        icon.
+
+        If in zoom mode, then checks whether mouse is over an extract box and pops the zoom icon.
+        If in edit mode, checks whether the mouse is over a landmark grab anchor and pops the
+        grab icon and the landmark label.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The current tkinter mouse event
+        """
         self._hide_labels()
         objs = (self._canvas.find_withtag("eb_box") if self._edit_mode == "zoom"
                 else self._canvas.find_withtag("lm_grb"))
@@ -180,7 +212,10 @@ class Landmarks(Editor):
     def _drag_start(self, event):
         """ The action to perform when the user starts clicking and dragging the mouse.
 
-        Collect information about the landmark being clicked on and add to :attr:`_drag_data`
+        If edit mode is zoom, then zooms the face in or out.
+
+        If edit mode is drag, then the underlying Detected Face's landmark is updated for the
+        point being edited.
 
         Parameters
         ----------
@@ -200,7 +235,7 @@ class Landmarks(Editor):
             self._drag_callback = self._move
 
     def _zoom_face(self, update_only=False):
-        """ Zoom in on the selected face.
+        """ Zoom in or zoom out of the selected face.
 
         Parameters
         ----------
@@ -253,7 +288,20 @@ class Landmarks(Editor):
 
 
 class Mesh(Editor):
-    """ The Landmarks Mesh Display. """
+    """ The Landmarks Mesh Display.
+
+    There are no editing options for Mesh editor. It is purely aesthetic and updated when other
+    editors are used.
+
+    Parameters
+    ----------
+    canvas: :class:`tkinter.Canvas`
+        The canvas that holds the image and annotations
+    detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
+        The _detected_faces data for this manual session
+    frames: :class:`FrameNavigation`
+        The frames navigator for this manual session
+    """
     def __init__(self, canvas, detected_faces, frames):
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
@@ -266,7 +314,7 @@ class Mesh(Editor):
         super().__init__(canvas, detected_faces, frames, None)
 
     def update_annotation(self):
-        """ Draw the Landmarks Mesh and set the objects to :attr:`_object`"""
+        """ Get the latest Landmarks and update the mesh."""
         key = "mesh"
         color = self._control_color
         for face_idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
