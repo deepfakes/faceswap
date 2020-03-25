@@ -169,6 +169,7 @@ class ContextMenu():  # pylint:disable=too-few-public-methods
 
     def _delete_face(self):
         """ Delete the selected face on a right click mouse delete action. """
+        logger.trace("Right click delete received. face_id: %s", self._face_id)
         self._canvas.update_face.remove_face_from_viewer(self._face_id)
         self._face_id = None
 
@@ -220,6 +221,7 @@ class ActiveFrame():
         add/remove face. """
         if not self._faces_cache.is_initialized:
             return
+        logger.trace("Reloading annotations")
         self._highlighter.highlight_selected()
 
     def _update(self):
@@ -227,7 +229,9 @@ class ActiveFrame():
         update, add or remove. """
         if not self._det_faces.tk_edited.get() or not self._faces_cache.is_initialized:
             return
+        logger.trace("Faces viewer update triggered")
         if self._add_remove_face():
+            logger.debug("Face count changed. Reloading annotations")
             self.reload_annotations()
             return
         self._canvas.update_face.update(*self._det_faces.update.last_updated_face)
@@ -238,13 +242,17 @@ class ActiveFrame():
         """ Check the number of displayed faces against the number of faces stored in the
         alignments data for the currently selected frame, and add or remove if appropriate. """
         alignment_faces = len(self._det_faces.current_faces[self.frame_index])
+        logger.trace("alignment_faces: %s, face_count: %s", alignment_faces, self.face_count)
         if alignment_faces > self.face_count:
+            logger.debug("Adding face")
             self._canvas.update_face.add(self._canvas.active_frame.frame_index)
             retval = True
         elif alignment_faces < self._canvas.active_frame.face_count:
+            logger.debug("Removing face")
             self._canvas.update_face.remove(*self._det_faces.update.last_updated_face)
             retval = True
         else:
+            logger.trace("Face count unchanged")
             retval = False
         logger.trace(retval)
         return retval
@@ -708,6 +716,7 @@ class FaceFilter():
         """
         if self._filter_type != "no_faces":
             return
+        logger.trace("Frame change callback for Faces Viewer")
         for image_id in self.image_ids:
             self._canvas.itemconfig(self._canvas.face_id_from_object(image_id), state="hidden")
         self._temporary_image_ids = []

@@ -376,7 +376,7 @@ class UpdateFace():
                         None) if self._canvas.optional_annotations["mask"] else None
         mask = mask if mask is None else mask.mask.squeeze()
         if mask is not None and mask.shape[0] != self._faces_cache.size:
-            logger.info("Resizing mask from %spx to %spx", mask.shape[0], self._faces_cache.size)
+            logger.trace("Resizing mask from %spx to %spx", mask.shape[0], self._faces_cache.size)
             mask = cv2.resize(mask, (self._faces_cache.size, self._faces_cache.size))
         return face, landmarks, mask
 
@@ -466,12 +466,15 @@ class UpdateFace():
         """
         frame_idx = self._canvas.frame_index_from_object(item_id)
         face_idx = self._canvas.find_withtag("image_{}".format(frame_idx)).index(item_id)
-        logger.debug("item_id: %s, frame_index: %s, face_index: %s", item_id, frame_idx, face_idx)
+        logger.trace("item_id: %s, frame_index: %s, face_index: %s", item_id, frame_idx, face_idx)
         self._det_faces.update.delete(frame_idx, face_idx)
-        self.remove(frame_idx, face_idx)
         if frame_idx == self._frames.tk_position.get():
+            # Let updater handle removing of face from canvas
             self._frames.tk_update.set(True)
             self._canvas.active_frame.reload_annotations()
+        else:
+            # Explicitly remove if not the active frame
+            self.remove(frame_idx, face_idx)
 
     def remove(self, frame_index, face_index):
         """ Remove a face and it's annotations from the :class:`~tools.manual.FacesViewer` canvas
@@ -485,7 +488,7 @@ class UpdateFace():
         face_index: int
             The index of the face within the given frame that is to have its objects removed
         """
-        logger.debug("Removing face for frame %s at index: %s", frame_index, face_index)
+        logger.trace("Removing face for frame %s at index: %s", frame_index, face_index)
         self._faces_cache.remove(frame_index, face_index)
         image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
         # Retrieve the position of the face in the current viewer prior to deletion
@@ -537,6 +540,7 @@ class UpdateFace():
         face_index: int
             The index of the face within the given frame that is to have its objects updated
         """
+        logger.trace("Updating face %s for frame %s", frame_index, face_index)
         tk_face = self._faces_cache.tk_faces[frame_index][face_index]
         face, landmarks, mask = self._get_aligned_face(frame_index, face_index)
         tk_face.update(face, landmarks, mask=mask)

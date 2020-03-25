@@ -272,8 +272,7 @@ class TKFace():
                 if str(err) == "Too early to create image":
                     # GUI has gone away. Probably quit during load
                     return None
-                # TODO Set to debug
-                logger.info("attempt: %s: %s", attempt + 1, str(err))
+                logger.debug("attempt: %s: %s", attempt + 1, str(err))
                 sleep(0.25)
         return tk_face
 
