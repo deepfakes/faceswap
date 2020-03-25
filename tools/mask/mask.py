@@ -41,7 +41,7 @@ class Mask():  # pylint:disable=too-few-public-methods
                                       threshold=arguments.threshold),
                             type=arguments.output_type,
                             full_frame=arguments.full_frame,
-                            suffix=self._get_output_suffix())
+                            suffix=self._get_output_suffix(arguments))
         self._counts = dict(face=0, skip=0, update=0)
 
         self._check_input(arguments.input)
@@ -248,8 +248,13 @@ class Mask():  # pylint:disable=too-few-public-methods
             logger.debug("Mask pre-exists for face: '%s' - %s", frame, idx)
         return retval
 
-    def _get_output_suffix(self):
-        """ The filename suffix, based on selected output options
+    def _get_output_suffix(self, arguments):
+        """ The filename suffix, based on selected output options.
+
+        Parameters
+        ----------
+        arguments: :class:`argparse.Namespace`
+            The command line arguments for the mask tool
 
         Returns
         -------
@@ -257,8 +262,8 @@ class Mask():  # pylint:disable=too-few-public-methods
             The suffix to be appended to the output filename
         """
         sfx = "{}_mask_preview_".format(self._mask_type)
-        sfx += "face_" if not self._output["full_frame"] or self._input_is_faces else "frame_"
-        sfx += "{}.png".format(self._output["type"])
+        sfx += "face_" if not arguments.full_frame or self._input_is_faces else "frame_"
+        sfx += "{}.png".format(arguments.output_type)
         return sfx
 
     @staticmethod
