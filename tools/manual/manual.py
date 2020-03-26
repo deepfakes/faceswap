@@ -344,8 +344,8 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         progress_bar = StatusBar(parent, hide_status=True)
         self._faces_frame = ttk.Frame(self)
+        self._faces_frame.pack_propagate(0)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
         self._canvas = FacesViewer(self._faces_frame,
                                    self._actions_frame._tk_vars,
                                    frames,
