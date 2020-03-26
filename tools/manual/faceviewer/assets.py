@@ -357,14 +357,13 @@ class UpdateFace():
 
         Returns
         -------
-        :class:`tkinter.PhotoImage`
-            The masked or unmasked face formatted for canvas placement
-        dict
-            A dictionary containing the keys `landmarks` holding a `list` of :class:`numpy.ndarray`
-            objects and `is_poly` containing a `list` of `bool` types corresponding to the
-            `landmarks` indicating whether a line or polygon should be created for each mesh
-            annotation
-         """
+        face: :class:`numpy.ndarray`
+            The aligned face
+        landmarks: :class:`numpy.ndarray`
+            The aligned 68 point face landmarks for this face
+        mask: :class:`numpy.ndarray` or ``None``
+            The mask. Returns ``None`` if no mask is available
+        """
         logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
         face, landmarks, mask = self._det_faces.get_face_at_index(frame_index,
                                                                   face_index,

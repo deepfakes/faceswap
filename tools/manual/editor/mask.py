@@ -25,6 +25,7 @@ class Mask(Editor):
     """
     def __init__(self, canvas, detected_faces, frames):
         self._meta = []
+        self._tk_faces = []
         self._internal_size = 512
         control_text = ("Mask Editor\nEdit the mask."
                         "\n - NB: For Landmark based masks (e.g. components/extended) it is "
@@ -272,7 +273,13 @@ class Mask(Editor):
         else:
             display_image = self._update_mask_image_full_frame(mask, rgb_color, face_index)
             top_left = self._meta["top_left"][face_index]
-        self._update_meta("image", display_image, face_index)
+
+        if len(self._tk_faces) < face_index + 1:
+            logger.debug("Adding new Photo Image for face index: %s", face_index)
+            self._tk_faces.append(display_image)
+        else:
+            self._tk_faces[face_index] = display_image
+
         self._object_tracker(key,
                              "image",
                              face_index,
@@ -299,8 +306,8 @@ class Mask(Editor):
                           tuple(reversed(self._zoomed_dims)),
                           interpolation=cv2.INTER_CUBIC)[..., None]
         rgba = np.concatenate((rgb, mask), axis=2)
-        display = ImageTk.PhotoImage(Image.fromarray(rgba))
-        return display
+        tk_face = ImageTk.PhotoImage(Image.fromarray(rgba))
+        return tk_face
 
     def _update_mask_image_full_frame(self, mask, rgb_color, face_index):
         """ Update the mask image when in full frame view.
@@ -331,8 +338,8 @@ class Mask(Editor):
                               borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]][..., None]
         rgb = np.tile(rgb_color, mask.shape).astype("uint8")
         rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
-        display = ImageTk.PhotoImage(Image.fromarray(rgba))
-        return display
+        tk_face = ImageTk.PhotoImage(Image.fromarray(rgba))
+        return tk_face
 
     def _update_roi_box(self, mask, face_index, color):
         """ Update the region of interest box for the current mask.
