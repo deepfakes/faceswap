@@ -477,12 +477,12 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for action in ("copy_prev", "copy_next", "reload"):
             if action == "reload":
                 icon = "reload3"
-                cmd = lambda f=tk_position.get(): self._det_faces.update.revert_to_saved(f)
+                cmd = lambda f=tk_position: self._det_faces.update.revert_to_saved(f.get())
                 helptext = "Revert to saved Alignments ({})".format(lookup[action][1])
             else:
                 icon = action
                 direction = action.replace("copy_", "")
-                cmd = lambda d=direction: self._det_faces.update.copy_alignments(d)
+                cmd = lambda f=tk_position, d=direction: self._det_faces.update.copy(f.get(), d)
                 helptext = "Copy {} Alignments ({})".format(*lookup[action])
             state = ["!disabled"] if action == "copy_next" else ["disabled"]
             button = ttk.Button(frame,
