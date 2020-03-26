@@ -295,7 +295,9 @@ class Mask(Editor):
             The zoomed mask image formatted for display
         """
         rgb = np.tile(rgb_color, self._zoomed_dims + (1, )).astype("uint8")
-        mask = cv2.resize(mask, self._zoomed_dims, interpolation=cv2.INTER_CUBIC)[..., None]
+        mask = cv2.resize(mask,
+                          tuple(reversed(self._zoomed_dims)),
+                          interpolation=cv2.INTER_CUBIC)[..., None]
         rgba = np.concatenate((rgb, mask), axis=2)
         display = ImageTk.PhotoImage(Image.fromarray(rgba))
         return display

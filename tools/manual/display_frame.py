@@ -69,8 +69,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return dict(
             play="Play/Pause (SPACE)",
             beginning="Go to First Frame (HOME)",
-            prev="Go to Previous Frame (LEFT)",
-            next="Go to Next Frame (RIGHT)",
+            prev="Go to Previous Frame (Z)",
+            next="Go to Next Frame (X)",
             end="Go to Last Frame (END)",
             save="Save the Alignments file (Ctrl+S)",
             mode="Filter Frames to only those Containing the Selected Item (F)")

@@ -35,7 +35,9 @@ class HoverBox():  # pylint:disable=too-few-public-methods
                                                   width=2,
                                                   state="hidden",
                                                   fill="#0000ff",
-                                                  stipple="gray12")
+                                                  stipple="gray12",
+                                                  tags="hover_box")
+        self._current_frame_index = None
         self._canvas.bind("<Leave>", lambda e: self._clear())
         self._canvas.bind("<Motion>", self.on_hover)
         self._canvas.bind("<ButtonPress-1>", lambda e: self._select_frame())
@@ -65,13 +67,16 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         if item_id is None or any(pnt < 0 for pnt in pnts):
             self._clear()
             self._canvas.config(cursor="")
+            self._current_frame_index = None
             return
         if self._canvas.frame_index_from_object(item_id) == self._frames.tk_position.get():
             self._clear()
             self._canvas.config(cursor="")
+            self._current_frame_index = None
             return
         self._canvas.config(cursor="hand1")
         self._highlight(item_id)
+        self._current_frame_index = self._canvas.frame_index_from_object(item_id)
 
     def _clear(self):
         """ Hide the hover box when the mouse is not over a face. """
@@ -96,16 +101,11 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         """ Select the face and the subsequent frame (in the editor view) when a face is clicked
         on in :class:`~tools.manual.FacesViewer`.
         """
-        item_id = next((idx for idx in self._canvas.find_withtag("current")), None)
-        logger.trace("item_id: %s", item_id)
-        if item_id is None:
-            return
-        frame_id = self._canvas.frame_index_from_object(item_id)
-        logger.trace("frame_id: %s", frame_id)
+        frame_id = self._current_frame_index
         if frame_id is None or frame_id == self._frames.tk_position.get():
             return
         transport_id = self._transport_index_from_frame_index(frame_id)
-        logger.trace("transport_id: %s", transport_id)
+        logger.trace("frame_index: %s, transport_id: %s", frame_id, transport_id)
         if transport_id is None:
             return
         self._frames.stop_playback()

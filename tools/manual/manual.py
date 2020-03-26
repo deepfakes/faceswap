@@ -184,15 +184,14 @@ class Manual(tk.Tk):
             * [] - decrease / increase brush size
             * B, D, E, Z - Optional Actions (Brush, Drag, Erase, Zoom)
         """
+        # Alt modifier appears to be broken in Windows so don't use it.
         modifiers = {0x0001: 'shift',
-                     0x0004: 'ctrl',
-                     0x0008: 'alt',
-                     0x0080: 'alt'}
+                     0x0004: 'ctrl'}
 
         tk_pos = self._frames.tk_position
         bindings = {
-            "left": self._display.decrement_frame,
-            "right": self._display.increment_frame,
+            "z": self._display.decrement_frame,
+            "x": self._display.increment_frame,
             "space": self._display.handle_play_button,
             "home": self._display.goto_first_frame,
             "end": self._display.goto_last_frame,
