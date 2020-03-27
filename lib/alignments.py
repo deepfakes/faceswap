@@ -216,6 +216,11 @@ class Alignments():
 
     def save_video_meta_data(self, pts_time, keyframes):
         """ Save video meta data to the alignments file.
+
+        If the alignments file does not have an entry for every frame (e.g. if Extract Every N
+        was used) then the frame is added to the alignments file with no faces, so that they video
+        meta data can be stored.
+
         Parameters
         ----------
         pts_time: list
@@ -224,11 +229,17 @@ class Alignments():
         keyframes: list
             A list of frame indices corresponding to the key frames in the input video
         """
+        sample_filename = next(fname for fname in self.data)
+        basename = sample_filename[:sample_filename.rfind("_")]
+        logger.info("sample filename: %s, base filename: %s", sample_filename, basename)
         logger.info("Saving video meta information to Alignments file")
-        for idx, key in enumerate(sorted(self.data)):
-            meta = dict(pts_time=pts_time[idx],
-                        keyframe=idx in keyframes)
-            self.data[key]["video_meta"] = meta
+        for idx, pts in enumerate(pts_time):
+            meta = dict(pts_time=pts, keyframe=idx in keyframes)
+            key = "{}_{:06d}.png".format(basename, idx + 1)
+            if key not in self.data:
+                self.data[key] = dict(video_meta=meta, faces=[])
+            else:
+                self.data[key]["video_meta"] = meta
         self.save()
 
     # << VALIDATION >> #
