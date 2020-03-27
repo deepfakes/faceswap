@@ -203,7 +203,7 @@ class DetectedFaces():
         face = self.current_faces[frame_index][face_index]
         resize = self._zoomed_size != size
         logger.trace("Requires resize: %s", resize)
-        # TODO self._frames is not currently referenced.
+        # TODO Change when removed frames requirement
         face.load_aligned(self._frames.current_frame, size=self._zoomed_size, force=True)
 
         retval = cv2.resize(face.aligned_face,

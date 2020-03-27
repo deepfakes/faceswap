@@ -37,6 +37,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self._frames = frames
         self._det_faces = detected_faces
+        self._tk_navigation_mode = None
 
         self._actions_frame = ActionsFrame(self, self._frames, self._det_faces)
         main_frame = ttk.Frame(self)
@@ -133,6 +134,17 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ list: The navigation modes combo box values """
         return ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"]
 
+    @property
+    def _active_navigation_mode(self):
+        """ ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"]: The currently selected
+        navigation mode filter """
+        return self._tk_navigation_mode.get()
+
+    @property
+    def _current_nav_frame_count(self):
+        """ int: The current frame count for the transport slider """
+        return self._nav["scale"].cget("to") + 1
+
     def _add_nav(self):
         """ Add the slider to navigate through frames """
         var = self._frames.tk_transport_position
@@ -205,15 +217,15 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_navigation_mode_combo(self, frame):
         """ Add the navigation mode combo box to the transport frame """
-        tk_var = self._frames.tk_navigation_mode
-        tk_var.set("All Frames")
-        tk_var.trace("w", self._nav_scale_callback)
+        self._tk_navigation_mode = self._frames.tk_navigation_mode
+        self._tk_navigation_mode.set("All Frames")
+        self._tk_navigation_mode.trace("w", self._nav_scale_callback)
         nav_frame = ttk.Frame(frame)
         lbl = ttk.Label(nav_frame, text="Filter:")
         lbl.pack(side=tk.LEFT, padx=(0, 5))
         combo = ttk.Combobox(
             nav_frame,
-            textvariable=tk_var,
+            textvariable=self._tk_navigation_mode,
             state="readonly",
             values=self._navigation_modes)
         combo.pack(side=tk.RIGHT)
@@ -226,18 +238,28 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._frames.tk_navigation_mode.set(self._navigation_modes[idx])
 
     def _nav_scale_callback(self, *args, reset_progress=True):  # pylint:disable=unused-argument
-        """ Adjust transport slider scale for different filters """
-        self._frames.stop_playback()
-        frame_count = self._frames_count
-        if self._nav["scale"].cget("to") == frame_count - 1:
-            return
-        max_frame = frame_count if frame_count == 0 else frame_count - 1
+        """ Adjust transport slider scale for different filters.
+
+        Returns
+        -------
+        bool
+            ``True`` if the navigation scale has been updated otherwise ``False``
+        """
+        if reset_progress:
+            self._frames.stop_playback()
+        if self._current_nav_frame_count == self._frames_count:
+            logger.trace("Filtered count has not changed. Returning")
+            return False
+        max_frame = max(0, self._frames_count - 1)
+        logger.debug("Filtered frame count has changed. Updating from %s to %s",
+                     self._current_nav_frame_count, self._frames_count)
         self._nav["scale"].config(to=max_frame)
         self._nav["label"].config(text="/{}".format(max_frame))
         state = "disabled" if max_frame == 0 else "normal"
         self._nav["entry"].config(state=state)
         if reset_progress:
             self._frames.tk_transport_position.set(0)
+        return True
 
     def handle_play_button(self):
         """ Handle the play button.
@@ -284,46 +306,63 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         state = ["!disabled"] if self._det_faces.tk_unsaved.get() else ["disabled"]
         self._buttons["save"].state(state)
 
+    # TODO Annotations stay in the faces viewer when incrementing/decrementing a frame
+    # which no longer meets criteria
+    # TODO Hide the frame image and annotations if no frames meet the criteria any more.
+    # NB: This will be easier to do if image is subclassed as currently hidden image indicates
+    # zoom mode
+
     def increment_frame(self, frame_count=None, is_playing=False):
         """ Update The frame navigation position to the next frame based on filter. """
         if not is_playing:
             self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
-        # TODO. This old way was buggy and the storage of face_count_modified has been
-        # removed in refactor. Find a solution for updating the navigation scale on a face count
-        # change
-#        if self._alignments.face_count_modified:
-#            # TODO This always freezes a frame when face added/removed. Do better logic
-#            # for filtered views
-#            self._nav_scale_callback(reset_progress=False)
-#            self._alignments.reset_face_count_modified()
-#            position -= 1
-        # TODO This is no good. Edited is for every edit and should be cleared then, not for every
-        # frame. Mechanism to check count of saved vs count of updated?
-        # if self._det_faces.tk_edited.get():
-        #    self._nav_scale_callback(reset_progress=False)
-        #    position -= 1
-        #    self._det_faces.tk_edited.set(False)
-
+        face_count_change = self._check_face_count_change()
+        if face_count_change:
+            position -= 1
         frame_count = self._frames_count if frame_count is None else frame_count
-        if position == frame_count - 1 or frame_count == 0:
-            logger.trace("End of stream. Not incrementing")
+        if not face_count_change and (frame_count == 0 or position == frame_count - 1):
+            logger.debug("End of Stream. Not incrementing")
             self._frames.stop_playback()
             return
-        self._frames.tk_transport_position.set(position + 1)
+        self._frames.tk_transport_position.set(min(position + 1, max(0, frame_count - 1)))
 
     def decrement_frame(self):
         """ Update The frame navigation position to the previous frame based on filter. """
         self._frames.stop_playback()
         position = self._frames.tk_transport_position.get()
-        # TODO See previous note
-#        if self._alignments.face_count_modified:
-#            self._nav_scale_callback(reset_progress=False)
-#            self._alignments.reset_face_count_modified()
-        if position == 0:
-            logger.trace("Beginning of stream. Not decrementing")
+        face_count_change = self._check_face_count_change()
+        if face_count_change:
+            position += 1
+        if not face_count_change and (self._frames_count == 0 or position == 0):
+            logger.debug("End of Stream. Not incrementing")
             return
-        self._frames.tk_transport_position.set(position - 1)
+        self._frames.tk_transport_position.set(min(max(0, self._frames_count - 1),
+                                                   max(0, position - 1)))
+
+    def _check_face_count_change(self):
+        """ Check whether the face count for the current filter has changed, and update the
+        transport scale appropriately.
+
+        Perform additional check on whether the current frame still meets the selected navigation
+        mode filter criteria.
+
+        Returns
+        -------
+        bool
+            ``True`` if the currently active frame no longer meets the filter criteria otherwise
+            ``False``
+        """
+        nav_mode = self._active_navigation_mode
+        if nav_mode not in ("No Faces", "Multiple Faces"):
+            return False
+        if not self._nav_scale_callback(reset_progress=False):
+            return False
+        face_count = len(self._det_faces.current_faces[self._frames.tk_position.get()])
+        if (nav_mode == "No Faces" and face_count != 0) or (nav_mode == "Multiple Faces"
+                                                            and face_count < 2):
+            return True
+        return False
 
     def goto_first_frame(self):
         """ Go to the first frame that meets the filter criteria. """
