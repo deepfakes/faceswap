@@ -814,11 +814,15 @@ class ControlBuilder():
         logger.debug("Add slider control to Options Frame: (widget: '%s', dtype: %s, "
                      "rounding: %s, min_max: %s)", self.option.name, self.option.dtype,
                      self.option.rounding, self.option.min_max)
+        validate = self.slider_check_int if self.option.dtype == int else self.slider_check_float
+        vcmd = (self.frame.register(validate))
         tbox = ttk.Entry(self.frame,
                          width=8,
                          textvariable=self.option.tk_var,
                          justify=tk.RIGHT,
-                         font=get_config().default_font)
+                         font=get_config().default_font,
+                         validate="all",
+                         validatecommand=(vcmd, "%P"))
         tbox.pack(padx=(0, 5), side=tk.RIGHT)
         cmd = partial(set_slider_rounding,
                       var=self.option.tk_var,
@@ -833,6 +837,34 @@ class ControlBuilder():
         ctl["to"] = self.option.min_max[1]
         logger.debug("Added slider control to Options Frame: %s", self.option.name)
         return ctl
+
+    @staticmethod
+    def slider_check_int(value):
+        """ Validate a slider's text entry box for integer values.
+
+        Parameters
+        ----------
+        value: str
+            The slider text entry value to validate
+        """
+        if value.isdigit() or value == "":
+            return True
+        return False
+
+    @staticmethod
+    def slider_check_float(value):
+        """ Validate a slider's text entry box for float values.
+        Parameters
+        ----------
+        value: str
+            The slider text entry value to validate
+        """
+        if value:
+            try:
+                float(value)
+            except ValueError:
+                return False
+        return True
 
     def control_to_optionsframe(self):
         """ Standard non-check buttons sit in the main options frame """
