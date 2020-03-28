@@ -21,8 +21,8 @@ from .detected_faces import DetectedFaces
 from .faceviewer.assets import FacesViewerLoader, ObjectCreator, UpdateFace
 from .faceviewer.cache import FaceCache
 from .faceviewer.display import ActiveFrame, ContextMenu, FaceFilter, HoverBox
-from .display_frame import DisplayFrame
-from .media import FrameNavigation
+from .frameviewer.display_frame import DisplayFrame
+from .frameviewer.media import FrameNavigation
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

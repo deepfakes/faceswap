@@ -858,7 +858,7 @@ class BackgroundImage():
         self._is_hidden = False
         self._image = self._canvas.create_image(self._frames.display_dims[0] / 2,
                                                 self._frames.display_dims[1] / 2,
-                                                image=self._frames.current_display_frame,
+                                                image=self._frames.tk_image,
                                                 anchor=tk.CENTER,
                                                 tags="main_image")
 

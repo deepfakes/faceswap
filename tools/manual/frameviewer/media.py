@@ -31,7 +31,7 @@ class FrameNavigation():
         self._scaling = scaling_factor
         self._tk_vars = self._set_tk_vars()
         self._current_frame = None
-        self._current_display_frame = None
+        self._tk_image = None
         self._display_dims = (896, 504)
         self._init_thread = self._background_init_frames(frames_location)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -95,10 +95,10 @@ class FrameNavigation():
         return self._current_frame.shape[:2]
 
     @property
-    def current_display_frame(self):
+    def tk_image(self):
         """ :class:`ImageTk.PhotoImage`: The currently loaded frame, formatted and sized
         for display. """
-        return self._current_display_frame
+        return self._tk_image
 
     @property
     def display_dims(self):
@@ -193,10 +193,10 @@ class FrameNavigation():
         display = cv2.resize(self._current_frame,
                              self.current_meta_data["display_dims"],
                              interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
-        if self._current_display_frame is None:
-            self._current_display_frame = ImageTk.PhotoImage(Image.fromarray(display))
+        if self._tk_image is None:
+            self._tk_image = ImageTk.PhotoImage(Image.fromarray(display))
         else:
-            self._current_display_frame.paste(Image.fromarray(display))
+            self._tk_image.paste(Image.fromarray(display))
         self._current_idx = position
         self.tk_update.set(True)
 
