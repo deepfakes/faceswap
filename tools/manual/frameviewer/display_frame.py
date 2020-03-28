@@ -869,7 +869,8 @@ class BackgroundImage():
         self._frames = canvas._frames
         self._det_faces = canvas._det_faces
         self._current_view_mode = "frame"
-        self._zoom_padding = self._get_zoomed_padding()
+        zoom_size = (min(self._frames.display_dims), min(self._frames.display_dims))
+        self._zoom_padding = self._get_padding(zoom_size)
         placeholder = np.ones((*reversed(self._frames.display_dims), 3), dtype="uint8")
         self._tk_frame = ImageTk.PhotoImage(Image.fromarray(placeholder))
         self._tk_face = ImageTk.PhotoImage(Image.fromarray(placeholder))
@@ -884,22 +885,21 @@ class BackgroundImage():
         """ bool: ``True`` if the current display is zoomed on a face otherwise ``False``. """
         return self._current_view_mode == "face"
 
-    def _get_zoomed_padding(self):
-        """ Obtain the Left, Top, Right, Bottom padding required to place the square face in the
-        full frame.
+    def _get_padding(self, size):
+        """ Obtain the Left, Top, Right, Bottom padding required to place the square face or frame
+        in to the Photo Image
 
         Returns
         -------
         tuple
             The (Left, Top, Right, Bottom) padding to apply to the face image in pixels
         """
-        size = min(self._frames.display_dims)
-        pad_lt = ((self._frames.display_dims[1] - size) // 2,
-                  (self._frames.display_dims[0] - size) // 2)
+        pad_lt = ((self._frames.display_dims[1] - size[0]) // 2,
+                  (self._frames.display_dims[0] - size[1]) // 2)
         padding = (pad_lt[0],
-                   self._frames.display_dims[1] - size - pad_lt[0],
+                   self._frames.display_dims[1] - size[0] - pad_lt[0],
                    pad_lt[1],
-                   self._frames.display_dims[0] - size - pad_lt[1])
+                   self._frames.display_dims[0] - size[1] - pad_lt[1])
         logger.debug("Frame dimensions: %s, size: %s, padding: %s",
                      self._frames.display_dims, size, padding)
         return padding
@@ -952,5 +952,8 @@ class BackgroundImage():
         img = cv2.resize(self._frames.current_frame,
                          self._frames.current_meta_data["display_dims"],
                          interpolation=self._frames.current_meta_data["interpolation"])[..., 2::-1]
+        padding = self._get_padding(img.shape[:2])
+        if any(padding):
+            img = cv2.copyMakeBorder(img, *padding, cv2.BORDER_CONSTANT)
         logger.trace("final shape: %s", img.shape)
         self._tk_frame.paste(Image.fromarray(img))
