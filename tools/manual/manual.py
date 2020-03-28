@@ -182,7 +182,7 @@ class Manual(tk.Tk):
         The following keys are reserved for the :mod:`tools.lib_manual.editor` classes
             * Delete - Used for deleting faces
             * [] - decrease / increase brush size
-            * B, D, E, Z - Optional Actions (Brush, Drag, Erase, Zoom)
+            * B, D, E, M - Optional Actions (Brush, Drag, Erase, Zoom)
         """
         # Alt modifier appears to be broken in Windows so don't use it.
         modifiers = {0x0001: 'shift',

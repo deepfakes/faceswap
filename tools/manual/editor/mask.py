@@ -68,7 +68,7 @@ class Mask(Editor):
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
         and Zoom. """
-        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
+        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="M")
         self._add_action("draw", "draw", "Draw Tool", hotkey="D")
         self._add_action("erase", "erase", "Erase Tool", hotkey="E")
 

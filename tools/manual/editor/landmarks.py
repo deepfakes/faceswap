@@ -39,7 +39,7 @@ class Landmarks(Editor):
 
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Drag and Zoom. """
-        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="Z")
+        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="M")
         self._add_action("drag", "move", "Drag Tool", hotkey="D")
         self._add_edit_mode_callback()
 
