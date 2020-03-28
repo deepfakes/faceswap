@@ -33,7 +33,7 @@ class AlignmentData(Alignments):
         folder, filename = self.check_file_exists(alignments_file)
         if filename.lower() == "dfl":
             self._serializer = get_serializer("compressed")
-            self.file = "{}.{}".format(filename.lower(), self._serializer.file_extension)
+            self._file = "{}.{}".format(filename.lower(), self._serializer.file_extension)
             return
         super().__init__(folder, filename=filename)
         logger.verbose("%s items loaded", self.frames_count)

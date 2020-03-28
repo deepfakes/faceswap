@@ -2,9 +2,12 @@
 """ Utilities for working with images and videos """
 
 import logging
+import re
 import subprocess
 import os
+import sys
 
+from bisect import bisect
 from concurrent import futures
 from hashlib import sha1
 
@@ -26,6 +29,197 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 # <<< IMAGE IO >>> #
+
+class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
+    """ Monkey patch imageio ffmpeg to use keyframes whilst seeking """
+    def __init__(self, format, request):
+        super().__init__(format, request)
+        self._frame_pts = None
+        self._keyframes = None
+
+    def get_frame_info(self, frame_pts=None, keyframes=None):
+        """ Store the source video's keyframes in :attr:`_frame_info" for the current video for use
+        in :func:`initialize`.
+
+        Parameters
+        ----------
+        frame_pts: list, optional
+            A list corresponding to the video frame count of the pts_time per frame. If this and
+            `keyframes` are provided, then analyzing the video is skipped and the values from the
+            given lists are used. Default: ``None``
+        keyframes: list, optional
+            A list containing the frame numbers of each key frame. if this and `frame_pts` are
+            provided, then analyzing the video is skipped and the values from the given lists are
+            used. Default: ``None``
+        """
+        if frame_pts is not None and keyframes is not None:
+            logger.debug("Video meta information provided. Not analyzing video")
+            self._frame_pts = frame_pts
+            self._keyframes = keyframes
+            return len(frame_pts), dict(pts_time=self._frame_pts, keyframes=self._keyframes)
+
+        assert isinstance(self._filename, str), "Video path must be a string"
+        cmd = [im_ffm.get_ffmpeg_exe(),
+               "-hide_banner",
+               "-copyts",
+               "-i", self._filename,
+               "-vf", "showinfo",
+               "-start_number", "0",
+               "-an",
+               "-f", "null",
+               "-"]
+        logger.debug("FFMPEG Command: '%s'", " ".join(cmd))
+        process = subprocess.Popen(cmd,
+                                   stderr=subprocess.STDOUT,
+                                   stdout=subprocess.PIPE,
+                                   universal_newlines=True)
+        frame_pts = []
+        key_frames = []
+        last_update = 0
+        pbar = tqdm(desc="Analyzing Video",
+                    leave=False,
+                    total=int(self._meta["duration"]),
+                    unit="secs")
+        while True:
+            output = process.stdout.readline().strip()
+            if output == "" and process.poll() is not None:
+                break
+            if "iskey" not in output:
+                continue
+            logger.trace("Keyframe line: %s", output)
+            line = re.split(r"\s+|:\s*", output)
+            pts_time = float(line[line.index("pts_time") + 1])
+            frame_no = int(line[line.index("n") + 1])
+            frame_pts.append(pts_time)
+            if "iskey:1" in output:
+                key_frames.append(frame_no)
+
+            logger.trace("pts_time: %s, frame_no: %s", pts_time, frame_no)
+            if int(pts_time) == last_update:
+                # Floating points make TQDM display poorly, so only update on full
+                # second increments
+                continue
+            pbar.update(int(pts_time) - last_update)
+            last_update = int(pts_time)
+        pbar.close()
+        return_code = process.poll()
+        frame_count = len(frame_pts)
+        logger.debug("Return code: %s, frame_pts: %s, keyframes: %s, frame_count: %s",
+                     return_code, frame_pts, key_frames, frame_count)
+
+        self._frame_pts = frame_pts
+        self._keyframes = key_frames
+        return frame_count, dict(pts_time=self._frame_pts, keyframes=self._keyframes)
+
+    def _previous_keyframe_info(self, index=0):
+        """ Return the previous keyframe's pts_time and frame number """
+        prev_keyframe_idx = bisect(self._keyframes, index) - 1
+        prev_keyframe = self._keyframes[prev_keyframe_idx]
+        prev_pts_time = self._frame_pts[prev_keyframe]
+        logger.trace("keyframe pts_time: %s, keyframe: %s", prev_pts_time, prev_keyframe)
+        return prev_pts_time, prev_keyframe
+
+    def _initialize(self, index=0):
+        """ Replace ImageIO _initialize with a version that explictly uses keyframes.
+
+        Notes
+        -----
+        This introduces a minor change by seeking fast to the previous keyframe and then discarding
+        subsequent frames until the desired frame is reached. In testing, setting -ss flag either
+        prior to input, or both prior (fast) and after (slow) would not always bring back the
+        correct frame for all videos. Navigating to the previous keyframe then discarding frames
+        until the correct frame is reached appears to work well.
+        """
+        # pylint: disable-all
+        if self._read_gen is not None:
+            self._read_gen.close()
+
+        iargs = []
+        oargs = []
+        skip_frames = 0
+
+        # Create input args
+        iargs += self._arg_input_params
+        if self.request._video:
+            iargs += ["-f", CAM_FORMAT]  # noqa
+            if self._arg_pixelformat:
+                iargs += ["-pix_fmt", self._arg_pixelformat]
+            if self._arg_size:
+                iargs += ["-s", self._arg_size]
+        elif index > 0:  # re-initialize  / seek
+            # Note: only works if we initialized earlier, and now have meta. Some info here:
+            # https://trac.ffmpeg.org/wiki/Seeking
+            # There are two ways to seek, one before -i (input_params) and after (output_params).
+            # The former is fast, because it uses keyframes, the latter is slow but accurate.
+            # According to the article above, the fast method should also be accurate from ffmpeg
+            # version 2.1, however in version 4.1 our tests start failing again. Not sure why, but
+            # we can solve this by combining slow and fast.
+            # Further note: The old method would go back 10 seconds and then seek slow. This was
+            # still somewhat unresponsive and did not always land on the correct frame. This monkey
+            # patched version goes to the previous keyframe then discards frames until the correct
+            # frame is landed on.
+            if self._frame_pts is None:
+                self.get_frame_info()
+
+            keyframe_pts, keyframe = self._previous_keyframe_info(index)
+            seek_fast = keyframe_pts
+            skip_frames = index - keyframe
+
+            # We used to have this epsilon earlier, when we did not use
+            # the slow seek. I don't think we need it anymore.
+            # epsilon = -1 / self._meta["fps"] * 0.1
+            iargs += ["-ss", "%.06f" % (seek_fast)]
+
+        # Output args, for writing to pipe
+        if self._arg_size:
+            oargs += ["-s", self._arg_size]
+        if self.request.kwargs.get("fps", None):
+            fps = float(self.request.kwargs["fps"])
+            oargs += ["-r", "%.02f" % fps]
+        oargs += self._arg_output_params
+
+        # Get pixelformat and bytes per pixel
+        pix_fmt = self._pix_fmt
+        bpp = self._depth * self._bytes_per_channel
+
+        # Create generator
+        rf = self._ffmpeg_api.read_frames
+        self._read_gen = rf(
+            self._filename, pix_fmt, bpp, input_params=iargs, output_params=oargs
+        )
+
+        # Read meta data. This start the generator (and ffmpeg subprocess)
+        if self.request._video:
+            # With cameras, catch error and turn into IndexError
+            try:
+                meta = self._read_gen.__next__()
+            except IOError as err:
+                err_text = str(err)
+                if "darwin" in sys.platform:
+                    if "Unknown input format: 'avfoundation'" in err_text:
+                        err_text += (
+                            "Try installing FFMPEG using "
+                            "home brew to get a version with "
+                            "support for cameras."
+                        )
+                raise IndexError(
+                    "No camera at {}.\n\n{}".format(self.request._video, err_text)
+                )
+            else:
+                self._meta.update(meta)
+        elif index == 0:
+            self._meta.update(self._read_gen.__next__())
+        else:
+            frames_skipped = 0
+            while skip_frames != frames_skipped:
+                # Skip frames that are not the desired frame
+                _ = self._read_gen.__next__()
+                frames_skipped += 1
+            self._read_gen.__next__()  # we already have meta data
+
+
+imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader
+
 
 def read_image(filename, raise_error=False, with_hash=False):
     """ Read an image file from a file location.
@@ -330,7 +524,7 @@ def count_frames(filename, fast=False):
             logger.debug("frame line: %s", output)
             if not init_tqdm:
                 logger.debug("Initializing tqdm")
-                pbar = tqdm(desc="Counting Video Frames", leave=False, total=duration, unit="secs")
+                pbar = tqdm(desc="Analyzing Video", leave=False, total=duration, unit="secs")
                 init_tqdm = True
             time_idx = output.find("time=") + len("time=")
             frame_idx = output.find("frame=") + len("frame=")
@@ -401,7 +595,7 @@ class ImageIO():
             raise FaceswapError("Not all locations in the input list exist")
 
     def _set_thread(self):
-        """ Set the load/save thread """
+        """ Set the background thread for the load and save iterators and launch it. """
         logger.debug("Setting thread")
         if self._thread is not None and self._thread.is_alive():
             logger.debug("Thread pre-exists and is alive: %s", self._thread)
@@ -428,6 +622,7 @@ class ImageIO():
         logger.debug("Received Close")
         if self._thread is not None:
             self._thread.join()
+        self._thread = None
         logger.debug("Closed")
 
 
@@ -447,9 +642,6 @@ class ImagesLoader(ImageIO):
         list of image files.
     queue_size: int, optional
         The amount of images to hold in the internal buffer. Default: 8.
-    load_with_hash: bool, optional
-        Set to ``True`` to return the sha1 hash of the image along with the image.
-        Default: ``False``.
     fast_count: bool, optional
         When loading from video, the video needs to be parsed frame by frame to get an accurate
         count. This can be done quite quickly without guaranteed accuracy, or slower with
@@ -457,7 +649,11 @@ class ImagesLoader(ImageIO):
         but accurately. Default: ``True``.
     skip_list: list, optional
         Optional list of frame/image indices to not load. Any indices provided here will be skipped
-        when reading images from the given location. Default: ``None``
+        when executing the :func:`load` function from the given location. Default: ``None``
+    count: int, optional
+        If the number of images that the loader will encounter is already known, it can be passed
+        in here to skip the image counting step, which can save time at launch. Set to ``None`` if
+        the count is not already known. Default: ``None``
 
     Examples
     --------
@@ -466,28 +662,26 @@ class ImagesLoader(ImageIO):
     >>> loader = ImagesLoader('/path/to/video.mp4')
     >>> for filename, image in loader.load():
     >>>     <do processing>
-
-    Loading faces with their sha1 hash:
-
-    >>> loader = ImagesLoader('/path/to/faces/folder', load_with_hash=True)
-    >>> for filename, image, sha1_hash in loader.load():
-    >>>     <do processing>
     """
 
-    def __init__(self, path, queue_size=8, load_with_hash=False, fast_count=True, skip_list=None):
-        logger.debug("Initializing %s: (path: %s, queue_size: %s, load_with_hash: %s, "
-                     "fast_count: %s, skip_list: %s)", self.__class__.__name__, path, queue_size,
-                     load_with_hash, fast_count, skip_list)
+    def __init__(self,
+                 path,
+                 queue_size=8,
+                 fast_count=True,
+                 skip_list=None,
+                 count=None):
+        logger.debug("Initializing %s: (path: %s, queue_size: %s, fast_count: %s, skip_list: %s, "
+                     "count: %s)", self.__class__.__name__, path, queue_size, fast_count,
+                     skip_list, count)
 
-        args = (load_with_hash, )
-        super().__init__(path, queue_size=queue_size, args=args)
+        super().__init__(path, queue_size=queue_size)
         self._skip_list = set() if skip_list is None else set(skip_list)
-
         self._is_video = self._check_for_video()
+        self._fps = self._get_fps()
 
         self._count = None
         self._file_list = None
-        self._get_count_and_filelist(fast_count)
+        self._get_count_and_filelist(fast_count, count)
 
     @property
     def count(self):
@@ -508,6 +702,12 @@ class ImagesLoader(ImageIO):
         return self._is_video
 
     @property
+    def fps(self):
+        """ float: For an input folder of images, this will always return 25fps. If the input is a
+        video, then the fps of the video will be returned. """
+        return self._fps
+
+    @property
     def file_list(self):
         """ list: A full list of files in the source location. This includes any files that will
         ultimately be skipped if a :attr:`skip_list` has been provided. If the input is a video
@@ -520,7 +720,8 @@ class ImagesLoader(ImageIO):
         Parameters
         ----------
         skip_list: list
-            A list of indices corresponding to the frame indices that should be skipped
+            A list of indices corresponding to the frame indices that should be skipped by the
+            :func:`load` function.
         """
         logger.debug(skip_list)
         self._skip_list = set(skip_list)
@@ -547,7 +748,26 @@ class ImagesLoader(ImageIO):
         logger.debug("Input '%s' is_video: %s", self.location, retval)
         return retval
 
-    def _get_count_and_filelist(self, fast_count):
+    def _get_fps(self):
+        """ Get the Frames per Second.
+
+        If the input is a folder of images than 25.0 will be returned, as it is not possible to
+        calculate the fps just from frames alone. For video files the correct FPS will be returned.
+
+        Returns
+        -------
+        float: The Frames per Second of the input sources
+        """
+        if self._is_video:
+            reader = imageio.get_reader(self.location, "ffmpeg")
+            retval = reader.get_meta_data()["fps"]
+            reader.close()
+        else:
+            retval = 25.0
+        logger.debug(retval)
+        return retval
+
+    def _get_count_and_filelist(self, fast_count, count):
         """ Set the count of images to be processed and set the file list
 
             If the input is a video, a dummy file list is created for checking against an
@@ -560,16 +780,20 @@ class ImagesLoader(ImageIO):
             count. This can be done quite quickly without guaranteed accuracy, or slower with
             guaranteed accuracy. Set to ``True`` to count quickly, or ``False`` to count slower
             but accurately.
+        count: int
+            The number of images that the loader will encounter if already known, otherwise
+            ``None``
         """
         if self._is_video:
-            self._count = int(count_frames(self.location, fast=fast_count))
+            self._count = int(count_frames(self.location,
+                                           fast=fast_count)) if count is None else count
             self._file_list = [self._dummy_video_framename(i) for i in range(self.count)]
         else:
             if isinstance(self.location, (list, tuple)):
                 self._file_list = self.location
             else:
                 self._file_list = get_image_paths(self.location)
-            self._count = len(self.file_list)
+            self._count = len(self.file_list) if count is None else count
 
         logger.debug("count: %s", self.count)
         logger.trace("filelist: %s", self.file_list)
@@ -649,32 +873,24 @@ class ImagesLoader(ImageIO):
             The filename of the loaded image.
         image: numpy.ndarray
             The loaded image.
-        sha1_hash: str, optional
-            The sha1 hash of the loaded image. Only yielded if :class:`ImageIO` was
-            initialized with :attr:`load_with_hash` set to ``True`` and the :attr:`location`
-            is a folder of images.
         """
-        with_hash = self._args[0]
-        logger.debug("Loading images from folder: '%s'. with_hash: %s", self.location, with_hash)
+        logger.debug("Loading frames from folder: '%s'", self.location)
         for idx, filename in enumerate(self.file_list):
             if idx in self._skip_list:
                 logger.trace("Skipping frame %s due to skip list")
                 continue
-            image_read = read_image(filename, raise_error=False, with_hash=with_hash)
-            if with_hash:
-                retval = filename, *image_read
-            else:
-                retval = filename, image_read
+            image_read = read_image(filename, raise_error=False, with_hash=False)
+            retval = filename, image_read
             if retval[1] is None:
-                logger.debug("Image not loaded: '%s'", filename)
+                logger.warning("Frame not loaded: '%s'", filename)
                 continue
             yield retval
 
     def load(self):
         """ Generator for loading images from the given :attr:`location`
 
-        If :class:`ImageIO` was initialized with :attr:`load_with_hash` set to ``True`` then
-        the sha1 hash of the image is added as the final item in the output `tuple`.
+        If :class:`FacesLoader` is in use then the sha1 hash of the image is added as the final
+        item in the output `tuple`.
 
         Yields
         ------
@@ -682,10 +898,9 @@ class ImagesLoader(ImageIO):
             The filename of the loaded image.
         image: numpy.ndarray
             The loaded image.
-        sha1_hash: str, optional
-            The sha1 hash of the loaded image. Only yielded if :class:`ImageIO` was
-            initialized with :attr:`load_with_hash` set to ``True`` and the :attr:`location`
-            is a folder of images.
+        sha1_hash: str, (:class:`FacesLoader` only)
+            The sha1 hash of the loaded image. Only yielded if :class:`FacesLoader` is being
+            executed.
         """
         logger.debug("Initializing Load Generator")
         self._set_thread()
@@ -702,7 +917,129 @@ class ImagesLoader(ImageIO):
                                           for v in retval])
             yield retval
         logger.debug("Closing Load Generator")
-        self._thread.join()
+        self.close()
+
+
+class FacesLoader(ImagesLoader):
+    """ Loads faces from a faces folder along with the face's hash.
+
+    Examples
+    --------
+    Loading faces with their sha1 hash:
+
+    >>> loader = FacesLoader('/path/to/faces/folder')
+    >>> for filename, face, sha1_hash in loader.load():
+    >>>     <do processing>
+    """
+    def __init__(self, path, skip_list=None, count=None):
+        logger.debug("Initializing %s: (path: %s, count: %s)", self.__class__.__name__,
+                     path, count)
+        super().__init__(path, queue_size=8, skip_list=skip_list, count=count)
+
+    def _from_folder(self):
+        """ Generator for loading images from a folder
+        Faces will only ever be loaded from a folder, so this is the only function requiring
+        an override
+
+        Yields
+        ------
+        filename: str
+            The filename of the loaded image.
+        image: numpy.ndarray
+            The loaded image.
+        sha1_hash: str
+            The sha1 hash of the loaded image.
+        """
+        logger.debug("Loading images from folder: '%s'", self.location)
+        for idx, filename in enumerate(self.file_list):
+            if idx in self._skip_list:
+                logger.trace("Skipping face %s due to skip list")
+                continue
+            image_read = read_image(filename, raise_error=False, with_hash=True)
+            retval = filename, *image_read
+            if retval[1] is None:
+                logger.warning("Face not loaded: '%s'", filename)
+                continue
+            yield retval
+
+
+class SingleFrameLoader(ImagesLoader):
+    """ Allows direct access to a frame by filename or frame index.
+
+    As we are interested in instant access to frames, there is no requirement to process in a
+    background thread, as either way we need to wait for the frame to load.
+
+    Parameters
+    ----------
+    video_meta_data: dict, optional
+        Existing video meta information containing the pts_time and iskey flags for the given
+        video. Used in conjunction with single_frame_reader for faster seeks. Providing this means
+        that the video does not need to be scanned again. Set to ``None`` if the video is to be
+        scanned. Default: ``None``
+     """
+    def __init__(self, path, video_meta_data=None):
+        logger.debug("Initializing %s: (path: %s, video_meta_data: %s)",
+                     self.__class__.__name__, path, video_meta_data)
+        self._video_meta_data = dict() if video_meta_data is None else video_meta_data
+        self._reader = None
+        super().__init__(path, queue_size=1, fast_count=False)
+
+    @property
+    def video_meta_data(self):
+        """ dict: For videos contains the keys `frame_pts` holding a list of time stamps for each
+        frame and `keyframes` holding the frame index of each key frame.
+
+        Notes
+        -----
+        Only populated if the input is a video and single frame reader is being used, otherwise
+        returns ``None``.
+        """
+        return self._video_meta_data
+
+    def _get_count_and_filelist(self, fast_count, count):
+        if self._is_video:
+            self._reader = imageio.get_reader(self.location, "ffmpeg")
+            count, video_meta_data = self._reader.get_frame_info(
+                frame_pts=self._video_meta_data.get("pts_time", None),
+                keyframes=self._video_meta_data.get("keyframes", None))
+            self._video_meta_data = video_meta_data
+        super()._get_count_and_filelist(fast_count, count)
+
+    def image_from_index(self, index):
+        """ Return a single image from :attr:`file_list` for the given index.
+
+        Parameters
+        ----------
+        index: int
+            The index number (frame number) of the frame to retrieve. NB: The first frame is
+            index `0`
+
+        Returns
+        -------
+        filename: str
+            The filename of the returned image
+        image: :class:`numpy.ndarray`
+            The image for the given index
+
+        Notes
+        -----
+        Retrieving frames from video files can be slow as the whole video file needs to be
+        iterated to retrieve the requested frame. If a frame has already been retrieved, then
+        retrieving frames of a higher index will be quicker than retrieving frames of a lower
+        index, as iteration needs to start from the beginning again when navigating backwards.
+
+        We do not use a background thread for this task, as it is assumed that requesting an image
+        by index will be done when required.
+        """
+        if self.is_video:
+            image = self._reader.get_data(index)[..., ::-1]
+            filename = self._dummy_video_framename(index)
+        else:
+            filename = self.file_list[index]
+            image = read_image(filename, raise_error=True)
+            filename = os.path.basename(filename)
+        logger.trace("index: %s, filename: %s image shape: %s", index, filename, image.shape)
+        return filename, image
 
 
 class ImagesSaver(ImageIO):

@@ -56,10 +56,7 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         """
         button = "<Button-2>" if platform.system() == "Darwin" else "<Button-3>"
         logger.debug("Binding '%s' to '%s'", button, self._widget.winfo_class())
-        scaling_factor = get_config().scaling_factor if get_config() is not None else 1.0
-        x_offset = int(34 * scaling_factor)
-        self._widget.bind(button,
-                          lambda event: self.tk_popup(event.x_root + x_offset, event.y_root, 0))
+        self._widget.bind(button, lambda event: self.tk_popup(event.x_root, event.y_root))
 
     def _select_all(self):
         """ Select all for Text or Entry widgets """
@@ -70,6 +67,52 @@ class ContextMenu(tk.Menu):  # pylint: disable=too-many-ancestors
         else:
             self._widget.focus_force()
             self._widget.select_range(0, tk.END)
+
+
+class RightClickMenu(tk.Menu):  # pylint: disable=too-many-ancestors
+    """ A Pop up menu that can be bound to a right click mouse event to bring up a context menu
+
+    Parameters
+    ----------
+    labels: list
+        A list of label titles that will appear in the right click menu
+    actions: list
+        A list of python functions that are called when the corresponding label is clicked on
+    hotkeys: list, optional
+        The hotkeys corresponding to the labels. If using hotkeys, then there must be an entry in
+        the list for every label even if they don't all use hotkeys. Labels without a hotkey can be
+        an empty string or ``None``. Passing ``None`` instead of a list means that no actions will
+        be given hotkeys. NB: The hotkey is not bound by this class, that needs to be done in code.
+        Giving hotkeys here means that they will be displayed in the menu though. Default: ``None``
+    """
+    # TODO This should probably be merged with Context Menu
+    def __init__(self, labels, actions, hotkeys=None):
+        logger.debug("Initializing %s: (labels: %s, actions: %s)", self.__class__.__name__, labels,
+                     actions)
+        super().__init__(tearoff=0)
+        self._labels = labels
+        self._actions = actions
+        self._hotkeys = hotkeys
+        self._create_menu()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _create_menu(self):
+        """ Create the menu based on :attr:`_labels` and :attr:`_actions`. """
+        for idx, (label, action) in enumerate(zip(self._labels, self._actions)):
+            kwargs = dict(label=label, command=action)
+            if isinstance(self._hotkeys, (list, tuple)) and self._hotkeys[idx]:
+                kwargs["accelerator"] = self._hotkeys[idx]
+            self.add_command(**kwargs)
+
+    def popup(self, event):
+        """ Pop up the right click menu.
+
+        Parameters
+        ----------
+        event: class:`tkinter.Event`
+            The tkinter mouse event calling this popup
+        """
+        self.tk_popup(event.x_root, event.y_root)
 
 
 class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
@@ -367,30 +410,48 @@ class _OriginalCommand:
 
 
 class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
-    """ Status Bar for displaying the Status Message and  Progress Bar at the
-    bottom of the GUI. """
+    """ Status Bar for displaying the Status Message and  Progress Bar at the bottom of the GUI.
 
-    def __init__(self, parent):
+    Parameters
+    ----------
+    parent: tkinter object
+        The parent tkinter widget that will hold the status bar
+    hide_status: bool, optional
+        ``True`` to hide the status message that appears at the far left hand side of the status
+        frame otherwise ``False``. Default: ``False``
+    """
+
+    def __init__(self, parent, hide_status=False):
         ttk.Frame.__init__(self, parent)
         self.pack(side=tk.BOTTOM, padx=10, pady=2, fill=tk.X, expand=False)
 
-        self._status_message = tk.StringVar()
+        self._message = tk.StringVar()
         self._pbar_message = tk.StringVar()
         self._pbar_position = tk.IntVar()
 
-        self._status_message.set("Ready")
+        self._message.set("Ready")
 
-        self._status()
+        self._status(hide_status)
         self._pbar = self._progress_bar()
 
     @property
-    def status_message(self):
+    def message(self):
         """:class:`tkinter.StringVar`: The variable to hold the status bar message on the left
         hand side of the status bar. """
-        return self._status_message
+        return self._message
 
-    def _status(self):
-        """ Place Status label into left of the status bar. """
+    def _status(self, hide_status):
+        """ Place Status label into left of the status bar.
+
+        Parameters
+        ----------
+        hide_status: bool, optional
+            ``True`` to hide the status message that appears at the far left hand side of the
+            status frame otherwise ``False``
+        """
+        if hide_status:
+            return
+
         statusframe = ttk.Frame(self)
         statusframe.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=False)
 
@@ -399,7 +460,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         lblstatus = ttk.Label(statusframe,
                               width=40,
-                              textvariable=self._status_message,
+                              textvariable=self._message,
                               anchor=tk.W)
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
 
@@ -420,7 +481,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         pbar.pack_forget()
         return pbar
 
-    def progress_start(self, mode):
+    def start(self, mode):
         """ Set progress bar mode and display,
 
         Parameters
@@ -428,17 +489,17 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         mode: ["indeterminate", "determinate"]
             The mode that the progress bar should be executed in
         """
-        self._progress_set_mode(mode)
+        self._set_mode(mode)
         self._pbar.pack()
 
-    def progress_stop(self):
+    def stop(self):
         """ Reset progress bar and hide """
         self._pbar_message.set("")
         self._pbar_position.set(0)
-        self._progress_set_mode("determinate")
+        self._set_mode("determinate")
         self._pbar.pack_forget()
 
-    def _progress_set_mode(self, mode):
+    def _set_mode(self, mode):
         """ Set the progress bar mode """
         self._pbar.config(mode=mode)
         if mode == "indeterminate":
@@ -481,7 +542,7 @@ class Tooltip:
     text: str, optional
         The text to be displayed in the tool-tip. Default: 'widget info'
     waittime: int, optional
-        The time in miliseconds to wait before showing the tool-tip. Default: 400
+        The time in milliseconds to wait before showing the tool-tip. Default: 400
     wraplength: int, optional
         The text length for each line before wrapping. Default: 250
 
@@ -495,19 +556,6 @@ class Tooltip:
     -----
     Adapted from StackOverflow: http://stackoverflow.com/questions/3221956 and
     http://www.daniweb.com/programming/software-development/code/484591/a-tooltip-class-for-tkinter
-
-
-    - Originally written by vegaseat on 2014.09.09.
-    - Modified to include a delay time by Victor Zaccardo on 2016.03.25.
-    - Modified to correct extreme right and extreme bottom behavior by Alberto Vassena on \
-        2016.11.05.
-    - Modified to stay inside the screen whenever the tooltip might go out on the top but still \
-        the screen is higher than the tooltip  by Alberto Vassena on 2016.11.05.
-    - Modified to use the more flexible mouse positioning  by Alberto Vassena on 2016.11.05.
-    - Modified to add customizable background color, padding, waittime and wraplength on creation \
-        by Alberto Vassena on 2016.11.05.
-
-    Tested on Ubuntu 16.04/16.10, running Python 3.5.2
     """
     def __init__(self, widget, *, background="#FFFFEA", pad=(5, 3, 5, 3), text="widget info",
                  waittime=400, wraplength=250):
@@ -529,7 +577,7 @@ class Tooltip:
         self._schedule()
 
     def _on_leave(self, event=None):  # pylint:disable=unused-argument
-        """ Unschedule on a leave event """
+        """ remove schedule on a leave event """
         self._unschedule()
         self._hide()
 
@@ -583,11 +631,9 @@ class Tooltip:
 
             if offscreen_again:
                 # No further checks will be done.
-
                 # TIP:
-                # A further mod might auto-magically augment the
-                # wraplength when the tooltip is too high to be
-                # kept inside the screen.
+                # A further mod might auto-magically augment the wrap length when the tooltip is
+                # too high to be kept inside the screen.
                 y_1 = 0
 
             return x_1, y_1
@@ -596,7 +642,7 @@ class Tooltip:
         pad = self._pad
         widget = self._widget
 
-        # creates a toplevel window
+        # Creates a top level window
         self._topwidget = tk.Toplevel(widget)
         if platform.system() == "Darwin":
             # For Mac OS

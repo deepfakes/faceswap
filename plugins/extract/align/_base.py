@@ -56,13 +56,25 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         super().__init__(git_model_id,
                          model_filename,
                          configfile=configfile)
-        self.normalize_method = normalize_method
+        self._normalize_method = None
+        self.set_normalize_method(normalize_method)
 
         self._plugin_type = "align"
         self._faces_per_filename = dict()  # Tracking for recompiling face batches
         self._rollover = None  # Items that are rolled over from the previous batch in get_batch
         self._output_faces = []
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def set_normalize_method(self, method):
+        """ Set the normalization method for feeding faces into the aligner.
+
+        Parameters
+        ----------
+        method: {"none", "clahe", "hist", "mean"}
+            The normalization method to apply to faces prior to feeding into the model
+        """
+        method = None if method is None or method.lower() == "none" else method
+        self._normalize_method = method
 
     # << QUEUE METHODS >>> #
     def get_batch(self, queue):
@@ -209,10 +221,10 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         The normalization method is dictated by the command line argument `-nh (--normalization)`
         """
-        if self.normalize_method is None:
+        if self._normalize_method is None:
             return faces
         logger.trace("Normalizing faces")
-        meth = getattr(self, "_normalize_{}".format(self.normalize_method.lower()))
+        meth = getattr(self, "_normalize_{}".format(self._normalize_method.lower()))
         faces = [meth(face) for face in faces]
         logger.trace("Normalized faces")
         return faces

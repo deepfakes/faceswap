@@ -109,6 +109,23 @@ class Alignments():
                     masks[key] = masks.get(key, 0) + 1
         return masks
 
+    @property
+    def video_meta_data(self):
+        """ dict: The frame meta data stored in the alignments file. If data does not exist in the
+        alignments file then ``None`` is returned for each Key """
+        retval = dict(pts_time=None, keyframes=None)
+        pts_time = []
+        keyframes = []
+        for idx, key in enumerate(sorted(self.data)):
+            if "video_meta" not in self.data[key]:
+                return retval
+            meta = self.data[key]["video_meta"]
+            pts_time.append(meta["pts_time"])
+            if meta["keyframe"]:
+                keyframes.append(idx)
+        retval = dict(pts_time=pts_time, keyframes=keyframes)
+        return retval
+
     # << INIT FUNCTIONS >> #
 
     def _get_location(self, folder, filename):
@@ -196,6 +213,34 @@ class Alignments():
         logger.info("Backing up original alignments to '%s'", dst)
         os.rename(src, dst)
         logger.debug("Backed up alignments")
+
+    def save_video_meta_data(self, pts_time, keyframes):
+        """ Save video meta data to the alignments file.
+
+        If the alignments file does not have an entry for every frame (e.g. if Extract Every N
+        was used) then the frame is added to the alignments file with no faces, so that they video
+        meta data can be stored.
+
+        Parameters
+        ----------
+        pts_time: list
+            A list of presentation timestamps (`float`) in frame index order for every frame in
+            the input video
+        keyframes: list
+            A list of frame indices corresponding to the key frames in the input video
+        """
+        sample_filename = next(fname for fname in self.data)
+        basename = sample_filename[:sample_filename.rfind("_")]
+        logger.info("sample filename: %s, base filename: %s", sample_filename, basename)
+        logger.info("Saving video meta information to Alignments file")
+        for idx, pts in enumerate(pts_time):
+            meta = dict(pts_time=pts, keyframe=idx in keyframes)
+            key = "{}_{:06d}.png".format(basename, idx + 1)
+            if key not in self.data:
+                self.data[key] = dict(video_meta=meta, faces=[])
+            else:
+                self.data[key]["video_meta"] = meta
+        self.save()
 
     # << VALIDATION >> #
 

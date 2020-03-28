@@ -10,8 +10,8 @@ Created on 2018-03-16 15:14
 #       -> figure out if ffmpeg | ffplay would work on windows and mac
 import logging
 import os
-import sys
 import subprocess
+import sys
 import datetime
 from collections import OrderedDict
 
@@ -20,14 +20,7 @@ import imageio_ffmpeg as im_ffm
 from ffmpy import FFmpeg, FFRuntimeError
 
 # faceswap imports
-from lib.cli import FullHelpArgumentParser
 from lib.utils import _image_extensions, _video_extensions
-from . import cli
-
-if sys.version_info[0] < 3:
-    raise Exception("This program requires at least python3.2")
-if sys.version_info[0] == 3 and sys.version_info[1] < 2:
-    raise Exception("This program requires at least python3.2")
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -274,7 +267,7 @@ class Effmpeg():
             except ValueError:
                 logger.error("You have entered an invalid value for degrees: %s",
                              self.args.degrees)
-                exit(1)
+                sys.exit(1)
 
         # Set executable based on whether previewing or not
         if self.args.preview and self.args.action in self._actions_can_preview:
@@ -593,21 +586,3 @@ class Effmpeg():
         retval = hours + ':' + minutes + ':' + seconds
         logger.debug("txt: '%s', retval: %s", txt, retval)
         return retval
-
-
-def bad_args(args):  # pylint: disable=unused-argument
-    """ Print help on bad arguments """
-    PARSER.print_help()
-    exit(0)
-
-
-if __name__ == "__main__":
-    print('"Easy"-ffmpeg wrapper.\n')
-
-    PARSER = FullHelpArgumentParser()
-    SUBPARSER = PARSER.add_subparsers()
-    EFFMPEG = cli.EffmpegArgs(
-        SUBPARSER, "effmpeg", "Wrapper for various common ffmpeg commands.")
-    PARSER.set_defaults(func=bad_args)
-    ARGUMENTS = PARSER.parse_args()
-    ARGUMENTS.func(ARGUMENTS)

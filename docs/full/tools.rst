@@ -1,18 +1,18 @@
 tools package
 =============
 
-tools.mask module
------------------
+tools.mask.mask module
+----------------------
 
-.. automodule:: tools.mask
+.. automodule:: tools.mask.mask
    :members:
    :undoc-members:
    :show-inheritance:
 
-tools.preview module
---------------------
+tools.preview.preview module
+----------------------------
 
-.. automodule:: tools.preview
+.. automodule:: tools.preview.preview
    :members:
    :undoc-members:
    :show-inheritance:
