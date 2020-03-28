@@ -487,14 +487,25 @@ class UpdateFace():
         face_index: int
             The index of the face within the given frame that is to have its objects removed
         """
-        logger.trace("Removing face for frame %s at index: %s", frame_index, face_index)
-        self._faces_cache.remove(frame_index, face_index)
-        image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
-        # Retrieve the position of the face in the current viewer prior to deletion
-        display_index = self._canvas.active_filter.image_ids.index(image_id)
-        self._canvas.delete(self._canvas.face_id_from_object(image_id))
+        logger.debug("Removing face for frame %s at index: %s", frame_index, face_index)
+        if face_index == -1:  # Revert to saved
+            stored_count = len(self._det_faces.current_faces[frame_index])
+            display_count = len(self._faces_cache.tk_faces[frame_index])
+            if display_count <= stored_count:
+                return
+            indices = reversed(range(stored_count, display_count))
+        else:
+            indices = [face_index]
+
+        for idx in indices:
+            logger.debug("Removing face id %s for frame id %s", idx, frame_index)
+            self._faces_cache.remove(frame_index, idx)
+            image_id = self._canvas.find_withtag("image_{}".format(frame_index))[face_index]
+            # Retrieve the position of the face in the current viewer prior to deletion
+            display_index = self._canvas.active_filter.image_ids.index(image_id)
+            self._canvas.delete(self._canvas.face_id_from_object(image_id))
+            self._canvas.active_filter.remove_face(frame_index, face_index, display_index)
         self._update_multi_tags(frame_index)
-        self._canvas.active_filter.remove_face(frame_index, face_index, display_index)
 
     # << ADD AND REMOVE METHODS >> #
     def _update_multi_tags(self, frame_index):

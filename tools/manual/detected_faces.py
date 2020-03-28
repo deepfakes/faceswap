@@ -619,14 +619,15 @@ class FaceUpdate():
         ----------
         frame_index: int
             The frame that the needs to have alignments copied to it
-        direction: ["previous", "next"]
+        direction: ["prev", "next"]
             Whether to copy alignments from the previous frame with alignments, or the next
             frame with alignments
         """
+        logger.debug("frame: %s, direction: %s", frame_index, direction)
         faces = self._current_faces_at_index(frame_index)
         frames_with_faces = [idx for idx, faces in enumerate(self._det_faces.current_faces)
                              if len(faces) > 0]
-        if direction == "previous":
+        if direction == "prev":
             idx = next((idx for idx in reversed(frames_with_faces)
                         if idx < frame_index), None)
         else:
@@ -656,5 +657,6 @@ class FaceUpdate():
             return
         logger.debug("Reverting alignments for frame_index %s", frame_index)
         self._updated_faces[frame_index] = None
+        self._last_updated_face = (frame_index, -1)
         self._tk_edited.set(True)
         self._tk_update.set(True)
