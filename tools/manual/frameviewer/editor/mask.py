@@ -1,0 +1,589 @@
+#!/usr/bin/env python3
+""" Mask Editor for the manual adjustments tool """
+import tkinter as tk
+
+import numpy as np
+import cv2
+from PIL import Image, ImageTk
+
+from ._base import ControlPanelOption, Editor, logger
+
+
+class Mask(Editor):
+    """ The mask Editor.
+
+    Edit a mask in the alignments file.
+
+    Parameters
+    ----------
+    canvas: :class:`tkinter.Canvas`
+        The canvas that holds the image and annotations
+    detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
+        The _detected_faces data for this manual session
+    frames: :class:`FrameNavigation`
+        The frames navigator for this manual session
+    """
+    def __init__(self, canvas, detected_faces, frames):
+        self._meta = []
+        self._tk_faces = []
+        self._internal_size = 512
+        control_text = ("Mask Editor\nEdit the mask."
+                        "\n - NB: For Landmark based masks (e.g. components/extended) it is "
+                        "better to make sure the landmarks are correct rather than editing the "
+                        "mask directly. Any change to the landmarks after editing the mask will "
+                        "override your manual edits.")
+        key_bindings = {"[": lambda *e, i=False: self._adjust_brush_radius(increase=i),
+                        "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
+        super().__init__(canvas, detected_faces, frames,
+                         control_text=control_text, key_bindings=key_bindings)
+        # Bind control click for reverse painting
+        self._canvas.bind("<Control-ButtonPress-1>", self._control_click)
+        self._mask_type = self._set_tk_mask_change_callback()
+        self._mouse_location = [
+            self._canvas.create_oval(0, 0, 0, 0, outline="black", state="hidden"), False]
+
+    @property
+    def _opacity(self):
+        """ float: The mask opacity setting from the control panel from 0.0 - 1.0. """
+        annotation = self.__class__.__name__
+        return self._annotation_formats[annotation]["mask_opacity"].get() / 100.0
+
+    @property
+    def _brush_radius(self):
+        """ int: The radius of the brush to use as set in control panel options """
+        return self._control_vars["brush"]["BrushSize"].get()
+
+    @property
+    def _edit_mode(self):
+        """ str: The currently selected edit mode based on optional action button.
+        One of "draw", "erase" or "zoom" """
+        action = [name for name, option in self._actions.items() if option["tk_var"].get()]
+        return "draw" if not action else action[0]
+
+    @property
+    def _cursor_color(self):
+        """ str: The hex code for the selected cursor color """
+        return self._canvas.colors[self._control_vars["brush"]["CursorColor"].get().lower()]
+
+    def _add_actions(self):
+        """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
+        and Zoom. """
+        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="M")
+        self._add_action("draw", "draw", "Draw Tool", hotkey="D")
+        self._add_action("erase", "erase", "Erase Tool", hotkey="E")
+
+    def _add_controls(self):
+        """ Add the mask specific control panel controls.
+
+        Current controls are:
+          - the mask type to edit, the size of brush to use and the cursor display color.
+          - View Mode: Frame or Faces
+        """
+        masks = sorted(msk.title() for msk in list(self._det_faces.available_masks) + ["None"])
+        default = masks[0] if len(masks) == 1 else [mask for mask in masks if mask != "None"][0]
+        self._add_control(ControlPanelOption("Mask type",
+                                             str,
+                                             group="Display",
+                                             choices=masks,
+                                             default=default,
+                                             is_radio=True,
+                                             helptext="Select which mask to edit"))
+        self._add_control(ControlPanelOption("Brush Size",
+                                             int,
+                                             group="Brush",
+                                             min_max=(1, 100),
+                                             default=10,
+                                             rounding=1,
+                                             helptext="Set the brush size. ([ - decrease, "
+                                                      "] - increase)"))
+        self._add_control(ControlPanelOption("Cursor Color",
+                                             str,
+                                             group="Brush",
+                                             choices=sorted(self._canvas.colors),
+                                             default="White",
+                                             helptext="Select the brush cursor color."))
+        self._add_control(ControlPanelOption("View Mode",
+                                             str,
+                                             choices=("Frame", "Face"),
+                                             default="Frame",
+                                             is_radio=True,
+                                             helptext="Set the view mode"))
+
+    def _set_tk_mask_change_callback(self):
+        """ Add a trace to change the displayed mask on a mask type change. """
+        var = self._control_vars["display"]["MaskType"]
+        var.trace("w", lambda *e: self._on_mask_type_change())
+        return var.get()
+
+    def _on_mask_type_change(self):
+        """ Update the displayed mask on a mask type change """
+        mask_type = self._control_vars["display"]["MaskType"].get()
+        if mask_type == self._mask_type:
+            return
+        self._meta = dict(position=self._frame_index)
+        self._mask_type = mask_type
+        self._frames.tk_update.set(True)
+
+    def _update_meta(self, key, item, face_index):
+        """ Update the meta information for the given object.
+
+        Parameters
+        ----------
+        key: str
+            The object key in the meta dictionary
+        item: tkinter object
+            The object to be stored
+        index:
+            The face index that this object belongs to.
+        """
+        logger.trace("Updating meta dict: (key: %s, object: %s, face_index: %s)",
+                     key, item, face_index)
+        if key not in self._meta or len(self._meta[key]) - 1 < face_index:
+            logger.trace("Creating new item list")
+            self._meta.setdefault(key, []).append(item)
+        else:
+            logger.trace("Appending to existing item list")
+            self._meta[key][face_index] = item
+
+    def hide_annotation(self):
+        """ Clear the mask :attr:`_meta` dict when hiding the annotation. """
+        super().hide_annotation()
+        self._meta = dict()
+
+    def update_annotation(self):
+        """ Update the mask annotation with the latest mask. """
+        position = self._frame_index
+        if position != self._meta.get("position", -1):
+            # Reset meta information when moving to a new frame
+            self._meta = dict(position=position)
+        key = self.__class__.__name__
+        mask_type = self._control_vars["display"]["MaskType"].get().lower()
+        color = self._control_color[1:]
+        rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
+        roi_color = self._canvas.colors[self._annotation_formats["ExtractBox"]["color"].get()]
+        opacity = self._opacity
+        for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
+            mask = face.mask.get(mask_type, None)
+            if mask is None:
+                continue
+            self._set_face_meta_data(mask, idx)
+            self._update_mask_image(key.lower(), idx, rgb_color, opacity)
+            self._update_roi_box(mask, idx, roi_color)
+
+        self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
+        logger.trace("Updated mask annotation")
+
+    def _set_face_meta_data(self, mask, face_index):
+        """ Set the metadata for the current face if it has changed or is new.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The one channel mask cropped to the ROI
+        face_index: int
+            The index pertaining to the current face
+        """
+        masks = self._meta.get("mask", None)
+        if masks is not None and len(masks) - 1 == face_index:
+            logger.trace("Meta information already defined for face: %s", face_index)
+            return
+
+        logger.debug("Defining meta information for face: %s", face_index)
+        scale = self._internal_size / mask.mask.shape[0]
+        self._set_full_frame_meta(mask, scale)
+        dims = (self._internal_size, self._internal_size)
+        self._meta.setdefault("mask", []).append(cv2.resize(mask.mask,
+                                                            dims,
+                                                            interpolation=cv2.INTER_CUBIC))
+
+    def _set_full_frame_meta(self, mask, mask_scale):
+        """ Sets the meta information for displaying the mask in full frame mode.
+
+        Parameters
+        ----------
+        mask: :class:`lib.faces_detect.Mask`
+            The mask object
+        mask_scale: float
+            The scaling factor from the stored mask size to the internal mask size
+
+        Sets the following parameters to :attr:`_meta`:
+            - roi_mask: the rectangular ROI box from the full frame that contains the original ROI
+            for the full frame mask
+            - top_left: The location that the roi_mask should be placed in the display frame
+            - affine_matrix: The matrix for transposing the mask to a full frame
+            - interpolator: The cv2 interpolation method to use for transposing mask to a
+            full frame
+            - slices: The (`x`, `y`) slice objects required to extract the mask ROI
+            from the full frame
+        """
+        frame_dims = self._frames.current_meta_data["display_dims"]
+        scaled_mask_roi = np.rint(mask.original_roi * self._frames.current_scale).astype("int32")
+
+        # Scale and clip the ROI to fit within display frame boundaries
+        clipped_roi = scaled_mask_roi.clip(min=(0, 0), max=frame_dims)
+
+        # Obtain min and max points to get ROI as a rectangle
+        min_max = dict(min=clipped_roi.min(axis=0), max=clipped_roi.max(axis=0))
+
+        # Create a bounding box rectangle ROI
+        roi_dims = np.rint((min_max["max"][1] - min_max["min"][1],
+                            min_max["max"][0] - min_max["min"][0])).astype("uint16")
+        roi = dict(mask=np.zeros(roi_dims, dtype="uint8")[..., None],
+                   corners=np.expand_dims(scaled_mask_roi - min_max["min"], axis=0))
+        # Block out areas outside of the actual mask ROI polygon
+        cv2.fillPoly(roi["mask"], roi["corners"], 255)
+        logger.trace("Setting Full Frame mask ROI. shape: %s", roi["mask"].shape)
+
+        # obtain the slices for cropping mask from full frame
+        xy_slices = (slice(int(round(min_max["min"][1])), int(round(min_max["max"][1]))),
+                     slice(int(round(min_max["min"][0])), int(round(min_max["max"][0]))))
+
+        # Adjust affine matrix for internal mask size and display dimensions
+        adjustments = (np.array([[mask_scale, 0., 0.], [0., mask_scale, 0.]]),
+                       np.array([[1 / self._frames.current_scale, 0., 0.],
+                                 [0., 1 / self._frames.current_scale, 0.],
+                                 [0., 0., 1.]]))
+        in_matrix = np.dot(adjustments[0],
+                           np.concatenate((mask.affine_matrix, np.array([[0., 0., 1.]]))))
+        affine_matrix = np.dot(in_matrix, adjustments[1])
+
+        # Get the size of the mask roi box in the frame
+        side_sizes = (scaled_mask_roi[1][0] - scaled_mask_roi[0][0],
+                      scaled_mask_roi[1][1] - scaled_mask_roi[0][1])
+        mask_roi_size = (side_sizes[0] ** 2 + side_sizes[1] ** 2) ** 0.5
+
+        self._meta.setdefault("roi_mask", []).append(roi["mask"])
+        self._meta.setdefault("affine_matrix", []).append(affine_matrix)
+        self._meta.setdefault("interpolator", []).append(mask.interpolator)
+        self._meta.setdefault("slices", []).append(xy_slices)
+        self._meta.setdefault("top_left", []).append(min_max["min"] + self._canvas.offset)
+        self._meta.setdefault("mask_roi_size", []).append(mask_roi_size)
+
+    def _update_mask_image(self, key, face_index, rgb_color, opacity):
+        """ Obtain a full frame mask, overlay over image and add to canvas or update.
+
+        Parameters
+        ----------
+        key: str
+            The base annotation name for creating tags
+        face_index: int
+            The index of the face within the current frame
+        rgb_color: tuple
+            The color that the mask should be displayed as
+        opacity: float
+            The opacity to apply to the mask
+        """
+        mask = (self._meta["mask"][face_index] * opacity).astype("uint8")
+        if self._is_zoomed:
+            display_image = self._update_mask_image_zoomed(mask, rgb_color)
+            top_left = self._zoomed_roi[:2]
+        else:
+            display_image = self._update_mask_image_full_frame(mask, rgb_color, face_index)
+            top_left = self._meta["top_left"][face_index]
+
+        if len(self._tk_faces) < face_index + 1:
+            logger.debug("Adding new Photo Image for face index: %s", face_index)
+            self._tk_faces.append(display_image)
+        else:
+            self._tk_faces[face_index] = display_image
+
+        self._object_tracker(key,
+                             "image",
+                             face_index,
+                             top_left,
+                             dict(image=display_image, anchor=tk.NW))
+
+    def _update_mask_image_zoomed(self, mask, rgb_color):
+        """ Update the mask image when zoomed in.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The raw mask
+        rgb_color: tuple
+            The rgb color selected for the mask
+
+        Returns
+        -------
+        :class: `ImageTk.PhotoImage`
+            The zoomed mask image formatted for display
+        """
+        rgb = np.tile(rgb_color, self._zoomed_dims + (1, )).astype("uint8")
+        mask = cv2.resize(mask,
+                          tuple(reversed(self._zoomed_dims)),
+                          interpolation=cv2.INTER_CUBIC)[..., None]
+        rgba = np.concatenate((rgb, mask), axis=2)
+        tk_face = ImageTk.PhotoImage(Image.fromarray(rgba))
+        return tk_face
+
+    def _update_mask_image_full_frame(self, mask, rgb_color, face_index):
+        """ Update the mask image when in full frame view.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The raw mask
+        rgb_color: tuple
+            The rgb color selected for the mask
+        face_index: int
+            The index of the face being displayed
+
+        Returns
+        -------
+        :class: `ImageTk.PhotoImage`
+            The full frame mask image formatted for display
+        """
+        frame_dims = self._frames.current_meta_data["display_dims"]
+        frame = np.zeros(frame_dims + (1, ), dtype="uint8")
+        interpolator = self._meta["interpolator"][face_index]
+        slices = self._meta["slices"][face_index]
+        mask = cv2.warpAffine(mask,
+                              self._meta["affine_matrix"][face_index],
+                              frame_dims,
+                              frame,
+                              flags=cv2.WARP_INVERSE_MAP | interpolator,
+                              borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]][..., None]
+        rgb = np.tile(rgb_color, mask.shape).astype("uint8")
+        rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
+        tk_face = ImageTk.PhotoImage(Image.fromarray(rgba))
+        return tk_face
+
+    def _update_roi_box(self, mask, face_index, color):
+        """ Update the region of interest box for the current mask.
+
+        mask: :class:`~lib.faces_detect.Mask`
+            The current mask object to create an ROI box for
+        face_index: int
+            The index of the face within the current frame
+        color: str
+            The hex color code that the mask should be displayed as
+        """
+        if self._is_zoomed:
+            box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
+                            self._zoomed_roi[2], self._zoomed_roi[1],
+                            self._zoomed_roi[2], self._zoomed_roi[3],
+                            self._zoomed_roi[0], self._zoomed_roi[3]))
+        else:
+            box = self._scale_to_display(mask.original_roi).flatten()
+        top_left = box[:2] - 10
+        kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(face_index))
+        self._object_tracker("mask_text", "text", face_index, top_left, kwargs)
+        kwargs = dict(fill="", outline=color, width=1)
+        self._object_tracker("mask_roi", "polygon", face_index, box, kwargs)
+        if self._is_zoomed:
+            # Raise box above zoomed image
+            self._canvas.tag_raise("mask_roi_face_{}".format(face_index))
+
+    # << MOUSE HANDLING >>
+    # Mouse cursor display
+    def _update_cursor(self, event):
+        """ Set the cursor action.
+
+        Update :attr:`_mouse_location` with the current cursor position and display appropriate
+        icon.
+
+        If in zoom mode, then checks whether mouse is over a mask ROI box and pops the zoom icon.
+        If in edit mode, checks whether the mouse is over a mask ROI box and pops the paint icon.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The current tkinter mouse event
+        """
+        roi_boxes = self._canvas.find_withtag("mask_roi")
+        item_ids = set(self._canvas.find_withtag("current")).intersection(roi_boxes)
+        if not item_ids:
+            self._canvas.config(cursor="")
+            self._canvas.itemconfig(self._mouse_location[0], state="hidden")
+            self._mouse_location[1] = None
+            return
+        item_id = list(item_ids)[0]
+        tags = self._canvas.gettags(item_id)
+        face_idx = int(next(tag for tag in tags if tag.startswith("face_")).split("_")[-1])
+        if self._edit_mode == "zoom":
+            self._canvas.config(cursor="exchange")
+        else:
+            radius = self._brush_radius
+            coords = (event.x - radius, event.y - radius, event.x + radius, event.y + radius)
+            self._canvas.config(cursor="none")
+            self._canvas.coords(self._mouse_location[0], *coords)
+            self._canvas.itemconfig(self._mouse_location[0],
+                                    state="normal",
+                                    outline=self._cursor_color)
+        self._mouse_location[1] = face_idx
+        self._canvas.update_idletasks()
+
+    def _control_click(self, event):
+        """ The action to perform when the user starts clicking and dragging the mouse whilst
+        pressing the control button.
+
+        For editing the mask this will activate the opposite action than what is currently selected
+        (e.g. it will erase if draw is set and it will draw if erase is set)
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        self._drag_start(event, control_click=True)
+
+    def _drag_start(self, event, control_click=False):  # pylint:disable=arguments-differ
+        """ The action to perform when the user starts clicking and dragging the mouse.
+
+        If edit mode is zoom, then zooms the face in or out.
+        If edit mode is draw or erase, then paints on the mask with the appropriate action.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        face_idx = self._mouse_location[1]
+        if face_idx is None:
+            self._drag_data = dict()
+            self._drag_callback = None
+        elif self._edit_mode == "zoom":
+            self._zoom_face(face_idx)
+        else:
+            self._drag_data["starting_location"] = np.array((event.x, event.y))
+            self._drag_data["control_click"] = control_click
+            self._drag_callback = self._paint
+
+    def _zoom_face(self, face_index):
+        """ Zoom in or zoom out of the selected face.
+
+        Parameters
+        ----------
+        face_index: int
+            The face index within the current frame that is to be zoomed in or out
+        """
+        self._canvas.image.toggle()
+        coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
+        if self._is_zoomed:
+            face = self._det_faces.get_face_at_index(
+                self._frame_index,
+                face_index,
+                min(self._frames.display_dims))[..., 2::-1]
+            display = ImageTk.PhotoImage(Image.fromarray(face))
+            self._update_meta("zoomed", display, face_index)
+            kwargs = dict(image=display, anchor=tk.CENTER)
+        else:
+            kwargs = dict(state="hidden")
+        item_id = self._object_tracker("zoom", "image", face_index, coords, kwargs)
+        self._canvas.tag_lower(item_id)
+        self._frames.tk_update.set(True)
+
+    def _paint(self, event):
+        """ Paint or erase from Mask and update cursor on click and drag.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        face_idx = self._mouse_location[1]
+        line = np.array((self._drag_data["starting_location"], (event.x, event.y)))
+        line, scale = self._transform_points(face_idx, line)
+        brush_radius = int(round(self._brush_radius * scale))
+        color = 0 if self._edit_mode == "erase" else 255
+        # Reverse action on control click
+        color = abs(color - 255) if self._drag_data["control_click"] else color
+        cv2.line(self._meta["mask"][face_idx],
+                 tuple(line[0]),
+                 tuple(line[1]),
+                 color,
+                 brush_radius * 2)
+        self._drag_data["starting_location"] = np.array((event.x, event.y))
+        self._frames.tk_update.set(True)
+        self._update_cursor(event)
+
+    def _transform_points(self, face_index, points):
+        """ Transform the edit points from a full frame or zoomed view back to the mask.
+
+        Parameters
+        ----------
+        face_index: int
+            The index of the face within the current frame
+        points: :class:`numpy.ndarray`
+            The points that are to be translated from the viewer to the underlying
+            Detected Face
+        """
+        if self._is_zoomed:
+            offset = self._zoomed_roi[:2]
+            scale = self._internal_size / self._zoomed_dims[0]
+            t_points = np.rint((points - offset) * scale).astype("int32").squeeze()
+        else:
+            scale = self._internal_size / self._meta["mask_roi_size"][face_index]
+            t_points = np.expand_dims(points - self._canvas.offset, axis=0)
+            t_points = cv2.transform(t_points, self._meta["affine_matrix"][face_index]).squeeze()
+            t_points = np.rint(t_points).astype("int32")
+        logger.trace("original points: %s, transformed points: %s, scale: %s",
+                     points, t_points, scale)
+        return t_points, scale
+
+    def _drag_stop(self, event):
+        """ The action to perform when the user stops clicking and dragging the mouse.
+
+        If a line hasn't been drawn then draw a circle. Update alignments.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Unused but required
+        """
+        if not self._drag_data:
+            return
+        if self._edit_mode == "zoom":
+            self._drag_data = dict()
+            self._drag_callback = None
+            return
+        face_idx = self._mouse_location[1]
+        location = np.array(((event.x, event.y), ))
+        color = 0 if self._edit_mode == "erase" else 255
+        # Reverse action on control click
+        color = abs(color - 255) if self._drag_data["control_click"] else color
+        if np.array_equal(self._drag_data["starting_location"], location[0]):
+            points, scale = self._transform_points(face_idx, location)
+            brush_radius = int(round(self._brush_radius * scale))
+            cv2.circle(self._meta["mask"][face_idx], tuple(points), brush_radius, color,
+                       thickness=-1)
+        self._mask_to_alignments(face_idx)
+        self._drag_data = dict()
+        self._update_cursor(event)
+
+    def _mask_to_alignments(self, face_index):
+        """ Update the annotated mask to alignments.
+
+        Parameters
+        ----------
+        face_index: int
+            The index of the face in the current frame
+        """
+        mask_type = self._control_vars["display"]["MaskType"].get().lower()
+        mask = self._meta["mask"][face_index].astype("float32") / 255.0
+        self._det_faces.update.mask(self._frame_index, face_index, mask, mask_type)
+
+    def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
+        """ Adjust the brush radius up or down by 2px.
+
+        Sets the control panel option for brush radius to 2 less or 2 more than its current value
+
+        Parameters
+        ----------
+        increase: bool, optional
+            ``True`` to increment brush radius, ``False`` to decrement. Default: ``True``
+        """
+        radius_var = self._control_vars["brush"]["BrushSize"]
+        current_val = radius_var.get()
+        new_val = min(100, current_val + 2) if increase else max(1, current_val - 2)
+        logger.trace("Adjusting brush radius from %s to %s", current_val, new_val)
+        radius_var.set(new_val)
+
+        delta = new_val - current_val
+        if delta == 0:
+            return
+        current_coords = self._canvas.coords(self._mouse_location[0])
+        new_coords = tuple(coord - delta if idx < 2 else coord + delta
+                           for idx, coord in enumerate(current_coords))
+        logger.trace("Adjusting brush coordinates from %s to %s", current_coords, new_coords)
+        self._canvas.coords(self._mouse_location[0], new_coords)
