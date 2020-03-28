@@ -77,7 +77,7 @@ class Editor():
     @property
     def view_mode(self):
         """ ["frame", "face"]: The view mode for the currently selected editor. If the editor does
-        not have an updatable view mode, then `"frame"` will be returned. """
+        not have a view mode that can be updated, then `"frame"` will be returned. """
         tk_var = self._control_vars.get("none", dict()).get("ViewMode", None)
         retval = "frame" if tk_var is None or not tk_var.get() else tk_var.get().lower()
         return retval
@@ -86,7 +86,7 @@ class Editor():
     def _is_zoomed(self):
         """ bool: ``True`` if a face is currently zoomed in, ``False`` if the full frame is
         displayed """
-        return self._canvas.image.is_hidden
+        return self._canvas.image.is_zoomed
 
     @property
     def _zoomed_dims(self):
@@ -126,6 +126,14 @@ class Editor():
         """ int: The currently displayed frame index. """
         return self._frames.tk_position.get()
 
+    @property
+    def _face_iterator(self):
+        """ list: The detected face objects to be iterated. This will either be all faces in the
+        frame (normal view) or the single zoomed in face (zoom mode). """
+        faces = self._det_faces.current_faces[self._frame_index]
+        faces = [faces[self._canvas.zoomed_face_index]] if self._is_zoomed and faces else faces
+        return faces
+
     def _add_key_bindings(self, key_bindings):
         """ Add the editor specific key bindings for the currently viewed editor.
 
@@ -137,6 +145,8 @@ class Editor():
         if key_bindings is None:
             return
         for key, method in key_bindings.items():
+            logger.debug("Binding key '%s' to method %s for editor '%s'",
+                         key, method, self.__class__.__name__)
             self._canvas.key_bindings.setdefault(key, dict())["bound_to"] = None
             self._canvas.key_bindings[key][self.__class__.__name__] = method
 
@@ -560,6 +570,13 @@ class Editor():
                              editor, group)
                 self._add_control(ctl, global_control=True)
 
+    def _switch_view_mode(self):
+        """ Switch the view mode on an "M" key key press. """
+        current = self.view_mode
+        mode = "Frame" if current == "face" else "Face"
+        logger.debug("Switching view mode from '%s' to '%s'", current, mode)
+        self._control_vars["none"]["ViewMode"].set(mode)
+
 
 class View(Editor):
     """ The view Editor.
@@ -570,7 +587,8 @@ class View(Editor):
     """
     def __init__(self, canvas, detected_faces, frames):
         control_text = "Viewer\nPreview the frame's annotations."
-        super().__init__(canvas, detected_faces, frames, control_text)
+        key_bindings = {"m": lambda *e: self._switch_view_mode()}
+        super().__init__(canvas, detected_faces, frames, control_text, key_bindings=key_bindings)
 
     def _add_controls(self):
         """ Add the Landmarks specific control panel controls.
@@ -582,4 +600,4 @@ class View(Editor):
                                              choices=("Frame", "Face"),
                                              default="Frame",
                                              is_radio=True,
-                                             helptext="Set the view mode"))
+                                             helptext="Set the view mode (M)"))

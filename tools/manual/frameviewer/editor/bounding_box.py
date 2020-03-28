@@ -82,9 +82,13 @@ class BoundingBox(Editor):
 
     def update_annotation(self):
         """ Get the latest bounding box data from alignments and update. """
+        if self._is_zoomed:
+            logger.trace("Image is zoomed. Hiding Bounding Box.")
+            self.hide_annotation()
+            return
         key = "bb_box"
         color = self._control_color
-        for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
+        for idx, face in enumerate(self._face_iterator):
             box = np.array([(face.left, face.top), (face.right, face.bottom)])
             box = self._scale_to_display(box).astype("int32").flatten()
             kwargs = dict(outline=color, width=1)

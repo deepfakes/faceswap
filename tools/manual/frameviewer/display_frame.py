@@ -7,6 +7,10 @@ from tkinter import ttk, TclError
 from functools import partial
 from time import time
 
+import cv2
+import numpy as np
+from PIL import Image, ImageTk
+
 from lib.gui.control_helper import set_slider_rounding
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images
@@ -309,8 +313,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     # TODO Annotations stay in the faces viewer when incrementing/decrementing a frame
     # which no longer meets criteria
     # TODO Hide the frame image and annotations if no frames meet the criteria any more.
-    # NB: This will be easier to do if image is subclassed as currently hidden image indicates
-    # zoom mode
 
     def increment_frame(self, frame_count=None, is_playing=False):
         """ Update The frame navigation position to the next frame based on filter. """
@@ -671,6 +673,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._frames = frames
         self._actions = actions
         self._tk_action_var = tk_action_var
+        self._zoomed_face_index = 0  # TODO
         self._image = BackgroundImage(self)
         self._editor_globals = dict(control_tk_vars=dict(),
                                     annotation_formats=dict(),
@@ -748,6 +751,11 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """ :class:`BackgroundFrame`: The background image on the canvas. """
         return self._image
 
+    @property
+    def zoomed_face_index(self):
+        """ int: The index of the face in the current frame that is zoomed in """
+        return self._zoomed_face_index
+
     def _get_editors(self):
         """ Get the object editors for the canvas.
 
@@ -805,7 +813,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """
         if not self._frames.tk_update.get():
             return
-        self._image.refresh()
+        self._image.refresh(self.active_editor.view_mode)
         to_display = sorted([self.selected_action] + self.editor_display[self.selected_action])
         self._hide_additional_faces()
         for editor in to_display:
@@ -817,7 +825,11 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def _hide_additional_faces(self):
         """ Hide additional faces if the number of faces on the canvas reduces on a frame
         change. """
-        current_face_count = len(self._det_faces.current_faces[self._frames.tk_position.get()])
+        if self._image.is_zoomed:
+            current_face_count = 1
+        else:
+            current_face_count = len(self._det_faces.current_faces[self._frames.tk_position.get()])
+
         if current_face_count > self._max_face_count:
             # Most faces seen to date so nothing to hide. Update max count and return
             logger.debug("Incrementing max face count from: %s to: %s",
@@ -855,27 +867,90 @@ class BackgroundImage():
     def __init__(self, canvas):
         self._canvas = canvas
         self._frames = canvas._frames
-        self._is_hidden = False
+        self._det_faces = canvas._det_faces
+        self._current_view_mode = "frame"
+        self._zoom_padding = self._get_zoomed_padding()
+        placeholder = np.ones((*reversed(self._frames.display_dims), 3), dtype="uint8")
+        self._tk_frame = ImageTk.PhotoImage(Image.fromarray(placeholder))
+        self._tk_face = ImageTk.PhotoImage(Image.fromarray(placeholder))
         self._image = self._canvas.create_image(self._frames.display_dims[0] / 2,
                                                 self._frames.display_dims[1] / 2,
-                                                image=self._frames.tk_image,
+                                                image=self._tk_frame,
                                                 anchor=tk.CENTER,
                                                 tags="main_image")
 
     @property
-    def is_hidden(self):
-        """ bool: ``True`` if the background frame image is hidden otherwise ``False``. """
-        return self._is_hidden
+    def is_zoomed(self):
+        """ bool: ``True`` if the current display is zoomed on a face otherwise ``False``. """
+        return self._current_view_mode == "face"
 
-    def toggle(self):
-        """ Toggle the background frame between displayed and hidden. """
-        state = "normal" if self._is_hidden else "hidden"
-        self._canvas.itemconfig(self._image, state=state)
-        self._is_hidden = not self._is_hidden
+    def _get_zoomed_padding(self):
+        """ Obtain the Left, Top, Right, Bottom padding required to place the square face in the
+        full frame.
 
-    def refresh(self):
+        Returns
+        -------
+        tuple
+            The (Left, Top, Right, Bottom) padding to apply to the face image in pixels
+        """
+        size = min(self._frames.display_dims)
+        pad_lt = ((self._frames.display_dims[1] - size) // 2,
+                  (self._frames.display_dims[0] - size) // 2)
+        padding = (pad_lt[0],
+                   self._frames.display_dims[1] - size - pad_lt[0],
+                   pad_lt[1],
+                   self._frames.display_dims[0] - size - pad_lt[1])
+        logger.debug("Frame dimensions: %s, size: %s, padding: %s",
+                     self._frames.display_dims, size, padding)
+        return padding
+
+    def refresh(self, view_mode):
         """ Update the displayed frame """
+        self._switch_image(view_mode)
+        getattr(self, "_update_tk_{}".format(self._current_view_mode))()
         logger.trace("Updating background frame")
-        if self._is_hidden:
-            logger.trace("Unhiding background frame")
-            self.toggle()
+
+    def _switch_image(self, view_mode):
+        """ Switch the image between the full frame image and the zoomed face image """
+        if view_mode == self._current_view_mode:
+            return
+        logger.trace("Switching background image from '%s' to '%s'",
+                     self._current_view_mode, view_mode)
+        img = self._tk_frame if view_mode == "frame" else self._tk_face
+        self._canvas.itemconfig(self._image, image=img)
+        self._current_view_mode = view_mode
+
+    def _update_tk_face(self):
+        # TODO Face index
+        face = self._get_zoomed_face()
+        face = cv2.copyMakeBorder(face, *self._zoom_padding, cv2.BORDER_CONSTANT)
+        logger.trace("final shape: %s", face.shape)
+        self._tk_face.paste(Image.fromarray(face))
+
+    def _get_zoomed_face(self):
+        """ Get the zoomed face or a blank image if not faces are available.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The face sized to the shortest dimensions of the face viewer
+        """
+        position = self._frames.tk_position.get()
+        size = min(self._frames.display_dims)
+        if self._det_faces.face_count_per_index[position] == 0:
+            face = np.ones((size, size, 3), dtype="uint8")
+        else:
+            face = self._det_faces.get_face_at_index(position,
+                                                     0,  # Hard wired to 0 for now
+                                                     size,
+                                                     image=self._frames.current_frame)[..., 2::-1]
+        logger.trace("face shape: %s", face.shape)
+        return face
+
+    def _update_tk_frame(self):
+        """ Place the currently held frame into :attr:`_tk_frame`. """
+        img = cv2.resize(self._frames.current_frame,
+                         self._frames.current_meta_data["display_dims"],
+                         interpolation=self._frames.current_meta_data["interpolation"])[..., 2::-1]
+        logger.trace("final shape: %s", img.shape)
+        self._tk_frame.paste(Image.fromarray(img))

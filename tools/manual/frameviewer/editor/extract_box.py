@@ -38,7 +38,7 @@ class ExtractBox(Editor):
     def update_annotation(self):
         """ Draw the latest Extract Boxes around the faces. """
         color = self._control_color
-        for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
+        for idx, face in enumerate(self._face_iterator):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
             if self._is_zoomed:
                 box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],

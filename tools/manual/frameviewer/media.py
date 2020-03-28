@@ -4,7 +4,6 @@ import logging
 import tkinter as tk
 
 import cv2
-from PIL import Image, ImageTk
 
 from lib.image import SingleFrameLoader
 from lib.multithreading import MultiThread
@@ -31,7 +30,6 @@ class FrameNavigation():
         self._scaling = scaling_factor
         self._tk_vars = self._set_tk_vars()
         self._current_frame = None
-        self._tk_image = None
         self._display_dims = (896, 504)
         self._init_thread = self._background_init_frames(frames_location)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -93,12 +91,6 @@ class FrameNavigation():
     def current_frame_dims(self):
         """ tuple: The (`height`, `width`) of the source frame that is being displayed """
         return self._current_frame.shape[:2]
-
-    @property
-    def tk_image(self):
-        """ :class:`ImageTk.PhotoImage`: The currently loaded frame, formatted and sized
-        for display. """
-        return self._tk_image
 
     @property
     def display_dims(self):
@@ -190,13 +182,6 @@ class FrameNavigation():
         filename, frame = self._loader.image_from_index(position)
         self._add_meta_data(position, frame, filename)
         self._current_frame = frame
-        display = cv2.resize(self._current_frame,
-                             self.current_meta_data["display_dims"],
-                             interpolation=self.current_meta_data["interpolation"])[..., 2::-1]
-        if self._tk_image is None:
-            self._tk_image = ImageTk.PhotoImage(Image.fromarray(display))
-        else:
-            self._tk_image.paste(Image.fromarray(display))
         self._current_idx = position
         self.tk_update.set(True)
 

@@ -33,7 +33,8 @@ class Mask(Editor):
                         "mask directly. Any change to the landmarks after editing the mask will "
                         "override your manual edits.")
         key_bindings = {"[": lambda *e, i=False: self._adjust_brush_radius(increase=i),
-                        "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
+                        "]": lambda *e, i=True: self._adjust_brush_radius(increase=i),
+                        "m": lambda *e: self._switch_view_mode()}
         super().__init__(canvas, detected_faces, frames,
                          control_text=control_text, key_bindings=key_bindings)
         # Bind control click for reverse painting
@@ -56,7 +57,7 @@ class Mask(Editor):
     @property
     def _edit_mode(self):
         """ str: The currently selected edit mode based on optional action button.
-        One of "draw", "erase" or "zoom" """
+        One of "draw" or "erase" """
         action = [name for name, option in self._actions.items() if option["tk_var"].get()]
         return "draw" if not action else action[0]
 
@@ -68,7 +69,6 @@ class Mask(Editor):
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
         and Zoom. """
-        self._add_action("zoom", "zoom", "Zoom Tool", hotkey="M")
         self._add_action("draw", "draw", "Draw Tool", hotkey="D")
         self._add_action("erase", "erase", "Erase Tool", hotkey="E")
 
@@ -107,7 +107,7 @@ class Mask(Editor):
                                              choices=("Frame", "Face"),
                                              default="Frame",
                                              is_radio=True,
-                                             helptext="Set the view mode"))
+                                             helptext="Set the view mode (M)"))
 
     def _set_tk_mask_change_callback(self):
         """ Add a trace to change the displayed mask on a mask type change. """
@@ -162,7 +162,7 @@ class Mask(Editor):
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
         roi_color = self._canvas.colors[self._annotation_formats["ExtractBox"]["color"].get()]
         opacity = self._opacity
-        for idx, face in enumerate(self._det_faces.current_faces[self._frame_index]):
+        for idx, face in enumerate(self._face_iterator):
             mask = face.mask.get(mask_type, None)
             if mask is None:
                 continue
@@ -382,8 +382,7 @@ class Mask(Editor):
         Update :attr:`_mouse_location` with the current cursor position and display appropriate
         icon.
 
-        If in zoom mode, then checks whether mouse is over a mask ROI box and pops the zoom icon.
-        If in edit mode, checks whether the mouse is over a mask ROI box and pops the paint icon.
+        Checks whether the mouse is over a mask ROI box and pops the paint icon.
 
         Parameters
         ----------
@@ -400,16 +399,14 @@ class Mask(Editor):
         item_id = list(item_ids)[0]
         tags = self._canvas.gettags(item_id)
         face_idx = int(next(tag for tag in tags if tag.startswith("face_")).split("_")[-1])
-        if self._edit_mode == "zoom":
-            self._canvas.config(cursor="exchange")
-        else:
-            radius = self._brush_radius
-            coords = (event.x - radius, event.y - radius, event.x + radius, event.y + radius)
-            self._canvas.config(cursor="none")
-            self._canvas.coords(self._mouse_location[0], *coords)
-            self._canvas.itemconfig(self._mouse_location[0],
-                                    state="normal",
-                                    outline=self._cursor_color)
+
+        radius = self._brush_radius
+        coords = (event.x - radius, event.y - radius, event.x + radius, event.y + radius)
+        self._canvas.config(cursor="none")
+        self._canvas.coords(self._mouse_location[0], *coords)
+        self._canvas.itemconfig(self._mouse_location[0],
+                                state="normal",
+                                outline=self._cursor_color)
         self._mouse_location[1] = face_idx
         self._canvas.update_idletasks()
 
@@ -430,8 +427,7 @@ class Mask(Editor):
     def _drag_start(self, event, control_click=False):  # pylint:disable=arguments-differ
         """ The action to perform when the user starts clicking and dragging the mouse.
 
-        If edit mode is zoom, then zooms the face in or out.
-        If edit mode is draw or erase, then paints on the mask with the appropriate action.
+        Paints on the mask with the appropriate draw or erase action.
 
         Parameters
         ----------
@@ -442,36 +438,10 @@ class Mask(Editor):
         if face_idx is None:
             self._drag_data = dict()
             self._drag_callback = None
-        elif self._edit_mode == "zoom":
-            self._zoom_face(face_idx)
         else:
             self._drag_data["starting_location"] = np.array((event.x, event.y))
             self._drag_data["control_click"] = control_click
             self._drag_callback = self._paint
-
-    def _zoom_face(self, face_index):
-        """ Zoom in or zoom out of the selected face.
-
-        Parameters
-        ----------
-        face_index: int
-            The face index within the current frame that is to be zoomed in or out
-        """
-        self._canvas.image.toggle()
-        coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
-        if self._is_zoomed:
-            face = self._det_faces.get_face_at_index(
-                self._frame_index,
-                face_index,
-                min(self._frames.display_dims))[..., 2::-1]
-            display = ImageTk.PhotoImage(Image.fromarray(face))
-            self._update_meta("zoomed", display, face_index)
-            kwargs = dict(image=display, anchor=tk.CENTER)
-        else:
-            kwargs = dict(state="hidden")
-        item_id = self._object_tracker("zoom", "image", face_index, coords, kwargs)
-        self._canvas.tag_lower(item_id)
-        self._frames.tk_update.set(True)
 
     def _paint(self, event):
         """ Paint or erase from Mask and update cursor on click and drag.
@@ -532,10 +502,6 @@ class Mask(Editor):
             The tkinter mouse event. Unused but required
         """
         if not self._drag_data:
-            return
-        if self._edit_mode == "zoom":
-            self._drag_data = dict()
-            self._drag_callback = None
             return
         face_idx = self._mouse_location[1]
         location = np.array(((event.x, event.y), ))

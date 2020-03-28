@@ -166,7 +166,7 @@ class DetectedFaces():
         if self._is_video:
             self._alignments.save_video_meta_data(pts_time, keyframes)
 
-    def get_face_at_index(self, frame_index, face_index, size,
+    def get_face_at_index(self, frame_index, face_index, size, image=None,
                           with_landmarks=False, with_mask=False):
         """ Return an aligned face for the given frame and face index sized at the given size.
 
@@ -204,7 +204,9 @@ class DetectedFaces():
         resize = self._zoomed_size != size
         logger.trace("Requires resize: %s", resize)
         # TODO Change when removed frames requirement
-        face.load_aligned(self._frames.current_frame, size=self._zoomed_size, force=True)
+        # Image is passed in for Zoomed Face. Do this for all use cases + document image
+        image = self._frames.current_frame if image is None else image
+        face.load_aligned(image, size=self._zoomed_size, force=True)
 
         retval = cv2.resize(face.aligned_face,
                             (size, size)) if resize else face.aligned_face.copy()
