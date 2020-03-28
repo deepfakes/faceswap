@@ -450,7 +450,7 @@ class Mask(Editor):
         face_index: int
             The face index within the current frame that is to be zoomed in or out
         """
-        self._canvas.toggle_image_display()
+        self._canvas.image.toggle()
         coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
         if self._is_zoomed:
             face = self._det_faces.get_face_at_index(

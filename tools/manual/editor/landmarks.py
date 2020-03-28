@@ -245,7 +245,7 @@ class Landmarks(Editor):
         """
         face_index = self._zoomed_face_index
         if not update_only:
-            self._canvas.toggle_image_display()
+            self._canvas.image.toggle()
         coords = (self._frames.display_dims[0] / 2, self._frames.display_dims[1] / 2)
         if self._is_zoomed:
             face = self._det_faces.get_face_at_index(

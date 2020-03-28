@@ -669,14 +669,9 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
         self._det_faces = detected_faces
         self._frames = frames
-        self._image_is_hidden = False
         self._actions = actions
         self._tk_action_var = tk_action_var
-        self._image = self.create_image(self._frames.display_dims[0] / 2,
-                                        self._frames.display_dims[1] / 2,
-                                        image=self._frames.current_display_frame,
-                                        anchor=tk.CENTER,
-                                        tags="main_image")
+        self._image = BackgroundImage(self)
         self._editor_globals = dict(control_tk_vars=dict(),
                                     annotation_formats=dict(),
                                     key_bindings=dict())
@@ -749,19 +744,9 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                     white="#ffffff")
 
     @property
-    def image_is_hidden(self):
-        """ bool: ``True`` if the background frame image is hidden otherwise ``False``. """
-        return self._image_is_hidden
-
-    def send_frame_to_bottom(self):
-        """ Sent the background frame to the bottom of the stack """
-        self.tag_lower(self._image)
-
-    def toggle_image_display(self):
-        """ Toggle the background frame between displayed and hidden. """
-        state = "normal" if self._image_is_hidden else "hidden"
-        self.itemconfig(self._image, state=state)
-        self._image_is_hidden = not self._image_is_hidden
+    def image(self):
+        """ :class:`BackgroundFrame`: The background image on the canvas. """
+        return self._image
 
     def _get_editors(self):
         """ Get the object editors for the canvas.
@@ -820,7 +805,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """
         if not self._frames.tk_update.get():
             return
-        self.refresh_display_image()
+        self._image.refresh()
         to_display = sorted([self.selected_action] + self.editor_display[self.selected_action])
         self._hide_additional_faces()
         for editor in to_display:
@@ -845,18 +830,6 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                 logger.debug("Hiding face tag '%s'", tag)
                 self.itemconfig(tag, state="hidden")
 
-    def refresh_display_image(self):
-        """ Update the displayed frame """
-        if not self._frames.needs_update:
-            logger.trace("Background frame not updated. Returning")
-            return
-        logger.trace("Updating background frame")
-        self.itemconfig(self._image, image=self._frames.current_display_frame)
-        if self._image_is_hidden:
-            logger.trace("Unhiding background frame")
-            self.toggle_image_display()
-        self._frames.clear_update_flag()
-
     def _bind_unbind_keys(self):
         """ Bind or unbind this editor's hotkeys depending on whether it is active. """
         unbind_keys = [key for key, binding in self.key_bindings.items()
@@ -875,3 +848,39 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             logger.debug("Binding key '%s' to method %s", key, method)
             self.winfo_toplevel().bind(key, method)
             self.key_bindings[key]["bound_to"] = self.selected_action
+
+
+class BackgroundImage():
+    """ The background image of the canvas """
+    def __init__(self, canvas):
+        self._canvas = canvas
+        self._frames = canvas._frames
+        self._is_hidden = False
+        self._image = self._canvas.create_image(self._frames.display_dims[0] / 2,
+                                                self._frames.display_dims[1] / 2,
+                                                image=self._frames.current_display_frame,
+                                                anchor=tk.CENTER,
+                                                tags="main_image")
+
+    @property
+    def is_hidden(self):
+        """ bool: ``True`` if the background frame image is hidden otherwise ``False``. """
+        return self._is_hidden
+
+    def toggle(self):
+        """ Toggle the background frame between displayed and hidden. """
+        state = "normal" if self._is_hidden else "hidden"
+        self._canvas.itemconfig(self._image, state=state)
+        self._is_hidden = not self._is_hidden
+
+    def refresh(self):
+        """ Update the displayed frame """
+        if not self._frames.needs_update:
+            logger.trace("Background frame not updated. Returning")
+            return
+        logger.trace("Updating background frame")
+        self._canvas.itemconfig(self._image, image=self._frames.current_display_frame)
+        if self._is_hidden:
+            logger.trace("Unhiding background frame")
+            self.toggle()
+        self._frames.clear_update_flag()

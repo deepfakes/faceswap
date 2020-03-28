@@ -78,7 +78,7 @@ class Editor():
     def _is_zoomed(self):
         """ bool: ``True`` if a face is currently zoomed in, ``False`` if the full frame is
         displayed """
-        return self._canvas.image_is_hidden
+        return self._canvas.image.is_hidden
 
     @property
     def _zoomed_dims(self):
