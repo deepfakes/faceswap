@@ -875,12 +875,7 @@ class BackgroundImage():
 
     def refresh(self):
         """ Update the displayed frame """
-        if not self._frames.needs_update:
-            logger.trace("Background frame not updated. Returning")
-            return
         logger.trace("Updating background frame")
-        self._canvas.itemconfig(self._image, image=self._frames.current_display_frame)
         if self._is_hidden:
             logger.trace("Unhiding background frame")
             self.toggle()
-        self._frames.clear_update_flag()
