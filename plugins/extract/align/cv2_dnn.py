@@ -63,22 +63,21 @@ class Align(Aligner):
         rois = []
         faces = []
         offsets = []
-        for face, image in zip(batch["detected_faces"], batch["image"]):
-            box = (face.left,
-                   face.top,
-                   face.right,
-                   face.bottom)
-            diff_height_width = face.h - face.w
+        for det_face, image in zip(batch["detected_faces"], batch["image"]):
+            box = (det_face.left,
+                   det_face.top,
+                   det_face.right,
+                   det_face.bottom)
+            diff_height_width = det_face.h - det_face.w
             offset_y = int(abs(diff_height_width / 2))
             box_moved = self.move_box(box, [0, offset_y])
-
             # Make box square.
             roi = self.get_square_box(box_moved)
 
             # Pad the image and adjust roi if face is outside of boundaries
             image, offset = self.pad_image(roi, image)
-            face = image[roi[1] + offset[1]: roi[3] + offset[1],
-                         roi[0] + offset[0]: roi[2] + offset[0]]
+            face = image[roi[1] + abs(offset[1]): roi[3] + abs(offset[1]),
+                         roi[0] + abs(offset[0]): roi[2] + abs(offset[0])]
             interpolation = cv2.INTER_CUBIC if face.shape[0] < self.input_size else cv2.INTER_AREA
             face = cv2.resize(face, dsize=sizes, interpolation=interpolation)
             faces.append(face)
