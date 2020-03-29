@@ -36,6 +36,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
         super().__init__(format, request)
         self._frame_pts = None
         self._keyframes = None
+        self.use_patch = False
 
     def get_frame_info(self, frame_pts=None, keyframes=None):
         """ Store the source video's keyframes in :attr:`_frame_info" for the current video for use
@@ -158,17 +159,24 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
             # still somewhat unresponsive and did not always land on the correct frame. This monkey
             # patched version goes to the previous keyframe then discards frames until the correct
             # frame is landed on.
-            if self._frame_pts is None:
+            if self.use_patch and self._frame_pts is None:
                 self.get_frame_info()
 
-            keyframe_pts, keyframe = self._previous_keyframe_info(index)
-            seek_fast = keyframe_pts
-            skip_frames = index - keyframe
+            if self.use_patch:
+                keyframe_pts, keyframe = self._previous_keyframe_info(index)
+                seek_fast = keyframe_pts
+                skip_frames = index - keyframe
+            else:
+                starttime = index / self._meta["fps"]
+                seek_slow = min(10, starttime)
+                seek_fast = starttime - seek_slow
 
             # We used to have this epsilon earlier, when we did not use
             # the slow seek. I don't think we need it anymore.
             # epsilon = -1 / self._meta["fps"] * 0.1
             iargs += ["-ss", "%.06f" % (seek_fast)]
+            if not self.use_patch:
+                oargs += ["-ss", "%.06f" % (seek_slow)]
 
         # Output args, for writing to pipe
         if self._arg_size:
@@ -210,11 +218,12 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
         elif index == 0:
             self._meta.update(self._read_gen.__next__())
         else:
-            frames_skipped = 0
-            while skip_frames != frames_skipped:
-                # Skip frames that are not the desired frame
-                _ = self._read_gen.__next__()
-                frames_skipped += 1
+            if self.use_patch:
+                frames_skipped = 0
+                while skip_frames != frames_skipped:
+                    # Skip frames that are not the desired frame
+                    _ = self._read_gen.__next__()
+                    frames_skipped += 1
             self._read_gen.__next__()  # we already have meta data
 
 
@@ -999,6 +1008,7 @@ class SingleFrameLoader(ImagesLoader):
     def _get_count_and_filelist(self, fast_count, count):
         if self._is_video:
             self._reader = imageio.get_reader(self.location, "ffmpeg")
+            self._reader.use_patch = True
             count, video_meta_data = self._reader.get_frame_info(
                 frame_pts=self._video_meta_data.get("pts_time", None),
                 keyframes=self._video_meta_data.get("keyframes", None))
