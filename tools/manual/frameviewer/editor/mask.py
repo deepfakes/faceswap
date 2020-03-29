@@ -33,8 +33,7 @@ class Mask(Editor):
                         "mask directly. Any change to the landmarks after editing the mask will "
                         "override your manual edits.")
         key_bindings = {"[": lambda *e, i=False: self._adjust_brush_radius(increase=i),
-                        "]": lambda *e, i=True: self._adjust_brush_radius(increase=i),
-                        "m": lambda *e: self._switch_view_mode()}
+                        "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
         super().__init__(canvas, detected_faces, frames,
                          control_text=control_text, key_bindings=key_bindings)
         # Bind control click for reverse painting
@@ -58,7 +57,8 @@ class Mask(Editor):
     def _edit_mode(self):
         """ str: The currently selected edit mode based on optional action button.
         One of "draw" or "erase" """
-        action = [name for name, option in self._actions.items() if option["tk_var"].get()]
+        action = [name for name, option in self._actions.items()
+                  if option["group"] == "paint" and option["tk_var"].get()]
         return "draw" if not action else action[0]
 
     @property
@@ -69,15 +69,18 @@ class Mask(Editor):
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
         and Zoom. """
-        self._add_action("draw", "draw", "Draw Tool", hotkey="D")
-        self._add_action("erase", "erase", "Erase Tool", hotkey="E")
+        self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
+        self._add_action("draw", "draw", "Draw Tool", group="paint", hotkey="D")
+        self._add_action("erase", "erase", "Erase Tool", group="paint", hotkey="E")
+        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._frames.tk_update.set(True))
 
     def _add_controls(self):
         """ Add the mask specific control panel controls.
 
         Current controls are:
-          - the mask type to edit, the size of brush to use and the cursor display color.
-          - View Mode: Frame or Faces
+          - the mask type to edit
+          - the size of brush to use
+          - the cursor display color
         """
         masks = sorted(msk.title() for msk in list(self._det_faces.available_masks) + ["None"])
         default = masks[0] if len(masks) == 1 else [mask for mask in masks if mask != "None"][0]
@@ -102,12 +105,6 @@ class Mask(Editor):
                                              choices=sorted(self._canvas.colors),
                                              default="White",
                                              helptext="Select the brush cursor color."))
-        self._add_control(ControlPanelOption("View Mode",
-                                             str,
-                                             choices=("Frame", "Face"),
-                                             default="Frame",
-                                             is_radio=True,
-                                             helptext="Set the view mode (M)"))
 
     def _set_tk_mask_change_callback(self):
         """ Add a trace to change the displayed mask on a mask type change. """

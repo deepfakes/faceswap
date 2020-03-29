@@ -565,11 +565,14 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             frame = ttk.Frame(self)
             sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
             sep.pack(fill=tk.X, pady=5, side=tk.TOP)
-            for idx, action in enumerate(actions.values()):
-                if idx == 0:
+            seen_groups = set()
+            for action in actions.values():
+                group = action["group"]
+                if group is not None and group not in seen_groups:
                     btn_style = "actions_selected.TButton"
                     state = (["pressed", "focus"])
                     action["tk_var"].set(True)
+                    seen_groups.add(group)
                 else:
                     btn_style = "actions_deselected.TButton"
                     state = (["!pressed", "!focus"])
@@ -586,7 +589,9 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 helptext += "" if hotkey is None else " ({})".format(hotkey.upper())
                 Tooltip(button, text=helptext)
                 self._optional_buttons.setdefault(
-                    name, dict())[button] = dict(hotkey=hotkey, tk_var=action["tk_var"])
+                    name, dict())[button] = dict(hotkey=hotkey,
+                                                 group=group,
+                                                 tk_var=action["tk_var"])
             self._optional_buttons[name]["frame"] = frame
         self._display_optional_buttons()
 
@@ -599,17 +604,28 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The action name for the button that has called this event as exists in :attr:`_buttons`
         """
         options = self._optional_buttons[self._selected_action.get()]
+        group = options[button]["group"]
         for child in options["frame"].winfo_children():
             if child.winfo_class() != "TButton":
                 continue
-            if child == button:
+            child_group = options[child]["group"]
+            if child == button and group is not None:
                 child.configure(style="actions_selected.TButton")
                 child.state(["pressed", "focus"])
                 options[child]["tk_var"].set(True)
-            else:
+            elif child != button and group is not None and child_group == group:
                 child.configure(style="actions_deselected.TButton")
                 child.state(["!pressed", "!focus"])
                 options[child]["tk_var"].set(False)
+            elif group is None and child_group is None:
+                if child.cget("style") == "actions_selected.TButton":
+                    child.configure(style="actions_deselected.TButton")
+                    child.state(["!pressed", "!focus"])
+                    options[child]["tk_var"].set(False)
+                else:
+                    child.configure(style="actions_selected.TButton")
+                    child.state(["pressed", "focus"])
+                    options[child]["tk_var"].set(True)
 
     def _display_optional_buttons(self, *args):  # pylint:disable=unused-argument
         """ Pack or forget the optional buttons depending on active editor """

@@ -2,7 +2,7 @@
 """ Landmarks Editor and Landmarks Mesh viewer for the manual adjustments tool """
 import numpy as np
 
-from ._base import ControlPanelOption, Editor, logger
+from ._base import Editor, logger
 
 
 class Landmarks(Editor):
@@ -22,20 +22,13 @@ class Landmarks(Editor):
     def __init__(self, canvas, detected_faces, frames):
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
                         " - Click and drag individual landmark points to relocate.")
-        key_bindings = {"m": lambda *e: self._switch_view_mode()}
-        super().__init__(canvas, detected_faces, frames, control_text, key_bindings=key_bindings)
+        super().__init__(canvas, detected_faces, frames, control_text)
 
-    def _add_controls(self):
-        """ Add the Landmarks specific control panel controls.
-
-        Current controls are: View Mode: Frame or Faces
-        """
-        self._add_control(ControlPanelOption("View Mode",
-                                             str,
-                                             choices=("Frame", "Face"),
-                                             default="Frame",
-                                             is_radio=True,
-                                             helptext="Set the view mode (M)"))
+    def _add_actions(self):
+        """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
+        and Zoom. """
+        self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
+        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._frames.tk_update.set(True))
 
     def update_annotation(self):
         """ Get the latest Landmarks points and update. """

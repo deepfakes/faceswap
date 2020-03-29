@@ -78,8 +78,8 @@ class Editor():
     def view_mode(self):
         """ ["frame", "face"]: The view mode for the currently selected editor. If the editor does
         not have a view mode that can be updated, then `"frame"` will be returned. """
-        tk_var = self._control_vars.get("none", dict()).get("ViewMode", None)
-        retval = "frame" if tk_var is None or not tk_var.get() else tk_var.get().lower()
+        tk_var = self._actions.get("magnify", dict()).get("tk_var", None)
+        retval = "frame" if tk_var is None or not tk_var.get() else "face"
         return retval
 
     @property
@@ -481,7 +481,7 @@ class Editor():
         """
         self._actions = self._actions
 
-    def _add_action(self, title, icon, helptext, hotkey=None):
+    def _add_action(self, title, icon, helptext, group=None, hotkey=None):
         """ Add an action dictionary to :attr:`_actions`. This will create a button in the optional
         actions frame to the left hand side of the frames viewer.
 
@@ -493,12 +493,16 @@ class Editor():
             The name of the icon that is used to display this action's button
         helptext: str
             The tooltip text to display for this action
+        group: str, optional
+            If a group is passed in, then any buttons belonging to that group will be linked (i.e.
+            only one button can be active at a time.). If ``None`` is passed in then the button
+            will act independently. Default: ``None``
         hotkey: str, optional
             The hotkey binding for this action. Set to ``None`` if there is no hotkey binding.
             Default: ``None``
         """
         var = tk.BooleanVar()
-        action = dict(icon=icon, helptext=helptext, tk_var=var, hotkey=hotkey)
+        action = dict(icon=icon, helptext=helptext, group=group, tk_var=var, hotkey=hotkey)
         logger.debug("Adding action: %s", action)
         self._actions[title] = action
 
@@ -546,7 +550,7 @@ class Editor():
                                          int,
                                          group="Color",
                                          min_max=(0, 100),
-                                         default=20,
+                                         default=40,
                                          rounding=1,
                                          helptext="Set the mask opacity")
             for editor in editors:
@@ -572,10 +576,13 @@ class Editor():
 
     def _switch_view_mode(self):
         """ Switch the view mode on an "M" key key press. """
+        tk_var = self._actions["magnify"]["tk_var"]
+        print(tk_var, tk_var.get())
         current = self.view_mode
-        mode = "Frame" if current == "face" else "Face"
-        logger.debug("Switching view mode from '%s' to '%s'", current, mode)
-        self._control_vars["none"]["ViewMode"].set(mode)
+        mode = False if current == "face" else True
+        logger.info("Switching view mode from '%s' to '%s'", tk_var.get(), mode)
+        tk_var.set(mode)
+        self._frames.tk_update.set(True)
 
 
 class View(Editor):
@@ -587,17 +594,9 @@ class View(Editor):
     """
     def __init__(self, canvas, detected_faces, frames):
         control_text = "Viewer\nPreview the frame's annotations."
-        key_bindings = {"m": lambda *e: self._switch_view_mode()}
-        super().__init__(canvas, detected_faces, frames, control_text, key_bindings=key_bindings)
+        super().__init__(canvas, detected_faces, frames, control_text)
 
-    def _add_controls(self):
-        """ Add the Landmarks specific control panel controls.
-
-        Current controls are: View Mode: Frame or Faces
-        """
-        self._add_control(ControlPanelOption("View Mode",
-                                             str,
-                                             choices=("Frame", "Face"),
-                                             default="Frame",
-                                             is_radio=True,
-                                             helptext="Set the view mode (M)"))
+    def _add_actions(self):
+        """ Add the optional action buttons to the viewer. Current actions are Zoom. """
+        self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
+        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._frames.tk_update.set(True))
