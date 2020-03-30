@@ -836,7 +836,8 @@ class Aligner():
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # TODO FAN
-        aligner = Extractor(None, "FAN", None, multiprocess=True, normalize_method="hist")
+        aligner = Extractor(None, "FAN", ["components", "extended"],
+                            multiprocess=True, normalize_method="hist")
         aligner.set_batchsize("align", 1)  # Set the batchsize to 1
         aligner.launch()
         logger.debug("Initialized Extractor")
