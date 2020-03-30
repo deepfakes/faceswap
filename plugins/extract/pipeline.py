@@ -73,6 +73,7 @@ class Extractor():
                      "normalize_method: %s, image_is_aligned: %s)",
                      self.__class__.__name__, detector, aligner, masker, configfile,
                      multiprocess, rotate_images, min_size, normalize_method, image_is_aligned)
+        masker = [masker] if not isinstance(masker, list) else masker
         self._flow = self._set_flow(detector, aligner, masker)
         self.phase = self._flow[0]
         # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
@@ -81,7 +82,7 @@ class Extractor():
         self._vram_buffer = 256  # Leave a buffer for VRAM allocation
         self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
         self._align = self._load_align(aligner, configfile, normalize_method)
-        self._mask = self._load_mask(masker, image_is_aligned, configfile)
+        self._mask = [self._load_mask(mask, image_is_aligned, configfile) for mask in masker]
         self._is_parallel = self._set_parallel_processing(multiprocess)
         self._set_extractor_batchsize()
         self._queues = self._add_queues()
@@ -255,10 +256,18 @@ class Extractor():
     @property
     def _total_vram_required(self):
         """ Return vram required for all phases plus the buffer """
-        vrams = [getattr(self, "_{}".format(p)).vram for p in self._flow]
-        vram_required_count = sum(1 for p in vrams if p > 0)
-        retval = (sum(vrams) * self._parallel_scaling[vram_required_count]) + self._vram_buffer
-        logger.trace(retval)
+        vrams = dict()
+        for phase in self._flow:
+            plugin_type, idx = self._get_plugin_type_and_index(phase)
+            attr = getattr(self, "_{}".format(plugin_type))
+            attr = attr[idx] if idx is not None else attr
+            vrams[phase] = attr.vram
+        vram_required_count = sum(1 for p in vrams.values() if p > 0)
+        logger.debug("VRAM requirements: %s. Plugins requiring VRAM: %s",
+                     vrams, vram_required_count)
+        retval = (sum(vrams.values()) *
+                  self._parallel_scaling[vram_required_count]) + self._vram_buffer
+        logger.debug("Total VRAM required: %s", retval)
         return retval
 
     @property
@@ -289,7 +298,13 @@ class Extractor():
     @property
     def _all_plugins(self):
         """ Return list of all plugin objects in this pipeline """
-        retval = [getattr(self, "_{}".format(phase)) for phase in self._flow]
+        retval = []
+        for phase in self._flow:
+            plugin_type, idx = self._get_plugin_type_and_index(phase)
+            attr = getattr(self, "_{}".format(plugin_type))
+            attr = attr[idx] if idx is not None else attr
+            retval.append(attr)
+            attr = getattr(self, "_{}".format(plugin_type))
         logger.trace("All Plugins: %s", retval)
         return retval
 
@@ -312,14 +327,46 @@ class Extractor():
             retval.append("detect")
         if aligner is not None and aligner.lower() != "none":
             retval.append("align")
-        if masker is not None and masker.lower() != "none":
-            retval.append("mask")
+        for idx, mask in enumerate(masker):
+            if mask is not None and mask.lower() != "none":
+                retval.append("mask_{}".format(idx))
         logger.debug("flow: %s", retval)
         return retval
+
+    @staticmethod
+    def _get_plugin_type_and_index(flow_phase):
+        """ Obtain the plugin type and index for the plugin for the given flow phase.
+
+        When multiple plugins for the same phase are allowed (e.g. Mask) this will return
+        the plugin type and the index of the plugin required. If only one plugin is allowed
+        then the plugin type will be returned and the index will be ``None``.
+
+        Parameters
+        ----------
+        flow_phase: str
+            The phase within :attr:`_flow` that is to have the plugin type and index returned
+
+        Returns
+        -------
+        plugin_type: str
+            The plugin type for the given flow phase
+        index: int
+            The index of this plugin type within the flow, if there are multiple plugins in use
+            otherwise ``None`` if there is only 1 plugin in use for the given phase
+        """
+        idx = flow_phase.split("_")[-1]
+        if idx.isdigit():
+            idx = int(idx)
+            plugin_type = "_".join(flow_phase.split("_")[:-1])
+        else:
+            plugin_type = flow_phase
+            idx = None
+        return plugin_type, idx
 
     def _add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
+        tasks = []
         tasks = ["extract_{}_in".format(phase) for phase in self._flow]
         tasks.append("extract_{}_out".format(self._final_phase))
         for task in tasks:
@@ -407,7 +454,9 @@ class Extractor():
         logger.debug("in_qname: %s, out_qname: %s", in_qname, out_qname)
         kwargs = dict(in_queue=self._queues[in_qname], out_queue=self._queues[out_qname])
 
-        plugin = getattr(self, "_{}".format(phase))
+        plugin_type, idx = self._get_plugin_type_and_index(phase)
+        plugin = getattr(self, "_{}".format(plugin_type))
+        plugin = plugin[idx] if idx is not None else plugin
         plugin.initialize(**kwargs)
         plugin.start()
         logger.debug("Launched %s plugin", phase)

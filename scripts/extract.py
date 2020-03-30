@@ -53,7 +53,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         normalization = None if self._args.normalization == "none" else self._args.normalization
         self._extractor = Extractor(self._args.detector,
                                     self._args.aligner,
-                                    self._args.masker,
+                                    [self._args.masker, "components", "extended"],
                                     configfile=configfile,
                                     multiprocess=not self._args.singleprocess,
                                     rotate_images=self._args.rotate_images,

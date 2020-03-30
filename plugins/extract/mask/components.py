@@ -44,7 +44,7 @@ class Mask(Masker):
 
     @staticmethod
     def parse_parts(landmarks):
-        """ Component facehull mask """
+        """ Component face hull mask """
         r_jaw = (landmarks[0:9], landmarks[17:18])
         l_jaw = (landmarks[8:17], landmarks[26:27])
         r_cheek = (landmarks[17:20], landmarks[8:9])

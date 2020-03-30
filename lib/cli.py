@@ -47,15 +47,15 @@ class ScriptExecutor():
         min_ver = 1.12
         max_ver = 1.15
         try:
-            # Ensure tensorflow doesn't pin all threads to one core when using tf-mkl
+            # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
             os.environ["KMP_AFFINITY"] = "disabled"
-            import tensorflow as tf
+            import tensorflow as tf  # pylint:disable=import-outside-toplevel
         except ImportError as err:
             raise FaceswapError("There was an error importing Tensorflow. This is most likely "
                                 "because you do not have TensorFlow installed, or you are trying "
                                 "to run tensorflow-gpu on a system without an Nvidia graphics "
                                 "card. Original import error: {}".format(str(err)))
-        tf_ver = float(".".join(tf.__version__.split(".")[:2]))
+        tf_ver = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
         if tf_ver < min_ver:
             raise FaceswapError("The minimum supported Tensorflow is version {} but you have "
                                 "version {} installed. Please upgrade Tensorflow.".format(
@@ -85,7 +85,7 @@ class ScriptExecutor():
 
         try:
             # pylint: disable=unused-variable
-            import tkinter  # noqa pylint: disable=unused-import
+            import tkinter  # noqa pylint: disable=unused-import,import-outside-toplevel
         except ImportError:
             logger.error(
                 "It looks like TkInter isn't installed for your OS, so "
@@ -153,11 +153,11 @@ class ScriptExecutor():
         """ Test for plaidml and setup for AMD """
         logger.debug("Setting up for AMD")
         try:
-            import plaidml  # noqa pylint:disable=unused-import
+            import plaidml  # noqa pylint:disable=unused-import,import-outside-toplevel
         except ImportError:
             logger.error("PlaidML not found. Run `pip install plaidml-keras` for AMD support")
             return False
-        from lib.plaidml_tools import setup_plaidml
+        from lib.plaidml_tools import setup_plaidml  # pylint:disable=import-outside-toplevel
         setup_plaidml(loglevel)
         logger.debug("setup up for PlaidML")
         return True
@@ -255,14 +255,14 @@ class FilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
     """ Class that the gui uses to determine that the input can take multiple files as an input.
         Inherits functionality from FileFullPaths
         Has the effect of giving the user 2 Open Dialogue buttons in the gui """
-    pass
+    pass  # pylint: disable=unnecessary-pass
 
 
 class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
     """ Class that the gui uses to determine that the input can take a folder or a filename.
         Inherits functionality from FileFullPaths
         Has the effect of giving the user 2 Open Dialogue buttons in the gui """
-    pass
+    pass  # pylint: disable=unnecessary-pass
 
 
 class SaveFileFullPaths(FileFullPaths):
@@ -568,21 +568,20 @@ class ExtractArgs(ExtractConvertArgs):
                     "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
                     "but less accurate. Only use this if not using a GPU and time is important."
                     "\nL|fan: Best aligner. Fast on GPU, slow on CPU."})
+        mask_choices = [mask
+                        for mask in PluginLoader.get_available_extractors("mask", add_none=True)
+                        if mask not in ("components", "extended")]
         argument_list.append({
             "opts": ("-M", "--masker"),
             "action": Radio,
             "type": str.lower,
-            "choices": PluginLoader.get_available_extractors("mask", add_none=True),
-            "default": "extended",
+            "choices": mask_choices,
+            "default": "none",
             "group": "Plugins",
-            "help": "R|Masker to use."
+            "help": "R|Additional Masker to use. NB: The Extended and Components (landmark based) "
+                    "masks are automatically generated on extraction. Any mask selected here "
+                    "will be generated in addition to these default masks."
                     "\nL|none: Don't use a mask."
-                    "\nL|components: Mask designed to provide facial segmentation based on the "
-                    "positioning of landmark locations. A convex hull is constructed around the "
-                    "exterior of the landmarks to create a mask."
-                    "\nL|extended: Mask designed to provide facial segmentation based on the "
-                    "positioning of landmark locations. A convex hull is constructed around the "
-                    "exterior of the landmarks and the mask is extended upwards onto the forehead."
                     "\nL|vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
                     "faces clear of obstructions. Profile faces and obstructions may result in "
                     "sub-par performance."
@@ -593,7 +592,15 @@ class ExtractArgs(ExtractConvertArgs):
                     "\nL|unet-dfl: Mask designed to provide smart segmentation of mostly frontal "
                     "faces. The mask model has been trained by community members and will need "
                     "testing for further description. Profile faces may result in sub-par "
-                    "performance."})
+                    "performance."
+                    "\nThe auto generated masks are as follows:"
+                    "\nL|components: Mask designed to provide facial segmentation based on the "
+                    "positioning of landmark locations. A convex hull is constructed around the "
+                    "exterior of the landmarks to create a mask."
+                    "\nL|extended: Mask designed to provide facial segmentation based on the "
+                    "positioning of landmark locations. A convex hull is constructed around the "
+                    "exterior of the landmarks and the mask is extended upwards onto the "
+                    "forehead."})
         argument_list.append({
             "opts": ("-nm", "--normalization"),
             "action": Radio,

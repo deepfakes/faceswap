@@ -114,7 +114,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 self._queues["out"].put(item)
                 continue
             for f_idx, face in enumerate(item.detected_faces):
-                face.load_feed_face(item.get_image_copy(self.colorformat),
+                face.load_feed_face(item.get_image_copy(self.color_format),
                                     size=self.input_size,
                                     coverage_ratio=1.0,
                                     dtype="float32",

@@ -229,7 +229,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         item: :class:`plugins.extract.pipeline.ExtractMedia`
             The input item from the pipeline
         """
-        image = item.get_image_copy(self.colorformat)
+        image = item.get_image_copy(self.color_format)
         scale = self._set_scale(item.image_size)
         pad = self._set_padding(item.image_size, scale)
 

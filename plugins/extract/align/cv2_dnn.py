@@ -39,7 +39,7 @@ class Align(Aligner):
 
         self.name = "cv2-DNN Aligner"
         self.input_size = 128
-        self.colorformat = "RGB"
+        self.color_format = "RGB"
         self.vram = 0  # Doesn't use GPU
         self.vram_per_batch = 0
         self.batchsize = 1

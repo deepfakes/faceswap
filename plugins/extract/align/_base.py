@@ -125,7 +125,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 self._queues["out"].put(item)
                 continue
 
-            converted_image = item.get_image_copy(self.colorformat)
+            converted_image = item.get_image_copy(self.color_format)
             for f_idx, face in enumerate(item.detected_faces):
                 batch.setdefault("image", []).append(converted_image)
                 batch.setdefault("detected_faces", []).append(face)
@@ -219,7 +219,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     def _normalize_faces(self, faces):
         """ Normalizes the face for feeding into model
 
-        The normalization method is dictated by the command line argument `-nh (--normalization)`
+        The normalization method is dictated by the normalization command line argument
         """
         if self._normalize_method is None:
             return faces

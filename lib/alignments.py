@@ -231,7 +231,7 @@ class Alignments():
         """
         sample_filename = next(fname for fname in self.data)
         basename = sample_filename[:sample_filename.rfind("_")]
-        logger.info("sample filename: %s, base filename: %s", sample_filename, basename)
+        logger.debug("sample filename: %s, base filename: %s", sample_filename, basename)
         logger.info("Saving video meta information to Alignments file")
         for idx, pts in enumerate(pts_time):
             meta = dict(pts_time=pts, keyframe=idx in keyframes)
