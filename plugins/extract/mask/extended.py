@@ -44,7 +44,7 @@ class Mask(Masker):
 
     @staticmethod
     def parse_parts(landmarks):
-        """ Extended facehull mask """
+        """ Extended face hull mask """
         # mid points between the side of face and eye point
         ml_pnt = (landmarks[36] + landmarks[0]) // 2
         mr_pnt = (landmarks[16] + landmarks[45]) // 2

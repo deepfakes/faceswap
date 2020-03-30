@@ -20,7 +20,7 @@ class Align(Aligner):
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "FAN"
         self.input_size = 256
-        self.colorformat = "RGB"
+        self.color_format = "RGB"
         self.vram = 2240
         self.vram_warnings = 512  # Will run at this with warnings
         self.vram_per_batch = 64

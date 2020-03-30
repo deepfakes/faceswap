@@ -28,7 +28,7 @@ class Mask(Masker):
         self.name = "VGG Obstructed"
         self.input_size = 500
         self.vram = 3936
-        self.vram_warnings = 1088  # at BS 1. OOMs at higher batchsizes
+        self.vram_warnings = 1088  # at BS 1. OOMs at higher batch sizes
         self.vram_per_batch = 304
         self.batchsize = self.config["batch-size"]
 

@@ -25,7 +25,7 @@ class Detect(Detector):
         self.vram_per_batch = 32
         self.batchsize = self.config["batch-size"]
         self.kwargs = self.validate_kwargs()
-        self.colorformat = "RGB"
+        self.color_format = "RGB"
 
     def validate_kwargs(self):
         """ Validate that config options are correct. If not reset to default """
