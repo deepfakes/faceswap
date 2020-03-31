@@ -75,15 +75,16 @@ class Extractor():
                      multiprocess, rotate_images, min_size, normalize_method, image_is_aligned)
         masker = [masker] if not isinstance(masker, list) else masker
         self._flow = self._set_flow(detector, aligner, masker)
-        self.phase = self._flow[0]
         # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
         # for queue) at each point. Adding more just stacks RAM with no speed benefit.
         self._queue_size = 1
-        self._vram_buffer = 256  # Leave a buffer for VRAM allocation
+        self._vram_stats = self._get_vram_stats()
         self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
         self._align = self._load_align(aligner, configfile, normalize_method)
         self._mask = [self._load_mask(mask, image_is_aligned, configfile) for mask in masker]
         self._is_parallel = self._set_parallel_processing(multiprocess)
+        self._phases = self._set_phases(multiprocess)
+        self._phase_index = 0
         self._set_extractor_batchsize()
         self._queues = self._add_queues()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -101,7 +102,7 @@ class Extractor():
         For align/mask (2nd/3rd pass operations) the :attr:`ExtractMedia.detected_faces` should
         also be populated by calling :func:`ExtractMedia.set_detected_faces`.
         """
-        qname = "extract_{}_in".format(self.phase)
+        qname = "extract_{}_in".format(self._current_phase[0])
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -124,7 +125,17 @@ class Extractor():
         >>>         extract_media.set_image(image)
         >>>         extractor.input_queue.put(extract_media)
         """
-        retval = 1 if self._is_parallel else len(self._flow)
+        retval = len(self._phases)
+        logger.trace(retval)
+        return retval
+
+    @property
+    def phase_text(self):
+        """ str: The plugins that are running in the current phase, formatted for info text
+        output. """
+        plugin_types = set(self._get_plugin_type_and_index(phase)[0]
+                           for phase in self._current_phase)
+        retval = ", ".join(plugin_type.title() for plugin_type in list(plugin_types))
         logger.trace(retval)
         return retval
 
@@ -145,7 +156,7 @@ class Extractor():
         >>>         <do intermediate processing>
         >>>         extractor.input_queue.put(extract_media)
         """
-        retval = self._is_parallel or self.phase == self._final_phase
+        retval = self._phase_index == len(self._phases) - 1
         logger.trace(retval)
         return retval
 
@@ -178,12 +189,8 @@ class Extractor():
         >>>     extractor.launch():
         >>>         <do processing>
         """
-
-        if self._is_parallel:
-            for phase in self._flow:
-                self._launch_plugin(phase)
-        else:
-            self._launch_plugin(self.phase)
+        for phase in self._current_phase:
+            self._launch_plugin(phase)
 
     def detected_faces(self):
         """ Generator that returns results, frame by frame from the extraction pipeline
@@ -203,7 +210,7 @@ class Extractor():
         >>>     image = extract_media.image
         >>>     detected_faces = extract_media.detected_faces
         """
-        logger.debug("Running Detection. Phase: '%s'", self.phase)
+        logger.debug("Running Detection. Phase: '%s'", self._current_phase)
         # If not multiprocessing, intercept the align in queue for
         # detection phase
         out_queue = self._output_queue
@@ -225,8 +232,8 @@ class Extractor():
                 queue_manager.del_queue(q_name)
             logger.debug("Detection Complete")
         else:
-            self.phase = self._next_phase
-            logger.debug("Switching to %s phase", self.phase)
+            self._phase_index += 1
+            logger.debug("Switching to phase: %s", self._current_phase)
 
     # <<< INTERNAL METHODS >>> #
     @property
@@ -254,26 +261,33 @@ class Extractor():
         return retval
 
     @property
-    def _total_vram_required(self):
-        """ Return vram required for all phases plus the buffer """
-        vrams = dict()
+    def _vram_per_phase(self):
+        """ dict: The amount of vram required for each phase in :attr:`_flow`. """
+        retval = dict()
         for phase in self._flow:
             plugin_type, idx = self._get_plugin_type_and_index(phase)
             attr = getattr(self, "_{}".format(plugin_type))
             attr = attr[idx] if idx is not None else attr
-            vrams[phase] = attr.vram
+            retval[phase] = attr.vram
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _total_vram_required(self):
+        """ Return vram required for all phases plus the buffer """
+        vrams = self._vram_per_phase
         vram_required_count = sum(1 for p in vrams.values() if p > 0)
         logger.debug("VRAM requirements: %s. Plugins requiring VRAM: %s",
                      vrams, vram_required_count)
         retval = (sum(vrams.values()) *
-                  self._parallel_scaling[vram_required_count]) + self._vram_buffer
+                  self._parallel_scaling[vram_required_count])
         logger.debug("Total VRAM required: %s", retval)
         return retval
 
     @property
-    def _next_phase(self):
-        """ Return the next phase from the flow list """
-        retval = self._flow[self._flow.index(self.phase) + 1]
+    def _current_phase(self):
+        """ list: The current phase from :attr:`_phases` that is running through the extractor. """
+        retval = self._phases[self._phase_index]
         logger.trace(retval)
         return retval
 
@@ -290,7 +304,7 @@ class Extractor():
         if self.final_pass:
             qname = "extract_{}_out".format(self._final_phase)
         else:
-            qname = "extract_{}_in".format(self._next_phase)
+            qname = "extract_{}_in".format(self._phases[self._phase_index + 1][0])
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -304,17 +318,17 @@ class Extractor():
             attr = getattr(self, "_{}".format(plugin_type))
             attr = attr[idx] if idx is not None else attr
             retval.append(attr)
-            attr = getattr(self, "_{}".format(plugin_type))
         logger.trace("All Plugins: %s", retval)
         return retval
 
     @property
     def _active_plugins(self):
         """ Return the plugins that are currently active based on pass """
-        if self.passes == 1:
-            retval = self._all_plugins
-        else:
-            retval = [getattr(self, "_{}".format(self.phase))]
+        retval = []
+        for phase in self._current_phase:
+            plugin_type, idx = self._get_plugin_type_and_index(phase)
+            attr = getattr(self, "_{}".format(plugin_type))
+            retval.append(attr[idx] if idx is not None else attr)
         logger.trace("Active plugins: %s", retval)
         return retval
 
@@ -327,9 +341,9 @@ class Extractor():
             retval.append("detect")
         if aligner is not None and aligner.lower() != "none":
             retval.append("align")
-        for idx, mask in enumerate(masker):
-            if mask is not None and mask.lower() != "none":
-                retval.append("mask_{}".format(idx))
+        retval.extend(["mask_{}".format(idx)
+                       for idx, mask in enumerate(masker)
+                       if mask is not None and mask.lower() != "none"])
         logger.debug("flow: %s", retval)
         return retval
 
@@ -376,15 +390,38 @@ class Extractor():
         logger.debug("Queues: %s", queues)
         return queues
 
-    def _set_parallel_processing(self, multiprocess):
-        """ Set whether to run detect, align, and mask together or separately """
+    @staticmethod
+    def _get_vram_stats():
+        """ Obtain statistics on available VRAM and subtract a constant buffer from available vram.
 
+        Returns
+        -------
+        dict
+            Statistics on available VRAM
+        """
+        vram_buffer = 256  # Leave a buffer for VRAM allocation
+        gpu_stats = GPUStats()
+        stats = gpu_stats.get_card_most_free()
+        retval = dict(count=gpu_stats.device_count,
+                      device=stats["device"],
+                      vram_free=int(stats["free"] - vram_buffer),
+                      vram_total=int(stats["total"]))
+        logger.debug(retval)
+        return retval
+
+    def _set_parallel_processing(self, multiprocess):
+        """ Set whether to run detect, align, and mask together or separately.
+
+        Parameters
+        ----------
+        multiprocess: bool
+            ``True`` if the single-process command line flag has not been set otherwise ``False``
+        """
         if not multiprocess:
             logger.debug("Parallel processing disabled by cli.")
             return False
 
-        gpu_stats = GPUStats()
-        if gpu_stats.device_count == 0:
+        if self._vram_stats["count"] == 0:
             logger.debug("No GPU detected. Enabling parallel processing.")
             return True
 
@@ -392,17 +429,63 @@ class Extractor():
             logger.debug("Parallel processing disabled by amd")
             return False
 
-        stats = gpu_stats.get_card_most_free()
-        vram_free = int(stats["free"])
         logger.verbose("%s - %sMB free of %sMB",
-                       stats["device"],
-                       vram_free,
-                       int(stats["total"]))
-        if vram_free <= self._total_vram_required:
+                       self._vram_stats["device"],
+                       self._vram_stats["vram_free"],
+                       self._vram_stats["vram_total"])
+        if self._vram_stats["vram_free"] <= self._total_vram_required:
             logger.warning("Not enough free VRAM for parallel processing. "
                            "Switching to serial")
             return False
         return True
+
+    def _set_phases(self, multiprocess):
+        """ If not enough VRAM is available, then chunk :attr:`_flow` up into phases that will fit
+        into VRAM, otherwise return the single flow.
+
+        Parameters
+        ----------
+        multiprocess: bool
+            ``True`` if the single-process command line flag has not been set otherwise ``False``
+
+        Returns
+        -------
+        list:
+            The jobs to be undertaken split into phases that fit into GPU RAM
+        """
+        force_single_process = not multiprocess or get_backend() == "amd"
+        phases = []
+        current_phase = []
+        available = self._vram_stats["vram_free"]
+        for phase in self._flow:
+            num_plugins = len([p for p in current_phase if self._vram_per_phase[p] > 0])
+            num_plugins += 1 if self._vram_per_phase[phase] > 0 else 0
+            scaling = self._parallel_scaling[num_plugins]
+            required = sum(self._vram_per_phase[p] for p in current_phase + [phase]) * scaling
+            logger.debug("Num plugins for phase: %s, scaling: %s, vram required: %s",
+                         num_plugins, scaling, required)
+            if required <= available and not force_single_process:
+                logger.debug("Required: %s, available: %s. Adding phase '%s' to current phase: %s",
+                             required, available, phase, current_phase)
+                current_phase.append(phase)
+            elif len(current_phase) == 0 or force_single_process:
+                # Amount of VRAM required to run a single plugin is greater than available. We add
+                # it anyway, and hope it will run with warnings, as the alternative is to not run
+                # at all.
+                # This will also run if forcing single process
+                logger.debug("Required: %s, available: %s. Single plugin has higher requirements "
+                             "than available or forcing single process: '%s'",
+                             required, available, phase)
+                phases.append([phase])
+            else:
+                logger.debug("Required: %s, available: %s. Adding phase to flow: %s",
+                             required, available, current_phase)
+                phases.append(current_phase)
+                current_phase = [phase]
+        if current_phase:
+            phases.append(current_phase)
+        logger.debug("Total phases: %s, Phases: %s", len(phases), phases)
+        return phases
 
     # << INTERNAL PLUGIN HANDLING >> #
     @staticmethod
@@ -463,46 +546,30 @@ class Extractor():
 
     def _set_extractor_batchsize(self):
         """
-        Sets the batch size of the requested plugins based on their vram and
-        vram_per_batch_requirements if the the configured batch size requires more
-        vram than is available. Nvidia only.
+        Sets the batch size of the requested plugins based on their vram, their
+        vram_per_batch_requirements and the number of plugins being loaded in the current phase.
+        Only adjusts if the the configured batch size requires more vram than is available. Nvidia
+        only.
         """
         if get_backend() != "nvidia":
             logger.debug("Backend is not Nvidia. Not updating batchsize requirements")
             return
-        if sum([plugin.vram for plugin in self._all_plugins]) == 0:
+        if sum([plugin.vram for plugin in self._active_plugins]) == 0:
             logger.debug("No plugins use VRAM. Not updating batchsize requirements.")
             return
 
-        stats = GPUStats().get_card_most_free()
-        vram_free = int(stats["free"])
-        if self._is_parallel:
-            batch_required = sum([plugin.vram_per_batch * plugin.batchsize
-                                  for plugin in self._all_plugins])
-            plugin_required = self._total_vram_required + batch_required
-            if plugin_required <= vram_free:
-                logger.debug("Plugin requirements within threshold: (plugin_required: %sMB, "
-                             "vram_free: %sMB)", plugin_required, vram_free)
-                return
-            # Hacky split across plugins that use vram
-            gpu_plugin_count = sum([1 for plugin in self._all_plugins if plugin.vram != 0])
-            available_vram = (vram_free - self._total_vram_required) // gpu_plugin_count
-            for plugin in self._all_plugins:
-                if plugin.vram != 0:
-                    self._set_plugin_batchsize(plugin, available_vram)
-        else:
-            for plugin in self._all_plugins:
-                if plugin.vram == 0:
-                    continue
-                vram_required = plugin.vram + self._vram_buffer
-                batch_required = plugin.vram_per_batch * plugin.batchsize
-                plugin_required = vram_required + batch_required
-                if plugin_required <= vram_free:
-                    logger.debug("%s requirements within threshold: (plugin_required: %sMB, "
-                                 "vram_free: %sMB)", plugin.name, plugin_required, vram_free)
-                    continue
-                available_vram = vram_free - vram_required
-                self._set_plugin_batchsize(plugin, available_vram)
+        batch_required = sum([plugin.vram_per_batch * plugin.batchsize
+                              for plugin in self._active_plugins])
+        gpu_plugins = [p for p in self._current_phase if self._vram_per_phase[p] > 0]
+        plugins_required = sum([self._vram_per_phase[p]
+                                for p in gpu_plugins]) * self._parallel_scaling[len(gpu_plugins)]
+        if plugins_required + batch_required <= self._vram_stats["vram_free"]:
+            logger.debug("Plugin requirements within threshold: (plugins_required: %sMB, "
+                         "vram_free: %sMB)", plugins_required, self._vram_stats["vram_free"])
+            return
+        # Hacky split across plugins that use vram
+        available_vram = (self._vram_stats["vram_free"] - plugins_required) // len(gpu_plugins)
+        self._set_plugin_batchsize(gpu_plugins, available_vram)
 
     def set_aligner_normalization_method(self, method):
         """ Change the normalization method for faces fed into the aligner.
@@ -515,15 +582,50 @@ class Extractor():
         logger.debug("Setting to: '%s'", method)
         self._align.set_normalize_method(method)
 
-    @staticmethod
-    def _set_plugin_batchsize(plugin, available_vram):
+    def _set_plugin_batchsize(self, gpu_plugins, available_vram):
         """ Set the batch size for the given plugin based on given available vram.
         Do not update plugins which have a vram_per_batch of 0 (CPU plugins) due to
         zero division error.
         """
-        if plugin.vram_per_batch != 0:
-            plugin.batchsize = int(max(1, available_vram // plugin.vram_per_batch))
-            logger.verbose("Reset batchsize for %s to %s", plugin.name, plugin.batchsize)
+        plugins = [self._active_plugins[idx]
+                   for idx, plugin in enumerate(self._current_phase)
+                   if plugin in gpu_plugins]
+        vram_per_batch = [plugin.vram_per_batch for plugin in plugins]
+        ratios = [vram / sum(vram_per_batch) for vram in vram_per_batch]
+        requested_batchsizes = [plugin.batchsize for plugin in plugins]
+        batchsizes = [min(requested, max(1, int((available_vram * ratio) / plugin.vram_per_batch)))
+                      for ratio, plugin, requested in zip(ratios, plugins, requested_batchsizes)]
+        remaining = available_vram - sum(batchsize * plugin.vram_per_batch
+                                         for batchsize, plugin in zip(batchsizes, plugins))
+        sorted_indices = [i[0] for i in sorted(enumerate(plugins),
+                                               key=lambda x: x[1].vram_per_batch, reverse=True)]
+
+        logger.debug("requested_batchsizes: %s, batchsizes: %s, remaining vram: %s",
+                     requested_batchsizes, batchsizes, remaining)
+
+        while remaining > min(plugin.vram_per_batch
+                              for plugin in plugins) and requested_batchsizes != batchsizes:
+            for idx in sorted_indices:
+                plugin = plugins[idx]
+                if plugin.vram_per_batch > remaining:
+                    logger.debug("Not enough VRAM to increase batch size of %s. Required: %sMB, "
+                                 "Available: %sMB", plugin, plugin.vram_per_batch, remaining)
+                    continue
+                if plugin.batchsize == batchsizes[idx]:
+                    logger.debug("Threshold reached for %s. Batch size: %s",
+                                 plugin, plugin.batchsize)
+                    continue
+                logger.debug("Incrementing batch size of %s to %s", plugin, batchsizes[idx] + 1)
+                batchsizes[idx] += 1
+                remaining -= plugin.vram_per_batch
+                logger.debug("Remaining VRAM to allocate: %sMB", remaining)
+
+        if batchsizes != requested_batchsizes:
+            text = ", ".join(["{}: {}".format(plugin.__class__.__name__, batchsize)
+                              for plugin, batchsize in zip(plugins, batchsizes)])
+            for plugin, batchsize in zip(plugins, batchsizes):
+                plugin.batchsize = batchsize
+            logger.info("Reset batch sizes due to available VRAM: %s", text)
 
     def _join_threads(self):
         """ Join threads for current pass """
