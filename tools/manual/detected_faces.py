@@ -513,6 +513,8 @@ class FaceUpdate():
         height: int
             The height of the bounding box
         """
+        logger.trace("frame_index: %s, face_index %s, pnt_x %s, width %s, pnt_y %s, height %s",
+                     frame_index, face_index, pnt_x, width, pnt_y, height)
         face = self._current_faces_at_index(frame_index)[face_index]
         face.x = pnt_x
         face.w = width

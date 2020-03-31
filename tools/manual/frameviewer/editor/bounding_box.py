@@ -39,11 +39,6 @@ class BoundingBox(Editor):
                          control_text=control_text, key_bindings=key_bindings)
 
     @property
-    def _coords_layout(self):
-        """ tuple: The layout order of tkinter canvas bounding box points """
-        return ("left", "top", "right", "bottom")
-
-    @property
     def _corner_order(self):
         """ dict: The position index of bounding box corners """
         return {0: ("top", "left"),
@@ -350,7 +345,8 @@ class BoundingBox(Editor):
                   partial(min, box[3] - 20),
                   partial(max, box[0] + 20),
                   partial(max, box[1] + 20))
-        rect_xy_indices = [self._coords_layout.index(pnt) for pnt in self._drag_data["corner"]]
+        rect_xy_indices = [("left", "top", "right", "bottom").index(pnt)
+                           for pnt in self._drag_data["corner"]]
         box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
         box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
         logger.trace("New ROI: %s", box)

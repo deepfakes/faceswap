@@ -446,9 +446,10 @@ class Editor():
         Returns
         -------
         :class:`numpy.ndarray`
-            The adjusted x, y co-ordinates for display purposes
+            The adjusted x, y co-ordinates for display purposes rounded to the nearest integer
         """
-        retval = (points * self._frames.current_scale) + self._canvas.offset
+        retval = np.rint((points * self._frames.current_scale)
+                         + self._canvas.offset).astype("int32")
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
 
@@ -466,10 +467,11 @@ class Editor():
         Returns
         -------
         :class:`numpy.ndarray`
-            The adjusted x, y co-ordinates to the original frame location
+            The adjusted x, y co-ordinates to the original frame location rounded to the nearest
+            integer
         """
         offset = self._canvas.offset if do_offset else (0, 0)
-        retval = (points - offset) / self._frames.current_scale
+        retval = np.rint((points - offset) / self._frames.current_scale).astype("int32")
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
 
