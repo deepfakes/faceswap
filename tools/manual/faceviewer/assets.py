@@ -365,12 +365,13 @@ class UpdateFace():
             The mask. Returns ``None`` if no mask is available
         """
         logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
-        face, landmarks, mask = self._det_faces.get_face_at_index(frame_index,
-                                                                  face_index,
-                                                                  self._faces_cache.size,
-                                                                  with_landmarks=True,
-                                                                  with_mask=True)
-
+        face, landmarks, mask = self._det_faces.get_face_at_index(
+            frame_index,
+            face_index,
+            self._frames.current_frame,
+            self._faces_cache.size,
+            with_landmarks=True,
+            with_mask=True)
         mask = mask.get(self._canvas.selected_mask,
                         None) if self._canvas.optional_annotations["mask"] else None
         mask = mask if mask is None else mask.mask.squeeze()

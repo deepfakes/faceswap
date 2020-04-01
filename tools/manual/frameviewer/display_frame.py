@@ -957,11 +957,11 @@ class BackgroundImage():
             face = np.ones((size, size, 3), dtype="uint8")
         else:
             face = self._det_faces.get_face_at_index(position,
-                                                     0,  # Hard wired to 0 for now
-                                                     size,
-                                                     image=self._frames.current_frame)[..., 2::-1]
+                                                     0,  # TODO Hard wired to 0 for now
+                                                     self._frames.current_frame,
+                                                     size)
         logger.trace("face shape: %s", face.shape)
-        return face
+        return face[..., 2::-1]
 
     def _update_tk_frame(self):
         """ Place the currently held frame into :attr:`_tk_frame`. """

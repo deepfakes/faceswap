@@ -32,8 +32,8 @@ class DetectedFaces():
     """
     def __init__(self, alignments_path, input_location, extractor, is_video):
         self._saved_faces = []
-        self._updated_faces = []  # Updated to correct size in when data is loaded
-        self._zoomed_size = None  # TODO Look to remove and pass in explicitly
+        self._updated_faces = []
+        self._extract_size = None  # Updated to correct size in in :func:`_load`
         self._is_video = is_video
 
         self._alignments = self._get_alignments(alignments_path, input_location)
@@ -42,9 +42,6 @@ class DetectedFaces():
         self._io = DiskIO(self)
         self._update = FaceUpdate(self)
         self._filter = Filter(self)
-
-        # Set in :func:`load_faces`
-        self._frames = None  # TODO Look to remove
 
     # <<<< PUBLIC PROPERTIES >>>> #
     # << SUBCLASSES >> #
@@ -126,7 +123,8 @@ class DetectedFaces():
     def load_faces(self, frames):
         """ Load the faces as :class:`~lib.faces_detect.DetectedFace` from the alignments file.
 
-        Set the zoomed face size based on the Editor canvas size.
+        Set the extract size to be the zoomed face face size. This is the largest a face will be
+        extracted at, so every other use can be scaled down from this value
         Set the global tkinter variables to :attr:`_tk_vars`.
         Load the faces.
 
@@ -135,9 +133,7 @@ class DetectedFaces():
         frames: :class:`~tools.manual.media.FrameNavigation`
             The frames navigation object for the Manual Tool
         """
-        # TODO Lose this requirement on frames
-        self._frames = frames
-        self._zoomed_size = min(frames.display_dims)
+        self._extract_size = min(frames.display_dims)
         self._tk_vars["update"] = frames.tk_update
         self._tk_vars["nav_mode"] = frames.tk_navigation_mode
         self._io.load()
@@ -166,7 +162,7 @@ class DetectedFaces():
         if self._is_video:
             self._alignments.save_video_meta_data(pts_time, keyframes)
 
-    def get_face_at_index(self, frame_index, face_index, size, image=None,
+    def get_face_at_index(self, frame_index, face_index, image, size,
                           with_landmarks=False, with_mask=False):
         """ Return an aligned face for the given frame and face index sized at the given size.
 
@@ -178,6 +174,8 @@ class DetectedFaces():
             The frame that the required face exists in
         face_index: int
             The face index within the frame to retrieve the face for
+        image: :class:`numpy.ndarray`
+            The original frame that contains the face to be extracted
         size: int
             The required pixel size of the aligned face. NB The default size is set for a zoomed
             display frame image. Rather than resize the underlying Detected Face object, the
@@ -198,22 +196,20 @@ class DetectedFaces():
             aligned face in position 0 and the requested additional data populated in the following
             order (`aligned face`, `aligned landmarks`, `mask objects`)
         """
-        logger.trace("frame_index: %s, face_index: %s, size: %s, with_landmarks: %s, "
-                     "with_mask: %s", frame_index, face_index, size, with_landmarks, with_mask)
+        logger.trace("frame_index: %s, face_index: %s, image: %s, size: %s, with_landmarks: %s, "
+                     "with_mask: %s", frame_index, face_index, image.shape, size, with_landmarks,
+                     with_mask)
         face = self.current_faces[frame_index][face_index]
-        resize = self._zoomed_size != size
+        resize = self._extract_size != size
         logger.trace("Requires resize: %s", resize)
-        # TODO Change when removed frames requirement
-        # Image is passed in for Zoomed Face. Do this for all use cases + document image
-        image = self._frames.current_frame if image is None else image
-        face.load_aligned(image, size=self._zoomed_size, force=True)
+        face.load_aligned(image, size=self._extract_size, force=True)
 
         retval = cv2.resize(face.aligned_face,
                             (size, size)) if resize else face.aligned_face.copy()
         retval = [retval] if with_landmarks or with_mask else retval
         face.aligned["face"] = None
         if with_landmarks:
-            retval.append(face.aligned_landmarks * (size / self._zoomed_size)
+            retval.append(face.aligned_landmarks * (size / self._extract_size)
                           if resize else face.aligned_landmarks)
         if with_mask:
             retval.append(face.mask)
@@ -547,8 +543,6 @@ class FaceUpdate():
         """
         face = self._current_faces_at_index(frame_index)[face_index]
         if is_zoomed:
-            if face.aligned["size"] != self._zoomed_size:
-                face.load_aligned(None, self._zoomed_size, force=True)
             landmark = face.aligned_landmarks[landmark_index]
             landmark += (shift_x, shift_y)
             matrix = AlignerExtract.transform_matrix(face.aligned["matrix"],
