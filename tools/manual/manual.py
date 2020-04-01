@@ -43,17 +43,20 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
+        self._globals = TkGlobals()
         is_video = self._check_input(arguments.frames)
         self._initialize_tkinter()
 
         extractor = Aligner()
-        self._det_faces = DetectedFaces(arguments.alignments_path,
+        self._det_faces = DetectedFaces(self._globals,
+                                        arguments.alignments_path,
                                         arguments.frames,
                                         extractor,
                                         is_video)
 
         video_meta_data = self._det_faces.video_meta_data
-        self._frames = FrameNavigation(arguments.frames,
+        self._frames = FrameNavigation(self._globals,
+                                       arguments.frames,
                                        get_config().scaling_factor,
                                        video_meta_data)
         self._det_faces.load_faces(self._frames)
@@ -62,13 +65,17 @@ class Manual(tk.Tk):
 
         self._wait_for_threads(extractor, video_meta_data)
 
-        self._display = DisplayFrame(self._containers["top"], self._frames, self._det_faces)
+        self._display = DisplayFrame(self._containers["top"],
+                                     self._globals,
+                                     self._frames,
+                                     self._det_faces)
         self._faces_frame = FacesFrame(self._containers["bottom"],
+                                       self._globals,
                                        self._frames,
                                        self._det_faces,
                                        self._display)
 
-        self._options = Options(self._containers["top"], self._display)
+        self._options = Options(self._containers["top"], self._globals, self._display)
         self._display.tk_selected_action.set("View")
 
         self.bind("<Key>", self._handle_key_press)
@@ -188,7 +195,7 @@ class Manual(tk.Tk):
         modifiers = {0x0001: 'shift',
                      0x0004: 'ctrl'}
 
-        tk_pos = self._frames.tk_position
+        tk_pos = self._globals.tk_frame_index
         bindings = {
             "z": self._display.decrement_frame,
             "x": self._display.increment_frame,
@@ -199,7 +206,7 @@ class Manual(tk.Tk):
             "up": lambda d="up": self._faces_frame.canvas_scroll(d),
             "next": lambda d="page-down": self._faces_frame.canvas_scroll(d),
             "prior": lambda d="page-up": self._faces_frame.canvas_scroll(d),
-            "f": self._display.cycle_navigation_mode,
+            "f": self._display.cycle_filter_mode,
             "f1": lambda k=event.keysym: self._display.set_action(k),
             "f2": lambda k=event.keysym: self._display.set_action(k),
             "f3": lambda k=event.keysym: self._display.set_action(k),
@@ -239,12 +246,15 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the control panel options
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
     display_frame: :class:`DisplayFrame`
         The frame that holds the editors
     """
-    def __init__(self, parent, display_frame):
+    def __init__(self, parent, tk_globals, display_frame):
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._globals = tk_globals
         self._display_frame = display_frame
         self._control_panels = self._initialize()
         self._set_tk_callbacks()
@@ -294,7 +304,7 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
                 logger.debug("Adding control update callback: (editor: %s, control: %s)",
                              name, ctl.title)
                 seen_controls.add(ctl)
-                ctl.tk_var.trace("w", lambda *e: self._display_frame.tk_update.set(True))
+                ctl.tk_var.trace("w", lambda *e: self._globals.tk_update.set(True))
 
     def _update_options(self, *args):  # pylint:disable=unused-argument
         """ Update the control panel display for the current editor.
@@ -327,6 +337,8 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the faces frame resides in
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
     detected_faces: :class:`~tool.manual.faces.DetectedFaces`
@@ -334,10 +346,10 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
     """
-    def __init__(self, parent, frames, detected_faces, display_frame):
-        logger.debug("Initializing %s: (parent: %s, frames: %s, detected_faces: %s, "
-                     "display_frame: %s)", self.__class__.__name__, parent, frames, detected_faces,
-                     display_frame)
+    def __init__(self, parent, tk_globals, frames, detected_faces, display_frame):
+        logger.debug("Initializing %s: (parent: %s, tk_globals: %s, frames: %s, "
+                     "detected_faces: %s, display_frame: %s)", self.__class__.__name__, parent,
+                     tk_globals, frames, detected_faces, display_frame)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._actions_frame = FacesActionsFrame(self)
@@ -347,6 +359,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._faces_frame.pack_propagate(0)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._canvas = FacesViewer(self._faces_frame,
+                                   tk_globals,
                                    self._actions_frame._tk_vars,
                                    frames,
                                    detected_faces,
@@ -511,6 +524,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the canvas
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
     tk_action_vars: dict
         The :class:`tkinter.BooleanVar` objects for selectable optional annotations
         as set by the buttons in the :class:`FacesActionsFrame`
@@ -523,15 +538,16 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
         The progress bar object that displays in the bottom right of the GUI
     """
-    def __init__(self, parent, tk_action_vars, frames,
+    def __init__(self, parent, tk_globals, tk_action_vars, frames,
                  detected_faces, display_frame, progress_bar):
-        logger.debug("Initializing %s: (parent: %s, tk_action_vars: %s, frames: %s, "
-                     "detected_faces: %s, display_frame: %s, progress_bar: %s)",
-                     self.__class__.__name__, parent, tk_action_vars, frames, detected_faces,
-                     display_frame, progress_bar)
+        logger.debug("Initializing %s: (parent: %s, tk_globals: %s, tk_action_vars: %s, "
+                     "frames: %s, detected_faces: %s, display_frame: %s, progress_bar: %s)",
+                     self.__class__.__name__, parent, tk_globals, tk_action_vars, frames,
+                     detected_faces, display_frame, progress_bar)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._progress_bar = progress_bar
+        self._globals = tk_globals
         self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
                                          if key != "lockout"}
         self._frames = frames
@@ -604,7 +620,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         Updates the mask type when the user changes the selected mask types
         Toggles the face viewer annotations on an optional annotation button press.
         """
-        self._frames.tk_navigation_mode.trace("w", lambda *e: self.switch_filter())
+        self._globals.tk_filter_mode.trace("w", lambda *e: self.switch_filter())
         self._display_frame.tk_control_colors["Mesh"].trace("w",
                                                             lambda *e: self.update_mesh_color())
         self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
@@ -617,14 +633,14 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
          """
         if not self._faces_cache.is_initialized:
             return
-        nav_mode = self._frames.tk_navigation_mode.get().replace(" ", "_").lower()
-        nav_mode = "all_frames" if nav_mode == "has_face(s)" else nav_mode
+        filter_mode = self._globals.filter_mode.replace(" ", "_").lower()
+        filter_mode = "all_frames" if filter_mode == "has_face(s)" else filter_mode
         current_dsp = self.active_filter.filter_type
-        logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, nav_mode)
-        if nav_mode == current_dsp:
+        logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, filter_mode)
+        if filter_mode == current_dsp:
             return
         self.active_filter.de_initialize()
-        self._utilities["active_filter"] = FaceFilter(self, nav_mode)
+        self._utilities["active_filter"] = FaceFilter(self, filter_mode)
 
     def _update_mask_type(self):
         """ Update the displayed mask in the :class:`FacesViewer` canvas when the user changes
@@ -748,6 +764,35 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         retval = next((int(tag.replace("frame_id_", ""))
                        for tag in self.gettags(item_id) if tag.startswith("frame_id_")), None)
         logger.trace("item_id: %s, frame_id: %s", item_id, retval)
+        return retval
+
+    def face_index_from_object(self, item_id):
+        """ Retrieve the index of the face within the current frame for the given canvas item id.
+
+        Parameters
+        ----------
+        item_id: int
+            The tkinter canvas object id
+
+        Returns
+        -------
+        int
+            The index of the face within the current frame
+        """
+        frame_id = self.frame_index_from_object(item_id)
+        faces = self.find_withtag("image_{}".format(frame_id))
+        logger.trace("frame_id: %s, face count: %s", frame_id, len(faces))
+        if len(faces) == 1:  # Only 1 face, so face index is 0
+            retval = 0
+        else:
+            face_group_id = self.face_id_from_object(item_id)
+            face_groups = [next(tag
+                                for tag in self.gettags(obj_id)
+                                if tag.startswith("face_id"))
+                           for obj_id in faces]
+            logger.trace("face_groups: %s, face_group_id: %s", face_groups, face_group_id)
+            retval = face_groups.index(face_group_id)
+        logger.trace("item_id: %s, face_index: %s", item_id, retval)
         return retval
 
     def face_id_from_object(self, item_id):
@@ -874,3 +919,50 @@ class Aligner():
         """ Change the normalization method for faces fed into the aligner """
         method = method_var.get()
         self._aligner.set_aligner_normalization_method(method)
+
+
+class TkGlobals():
+    """ Tkinter Variables that need to be accessible from all areas of the GUI """
+    def __init__(self):
+        self._tk_frame_index = tk.IntVar()
+        self._tk_frame_index.set(0)
+
+        self._tk_transport_index = tk.IntVar()
+        self._tk_transport_index.set(0)
+
+        self._tk_update = tk.BooleanVar()
+        self._tk_update.set(False)
+
+        self._tk_filter_mode = tk.StringVar()
+
+    @property
+    def frame_index(self):
+        "int: The currently displayed frame index"
+        return self._tk_frame_index.get()
+
+    @property
+    def tk_frame_index(self):
+        """ :class:`tkinter.IntVar`: The variable holding current frame index. """
+        return self._tk_frame_index
+
+    @property
+    def filter_mode(self):
+        """ str: The currently selected navigation mode. """
+        return self._tk_filter_mode.get()
+
+    @property
+    def tk_filter_mode(self):
+        """ :class:`tkinter.StringVar`: The variable holding the currently selected navigation
+        filter mode. """
+        return self._tk_filter_mode
+
+    @property
+    def tk_transport_index(self):
+        """ :class:`tkinter.IntVar`: The current index of the display frame's transport slider. """
+        return self._tk_transport_index
+
+    @property
+    def tk_update(self):
+        """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that an
+        update needs to occur. """
+        return self._tk_update

@@ -35,6 +35,7 @@ class Editor():
                      "control_text: %s)", self.__class__.__name__, canvas, detected_faces, frames,
                      control_text)
         self._canvas = canvas
+        self._globals = canvas._globals
         self._det_faces = detected_faces
         self._frames = frames
 
@@ -124,7 +125,7 @@ class Editor():
     @property
     def _frame_index(self):
         """ int: The currently displayed frame index. """
-        return self._frames.tk_position.get()
+        return self._globals.frame_index
 
     @property
     def _face_iterator(self):
@@ -579,12 +580,11 @@ class Editor():
     def _switch_view_mode(self):
         """ Switch the view mode on an "M" key key press. """
         tk_var = self._actions["magnify"]["tk_var"]
-        print(tk_var, tk_var.get())
         current = self.view_mode
-        mode = False if current == "face" else True
+        mode = current != "face"
         logger.info("Switching view mode from '%s' to '%s'", tk_var.get(), mode)
         tk_var.set(mode)
-        self._frames.tk_update.set(True)
+        self._globals.tk_update.set(True)
 
 
 class View(Editor):
@@ -601,4 +601,4 @@ class View(Editor):
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Zoom. """
         self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
-        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._frames.tk_update.set(True))
+        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._globals.tk_update.set(True))

@@ -27,6 +27,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
     def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
+        self._globals = canvas._globals
         self._frames = canvas._frames
         self._det_faces = detected_faces
         self._face_size = canvas._faces_cache.size
@@ -38,6 +39,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
                                                   stipple="gray12",
                                                   tags="hover_box")
         self._current_frame_index = None
+        self._current_face_index = None
         self._canvas.bind("<Leave>", lambda e: self._clear())
         self._canvas.bind("<Motion>", self.on_hover)
         self._canvas.bind("<ButtonPress-1>", lambda e: self._select_frame())
@@ -68,15 +70,18 @@ class HoverBox():  # pylint:disable=too-few-public-methods
             self._clear()
             self._canvas.config(cursor="")
             self._current_frame_index = None
+            self._current_face_index = None
             return
-        if self._canvas.frame_index_from_object(item_id) == self._frames.tk_position.get():
+        if self._canvas.frame_index_from_object(item_id) == self._globals.frame_index:
             self._clear()
             self._canvas.config(cursor="")
             self._current_frame_index = None
+            self._current_face_index = self._canvas.face_index_from_object(item_id)
             return
         self._canvas.config(cursor="hand1")
         self._highlight(item_id)
         self._current_frame_index = self._canvas.frame_index_from_object(item_id)
+        self._current_face_index = self._canvas.face_index_from_object(item_id)
 
     def _clear(self):
         """ Hide the hover box when the mouse is not over a face. """
@@ -102,14 +107,14 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         on in :class:`~tools.manual.FacesViewer`.
         """
         frame_id = self._current_frame_index
-        if frame_id is None or frame_id == self._frames.tk_position.get():
+        if frame_id is None or frame_id == self._globals.frame_index:
             return
         transport_id = self._transport_index_from_frame_index(frame_id)
         logger.trace("frame_index: %s, transport_id: %s", frame_id, transport_id)
         if transport_id is None:
             return
         self._frames.stop_playback()
-        self._frames.tk_transport_position.set(transport_id)
+        self._globals.tk_transport_index.set(transport_id)
 
     def _transport_index_from_frame_index(self, frame_index):
         """ When a face is clicked on, the transport index for the frames in the editor view needs
@@ -190,9 +195,9 @@ class ActiveFrame():
         self._det_faces = detected_faces
         self._faces_cache = canvas._faces_cache
         self._size = canvas._faces_cache.size
-        self._tk_position = canvas._frames.tk_position
+        self._globals = canvas._globals
         self._highlighter = Highlighter(self)
-        self._tk_position.trace("w", lambda *e: self.reload_annotations())
+        self._globals.tk_frame_index.trace("w", lambda *e: self.reload_annotations())
         self._det_faces.tk_edited.trace("w", lambda *e: self._update())
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -202,19 +207,14 @@ class ActiveFrame():
         return len(self.image_ids)
 
     @property
-    def frame_index(self):
-        """ int: The currently selected frame's index. """
-        return self._tk_position.get()
-
-    @property
     def image_ids(self):
         """ tuple: The tkinter canvas image ids for the currently selected frame's faces. """
-        return self._canvas.find_withtag("image_{}".format(self.frame_index))
+        return self._canvas.find_withtag("image_{}".format(self._globals.frame_index))
 
     @property
     def mesh_ids(self):
         """ tuple: The tkinter canvas mesh ids for the currently selected frame's faces. """
-        return self._canvas.find_withtag("mesh_{}".format(self.frame_index))
+        return self._canvas.find_withtag("mesh_{}".format(self._globals.frame_index))
 
     def reload_annotations(self):
         """ Refresh the highlighted annotations for faces in the currently selected frame on an
@@ -241,11 +241,11 @@ class ActiveFrame():
     def _add_remove_face(self):
         """ Check the number of displayed faces against the number of faces stored in the
         alignments data for the currently selected frame, and add or remove if appropriate. """
-        alignment_faces = len(self._det_faces.current_faces[self.frame_index])
+        alignment_faces = len(self._det_faces.current_faces[self._globals.frame_index])
         logger.trace("alignment_faces: %s, face_count: %s", alignment_faces, self.face_count)
         if alignment_faces > self.face_count:
             logger.debug("Adding face")
-            self._canvas.update_face.add(self._canvas.active_frame.frame_index)
+            self._canvas.update_face.add(self._globals.frame_index)
             retval = True
         elif alignment_faces < self._canvas.active_frame.face_count:
             logger.debug("Removing face")
@@ -270,8 +270,10 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing: %s: (active_frame: %s)", self.__class__.__name__, active_frame)
         self._size = active_frame._canvas._faces_cache.size
         self._canvas = active_frame._canvas
+        self._globals = active_frame._globals
         self._faces_cache = active_frame._canvas._faces_cache
         self._active_frame = active_frame
+
         self._tk_vars = dict(selected_editor=self._canvas._display_frame.tk_selected_action,
                              selected_mask=self._canvas._display_frame.tk_selected_mask)
         self._objects = dict(image_ids=[], mesh_ids=[], boxes=[])
@@ -283,7 +285,7 @@ class Highlighter():  # pylint:disable=too-few-public-methods
     @property
     def _frame_index(self):
         """ int: The currently selected frame's index. """
-        return self._active_frame.frame_index
+        return self._globals.frame_index
 
     @property
     def _face_count(self):
@@ -449,16 +451,16 @@ class FaceFilter():
         logger.debug("Initializing: %s: (canvas: %s, filter_type: %s)",
                      self.__class__.__name__, canvas, filter_type)
         self._canvas = canvas
+        self._globals = canvas._globals
         self._filter_type = filter_type
-        self._tk_position = canvas._frames.tk_position
         self._size = canvas._faces_cache.size
         self._temporary_image_ids = []
-        self._tk_position = canvas._frames.tk_position
 
         self._set_object_display_state()
         self._set_initial_layout()
         if self._filter_type == "no_faces":
-            self._tk_position_callback = self._tk_position.trace("w", self._on_frame_change)
+            self._tk_position_callback = self._globals.tk_frame_index.trace("w",
+                                                                            self._on_frame_change)
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -725,4 +727,4 @@ class FaceFilter():
         """ Remove the trace variable on when changing filter. """
         if self._filter_type == "no_faces":
             logger.debug("Removing on_frame_change_var")
-            self._tk_position.trace_vdelete("w", self._tk_position_callback)
+            self._globals.tk_frame_index.trace_vdelete("w", self._tk_position_callback)

@@ -28,7 +28,7 @@ class Landmarks(Editor):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
         and Zoom. """
         self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
-        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._frames.tk_update.set(True))
+        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._globals.tk_update.set(True))
 
     def update_annotation(self):
         """ Get the latest Landmarks points and update. """

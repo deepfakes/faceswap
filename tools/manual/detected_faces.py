@@ -21,6 +21,8 @@ class DetectedFaces():
 
     Parameters
     ----------
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
     alignments_path: str
         The full path to the alignments file
     input_location: str
@@ -30,7 +32,11 @@ class DetectedFaces():
     is_video: bool
         ``True`` if the :attr:`input_location` is a video file otherwise ``False``
     """
-    def __init__(self, alignments_path, input_location, extractor, is_video):
+    def __init__(self, tk_globals, alignments_path, input_location, extractor, is_video):
+        logger.debug("Initializing: %s: (tk_globals: %s. alignments_path: %s, input_location: %s "
+                     "extractor: %s, is_video: %s)", self.__class__.__name__, tk_globals,
+                     alignments_path, input_location, extractor, is_video)
+        self._globals = tk_globals
         self._saved_faces = []
         self._updated_faces = []
         self._extract_size = None  # Updated to correct size in in :func:`_load`
@@ -42,6 +48,7 @@ class DetectedFaces():
         self._io = DiskIO(self)
         self._update = FaceUpdate(self)
         self._filter = Filter(self)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     # <<<< PUBLIC PROPERTIES >>>> #
     # << SUBCLASSES >> #
@@ -75,16 +82,6 @@ class DetectedFaces():
         """ :class:`tkinter.BooleanVar`: The variable indicating whether an edit has occurred
         meaning a GUI redraw needs to be triggered. """
         return self._tk_vars["edited"]
-
-    @property
-    def tk_update(self):
-        """ :class:`tkinter.BooleanVar`: The master GUI update variable. """
-        return self._tk_vars["update"]
-
-    @property
-    def tk_nav_mode(self):
-        """ :class:`tkinter.StringVar`: The currently user selected filter navigation mode. """
-        return self._tk_vars["nav_mode"]
 
     # << STATISTICS >> #
     @property
@@ -125,7 +122,6 @@ class DetectedFaces():
 
         Set the extract size to be the zoomed face face size. This is the largest a face will be
         extracted at, so every other use can be scaled down from this value
-        Set the global tkinter variables to :attr:`_tk_vars`.
         Load the faces.
 
         Parameters
@@ -134,8 +130,6 @@ class DetectedFaces():
             The frames navigation object for the Manual Tool
         """
         self._extract_size = min(frames.display_dims)
-        self._tk_vars["update"] = frames.tk_update
-        self._tk_vars["nav_mode"] = frames.tk_navigation_mode
         self._io.load()
 
     def save(self):
@@ -237,8 +231,6 @@ class DetectedFaces():
             var = tk.BooleanVar()
             var.set(False)
             retval[name] = var
-        for name in ("update", "nav_mode"):
-            retval[name] = None
         logger.debug(retval)
         return retval
 
@@ -342,43 +334,39 @@ class Filter():
         The parent :class:`DetectedFaces` object
     """
     def __init__(self, detected_faces):
+        self._globals = detected_faces._globals
         self._det_faces = detected_faces
-
-    @property
-    def _navigation_mode(self):
-        """ str: The currently selected user navigation mode. """
-        return self._det_faces.tk_nav_mode.get()
 
     @property
     def count(self):
         """ int: The number of frames that meet the filter criteria returned by
-        :attr:`_navigation_mode`. """
+        :attr:`_globals.filter_mode`. """
         face_count_per_index = self._det_faces.face_count_per_index
-        if self._navigation_mode == "No Faces":
+        if self._globals.filter_mode == "No Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount == 0)
-        elif self._navigation_mode == "Has Face(s)":
+        elif self._globals.filter_mode == "Has Face(s)":
             retval = sum(1 for fcount in face_count_per_index if fcount != 0)
-        elif self._navigation_mode == "Multiple Faces":
+        elif self._globals.filter_mode == "Multiple Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount > 1)
         else:
             retval = len(face_count_per_index)
-        logger.trace("nav_mode: %s, frame count: %s", self._navigation_mode, retval)
+        logger.trace("filter mode: %s, frame count: %s", self._globals.filter_mode, retval)
         return retval
 
     @property
     def frames_list(self):
         """ list: The list of frame indices that meet the filter criteria returned by
-        :attr:`_navigation_mode`. """
+        :attr:`_globals.filter_mode`. """
         face_count_per_index = self._det_faces.face_count_per_index
-        if self._navigation_mode == "No Faces":
+        if self._globals.filter_mode == "No Faces":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count == 0]
-        elif self._navigation_mode == "Multiple Faces":
+        elif self._globals.filter_mode == "Multiple Faces":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count > 1]
-        elif self._navigation_mode == "Has Face(s)":
+        elif self._globals.filter_mode == "Has Face(s)":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count != 0]
         else:
             retval = range(len(face_count_per_index))
-        logger.trace("nav_mode: %s, number_frames: %s", self._navigation_mode, len(retval))
+        logger.trace("filter mode: %s, number_frames: %s", self._globals.filter_mode, len(retval))
         return retval
 
 
@@ -393,6 +381,7 @@ class FaceUpdate():
     """
     def __init__(self, detected_faces):
         self._det_faces = detected_faces
+        self._globals = detected_faces._globals
         self._saved_faces = detected_faces._saved_faces
         self._updated_faces = detected_faces._updated_faces
         self._tk_unsaved = detected_faces.tk_unsaved
@@ -409,15 +398,6 @@ class FaceUpdate():
         The variable is still a ``None`` when this class is initialized, so referenced explicitly.
         """
         return self._det_faces.tk_edited
-
-    @property
-    def _tk_update(self):
-        """ :class:`tkinter.BooleanVar`: The master GUI update variable.
-        Notes
-        -----
-        The variable is still a ``None`` when this class is initialized, so referenced explicitly.
-        """
-        return self._det_faces.tk_update
 
     @property
     def _zoomed_size(self):
@@ -488,7 +468,7 @@ class FaceUpdate():
         del faces[face_index]
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
-        self._tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def bounding_box(self, frame_index, face_index, pnt_x, width, pnt_y, height):
         """ Update the bounding box for the :class:`DetectedFace` object at the given frame and
@@ -520,7 +500,7 @@ class FaceUpdate():
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         # TODO Link this in to edited
-        self._tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def landmark(self, frame_index, face_index, landmark_index, shift_x, shift_y, is_zoomed):
         """ Shift a single landmark point for the :class:`DetectedFace` object at the given frame
@@ -556,7 +536,7 @@ class FaceUpdate():
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
-        self._tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def landmarks(self, frame_index, face_index, shift_x, shift_y):
         """ Shift all of the landmarks and bounding box for the :class:`DetectedFace` object at
@@ -584,7 +564,7 @@ class FaceUpdate():
         face.landmarks_xy += (shift_x, shift_y)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
-        self._tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def mask(self, frame_index, face_index, mask, mask_type):
         """ Update the mask on an edit for the :class:`DetectedFace` object at the given frame and
@@ -605,7 +585,7 @@ class FaceUpdate():
         face.mask[mask_type].replace_mask(mask)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
-        self._tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def copy(self, frame_index, direction):
         """ Copy the alignments from the previous or next frame that has alignments
@@ -637,7 +617,7 @@ class FaceUpdate():
         face_index = len(self._det_faces.current_faces[frame_index]) - 1
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
-        self._tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def revert_to_saved(self, frame_index):
         """ Revert the frame's alignments to their saved version for the given frame index.
@@ -655,4 +635,4 @@ class FaceUpdate():
         self._updated_faces[frame_index] = None
         self._last_updated_face = (frame_index, -1)
         self._tk_edited.set(True)
-        self._tk_update.set(True)
+        self._globals.tk_update.set(True)

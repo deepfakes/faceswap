@@ -28,22 +28,25 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the display frame resides in
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
-    alignments: dict
-        Dictionary of :class:`lib.faces_detect.DetectedFace` objects
+    detected_faces: :class:`tools.manual.detected_faces.DetectedFaces`
+        The detected faces stored in the alignments file
     """
-    def __init__(self, parent, frames, detected_faces):
-        logger.debug("Initializing %s: (parent: %s, frames: %s)",
-                     self.__class__.__name__, parent, frames)
+    def __init__(self, parent, tk_globals, frames, detected_faces):
+        logger.debug("Initializing %s: (parent: %s, tk_globals: %s, frames: %s, "
+                     "detected_faces: %s)",
+                     self.__class__.__name__, parent, tk_globals, frames, detected_faces)
         super().__init__(parent)
         self.pack(side=tk.LEFT, anchor=tk.NW)
 
+        self._globals = tk_globals
         self._frames = frames
         self._det_faces = detected_faces
-        self._tk_navigation_mode = None
 
-        self._actions_frame = ActionsFrame(self, self._frames, self._det_faces)
+        self._actions_frame = ActionsFrame(self)
         main_frame = ttk.Frame(self)
         main_frame.pack(side=tk.RIGHT)
         self._video_frame = ttk.Frame(main_frame,
@@ -54,6 +57,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._video_frame.pack_propagate(False)
 
         self._canvas = FrameViewer(self._video_frame,
+                                   self._globals,
                                    self._det_faces,
                                    self._frames,
                                    self._actions_frame.actions,
@@ -97,11 +101,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return self._actions_frame.tk_selected_action
 
     @property
-    def tk_update(self):
-        """ :class:`tkinter.BooleanVar`: The frames display update flag. """
-        return self._frames.tk_update
-
-    @property
     def active_editor(self):
         """ :class:`Editor`: The current editor in use based on :attr:`selected_action`. """
         return self._canvas.active_editor
@@ -134,15 +133,9 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return self._det_faces.filter.count
 
     @property
-    def _navigation_modes(self):
-        """ list: The navigation modes combo box values """
+    def _filter_modes(self):
+        """ list: The filter modes combo box values """
         return ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"]
-
-    @property
-    def _active_navigation_mode(self):
-        """ ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"]: The currently selected
-        navigation mode filter """
-        return self._tk_navigation_mode.get()
 
     @property
     def _current_nav_frame_count(self):
@@ -151,8 +144,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
-        var = self._frames.tk_transport_position
-        var.trace("w", self._set_frame_index)
+        self._globals.tk_transport_index.trace("w", self._set_frame_index)
         max_frame = self._frames.frame_count - 1
 
         frame = ttk.Frame(self._transport_frame)
@@ -162,36 +154,40 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         lbl_frame.pack(side=tk.RIGHT)
         tbox = ttk.Entry(lbl_frame,
                          width=7,
-                         textvariable=var,
+                         textvariable=self._globals.tk_transport_index,
                          justify=tk.RIGHT)
         tbox.pack(padx=0, side=tk.LEFT)
         lbl = ttk.Label(lbl_frame, text="/{}".format(max_frame))
         lbl.pack(side=tk.RIGHT)
 
         cmd = partial(set_slider_rounding,
-                      var=var,
+                      var=self._globals.tk_transport_index,
                       d_type=int,
                       round_to=1,
                       min_max=(0, max_frame))
 
-        nav = ttk.Scale(frame, variable=var, from_=0, to=max_frame, command=cmd)
+        nav = ttk.Scale(frame,
+                        variable=self._globals.tk_transport_index,
+                        from_=0,
+                        to=max_frame,
+                        command=cmd)
         nav.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         return dict(entry=tbox, scale=nav, label=lbl)
 
     def _set_frame_index(self, *args):  # pylint:disable=unused-argument
         """ Set the actual frame index based on current slider position and filter mode. """
         try:
-            slider_position = self._frames.tk_transport_position.get()
+            slider_position = self._globals.tk_transport_index.get()
         except TclError:
             # don't update the slider when the entry box has been cleared of any value
             return
         frames = self._det_faces.filter.frames_list
         actual_position = max(0, min(len(frames) - 1, slider_position))
         if actual_position != slider_position:
-            self._frames.tk_transport_position.set(actual_position)
+            self._globals.tk_transport_index.set(actual_position)
         frame_idx = frames[actual_position] if frames else 0
         logger.trace("slider_position: %s, frame_idx: %s", actual_position, frame_idx)
-        self._frames.tk_position.set(frame_idx)
+        self._globals.tk_frame_index.set(frame_idx)
 
     def _add_transport(self):
         """ Add video transport controls """
@@ -207,7 +203,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
                 wgt.state(state)
             else:
-                wgt = self._add_navigation_mode_combo(frame)
+                wgt = self._add_filter_mode_combo(frame)
             wgt.pack(side=side, padx=padx)
             Tooltip(wgt, text=self._helptext[action])
             buttons[action] = wgt
@@ -219,27 +215,26 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._frames.tk_is_playing.trace("w", self._play)
         self._det_faces.tk_unsaved.trace("w", self._toggle_save_state)
 
-    def _add_navigation_mode_combo(self, frame):
+    def _add_filter_mode_combo(self, frame):
         """ Add the navigation mode combo box to the transport frame """
-        self._tk_navigation_mode = self._frames.tk_navigation_mode
-        self._tk_navigation_mode.set("All Frames")
-        self._tk_navigation_mode.trace("w", self._nav_scale_callback)
+        self._globals.tk_filter_mode.set("All Frames")
+        self._globals.tk_filter_mode.trace("w", self._nav_scale_callback)
         nav_frame = ttk.Frame(frame)
         lbl = ttk.Label(nav_frame, text="Filter:")
         lbl.pack(side=tk.LEFT, padx=(0, 5))
         combo = ttk.Combobox(
             nav_frame,
-            textvariable=self._tk_navigation_mode,
+            textvariable=self._globals.tk_filter_mode,
             state="readonly",
-            values=self._navigation_modes)
+            values=self._filter_modes)
         combo.pack(side=tk.RIGHT)
         return nav_frame
 
-    def cycle_navigation_mode(self):
+    def cycle_filter_mode(self):
         """ Cycle the navigation mode combo entry """
-        current_mode = self._frames.tk_navigation_mode.get()
-        idx = (self._navigation_modes.index(current_mode) + 1) % len(self._navigation_modes)
-        self._frames.tk_navigation_mode.set(self._navigation_modes[idx])
+        current_mode = self._globals.filter_mode
+        idx = (self._filter_modes.index(current_mode) + 1) % len(self._filter_modes)
+        self._globals.tk_filter_mode.set(self._filter_modes[idx])
 
     def _nav_scale_callback(self, *args, reset_progress=True):  # pylint:disable=unused-argument
         """ Adjust transport slider scale for different filters.
@@ -262,7 +257,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         state = "disabled" if max_frame == 0 else "normal"
         self._nav["entry"].config(state=state)
         if reset_progress:
-            self._frames.tk_transport_position.set(0)
+            self._globals.tk_transport_index.set(0)
         return True
 
     def handle_play_button(self):
@@ -310,7 +305,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         state = ["!disabled"] if self._det_faces.tk_unsaved.get() else ["disabled"]
         self._buttons["save"].state(state)
 
-    # TODO Annotations stay in the faces viewer when incrementing/decrementing a frame
+    # TODO Annotations stay in the faces viewer when increment/decrement a frame
     # which no longer meets criteria
     # TODO Hide the frame image and annotations if no frames meet the criteria any more.
 
@@ -318,7 +313,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Update The frame navigation position to the next frame based on filter. """
         if not is_playing:
             self._frames.stop_playback()
-        position = self._frames.tk_transport_position.get()
+        position = self._globals.tk_transport_index.get()
         face_count_change = self._check_face_count_change()
         if face_count_change:
             position -= 1
@@ -327,20 +322,20 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("End of Stream. Not incrementing")
             self._frames.stop_playback()
             return
-        self._frames.tk_transport_position.set(min(position + 1, max(0, frame_count - 1)))
+        self._globals.tk_transport_index.set(min(position + 1, max(0, frame_count - 1)))
 
     def decrement_frame(self):
         """ Update The frame navigation position to the previous frame based on filter. """
         self._frames.stop_playback()
-        position = self._frames.tk_transport_position.get()
+        position = self._globals.tk_transport_index.get()
         face_count_change = self._check_face_count_change()
         if face_count_change:
             position += 1
         if not face_count_change and (self._frames_count == 0 or position == 0):
             logger.debug("End of Stream. Not incrementing")
             return
-        self._frames.tk_transport_position.set(min(max(0, self._frames_count - 1),
-                                                   max(0, position - 1)))
+        self._globals.tk_transport_index.set(min(max(0, self._frames_count - 1),
+                                                 max(0, position - 1)))
 
     def _check_face_count_change(self):
         """ Check whether the face count for the current filter has changed, and update the
@@ -355,33 +350,33 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             ``True`` if the currently active frame no longer meets the filter criteria otherwise
             ``False``
         """
-        nav_mode = self._active_navigation_mode
-        if nav_mode not in ("No Faces", "Multiple Faces"):
+        filter_mode = self._globals.filter_mode
+        if filter_mode not in ("No Faces", "Multiple Faces"):
             return False
         if not self._nav_scale_callback(reset_progress=False):
             return False
-        face_count = len(self._det_faces.current_faces[self._frames.tk_position.get()])
-        if (nav_mode == "No Faces" and face_count != 0) or (nav_mode == "Multiple Faces"
-                                                            and face_count < 2):
+        face_count = len(self._det_faces.current_faces[self._globals.frame_index])
+        if (filter_mode == "No Faces" and face_count != 0) or (filter_mode == "Multiple Faces"
+                                                               and face_count < 2):
             return True
         return False
 
     def goto_first_frame(self):
         """ Go to the first frame that meets the filter criteria. """
         self._frames.stop_playback()
-        position = self._frames.tk_transport_position.get()
+        position = self._globals.tk_transport_index.get()
         if position == 0:
             return
-        self._frames.tk_transport_position.set(0)
+        self._globals.tk_transport_index.set(0)
 
     def goto_last_frame(self):
         """ Go to the last frame that meets the filter criteria. """
         self._frames.stop_playback()
-        position = self._frames.tk_transport_position.get()
+        position = self._globals.tk_transport_index.get()
         frame_count = self._frames_count
         if position == frame_count - 1:
             return
-        self._frames.tk_transport_position.set(frame_count - 1)
+        self._globals.tk_transport_index.set(frame_count - 1)
 
 
 class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
@@ -391,15 +386,12 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`DisplayFrame`
         The Display frame that the Actions reside in
-    alignments: dict
-        Dictionary of :class:`lib.faces_detect.DetectedFace` objects
     """
-    def __init__(self, parent, frames, detected_faces):
+    def __init__(self, parent):
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.Y, padx=(2, 4), pady=2)
-
-        self._frames = frames
-        self._det_faces = detected_faces
+        self._globals = parent._globals
+        self._det_faces = parent._det_faces
 
         self._configure_styles()
         self._actions = ("View", "BoundingBox", "ExtractBox", "Landmarks", "Mask")
@@ -514,16 +506,16 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=5, side=tk.TOP)
         buttons = dict()
-        tk_position = self._frames.tk_position
+        tk_frame_index = self._globals.tk_frame_index
         for action in ("copy_prev", "copy_next", "reload"):
             if action == "reload":
                 icon = "reload3"
-                cmd = lambda f=tk_position: self._det_faces.update.revert_to_saved(f.get())
+                cmd = lambda f=tk_frame_index: self._det_faces.update.revert_to_saved(f.get())
                 helptext = "Revert to saved Alignments ({})".format(lookup[action][1])
             else:
                 icon = action
                 direction = action.replace("copy_", "")
-                cmd = lambda f=tk_position, d=direction: self._det_faces.update.copy(f.get(), d)
+                cmd = lambda f=tk_frame_index, d=direction: self._det_faces.update.copy(f.get(), d)
                 helptext = "Copy {} Alignments ({})".format(*lookup[action])
             state = ["!disabled"] if action == "copy_next" else ["disabled"]
             button = ttk.Button(frame,
@@ -534,13 +526,13 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             button.pack()
             Tooltip(button, text=helptext)
             buttons[action] = button
-        self._frames.tk_position.trace("w", self._disable_enable_copy_buttons)
-        self._frames.tk_update.trace("w", self._disable_enable_reload_button)
+        self._globals.tk_frame_index.trace("w", self._disable_enable_copy_buttons)
+        self._globals.tk_update.trace("w", self._disable_enable_reload_button)
         return buttons
 
     def _disable_enable_copy_buttons(self, *args):  # pylint: disable=unused-argument
         """ Disable or enable the static buttons """
-        position = self._frames.tk_position.get()
+        position = self._globals.frame_index
         face_count_per_index = self._det_faces.face_count_per_index
         prev_exists = any(count != 0 for count in face_count_per_index[:position])
         next_exists = any(count != 0 for count in face_count_per_index[position + 1:])
@@ -551,7 +543,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _disable_enable_reload_button(self, *args):  # pylint: disable=unused-argument
         """ Disable or enable the static buttons """
-        position = self._frames.tk_position.get()
+        position = self._globals.frame_index
         state = ["!disabled"] if self._det_faces.is_frame_updated(position) else ["disabled"]
         self._static_buttons["reload"].state(state)
 
@@ -669,6 +661,8 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the canvas
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
     detected_faces: :class:`AlignmentsData`
         The alignments data for this manual session
     frames: :class:`FrameNavigation`
@@ -678,13 +672,13 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     tk_action_var: :class:`tkinter.StringVar`
         The variable holding the currently selected action
     """
-    def __init__(self, parent, detected_faces, frames, actions, tk_action_var):
-        logger.debug("Initializing %s: (parent: %s, detected_faces: %s, frames: %s, actions: %s, "
-                     "tk_action_var: %s)", self.__class__.__name__, parent, detected_faces, frames,
-                     actions, tk_action_var)
+    def __init__(self, parent, tk_globals, detected_faces, frames, actions, tk_action_var):
+        logger.debug("Initializing %s: (parent: %s, tk_globals: %s, detected_faces: %s, "
+                     "frames: %s, actions: %s, tk_action_var: %s)", self.__class__.__name__,
+                     parent, tk_globals, detected_faces, frames, actions, tk_action_var)
         super().__init__(parent, bd=0, highlightthickness=0, background="black")
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True, anchor=tk.E)
-
+        self._globals = tk_globals
         self._det_faces = detected_faces
         self._frames = frames
         self._actions = actions
@@ -793,10 +787,10 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """ Add the callback trace functions to the :class:`tkinter.Variable` s
 
         Adds callbacks for:
-            :attr:`_frames.tk_update` Update the display for the current image
+            :attr:`_globals.tk_update` Update the display for the current image
             :attr:`__tk_action_var` Update the mouse display tracking for current action
         """
-        self._frames.tk_update.trace("w", self._update_display)
+        self._globals.tk_update.trace("w", self._update_display)
         self._tk_action_var.trace("w", self._change_active_editor)
 
     def _change_active_editor(self, *args):  # pylint:disable=unused-argument
@@ -817,7 +811,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
 
         self.active_editor.bind_mouse_motion()
         self.active_editor.set_mouse_click_actions()
-        self._frames.tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def _update_display(self, *args):  # pylint:disable=unused-argument
         """ Update the display on frame cache update
@@ -827,7 +821,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         A little hacky, but the editors to display or hide are processed in alphabetical
         order, so that they are always processed in the same order (for tag lowering and raising)
         """
-        if not self._frames.tk_update.get():
+        if not self._globals.tk_update.get():
             return
         self._image.refresh(self.active_editor.view_mode)
         to_display = sorted([self.selected_action] + self.editor_display[self.selected_action])
@@ -835,7 +829,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         for editor in to_display:
             self._editors[editor].update_annotation()
         self._bind_unbind_keys()
-        self._frames.tk_update.set(False)
+        self._globals.tk_update.set(False)
         self.update_idletasks()
 
     def _hide_additional_faces(self):
@@ -844,7 +838,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         if self._image.is_zoomed:
             current_face_count = 1
         else:
-            current_face_count = len(self._det_faces.current_faces[self._frames.tk_position.get()])
+            current_face_count = len(self._det_faces.current_faces[self._globals.frame_index])
 
         if current_face_count > self._max_face_count:
             # Most faces seen to date so nothing to hide. Update max count and return
@@ -882,6 +876,7 @@ class BackgroundImage():
     """ The background image of the canvas """
     def __init__(self, canvas):
         self._canvas = canvas
+        self._globals = canvas._globals
         self._frames = canvas._frames
         self._det_faces = canvas._det_faces
         self._current_view_mode = "frame"
@@ -951,7 +946,7 @@ class BackgroundImage():
         :class:`numpy.ndarray`
             The face sized to the shortest dimensions of the face viewer
         """
-        position = self._frames.tk_position.get()
+        position = self._globals.frame_index
         size = min(self._frames.display_dims)
         if self._det_faces.face_count_per_index[position] == 0:
             face = np.ones((size, size, 3), dtype="uint8")

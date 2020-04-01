@@ -340,6 +340,7 @@ class UpdateFace():
     def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
+        self._globals = canvas._globals
         self._det_faces = detected_faces
         self._faces_cache = canvas._faces_cache
         self._frames = canvas._frames
@@ -468,9 +469,9 @@ class UpdateFace():
         face_idx = self._canvas.find_withtag("image_{}".format(frame_idx)).index(item_id)
         logger.trace("item_id: %s, frame_index: %s, face_index: %s", item_id, frame_idx, face_idx)
         self._det_faces.update.delete(frame_idx, face_idx)
-        if frame_idx == self._frames.tk_position.get():
+        if frame_idx == self._globals.frame_index:
             # Let updater handle removing of face from canvas
-            self._frames.tk_update.set(True)
+            self._globals.tk_update.set(True)
             self._canvas.active_frame.reload_annotations()
         else:
             # Explicitly remove if not the active frame

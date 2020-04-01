@@ -16,22 +16,29 @@ class FrameNavigation():
 
     Parameters
     ----------
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
     frames_location: str
         The path to the input frames
     """
-    def __init__(self, frames_location, scaling_factor, video_meta_data):
-        logger.debug("Initializing %s: (frames_location: '%s', scaling_factor: %s, "
-                     "video_meta_data: %s)", self.__class__.__name__, frames_location,
-                     scaling_factor, video_meta_data)
+    def __init__(self, tk_globals, frames_location, scaling_factor, video_meta_data):
+        logger.debug("Initializing %s: (tk_globals: %s, frames_location: '%s', "
+                     "scaling_factor: %s, video_meta_data: %s)", self.__class__.__name__,
+                     tk_globals, frames_location, scaling_factor, video_meta_data)
+        self._globals = tk_globals
         self._video_meta_data = video_meta_data
         self._loader = None
         self._meta = dict()
         self._current_idx = 0
         self._scaling = scaling_factor
-        self._tk_vars = self._set_tk_vars()
+
+        self._tk_is_playing = tk.BooleanVar()
+        self._tk_is_playing.set(False)
+
         self._current_frame = None
         self._display_dims = (896, 504)
         self._init_thread = self._background_init_frames(frames_location)
+        self._globals.tk_frame_index.trace("w", self._set_current_frame)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -75,7 +82,7 @@ class FrameNavigation():
     def current_meta_data(self):
         """ dict: The current cache item for the current location. Keys are `filename`,
         `display_dims`, `scale` and `interpolation`. """
-        return self._meta[self.tk_position.get()]
+        return self._meta[self._globals.frame_index]
 
     @property
     def current_scale(self):
@@ -99,55 +106,9 @@ class FrameNavigation():
         return tuple(retval)
 
     @property
-    def tk_position(self):
-        """ :class:`tkinter.IntVar`: The current frame position. """
-        return self._tk_vars["position"]
-
-    @property
-    def tk_transport_position(self):
-        """ :class:`tkinter.IntVar`: The current index of the display frame's transport slider. """
-        return self._tk_vars["transport_position"]
-
-    @property
     def tk_is_playing(self):
         """ :class:`tkinter.BooleanVar`: Whether the stream is currently playing. """
-        return self._tk_vars["is_playing"]
-
-    @property
-    def tk_update(self):
-        """ :class:`tkinter.BooleanVar`: Whether the display needs to be updated. """
-        return self._tk_vars["updated"]
-
-    @property
-    def tk_navigation_mode(self):
-        """ :class:`tkinter.StringVar`: The variable holding the selected frame navigation
-        mode. """
-        return self._tk_vars["nav_mode"]
-
-    def _set_tk_vars(self):
-        """ Set the initial tkinter variables and add traces. """
-        logger.debug("Setting tkinter variables")
-        position = tk.IntVar()
-        position.set(self._current_idx)
-        position.trace("w", self._set_current_frame)
-
-        is_playing = tk.BooleanVar()
-        is_playing.set(False)
-
-        updated = tk.BooleanVar()
-        updated.set(False)
-
-        nav_mode = tk.StringVar()
-        transport_position = tk.IntVar()
-        transport_position.set(0)
-
-        retval = dict(position=position,
-                      is_playing=is_playing,
-                      updated=updated,
-                      nav_mode=nav_mode,
-                      transport_position=transport_position)
-        logger.debug("Set tkinter variables: %s", retval)
-        return retval
+        return self._tk_is_playing
 
     def _background_init_frames(self, frames_location):
         """ Launch the images loader in a background thread so we can run other tasks whilst
@@ -176,14 +137,14 @@ class FrameNavigation():
             ``True`` if initializing for the first frame to be displayed otherwise ``False``.
             Default: ``False``
         """
-        position = self.tk_position.get()
+        position = self._globals.frame_index
         if not initialize and position == self._current_idx:
             return
         filename, frame = self._loader.image_from_index(position)
         self._add_meta_data(position, frame, filename)
         self._current_frame = frame
         self._current_idx = position
-        self.tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def _add_meta_data(self, position, frame, filename):
         """ Adds the metadata for the current frame to :attr:`meta`.

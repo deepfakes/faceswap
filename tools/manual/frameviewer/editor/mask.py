@@ -72,7 +72,7 @@ class Mask(Editor):
         self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
         self._add_action("draw", "draw", "Draw Tool", group="paint", hotkey="D")
         self._add_action("erase", "erase", "Erase Tool", group="paint", hotkey="E")
-        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._frames.tk_update.set(True))
+        self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._globals.tk_update.set(True))
 
     def _add_controls(self):
         """ Add the mask specific control panel controls.
@@ -119,7 +119,7 @@ class Mask(Editor):
             return
         self._meta = dict(position=self._frame_index)
         self._mask_type = mask_type
-        self._frames.tk_update.set(True)
+        self._globals.tk_update.set(True)
 
     def _update_meta(self, key, item, face_index):
         """ Update the meta information for the given object.
@@ -461,7 +461,7 @@ class Mask(Editor):
                  color,
                  brush_radius * 2)
         self._drag_data["starting_location"] = np.array((event.x, event.y))
-        self._frames.tk_update.set(True)
+        self._globals.tk_update.set(True)
         self._update_cursor(event)
 
     def _transform_points(self, face_index, points):
