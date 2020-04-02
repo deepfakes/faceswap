@@ -997,8 +997,167 @@ class Sort():
         return reindexed
 
 
+class Temporal():
+    """ Apply spatio-temporal filtering to landmarks
+        Adapted from:
+        https://www.kaggle.com/selfishgene/animating-and-smoothing-3d-facial-keypoints/notebook """
+
+    def __init__(self, alignments, arguments):
+        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
+        self.arguments = arguments
+        self.alignments = alignments
+        self.mappings = dict()
+        self.normalized = dict()
+        self.shapes_model = None
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def process(self):
+        """ Perform spatio-temporal filtering """
+        logger.info("[SPATIO-TEMPORAL FILTERING]")  # Tidy up cli output
+        logger.info("NB: The process only processes the alignments for the first "
+                    "face it finds for any given frame. For best results only run this when "
+                    "there is only a single face in the alignments file and all false positives "
+                    "have been removed")
+
+        self.normalize()
+        self.shape_model()
+        landmarks = self.spatially_filter()
+        landmarks = self.temporally_smooth(landmarks)
+        self.update_alignments(landmarks)
+        self.alignments.save()
+
+        logger.info("Done! To re-extract faces run: python tools.py "
+                    "alignments -j extract -a %s -fr <path_to_frames_dir> -fc "
+                    "<output_folder>", self.arguments.alignments_file)
+
+    # Define shape normalization utility functions
+    @staticmethod
+    def normalize_shapes(shapes_im_coords):
+        """ Normalize a 2D or 3D shape """
+        logger.debug("Normalize shapes")
+        (num_pts, num_dims, _) = shapes_im_coords.shape
+
+        # Calculate mean coordinates and subtract from shapes
+        mean_coords = shapes_im_coords.mean(axis=0)
+        shapes_centered = np.zeros(shapes_im_coords.shape)
+        shapes_centered = shapes_im_coords - np.tile(mean_coords, [num_pts, 1, 1])
+
+        # Calculate scale factors and divide shapes
+        scale_factors = np.sqrt((shapes_centered**2).sum(axis=1)).mean(axis=0)
+        shapes_normalized = np.zeros(shapes_centered.shape)
+        shapes_normalized = shapes_centered / np.tile(scale_factors, [num_pts, num_dims, 1])
+
+        logger.debug("Normalized shapes: (shapes_normalized: %s, scale_factors: %s, mean_coords: "
+                     "%s", shapes_normalized, scale_factors, mean_coords)
+        return shapes_normalized, scale_factors, mean_coords
+
+    @staticmethod
+    def normalized_to_original(shapes_normalized, scale_factors, mean_coords):
+        """ Transform a normalized shape back to original image coordinates """
+        logger.debug("Normalize to original")
+        (num_pts, num_dims, _) = shapes_normalized.shape
+
+        # move back to the correct scale
+        shapes_centered = shapes_normalized * np.tile(scale_factors, [num_pts, num_dims, 1])
+        # move back to the correct location
+        shapes_im_coords = shapes_centered + np.tile(mean_coords, [num_pts, 1, 1])
+
+        logger.debug("Normalized to original: %s", shapes_im_coords)
+        return shapes_im_coords
+
+    def normalize(self):
+        """ Compile all original and normalized alignments """
+        logger.debug("Normalize")
+        count = sum(1 for val in self.alignments.data.values() if val["faces"])
+        landmarks_all = np.zeros((68, 2, int(count)))
+
+        end = 0
+        for key in tqdm(sorted(self.alignments.data.keys()), desc="Compiling"):
+            val = self.alignments.data[key]["faces"]
+            if not val:
+                continue
+            # We should only be normalizing a single face, so just take
+            # the first landmarks found
+            landmarks = np.array(val[0]["landmarks_xy"]).reshape(68, 2, 1)
+            start = end
+            end = start + landmarks.shape[2]
+            # Store in one big array
+            landmarks_all[:, :, start:end] = landmarks
+            # Make sure we keep track of the mapping to the original frame
+            self.mappings[start] = key
+
+        # Normalize shapes
+        normalized_shape = self.normalize_shapes(landmarks_all)
+        self.normalized["landmarks"] = normalized_shape[0]
+        self.normalized["scale_factors"] = normalized_shape[1]
+        self.normalized["mean_coords"] = normalized_shape[2]
+        logger.debug("Normalized: %s", self.normalized)
+
+    def shape_model(self):
+        """ build 2D shape model """
+        logger.debug("Shape model")
+        landmarks_norm = self.normalized["landmarks"]
+        num_components = 20
+        normalized_shapes_tbl = np.reshape(landmarks_norm, [68*2, landmarks_norm.shape[2]]).T
+        self.shapes_model = decomposition.PCA(n_components=num_components,
+                                              whiten=True,
+                                              random_state=1).fit(normalized_shapes_tbl)
+        explained = self.shapes_model.explained_variance_ratio_.sum()
+        logger.info("Total explained percent by PCA model with %s components is %s%%",
+                    num_components, round(100 * explained, 1))
+        logger.debug("Shaped model")
+
+    def spatially_filter(self):
+        """ interpret the shapes using our shape model
+            (project and reconstruct) """
+        logger.debug("Spatio-Temporal Filter")
+        landmarks_norm = self.normalized["landmarks"]
+        # Convert to matrix form
+        landmarks_norm_table = np.reshape(landmarks_norm, [68 * 2, landmarks_norm.shape[2]]).T
+        # Project onto shapes model and reconstruct
+        landmarks_norm_table_rec = self.shapes_model.inverse_transform(
+            self.shapes_model.transform(landmarks_norm_table))
+        # Convert back to shapes (numKeypoint, num_dims, numFrames)
+        landmarks_norm_rec = np.reshape(landmarks_norm_table_rec.T,
+                                        [68, 2, landmarks_norm.shape[2]])
+        # Transform back to image co-ordinates
+        retval = self.normalized_to_original(landmarks_norm_rec,
+                                             self.normalized["scale_factors"],
+                                             self.normalized["mean_coords"])
+
+        logger.debug("Spatially Filtered: %s", retval)
+        return retval
+
+    @staticmethod
+    def temporally_smooth(landmarks):
+        """ apply temporal filtering on the 2D points """
+        logger.debug("Temporally Smooth")
+        filter_half_length = 2
+        temporal_filter = np.ones((1, 1, 2 * filter_half_length + 1))
+        temporal_filter = temporal_filter / temporal_filter.sum()
+
+        start_tileblock = np.tile(landmarks[:, :, 0][:, :, np.newaxis], [1, 1, filter_half_length])
+        end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, filter_half_length])
+        landmarks_padded = np.dstack((start_tileblock, landmarks, end_tileblock))
+
+        retval = signal.convolve(landmarks_padded, temporal_filter, mode='valid', method='fft')
+        logger.debug("Temporally Smoothed: %s", retval)
+        return retval
+
+    def update_alignments(self, landmarks):
+        """ Update smoothed landmarks back to alignments """
+        logger.debug("Update alignments")
+        for idx, frame in tqdm(self.mappings.items(), desc="Updating"):
+            logger.trace("Updating: (frame: %s)", frame)
+            landmarks_update = landmarks[:, :, idx]
+            landmarks_xy = landmarks_update.reshape(68, 2).tolist()
+            self.alignments.data[frame]["faces"][0]["landmarks_xy"] = landmarks_xy
+            logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
+        logger.debug("Updated alignments")
+
+
 class Spatial():
-    """ Apply spatial temporal filtering to landmarks
+    """ Apply spatial filtering to landmarks
         Adapted from:
         https://www.kaggle.com/selfishgene/animating-and-smoothing-3d-facial-keypoints/notebook """
 
@@ -1013,7 +1172,7 @@ class Spatial():
 
     def process(self):
         """ Perform spatial filtering """
-        logger.info("[SPATIO-TEMPORAL FILTERING]")  # Tidy up cli output
+        logger.info("[SPATIAL FILTERING]")  # Tidy up cli output
         logger.info("NB: The process only processes the alignments for the first "
                     "face it finds for any given frame. For best results only run this when "
                     "there is only a single face in the alignments file and all false positives "
@@ -1131,10 +1290,10 @@ class Spatial():
     @staticmethod
     def temporally_smooth(landmarks):
         """ apply temporal filtering on the 2D points """
-        logger.debug("Temporally Smooth")
-        filter_half_length = 2
-        temporal_filter = np.ones((1, 1, 2 * filter_half_length + 1))
-        temporal_filter = temporal_filter / temporal_filter.sum()
+        logger.debug("Spatially Smooth")
+        filter_half_length = 1
+        spatial_filter = np.ones((1, 1, 2 * filter_half_length + 1))
+        spatial_filter = temporal_filter / temporal_filter.sum()
 
         start_tileblock = np.tile(landmarks[:, :, 0][:, :, np.newaxis], [1, 1, filter_half_length])
         end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, filter_half_length])
@@ -1155,7 +1314,7 @@ class Spatial():
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
         logger.debug("Updated alignments")
 
-
+        
 class UpdateHashes():
     """ Update hashes in an alignments file """
     def __init__(self, alignments, arguments):
