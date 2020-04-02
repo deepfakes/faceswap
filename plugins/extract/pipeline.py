@@ -20,6 +20,14 @@ from lib.utils import get_backend
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+_INSTANCES = -1  # Tracking for multiple instances of pipeline
+
+
+def _get_instance():
+    """ Increment the global :attr:`_INSTANCES` and obtain the current instance value """
+    global _INSTANCES  # pylint:disable=global-statement
+    _INSTANCES += 1
+    return _INSTANCES
 
 
 class Extractor():
@@ -73,6 +81,7 @@ class Extractor():
                      "normalize_method: %s, image_is_aligned: %s)",
                      self.__class__.__name__, detector, aligner, masker, configfile,
                      multiprocess, rotate_images, min_size, normalize_method, image_is_aligned)
+        self._instance = _get_instance()
         masker = [masker] if not isinstance(masker, list) else masker
         self._flow = self._set_flow(detector, aligner, masker)
         # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
@@ -102,7 +111,7 @@ class Extractor():
         For align/mask (2nd/3rd pass operations) the :attr:`ExtractMedia.detected_faces` should
         also be populated by calling :func:`ExtractMedia.set_detected_faces`.
         """
-        qname = "extract_{}_in".format(self._current_phase[0])
+        qname = "extract{}_{}_in".format(self._instance, self._current_phase[0])
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -302,9 +311,10 @@ class Extractor():
     def _output_queue(self):
         """ Return the correct output queue depending on the current phase """
         if self.final_pass:
-            qname = "extract_{}_out".format(self._final_phase)
+            qname = "extract{}_{}_out".format(self._instance, self._final_phase)
         else:
-            qname = "extract_{}_in".format(self._phases[self._phase_index + 1][0])
+            qname = "extract{}_{}_in".format(self._instance,
+                                             self._phases[self._phase_index + 1][0])
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -380,9 +390,8 @@ class Extractor():
     def _add_queues(self):
         """ Add the required processing queues to Queue Manager """
         queues = dict()
-        tasks = []
-        tasks = ["extract_{}_in".format(phase) for phase in self._flow]
-        tasks.append("extract_{}_out".format(self._final_phase))
+        tasks = ["extract{}_{}_in".format(self._instance, phase) for phase in self._flow]
+        tasks.append("extract{}_{}_out".format(self._instance, self._final_phase))
         for task in tasks:
             # Limit queue size to avoid stacking ram
             queue_manager.add_queue(task, maxsize=self._queue_size)
@@ -488,8 +497,7 @@ class Extractor():
         return phases
 
     # << INTERNAL PLUGIN HANDLING >> #
-    @staticmethod
-    def _load_align(aligner, configfile, normalize_method):
+    def _load_align(self, aligner, configfile, normalize_method):
         """ Set global arguments and load aligner plugin """
         if aligner is None or aligner.lower() == "none":
             logger.debug("No aligner selected. Returning None")
@@ -497,11 +505,11 @@ class Extractor():
         aligner_name = aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
         aligner = PluginLoader.get_aligner(aligner_name)(configfile=configfile,
-                                                         normalize_method=normalize_method)
+                                                         normalize_method=normalize_method,
+                                                         instance=self._instance)
         return aligner
 
-    @staticmethod
-    def _load_detect(detector, rotation, min_size, configfile):
+    def _load_detect(self, detector, rotation, min_size, configfile):
         """ Set global arguments and load detector plugin """
         if detector is None or detector.lower() == "none":
             logger.debug("No detector selected. Returning None")
@@ -510,11 +518,11 @@ class Extractor():
         logger.debug("Loading Detector: '%s'", detector_name)
         detector = PluginLoader.get_detector(detector_name)(rotation=rotation,
                                                             min_size=min_size,
-                                                            configfile=configfile)
+                                                            configfile=configfile,
+                                                            instance=self._instance)
         return detector
 
-    @staticmethod
-    def _load_mask(masker, image_is_aligned, configfile):
+    def _load_mask(self, masker, image_is_aligned, configfile):
         """ Set global arguments and load masker plugin """
         if masker is None or masker.lower() == "none":
             logger.debug("No masker selected. Returning None")
@@ -522,18 +530,19 @@ class Extractor():
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
         masker = PluginLoader.get_masker(masker_name)(image_is_aligned=image_is_aligned,
-                                                      configfile=configfile)
+                                                      configfile=configfile,
+                                                      instance=self._instance)
         return masker
 
     def _launch_plugin(self, phase):
         """ Launch an extraction plugin """
         logger.debug("Launching %s plugin", phase)
-        in_qname = "extract_{}_in".format(phase)
+        in_qname = "extract{}_{}_in".format(self._instance, phase)
         if phase == self._final_phase:
-            out_qname = "extract_{}_out".format(self._final_phase)
+            out_qname = "extract{}_{}_out".format(self._instance, self._final_phase)
         else:
             next_phase = self._flow[self._flow.index(phase) + 1]
-            out_qname = "extract_{}_in".format(next_phase)
+            out_qname = "extract{}_{}_in".format(self._instance, next_phase)
         logger.debug("in_qname: %s, out_qname: %s", in_qname, out_qname)
         kwargs = dict(in_queue=self._queues[in_qname], out_queue=self._queues[out_qname])
 
