@@ -31,7 +31,7 @@ class AlignmentsArgs(FaceSwapArgs):
             "type": str,
             "choices": ("dfl", "draw", "extract", "fix", "manual", "merge", "missing-alignments",
                         "missing-frames", "leftover-faces", "multi-faces", "no-faces",
-                        "remove-faces", "remove-frames", "rename", "sort", "spatial",
+                        "remove-faces", "remove-frames", "rename", "sort", "temporal", "spatial",
                         "update-hashes"),
             "required": True,
             "help": "R|Choose which action you want to perform. "
@@ -76,7 +76,9 @@ class AlignmentsArgs(FaceSwapArgs):
                     "\nL|'sort': Re-index the alignments from left to right. For alignments "
                     "with multiple faces this will ensure that the left-most face is at index 0 "
                     "Optionally pass in a faces folder (-fc) to also rename extracted faces."
-                    "\nL|'spatial': Perform spatial and temporal filtering to smooth alignments "
+                    "\nL|'temporal': Perform spatio-temporal filtering to smooth alignments "
+                    "(EXPERIMENTAL!)"
+                    "\nL|'spatial': Perform spatial filtering to smooth alignments (not as strong as temporal) "
                     "(EXPERIMENTAL!)"
                     "\nL|'update-hashes': Recalculate the face hashes. Only use this if you have "
                     "altered the extracted faces (e.g. colour adjust). The files MUST be "
