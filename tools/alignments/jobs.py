@@ -1181,7 +1181,7 @@ class Spatial():
         self.normalize()
         self.shape_model()
         landmarks = self.spatially_filter()
-        landmarks = self.temporally_smooth(landmarks)
+        landmarks = self.spatially_smooth(landmarks)
         self.update_alignments(landmarks)
         self.alignments.save()
 
@@ -1288,8 +1288,8 @@ class Spatial():
         return retval
 
     @staticmethod
-    def temporally_smooth(landmarks):
-        """ apply temporal filtering on the 2D points """
+    def spatially_smooth(landmarks):
+        """ apply spatial smoothing on the 2D points """
         logger.debug("Spatially Smooth")
         filter_half_length = 1
         spatial_filter = np.ones((1, 1, 2 * filter_half_length + 1))
@@ -1300,7 +1300,7 @@ class Spatial():
         landmarks_padded = np.dstack((start_tileblock, landmarks, end_tileblock))
 
         retval = signal.convolve(landmarks_padded, spatial_filter, mode='valid', method='fft')
-        logger.debug("Temporally Smoothed: %s", retval)
+        logger.debug("Spatially Smoothed: %s", retval)
         return retval
 
     def update_alignments(self, landmarks):
