@@ -1132,7 +1132,7 @@ class Spatial():
     def temporally_smooth(landmarks):
         """ apply temporal filtering on the 2D points """
         logger.debug("Temporally Smooth")
-        filter_half_length = 2
+        filter_half_length = 1
         temporal_filter = np.ones((1, 1, 2 * filter_half_length + 1))
         temporal_filter = temporal_filter / temporal_filter.sum()
 
