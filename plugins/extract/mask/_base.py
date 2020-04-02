@@ -50,11 +50,12 @@ class Masker(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self, git_model_id=None, model_filename=None, configfile=None,
-                 image_is_aligned=False):
+                 instance=0, image_is_aligned=False):
         logger.debug("Initializing %s: (configfile: %s, )", self.__class__.__name__, configfile)
         super().__init__(git_model_id,
                          model_filename,
-                         configfile=configfile)
+                         configfile=configfile,
+                         instance=instance)
         self.input_size = 256  # Override for model specific input_size
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 

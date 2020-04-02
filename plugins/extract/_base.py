@@ -65,7 +65,10 @@ class Extractor():
     ----------------
     configfile: str, optional
         Path to a custom configuration ``ini`` file. Default: Use system configfile
-
+    instance: int, optional
+        If this plugin is being executed multiple times (i.e. multiple pipelines have been
+        launched), the instance of the plugin must be passed in for naming convention reasons.
+        Default: 0
 
     The following attributes should be set in the plugin's :func:`__init__` method after
     initializing the parent.
@@ -98,11 +101,12 @@ class Extractor():
     plugins.extract.pipeline : The extract pipeline that configures and calls all plugins
 
     """
-    def __init__(self, git_model_id=None, model_filename=None, configfile=None):
-        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, "
-                     " configfile: %s)", self.__class__.__name__, git_model_id,
-                     model_filename, configfile)
+    def __init__(self, git_model_id=None, model_filename=None, configfile=None, instance=0):
+        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, instance: %s, "
+                     "configfile: %s, )", self.__class__.__name__, git_model_id, model_filename,
+                     instance, configfile)
 
+        self._instance = instance
         self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
 
@@ -358,7 +362,7 @@ class Extractor():
         self._queues["out"] = out_queue
         for q_name in queues:
             self._queues[q_name] = queue_manager.get_queue(
-                name="{}_{}".format(self._plugin_type, q_name),
+                name="{}{}_{}".format(self._plugin_type, self._instance, q_name),
                 maxsize=self.queue_size)
 
     # <<< THREAD METHODS >>> #

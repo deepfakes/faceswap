@@ -58,12 +58,13 @@ class Detector(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self, git_model_id=None, model_filename=None,
-                 configfile=None, rotation=None, min_size=0):
+                 configfile=None, instance=0, rotation=None, min_size=0):
         logger.debug("Initializing %s: (rotation: %s, min_size: %s)", self.__class__.__name__,
                      rotation, min_size)
         super().__init__(git_model_id,
                          model_filename,
-                         configfile=configfile)
+                         configfile=configfile,
+                         instance=instance)
         self.rotation = self._get_rotation_angles(rotation)
         self.min_size = min_size
 

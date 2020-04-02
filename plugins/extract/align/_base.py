@@ -50,12 +50,13 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self, git_model_id=None, model_filename=None,
-                 configfile=None, normalize_method=None):
+                 configfile=None, instance=0, normalize_method=None):
         logger.debug("Initializing %s: (normalize_method: %s)", self.__class__.__name__,
                      normalize_method)
         super().__init__(git_model_id,
                          model_filename,
-                         configfile=configfile)
+                         configfile=configfile,
+                         instance=instance)
         self._normalize_method = None
         self.set_normalize_method(normalize_method)
 
