@@ -300,14 +300,12 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         delay = max(1, delay - duration)
         self.after(delay, lambda f=frame_count: self._play(f))
 
+    # TODO Hide the frame image and annotations if no frames meet the criteria any more.
+
     def _toggle_save_state(self, *args):  # pylint:disable=unused-argument
         """ Toggle the state of the save button when alignments are updated. """
         state = ["!disabled"] if self._det_faces.tk_unsaved.get() else ["disabled"]
         self._buttons["save"].state(state)
-
-    # TODO Annotations stay in the faces viewer when increment/decrement a frame
-    # which no longer meets criteria
-    # TODO Hide the frame image and annotations if no frames meet the criteria any more.
 
     def increment_frame(self, frame_count=None, is_playing=False):
         """ Update The frame navigation position to the next frame based on filter. """
@@ -842,7 +840,8 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
             return
         for idx in range(current_face_count, self._max_face_count):
             tag = "face_{}".format(idx)
-            if self.itemcget(tag, "state") != "hidden":
+            if any(self.itemcget(item_id, "state") != "hidden"
+                   for item_id in self.find_withtag(tag)):
                 logger.debug("Hiding face tag '%s'", tag)
                 self.itemconfig(tag, state="hidden")
 
