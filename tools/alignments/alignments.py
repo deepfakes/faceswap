@@ -5,7 +5,7 @@ import logging
 
 from .media import AlignmentData
 from .jobs import (Check, Dfl, Draw, Extract, Fix, Merge,  # noqa pylint: disable=unused-import
-                   Rename, RemoveAlignments, Sort, Spatial, UpdateHashes)
+                   Rename, RemoveAlignments, Sort, Temporal, Spatial, UpdateHashes)
 from .jobs_manual import Manual  # noqa pylint: disable=unused-import
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
