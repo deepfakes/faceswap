@@ -451,7 +451,7 @@ class FaceUpdate():
         faces = self._current_faces_at_index(frame_index)
         faces.append(DetectedFace())
         face_index = len(faces) - 1
-        self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height)
+        self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
 
     def delete(self, frame_index, face_index):
         """ Delete the :class:`DetectedFace` object for the given frame and face indices.
@@ -470,7 +470,7 @@ class FaceUpdate():
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
-    def bounding_box(self, frame_index, face_index, pnt_x, width, pnt_y, height):
+    def bounding_box(self, frame_index, face_index, pnt_x, width, pnt_y, height, aligner="FAN"):
         """ Update the bounding box for the :class:`DetectedFace` object at the given frame and
         face indices, with the given dimensions.
 
@@ -488,15 +488,17 @@ class FaceUpdate():
             The top point of the bounding box
         height: int
             The height of the bounding box
+        aligner: ["cv2-dnn", "FAN], optional
+            The aligner to use to generate the landmarks. Default: "FAN"
         """
-        logger.trace("frame_index: %s, face_index %s, pnt_x %s, width %s, pnt_y %s, height %s",
-                     frame_index, face_index, pnt_x, width, pnt_y, height)
+        logger.trace("frame_index: %s, face_index %s, pnt_x %s, width %s, pnt_y %s, height %s, "
+                     "aligner: %s", frame_index, face_index, pnt_x, width, pnt_y, height, aligner)
         face = self._current_faces_at_index(frame_index)[face_index]
         face.x = pnt_x
         face.w = width
         face.y = pnt_y
         face.h = height
-        face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index)
+        face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         # TODO Link this in to edited

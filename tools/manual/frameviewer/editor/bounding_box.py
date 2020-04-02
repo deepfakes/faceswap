@@ -25,6 +25,7 @@ class BoundingBox(Editor):
         The frames navigator for this manual session
     """
     def __init__(self, canvas, detected_faces, frames):
+        self._tk_aligner = None
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
@@ -55,6 +56,19 @@ class BoundingBox(Editor):
 
     def _add_controls(self):
         """ Controls for feeding the Aligner. Exposes Normalization Method as a parameter. """
+        align_ctl = ControlPanelOption(
+            "Aligner",
+            str,
+            group="Aligner",
+            choices=["cv2-dnn", "FAN"],
+            default="FAN",
+            is_radio=True,
+            helptext="Aligner to use. FAN will obtain better alignments, but cv2-dnn can be "
+                     "useful if FAN cannot get decent alignments and you want to set a base to "
+                     "edit from.")
+        self._tk_aligner = align_ctl.tk_var
+        self._add_control(align_ctl)
+
         norm_ctl = ControlPanelOption(
             "Normalization method",
             str,
@@ -352,7 +366,8 @@ class BoundingBox(Editor):
         logger.trace("New ROI: %s", box)
         self._det_faces.update.bounding_box(self._frame_index,
                                             face_idx,
-                                            *self._coords_to_bounding_box(box))
+                                            *self._coords_to_bounding_box(box),
+                                            aligner=self._tk_aligner.get())
 
     def _move(self, event):
         """ Moves the bounding box on a bounding box drag event.
@@ -371,7 +386,8 @@ class BoundingBox(Editor):
         logger.trace("face_tag: %s, shift: %s, new co-ords: %s", face_tag, shift, coords)
         self._det_faces.update.bounding_box(self._frame_index,
                                             face_idx,
-                                            *self._coords_to_bounding_box(coords))
+                                            *self._coords_to_bounding_box(coords),
+                                            aligner=self._tk_aligner.get())
         self._drag_data["current_location"] = (event.x, event.y)
 
     def _coords_to_bounding_box(self, coords):

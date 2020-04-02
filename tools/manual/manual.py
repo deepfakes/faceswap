@@ -835,7 +835,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 class Aligner():
     """ Handles the extraction pipeline for retrieving the alignment landmarks. """
     def __init__(self):
-        self._aligner = None
+        self._aligners = {"cv2-dnn": None, "FAN": None}
+        self._aligner = "FAN"
         self._det_faces = None
         self._frames = None
         self._frame_index = None
@@ -845,7 +846,7 @@ class Aligner():
     @property
     def _in_queue(self):
         """ :class:`queue.Queue` - The input queue to the aligner. """
-        return self._aligner.input_queue
+        return self._aligners[self._aligner].input_queue
 
     @property
     def _feed_face(self):
@@ -880,13 +881,14 @@ class Aligner():
     def _init_aligner(self):
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
-        # TODO FAN
-        aligner = Extractor(None, "cv2-dnn", ["components", "extended"],
-                            multiprocess=True, normalize_method="hist")
-        aligner.set_batchsize("align", 1)  # Set the batchsize to 1
-        aligner.launch()
-        logger.debug("Initialized Extractor")
-        self._aligner = aligner
+        # Make sure non-GPU aligner is allocated first
+        for model in sorted(self._aligners, key=str.casefold):
+            aligner = Extractor(None, model, ["components", "extended"],
+                                multiprocess=True, normalize_method="hist")
+            aligner.set_batchsize("align", 1)  # Set the batchsize to 1
+            aligner.launch()
+            logger.debug("Initialized %s Extractor", model)
+            self._aligners[model] = aligner
 
     def link_faces_and_frames(self, detected_faces, frames):
         """ Add the :class:`AlignmentsData` object as a property of the aligner.
@@ -901,8 +903,17 @@ class Aligner():
         self._det_faces = detected_faces
         self._frames = frames
 
-    def get_landmarks(self, frame_index, face_index):
+    def get_landmarks(self, frame_index, face_index, aligner):
         """ Feed the detected face into the alignment pipeline and retrieve the landmarks
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index to extract the aligned face for
+        face_index: int
+            The face index within the current frame to extract the face for
+        aligner: ["FAN", "cv2-dnn"]
+            The aligner to use to extract the face
 
         Returns
         -------
@@ -911,14 +922,16 @@ class Aligner():
         """
         self._frame_index = frame_index
         self._face_index = face_index
+        self._aligner = aligner
         self._in_queue.put(self._feed_face)
-        detected_face = next(self._aligner.detected_faces()).detected_faces[0]
+        detected_face = next(self._aligners[aligner].detected_faces()).detected_faces[0]
         return detected_face.landmarks_xy
 
     def set_normalization_method(self, method_var):
         """ Change the normalization method for faces fed into the aligner """
         method = method_var.get()
-        self._aligner.set_aligner_normalization_method(method)
+        for aligner in self._aligners.values():
+            aligner.set_aligner_normalization_method(method)
 
 
 class TkGlobals():
