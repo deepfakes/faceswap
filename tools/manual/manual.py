@@ -881,7 +881,7 @@ class Aligner():
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # TODO FAN
-        aligner = Extractor(None, "FAN", ["components", "extended"],
+        aligner = Extractor(None, "cv2-dnn", ["components", "extended"],
                             multiprocess=True, normalize_method="hist")
         aligner.set_batchsize("align", 1)  # Set the batchsize to 1
         aligner.launch()
@@ -930,20 +930,36 @@ class TkGlobals():
         self._tk_transport_index = tk.IntVar()
         self._tk_transport_index.set(0)
 
+        self._tk_face_index = tk.IntVar()
+        self._tk_face_index.set(0)
+
         self._tk_update = tk.BooleanVar()
         self._tk_update.set(False)
 
         self._tk_filter_mode = tk.StringVar()
+        self._tk_is_zoomed = tk.BooleanVar()
+        self._tk_is_zoomed.set(False)
 
     @property
     def frame_index(self):
-        "int: The currently displayed frame index"
+        """ int: The currently displayed frame index """
         return self._tk_frame_index.get()
 
     @property
     def tk_frame_index(self):
         """ :class:`tkinter.IntVar`: The variable holding current frame index. """
         return self._tk_frame_index
+
+    @property
+    def tk_face_index(self):
+        """ :class:`tkinter.IntVar`: The variable face index if the selected face when in zoomed
+        mode. """
+        return self._tk_face_index
+
+    @property
+    def face_index(self):
+        """ int: The currently displayed face index """
+        return self._tk_face_index.get()
 
     @property
     def filter_mode(self):
@@ -955,6 +971,18 @@ class TkGlobals():
         """ :class:`tkinter.StringVar`: The variable holding the currently selected navigation
         filter mode. """
         return self._tk_filter_mode
+
+    @property
+    def tk_is_zoomed(self):
+        """ :class:`tkinter.BooleanVar`: The variable holding the value indicating whether the
+        frame viewer is zoomed into a face or zoomed out to the full frame. """
+        return self._tk_is_zoomed
+
+    @property
+    def is_zoomed(self):
+        """ bool: ``True`` if the frame viewer is zoomed into a face, ``False`` if the frame viewer
+        is displaying a full frame. """
+        return self._tk_is_zoomed.get()
 
     @property
     def tk_transport_index(self):

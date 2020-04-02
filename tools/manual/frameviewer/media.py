@@ -138,7 +138,7 @@ class FrameNavigation():
             Default: ``False``
         """
         position = self._globals.frame_index
-        if not initialize and position == self._current_idx:
+        if not initialize and (position == self._current_idx and not self._globals.is_zoomed):
             return
         filename, frame = self._loader.image_from_index(position)
         self._add_meta_data(position, frame, filename)

@@ -683,7 +683,6 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._frames = frames
         self._actions = actions
         self._tk_action_var = tk_action_var
-        self._zoomed_face_index = 0  # TODO
         self._image = BackgroundImage(self)
         self._editor_globals = dict(control_tk_vars=dict(),
                                     annotation_formats=dict(),
@@ -761,11 +760,6 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """ :class:`BackgroundFrame`: The background image on the canvas. """
         return self._image
 
-    @property
-    def zoomed_face_index(self):
-        """ int: The index of the face in the current frame that is zoomed in """
-        return self._zoomed_face_index
-
     def _get_editors(self):
         """ Get the object editors for the canvas.
 
@@ -835,7 +829,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def _hide_additional_faces(self):
         """ Hide additional faces if the number of faces on the canvas reduces on a frame
         change. """
-        if self._image.is_zoomed:
+        if self._globals.is_zoomed:
             current_face_count = 1
         else:
             current_face_count = len(self._det_faces.current_faces[self._globals.frame_index])
@@ -879,7 +873,6 @@ class BackgroundImage():
         self._globals = canvas._globals
         self._frames = canvas._frames
         self._det_faces = canvas._det_faces
-        self._current_view_mode = "frame"
         zoom_size = (min(self._frames.display_dims), min(self._frames.display_dims))
         self._zoom_padding = self._get_padding(zoom_size)
         placeholder = np.ones((*reversed(self._frames.display_dims), 3), dtype="uint8")
@@ -892,9 +885,11 @@ class BackgroundImage():
                                                 tags="main_image")
 
     @property
-    def is_zoomed(self):
-        """ bool: ``True`` if the current display is zoomed on a face otherwise ``False``. """
-        return self._current_view_mode == "face"
+    def _current_view_mode(self):
+        """ str: `frame` if global zoom mode variable is set to ``False`` other wise `face`. """
+        retval = "face" if self._globals.is_zoomed else "frame"
+        logger.trace(retval)
+        return retval
 
     def _get_padding(self, size):
         """ Obtain the Left, Top, Right, Bottom padding required to place the square face or frame
@@ -916,43 +911,65 @@ class BackgroundImage():
         return padding
 
     def refresh(self, view_mode):
-        """ Update the displayed frame """
+        """ Update the displayed frame.
+
+        Parameters
+        ----------
+        view_mode: ["frame", "face"]
+            The currently active editor's selected view mode.
+        """
         self._switch_image(view_mode)
         getattr(self, "_update_tk_{}".format(self._current_view_mode))()
         logger.trace("Updating background frame")
 
     def _switch_image(self, view_mode):
-        """ Switch the image between the full frame image and the zoomed face image """
+        """ Switch the image between the full frame image and the zoomed face image.
+
+        Parameters
+        ----------
+        view_mode: ["frame", "face"]
+            The currently active editor's selected view mode.
+        """
         if view_mode == self._current_view_mode:
             return
         logger.trace("Switching background image from '%s' to '%s'",
                      self._current_view_mode, view_mode)
-        img = self._tk_frame if view_mode == "frame" else self._tk_face
+        img = getattr(self, "_tk_{}".format(view_mode))
         self._canvas.itemconfig(self._image, image=img)
-        self._current_view_mode = view_mode
+        self._globals.tk_is_zoomed.set(view_mode == "face")
+        self._globals.tk_face_index.set(0)
 
     def _update_tk_face(self):
-        # TODO Face index
+        """ Update the currently zoomed face. """
         face = self._get_zoomed_face()
         face = cv2.copyMakeBorder(face, *self._zoom_padding, cv2.BORDER_CONSTANT)
         logger.trace("final shape: %s", face.shape)
         self._tk_face.paste(Image.fromarray(face))
 
     def _get_zoomed_face(self):
-        """ Get the zoomed face or a blank image if not faces are available.
+        """ Get the zoomed face or a blank image if no faces are available.
 
         Returns
         -------
         :class:`numpy.ndarray`
             The face sized to the shortest dimensions of the face viewer
         """
-        position = self._globals.frame_index
+        frame_idx = self._globals.frame_index
+        face_idx = self._globals.face_index
+        faces_in_frame = self._det_faces.face_count_per_index[frame_idx]
         size = min(self._frames.display_dims)
-        if self._det_faces.face_count_per_index[position] == 0:
+
+        if face_idx + 1 > faces_in_frame:
+            logger.debug("Resetting face index to 0 for more faces in frame than current index: ("
+                         "faces_in_frame: %s, zoomed_face_index: %s", faces_in_frame, face_idx)
+            self._globals.tk_face_index.set(0)
+
+        if faces_in_frame == 0:
             face = np.ones((size, size, 3), dtype="uint8")
         else:
-            face = self._det_faces.get_face_at_index(position,
-                                                     0,  # TODO Hard wired to 0 for now
+
+            face = self._det_faces.get_face_at_index(frame_idx,
+                                                     self._globals.face_index,
                                                      self._frames.current_frame,
                                                      size)
         logger.trace("face shape: %s", face.shape)

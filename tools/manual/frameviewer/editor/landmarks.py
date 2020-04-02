@@ -33,7 +33,7 @@ class Landmarks(Editor):
     def update_annotation(self):
         """ Get the latest Landmarks points and update. """
         for face_idx, face in enumerate(self._face_iterator):
-            if self._is_zoomed:
+            if self._globals.is_zoomed:
                 landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
             else:
                 landmarks = self._scale_to_display(face.landmarks_xy)
@@ -193,7 +193,7 @@ class Landmarks(Editor):
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
 
-        if self._is_zoomed:
+        if self._globals.is_zoomed:
             scaled_shift = np.array((shift_x, shift_y))
         else:
             scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
@@ -201,7 +201,7 @@ class Landmarks(Editor):
                                         face_idx,
                                         lm_idx,
                                         *scaled_shift,
-                                        self._is_zoomed)
+                                        self._globals.is_zoomed)
         self._drag_data["current_location"] = (event.x, event.y)
 
 
@@ -236,7 +236,7 @@ class Mesh(Editor):
         key = "mesh"
         color = self._control_color
         for face_idx, face in enumerate(self._face_iterator):
-            if self._is_zoomed:
+            if self._globals.is_zoomed:
                 landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
             else:
                 landmarks = self._scale_to_display(face.landmarks_xy)

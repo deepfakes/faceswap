@@ -72,16 +72,22 @@ class HoverBox():  # pylint:disable=too-few-public-methods
             self._current_frame_index = None
             self._current_face_index = None
             return
-        if self._canvas.frame_index_from_object(item_id) == self._globals.frame_index:
+
+        frame_idx = self._canvas.frame_index_from_object(item_id)
+        face_idx = self._canvas.face_index_from_object(item_id)
+        is_zoomed = self._globals.is_zoomed
+
+        if (frame_idx == self._globals.frame_index and
+                (not is_zoomed or (is_zoomed and face_idx == self._globals.tk_face_index.get()))):
             self._clear()
             self._canvas.config(cursor="")
             self._current_frame_index = None
-            self._current_face_index = self._canvas.face_index_from_object(item_id)
+            self._current_face_index = None
             return
         self._canvas.config(cursor="hand1")
         self._highlight(item_id)
-        self._current_frame_index = self._canvas.frame_index_from_object(item_id)
-        self._current_face_index = self._canvas.face_index_from_object(item_id)
+        self._current_frame_index = frame_idx
+        self._current_face_index = face_idx
 
     def _clear(self):
         """ Hide the hover box when the mouse is not over a face. """
@@ -107,10 +113,14 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         on in :class:`~tools.manual.FacesViewer`.
         """
         frame_id = self._current_frame_index
-        if frame_id is None or frame_id == self._globals.frame_index:
+        is_zoomed = self._globals.is_zoomed
+        if frame_id is None or (frame_id == self._globals.frame_index and not is_zoomed):
             return
+        face_idx = self._current_face_index if is_zoomed else 0
+        self._globals.tk_face_index.set(face_idx)
         transport_id = self._transport_index_from_frame_index(frame_id)
-        logger.trace("frame_index: %s, transport_id: %s", frame_id, transport_id)
+        logger.trace("frame_index: %s, transport_id: %s, face_idx: %s",
+                     frame_id, transport_id, face_idx)
         if transport_id is None:
             return
         self._frames.stop_playback()

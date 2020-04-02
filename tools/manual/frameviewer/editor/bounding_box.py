@@ -77,7 +77,7 @@ class BoundingBox(Editor):
 
     def update_annotation(self):
         """ Get the latest bounding box data from alignments and update. """
-        if self._is_zoomed:
+        if self._globals.is_zoomed:
             logger.trace("Image is zoomed. Hiding Bounding Box.")
             self.hide_annotation()
             return

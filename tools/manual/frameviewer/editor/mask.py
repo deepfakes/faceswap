@@ -271,7 +271,7 @@ class Mask(Editor):
             The opacity to apply to the mask
         """
         mask = (self._meta["mask"][face_index] * opacity).astype("uint8")
-        if self._is_zoomed:
+        if self._globals.is_zoomed:
             display_image = self._update_mask_image_zoomed(mask, rgb_color)
             top_left = self._zoomed_roi[:2]
         else:
@@ -355,7 +355,7 @@ class Mask(Editor):
         color: str
             The hex color code that the mask should be displayed as
         """
-        if self._is_zoomed:
+        if self._globals.is_zoomed:
             box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
                             self._zoomed_roi[2], self._zoomed_roi[1],
                             self._zoomed_roi[2], self._zoomed_roi[3],
@@ -367,7 +367,7 @@ class Mask(Editor):
         self._object_tracker("mask_text", "text", face_index, top_left, kwargs)
         kwargs = dict(fill="", outline=color, width=1)
         self._object_tracker("mask_roi", "polygon", face_index, box, kwargs)
-        if self._is_zoomed:
+        if self._globals.is_zoomed:
             # Raise box above zoomed image
             self._canvas.tag_raise("mask_roi_face_{}".format(face_index))
 
@@ -475,7 +475,7 @@ class Mask(Editor):
             The points that are to be translated from the viewer to the underlying
             Detected Face
         """
-        if self._is_zoomed:
+        if self._globals.is_zoomed:
             offset = self._zoomed_roi[:2]
             scale = self._internal_size / self._zoomed_dims[0]
             t_points = np.rint((points - offset) * scale).astype("int32").squeeze()

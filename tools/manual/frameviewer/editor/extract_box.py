@@ -40,7 +40,7 @@ class ExtractBox(Editor):
         color = self._control_color
         for idx, face in enumerate(self._face_iterator):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
-            if self._is_zoomed:
+            if self._globals.is_zoomed:
                 box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
                                 self._zoomed_roi[2], self._zoomed_roi[1],
                                 self._zoomed_roi[2], self._zoomed_roi[3],

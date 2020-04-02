@@ -84,12 +84,6 @@ class Editor():
         return retval
 
     @property
-    def _is_zoomed(self):
-        """ bool: ``True`` if a face is currently zoomed in, ``False`` if the full frame is
-        displayed """
-        return self._canvas.image.is_zoomed
-
-    @property
     def _zoomed_dims(self):
         """ tuple: The (`width`, `height`) of the zoomed ROI """
         return (self._zoomed_roi[2] - self._zoomed_roi[0],
@@ -132,7 +126,7 @@ class Editor():
         """ list: The detected face objects to be iterated. This will either be all faces in the
         frame (normal view) or the single zoomed in face (zoom mode). """
         faces = self._det_faces.current_faces[self._frame_index]
-        faces = [faces[self._canvas.zoomed_face_index]] if self._is_zoomed and faces else faces
+        faces = [faces[self._globals.face_index]] if self._globals.is_zoomed and faces else faces
         return faces
 
     def _add_key_bindings(self, key_bindings):
