@@ -1293,7 +1293,7 @@ class Spatial():
         logger.debug("Spatially Smooth")
         filter_half_length = 1
         spatial_filter = np.ones((1, 1, 2 * filter_half_length + 1))
-        spatial_filter = spatial_filter / temporal_filter.sum()
+        spatial_filter = spatial_filter / spatial_filter.sum()
 
         start_tileblock = np.tile(landmarks[:, :, 0][:, :, np.newaxis], [1, 1, filter_half_length])
         end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, filter_half_length])
