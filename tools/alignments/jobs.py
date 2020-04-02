@@ -1299,7 +1299,7 @@ class Spatial():
         end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, filter_half_length])
         landmarks_padded = np.dstack((start_tileblock, landmarks, end_tileblock))
 
-        retval = signal.convolve(landmarks_padded, temporal_filter, mode='valid', method='fft')
+        retval = signal.convolve(landmarks_padded, spatial_filter, mode='valid', method='fft')
         logger.debug("Temporally Smoothed: %s", retval)
         return retval
 
