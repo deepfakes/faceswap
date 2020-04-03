@@ -357,7 +357,7 @@ class FaceCacheLoader():
         self._is_video = self._key_frames is not None and self._pts_times is not None
         self._num_threads = os.cpu_count() - 2
         if self._is_video:
-            self._num_threads = min(self._num_threads, len(self._key_frames) - 1)
+            self._num_threads = min(self._num_threads, len(self._key_frames))
         self._executor = futures.ThreadPoolExecutor(max_workers=self._num_threads)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -393,7 +393,7 @@ class FaceCacheLoader():
         key_frame_split = len(self._key_frames) // self._num_threads
         for idx in range(self._num_threads):
             start_idx = idx * key_frame_split
-            end_idx = self._key_frames[start_idx + key_frame_split]
+            end_idx = self._key_frames[min(start_idx + key_frame_split, len(self._key_frames) - 1)]
             start_pts = self._pts_times[self._key_frames[start_idx]]
             end_pts = False if idx + 1 == self._num_threads else self._pts_times[end_idx]
             starting_index = self._pts_times.index(start_pts)
@@ -401,6 +401,9 @@ class FaceCacheLoader():
                 segment_count = len(self._pts_times[self._key_frames[start_idx]:end_idx])
             else:
                 segment_count = len(self._pts_times[self._key_frames[start_idx]:])
+            logger.debug("thread index: %s, start_idx: %s, end_idx: %s, start_pts: %s, "
+                         "end_pts: %s, starting_index: %s, segment_count: %s", idx, start_idx,
+                         end_idx, start_pts, end_pts, starting_index, segment_count)
             self._executor.submit(self._load_from_video,
                                   start_pts,
                                   end_pts,
