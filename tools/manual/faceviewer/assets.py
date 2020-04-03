@@ -65,6 +65,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         update_indices = self._faces_cache.loader.loaded_frame_indices[faces_seen:]
         logger.debug("faces_seen: %s, update count: %s", faces_seen, len(update_indices))
         tk_faces = self._faces_cache.tk_faces[update_indices]
+        self._faces_cache.loader.check_and_raise_error()
         for frame_idx, faces in zip(update_indices, tk_faces):
             starting_idx = sum(faces_count[:frame_idx])
             for idx, tk_face in enumerate(faces):
@@ -78,6 +79,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         faces_seen += len(update_indices)
         if faces_seen == self._frame_count:
             logger.debug("Load complete")
+            self._faces_cache.loader.join_threads()
             self._on_load_complete()
         else:
             logger.debug("Refreshing... (faces_seen: %s, frame_count: %s",
