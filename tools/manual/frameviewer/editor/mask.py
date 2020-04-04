@@ -142,7 +142,7 @@ class Mask(Editor):
             logger.trace("Appending to existing item list")
             self._meta[key][face_index] = item
 
-    def hide_annotation(self):
+    def hide_annotation(self, tag=None):
         """ Clear the mask :attr:`_meta` dict when hiding the annotation. """
         super().hide_annotation()
         self._meta = dict()

@@ -155,11 +155,11 @@ class Editor():
         :class:`numpy.ndarray`
             The (`left`, `top`, `right`, `bottom`) roi of the zoomed face in the display frame
         """
-        half_size = min(self._frames.display_dims) / 2
-        left = self._frames.display_dims[0] / 2 - half_size
+        half_size = min(self._globals.frame_display_dims) / 2
+        left = self._globals.frame_display_dims[0] / 2 - half_size
         top = 0
-        right = self._frames.display_dims[0] / 2 + half_size
-        bottom = self._frames.display_dims[1]
+        right = self._globals.frame_display_dims[0] / 2 + half_size
+        bottom = self._globals.frame_display_dims[1]
         retval = np.rint(np.array((left, top, right, bottom))).astype("int32")
         logger.debug("Zoomed ROI: %s", retval)
         return retval

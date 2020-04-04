@@ -16,7 +16,7 @@ from plugins.extract.pipeline import Extractor, ExtractMedia
 from .detected_faces import DetectedFaces
 from .faceviewer.frame import FacesFrame
 from .frameviewer.display_frame import DisplayFrame
-from .frameviewer.media import FrameNavigation
+from .frameviewer.navigation import FrameNavigation
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -37,9 +37,9 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
+        self._initialize_tkinter()
         self._globals = TkGlobals()
         is_video = self._check_input(arguments.frames)
-        self._initialize_tkinter()
 
         extractor = Aligner()
         self._det_faces = DetectedFaces(self._globals,
@@ -51,9 +51,8 @@ class Manual(tk.Tk):
         video_meta_data = self._det_faces.video_meta_data
         self._frames = FrameNavigation(self._globals,
                                        arguments.frames,
-                                       get_config().scaling_factor,
                                        video_meta_data)
-        self._det_faces.load_faces(self._frames)
+        self._det_faces.load_faces()
 
         self._containers = self._create_containers()
 
@@ -329,10 +328,10 @@ class Aligner():
     """ Handles the extraction pipeline for retrieving the alignment landmarks. """
     def __init__(self):
         # TODO
-        # self._aligners = {"cv2-dnn": None}
-        # self._aligner = "cv2-dnn"
-        self._aligners = {"cv2-dnn": None, "FAN": None}
-        self._aligner = "FAN"
+        self._aligners = {"cv2-dnn": None}
+        self._aligner = "cv2-dnn"
+        # self._aligners = {"cv2-dnn": None, "FAN": None}
+        # self._aligner = "FAN"
         self._det_faces = None
         self._frames = None
         self._frame_index = None
@@ -431,7 +430,8 @@ class Aligner():
 
 
 class TkGlobals():
-    """ Tkinter Variables that need to be accessible from all areas of the GUI """
+    """ Tkinter Variables and frame information that need to be accessible from all areas of the
+    GUI. """
     def __init__(self):
         self._tk_frame_index = tk.IntVar()
         self._tk_frame_index.set(0)
@@ -448,6 +448,15 @@ class TkGlobals():
         self._tk_filter_mode = tk.StringVar()
         self._tk_is_zoomed = tk.BooleanVar()
         self._tk_is_zoomed.set(False)
+
+        self._frame_display_dims = (int(round(896 * get_config().scaling_factor)),
+                                    int(round(504 * get_config().scaling_factor)))
+        self._current_frame = dict(image=None)
+
+    @property
+    def frame_display_dims(self):
+        """ tuple: The (`width`, `height`) of the display image with scaling factor applied. """
+        return self._frame_display_dims
 
     @property
     def frame_index(self):

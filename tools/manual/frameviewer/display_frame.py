@@ -50,8 +50,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         main_frame = ttk.Frame(self)
         main_frame.pack(side=tk.RIGHT)
         self._video_frame = ttk.Frame(main_frame,
-                                      width=self._frames.display_dims[0],
-                                      height=self._frames.display_dims[1])
+                                      width=self._globals.frame_display_dims[0],
+                                      height=self._globals.frame_display_dims[1])
 
         self._video_frame.pack(side=tk.TOP, expand=True)
         self._video_frame.pack_propagate(False)
@@ -736,8 +736,8 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """ tuple: The (`width`, `height`) offset of the canvas based on the size of the currently
         displayed image """
         frame_dims = self._frames.current_meta_data["display_dims"]
-        offset_x = (self._frames.display_dims[0] - frame_dims[0]) / 2
-        offset_y = (self._frames.display_dims[1] - frame_dims[1]) / 2
+        offset_x = (self._globals.frame_display_dims[0] - frame_dims[0]) / 2
+        offset_y = (self._globals.frame_display_dims[1] - frame_dims[1]) / 2
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
         return offset_x, offset_y
 
@@ -872,13 +872,13 @@ class BackgroundImage():
         self._globals = canvas._globals
         self._frames = canvas._frames
         self._det_faces = canvas._det_faces
-        zoom_size = (min(self._frames.display_dims), min(self._frames.display_dims))
+        zoom_size = (min(self._globals.frame_display_dims), min(self._globals.frame_display_dims))
         self._zoom_padding = self._get_padding(zoom_size)
-        placeholder = np.ones((*reversed(self._frames.display_dims), 3), dtype="uint8")
+        placeholder = np.ones((*reversed(self._globals.frame_display_dims), 3), dtype="uint8")
         self._tk_frame = ImageTk.PhotoImage(Image.fromarray(placeholder))
         self._tk_face = ImageTk.PhotoImage(Image.fromarray(placeholder))
-        self._image = self._canvas.create_image(self._frames.display_dims[0] / 2,
-                                                self._frames.display_dims[1] / 2,
+        self._image = self._canvas.create_image(self._globals.frame_display_dims[0] / 2,
+                                                self._globals.frame_display_dims[1] / 2,
                                                 image=self._tk_frame,
                                                 anchor=tk.CENTER,
                                                 tags="main_image")
@@ -899,14 +899,14 @@ class BackgroundImage():
         tuple
             The (Left, Top, Right, Bottom) padding to apply to the face image in pixels
         """
-        pad_lt = ((self._frames.display_dims[1] - size[0]) // 2,
-                  (self._frames.display_dims[0] - size[1]) // 2)
+        pad_lt = ((self._globals.frame_display_dims[1] - size[0]) // 2,
+                  (self._globals.frame_display_dims[0] - size[1]) // 2)
         padding = (pad_lt[0],
-                   self._frames.display_dims[1] - size[0] - pad_lt[0],
+                   self._globals.frame_display_dims[1] - size[0] - pad_lt[0],
                    pad_lt[1],
-                   self._frames.display_dims[0] - size[1] - pad_lt[1])
+                   self._globals.frame_display_dims[0] - size[1] - pad_lt[1])
         logger.debug("Frame dimensions: %s, size: %s, padding: %s",
-                     self._frames.display_dims, size, padding)
+                     self._globals.frame_display_dims, size, padding)
         return padding
 
     def refresh(self, view_mode):
@@ -956,7 +956,7 @@ class BackgroundImage():
         frame_idx = self._globals.frame_index
         face_idx = self._globals.face_index
         faces_in_frame = self._det_faces.face_count_per_index[frame_idx]
-        size = min(self._frames.display_dims)
+        size = min(self._globals.frame_display_dims)
 
         if face_idx + 1 > faces_in_frame:
             logger.debug("Resetting face index to 0 for more faces in frame than current index: ("

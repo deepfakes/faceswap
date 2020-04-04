@@ -39,7 +39,7 @@ class DetectedFaces():
         self._globals = tk_globals
         self._saved_faces = []
         self._updated_faces = []
-        self._extract_size = None  # Updated to correct size in in :func:`_load`
+        self._extract_size = min(self._globals.frame_display_dims)
         self._is_video = is_video
 
         self._alignments = self._get_alignments(alignments_path, input_location)
@@ -117,19 +117,8 @@ class DetectedFaces():
         ``False`` """
         return self._updated_faces[frame_index] is not None
 
-    def load_faces(self, frames):
-        """ Load the faces as :class:`~lib.faces_detect.DetectedFace` from the alignments file.
-
-        Set the extract size to be the zoomed face face size. This is the largest a face will be
-        extracted at, so every other use can be scaled down from this value
-        Load the faces.
-
-        Parameters
-        ----------
-        frames: :class:`~tools.manual.media.FrameNavigation`
-            The frames navigation object for the Manual Tool
-        """
-        self._extract_size = min(frames.display_dims)
+    def load_faces(self):
+        """ Load the faces as :class:`~lib.faces_detect.DetectedFace` from the alignments file. """
         self._io.load()
 
     def save(self):

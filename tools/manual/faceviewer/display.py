@@ -630,7 +630,6 @@ class FaceFilter():
         if len(self.image_ids) == starting_object_index:
             logger.debug("Update is last face. Not changing layout")
             return
-        # TODO Do the calculation rather than process twice on last multi_face
         for _ in range(2 if last_multi_face else 1):
             top_bulk_delta = np.array((self._size, 0))
             col_delta = np.array((-(self._canvas.column_count - 1) * self._size, self._size))
