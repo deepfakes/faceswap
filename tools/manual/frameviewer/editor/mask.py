@@ -20,10 +20,8 @@ class Mask(Editor):
         The canvas that holds the image and annotations
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
         The _detected_faces data for this manual session
-    frames: :class:`FrameNavigation`
-        The frames navigator for this manual session
     """
-    def __init__(self, canvas, detected_faces, frames):
+    def __init__(self, canvas, detected_faces):
         self._meta = []
         self._tk_faces = []
         self._internal_size = 512
@@ -34,7 +32,7 @@ class Mask(Editor):
                         "override your manual edits.")
         key_bindings = {"[": lambda *e, i=False: self._adjust_brush_radius(increase=i),
                         "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
-        super().__init__(canvas, detected_faces, frames,
+        super().__init__(canvas, detected_faces,
                          control_text=control_text, key_bindings=key_bindings)
         # Bind control click for reverse painting
         self._canvas.bind("<Control-ButtonPress-1>", self._control_click)
@@ -213,8 +211,9 @@ class Mask(Editor):
             - slices: The (`x`, `y`) slice objects required to extract the mask ROI
             from the full frame
         """
-        frame_dims = self._frames.current_meta_data["display_dims"]
-        scaled_mask_roi = np.rint(mask.original_roi * self._frames.current_scale).astype("int32")
+        frame_dims = self._globals.current_frame["display_dims"]
+        scaled_mask_roi = np.rint(mask.original_roi *
+                                  self._globals.current_frame["scale"]).astype("int32")
 
         # Scale and clip the ROI to fit within display frame boundaries
         clipped_roi = scaled_mask_roi.clip(min=(0, 0), max=frame_dims)
@@ -237,8 +236,8 @@ class Mask(Editor):
 
         # Adjust affine matrix for internal mask size and display dimensions
         adjustments = (np.array([[mask_scale, 0., 0.], [0., mask_scale, 0.]]),
-                       np.array([[1 / self._frames.current_scale, 0., 0.],
-                                 [0., 1 / self._frames.current_scale, 0.],
+                       np.array([[1 / self._globals.current_frame["scale"], 0., 0.],
+                                 [0., 1 / self._globals.current_frame["scale"], 0.],
                                  [0., 0., 1.]]))
         in_matrix = np.dot(adjustments[0],
                            np.concatenate((mask.affine_matrix, np.array([[0., 0., 1.]]))))
@@ -330,7 +329,7 @@ class Mask(Editor):
         :class: `ImageTk.PhotoImage`
             The full frame mask image formatted for display
         """
-        frame_dims = self._frames.current_meta_data["display_dims"]
+        frame_dims = self._globals.current_frame["display_dims"]
         frame = np.zeros(frame_dims + (1, ), dtype="uint8")
         interpolator = self._meta["interpolator"][face_index]
         slices = self._meta["slices"][face_index]

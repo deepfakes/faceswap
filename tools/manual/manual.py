@@ -7,6 +7,9 @@ import tkinter as tk
 from tkinter import ttk
 from time import sleep
 
+import cv2
+import numpy as np
+
 from lib.gui.control_helper import ControlPanel
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.multithreading import MultiThread
@@ -41,7 +44,7 @@ class Manual(tk.Tk):
         self._globals = TkGlobals()
         is_video = self._check_input(arguments.frames)
 
-        extractor = Aligner()
+        extractor = Aligner(self._globals)
         self._det_faces = DetectedFaces(self._globals,
                                         arguments.alignments_path,
                                         arguments.frames,
@@ -126,7 +129,7 @@ class Manual(tk.Tk):
             logger.debug("Threads not initialized. Waiting...")
             sleep(1)
 
-        extractor.link_faces_and_frames(self._det_faces, self._frames)
+        extractor.link_faces(self._det_faces)
         if any(val is None for val in video_meta_data.values()):
             self._det_faces.save_video_meta_data(**self._frames.video_meta_data)
 
@@ -324,111 +327,6 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
                 panel.pack_forget()
 
 
-class Aligner():
-    """ Handles the extraction pipeline for retrieving the alignment landmarks. """
-    def __init__(self):
-        # TODO
-        self._aligners = {"cv2-dnn": None}
-        self._aligner = "cv2-dnn"
-        # self._aligners = {"cv2-dnn": None, "FAN": None}
-        # self._aligner = "FAN"
-        self._det_faces = None
-        self._frames = None
-        self._frame_index = None
-        self._face_index = None
-        self._init_thread = self._background_init_aligner()
-
-    @property
-    def _in_queue(self):
-        """ :class:`queue.Queue` - The input queue to the aligner. """
-        return self._aligners[self._aligner].input_queue
-
-    @property
-    def _feed_face(self):
-        """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
-        aligner, formatted for the pipeline """
-        # TODO Try to remove requirement for frames here. Ultimately need a better way to access
-        # a frame's image
-        return ExtractMedia(
-            self._frames.current_meta_data["filename"],
-            self._frames.current_frame,
-            detected_faces=[self._det_faces.current_faces[self._frame_index][self._face_index]])
-
-    @property
-    def is_initialized(self):
-        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
-        thread_is_alive = self._init_thread.is_alive()
-        if thread_is_alive:
-            self._init_thread.check_and_raise_error()
-        else:
-            self._init_thread.join()
-        return not thread_is_alive
-
-    def _background_init_aligner(self):
-        """ Launch the aligner in a background thread so we can run other tasks whilst
-        waiting for initialization """
-        thread = MultiThread(self._init_aligner,
-                             thread_count=1,
-                             name="{}.init_aligner".format(self.__class__.__name__))
-        thread.start()
-        return thread
-
-    def _init_aligner(self):
-        """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
-        logger.debug("Initialize Aligner")
-        # Make sure non-GPU aligner is allocated first
-        for model in sorted(self._aligners, key=str.casefold):
-            aligner = Extractor(None, model, ["components", "extended"],
-                                multiprocess=True, normalize_method="hist")
-            aligner.set_batchsize("align", 1)  # Set the batchsize to 1
-            aligner.launch()
-            logger.debug("Initialized %s Extractor", model)
-            self._aligners[model] = aligner
-
-    def link_faces_and_frames(self, detected_faces, frames):
-        """ Add the :class:`AlignmentsData` object as a property of the aligner.
-
-        Parameters
-        ----------
-        detected_faces: :class:`~tool.manual.faces.DetectedFaces`
-            The :class:`~lib.faces_detect.DetectedFace` objects for this video
-        frames: :class:`~tools.lib_manual.media.FrameNavigation`
-            The Frame Navigation object for the manual tool
-        """
-        self._det_faces = detected_faces
-        self._frames = frames
-
-    def get_landmarks(self, frame_index, face_index, aligner):
-        """ Feed the detected face into the alignment pipeline and retrieve the landmarks
-
-        Parameters
-        ----------
-        frame_index: int
-            The frame index to extract the aligned face for
-        face_index: int
-            The face index within the current frame to extract the face for
-        aligner: ["FAN", "cv2-dnn"]
-            The aligner to use to extract the face
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The 68 point landmark alignments
-        """
-        self._frame_index = frame_index
-        self._face_index = face_index
-        self._aligner = aligner
-        self._in_queue.put(self._feed_face)
-        detected_face = next(self._aligners[aligner].detected_faces()).detected_faces[0]
-        return detected_face.landmarks_xy
-
-    def set_normalization_method(self, method_var):
-        """ Change the normalization method for faces fed into the aligner """
-        method = method_var.get()
-        for aligner in self._aligners.values():
-            aligner.set_aligner_normalization_method(method)
-
-
 class TkGlobals():
     """ Tkinter Variables and frame information that need to be accessible from all areas of the
     GUI. """
@@ -451,7 +349,16 @@ class TkGlobals():
 
         self._frame_display_dims = (int(round(896 * get_config().scaling_factor)),
                                     int(round(504 * get_config().scaling_factor)))
-        self._current_frame = dict(image=None)
+        self._current_frame = dict(image=None,
+                                   scale=None,
+                                   interpolation=None,
+                                   display_dims=None,
+                                   filename=None)
+
+    @property
+    def current_frame(self):
+        """ dict: The currently displayed frame in the frame viewer with it's meta information. """
+        return self._current_frame
 
     @property
     def frame_display_dims(self):
@@ -512,3 +419,132 @@ class TkGlobals():
         """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that an
         update needs to occur. """
         return self._tk_update
+
+    def set_current_frame(self, image, filename):
+        """ Set the frame and meta information for the currently displayed frame.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The image used to display in the Frame Viewer
+        filename: str
+            The filename of the current frame
+        """
+        scale = min(self.frame_display_dims[0] / image.shape[1],
+                    self.frame_display_dims[1] / image.shape[0])
+        self._current_frame["image"] = image
+        self._current_frame["filename"] = filename
+        self._current_frame["scale"] = scale
+        self._current_frame["interpolation"] = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
+        self._current_frame["display_dims"] = (int(round(image.shape[1] * scale)),
+                                               int(round(image.shape[0] * scale)))
+        logger.trace({k: v.shape if isinstance(v, np.ndarray) else v
+                      for k, v in self._current_frame.items()})
+
+
+class Aligner():
+    """ Handles the extraction pipeline for retrieving the alignment landmarks.
+
+    Parameters
+    ----------
+    tk_globals: :class:`TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
+    """
+    def __init__(self, tk_globals):
+        logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
+        self._globals = tk_globals
+        # TODO
+        # self._aligners = {"cv2-dnn": None}
+        # self._aligner = "cv2-dnn"
+        self._aligners = {"cv2-dnn": None, "FAN": None}
+        self._aligner = "FAN"
+        self._det_faces = None
+        self._frame_index = None
+        self._face_index = None
+        self._init_thread = self._background_init_aligner()
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    @property
+    def _in_queue(self):
+        """ :class:`queue.Queue` - The input queue to the aligner. """
+        return self._aligners[self._aligner].input_queue
+
+    @property
+    def _feed_face(self):
+        """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
+        aligner, formatted for the pipeline """
+        return ExtractMedia(
+            self._globals.current_frame["filename"],
+            self._globals.current_frame["image"],
+            detected_faces=[self._det_faces.current_faces[self._frame_index][self._face_index]])
+
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        thread_is_alive = self._init_thread.is_alive()
+        if thread_is_alive:
+            self._init_thread.check_and_raise_error()
+        else:
+            self._init_thread.join()
+        return not thread_is_alive
+
+    def _background_init_aligner(self):
+        """ Launch the aligner in a background thread so we can run other tasks whilst
+        waiting for initialization """
+        thread = MultiThread(self._init_aligner,
+                             thread_count=1,
+                             name="{}.init_aligner".format(self.__class__.__name__))
+        thread.start()
+        return thread
+
+    def _init_aligner(self):
+        """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
+        logger.debug("Initialize Aligner")
+        # Make sure non-GPU aligner is allocated first
+        for model in sorted(self._aligners, key=str.casefold):
+            aligner = Extractor(None, model, ["components", "extended"],
+                                multiprocess=True, normalize_method="hist")
+            aligner.set_batchsize("align", 1)  # Set the batchsize to 1
+            aligner.launch()
+            logger.debug("Initialized %s Extractor", model)
+            self._aligners[model] = aligner
+
+    def link_faces(self, detected_faces):
+        """ Add the :class:`AlignmentsData` object as a property of the aligner.
+
+        Parameters
+        ----------
+        detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+            The :class:`~lib.faces_detect.DetectedFace` objects for this video
+        """
+        self._det_faces = detected_faces
+
+    def get_landmarks(self, frame_index, face_index, aligner):
+        """ Feed the detected face into the alignment pipeline and retrieve the landmarks
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index to extract the aligned face for
+        face_index: int
+            The face index within the current frame to extract the face for
+        aligner: ["FAN", "cv2-dnn"]
+            The aligner to use to extract the face
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The 68 point landmark alignments
+        """
+        self._frame_index = frame_index
+        self._face_index = face_index
+        self._aligner = aligner
+        self._in_queue.put(self._feed_face)
+        detected_face = next(self._aligners[aligner].detected_faces()).detected_faces[0]
+        return detected_face.landmarks_xy
+
+    def set_normalization_method(self, method_var):
+        """ Change the normalization method for faces fed into the aligner """
+        method = method_var.get()
+        for aligner in self._aligners.values():
+            aligner.set_aligner_normalization_method(method)

@@ -345,7 +345,6 @@ class UpdateFace():
         self._globals = canvas._globals
         self._det_faces = detected_faces
         self._faces_cache = canvas._faces_cache
-        self._frames = canvas._frames
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _get_aligned_face(self, frame_index, face_index):
@@ -371,7 +370,7 @@ class UpdateFace():
         face, landmarks, mask = self._det_faces.get_face_at_index(
             frame_index,
             face_index,
-            self._frames.current_frame,
+            self._globals.current_frame["image"],
             self._faces_cache.size,
             with_landmarks=True,
             with_mask=True)

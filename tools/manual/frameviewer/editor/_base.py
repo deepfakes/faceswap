@@ -25,19 +25,15 @@ class Editor():
         The canvas that holds the image and annotations
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
         The _detected_faces data for this manual session
-    frames: :class:`FrameNavigation`
-        The frames navigator for this manual session
     control_text: str
         The text that is to be displayed at the top of the Editor's control panel.
     """
-    def __init__(self, canvas, detected_faces, frames, control_text="", key_bindings=None):
-        logger.debug("Initializing %s: (canvas: '%s', detected_faces: %s, frames: %s, "
-                     "control_text: %s)", self.__class__.__name__, canvas, detected_faces, frames,
-                     control_text)
+    def __init__(self, canvas, detected_faces, control_text="", key_bindings=None):
+        logger.debug("Initializing %s: (canvas: '%s', detected_faces: %s, control_text: %s)",
+                     self.__class__.__name__, canvas, detected_faces, control_text)
         self._canvas = canvas
         self._globals = canvas._globals
         self._det_faces = detected_faces
-        self._frames = frames
 
         self._current_color = dict()
         self._actions = OrderedDict()
@@ -453,7 +449,7 @@ class Editor():
         :class:`numpy.ndarray`
             The adjusted x, y co-ordinates for display purposes rounded to the nearest integer
         """
-        retval = np.rint((points * self._frames.current_scale)
+        retval = np.rint((points * self._globals.current_frame["scale"])
                          + self._canvas.offset).astype("int32")
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
@@ -476,7 +472,7 @@ class Editor():
             integer
         """
         offset = self._canvas.offset if do_offset else (0, 0)
-        retval = np.rint((points - offset) / self._frames.current_scale).astype("int32")
+        retval = np.rint((points - offset) / self._globals.current_frame["scale"]).astype("int32")
         logger.trace("Original points: %s, scaled points: %s", points, retval)
         return retval
 
@@ -597,10 +593,17 @@ class View(Editor):
     Does not allow any editing, just used for previewing annotations.
 
     This is the default start-up editor.
+
+    Parameters
+    ----------
+    canvas: :class:`tkinter.Canvas`
+        The canvas that holds the image and annotations
+    detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
+        The _detected_faces data for this manual session
     """
-    def __init__(self, canvas, detected_faces, frames):
+    def __init__(self, canvas, detected_faces):
         control_text = "Viewer\nPreview the frame's annotations."
-        super().__init__(canvas, detected_faces, frames, control_text)
+        super().__init__(canvas, detected_faces, control_text)
 
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Zoom. """

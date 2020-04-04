@@ -20,10 +20,8 @@ class ExtractBox(Editor):
         The canvas that holds the image and annotations
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
         The _detected_faces data for this manual session
-    frames: :class:`FrameNavigation`
-        The frames navigator for this manual session
     """
-    def __init__(self, canvas, detected_faces, frames):
+    def __init__(self, canvas, detected_faces):
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
                                                 ["Del"])
@@ -32,7 +30,7 @@ class ExtractBox(Editor):
                         " - Click and drag the bounding box to relocate the landmarks without "
                         "recalculating them.")
         key_bindings = {"<Delete>": self._delete_current_face}
-        super().__init__(canvas, detected_faces, frames,
+        super().__init__(canvas, detected_faces,
                          control_text=control_text, key_bindings=key_bindings)
 
     def update_annotation(self):

@@ -3,8 +3,6 @@
 import logging
 import tkinter as tk
 
-import cv2
-
 from lib.image import SingleFrameLoader
 from lib.multithreading import MultiThread
 
@@ -28,13 +26,11 @@ class FrameNavigation():
         self._globals = tk_globals
         self._video_meta_data = video_meta_data
         self._loader = None
-        self._meta = dict()
         self._current_idx = 0
 
         self._tk_is_playing = tk.BooleanVar()
         self._tk_is_playing.set(False)
 
-        self._current_frame = None
         self._init_thread = self._background_init_frames(frames_location)
         self._globals.tk_frame_index.trace("w", self._set_current_frame)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -77,27 +73,6 @@ class FrameNavigation():
         return self._loader.video_meta_data
 
     @property
-    def current_meta_data(self):
-        """ dict: The current cache item for the current location. Keys are `filename`,
-        `display_dims`, `scale` and `interpolation`. """
-        return self._meta[self._globals.frame_index]
-
-    @property
-    def current_scale(self):
-        """ float: The scaling factor for the currently displayed frame """
-        return self.current_meta_data["scale"]
-
-    @property
-    def current_frame(self):
-        """ :class:`numpy.ndarray`: The currently loaded, full frame. """
-        return self._current_frame
-
-    @property
-    def current_frame_dims(self):
-        """ tuple: The (`height`, `width`) of the source frame that is being displayed """
-        return self._current_frame.shape[:2]
-
-    @property
     def tk_is_playing(self):
         """ :class:`tkinter.BooleanVar`: Whether the stream is currently playing. """
         return self._tk_is_playing
@@ -133,34 +108,9 @@ class FrameNavigation():
         if not initialize and (position == self._current_idx and not self._globals.is_zoomed):
             return
         filename, frame = self._loader.image_from_index(position)
-        self._add_meta_data(position, frame, filename)
-        self._current_frame = frame
+        self._globals.set_current_frame(frame, filename)
         self._current_idx = position
         self._globals.tk_update.set(True)
-
-    def _add_meta_data(self, position, frame, filename):
-        """ Adds the metadata for the current frame to :attr:`meta`.
-
-        Parameters
-        ----------
-        position: int
-            The current frame index
-        frame: :class:`numpy.ndarray`
-            The current frame
-        filename: str
-            The filename for the current frame
-
-        """
-        if position in self._meta:
-            return
-        scale = min(self._globals.frame_display_dims[0] / frame.shape[1],
-                    self._globals.frame_display_dims[1] / frame.shape[0])
-        self._meta[position] = dict(
-            scale=scale,
-            interpolation=cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA,
-            display_dims=(int(round(frame.shape[1] * scale)),
-                          int(round(frame.shape[0] * scale))),
-            filename=filename)
 
     def stop_playback(self):
         """ Stop play back if playing """

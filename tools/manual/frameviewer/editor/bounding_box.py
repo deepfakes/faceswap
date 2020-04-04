@@ -21,10 +21,8 @@ class BoundingBox(Editor):
         The canvas that holds the image and annotations
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
         The _detected_faces data for this manual session
-    frames: :class:`FrameNavigation`
-        The frames navigator for this manual session
     """
-    def __init__(self, canvas, detected_faces, frames):
+    def __init__(self, canvas, detected_faces):
         self._tk_aligner = None
         self._right_click_menu = RightClickMenu(["Delete Face"],
                                                 [self._delete_current_face],
@@ -36,7 +34,7 @@ class BoundingBox(Editor):
                         " - Click in empty space to create a new bounding box.\n"
                         " - Right click a bounding box to delete a face.")
         key_bindings = {"<Delete>": self._delete_current_face}
-        super().__init__(canvas, detected_faces, frames,
+        super().__init__(canvas, detected_faces,
                          control_text=control_text, key_bindings=key_bindings)
 
     @property
@@ -277,7 +275,7 @@ class BoundingBox(Editor):
         bool
             ``True`` if cursor is over a bounding box otherwise ``False``
         """
-        display_dims = self._frames.current_meta_data["display_dims"]
+        display_dims = self._globals.current_frame["display_dims"]
         if (self._canvas.offset[0] <= event.x <= display_dims[0] + self._canvas.offset[0] and
                 self._canvas.offset[1] <= event.y <= display_dims[1] + self._canvas.offset[1]):
             self._canvas.config(cursor="plus")
@@ -337,7 +335,7 @@ class BoundingBox(Editor):
         event: :class:`tkinter.Event`
             The tkinter mouse event
         """
-        size = min(self._frames.current_meta_data["display_dims"]) // 8
+        size = min(self._globals.current_frame["display_dims"]) // 8
         box = (event.x - size, event.y - size, event.x + size, event.y + size)
         logger.debug("Creating new bounding box: %s ", box)
         self._det_faces.update.add(self._frame_index, *self._coords_to_bounding_box(box))

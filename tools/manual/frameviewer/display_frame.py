@@ -735,7 +735,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     def offset(self):
         """ tuple: The (`width`, `height`) offset of the canvas based on the size of the currently
         displayed image """
-        frame_dims = self._frames.current_meta_data["display_dims"]
+        frame_dims = self._globals.current_frame["display_dims"]
         offset_x = (self._globals.frame_display_dims[0] - frame_dims[0]) / 2
         offset_y = (self._globals.frame_display_dims[1] - frame_dims[1]) / 2
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
@@ -769,8 +769,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         editors = dict()
         for editor_name in self._actions + ("Mesh", ):
             editor = eval(editor_name)(self,  # pylint:disable=eval-used
-                                       self._det_faces,
-                                       self._frames)
+                                       self._det_faces)
             editors[editor_name] = editor
         logger.debug(editors)
         return editors
@@ -969,16 +968,16 @@ class BackgroundImage():
 
             face = self._det_faces.get_face_at_index(frame_idx,
                                                      self._globals.face_index,
-                                                     self._frames.current_frame,
+                                                     self._globals.current_frame["image"],
                                                      size)
         logger.trace("face shape: %s", face.shape)
         return face[..., 2::-1]
 
     def _update_tk_frame(self):
         """ Place the currently held frame into :attr:`_tk_frame`. """
-        img = cv2.resize(self._frames.current_frame,
-                         self._frames.current_meta_data["display_dims"],
-                         interpolation=self._frames.current_meta_data["interpolation"])[..., 2::-1]
+        img = cv2.resize(self._globals.current_frame["image"],
+                         self._globals.current_frame["display_dims"],
+                         interpolation=self._globals.current_frame["interpolation"])[..., 2::-1]
         padding = self._get_padding(img.shape[:2])
         if any(padding):
             img = cv2.copyMakeBorder(img, *padding, cv2.BORDER_CONSTANT)

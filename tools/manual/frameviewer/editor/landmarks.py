@@ -16,13 +16,11 @@ class Landmarks(Editor):
         The canvas that holds the image and annotations
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
         The _detected_faces data for this manual session
-    frames: :class:`FrameNavigation`
-        The frames navigator for this manual session
     """
-    def __init__(self, canvas, detected_faces, frames):
+    def __init__(self, canvas, detected_faces):
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
                         " - Click and drag individual landmark points to relocate.")
-        super().__init__(canvas, detected_faces, frames, control_text)
+        super().__init__(canvas, detected_faces, control_text)
 
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
@@ -217,10 +215,8 @@ class Mesh(Editor):
         The canvas that holds the image and annotations
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
         The _detected_faces data for this manual session
-    frames: :class:`FrameNavigation`
-        The frames navigator for this manual session
     """
-    def __init__(self, canvas, detected_faces, frames):
+    def __init__(self, canvas, detected_faces):
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -229,7 +225,7 @@ class Mesh(Editor):
                                       nose=(27, 36),
                                       jaw=(0, 17),
                                       chin=(8, 11))
-        super().__init__(canvas, detected_faces, frames, None)
+        super().__init__(canvas, detected_faces, None)
 
     def update_annotation(self):
         """ Get the latest Landmarks and update the mesh."""
