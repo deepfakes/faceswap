@@ -24,19 +24,19 @@ class FaceCache():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
-    scaling_factor: float
-        The scaling factor, based on DPI, to apply to the stored objects
     detected_faces: :class:`~tool.manual.faces.DetectedFaces`
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
     tk_face_loading: :class:`tkinter.BooleanVar`
         Variable to indicate whether faces are currently loading into the cache or not
+    size: int
+        The size, in pixels, to display the thumbnail images at
     """
-    def __init__(self, canvas, scaling_factor, detected_faces, tk_face_loading):
-        logger.debug("Initializing %s: (canvas: %s, scaling_factor: %s, detected_faces: %s, "
-                     "tk_face_loading: %s)", self.__class__.__name__, canvas, scaling_factor,
-                     detected_faces, tk_face_loading)
+    def __init__(self, canvas, detected_faces, tk_face_loading, size):
+        logger.debug("Initializing %s: (canvas: %s, detected_faces: %s, tk_face_loading: %s, "
+                     "size: %s)", self.__class__.__name__, canvas, detected_faces,
+                     tk_face_loading, size)
         self._frames = canvas._frames
-        self._face_size = int(round(96 * scaling_factor))
+        self._face_size = size
         self._canvas = canvas
         self._tk_loading = tk_face_loading
 
