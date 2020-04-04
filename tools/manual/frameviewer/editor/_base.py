@@ -171,9 +171,19 @@ class Editor():
         """
         logger.trace("Default annotations. Not storing Objects")
 
-    def hide_annotation(self):
-        """ Hide annotations for this editor. """
-        self._canvas.itemconfig(self.__class__.__name__, state="hidden")
+    def hide_annotation(self, tag=None):
+        """ Hide annotations for this editor.
+
+        Parameters
+        ----------
+        tag: str, optional
+            The specific tag to hide annotations for. If ``None`` then all annotations for this
+            editor are hidden, otherwise only the annotations specified by the given tag are
+            hidden. Default: ``None``
+        """
+        tag = self.__class__.__name__ if tag is None else tag
+        logger.trace("Hiding annotations for tag: %s", tag)
+        self._canvas.itemconfig(tag, state="hidden")
 
     def _object_tracker(self, key, object_type, face_index,
                         coordinates, object_kwargs):

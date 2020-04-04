@@ -122,6 +122,8 @@ class BoundingBox(Editor):
             The hex color of the bounding box line
         """
         if not self._is_active:
+            self.hide_annotation("bb_anc_dsp")
+            self.hide_annotation("bb_anc_grb")
             return
         fill_color = "gray"
         activefill_color = "white" if self._is_active else ""
