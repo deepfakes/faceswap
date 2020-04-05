@@ -31,14 +31,18 @@ class Landmarks(Editor):
     def update_annotation(self):
         """ Get the latest Landmarks points and update. """
         for face_idx, face in enumerate(self._face_iterator):
+            face_index = self._globals.face_index if self._globals.is_zoomed else face_idx
             if self._globals.is_zoomed:
                 landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
+                # Hide all landmarks and only display selected
+                self._canvas.itemconfig("lm_dsp", state="hidden")
+                self._canvas.itemconfig("lm_dsp_face_{}".format(face_index), state="normal")
             else:
                 landmarks = self._scale_to_display(face.landmarks_xy)
             for lm_idx, landmark in enumerate(landmarks):
-                self._display_landmark(landmark, face_idx, lm_idx)
-                self._label_landmark(landmark, face_idx, lm_idx)
-                self._grab_landmark(landmark, face_idx, lm_idx)
+                self._display_landmark(landmark, face_index, lm_idx)
+                self._label_landmark(landmark, face_index, lm_idx)
+                self._grab_landmark(landmark, face_index, lm_idx)
         logger.trace("Updated landmark annotations")
 
     def _display_landmark(self, bounding_box, face_index, landmark_index):
@@ -136,7 +140,8 @@ class Landmarks(Editor):
             The current tkinter mouse event
         """
         self._hide_labels()
-        objs = self._canvas.find_withtag("lm_grb")
+        objs = self._canvas.find_withtag("lm_grb_face_{}".format(self._globals.face_index)
+                                         if self._globals.is_zoomed else "lm_grb")
         item_ids = set(self._canvas.find_withtag("current")).intersection(objs)
         if not item_ids:
             self._canvas.config(cursor="")
@@ -232,8 +237,12 @@ class Mesh(Editor):
         key = "mesh"
         color = self._control_color
         for face_idx, face in enumerate(self._face_iterator):
+            face_index = self._globals.face_index if self._globals.is_zoomed else face_idx
             if self._globals.is_zoomed:
                 landmarks = face.aligned_landmarks + self._zoomed_roi[:2]
+                # Hide all meshes and only display selected
+                self._canvas.itemconfig("Mesh", state="hidden")
+                self._canvas.itemconfig("Mesh_face_{}".format(face_index), state="normal")
             else:
                 landmarks = self._scale_to_display(face.landmarks_xy)
             logger.trace("Drawing Landmarks Mesh: (landmarks: %s, color: %s)", landmarks, color)
@@ -242,8 +251,8 @@ class Mesh(Editor):
                 pts = landmarks[val[0]:val[1]].flatten()
                 if segment in ("right_eye", "left_eye", "mouth"):
                     kwargs = dict(fill="", outline=color, width=1)
-                    self._object_tracker(key, "polygon", face_idx, pts, kwargs)
+                    self._object_tracker(key, "polygon", face_index, pts, kwargs)
                 else:
-                    self._object_tracker(key, "line", face_idx, pts, dict(fill=color, width=1))
+                    self._object_tracker(key, "line", face_index, pts, dict(fill=color, width=1))
         # Place mesh as bottom annotation
         self._canvas.tag_raise(self.__class__.__name__, "main_image")

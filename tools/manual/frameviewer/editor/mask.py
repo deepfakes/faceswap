@@ -119,8 +119,6 @@ class Mask(Editor):
         self._mask_type = mask_type
         self._globals.tk_update.set(True)
 
-# TODO Mask does not change when switching face on multi-faces in zoom mode
-
     def hide_annotation(self, tag=None):
         """ Clear the mask :attr:`_meta` dict when hiding the annotation. """
         super().hide_annotation()
@@ -139,12 +137,13 @@ class Mask(Editor):
         roi_color = self._canvas.colors[self._annotation_formats["ExtractBox"]["color"].get()]
         opacity = self._opacity
         for idx, face in enumerate(self._face_iterator):
+            face_idx = self._globals.face_index if self._globals.is_zoomed else idx
             mask = face.mask.get(mask_type, None)
             if mask is None:
                 continue
-            self._set_face_meta_data(mask, idx)
-            self._update_mask_image(key.lower(), idx, rgb_color, opacity)
-            self._update_roi_box(mask, idx, roi_color)
+            self._set_face_meta_data(mask, face_idx)
+            self._update_mask_image(key.lower(), face_idx, rgb_color, opacity)
+            self._update_roi_box(mask, face_idx, roi_color)
 
         self._canvas.tag_raise(self._mouse_location[0])  # Always keep brush cursor on top
         logger.trace("Updated mask annotation")
@@ -237,7 +236,7 @@ class Mask(Editor):
         self._meta.setdefault("mask_roi_size", []).append(mask_roi_size)
 
     def _update_mask_image(self, key, face_index, rgb_color, opacity):
-        """ Obtain a full frame mask, overlay over image and add to canvas or update.
+        """ Obtain a mask, overlay over image and add to canvas or update.
 
         Parameters
         ----------
@@ -254,6 +253,9 @@ class Mask(Editor):
         if self._globals.is_zoomed:
             display_image = self._update_mask_image_zoomed(mask, rgb_color)
             top_left = self._zoomed_roi[:2]
+            # Hide all masks and only display selected
+            self._canvas.itemconfig("Mask", state="hidden")
+            self._canvas.itemconfig("Mask_face_{}".format(face_index), state="normal")
         else:
             display_image = self._update_mask_image_full_frame(mask, rgb_color, face_index)
             top_left = self._meta["top_left"][face_index]
