@@ -577,15 +577,6 @@ class Editor():
                              editor, group)
                 self._add_control(ctl, global_control=True)
 
-    def _switch_view_mode(self):
-        """ Switch the view mode on an "M" key key press. """
-        tk_var = self._actions["magnify"]["tk_var"]
-        current = self.view_mode
-        mode = current != "face"
-        logger.info("Switching view mode from '%s' to '%s'", tk_var.get(), mode)
-        tk_var.set(mode)
-        self._globals.tk_update.set(True)
-
 
 class View(Editor):
     """ The view Editor.

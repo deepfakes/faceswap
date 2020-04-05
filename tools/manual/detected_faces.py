@@ -296,13 +296,11 @@ class DiskIO():  # pylint:disable=too-few-public-methods
                    if faces is not None]
         logger.verbose("Saving alignments for %s updated frames", len(to_save))
 
-        save_count = 0
         for idx, faces in to_save:
             frame = self._sorted_frame_names[idx]
             self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
             self._saved_faces[idx] = faces
             self._updated_faces[idx] = None
-            save_count += 1
         self._alignments.backup()
         self._alignments.save()
         self._tk_unsaved.set(False)

@@ -58,11 +58,6 @@ class FrameNavigation():
         return self._loader.location
 
     @property
-    def filename_list(self):
-        """ list: List of filenames in correct frame order. """
-        return self._loader.file_list
-
-    @property
     def frame_count(self):
         """ int: The total number of frames """
         return self._loader.count

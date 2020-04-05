@@ -119,26 +119,7 @@ class Mask(Editor):
         self._mask_type = mask_type
         self._globals.tk_update.set(True)
 
-    def _update_meta(self, key, item, face_index):
-        """ Update the meta information for the given object.
-
-        Parameters
-        ----------
-        key: str
-            The object key in the meta dictionary
-        item: tkinter object
-            The object to be stored
-        index:
-            The face index that this object belongs to.
-        """
-        logger.trace("Updating meta dict: (key: %s, object: %s, face_index: %s)",
-                     key, item, face_index)
-        if key not in self._meta or len(self._meta[key]) - 1 < face_index:
-            logger.trace("Creating new item list")
-            self._meta.setdefault(key, []).append(item)
-        else:
-            logger.trace("Appending to existing item list")
-            self._meta[key][face_index] = item
+# TODO Mask does not change when switching face on multi-faces in zoom mode
 
     def hide_annotation(self, tag=None):
         """ Clear the mask :attr:`_meta` dict when hiding the annotation. """

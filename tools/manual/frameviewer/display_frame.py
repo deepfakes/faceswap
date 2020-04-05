@@ -753,11 +753,6 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
                     magenta="#ff00ff",
                     white="#ffffff")
 
-    @property
-    def image(self):
-        """ :class:`BackgroundFrame`: The background image on the canvas. """
-        return self._image
-
     def _get_editors(self):
         """ Get the object editors for the canvas.
 
