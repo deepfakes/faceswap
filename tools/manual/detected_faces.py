@@ -45,9 +45,7 @@ class DetectedFaces():
         self._alignments = self._get_alignments(alignments_path, input_location)
         self._extractor = extractor
         self._tk_vars = self._set_tk_vars()
-        self._io = DiskIO(self)
-        self._update = FaceUpdate(self)
-        self._filter = Filter(self)
+        self._children = dict(io=DiskIO(self), update=FaceUpdate(self), filter=Filter(self))
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     # <<<< PUBLIC PROPERTIES >>>> #
@@ -62,13 +60,13 @@ class DetectedFaces():
     def filter(self):
         """ :class:`Filter`: Handles returning of faces and stats based on the current user set
         navigation mode filter. """
-        return self._filter
+        return self._children["filter"]
 
     @property
     def update(self):
         """ :class:`FacFaceUpdate`: Handles the adding, removing and updating of
         :class:`~lib.faces_detect.DetectedFace` stored within the alignments file. """
-        return self._update
+        return self._children["update"]
 
     # << TKINTER VARIABLES >> #
     @property
@@ -119,17 +117,17 @@ class DetectedFaces():
 
     def load_faces(self):
         """ Load the faces as :class:`~lib.faces_detect.DetectedFace` from the alignments file. """
-        self._io.load()
+        self._children["io"].load()
 
     def save(self):
         """ Save the alignments file with the latest edits. """
-        self._io._save()  # pylint:disable=protected-access
+        self._children["io"]._save()  # pylint:disable=protected-access
 
     def enable_save(self):
         """ Enable saving of alignments file. Triggered when the
         :class:`tools.manual.manual.FacesViewer` has finished loading.
         """
-        self._io._enable_save()  # pylint:disable=protected-access
+        self._children["io"]._enable_save()  # pylint:disable=protected-access
 
     def save_video_meta_data(self, pts_time, keyframes):
         """ Save video meta data to the alignments file.

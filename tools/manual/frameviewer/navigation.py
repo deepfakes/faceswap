@@ -24,14 +24,13 @@ class FrameNavigation():
                      "video_meta_data: %s)", self.__class__.__name__, tk_globals, frames_location,
                      video_meta_data)
         self._globals = tk_globals
-        self._video_meta_data = video_meta_data
         self._loader = None
         self._current_idx = 0
 
         self._tk_is_playing = tk.BooleanVar()
         self._tk_is_playing.set(False)
 
-        self._init_thread = self._background_init_frames(frames_location)
+        self._init_thread = self._background_init_frames(frames_location, video_meta_data)
         self._globals.tk_frame_index.trace("w", self._set_current_frame)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -72,12 +71,12 @@ class FrameNavigation():
         """ :class:`tkinter.BooleanVar`: Whether the stream is currently playing. """
         return self._tk_is_playing
 
-    def _background_init_frames(self, frames_location):
+    def _background_init_frames(self, frames_location, video_meta_data):
         """ Launch the images loader in a background thread so we can run other tasks whilst
         waiting for initialization. """
         thread = MultiThread(self._load_images,
                              frames_location,
-                             self._video_meta_data,
+                             video_meta_data,
                              thread_count=1,
                              name="{}.init_frames".format(self.__class__.__name__))
         thread.start()

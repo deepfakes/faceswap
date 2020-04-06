@@ -1,6 +1,14 @@
 tools package
 =============
 
+Subpackages
+-----------
+
+.. toctree::
+
+   tools.manual
+   
+
 tools.mask.mask module
 ----------------------
 
