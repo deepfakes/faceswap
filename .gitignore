@@ -1,5 +1,6 @@
 *
 !setup.cfg
+!*.css
 !*.ico
 !*.inf
 !*.keep
@@ -18,6 +19,7 @@
 !.install/windows
 !docs
 !docs/full
+!docs/_static
 !config/
 !lib/
 !lib/*
