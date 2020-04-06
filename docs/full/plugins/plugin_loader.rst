@@ -1,5 +1,6 @@
-plugins.plugin\_loader module
-=============================
+*********************
+plugin\_loader module
+*********************
 
 .. automodule:: plugins.plugin_loader
    :members:

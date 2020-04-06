@@ -1,5 +1,5 @@
-lib.convert module
-==================
+convert module
+==============
 
 .. automodule:: lib.convert
    :members:

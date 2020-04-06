@@ -1,5 +1,5 @@
-lib.alignments module
-=====================
+alignments module
+=================
 
 .. automodule:: lib.alignments
    :members:

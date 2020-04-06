@@ -1,7 +1,7 @@
-lib.faces\_detect module
+vgg\_face2\_keras module
 ========================
 
-.. automodule:: lib.faces_detect
+.. automodule:: lib.vgg_face2_keras
    :members:
    :undoc-members:
    :show-inheritance:

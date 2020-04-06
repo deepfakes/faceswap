@@ -81,11 +81,11 @@ def download_file(url, filename):  # TODO: retry
         return None
 
 
-def extract_args(detector, aligner, masker, in_path, out_path, args=None):
+def extract_args(detector, aligner, in_path, out_path, args=None):
     """ Extraction command """
     py_exe = sys.executable
-    _extract_args = "%s faceswap.py extract -i %s -o %s -D %s -A %s -M %s" % (
-        py_exe, in_path, out_path, detector, aligner, masker
+    _extract_args = "%s faceswap.py extract -i %s -o %s -D %s -A %s" % (
+        py_exe, in_path, out_path, detector, aligner
     )
     if args:
         _extract_args += " %s" % args
@@ -138,19 +138,19 @@ def main():
     vid_path = download_file(vid_src, pathjoin(vid_base, "test.mp4"))
     if not vid_path:
         print_fail("[-] Aborting")
-        exit(1)
+        sys.exit(1)
     vid_extract = run_test(
         "Extraction video with cv2-dnn detector and cv2-dnn aligner.",
-        extract_args("Cv2-Dnn", "Cv2-Dnn", "extended", vid_path, pathjoin(vid_base, "faces"))
+        extract_args("Cv2-Dnn", "Cv2-Dnn", vid_path, pathjoin(vid_base, "faces"))
     )
 
     img_path = download_file(img_src, pathjoin(img_base, "test_img.jpg"))
     if not img_path:
         print_fail("[-] Aborting")
-        exit(1)
+        sys.exit(1)
     run_test(
         "Extraction images with cv2-dnn detector and cv2-dnn aligner.",
-        extract_args("Cv2-Dnn", "Cv2-Dnn", "extended", img_base, pathjoin(img_base, "faces"))
+        extract_args("Cv2-Dnn", "Cv2-Dnn", img_base, pathjoin(img_base, "faces"))
     )
 
     if vid_extract:
@@ -207,10 +207,10 @@ def main():
 
     if FAIL_COUNT == 0:
         print_ok("[+] Failed %i/%i tests." % (FAIL_COUNT, TEST_COUNT))
-        exit(0)
+        sys.exit(0)
     else:
         print_fail("[-] Failed %i/%i tests." % (FAIL_COUNT, TEST_COUNT))
-        exit(1)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
