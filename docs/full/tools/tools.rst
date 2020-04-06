@@ -8,6 +8,14 @@ The Tools Package provides various tools for working with Faceswap outside of th
    :depth: 1
    :local:
 
+Subpackages
+===========
+
+.. toctree::
+   :maxdepth: 1
+
+   manual
+
 mask module
 ===========
 
