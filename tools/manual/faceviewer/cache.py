@@ -26,24 +26,25 @@ class FaceCache():
         The :class:`~tools.manual.FacesViewer` canvas
     detected_faces: :class:`~tool.manual.faces.DetectedFaces`
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
+    input_location: str
+        The location of the input folder of frames or video file
     tk_face_loading: :class:`tkinter.BooleanVar`
         Variable to indicate whether faces are currently loading into the cache or not
     size: int
         The size, in pixels, to display the thumbnail images at
     """
-    def __init__(self, canvas, detected_faces, tk_face_loading, size):
-        logger.debug("Initializing %s: (canvas: %s, detected_faces: %s, tk_face_loading: %s, "
-                     "size: %s)", self.__class__.__name__, canvas, detected_faces,
-                     tk_face_loading, size)
-        self._frames = canvas._frames
+    def __init__(self, canvas, detected_faces, input_location, tk_face_loading, size):
+        logger.debug("Initializing %s: (canvas: %s, detected_faces: %s, input_location: %s, "
+                     "tk_face_loading: %s,  size: %s)", self.__class__.__name__, canvas,
+                     detected_faces, input_location, tk_face_loading, size)
         self._face_size = size
         self._canvas = canvas
         self._tk_loading = tk_face_loading
 
-        self._loader = FaceCacheLoader(self, detected_faces)
+        self._loader = FaceCacheLoader(self, detected_faces, input_location)
         self._mask_loader = MaskLoader(self, detected_faces)
 
-        self._tk_faces = np.array([None for _ in range(self._frames.frame_count)])
+        self._tk_faces = np.array([None for _ in range(self._canvas._globals.frame_count)])
         self._initialized = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -342,12 +343,14 @@ class FaceCacheLoader():
         The face cache that this loader will be populating faces for.
     detected_faces: :class:`~tool.manual.faces.DetectedFaces`
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
+    input_location: str
+        The location of the input folder of frames or video file
     """
-    def __init__(self, faces_cache, detected_faces):
-        logger.debug("Initializing %s: (faces_cache: %s, detected_faces: %s)",
-                     self.__class__.__name__, faces_cache, detected_faces)
+    def __init__(self, faces_cache, detected_faces, input_location):
+        logger.debug("Initializing %s: (faces_cache: %s, detected_faces: %s, input_location: %s)",
+                     self.__class__.__name__, faces_cache, detected_faces, input_location)
         self._faces_cache = faces_cache
-        self._location = faces_cache._frames.location
+        self._location = input_location
         self._tk_loading = faces_cache._tk_loading
         self._loaded_frame_indices = []
 

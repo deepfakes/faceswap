@@ -30,7 +30,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         self._det_faces = detected_faces
         self._updated_faces = detected_faces._updated_faces
         self._faces_cache = canvas._faces_cache
-        self._frame_count = canvas._frames.frame_count
+        self._frame_count = canvas._globals.frame_count
         self._progress_bar = canvas._progress_bar
         self._launch_face_loader()
         self._faces_cache.loader.launch()

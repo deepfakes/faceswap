@@ -34,18 +34,15 @@ class DetectedFaces():
         The location of the input folder of frames or video file
     extractor: :class:`~tools.manual.manual.Aligner`
         The pipeline for passing faces through the aligner and retrieving results
-    is_video: bool
-        ``True`` if the :attr:`input_location` is a video file otherwise ``False``
     """
-    def __init__(self, tk_globals, alignments_path, input_location, extractor, is_video):
+    def __init__(self, tk_globals, alignments_path, input_location, extractor):
         logger.debug("Initializing %s: (tk_globals: %s. alignments_path: %s, input_location: %s "
-                     "extractor: %s, is_video: %s)", self.__class__.__name__, tk_globals,
-                     alignments_path, input_location, extractor, is_video)
+                     "extractor: %s)", self.__class__.__name__, tk_globals, alignments_path,
+                     input_location, extractor)
         self._globals = tk_globals
         self._saved_faces = []
         self._updated_faces = []
         self._extract_size = min(self._globals.frame_display_dims)
-        self._is_video = is_video
 
         self._alignments = self._get_alignments(alignments_path, input_location)
         self._extractor = extractor
@@ -148,7 +145,7 @@ class DetectedFaces():
         keyframes: list
             A list of frame indices corresponding to the key frames in the input video.
         """
-        if self._is_video:
+        if self._globals.is_video:
             self._alignments.save_video_meta_data(pts_time, keyframes)
 
     def get_face_at_index(self, frame_index, face_index, image, size,
@@ -250,7 +247,7 @@ class DetectedFaces():
             folder, filename = os.path.split(alignments_path)
         else:
             filename = "alignments.fsa"
-            if self._is_video:
+            if self._globals.is_video:
                 folder, vid = os.path.split(os.path.splitext(input_location)[0])
                 filename = "{}_{}".format(vid, filename)
             else:

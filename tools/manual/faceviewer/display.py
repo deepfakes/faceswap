@@ -28,7 +28,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
         self._globals = canvas._globals
-        self._frames = canvas._frames
+        self._navigation = canvas._display_frame.navigation
         self._det_faces = detected_faces
         self._face_size = canvas._faces_cache.size
         self._box = self._canvas.create_rectangle(0, 0, self._face_size, self._face_size,
@@ -123,7 +123,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
                      frame_id, transport_id, face_idx)
         if transport_id is None:
             return
-        self._frames.stop_playback()
+        self._navigation.stop_playback()
         self._globals.tk_transport_index.set(transport_id)
 
     def _transport_index_from_frame_index(self, frame_index):

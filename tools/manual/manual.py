@@ -13,14 +13,14 @@ import numpy as np
 
 from lib.gui.control_helper import ControlPanel
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
+from lib.image import SingleFrameLoader
 from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .detected_faces import DetectedFaces
 from .faceviewer.frame import FacesFrame
-from .frameviewer.display_frame import DisplayFrame
-from .frameviewer.navigation import FrameNavigation
+from .frameviewer.frame import DisplayFrame
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -42,35 +42,29 @@ class Manual(tk.Tk):
         logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
         self._initialize_tkinter()
-        self._globals = TkGlobals()
-        is_video = self._check_input(arguments.frames)
+        self._globals = TkGlobals(arguments.frames)
 
         extractor = Aligner(self._globals)
         self._det_faces = DetectedFaces(self._globals,
                                         arguments.alignments_path,
                                         arguments.frames,
-                                        extractor,
-                                        is_video)
+                                        extractor)
 
         video_meta_data = self._det_faces.video_meta_data
-        self._frames = FrameNavigation(self._globals,
-                                       arguments.frames,
-                                       video_meta_data)
+        loader = FrameLoader(self._globals, arguments.frames, video_meta_data)
+
         self._det_faces.load_faces()
-
         self._containers = self._create_containers()
-
-        self._wait_for_threads(extractor, video_meta_data)
+        self._wait_for_threads(extractor, loader, video_meta_data)
 
         self._display = DisplayFrame(self._containers["top"],
                                      self._globals,
-                                     self._frames,
                                      self._det_faces)
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        self._globals,
-                                       self._frames,
                                        self._det_faces,
                                        self._display,
+                                       arguments.frames,
                                        arguments.face_size)
 
         _Options(self._containers["top"], self._globals, self._display)
@@ -80,38 +74,18 @@ class Manual(tk.Tk):
         self._set_initial_layout()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @staticmethod
-    def _check_input(frames_location):
-        """ Check whether the input is a video
+    def _wait_for_threads(self, extractor, loader, video_meta_data):
+        """ The :class:`Aligner` and :class:`FramesLoader` are launched in background threads.
+        Wait for them to be initialized prior to proceeding.
 
         Parameters
         ----------
-        frames_location: str
-            The input location for video or images
-
-        Returns
-        -------
-        bool: 'True' if input is a video 'False' if it is a folder.
-
-        Raises
-        ------
-        FaceswapError
-            If the given location is a file and does not have a valid video extension.
-
-        """
-        if os.path.isdir(frames_location):
-            retval = False
-        elif os.path.splitext(frames_location)[1].lower() in _video_extensions:
-            retval = True
-        else:
-            logger.error("The input location '%s' is not valid", frames_location)
-            sys.exit(1)
-        logger.debug("Input '%s' is_video: %s", frames_location, retval)
-        return retval
-
-    def _wait_for_threads(self, extractor, video_meta_data):
-        """ The :class:`Aligner` is launched in a background thread. Wait for it to be initialized
-        prior to proceeding
+        extractor: :class:`Aligner`
+            The extraction pipeline for the Manual Tool
+        loader: :class:`FramesLoader`
+            The frames loader for the Manual Tool
+        video_meta_data: dict
+            The video meta data that exists within the alignments file
 
         Notes
         -----
@@ -123,7 +97,7 @@ class Manual(tk.Tk):
         frames_init = False
         while True:
             extractor_init = extractor_init if extractor_init else extractor.is_initialized
-            frames_init = frames_init if frames_init else self._frames.is_initialized
+            frames_init = frames_init if frames_init else loader.is_initialized
             if extractor_init and frames_init:
                 logger.debug("Threads inialized")
                 break
@@ -133,7 +107,7 @@ class Manual(tk.Tk):
         extractor.link_faces(self._det_faces)
         if any(val is None for val in video_meta_data.values()):
             logger.debug("Saving video meta data to alignments file")
-            self._det_faces.save_video_meta_data(**self._frames.video_meta_data)
+            self._det_faces.save_video_meta_data(**loader.video_meta_data)
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -197,11 +171,11 @@ class Manual(tk.Tk):
 
         tk_pos = self._globals.tk_frame_index
         bindings = {
-            "z": self._display.decrement_frame,
-            "x": self._display.increment_frame,
-            "space": self._display.handle_play_button,
-            "home": self._display.goto_first_frame,
-            "end": self._display.goto_last_frame,
+            "z": self._display.navigation.decrement_frame,
+            "x": self._display.navigation.increment_frame,
+            "space": self._display.navigation.handle_play_button,
+            "home": self._display.navigation.goto_first_frame,
+            "end": self._display.navigation.goto_last_frame,
             "down": lambda d="down": self._faces_frame.canvas_scroll(d),
             "up": lambda d="up": self._faces_frame.canvas_scroll(d),
             "next": lambda d="page-down": self._faces_frame.canvas_scroll(d),
@@ -339,9 +313,16 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 class TkGlobals():
     """ Holds Tkinter Variables and other frame information that need to be accessible from all
-    areas of the GUI. """
-    def __init__(self):
-        logger.debug("Initializing %s", self.__class__.__name__)
+    areas of the GUI.
+
+    Parameters
+    ----------
+    input_location: str
+        The location of the input folder of frames or video file
+    """
+    def __init__(self, input_location):
+        logger.debug("Initializing %s: (input_location: %s)",
+                     self.__class__.__name__, input_location)
         self._tk_frame_index = tk.IntVar()
         self._tk_frame_index.set(0)
 
@@ -358,6 +339,8 @@ class TkGlobals():
         self._tk_is_zoomed = tk.BooleanVar()
         self._tk_is_zoomed.set(False)
 
+        self._is_video = self._check_input(input_location)
+        self._frame_count = 0  # set by FrameLoader
         self._frame_display_dims = (int(round(896 * get_config().scaling_factor)),
                                     int(round(504 * get_config().scaling_factor)))
         self._current_frame = dict(image=None,
@@ -386,6 +369,11 @@ class TkGlobals():
             **filename** (`str`): The filename of the currently displayed frame
         """
         return self._current_frame
+
+    @property
+    def frame_count(self):
+        """ int: The total number of frames for the input location """
+        return self._frame_count
 
     @property
     def tk_face_index(self):
@@ -426,6 +414,11 @@ class TkGlobals():
         return self._tk_filter_mode
 
     @property
+    def is_video(self):
+        """ bool: ``True`` if the input is a video file, ``False`` if it is a folder of images. """
+        return self._is_video
+
+    @property
     def tk_is_zoomed(self):
         """ :class:`tkinter.BooleanVar`: The variable holding the value indicating whether the
         frame viewer is zoomed into a face or zoomed out to the full frame. """
@@ -447,6 +440,47 @@ class TkGlobals():
         """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that a full
         update needs to occur. """
         return self._tk_update
+
+    @staticmethod
+    def _check_input(frames_location):
+        """ Check whether the input is a video
+
+        Parameters
+        ----------
+        frames_location: str
+            The input location for video or images
+
+        Returns
+        -------
+        bool: 'True' if input is a video 'False' if it is a folder.
+
+        Raises
+        ------
+        FaceswapError
+            If the given location is a file and does not have a valid video extension.
+
+        """
+        if os.path.isdir(frames_location):
+            retval = False
+        elif os.path.splitext(frames_location)[1].lower() in _video_extensions:
+            retval = True
+        else:
+            logger.error("The input location '%s' is not valid", frames_location)
+            sys.exit(1)
+        logger.debug("Input '%s' is_video: %s", frames_location, retval)
+        return retval
+
+    def set_frame_count(self, count):
+        """ Set the count of total number of frames to :attr:`frame_count` when the
+        :class:`FramesLoader` has completed loading.
+
+        Parameters
+        ----------
+        count: int
+            The number of frames that exist for this session
+        """
+        logger.debug("Setting frame_count to : %s", count)
+        self._frame_count = count
 
     def set_current_frame(self, image, filename):
         """ Set the frame and meta information for the currently displayed frame. Populates the
@@ -486,10 +520,10 @@ class Aligner():
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
         # TODO
-        # self._aligners = {"cv2-dnn": None}
-        # self._aligner = "cv2-dnn"
-        self._aligners = {"cv2-dnn": None, "FAN": None}
-        self._aligner = "FAN"
+        self._aligners = {"cv2-dnn": None}
+        self._aligner = "cv2-dnn"
+        # self._aligners = {"cv2-dnn": None, "FAN": None}
+        # self._aligner = "FAN"
         self._det_faces = None
         self._frame_index = None
         self._face_index = None
@@ -607,3 +641,85 @@ class Aligner():
         logger.debug("Setting normalization method to: '%s'", method)
         for aligner in self._aligners.values():
             aligner.set_aligner_normalization_method(method)
+
+
+class FrameLoader():
+    """ Loads the frames, sets the frame count to :attr:`TKGlobals.frame_count` and handles the
+    return of correct frame for the GUI.
+
+    Parameters
+    ----------
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
+    frames_location: str
+        The path to the input frames
+    video_meta_data: dict
+        The meta data held within the alignments file, if it exists and the input is a video
+    """
+    def __init__(self, tk_globals, frames_location, video_meta_data):
+        logger.debug("Initializing %s: (tk_globals: %s, frames_location: '%s', "
+                     "video_meta_data: %s)", self.__class__.__name__, tk_globals, frames_location,
+                     video_meta_data)
+        self._globals = tk_globals
+        self._loader = None
+        self._current_idx = 0
+        self._init_thread = self._background_init_frames(frames_location, video_meta_data)
+        self._globals.tk_frame_index.trace("w", lambda *e: self._set_frame())
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        thread_is_alive = self._init_thread.is_alive()
+        if thread_is_alive:
+            self._init_thread.check_and_raise_error()
+        else:
+            self._init_thread.join()
+            # Setting the initial frame cannot be done in the thread, so set when queried from main
+            self._set_frame(initialize=True)
+        return not thread_is_alive
+
+    @property
+    def video_meta_data(self):
+        """ dict: The pts_time and key frames for the loader. """
+        return self._loader.video_meta_data
+
+    def _background_init_frames(self, frames_location, video_meta_data):
+        """ Launch the images loader in a background thread so we can run other tasks whilst
+        waiting for initialization. """
+        thread = MultiThread(self._load_images,
+                             frames_location,
+                             video_meta_data,
+                             thread_count=1,
+                             name="{}.init_frames".format(self.__class__.__name__))
+        thread.start()
+        return thread
+
+    def _load_images(self, frames_location, video_meta_data):
+        """ Load the images in a background thread. """
+        self._loader = SingleFrameLoader(frames_location, video_meta_data=video_meta_data)
+        self._globals.set_frame_count(self._loader.count)
+
+    def _set_frame(self, initialize=False):
+        """ Set the currently loaded frame to :attr:`_current_frame` and trigger a full GUI update.
+
+        If the loader has not been initialized, or the navigation position is the same as the
+        current position and the face is not zoomed in, then this returns having done nothing.
+
+        Parameters
+        ----------
+        initialize: bool, optional
+            ``True`` if initializing for the first frame to be displayed otherwise ``False``.
+            Default: ``False``
+        """
+        position = self._globals.frame_index
+        if not initialize and (position == self._current_idx and not self._globals.is_zoomed):
+            logger.trace("Update criteria not met. Not updating: (initialize: %s, position: %s, "
+                         "current_idx: %s, is_zoomed: %s)", initialize, position,
+                         self._current_idx, self._globals.is_zoomed)
+            return
+        filename, frame = self._loader.image_from_index(position)
+        logger.trace("filename: %s, frame: %s, position: %s", filename, frame.shape, position)
+        self._globals.set_current_frame(frame, filename)
+        self._current_idx = position
+        self._globals.tk_update.set(True)
