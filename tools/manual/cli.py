@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Command Line Arguments for tools """
+""" The Command Line Arguments for the Manual Editor tool. """
 from lib.cli import FaceSwapArgs, DirOrFileFullPaths, FileFullPaths, Slider
 
 _HELPTEXT = ("This command lets you perform various actions on frames, "
@@ -7,17 +7,17 @@ _HELPTEXT = ("This command lets you perform various actions on frames, "
 
 
 class ManualArgs(FaceSwapArgs):
-    """ Class to perform visual actions on an alignments file """
+    """ Generate the command line options for the Manual Editor Tool."""
 
     @staticmethod
     def get_info():
-        """ Return command information """
+        """ Obtain the information about what the Manual Tool does. """
         return ("A tool to perform various actions on frames, faces and alignments files using "
                 "visual tools")
 
     @staticmethod
     def get_argument_list():
-        """ Put the arguments in a list so that they are accessible from both argparse and gui """
+        """ Generate the command line argument list for the Manual Tool. """
         argument_list = list()
         argument_list.append({
             "opts": ("-al", "--alignments"),

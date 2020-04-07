@@ -14,7 +14,7 @@ class FrameNavigation():
 
     Parameters
     ----------
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     frames_location: str
         The path to the input frames

@@ -84,7 +84,8 @@ class BoundingBox(Editor):
                      "\n\thist: Equalize the histograms on the RGB channels."
                      "\n\tmean: Normalize the face colors to the mean.")
         var = norm_ctl.tk_var
-        var.trace("w", lambda *e, v=var: self._det_faces.extractor.set_normalization_method(v))
+        var.trace("w",
+                  lambda *e, v=var: self._det_faces.extractor.set_normalization_method(v.get()))
         self._add_control(norm_ctl)
 
     def update_annotation(self):

@@ -219,12 +219,24 @@ class ActiveFrame():
     @property
     def image_ids(self):
         """ tuple: The tkinter canvas image ids for the currently selected frame's faces. """
-        return self._canvas.find_withtag("image_{}".format(self._globals.frame_index))
+        if not self._canvas.active_filter.image_ids:
+            logger.trace("No images in selected filter. Returning empty list")
+            retval = tuple()
+        else:
+            retval = self._canvas.find_withtag("image_{}".format(self._globals.frame_index))
+        logger.trace(retval)
+        return retval
 
     @property
     def mesh_ids(self):
         """ tuple: The tkinter canvas mesh ids for the currently selected frame's faces. """
-        return self._canvas.find_withtag("mesh_{}".format(self._globals.frame_index))
+        if not self._canvas.active_filter.image_ids == 0:
+            logger.trace("No images in selected filter. Returning empty list")
+            retval = tuple()
+        else:
+            retval = self._canvas.find_withtag("mesh_{}".format(self._globals.frame_index))
+        logger.trace(retval)
+        return retval
 
     def reload_annotations(self):
         """ Refresh the highlighted annotations for faces in the currently selected frame on an

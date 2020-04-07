@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-""" Alignments handling for the manual adjustments tool """
+""" Alignments handling for Faceswap's Manual Adjustments tool. Handles the conversion of
+alignments data to :class:`~lib.faces_detect.DetectedFace` objects, and the update of these faces
+when edits are made in the GUI. """
+
 import logging
 import os
 import tkinter as tk
@@ -17,11 +20,13 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class DetectedFaces():
     """ Handles the manipulation of :class:`~lib.faces_detect.DetectedFace` objects stored
-    in the alignments file.
+    in the alignments file. Acts as a parent class for the IO operations (saving and loading from
+    and alignments file), the face update operations (when changes are made to alignments in the
+    GUI) and the face filters (when a user changes the filter navigation mode.)
 
     Parameters
     ----------
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     alignments_path: str
         The full path to the alignments file
@@ -33,7 +38,7 @@ class DetectedFaces():
         ``True`` if the :attr:`input_location` is a video file otherwise ``False``
     """
     def __init__(self, tk_globals, alignments_path, input_location, extractor, is_video):
-        logger.debug("Initializing: %s: (tk_globals: %s. alignments_path: %s, input_location: %s "
+        logger.debug("Initializing %s: (tk_globals: %s. alignments_path: %s, input_location: %s "
                      "extractor: %s, is_video: %s)", self.__class__.__name__, tk_globals,
                      alignments_path, input_location, extractor, is_video)
         self._globals = tk_globals
@@ -45,8 +50,8 @@ class DetectedFaces():
         self._alignments = self._get_alignments(alignments_path, input_location)
         self._extractor = extractor
         self._tk_vars = self._set_tk_vars()
-        self._children = dict(io=DiskIO(self), update=FaceUpdate(self), filter=Filter(self))
-        logger.debug("Initialized: %s", self.__class__.__name__)
+        self._children = dict(io=_DiskIO(self), update=FaceUpdate(self), filter=Filter(self))
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<<< PUBLIC PROPERTIES >>>> #
     # << SUBCLASSES >> #
@@ -64,7 +69,7 @@ class DetectedFaces():
 
     @property
     def update(self):
-        """ :class:`FacFaceUpdate`: Handles the adding, removing and updating of
+        """ :class:`FaceUpdate`: Handles the adding, removing and updating of
         :class:`~lib.faces_detect.DetectedFace` stored within the alignments file. """
         return self._children["update"]
 
@@ -116,8 +121,9 @@ class DetectedFaces():
         return self._updated_faces[frame_index] is not None
 
     def load_faces(self):
-        """ Load the faces as :class:`~lib.faces_detect.DetectedFace` from the alignments file. """
-        self._children["io"].load()
+        """ Load the faces as :class:`~lib.faces_detect.DetectedFace` objects from the alignments
+        file. """
+        self._children["io"]._load()  # pylint:disable=protected-access
 
     def save(self):
         """ Save the alignments file with the latest edits. """
@@ -125,12 +131,14 @@ class DetectedFaces():
 
     def enable_save(self):
         """ Enable saving of alignments file. Triggered when the
-        :class:`tools.manual.manual.FacesViewer` has finished loading.
+        :class:`~tools.manual.faceviewer.frame.FacesViewer` has finished loading.
         """
         self._children["io"]._enable_save()  # pylint:disable=protected-access
 
     def save_video_meta_data(self, pts_time, keyframes):
-        """ Save video meta data to the alignments file.
+        """ Save video meta data to the alignments file. This is executed if the video meta data
+        does not already exist in the alignments file, so the video does not need to be scanned
+        on every use of the Manual Tool.
 
         Parameters
         ----------
@@ -166,7 +174,7 @@ class DetectedFaces():
             Default: ``False``
         with_mask: bool
             Set to `True` if the Detected Face's Mask object should be returned with the aligned
-            face. Default: ``True``
+            face. Default: ``False``
 
         Returns
         -------
@@ -237,6 +245,7 @@ class DetectedFaces():
         :class:`~lib.alignments.Alignments`
             The alignments object for the given input location
         """
+        logger.debug("alignments_path: %s, input_location: %s", alignments_path, input_location)
         if alignments_path:
             folder, filename = os.path.split(alignments_path)
         else:
@@ -246,10 +255,12 @@ class DetectedFaces():
                 filename = "{}_{}".format(vid, filename)
             else:
                 folder = input_location
-        return Alignments(folder, filename)
+        retval = Alignments(folder, filename)
+        logger.debug("folder: %s, filename: %s, alignments: %s", folder, filename, retval)
+        return retval
 
 
-class DiskIO():  # pylint:disable=too-few-public-methods
+class _DiskIO():  # pylint:disable=too-few-public-methods
     """ Handles the loading of :class:`~lib.faces_detect.DetectedFaces` from the alignments file
     into :class:`DetectedFaces` and the saving of this data (in the opposite direction) to an
     alignments file.
@@ -260,14 +271,17 @@ class DiskIO():  # pylint:disable=too-few-public-methods
         The parent :class:`DetectedFaces` object
     """
     def __init__(self, detected_faces):
+        logger.debug("Initializing %s: (detected_faces: %s)",
+                     self.__class__.__name__, detected_faces)
         self._alignments = detected_faces._alignments
         self._saved_faces = detected_faces._saved_faces
         self._updated_faces = detected_faces._updated_faces
         self._tk_unsaved = detected_faces.tk_unsaved
         self._sorted_frame_names = sorted(self._alignments.data)
         self._save_enabled = False
+        logger.debug("Initialized %s", self.__class__.__name__)
 
-    def load(self):
+    def _load(self):
         """ Load the faces from the alignments file, convert to
         :class:`~lib.faces_detect.DetectedFace`. objects and add to :attr:`_saved_faces`. """
         for key in sorted(self._alignments.data):
@@ -305,12 +319,13 @@ class DiskIO():  # pylint:disable=too-few-public-methods
 
     def _enable_save(self):
         """ Enable saving of alignments file. Triggered when the
-        :class:`tools.manual.manual.FacesViewer` has completed loading. """
+        :class:`~tools.manual.faceviewer.frames.FacesViewer` has completed loading. """
+        logger.debug("Enabling Save")
         self._save_enabled = True
 
 
 class Filter():
-    """ Returns stats and Faces for filtered frames based on the user selected navigation mode
+    """ Returns stats and frames for filtered frames based on the user selected navigation mode
     filter.
 
     Parameters
@@ -319,13 +334,16 @@ class Filter():
         The parent :class:`DetectedFaces` object
     """
     def __init__(self, detected_faces):
+        logger.debug("Initializing %s: (detected_faces: %s)",
+                     self.__class__.__name__, detected_faces)
         self._globals = detected_faces._globals
         self._det_faces = detected_faces
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def count(self):
         """ int: The number of frames that meet the filter criteria returned by
-        :attr:`_globals.filter_mode`. """
+        :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
         face_count_per_index = self._det_faces.face_count_per_index
         if self._globals.filter_mode == "No Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount == 0)
@@ -341,7 +359,7 @@ class Filter():
     @property
     def frames_list(self):
         """ list: The list of frame indices that meet the filter criteria returned by
-        :attr:`_globals.filter_mode`. """
+        :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
         face_count_per_index = self._det_faces.face_count_per_index
         if self._globals.filter_mode == "No Faces":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count == 0]
@@ -357,7 +375,7 @@ class Filter():
 
 class FaceUpdate():
     """ Perform updates on :class:`~lib.faces_detect.DetectedFace` objects stored in
-    :class:`DetectedFaces`.
+    :class:`DetectedFaces` when changes are made within the GUI.
 
     Parameters
     ----------
@@ -365,6 +383,8 @@ class FaceUpdate():
         The parent :class:`DetectedFaces` object
     """
     def __init__(self, detected_faces):
+        logger.debug("Initializing %s: (detected_faces: %s)",
+                     self.__class__.__name__, detected_faces)
         self._det_faces = detected_faces
         self._globals = detected_faces._globals
         self._saved_faces = detected_faces._saved_faces
@@ -372,6 +392,7 @@ class FaceUpdate():
         self._tk_unsaved = detected_faces.tk_unsaved
         self._extractor = detected_faces.extractor
         self._last_updated_face = None
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def _tk_edited(self):
@@ -394,7 +415,7 @@ class FaceUpdate():
     def last_updated_face(self):
         """ tuple: (`frame index`, `face index`) of the last face to be updated.
 
-        This attribute is populated after any update, just before :attr:_`tk_edited`
+        This attribute is populated after any update, just before :attr:`DetectedFaces.tk_edited`
         is triggered, so that any process picking up the update knows which face to update.
         """
         return self._last_updated_face
@@ -418,7 +439,8 @@ class FaceUpdate():
         return retval
 
     def add(self, frame_index, pnt_x, width, pnt_y, height):
-        """ Add a :class:`DetectedFace` object to the current frame with the given dimensions.
+        """ Add a :class:`~lib.faces_detect.DetectedFace` object to the current frame with the
+        given dimensions.
 
         Parameters
         ----------
@@ -439,7 +461,8 @@ class FaceUpdate():
         self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
 
     def delete(self, frame_index, face_index):
-        """ Delete the :class:`DetectedFace` object for the given frame and face indices.
+        """ Delete the :class:`~lib.faces_detect.DetectedFace` object for the given frame and face
+        indices.
 
         Parameters
         ----------
@@ -456,8 +479,9 @@ class FaceUpdate():
         self._globals.tk_update.set(True)
 
     def bounding_box(self, frame_index, face_index, pnt_x, width, pnt_y, height, aligner="FAN"):
-        """ Update the bounding box for the :class:`DetectedFace` object at the given frame and
-        face indices, with the given dimensions.
+        """ Update the bounding box for the :class:`~lib.faces_detect.DetectedFace` object at the
+        given frame and face indices, with the given dimensions and update the 68 point landmarks
+        from the :class:`~tools.manual.manual.Aligner` for the updated bounding box.
 
         Parameters
         ----------
@@ -473,7 +497,7 @@ class FaceUpdate():
             The top point of the bounding box
         height: int
             The height of the bounding box
-        aligner: ["cv2-dnn", "FAN], optional
+        aligner: ["cv2-dnn", "FAN"], optional
             The aligner to use to generate the landmarks. Default: "FAN"
         """
         logger.trace("frame_index: %s, face_index %s, pnt_x %s, width %s, pnt_y %s, height %s, "
@@ -490,8 +514,8 @@ class FaceUpdate():
         self._globals.tk_update.set(True)
 
     def landmark(self, frame_index, face_index, landmark_index, shift_x, shift_y, is_zoomed):
-        """ Shift a single landmark point for the :class:`DetectedFace` object at the given frame
-        and face indices by the given x and y values.
+        """ Shift a single landmark point for the :class:`~lib.faces_detect.DetectedFace` object
+        at the given frame and face indices by the given x and y values.
 
         Parameters
         ----------
@@ -506,7 +530,7 @@ class FaceUpdate():
         shift_y: int
             The amount to shift the landmark by along the y axis
         is_zoomed: bool
-            ``` True if landmarks are being adjusted on a zoomed image otherwise ``False``
+            ``True`` if landmarks are being adjusted on a zoomed image otherwise ``False``
         """
         face = self._current_faces_at_index(frame_index)[face_index]
         if is_zoomed:
@@ -526,8 +550,9 @@ class FaceUpdate():
         self._globals.tk_update.set(True)
 
     def landmarks(self, frame_index, face_index, shift_x, shift_y):
-        """ Shift all of the landmarks and bounding box for the :class:`DetectedFace` object at
-        the given frame and face indices by the given x and y values.
+        """ Shift all of the landmarks and bounding box for the
+        :class:`~lib.faces_detect.DetectedFace` object at the given frame and face indices by the
+        given x and y values.
 
         Parameters
         ----------
@@ -554,8 +579,8 @@ class FaceUpdate():
         self._globals.tk_update.set(True)
 
     def mask(self, frame_index, face_index, mask, mask_type):
-        """ Update the mask on an edit for the :class:`DetectedFace` object at the given frame and
-        face indices, for the given mask and mask type.
+        """ Update the mask on an edit for the :class:`~lib.faces_detect.DetectedFace` object at
+        the given frame and face indices, for the given mask and mask type.
 
         Parameters
         ----------

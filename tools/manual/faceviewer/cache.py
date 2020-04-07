@@ -162,8 +162,8 @@ class FaceCache():
 
 class TKFace():
     """ An object that holds a single :class:`tkinter.PhotoImage` face, ready for placement in the
-    :class:`~tools.manual.manual.FacesViewer` canvas, along with the face's associated mesh
-    annotation coordinates.
+    :class:`~tools.manual.faceviewer.frames.FacesViewer` canvas, along with the face's associated
+    mesh annotation coordinates.
 
     Parameters
     ----------

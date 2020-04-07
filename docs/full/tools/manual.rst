@@ -8,24 +8,18 @@ manual package
 
 Subpackages
 ===========
+The following subpackages handle the main two display areas of the Manual Tool's GUI.
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    manual.faceviewer
    manual.frameviewer
-  
-
-cli module
-==========
-
-.. automodule:: tools.manual.cli
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 manual module
 =============
+The Manual Module is the main entry point into the Manual Editor Tool.
+
 Module Summary
 --------------
 .. automodsumm:: tools.manual.manual

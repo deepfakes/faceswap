@@ -28,7 +28,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the display frame resides in
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
@@ -659,7 +659,7 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the canvas
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     detected_faces: :class:`AlignmentsData`
         The alignments data for this manual session

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-""" Tool to manually interact with the alignments file using visual tools """
+""" The Manual Tool is a tkinter driven GUI app for editing alignments files with visual tools.
+This module is the main entry point into the Manual Tool. """
 import logging
 import os
 import sys
@@ -25,8 +26,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Manual(tk.Tk):
-    """ This tool is part of the Faceswap Tools suite and should be called from
-    ``python tools.py manual`` command.
+    """ The main entry point for Faceswap's Manual Editor Tool. This tool is part of the Faceswap
+    Tools suite and should be called from ``python tools.py manual`` command.
 
     Allows for visual interaction with frames, faces and alignments file to perform various
     adjustments to the alignments file.
@@ -72,7 +73,7 @@ class Manual(tk.Tk):
                                        self._display,
                                        arguments.face_size)
 
-        Options(self._containers["top"], self._globals, self._display)
+        _Options(self._containers["top"], self._globals, self._display)
         self._display.tk_selected_action.set("View")
 
         self.bind("<Key>", self._handle_key_press)
@@ -131,6 +132,7 @@ class Manual(tk.Tk):
 
         extractor.link_faces(self._det_faces)
         if any(val is None for val in video_meta_data.values()):
+            logger.debug("Saving video meta data to alignments file")
             self._det_faces.save_video_meta_data(**self._frames.video_meta_data)
 
     def _initialize_tkinter(self):
@@ -170,8 +172,9 @@ class Manual(tk.Tk):
 
         bottom = ttk.Frame(main, name="frame_bottom")
         main.add(bottom)
-        logger.debug("Created containers")
-        return dict(main=main, top=top, bottom=bottom)
+        retval = dict(main=main, top=top, bottom=bottom)
+        logger.debug("Created containers: %s", retval)
+        return retval
 
     def _handle_key_press(self, event):
         """ Keyboard shortcuts
@@ -221,34 +224,40 @@ class Manual(tk.Tk):
         modifier = "_".join(val for key, val in modifiers.items() if event.state & key != 0)
         key_press = "_".join([modifier, press]) if modifier else press
         if key_press.lower() in bindings:
+            logger.trace("key press: %s, action: %s", key_press, bindings[key_press.lower()])
             self.focus_set()
             bindings[key_press.lower()]()
 
     def _set_initial_layout(self):
         """ Set the bottom frame position to correct location to display full frame window. """
+        logger.debug("Setting initial layout")
         self.update_idletasks()
         location = self._display.winfo_reqheight() + 5
         self._containers["main"].sash_place(0, 1, location)
 
     def process(self):
-        """ The entry point for the Visual Alignments tool from :file:`lib.tools.cli`.
+        """ The entry point for the Visual Alignments tool from :mod:`lib.tools.manual.cli`.
 
         Launch the tkinter Visual Alignments Window and run main loop.
         """
+        logger.debug("Launching mainloop")
         self.mainloop()
 
 
-class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ Control panel options for currently displayed Editor.
+class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ Control panel options for currently displayed Editor. This is the right hand panel of the
+    GUI that holds editor specific settings and annotation display settings.
 
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the control panel options
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     display_frame: :class:`DisplayFrame`
         The frame that holds the editors
     """
     def __init__(self, parent, tk_globals, display_frame):
+        logger.debug("Initializing %s: (parent: %s, tk_globals: %s, display_frame: %s)",
+                     self.__class__.__name__, parent, tk_globals, display_frame)
         super().__init__(parent)
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._globals = tk_globals
@@ -256,6 +265,7 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._control_panels = self._initialize()
         self._set_tk_callbacks()
         self._update_options()
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def _initialize(self):
         """ Initialize all of the control panels, then display the default panel.
@@ -328,9 +338,10 @@ class Options(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 
 class TkGlobals():
-    """ Tkinter Variables and frame information that need to be accessible from all areas of the
-    GUI. """
+    """ Holds Tkinter Variables and other frame information that need to be accessible from all
+    areas of the GUI. """
     def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self._tk_frame_index = tk.IntVar()
         self._tk_frame_index.set(0)
 
@@ -354,11 +365,38 @@ class TkGlobals():
                                    interpolation=None,
                                    display_dims=None,
                                    filename=None)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def current_frame(self):
-        """ dict: The currently displayed frame in the frame viewer with it's meta information. """
+        """ dict: The currently displayed frame in the frame viewer with it's meta information. Key
+        and Values are as follows:
+
+            **image** (:class:`numpy.ndarry`): The currently displayed frame in original dimensions
+
+            **scale** (`float`): The scaling factor to use to resize the image to the display
+            window
+
+            **interpolation** (`int`): The opencv interpolator ID to use for resizing the image to
+            the display window
+
+            **display_dims** (`tuple`): The size of the currently displayed frame, sized for the
+            display window
+
+            **filename** (`str`): The filename of the currently displayed frame
+        """
         return self._current_frame
+
+    @property
+    def tk_face_index(self):
+        """ :class:`tkinter.IntVar`: The variable that holds the face index of the selected face
+        within the current frame when in zoomed mode. """
+        return self._tk_face_index
+
+    @property
+    def face_index(self):
+        """ int: The currently displayed face index when in zoomed mode. """
+        return self._tk_face_index.get()
 
     @property
     def frame_display_dims(self):
@@ -367,24 +405,14 @@ class TkGlobals():
 
     @property
     def frame_index(self):
-        """ int: The currently displayed frame index """
+        """ int: The currently displayed frame index. NB: This returns -1 if there are no frames
+        that meet the currently selected filter criteria. """
         return self._tk_frame_index.get()
 
     @property
     def tk_frame_index(self):
         """ :class:`tkinter.IntVar`: The variable holding current frame index. """
         return self._tk_frame_index
-
-    @property
-    def tk_face_index(self):
-        """ :class:`tkinter.IntVar`: The variable face index if the selected face when in zoomed
-        mode. """
-        return self._tk_face_index
-
-    @property
-    def face_index(self):
-        """ int: The currently displayed face index """
-        return self._tk_face_index.get()
 
     @property
     def filter_mode(self):
@@ -416,12 +444,13 @@ class TkGlobals():
 
     @property
     def tk_update(self):
-        """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that an
+        """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that a full
         update needs to occur. """
         return self._tk_update
 
     def set_current_frame(self, image, filename):
-        """ Set the frame and meta information for the currently displayed frame.
+        """ Set the frame and meta information for the currently displayed frame. Populates the
+        attribute :attr:`current_frame`
 
         Parameters
         ----------
@@ -443,21 +472,24 @@ class TkGlobals():
 
 
 class Aligner():
-    """ Handles the extraction pipeline for retrieving the alignment landmarks.
+    """ The :class:`Aligner` class sets up an extraction pipeline for each of the current Faceswap
+    Aligners, along with the Landmarks based Maskers. When new landmarks are required, the bounding
+    boxes from the GUI are passed to this class for pushing through the pipeline. The resulting
+    Landmarks and Masks are then returned.
 
     Parameters
     ----------
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     """
     def __init__(self, tk_globals):
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
         # TODO
-        self._aligners = {"cv2-dnn": None}
-        self._aligner = "cv2-dnn"
-        # self._aligners = {"cv2-dnn": None, "FAN": None}
-        # self._aligner = "FAN"
+        # self._aligners = {"cv2-dnn": None}
+        # self._aligner = "cv2-dnn"
+        self._aligners = {"cv2-dnn": None, "FAN": None}
+        self._aligner = "FAN"
         self._det_faces = None
         self._frame_index = None
         self._face_index = None
@@ -466,7 +498,7 @@ class Aligner():
 
     @property
     def _in_queue(self):
-        """ :class:`queue.Queue` - The input queue to the aligner. """
+        """ :class:`queue.Queue` - The input queue to the extraction pipeline. """
         return self._aligners[self._aligner].input_queue
 
     @property
@@ -480,21 +512,27 @@ class Aligner():
 
     @property
     def is_initialized(self):
-        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        """ bool: The Aligners are initialized in a background thread so that other tasks can be
+        performed whilst we wait for initialization. ``True`` is returned if the aligner has
+        completed initialization otherwise ``False``."""
         thread_is_alive = self._init_thread.is_alive()
         if thread_is_alive:
+            logger.trace("Aligner not yet initialized")
             self._init_thread.check_and_raise_error()
         else:
+            logger.trace("Aligner initialized")
             self._init_thread.join()
         return not thread_is_alive
 
     def _background_init_aligner(self):
         """ Launch the aligner in a background thread so we can run other tasks whilst
         waiting for initialization """
+        logger.debug("Launching aligner initialization thread")
         thread = MultiThread(self._init_aligner,
                              thread_count=1,
                              name="{}.init_aligner".format(self.__class__.__name__))
         thread.start()
+        logger.debug("Launched aligner initialization thread")
         return thread
 
     def _init_aligner(self):
@@ -502,6 +540,7 @@ class Aligner():
         logger.debug("Initialize Aligner")
         # Make sure non-GPU aligner is allocated first
         for model in sorted(self._aligners, key=str.casefold):
+            logger.debug("Initializing aligner: %s", model)
             aligner = Extractor(None, model, ["components", "extended"],
                                 multiprocess=True, normalize_method="hist")
             aligner.set_batchsize("align", 1)  # Set the batchsize to 1
@@ -510,17 +549,26 @@ class Aligner():
             self._aligners[model] = aligner
 
     def link_faces(self, detected_faces):
-        """ Add the :class:`AlignmentsData` object as a property of the aligner.
+        """ As the Aligner has the potential to take the longest to initialize, it is kicked off
+        as early as possible. At this time :class:`~tools.manual.detected_faces.DetectedFaces` is
+        not yet available.
+
+        Once the Aligner has initialized, this function is called to add the
+        :class:`~tools.manual.detected_faces.DetectedFaces` class as a property of the Aligner.
 
         Parameters
         ----------
-        detected_faces: :class:`~tool.manual.faces.DetectedFaces`
-            The :class:`~lib.faces_detect.DetectedFace` objects for this video
+        detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
+            The class that holds the :class:`~lib.faces_detect.DetectedFace` objects for the
+            current Manual session
         """
+        logger.debug("Linking detected_faces: %s", detected_faces)
         self._det_faces = detected_faces
 
     def get_landmarks(self, frame_index, face_index, aligner):
-        """ Feed the detected face into the alignment pipeline and retrieve the landmarks
+        """ Feed the detected face into the alignment pipeline and retrieve the landmarks.
+
+        The face to feed into the aligner is generated from the given frame and face indices.
 
         Parameters
         ----------
@@ -536,15 +584,26 @@ class Aligner():
         :class:`numpy.ndarray`
             The 68 point landmark alignments
         """
+        logger.trace("frame_index: %s, face_index: %s, aligner: %s",
+                     frame_index, face_index, aligner)
         self._frame_index = frame_index
         self._face_index = face_index
         self._aligner = aligner
         self._in_queue.put(self._feed_face)
         detected_face = next(self._aligners[aligner].detected_faces()).detected_faces[0]
+        logger.trace("landmarks: %s", detected_face.landmarks_xy)
         return detected_face.landmarks_xy
 
-    def set_normalization_method(self, method_var):
-        """ Change the normalization method for faces fed into the aligner """
-        method = method_var.get()
+    def set_normalization_method(self, method):
+        """ Change the normalization method for faces fed into the aligner.
+        The normalization method is user adjustable from the GUI. When this method is triggered
+        the method is updated for all aligner pipelines.
+
+        Parameters
+        ----------
+        method: str
+            The normalization method to use
+        """
+        logger.debug("Setting normalization method to: '%s'", method)
         for aligner in self._aligners.values():
             aligner.set_aligner_normalization_method(method)

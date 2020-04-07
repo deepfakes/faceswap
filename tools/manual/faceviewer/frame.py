@@ -24,7 +24,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.PanedWindow`
         The paned window that the faces frame resides in
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     frames: :class:`FrameNavigation`
         The object that holds the cache of frames.
@@ -214,7 +214,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     ----------
     parent: :class:`tkinter.ttk.Frame`
         The parent frame for the canvas
-    tk_globals: :class:`TkGlobals`
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     tk_action_vars: dict
         The :class:`tkinter.BooleanVar` objects for selectable optional annotations
