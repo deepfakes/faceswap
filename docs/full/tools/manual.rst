@@ -27,6 +27,7 @@ The Manual Module is the main entry point into the Manual Editor Tool.
    ~tools.manual.manual.Aligner
    ~tools.manual.manual.FrameLoader
    ~tools.manual.manual.Manual
+   ~tools.manual.manual.TkGlobals
 
 .. rubric:: Module
 

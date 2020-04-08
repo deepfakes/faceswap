@@ -101,7 +101,7 @@ class BoundingBox(Editor):
             box = self._scale_to_display(box).astype("int32").flatten()
             kwargs = dict(outline=color, width=1)
             logger.trace("frame_index: %s, face_index: %s, box: %s, kwargs: %s",
-                         self._frame_index, idx, box, kwargs)
+                         self._globals.frame_index, idx, box, kwargs)
             self._object_tracker(key, "rectangle", idx, box, kwargs)
             self._update_anchor_annotation(idx, box, color)
         logger.trace("Updated bounding box annotations")
@@ -276,6 +276,8 @@ class BoundingBox(Editor):
         bool
             ``True`` if cursor is over a bounding box otherwise ``False``
         """
+        if self._globals.frame_index == -1:
+            return False
         display_dims = self._globals.current_frame["display_dims"]
         if (self._canvas.offset[0] <= event.x <= display_dims[0] + self._canvas.offset[0] and
                 self._canvas.offset[1] <= event.y <= display_dims[1] + self._canvas.offset[1]):
@@ -339,7 +341,7 @@ class BoundingBox(Editor):
         size = min(self._globals.current_frame["display_dims"]) // 8
         box = (event.x - size, event.y - size, event.x + size, event.y + size)
         logger.debug("Creating new bounding box: %s ", box)
-        self._det_faces.update.add(self._frame_index, *self._coords_to_bounding_box(box))
+        self._det_faces.update.add(self._globals.frame_index, *self._coords_to_bounding_box(box))
 
     def _resize(self, event):
         """ Resizes a bounding box on a corner anchor drag event.
@@ -365,7 +367,7 @@ class BoundingBox(Editor):
         box[rect_xy_indices[1]] = limits[rect_xy_indices[1]](event.x)
         box[rect_xy_indices[0]] = limits[rect_xy_indices[0]](event.y)
         logger.trace("New ROI: %s", box)
-        self._det_faces.update.bounding_box(self._frame_index,
+        self._det_faces.update.bounding_box(self._globals.frame_index,
                                             face_idx,
                                             *self._coords_to_bounding_box(box),
                                             aligner=self._tk_aligner.get())
@@ -385,7 +387,7 @@ class BoundingBox(Editor):
         face_tag = "bb_box_face_{}".format(face_idx)
         coords = np.array(self._canvas.coords(face_tag)) + (*shift, *shift)
         logger.trace("face_tag: %s, shift: %s, new co-ords: %s", face_tag, shift, coords)
-        self._det_faces.update.bounding_box(self._frame_index,
+        self._det_faces.update.bounding_box(self._globals.frame_index,
                                             face_idx,
                                             *self._coords_to_bounding_box(coords),
                                             aligner=self._tk_aligner.get())
@@ -427,4 +429,4 @@ class BoundingBox(Editor):
                          self._mouse_location)
             return
         logger.debug("Deleting face. _mouse_location: %s", self._mouse_location)
-        self._det_faces.update.delete(self._frame_index, int(self._mouse_location[1]))
+        self._det_faces.update.delete(self._globals.frame_index, int(self._mouse_location[1]))

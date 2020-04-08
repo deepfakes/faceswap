@@ -114,7 +114,9 @@ class ExtractBox(Editor):
         shift_x = event.x - self._drag_data["current_location"][0]
         shift_y = event.y - self._drag_data["current_location"][1]
         scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
-        self._det_faces.update.landmarks(self._frame_index, self._mouse_location, *scaled_shift)
+        self._det_faces.update.landmarks(self._globals.frame_index,
+                                         self._mouse_location,
+                                         *scaled_shift)
         self._drag_data["current_location"] = (event.x, event.y)
 
     def _context_menu(self, event):
@@ -135,4 +137,4 @@ class ExtractBox(Editor):
         """
         if self._mouse_location is None:
             return
-        self._det_faces.update.delete(self._frame_index, self._mouse_location)
+        self._det_faces.update.delete(self._globals.frame_index, self._mouse_location)

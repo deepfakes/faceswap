@@ -219,22 +219,14 @@ class ActiveFrame():
     @property
     def image_ids(self):
         """ tuple: The tkinter canvas image ids for the currently selected frame's faces. """
-        if not self._canvas.active_filter.image_ids:
-            logger.trace("No images in selected filter. Returning empty list")
-            retval = tuple()
-        else:
-            retval = self._canvas.find_withtag("image_{}".format(self._globals.frame_index))
+        retval = self._canvas.find_withtag("image_{}".format(self._globals.frame_index))
         logger.trace(retval)
         return retval
 
     @property
     def mesh_ids(self):
         """ tuple: The tkinter canvas mesh ids for the currently selected frame's faces. """
-        if not self._canvas.active_filter.image_ids == 0:
-            logger.trace("No images in selected filter. Returning empty list")
-            retval = tuple()
-        else:
-            retval = self._canvas.find_withtag("mesh_{}".format(self._globals.frame_index))
+        retval = self._canvas.find_withtag("mesh_{}".format(self._globals.frame_index))
         logger.trace(retval)
         return retval
 
@@ -303,11 +295,6 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         self._prev_objects = dict()
         self._tk_vars["selected_editor"].trace("w", lambda *e: self._highlight_annotations())
         logger.debug("Initialized: %s", self.__class__.__name__,)
-
-    @property
-    def _frame_index(self):
-        """ int: The currently selected frame's index. """
-        return self._globals.frame_index
 
     @property
     def _face_count(self):
@@ -429,8 +416,8 @@ class Highlighter():  # pylint:disable=too-few-public-methods
         if mask_edit == mask_view:
             return
         mask_type = self._tk_vars["selected_mask"].get() if mask_edit else None
-        self._faces_cache.mask_loader.update_selected(self._frame_index, mask_type)
-        self._prev_objects["mask"] = self._frame_index
+        self._faces_cache.mask_loader.update_selected(self._globals.frame_index, mask_type)
+        self._prev_objects["mask"] = self._globals.frame_index
 
     def _highlight_box(self, box, top_left):
         """ Locates the highlight box(es) (border(s)) for the currently selected frame correctly

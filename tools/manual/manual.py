@@ -520,10 +520,10 @@ class Aligner():
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
         # TODO
-        # self._aligners = {"cv2-dnn": None}
-        # self._aligner = "cv2-dnn"
-        self._aligners = {"cv2-dnn": None, "FAN": None}
-        self._aligner = "FAN"
+        self._aligners = {"cv2-dnn": None}
+        self._aligner = "cv2-dnn"
+        # self._aligners = {"cv2-dnn": None, "FAN": None}
+        # self._aligner = "FAN"
         self._det_faces = None
         self._frame_index = None
         self._face_index = None
@@ -718,7 +718,11 @@ class FrameLoader():
                          "current_idx: %s, is_zoomed: %s)", initialize, position,
                          self._current_idx, self._globals.is_zoomed)
             return
-        filename, frame = self._loader.image_from_index(position)
+        if position == -1:
+            filename = "No Frame"
+            frame = np.ones(self._globals.frame_display_dims + (3, ), dtype="uint8")
+        else:
+            filename, frame = self._loader.image_from_index(position)
         logger.trace("filename: %s, frame: %s, position: %s", filename, frame.shape, position)
         self._globals.set_current_frame(frame, filename)
         self._current_idx = position

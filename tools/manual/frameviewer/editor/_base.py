@@ -113,16 +113,15 @@ class Editor():
         return self._actions
 
     @property
-    def _frame_index(self):
-        """ int: The currently displayed frame index. """
-        return self._globals.frame_index
-
-    @property
     def _face_iterator(self):
         """ list: The detected face objects to be iterated. This will either be all faces in the
         frame (normal view) or the single zoomed in face (zoom mode). """
-        faces = self._det_faces.current_faces[self._frame_index]
-        faces = [faces[self._globals.face_index]] if self._globals.is_zoomed and faces else faces
+        if self._globals.frame_index == -1:
+            faces = []
+        else:
+            faces = self._det_faces.current_faces[self._globals.frame_index]
+            faces = ([faces[self._globals.face_index]]
+                     if self._globals.is_zoomed and faces else faces)
         return faces
 
     def _add_key_bindings(self, key_bindings):

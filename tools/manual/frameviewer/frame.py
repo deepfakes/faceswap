@@ -174,7 +174,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         actual_position = max(0, min(len(frames) - 1, slider_position))
         if actual_position != slider_position:
             self._globals.tk_transport_index.set(actual_position)
-        frame_idx = frames[actual_position] if frames else 0
+        frame_idx = frames[actual_position] if frames else -1
         logger.trace("slider_position: %s, frame_idx: %s", actual_position, frame_idx)
         self._globals.tk_frame_index.set(frame_idx)
 
@@ -257,7 +257,8 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         delay = max(1, delay - duration)
         self.after(delay, lambda f=frame_count: self._play(f))
 
-    # TODO Hide the frame image and annotations if no frames meet the criteria any more.
+    # TODO Check what happens to frame display when changes make a frame no longer meet filter
+    # criteria( i.e. Does the image blank properly?).
 
     def _toggle_save_state(self, *args):  # pylint:disable=unused-argument
         """ Toggle the state of the save button when alignments are updated. """
@@ -420,8 +421,10 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Disable or enable the static buttons """
         position = self._globals.frame_index
         face_count_per_index = self._det_faces.face_count_per_index
-        prev_exists = any(count != 0 for count in face_count_per_index[:position])
-        next_exists = any(count != 0 for count in face_count_per_index[position + 1:])
+        prev_exists = position != -1 and any(count != 0
+                                             for count in face_count_per_index[:position])
+        next_exists = position != -1 and any(count != 0
+                                             for count in face_count_per_index[position + 1:])
         states = dict(prev=["!disabled"] if prev_exists else ["disabled"],
                       next=["!disabled"] if next_exists else ["disabled"])
         for direction in ("prev", "next"):
@@ -430,7 +433,8 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _disable_enable_reload_button(self, *args):  # pylint: disable=unused-argument
         """ Disable or enable the static buttons """
         position = self._globals.frame_index
-        state = ["!disabled"] if self._det_faces.is_frame_updated(position) else ["disabled"]
+        state = ["!disabled"] if (position != -1 and
+                                  self._det_faces.is_frame_updated(position)) else ["disabled"]
         self._static_buttons["reload"].state(state)
 
     def add_optional_buttons(self, editors):
@@ -708,6 +712,8 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         change. """
         if self._globals.is_zoomed:
             current_face_count = 1
+        elif self._globals.frame_index == -1:
+            current_face_count = 0
         else:
             current_face_count = len(self._det_faces.current_faces[self._globals.frame_index])
 

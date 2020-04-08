@@ -115,7 +115,7 @@ class Mask(Editor):
         mask_type = self._control_vars["display"]["MaskType"].get()
         if mask_type == self._mask_type:
             return
-        self._meta = dict(position=self._frame_index)
+        self._meta = dict(position=self._globals.frame_index)
         self._mask_type = mask_type
         self._globals.tk_update.set(True)
 
@@ -126,7 +126,7 @@ class Mask(Editor):
 
     def update_annotation(self):
         """ Update the mask annotation with the latest mask. """
-        position = self._frame_index
+        position = self._globals.frame_index
         if position != self._meta.get("position", -1):
             # Reset meta information when moving to a new frame
             self._meta = dict(position=position)
@@ -506,7 +506,7 @@ class Mask(Editor):
         """
         mask_type = self._control_vars["display"]["MaskType"].get().lower()
         mask = self._meta["mask"][face_index].astype("float32") / 255.0
-        self._det_faces.update.mask(self._frame_index, face_index, mask, mask_type)
+        self._det_faces.update.mask(self._globals.frame_index, face_index, mask, mask_type)
 
     def _adjust_brush_radius(self, increase=True):  # pylint:disable=unused-argument
         """ Adjust the brush radius up or down by 2px.
