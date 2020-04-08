@@ -257,9 +257,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         delay = max(1, delay - duration)
         self.after(delay, lambda f=frame_count: self._play(f))
 
-    # TODO Check what happens to frame display when changes make a frame no longer meet filter
-    # criteria( i.e. Does the image blank properly?).
-
     def _toggle_save_state(self, *args):  # pylint:disable=unused-argument
         """ Toggle the state of the save button when alignments are updated. """
         state = ["!disabled"] if self._det_faces.tk_unsaved.get() else ["disabled"]
