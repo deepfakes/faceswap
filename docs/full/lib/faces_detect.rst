@@ -4,17 +4,17 @@ faces\_detect module
 
 Handles detected and aligned faces objects and their associated masks.
 
-.. contents:: Contents
-   :local:
+.. rubric:: Module Summary
 
-Module Summary
-==============
-.. automodsumm:: lib.faces_detect
-   :classes-only:
-   :skip: AlignerExtract
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.faces_detect.BlurMask
+   ~lib.faces_detect.DetectedFace
+   ~lib.faces_detect.Mask
 
-Module
-======
+.. rubric:: Module
+
 .. automodule:: lib.faces_detect
    :members:
    :undoc-members:

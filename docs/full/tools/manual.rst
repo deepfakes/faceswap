@@ -3,7 +3,6 @@ manual package
 **************
 
 .. contents:: Contents
-   :depth: 1
    :local:
 
 Subpackages
@@ -11,7 +10,7 @@ Subpackages
 The following subpackages handle the main two display areas of the Manual Tool's GUI.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
 
    manual.faceviewer
    manual.frameviewer
@@ -20,14 +19,17 @@ manual module
 =============
 The Manual Module is the main entry point into the Manual Editor Tool.
 
-Module Summary
---------------
-.. automodsumm:: tools.manual.manual
-   :classes-only:
-   :skip: ControlPanel, DetectedFaces, DisplayFrame, ExtractMedia, Extractor, FacesFrame, FrameNavigation, MultiThread
+.. rubric:: Module Summary
 
-Module
-------
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.manual.Aligner
+   ~tools.manual.manual.FrameLoader
+   ~tools.manual.manual.Manual
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.manual
    :members:
    :undoc-members:
@@ -35,14 +37,18 @@ Module
 
 detected_faces module
 =====================
-Module Summary
---------------
-.. automodsumm:: tools.manual.detected_faces
-   :classes-only:
-   :skip: AlignerExtract, Alignments, DetectedFace, deepcopy, logger
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.detected_faces.DetectedFaces
+   ~tools.manual.detected_faces.FaceUpdate
+   ~tools.manual.detected_faces.Filter
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.detected_faces
    :members:
    :undoc-members:

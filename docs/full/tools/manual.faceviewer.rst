@@ -6,17 +6,21 @@ Handles the display of faces in the Face Viewer section of Faceswap's Manual Too
 
 .. contents:: Contents
    :local:
-   :depth: 1
 
 assets module
 =============
-Module Summary
---------------
-.. automodsumm:: tools.manual.faceviewer.assets
-   :classes-only:
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.faceviewer.assets.FacesViewerLoader
+   ~tools.manual.faceviewer.assets.ObjectCreator
+   ~tools.manual.faceviewer.assets.UpdateFace
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.faceviewer.assets
    :members:
    :undoc-members:
@@ -24,14 +28,19 @@ Module
 
 cache module
 ============
-Module Summary
---------------
-.. automodsumm:: tools.manual.faceviewer.cache
-   :classes-only:
-   :skip: MultiThread, SingleFrameLoader
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.faceviewer.cache.FaceCache
+   ~tools.manual.faceviewer.cache.FaceCacheLoader
+   ~tools.manual.faceviewer.cache.MaskLoader
+   ~tools.manual.faceviewer.cache.TKFace
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.faceviewer.cache
    :members:
    :undoc-members:
@@ -39,14 +48,20 @@ Module
 
 display module
 ==============
-Module Summary
---------------
-.. automodsumm:: tools.manual.faceviewer.display
-   :classes-only:
-   :skip: RightClickMenu
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.faceviewer.display.ActiveFrame
+   ~tools.manual.faceviewer.display.ContextMenu
+   ~tools.manual.faceviewer.display.FaceFilter
+   ~tools.manual.faceviewer.display.Highlighter
+   ~tools.manual.faceviewer.display.HoverBox
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.faceviewer.display
    :members:
    :undoc-members:
@@ -54,14 +69,18 @@ Module
 
 frame module
 ============
-Module Summary
---------------
-.. automodsumm:: tools.manual.faceviewer.frame
-   :classes-only:
-   :skip: ActiveFrame, ContextMenu, FaceCache, FaceFilter, FacesViewerLoader, HoverBox, ObjectCreator, StatusBar, Tooltip, UpdateFace
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.faceviewer.frame.FacesActionsFrame
+   ~tools.manual.faceviewer.frame.FacesFrame
+   ~tools.manual.faceviewer.frame.FacesViewer
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.faceviewer.frame
    :members:
    :undoc-members:

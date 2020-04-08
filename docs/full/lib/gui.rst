@@ -6,47 +6,67 @@ The GUI Package contains the entire code base for Faceswap's optional GUI. The G
 is largely self-generated from the command line options specified in :mod:`lib.cli`.
 
 .. contents:: Contents
-   :depth: 1
    :local:
 
-gui.custom\_widgets module
-==========================
-Module Summary
---------------
-.. automodsumm:: lib.gui.custom_widgets
-   :classes-only:
-   :skip: TclError
+custom\_widgets module
+======================
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.gui.custom_widgets.ConsoleOut
+   ~lib.gui.custom_widgets.ContextMenu
+   ~lib.gui.custom_widgets.RightClickMenu
+   ~lib.gui.custom_widgets.StatusBar
+   ~lib.gui.custom_widgets.Tooltip
+
+.. rubric:: Module
+
 .. automodule:: lib.gui.custom_widgets
    :members:
    :undoc-members:
    :show-inheritance:
 
-gui.project module
-==================
-Module Summary
---------------
-.. automodsumm:: lib.gui.project
-   :classes-only:
+project module
+==============
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.gui.project.LastSession
+   ~lib.gui.project.Project
+   ~lib.gui.project.Tasks
+
+.. rubric:: Module
+
 .. automodule:: lib.gui.project
    :members:
    :undoc-members:
    :show-inheritance:
 
-gui.utils module
-================
-Module Summary
---------------
-.. automodsumm:: lib.gui.utils
-   :skip: Event, Thread, Project, Tasks, UserConfig, PATHCACHE, Queue, logger
+utils module
+============
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.gui.utils.Config
+   ~lib.gui.utils.FileHandler
+   ~lib.gui.utils.Images
+   ~lib.gui.utils.LongRunningTask
+   ~lib.gui.utils.get_config
+   ~lib.gui.utils.get_images
+   ~lib.gui.utils.initialize_config
+   ~lib.gui.utils.initialize_images
+
+.. rubric:: Module
+
 .. automodule:: lib.gui.utils
    :members:
    :undoc-members:

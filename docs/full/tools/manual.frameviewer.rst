@@ -6,26 +6,42 @@ Handles the display of frames in the Frame Viewer section of Faceswap's Manual T
 
 .. contents:: Contents
    :local:
-   :depth: 1
 
-display_frame module
-====================
-Module Summary
---------------
-.. automodsumm:: tools.manual.frameviewer.display_frame
-   :classes-only:
-   :skip: BoundingBox, ExtractBox, Landmarks, Mask, Mesh, TclError, Tooltip, View, partial
+frame module
+============
 
-Module
-------
-.. automodule:: tools.manual.frameviewer.display_frame
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.frameviewer.frame.ActionsFrame
+   ~tools.manual.frameviewer.frame.BackgroundImage
+   ~tools.manual.frameviewer.frame.DisplayFrame
+   ~tools.manual.frameviewer.frame.FrameViewer
+   ~tools.manual.frameviewer.frame.Navigation
+
+.. rubric:: Module
+
+.. automodule:: tools.manual.frameviewer.frame
    :members:
    :undoc-members:
    :show-inheritance:
 
-navigation module
-=================
-.. automodule:: tools.manual.frameviewer.navigation
+control module
+==============
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.frameviewer.control.BackgroundImage
+   ~tools.manual.frameviewer.control.Navigation
+
+.. rubric:: Module
+
+.. automodule:: tools.manual.frameviewer.control
    :members:
    :undoc-members:
    :show-inheritance:
@@ -34,18 +50,20 @@ editor package
 ==============
 .. contents:: Contents
    :local:
-   :depth: 1
 
 _base module
 ------------
-Module Summary
-^^^^^^^^^^^^^^
-.. automodsumm:: tools.manual.frameviewer.editor._base
-   :classes-only:
-   :skip: OrderedDict, ControlPanelOption
 
-Module
-^^^^^^
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.frameviewer.editor._base.Editor
+   ~tools.manual.frameviewer.editor._base.View
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.frameviewer.editor._base
    :members:
    :undoc-members:
@@ -67,14 +85,17 @@ extract_box module
 
 landmarks module
 ----------------
-Module Summary
-^^^^^^^^^^^^^^
-.. automodsumm:: tools.manual.frameviewer.editor.landmarks
-   :classes-only:
-   :skip: Editor
 
-Module
-^^^^^^
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.manual.frameviewer.editor.landmarks.Landmarks
+   ~tools.manual.frameviewer.editor.landmarks.Mesh
+
+.. rubric:: Module
+
 .. automodule:: tools.manual.frameviewer.editor.landmarks
    :members:
    :undoc-members:

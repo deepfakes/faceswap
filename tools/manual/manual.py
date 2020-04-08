@@ -520,10 +520,10 @@ class Aligner():
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
         # TODO
-        self._aligners = {"cv2-dnn": None}
-        self._aligner = "cv2-dnn"
-        # self._aligners = {"cv2-dnn": None, "FAN": None}
-        # self._aligner = "FAN"
+        # self._aligners = {"cv2-dnn": None}
+        # self._aligner = "cv2-dnn"
+        self._aligners = {"cv2-dnn": None, "FAN": None}
+        self._aligner = "FAN"
         self._det_faces = None
         self._frame_index = None
         self._face_index = None

@@ -5,19 +5,21 @@ extract package
 The Extract Package handles the various plugins available for extracting face sets in Faceswap.
 
 .. contents:: Contents
-   :depth: 1
    :local:
 
 pipeline module
 ===============
-Module Summary
---------------
-.. automodsumm:: plugins.extract.pipeline
-   :classes-only:
-   :skip: GPUStats, PluginLoader, QueueEmpty
 
-Module
-------
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~plugins.extract.pipeline.ExtractMedia
+   ~plugins.extract.pipeline.Extractor
+
+.. rubric:: Module
+
 .. automodule:: plugins.extract.pipeline
    :members:
    :undoc-members:
