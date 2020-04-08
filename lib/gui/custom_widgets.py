@@ -422,7 +422,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
     """
 
     def __init__(self, parent, hide_status=False):
-        ttk.Frame.__init__(self, parent)
+        super().__init__(parent)
         self.pack(side=tk.BOTTOM, padx=10, pady=2, fill=tk.X, expand=False)
 
         self._message = tk.StringVar()

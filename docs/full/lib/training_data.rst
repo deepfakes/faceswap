@@ -2,14 +2,16 @@
 training\_data module
 *********************
 
-Module Summary
-==============
-.. automodsumm:: lib.training_data
-   :classes-only:
-   :skip: FaceswapError, BackgroundGenerator
+.. rubric:: Module Summary
 
-Module
-======
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.training_data.ImageAugmentation
+   ~lib.training_data.TrainingDataGenerator
+
+.. rubric:: Module
+
 .. automodule:: lib.training_data
    :members:
    :undoc-members:

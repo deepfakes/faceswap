@@ -6,7 +6,6 @@ The Scripts Package is the entry point into Faceswap.
 
 .. contents:: Contents
    :local:
-   :depth: 1
 
 extract module
 ==============
@@ -25,14 +24,18 @@ train module
 convert module
 ==============
 
-Module Summary
---------------
-.. automodsumm:: scripts.convert
-   :classes-only:
-   :skip: Alignments, Converter, DetectedFace, Event, ExtractMedia, Extractor, FaceswapError, GPUStats, Images, MultiThread, PluginLoader, PostProcess, tqdm
+.. rubric:: Module Summary
 
-Module
-------
+.. autosummary::
+   :nosignatures:
+   
+   ~scripts.convert.Convert
+   ~scripts.convert.DiskIO
+   ~scripts.convert.OptionalActions
+   ~scripts.convert.Predict
+   
+.. rubric:: Module
+
 .. automodule:: scripts.convert
    :members:
    :undoc-members:
@@ -40,13 +43,21 @@ Module
 
 fsmedia module
 ==============
-Module Summary
---------------
-.. automodsumm:: scripts.fsmedia
-   :skip: AlignmentsBase, FilterFunc, Path, camel_case_split, count_frames, get_image_paths, logger, read_image
 
-Module
-------  
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~scripts.fsmedia.Alignments
+   ~scripts.fsmedia.DebugLandmarks
+   ~scripts.fsmedia.FaceFilter
+   ~scripts.fsmedia.Images
+   ~scripts.fsmedia.PostProcess
+   ~scripts.fsmedia.finalize
+
+.. rubric:: Module
+  
 .. automodule:: scripts.fsmedia
    :members:
    :undoc-members:

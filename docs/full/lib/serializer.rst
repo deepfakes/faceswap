@@ -2,13 +2,17 @@
 serializer module
 *****************
 
-Module Summary
-==============
-.. automodsumm:: lib.serializer
-   :skip: FaceswapError, BytesIO, logger
+.. rubric:: Module Summary
 
-Module
-======
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.serializer.Serializer
+   ~lib.serializer.get_serializer
+   ~lib.serializer.get_serializer_from_filename
+
+.. rubric:: Module
+
 .. automodule:: lib.serializer
    :members:
    :undoc-members:

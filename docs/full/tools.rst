@@ -5,7 +5,6 @@ tools package
 The Tools Package provides various tools for working with Faceswap outside of the core functionality.
 
 .. contents:: Contents
-   :depth: 1
    :local:
 
 mask module
@@ -18,14 +17,25 @@ mask module
 
 preview module
 ==============
-Module Summary
---------------
-.. automodsumm:: tools.preview.preview
-   :classes-only:
-   :skip: AlignerExtract, Alignments, Config, ConfigParser, ControlPanel,  ControlPanelOption, ConvertArgs, Converter, DetectedFace, Event, FaceswapError, Images, MultiThread, PluginLoader, Predict, Tooltip
 
-Module
-------
+.. rubric:: Module Summary
+
+
+.. autosummary::
+   :nosignatures:
+   
+   ~tools.preview.preview.ActionFrame
+   ~tools.preview.preview.ConfigFrame
+   ~tools.preview.preview.ConfigTools
+   ~tools.preview.preview.FacesDisplay
+   ~tools.preview.preview.ImagesCanvas
+   ~tools.preview.preview.OptionsBook
+   ~tools.preview.preview.Patch
+   ~tools.preview.preview.Preview
+   ~tools.preview.preview.Samples
+
+.. rubric:: Module
+
 .. automodule:: tools.preview.preview
    :members:
    :undoc-members:
