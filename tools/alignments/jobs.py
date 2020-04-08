@@ -998,7 +998,7 @@ class Sort():
 
 
 class Spatial():
-    """ Apply spatial temporal filtering to landmarks
+    """ Apply spatial filtering to landmarks
         Adapted from:
         https://www.kaggle.com/selfishgene/animating-and-smoothing-3d-facial-keypoints/notebook """
 
@@ -1013,7 +1013,7 @@ class Spatial():
 
     def process(self):
         """ Perform spatial filtering """
-        logger.info("[SPATIO-TEMPORAL FILTERING]")  # Tidy up cli output
+        logger.info("[SPATIAL FILTERING]")  # Tidy up cli output
         logger.info("NB: The process only processes the alignments for the first "
                     "face it finds for any given frame. For best results only run this when "
                     "there is only a single face in the alignments file and all false positives "
@@ -1022,7 +1022,7 @@ class Spatial():
         self.normalize()
         self.shape_model()
         landmarks = self.spatially_filter()
-        landmarks = self.temporally_smooth(landmarks)
+        landmarks = self.spatially_smooth(landmarks)
         self.update_alignments(landmarks)
         self.alignments.save()
 
@@ -1129,19 +1129,19 @@ class Spatial():
         return retval
 
     @staticmethod
-    def temporally_smooth(landmarks):
-        """ apply temporal filtering on the 2D points """
-        logger.debug("Temporally Smooth")
-        filter_half_length = 2
-        temporal_filter = np.ones((1, 1, 2 * filter_half_length + 1))
-        temporal_filter = temporal_filter / temporal_filter.sum()
+    def spatially_smooth(landmarks):
+        """ apply spatial filtering on the 2D points """
+        logger.debug("Spatially Smooth")
+        interpolate = 1
+        spatially_filter = np.ones((1, 1, 1 * interpolate + 1))
+        spatially_filter = spatially_filter / spatially_filter.sum()
 
-        start_tileblock = np.tile(landmarks[:, :, 0][:, :, np.newaxis], [1, 1, filter_half_length])
-        end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, filter_half_length])
+        start_tileblock = np.tile(landmarks[:, :, 0][:, :, np.newaxis], [1, 1, interpolate])
+        end_tileblock = np.tile(landmarks[:, :, -1][:, :, np.newaxis], [1, 1, interpolate])
         landmarks_padded = np.dstack((start_tileblock, landmarks, end_tileblock))
 
-        retval = signal.convolve(landmarks_padded, temporal_filter, mode='valid', method='fft')
-        logger.debug("Temporally Smoothed: %s", retval)
+        retval = signal.convolve(landmarks_padded, spatially_filter, mode='valid', method='fft')
+        logger.debug("Spatially Smoothed: %s", retval)
         return retval
 
     def update_alignments(self, landmarks):
