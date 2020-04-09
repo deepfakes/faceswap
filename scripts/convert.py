@@ -14,12 +14,12 @@ import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
 from tqdm import tqdm
 
-from scripts.fsmedia import Alignments, Images, PostProcess, finalize
+from scripts.fsmedia import Alignments, PostProcess, finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
 from lib.faces_detect import DetectedFace
 from lib.gpu_stats import GPUStats
-from lib.image import read_image_hash
+from lib.image import read_image_hash, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
 from lib.utils import FaceswapError, get_folder, get_image_paths
@@ -52,10 +52,10 @@ class Convert():  # pylint:disable=too-few-public-methods
         self._args = arguments
 
         self._patch_threads = None
-        self._images = Images(self._args)
+        self._images = ImagesLoader(self._args.input_dir, fast_count=True)
         self._alignments = Alignments(self._args, False, self._images.is_video)
 
-        self._opts = OptionalActions(self._args, self._images.input_images, self._alignments)
+        self._opts = OptionalActions(self._args, self._images.file_list, self._alignments)
 
         self._add_queues()
         self._disk_io = DiskIO(self._alignments, self._images, arguments)
@@ -90,9 +90,9 @@ class Convert():  # pylint:disable=too-few-public-methods
         if self._args.singleprocess:
             retval = 1
         elif self._args.jobs > 0:
-            retval = min(self._args.jobs, total_cpus(), self._images.images_found)
+            retval = min(self._args.jobs, total_cpus(), self._images.count)
         else:
-            retval = min(total_cpus(), self._images.images_found)
+            retval = min(total_cpus(), self._images.count)
         retval = 1 if retval == 0 else retval
         logger.debug(retval)
         return retval
@@ -158,7 +158,7 @@ class Convert():  # pylint:disable=too-few-public-methods
             self._disk_io.save_thread.join()
             queue_manager.terminate_queues()
 
-            finalize(self._images.images_found,
+            finalize(self._images.count,
                      self._predictor.faces_count,
                      self._predictor.verify_output)
             logger.debug("Completed Conversion")
@@ -215,7 +215,7 @@ class DiskIO():
     ----------
     alignments: :class:`lib.alignmnents.Alignments`
         The alignments for the input video
-    images: :class:`scripts.fsmedia.Images`
+    images: :class:`lib.image.ImagesLoader`
         The input images
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the convert process as generated from Faceswap's command
@@ -288,7 +288,7 @@ class DiskIO():
         if self._frame_ranges and not self._args.keep_unchanged:
             retval = sum([fr[1] - fr[0] + 1 for fr in self._frame_ranges])
         else:
-            retval = self._images.images_found
+            retval = self._images.count
         logger.debug(retval)
         return retval
 
@@ -331,10 +331,10 @@ class DiskIO():
 
         minframe, maxframe = None, None
         if self._images.is_video:
-            minframe, maxframe = 1, self._images.images_found
+            minframe, maxframe = 1, self._images.count
         else:
             indices = [int(self._imageidxre.findall(os.path.basename(filename))[0])
-                       for filename in self._images.input_images]
+                       for filename in self._images.file_list]
             if indices:
                 minframe, maxframe = min(indices), max(indices)
         logger.debug("minframe: %s, maxframe: %s", minframe, maxframe)
@@ -594,9 +594,7 @@ class DiskIO():
          """
         self._extractor.input_queue.put(ExtractMedia(filename, image))
         faces = next(self._extractor.detected_faces())
-
-        final_faces = [face for face in faces.detected_faces]
-        return final_faces
+        return faces.detected_faces
 
     # Saving tasks
     def _save(self, completion_event):
@@ -1082,7 +1080,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
             logger.warning("Aligned directory not found. All faces listed in the "
                            "alignments file will be converted")
         else:
-            file_list = [path for path in get_image_paths(input_aligned_dir)]
+            file_list = get_image_paths(input_aligned_dir)
             logger.info("Getting Face Hashes for selected Aligned Images")
             for face in tqdm(file_list, desc="Hashing Faces"):
                 face_hashes.append(read_image_hash(face))
