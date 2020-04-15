@@ -130,9 +130,6 @@ class ScriptExecutor():
         except FaceswapError as err:
             for line in str(err).splitlines():
                 logger.error(line)
-            crash_file = crash_log()
-            logger.info("To get more information on this error see the crash report written to "
-                        "'%s'", crash_file)
         except KeyboardInterrupt:  # pylint: disable=try-except-raise
             raise
         except SystemExit:
