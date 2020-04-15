@@ -240,6 +240,21 @@ class Alignments():
                 self.data[key] = dict(video_meta=meta, faces=[])
             else:
                 self.data[key]["video_meta"] = meta
+        logger.debug("Alignments count: %s, timestamp count: %s", len(self.data), len(pts_time))
+        if len(self.data) != len(pts_time):
+            raise FaceswapError(
+                "There is a mismatch between the number of frames found in the video file ({}) "
+                "and the number of frames found in the alignments file ({})."
+                "\nThis can be caused by a number of issues:"
+                "\n  - The video has a Variable Frame Rate and FFMPEG is having a hard time "
+                "calculating the correct number of frames."
+                "\n  - The video was not cut on a key frame and FFMPEG has dummied in some extra "
+                "frames to fill the gap."
+                "\n  - You are working with a Merged Alignments file. This is not supported for "
+                "your current use case."
+                "\nYou should either extract the video to individual frames, re-encode the "
+                "video at a constant frame rate and re-run extraction or work with a dedicated "
+                "alignments file for your requested video.".format(len(pts_time), len(self.data)))
         self.save()
 
     # << VALIDATION >> #

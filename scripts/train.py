@@ -15,7 +15,8 @@ from keras.backend.tensorflow_backend import set_session
 from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, get_image_paths, deprecation_warning
+from lib.utils import (get_folder, get_image_paths, deprecation_warning, FaceswapError,
+                       _image_extensions)
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -85,21 +86,22 @@ class Train():
                 not self._args.timelapse_input_b and
                 not self._args.timelapse_output):
             return None
-        if not self._args.timelapse_input_a or not self._args.timelapse_input_b:
-            raise ValueError("To enable the timelapse, you have to supply "
-                             "all the parameters (--timelapse-input-A and "
-                             "--timelapse-input-B).")
+        if (not self._args.timelapse_input_a or
+                not self._args.timelapse_input_b or
+                not self._args.timelapse_output):
+            raise FaceswapError("To enable the timelapse, you have to supply all the parameters "
+                                "(--timelapse-input-A, --timelapse-input-B and "
+                                "--timelapse-output).")
 
-        timelapse_output = None
-        if self._args.timelapse_output is not None:
-            timelapse_output = str(get_folder(self._args.timelapse_output))
+        timelapse_output = str(get_folder(self._args.timelapse_output))
 
-        for folder in (self._args.timelapse_input_a,
-                       self._args.timelapse_input_b,
-                       timelapse_output):
+        for folder in (self._args.timelapse_input_a, self._args.timelapse_input_b):
             if folder is not None and not os.path.isdir(folder):
-                raise ValueError("The Timelapse path '{}' does not exist".format(folder))
-
+                raise FaceswapError("The Timelapse path '{}' does not exist".format(folder))
+            exts = [os.path.splitext(fname)[-1] for fname in os.listdir(folder)]
+            if not any(ext in _image_extensions for ext in exts):
+                raise FaceswapError("The Timelapse path '{}' does not contain any valid "
+                                    "images".format(folder))
         kwargs = {"input_a": self._args.timelapse_input_a,
                   "input_b": self._args.timelapse_input_b,
                   "output": timelapse_output}

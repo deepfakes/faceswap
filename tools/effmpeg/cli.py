@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-from argparse import SUPPRESS
-
 from lib.cli import FaceSwapArgs
 from lib.cli import ContextFullPaths, FileFullPaths, Radio
 from lib.utils import _image_extensions
@@ -53,7 +51,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "\nL|'rotate' rotate video."
                                       "\nL|'slice' cuts a portion of the video into a separate "
                                       "video file."})
-
         argument_list.append({"opts": ('-i', '--input'),
                               "action": ContextFullPaths,
                               "dest": "input",
@@ -63,7 +60,6 @@ class EffmpegArgs(FaceSwapArgs):
                               "required": True,
                               "action_option": "-a",
                               "filetypes": "video"})
-
         argument_list.append({"opts": ('-o', '--output'),
                               "action": ContextFullPaths,
                               "group": "data",
@@ -83,7 +79,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "encoding.",
                               "action_option": "-a",
                               "filetypes": "video"})
-
         argument_list.append({"opts": ('-r', '--reference-video'),
                               "action": FileFullPaths,
                               "dest": "ref_vid",
@@ -92,7 +87,6 @@ class EffmpegArgs(FaceSwapArgs):
                               "help": "Path to reference video if 'input' "
                                       "was not a video.",
                               "filetypes": "video"})
-
         argument_list.append({"opts": ('-fps', '--fps'),
                               "type": str,
                               "dest": "fps",
@@ -103,7 +97,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "will make the program try to get the "
                                       "fps from the input or reference "
                                       "videos."})
-
         argument_list.append({"opts": ("-ef", "--extract-filetype"),
                               "action": Radio,
                               "choices": _image_extensions,
@@ -116,7 +109,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "will take the most storage space. "
                                       "'.png' will be slower but will take "
                                       "less storage."})
-
         argument_list.append({"opts": ('-s', '--start'),
                               "type": str,
                               "dest": "start",
@@ -128,7 +120,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "format. You can also enter the time "
                                       "with or without the colons, e.g. "
                                       "00:0000 or 026010."})
-
         argument_list.append({"opts": ('-e', '--end'),
                               "type": str,
                               "dest": "end",
@@ -140,7 +131,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "time will be used and the duration "
                                       "will be ignored. "
                                       "Default: 00:00:00, in HH:MM:SS."})
-
         argument_list.append({"opts": ('-d', '--duration'),
                               "type": str,
                               "dest": "duration",
@@ -156,7 +146,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "format. You can also enter the time "
                                       "with or without the colons, e.g. "
                                       "00:0000 or 026010."})
-
         argument_list.append({"opts": ('-m', '--mux-audio'),
                               "action": "store_true",
                               "dest": "mux_audio",
@@ -167,7 +156,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "option is only used for the 'gen-vid' "
                                       "action. 'mux-audio' action has this "
                                       "turned on implicitly."})
-
         argument_list.append(
             {"opts": ('-tr', '--transpose'),
              "choices": ("(0, 90CounterClockwise&VerticalFlip)",
@@ -184,7 +172,6 @@ class EffmpegArgs(FaceSwapArgs):
                      "or the long command name, "
                      "e.g. to use (1, 90Clockwise) "
                      "-tr 1 or -tr 90Clockwise"})
-
         argument_list.append({"opts": ('-de', '--degrees'),
                               "type": str,
                               "dest": "degrees",
@@ -192,7 +179,6 @@ class EffmpegArgs(FaceSwapArgs):
                               "group": "rotate",
                               "help": "Rotate the video clockwise by the "
                                       "given number of degrees."})
-
         argument_list.append({"opts": ('-sc', '--scale'),
                               "type": str,
                               "dest": "scale",
@@ -200,19 +186,6 @@ class EffmpegArgs(FaceSwapArgs):
                               "default": "1920x1080",
                               "help": "Set the new resolution scale if the "
                                       "chosen action is 'rescale'."})
-
-        argument_list.append({"opts": ('-pr', '--preview'),
-                              "action": "store_true",
-                              "dest": "preview",
-                              "default": False,
-                              # TODO Fix preview or remove
-                              "help": SUPPRESS,
-                              # "help": "Uses ffplay to preview the effects of "
-                              #         "actions that have a video output. "
-                              #         "Currently preview does not work when "
-                              #         "muxing audio."
-                              })
-
         argument_list.append({"opts": ('-q', '--quiet'),
                               "action": "store_true",
                               "dest": "quiet",
@@ -222,7 +195,6 @@ class EffmpegArgs(FaceSwapArgs):
                                       "serious errors are printed. If both "
                                       "quiet and verbose are set, verbose "
                                       "will override quiet."})
-
         argument_list.append({"opts": ('-v', '--verbose'),
                               "action": "store_true",
                               "dest": "verbose",
@@ -231,5 +203,4 @@ class EffmpegArgs(FaceSwapArgs):
                               "help": "Increases output verbosity. If both "
                                       "quiet and verbose are set, verbose "
                                       "will override quiet."})
-
         return argument_list

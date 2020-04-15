@@ -140,7 +140,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         """ dict: The accepted extensions for each file type for opening/saving """
         all_files = ("All files", "*.*")
         filetypes = {"default": (all_files,),
-                     "alignments": [("Faceswap Alignments", "*.fsa *.json"),
+                     "alignments": [("Faceswap Alignments", "*.fsa"),
                                     all_files],
                      "config_project": [("Faceswap Project files", "*.fsw"), all_files],
                      "config_task": [("Faceswap Task files", "*.fst"), all_files],

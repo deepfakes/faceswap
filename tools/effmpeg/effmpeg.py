@@ -5,9 +5,6 @@ Created on 2018-03-16 15:14
 
 @author: Lev Velykoivanenko (velykoivanenko.lev@gmail.com)
 """
-# TODO: integrate preview into gui window
-# TODO: add preview support when muxing audio
-#       -> figure out if ffmpeg | ffplay would work on windows and mac
 import logging
 import os
 import subprocess
@@ -128,8 +125,6 @@ class Effmpeg():
 
     _actions_req_fps = ["extract", "gen_vid"]
     _actions_req_ref_video = ["mux_audio"]
-    _actions_can_preview = ["gen_vid", "mux_audio", "rescale", "rotate",
-                            "slice"]
     _actions_can_use_ref_video = ["gen_vid"]
     _actions_have_dir_output = ["extract"]
     _actions_have_vid_output = ["gen_vid", "mux_audio", "rescale", "rotate",
@@ -269,11 +264,6 @@ class Effmpeg():
                              self.args.degrees)
                 sys.exit(1)
 
-        # Set executable based on whether previewing or not
-        if self.args.preview and self.args.action in self._actions_can_preview:
-            self.exe = 'ffplay'
-            self.output = DataItem()
-
         # Set verbosity of output
         self.__set_verbosity(self.args.quiet, self.args.verbose)
 
@@ -298,7 +288,6 @@ class Effmpeg():
                   "transpose": self.args.transpose,
                   "scale": self.args.scale,
                   "print_": self.print_,
-                  "preview": self.args.preview,
                   "exe": self.exe}
         action = getattr(self, self.args.action)
         action(**kwargs)
@@ -322,23 +311,18 @@ class Effmpeg():
 
     @staticmethod
     def gen_vid(input_=None, output=None, fps=None,  # pylint:disable=unused-argument
-                mux_audio=False, ref_vid=None, preview=False, exe=None, **kwargs):
+                mux_audio=False, ref_vid=None, exe=None, **kwargs):
         """ Generate Video """
-        logger.debug("input: %s, output: %s, fps: %s, mux_audio: %s, ref_vid: '%s', preview: %s, "
-                     "exe: '%s'", input, output, fps, mux_audio, ref_vid, preview, exe)
+        logger.debug("input: %s, output: %s, fps: %s, mux_audio: %s, ref_vid: '%s'exe: '%s'",
+                     input, output, fps, mux_audio, ref_vid, exe)
         filename = Effmpeg.__get_extracted_filename(input_.path)
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_path = os.path.join(input_.path, filename)
         _fps_arg = '-r ' + str(fps) + ' '
         _input_opts += _fps_arg + "-f image2 "
-        _output_opts = _fps_arg
-        if not preview:
-            _output_opts = '-y ' + _output_opts + ' -c:v libx264'
+        _output_opts = '-y ' + _fps_arg + ' -c:v libx264'
         if mux_audio:
             _ref_vid_opts = '-c copy -map 0:0 -map 1:1'
-            if preview:
-                raise ValueError("Preview for gen-vid with audio muxing is "
-                                 "not supported.")
             _output_opts = _ref_vid_opts + ' ' + _output_opts
             _inputs = OrderedDict([(_input_path, _input_opts), (ref_vid.path, None)])
         else:
@@ -380,19 +364,17 @@ class Effmpeg():
 
     @staticmethod
     def rescale(input_=None, output=None, scale=None,  # pylint:disable=unused-argument
-                preview=False, exe=None, **kwargs):
+                exe=None, **kwargs):
         """ Rescale Video """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts = '-vf scale="' + str(scale) + '"'
-        if not preview:
-            _output_opts = '-y ' + _output_opts
+        _output_opts = '-y -vf scale="' + str(scale) + '"'
         _inputs = {input_.path: _input_opts}
         _outputs = {output.path: _output_opts}
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def rotate(input_=None, output=None, degrees=None,  # pylint:disable=unused-argument
-               transpose=None, preview=None, exe=None, **kwargs):
+               transpose=None, exe=None, **kwargs):
         """ Rotate Video """
         if transpose is None and degrees is None:
             raise ValueError("You have not supplied a valid transpose or "
@@ -400,9 +382,7 @@ class Effmpeg():
                              "{}".format(transpose, degrees))
 
         _input_opts = Effmpeg._common_ffmpeg_args[:]
-        _output_opts = '-vf '
-        if not preview:
-            _output_opts = '-y -c:a copy ' + _output_opts
+        _output_opts = '-y -c:a copy -vf '
         _bilinear = ''
         if transpose is not None:
             _output_opts += 'transpose="' + str(transpose) + '"'
@@ -418,28 +398,22 @@ class Effmpeg():
 
     @staticmethod
     def mux_audio(input_=None, output=None, ref_vid=None,  # pylint:disable=unused-argument
-                  preview=None, exe=None, **kwargs):
+                  exe=None, **kwargs):
         """ Mux Audio """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _ref_vid_opts = None
         _output_opts = '-y -c copy -map 0:0 -map 1:1 -shortest'
-        if preview:
-            raise ValueError("Preview with audio muxing is not supported.")
-        # if not preview:
-        #    _output_opts = '-y ' + _output_opts
         _inputs = OrderedDict([(input_.path, _input_opts), (ref_vid.path, _ref_vid_opts)])
         _outputs = {output.path: _output_opts}
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_outputs)
 
     @staticmethod
     def slice(input_=None, output=None, start=None,  # pylint:disable=unused-argument
-              duration=None, preview=None, exe=None, **kwargs):
+              duration=None, exe=None, **kwargs):
         """ Slice Video """
         _input_opts = Effmpeg._common_ffmpeg_args[:]
         _input_opts += "-ss " + start
         _output_opts = "-t " + duration + " "
-        if not preview:
-            _output_opts = '-y ' + _output_opts + "-vcodec copy -acodec copy"
         _inputs = {input_.path: _input_opts}
         _output = {output.path: _output_opts}
         Effmpeg.__run_ffmpeg(exe=exe, inputs=_inputs, outputs=_output)
