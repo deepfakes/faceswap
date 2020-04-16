@@ -575,6 +575,30 @@ class FaceUpdate():
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
+    def landmarks_rotate(self, frame_index, face_index, angle, center):
+        """ Rotate the landmarks on an Extract Box rotate for the
+        :class:`~lib.faces_detect.DetectedFace` object at the given frame and face indices for the
+        given angle from the given center point.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame that the face is being set for
+        face_index: int
+            The face index within the frame
+        angle: :class:`numpy.ndarray`
+            The angle, in radians to rotate the points by
+        center: :class:`numpy.ndarray`
+            The center point of the Landmark's Extract Box
+        """
+        face = self._current_faces_at_index(frame_index)[face_index]
+        rot_mat = cv2.getRotationMatrix2D(tuple(center), angle, 1.)
+        face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
+                                          rot_mat).squeeze()
+        self._last_updated_face = (frame_index, face_index)
+        self._tk_edited.set(True)
+        self._globals.tk_update.set(True)
+
     def landmarks_scale(self, frame_index, face_index, scale, center):
         """ Scale the landmarks on an Extract Box resize for the
         :class:`~lib.faces_detect.DetectedFace` object at the given frame and face indices from the
