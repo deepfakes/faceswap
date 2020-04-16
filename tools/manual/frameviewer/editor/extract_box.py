@@ -120,7 +120,7 @@ class ExtractBox(Editor):
         """ Check whether the cursor is over a corner anchor.
 
         If it is, set the appropriate cursor type and set :attr:`_mouse_location` to
-        ("anchor", (`face index`, `anchor index`)
+        ("anchor", `face index`)
 
         Returns
         -------
@@ -139,7 +139,7 @@ class ExtractBox(Editor):
                               and "face_" not in tag).split("_")[-1])
 
         self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
-        self._mouse_location = ("anchor", "{}_{}".format(face_idx, corner_idx))
+        self._mouse_location = ("anchor", face_idx)
         return True
 
     def _check_cursor_box(self):
@@ -219,16 +219,10 @@ class ExtractBox(Editor):
         if self._mouse_location is None:
             self._drag_data = dict()
             self._drag_callback = None
-        elif self._mouse_location[0] == "anchor":
-            corner_idx = int(self._mouse_location[1].split("_")[-1])
-            self._drag_data["corner"] = corner_idx
-            self._drag_callback = self._resize
-        elif self._mouse_location[0] == "rotate":
-            self._drag_data["current_location"] = np.array((event.x, event.y))
-            self._drag_callback = self._rotate
-        else:
-            self._drag_data["current_location"] = (event.x, event.y)
-            self._drag_callback = self._move
+            return
+        self._drag_data["current_location"] = np.array((event.x, event.y))
+        callback = dict(anchor=self._resize, rotate=self._rotate, box=self._move)
+        self._drag_callback = callback[self._mouse_location[0]]
 
     def _move(self, event):
         """ Updates the underlying detected faces landmarks based on mouse dragging delta,
@@ -257,48 +251,29 @@ class ExtractBox(Editor):
         event: :class:`tkinter.Event`
             The tkinter mouse event.
         """
-        face_idx = int(self._mouse_location[1].split("_")[0])
+        face_idx = self._mouse_location[1]
         face_tag = "eb_box_face_{}".format(face_idx)
-
+        position = np.array((event.x, event.y))
         box = np.array(self._canvas.coords(face_tag))
-        # TODO Stop the drag from going too small. Just check for if drag takes to
-        # within 10 of center
         center = np.array((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
+
+        # TODO Prevent from being able to drag past the center point
+        start = self._drag_data["current_location"]
+        distance = (np.linalg.norm(center - start) - np.linalg.norm(center - position)) * 2
         size = ((box[2] - box[0]) ** 2 + (box[3] - box[1]) ** 2) ** 0.5
-        amount = self._get_amount(box, event)
-        scale = 1 - (amount / size)
-        logger.trace("face_index: %s, corner_index: %s, box: %s, amount: %s, center: %s, "
-                     "size: %s, scale: %s", face_idx, self._drag_data["corner"], box, amount,
-                     center, size, scale)
+        scale = 1 - (distance / size)
+        if size < 20 and scale < 1:
+            # Don't over shrink the box
+            return
+
+        logger.trace("face_index: %s, center: %s, start: %s, position: %s, distance: %s, "
+                     "size: %s, scale: %s", face_idx, center, start, position, distance, size,
+                     scale)
         self._det_faces.update.landmarks_scale(self._globals.frame_index,
                                                face_idx,
                                                scale,
                                                self.scale_from_display(center))
-
-    def _get_amount(self, box, event):
-        """ Get the amount of movement from the mouse in a positive or negative direction
-        for enlarging or shrinking.
-
-        Parameters
-        ----------
-        box: :class:`numpy.ndarray`
-            The polygon coordinates for the extract box
-        event: :class:`tkinter.Event`
-            The current tkinter mouse event
-
-        Returns
-        -------
-        int
-            The amount of movement the mouse has made from the initial corner point
-        """
-        cnr_idx = self._drag_data["corner"]
-        # Obtain the X, Y shift from the correct corner
-        shift = box[2 * cnr_idx: (2 * cnr_idx) + 2] - np.array((event.x, event.y))
-        shrink = (cnr_idx in (0, 1) and shift[0] > 0) or (cnr_idx in (2, 3) and shift[0] < 0)
-        # Obtain the maximum X, Y value for either positive or negative direction
-        max_movement = max(abs(shift)) / 2
-        max_movement *= -1 if shrink else 1
-        return max_movement
+        self._drag_data["current_location"] = position
 
     def _rotate(self, event):
         """ Rotates the landmarks contained within an extract box on a corner rotate drag event.
