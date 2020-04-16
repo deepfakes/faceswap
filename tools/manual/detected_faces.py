@@ -575,6 +575,28 @@ class FaceUpdate():
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
+    def landmarks_scale(self, frame_index, face_index, scale, center):
+        """ Scale the landmarks on an Extract Box resize for the
+        :class:`~lib.faces_detect.DetectedFace` object at the given frame and face indices from the
+        given center point.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame that the face is being set for
+        face_index: int
+            The face index within the frame
+        scale: float
+            The amount to scale the landmarks by
+        center: :class:`numpy.ndarray`
+            The center point of the Landmark's Extract Box
+        """
+        face = self._current_faces_at_index(frame_index)[face_index]
+        face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
+        self._last_updated_face = (frame_index, face_index)
+        self._tk_edited.set(True)
+        self._globals.tk_update.set(True)
+
     def mask(self, frame_index, face_index, mask, mask_type):
         """ Update the mask on an edit for the :class:`~lib.faces_detect.DetectedFace` object at
         the given frame and face indices, for the given mask and mask type.

@@ -33,6 +33,14 @@ class ExtractBox(Editor):
         super().__init__(canvas, detected_faces,
                          control_text=control_text, key_bindings=key_bindings)
 
+    @property
+    def _corner_order(self):
+        """ dict: The position index of bounding box corners """
+        return {0: ("top", "left"),
+                3: ("top", "right"),
+                2: ("bottom", "right"),
+                1: ("bottom", "left")}
+
     def update_annotation(self):
         """ Draw the latest Extract Boxes around the faces. """
         color = self._control_color
@@ -51,7 +59,41 @@ class ExtractBox(Editor):
             self._object_tracker("eb_text", "text", idx, top_left, kwargs)
             kwargs = dict(fill="", outline=color, width=1)
             self._object_tracker("eb_box", "polygon", idx, box, kwargs)
+            self._update_anchor_annotation(idx, box, color)
         logger.trace("Updated extract box annotations")
+
+    def _update_anchor_annotation(self, face_index, extract_box, color):
+        """ Update the anchor annotations for each corner of the extract box.
+
+        The anchors only display when the extract box editor is active.
+
+        Parameters
+        ----------
+        face_index: int
+            The index of the face being annotated
+        extract_box: :class:`numpy.ndarray`
+            The scaled extract box to get the corner anchors for
+        color: str
+            The hex color of the extract box line
+        """
+        if not self._is_active or self._globals.is_zoomed:
+            self.hide_annotation("eb_anc_dsp")
+            self.hide_annotation("eb_anc_grb")
+            return
+        fill_color = "gray"
+        activefill_color = "white" if self._is_active else ""
+        anchor_points = self._get_anchor_points((extract_box[:2],
+                                                 extract_box[2:4],
+                                                 extract_box[4:6],
+                                                 extract_box[6:]))
+        for idx, (anc_dsp, anc_grb) in enumerate(zip(*anchor_points)):
+            dsp_kwargs = dict(outline=color, fill=fill_color, width=1)
+            grb_kwargs = dict(outline="", fill="", width=1, activefill=activefill_color)
+            dsp_key = "eb_anc_dsp_{}".format(idx)
+            grb_key = "eb_anc_grb_{}".format(idx)
+            self._object_tracker(dsp_key, "oval", face_index, anc_dsp, dsp_kwargs)
+            self._object_tracker(grb_key, "oval", face_index, anc_grb, grb_kwargs)
+        logger.trace("Updated extract box anchor annotations")
 
     # << MOUSE HANDLING >>
     # Mouse cursor display
@@ -64,6 +106,8 @@ class ExtractBox(Editor):
         event: :class:`tkinter.Event`
             The current tkinter mouse event
         """
+        if self._check_cursor_anchors():
+            return
         extract_boxes = set(self._canvas.find_withtag("eb_box"))
         item_ids = set(self._canvas.find_withtag("current")).intersection(extract_boxes)
         if not item_ids:
@@ -72,9 +116,35 @@ class ExtractBox(Editor):
         else:
             item_id = list(item_ids)[0]
             self._canvas.config(cursor="fleur")
-            self._mouse_location = next(int(tag.split("_")[-1])
-                                        for tag in self._canvas.gettags(item_id)
-                                        if tag.startswith("face_"))
+            self._mouse_location = ("box", next(int(tag.split("_")[-1])
+                                                for tag in self._canvas.gettags(item_id)
+                                                if tag.startswith("face_")))
+
+    def _check_cursor_anchors(self):
+        """ Check whether the cursor is over a corner anchor.
+
+        If it is, set the appropriate cursor type and set :attr:`_mouse_location` to
+        ("anchor", (`face index`, `anchor index`)
+
+        Returns
+        -------
+        bool
+            ``True`` if cursor is over an anchor point otherwise ``False``
+        """
+        anchors = set(self._canvas.find_withtag("eb_anc_grb"))
+        item_ids = set(self._canvas.find_withtag("current")).intersection(anchors)
+        if not item_ids:
+            return False
+        item_id = list(item_ids)[0]
+        tags = self._canvas.gettags(item_id)
+        face_idx = int(next(tag for tag in tags if tag.startswith("face_")).split("_")[-1])
+        corner_idx = int(next(tag for tag in tags
+                              if tag.startswith("eb_anc_grb_")
+                              and "face_" not in tag).split("_")[-1])
+
+        self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
+        self._mouse_location = ("anchor", "{}_{}".format(face_idx, corner_idx))
+        return True
 
     # Mouse click actions
     def set_mouse_click_actions(self):
@@ -86,8 +156,7 @@ class ExtractBox(Editor):
     def _drag_start(self, event):
         """ The action to perform when the user starts clicking and dragging the mouse.
 
-        Moves the extract box and the underlying 68 point landmarks to the dragged to
-        location.
+        Selects the correct extract box action based on the initial cursor position.
 
         Parameters
         ----------
@@ -96,9 +165,15 @@ class ExtractBox(Editor):
         """
         if self._mouse_location is None:
             self._drag_data = dict()
+            self._drag_callback = None
             return
-        self._drag_data["current_location"] = (event.x, event.y)
-        self._drag_callback = self._move
+        if self._mouse_location[0] == "anchor":
+            corner_idx = int(self._mouse_location[1].split("_")[-1])
+            self._drag_data["corner"] = corner_idx
+            self._drag_callback = self._resize
+        else:
+            self._drag_data["current_location"] = (event.x, event.y)
+            self._drag_callback = self._move
 
     def _move(self, event):
         """ Updates the underlying detected faces landmarks based on mouse dragging delta,
@@ -115,14 +190,68 @@ class ExtractBox(Editor):
         shift_y = event.y - self._drag_data["current_location"][1]
         scaled_shift = self.scale_from_display(np.array((shift_x, shift_y)), do_offset=False)
         self._det_faces.update.landmarks(self._globals.frame_index,
-                                         self._mouse_location,
+                                         self._mouse_location[1],
                                          *scaled_shift)
         self._drag_data["current_location"] = (event.x, event.y)
+
+    def _resize(self, event):
+        """ Resizes the landmarks contained within an extract box on a corner anchor drag event.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event.
+        """
+        face_idx = int(self._mouse_location[1].split("_")[0])
+        face_tag = "eb_box_face_{}".format(face_idx)
+
+        box = np.array(self._canvas.coords(face_tag))
+        # TODO Stop the drag from going too small. Just check for if drag takes to
+        # within 10 of center
+        center = np.array((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
+        size = ((box[2] - box[0]) ** 2 + (box[3] - box[1]) ** 2) ** 0.5
+        amount = self._get_amount(box, event)
+        scale = 1 - (amount / size)
+        logger.trace("face_index: %s, corner_index: %s, box: %s, amount: %s, center: %s, "
+                     "size: %s, scale: %s", face_idx, self._drag_data["corner"], box, amount,
+                     center, size, scale)
+        self._det_faces.update.landmarks_scale(self._globals.frame_index,
+                                               face_idx,
+                                               scale,
+                                               self.scale_from_display(center))
+
+    def _get_amount(self, box, event):
+        """ Get the amount of movement from the mouse in a positive or negative direction
+        for enlarging or shrinking.
+
+        Parameters
+        ----------
+        box: :class:`numpy.ndarray`
+            The polygon coordinates for the extract box
+        event: :class:`tkinter.Event`
+            The current tkinter mouse event
+
+        Returns
+        -------
+        int
+            The amount of movement the mouse has made from the initial corner point
+        """
+        cnr_idx = self._drag_data["corner"]
+        # Obtain the X, Y shift from the correct corner
+        shift = box[2 * cnr_idx: (2 * cnr_idx) + 2] - np.array((event.x, event.y))
+        shrink = (cnr_idx in (0, 1) and shift[0] > 0) or (cnr_idx in (2, 3) and shift[0] < 0)
+        # Obtain the maximum X, Y value for either positive or negative direction
+        max_movement = max(abs(shift)) / 2
+        max_movement *= -1 if shrink else 1
+        return max_movement
+
+    def _get_scale(self):
+        """ Obtain the scaling for the extract box resize """
 
     def _context_menu(self, event):
         """ Create a right click context menu to delete the alignment that is being
         hovered over. """
-        if self._mouse_location is None:
+        if self._mouse_location is None or self._mouse_location[0] != "box":
             return
         self._right_click_menu.popup(event)
 
@@ -135,6 +264,6 @@ class ExtractBox(Editor):
         args: tuple (unused)
             The event parameter is passed in by the hot key binding, so args is required
         """
-        if self._mouse_location is None:
+        if self._mouse_location is None or self._mouse_location[0] != "box":
             return
-        self._det_faces.update.delete(self._globals.frame_index, self._mouse_location)
+        self._det_faces.update.delete(self._globals.frame_index, self._mouse_location[1])

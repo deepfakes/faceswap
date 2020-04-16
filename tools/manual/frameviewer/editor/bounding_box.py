@@ -126,7 +126,10 @@ class BoundingBox(Editor):
             return
         fill_color = "gray"
         activefill_color = "white" if self._is_active else ""
-        anchor_points = self._get_anchor_points(self._corners_from_coords(bounding_box))
+        anchor_points = self._get_anchor_points(((bounding_box[0], bounding_box[1]),
+                                                 (bounding_box[2], bounding_box[1]),
+                                                 (bounding_box[2], bounding_box[3]),
+                                                 (bounding_box[0], bounding_box[3])))
         for idx, (anc_dsp, anc_grb) in enumerate(zip(*anchor_points)):
             dsp_kwargs = dict(outline=color, fill=fill_color, width=1)
             grb_kwargs = dict(outline="", fill="", width=1, activefill=activefill_color)
@@ -135,51 +138,6 @@ class BoundingBox(Editor):
             self._object_tracker(dsp_key, "oval", face_index, anc_dsp, dsp_kwargs)
             self._object_tracker(grb_key, "oval", face_index, anc_grb, grb_kwargs)
         logger.trace("Updated bounding box anchor annotations")
-
-    @staticmethod
-    def _corners_from_coords(bounding_box):
-        """ Retrieve the (x, y) co-ordinates of each corner from a bounding box.
-
-        Parameters
-        bounding_box: :class:`numpy.ndarray`, list or tuple
-            The (left, top), (right, bottom) (x, y) coordinates of the bounding box
-
-        Returns
-        -------
-        The (`top-left`, `top-right`, `bottom-right`, `bottom-left`) (x, y) coordinates of the
-        bounding box
-        """
-        return ((bounding_box[0], bounding_box[1]), (bounding_box[2], bounding_box[1]),
-                (bounding_box[2], bounding_box[3]), (bounding_box[0], bounding_box[3]))
-
-    @staticmethod
-    def _get_anchor_points(bounding_box):
-        """ Retrieve the (x, y) co-ordinates for each of the 4 corners of a bounding box's anchors
-        for both the displayed anchors and the anchor grab locations.
-
-        Parameters
-        ----------
-        bounding_box: tuple
-            The (`top-left`, `top-right`, `bottom-right`, `bottom-left`) (x, y) coordinates of the
-            bounding box
-
-        Returns
-            display_anchors: tuple
-                The (`top`, `left`, `bottom`, `right`) co-ordinates for each circle at each point
-                of the bounding box corners, sized for display
-            grab_anchors: tuple
-                The (`top`, `left`, `bottom`, `right`) co-ordinates for each circle at each point
-                of the bounding box corners, at a larger size for grabbing with a mouse
-        """
-        radius = 3
-        grab_radius = radius * 3
-        display_anchors = tuple((cnr[0] - radius, cnr[1] - radius,
-                                 cnr[0] + radius, cnr[1] + radius)
-                                for cnr in bounding_box)
-        grab_anchors = tuple((cnr[0] - grab_radius, cnr[1] - grab_radius,
-                              cnr[0] + grab_radius, cnr[1] + grab_radius)
-                             for cnr in bounding_box)
-        return display_anchors, grab_anchors
 
     # << MOUSE HANDLING >>
     # Mouse cursor display

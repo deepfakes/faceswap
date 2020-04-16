@@ -140,6 +140,35 @@ class Editor():
             self._canvas.key_bindings.setdefault(key, dict())["bound_to"] = None
             self._canvas.key_bindings[key][self.__class__.__name__] = method
 
+    @staticmethod
+    def _get_anchor_points(bounding_box):
+        """ Retrieve the (x, y) co-ordinates for each of the 4 corners of a bounding box's anchors
+        for both the displayed anchors and the anchor grab locations.
+
+        Parameters
+        ----------
+        bounding_box: tuple
+            The (`top-left`, `top-right`, `bottom-right`, `bottom-left`) (x, y) coordinates of the
+            bounding box
+
+        Returns
+            display_anchors: tuple
+                The (`top`, `left`, `bottom`, `right`) co-ordinates for each circle at each point
+                of the bounding box corners, sized for display
+            grab_anchors: tuple
+                The (`top`, `left`, `bottom`, `right`) co-ordinates for each circle at each point
+                of the bounding box corners, at a larger size for grabbing with a mouse
+        """
+        radius = 3
+        grab_radius = radius * 3
+        display_anchors = tuple((cnr[0] - radius, cnr[1] - radius,
+                                 cnr[0] + radius, cnr[1] + radius)
+                                for cnr in bounding_box)
+        grab_anchors = tuple((cnr[0] - grab_radius, cnr[1] - grab_radius,
+                              cnr[0] + grab_radius, cnr[1] + grab_radius)
+                             for cnr in bounding_box)
+        return display_anchors, grab_anchors
+
     def _get_zoomed_roi(self):
         """ Get the Region of Interest for when the face is zoomed.
 
