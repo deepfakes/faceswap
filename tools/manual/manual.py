@@ -520,9 +520,9 @@ class Aligner():
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
         # TODO
-        # self._aligners = {"cv2-dnn": None}
+        # self._aligners = {"cv2-dnn": None, "mask": None}
         # self._aligner = "cv2-dnn"
-        self._aligners = {"cv2-dnn": None, "FAN": None}
+        self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
         self._aligner = "FAN"
         self._det_faces = None
         self._frame_index = None
@@ -573,11 +573,13 @@ class Aligner():
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # Make sure non-GPU aligner is allocated first
-        for model in sorted(self._aligners, key=str.casefold):
+        for model in ("mask", "cv2-dnn", "FAN"):
             logger.debug("Initializing aligner: %s", model)
-            aligner = Extractor(None, model, ["components", "extended"],
+            plugin = None if model == "mask" else model
+            aligner = Extractor(None, plugin, ["components", "extended"],
                                 multiprocess=True, normalize_method="hist")
-            aligner.set_batchsize("align", 1)  # Set the batchsize to 1
+            if plugin:
+                aligner.set_batchsize("align", 1)  # Set the batchsize to 1
             aligner.launch()
             logger.debug("Initialized %s Extractor", model)
             self._aligners[model] = aligner
@@ -628,6 +630,34 @@ class Aligner():
         logger.trace("landmarks: %s", detected_face.landmarks_xy)
         return detected_face.landmarks_xy
 
+    def get_masks(self, frame_index, face_index):
+        """ Feed the aligned face into the mask pipeline and retrieve the updated masks.
+
+        The face to feed into the aligner is generated from the given frame and face indices.
+        This is to be called when a manual update is done on the landmarks, and new masks need
+        generating
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index to extract the aligned face for
+        face_index: int
+            The face index within the current frame to extract the face for
+
+        Returns
+        -------
+        dict
+            The updated masks
+        """
+        logger.trace("frame_index: %s, face_index: %s", frame_index, face_index)
+        self._frame_index = frame_index
+        self._face_index = face_index
+        self._aligner = "mask"
+        self._in_queue.put(self._feed_face)
+        detected_face = next(self._aligners["mask"].detected_faces()).detected_faces[0]
+        logger.debug("mask: %s", detected_face.mask)
+        return detected_face.mask
+
     def set_normalization_method(self, method):
         """ Change the normalization method for faces fed into the aligner.
         The normalization method is user adjustable from the GUI. When this method is triggered
@@ -639,7 +669,9 @@ class Aligner():
             The normalization method to use
         """
         logger.debug("Setting normalization method to: '%s'", method)
-        for aligner in self._aligners.values():
+        for plugin, aligner in self._aligners.items():
+            if plugin == "mask":
+                continue
             aligner.set_aligner_normalization_method(method)
 
 

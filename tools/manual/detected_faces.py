@@ -542,6 +542,7 @@ class FaceUpdate():
             face.landmarks_xy[landmark_index] = landmark
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
+        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
@@ -549,7 +550,7 @@ class FaceUpdate():
     def landmarks(self, frame_index, face_index, shift_x, shift_y):
         """ Shift all of the landmarks and bounding box for the
         :class:`~lib.faces_detect.DetectedFace` object at the given frame and face indices by the
-        given x and y values.
+        given x and y values and update the masks.
 
         Parameters
         ----------
@@ -571,6 +572,7 @@ class FaceUpdate():
         face.x += shift_x
         face.y += shift_y
         face.landmarks_xy += (shift_x, shift_y)
+        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
@@ -595,6 +597,7 @@ class FaceUpdate():
         rot_mat = cv2.getRotationMatrix2D(tuple(center), angle, 1.)
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
+        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
@@ -617,6 +620,7 @@ class FaceUpdate():
         """
         face = self._current_faces_at_index(frame_index)[face_index]
         face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
+        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
