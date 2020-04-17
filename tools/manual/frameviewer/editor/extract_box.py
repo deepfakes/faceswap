@@ -120,7 +120,7 @@ class ExtractBox(Editor):
         """ Check whether the cursor is over a corner anchor.
 
         If it is, set the appropriate cursor type and set :attr:`_mouse_location` to
-        ("anchor", `face index`)
+        ("anchor", `face index`, `corner_index`)
 
         Returns
         -------
@@ -139,7 +139,7 @@ class ExtractBox(Editor):
                               and "face_" not in tag).split("_")[-1])
 
         self._canvas.config(cursor="{}_{}_corner".format(*self._corner_order[corner_idx]))
-        self._mouse_location = ("anchor", face_idx)
+        self._mouse_location = ("anchor", face_idx, corner_idx)
         return True
 
     def _check_cursor_box(self):
@@ -256,24 +256,86 @@ class ExtractBox(Editor):
         position = np.array((event.x, event.y))
         box = np.array(self._canvas.coords(face_tag))
         center = np.array((sum(box[0::2]) / 4, sum(box[1::2]) / 4))
+        if not self._check_in_bounds(center, box, position):
+            logger.trace("Drag out of bounds. Not updating")
+            self._drag_data["current_location"] = position
+            return
 
-        # TODO Prevent from being able to drag past the center point
         start = self._drag_data["current_location"]
         distance = (np.linalg.norm(center - start) - np.linalg.norm(center - position)) * 2
         size = ((box[2] - box[0]) ** 2 + (box[3] - box[1]) ** 2) ** 0.5
         scale = 1 - (distance / size)
-        if size < 20 and scale < 1:
-            # Don't over shrink the box
-            return
-
         logger.trace("face_index: %s, center: %s, start: %s, position: %s, distance: %s, "
                      "size: %s, scale: %s", face_idx, center, start, position, distance, size,
                      scale)
+        if size * scale < 20:
+            # Don't over shrink the box
+            logger.trace("Box would size to less than 20px. Not updating")
+            self._drag_data["current_location"] = position
+            return
+
         self._det_faces.update.landmarks_scale(self._globals.frame_index,
                                                face_idx,
                                                scale,
                                                self.scale_from_display(center))
         self._drag_data["current_location"] = position
+
+    def _check_in_bounds(self, center, box, position):
+        """ Ensure that a resize drag does is not going to cross the center point from it's initial
+        corner location.
+
+        Parameters
+        ----------
+        center: :class:`numpy.ndarray`
+            The (`x`, `y`) center point of the face extract box
+        box: :class:`numpy.ndarray`
+            The canvas coordinates of the extract box polygon's corners
+        position: : class:`numpy.ndarray`
+            The current (`x`, `y`) position of the mouse cursor
+
+        Returns
+        -------
+        bool
+            ``True`` if the drag operation does not cross the center point otherwise ``False``
+        """
+        # Generate lines that span the full frame (x and y) along the center point
+        center_x = np.array(((center[0], 0), (center[0], self._globals.frame_display_dims[1])))
+        center_y = np.array(((0, center[1]), (self._globals.frame_display_dims[0], center[1])))
+
+        # Generate a line coming from the current corner location to the current cursor position
+        full_line = np.array((box[self._mouse_location[2] * 2:self._mouse_location[2] * 2 + 2],
+                              position))
+        logger.trace("center: %s, center_x_line: %s, center_y_line: %s, full_line: %s",
+                     center, center_x, center_y, full_line)
+
+        # Check whether any of the generated lines intersect
+        for line in (center_x, center_y):
+            if (self._is_ccw(full_line[0], *line) != self._is_ccw(full_line[1], *line) and
+                    self._is_ccw(*full_line, line[0]) != self._is_ccw(*full_line, line[1])):
+                logger.trace("line: %s crosses center: %s", full_line, center)
+                return False
+        return True
+
+    @staticmethod
+    def _is_ccw(point_a, point_b, point_c):
+        """ Check whether 3 points are counter clockwise from each other.
+
+        Parameters
+        ----------
+        point_a: :class:`numpy.ndarray`
+            The first (`x`, `y`) point to check for counter clockwise ordering
+        point_b: :class:`numpy.ndarray`
+            The second (`x`, `y`) point to check for counter clockwise ordering
+        point_c: :class:`numpy.ndarray`
+            The third (`x`, `y`) point to check for counter clockwise ordering
+
+        Returns
+        -------
+        bool
+            ``True`` if the 3 points are provided in counter clockwise order otherwise ``False``
+        """
+        return ((point_c[1] - point_a[1]) * (point_b[0] - point_a[0]) >
+                (point_b[1] - point_a[1]) * (point_c[0] - point_a[0]))
 
     def _rotate(self, event):
         """ Rotates the landmarks contained within an extract box on a corner rotate drag event.
