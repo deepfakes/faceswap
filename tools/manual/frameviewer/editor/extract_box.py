@@ -6,6 +6,7 @@ import platform
 import numpy as np
 
 from lib.gui.custom_widgets import RightClickMenu
+from lib.gui.utils import get_config
 from ._base import Editor, logger
 
 
@@ -262,7 +263,8 @@ class ExtractBox(Editor):
             return
 
         start = self._drag_data["current_location"]
-        distance = (np.linalg.norm(center - start) - np.linalg.norm(center - position)) * 2
+        distance = ((np.linalg.norm(center - start) - np.linalg.norm(center - position))
+                    * get_config().scaling_factor)
         size = ((box[2] - box[0]) ** 2 + (box[3] - box[1]) ** 2) ** 0.5
         scale = 1 - (distance / size)
         logger.trace("face_index: %s, center: %s, start: %s, position: %s, distance: %s, "

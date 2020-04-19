@@ -519,9 +519,6 @@ class Aligner():
     def __init__(self, tk_globals):
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
-        # TODO
-        # self._aligners = {"cv2-dnn": None, "mask": None}
-        # self._aligner = "cv2-dnn"
         self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
         self._aligner = "FAN"
         self._det_faces = None
@@ -573,6 +570,8 @@ class Aligner():
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # Make sure non-GPU aligner is allocated first
+        # TODO
+        # for model in ("mask", "cv2-dnn"):
         for model in ("mask", "cv2-dnn", "FAN"):
             logger.debug("Initializing aligner: %s", model)
             plugin = None if model == "mask" else model
@@ -668,6 +667,8 @@ class Aligner():
         method: str
             The normalization method to use
         """
+        # TODO
+        # return
         logger.debug("Setting normalization method to: '%s'", method)
         for plugin, aligner in self._aligners.items():
             if plugin == "mask":
