@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-from lib.cli import FaceSwapArgs
-from lib.cli import (DirOrFileFullPaths, DirFullPaths, FileFullPaths, Radio, Slider)
+from lib.cli.args import FaceSwapArgs
+from lib.cli.actions import (DirOrFileFullPaths, DirFullPaths, FileFullPaths, Radio, Slider)
 from plugins.plugin_loader import PluginLoader
 
 _HELPTEXT = "This command lets you generate masks for existing alignments."

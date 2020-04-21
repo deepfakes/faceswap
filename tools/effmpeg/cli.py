@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-from lib.cli import FaceSwapArgs
-from lib.cli import ContextFullPaths, FileFullPaths, Radio
+from lib.cli.args import FaceSwapArgs
+from lib.cli.actions import ContextFullPaths, FileFullPaths, Radio
 from lib.utils import _image_extensions
 
 _HELPTEXT = "This command allows you to easily execute common ffmpeg tasks."
