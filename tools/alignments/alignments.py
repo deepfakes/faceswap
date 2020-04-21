@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Tools for manipulating the alignments seralized file """
+""" Tools for manipulating the alignments serialized file """
 import sys
 import logging
 

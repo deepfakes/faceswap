@@ -6,7 +6,7 @@ import sys
 from importlib import import_module
 
 # Importing the various tools
-from lib.cli import FullHelpArgumentParser
+from lib.cli.args import FullHelpArgumentParser
 
 # Python version check
 if sys.version_info[0] < 3:

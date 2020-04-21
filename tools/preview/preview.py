@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image, ImageTk
 
 from lib.aligner import Extract as AlignerExtract
-from lib.cli import ConvertArgs
+from lib.cli.args import ConvertArgs
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import ControlPanel, ControlPanelOption
