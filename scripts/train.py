@@ -139,7 +139,7 @@ class Train():
     def process(self):
         """ The entry point for triggering the Training Process.
 
-        Should only be called from  :class:`lib.cli.ScriptExecutor`
+        Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
         """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self._args.model_dir)

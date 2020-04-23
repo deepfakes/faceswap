@@ -679,3 +679,84 @@ class Tooltip:
         if topwidget:
             topwidget.destroy()
         self._topwidget = None
+
+
+class MultiOption(ttk.Checkbutton):  # pylint: disable=too-many-ancestors
+    """ Similar to the standard :class:`ttk.Radio` widget, but with the ability to select
+    multiple pre-defined options. Selected options are generated as `nargs` for the argument
+    parser to consume.
+
+    Parameters
+    ----------
+    parent: :class:`ttk.Frame`
+        The tkinter parent widget for the check button
+    value: str
+        The raw option value for this check button
+    variable: :class:`tkinter.StingVar`
+        The master variable for the group of check buttons that this check button will belong to.
+        The output of this variable will be a string containing a space separated list of the
+        selected check button options
+    """
+    def __init__(self, parent, value, variable, **kwargs):
+        self._tk_var = tk.BooleanVar()
+        self._tk_var.set(False)
+        super().__init__(parent, variable=self._tk_var, **kwargs)
+        self._value = value
+        self._master_variable = variable
+        self._tk_var.trace("w", self._on_update)
+        self._master_variable.trace("w", self._on_master_update)
+
+    @property
+    def _master_list(self):
+        """ list: The contents of the check box group's :attr:`_master_variable` in list form.
+        Selected check boxes will appear in this list. """
+        retval = self._master_variable.get().split()
+        logger.trace(retval)
+        return retval
+
+    @property
+    def _master_needs_update(self):
+        """ bool: ``True`` if :attr:`_master_variable` requires updating otherwise ``False``. """
+        active = self._tk_var.get()
+        retval = ((active and self._value not in self._master_list) or
+                  (not active and self._value in self._master_list))
+        logger.trace(retval)
+        return retval
+
+    def _on_update(self, *args):  # pylint: disable=unused-argument
+        """ Update the master variable on a check button change.
+
+        The value for this checked option is added or removed from the :attr:`_master_variable`
+        on a ``True``, ``False`` change for this check button.
+
+        Parameters
+        ----------
+        args: tuple
+            Required for variable callback, but unused
+        """
+        if not self._master_needs_update:
+            return
+        new_vals = self._master_list + [self._value] if self._tk_var.get() else [
+            val
+            for val in self._master_list
+            if val != self._value]
+        val = " ".join(new_vals)
+        logger.trace("Setting master variable to: %s", val)
+        self._master_variable.set(val)
+
+    def _on_master_update(self, *args):  # pylint: disable=unused-argument
+        """ Update the check button on a master variable change (e.g. load .fsw file in the GUI).
+
+        The value for this option is set to ``True`` or ``False`` depending on it's existence in
+        the :attr:`_master_variable`
+
+        Parameters
+        ----------
+        args: tuple
+            Required for variable callback, but unused
+        """
+        if not self._master_needs_update:
+            return
+        state = self._value in self._master_list
+        logger.trace("Setting '%s' to %s", self._value, state)
+        self._tk_var.set(state)

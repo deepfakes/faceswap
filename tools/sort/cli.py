@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-from lib.cli import FaceSwapArgs
-from lib.cli import DirFullPaths, SaveFileFullPaths, Radio, Slider
+from lib.cli.args import FaceSwapArgs
+from lib.cli.actions import DirFullPaths, SaveFileFullPaths, Radio, Slider
 
 _HELPTEXT = "This command lets you sort images using various methods."
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-from lib.cli import FaceSwapArgs
-from lib.cli import DirFullPaths
+from lib.cli.args import FaceSwapArgs
+from lib.cli.actions import DirFullPaths
 
 _HELPTEXT = "This command lets you restore models from backup."
 

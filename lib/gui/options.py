@@ -9,7 +9,7 @@ import re
 import sys
 from collections import OrderedDict
 
-from lib import cli
+from lib.cli import actions, args as cli
 from .utils import get_images
 from .control_helper import ControlPanelOption
 
@@ -121,7 +121,8 @@ class CliOptions():
                 group=opt.get("group", None),
                 default=opt.get("default", None),
                 choices=opt.get("choices", None),
-                is_radio=opt.get("action", "") == cli.Radio,
+                is_radio=opt.get("action", "") == actions.Radio,
+                is_multi_option=opt.get("action", "") == actions.MultiOption,
                 rounding=self.get_rounding(opt),
                 min_max=opt.get("min_max", None),
                 sysbrowser=self.get_sysbrowser(opt, command_options, command),
@@ -167,13 +168,12 @@ class CliOptions():
     def get_sysbrowser(self, option, options, command):
         """ Return the system file browser and file types if required else None """
         action = option.get("action", None)
-        if action not in (cli.FullPaths,
-                          cli.DirFullPaths,
-                          cli.FileFullPaths,
-                          cli.FilesFullPaths,
-                          cli.DirOrFileFullPaths,
-                          cli.SaveFileFullPaths,
-                          cli.ContextFullPaths):
+        if action not in (actions.DirFullPaths,
+                          actions.FileFullPaths,
+                          actions.FilesFullPaths,
+                          actions.DirOrFileFullPaths,
+                          actions.SaveFileFullPaths,
+                          actions.ContextFullPaths):
             return None
 
         retval = dict()
@@ -182,15 +182,15 @@ class CliOptions():
             self.expand_action_option(option, options)
             action_option = option["action_option"]
         retval["filetypes"] = option.get("filetypes", "default")
-        if action == cli.FileFullPaths:
+        if action == actions.FileFullPaths:
             retval["browser"] = ["load"]
-        elif action == cli.FilesFullPaths:
+        elif action == actions.FilesFullPaths:
             retval["browser"] = ["multi_load"]
-        elif action == cli.SaveFileFullPaths:
+        elif action == actions.SaveFileFullPaths:
             retval["browser"] = ["save"]
-        elif action == cli.DirOrFileFullPaths:
+        elif action == actions.DirOrFileFullPaths:
             retval["browser"] = ["folder", "load"]
-        elif action == cli.ContextFullPaths and action_option:
+        elif action == actions.ContextFullPaths and action_option:
             retval["browser"] = ["context"]
             retval["command"] = command
             retval["action_option"] = action_option
