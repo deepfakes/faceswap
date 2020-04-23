@@ -126,7 +126,7 @@ def get_image_paths(directory):
 
 def convert_to_secs(*args):
     """ converts a time to second. Either convert_to_secs(min, secs) or
-        convert_to_secs(hours, mins, secs). """
+        convert_to_secs(hours, minutes, secs). """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("from time: %s", args)
     retval = 0.0
@@ -174,11 +174,16 @@ def backup_file(directory, filename):
 
 
 def keras_backend_quiet():
-    """ Suppresses the "Using x backend" message when importing
-        backend from keras """
+    """ Suppresses the "Using x backend" message when importing backend from keras.
+
+    Make sure output is redirected back to stderr if there is an error. """
     stderr = sys.stderr
     sys.stderr = open(os.devnull, 'w')
-    from keras import backend as K
+    try:
+        from keras import backend as K  # pylint:disable=import-outside-toplevel
+    except:
+        sys.stderr = stderr
+        raise
     sys.stderr = stderr
     return K
 
