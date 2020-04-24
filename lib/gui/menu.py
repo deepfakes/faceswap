@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
     """ GUI Main Menu Bar """
+
     def __init__(self, master=None):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(master)
@@ -52,6 +53,7 @@ class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
 
 class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     """ Settings menu items and functions """
+
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent, tearoff=0)
@@ -113,6 +115,7 @@ class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
 class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     """ File menu items and functions """
+
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent, tearoff=0)
@@ -229,6 +232,7 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
 class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     """ Help menu items and functions """
+
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent, tearoff=0)
@@ -478,6 +482,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
 
 class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Task bar buttons """
+
     def __init__(self, parent):
         super().__init__(parent)
         self._config = get_config()
@@ -569,7 +574,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         if btntype.startswith("reload"):
             hlp = "Reload {} from disk".format(task)
         if btntype == "new":
-            hlp = "Crate a new {}...".format(task)
+            hlp = "Create a new {}...".format(task)
         if btntype.startswith("clear"):
             hlp = "Reset {} to default".format(task)
         elif btntype.startswith("save") and "_" not in btntype:
