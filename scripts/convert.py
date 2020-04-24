@@ -10,9 +10,9 @@ from time import sleep
 
 import cv2
 import numpy as np
+from tqdm import tqdm
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
-from tqdm import tqdm
 
 from scripts.fsmedia import Alignments, PostProcess, finalize
 from lib.serializer import get_serializer
@@ -22,7 +22,7 @@ from lib.gpu_stats import GPUStats
 from lib.image import read_image_hash, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
-from lib.utils import FaceswapError, get_folder, get_image_paths
+from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from plugins.plugin_loader import PluginLoader
 
@@ -830,7 +830,7 @@ class Predict():
         faces_seen = 0
         consecutive_no_faces = 0
         batch = list()
-        is_plaidml = GPUStats().is_plaidml
+        is_amd = get_backend() == "amd"
         while True:
             item = self._in_queue.get()
             if item != "EOF":
@@ -867,7 +867,7 @@ class Predict():
                 if faces_seen != 0:
                     feed_faces = self._compile_feed_faces(detected_batch)
                     batch_size = None
-                    if is_plaidml and feed_faces.shape[0] != self._batchsize:
+                    if is_amd and feed_faces.shape[0] != self._batchsize:
                         logger.verbose("Fallback to BS=1")
                         batch_size = 1
                     predicted = self._predict(feed_faces, batch_size)
