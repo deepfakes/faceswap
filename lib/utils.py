@@ -149,12 +149,11 @@ def full_path_split(path):
         if parts[0] == path:   # sentinel for absolute paths
             allparts.insert(0, parts[0])
             break
-        elif parts[1] == path:  # sentinel for relative paths
+        if parts[1] == path:  # sentinel for relative paths
             allparts.insert(0, parts[1])
             break
-        else:
-            path = parts[0]
-            allparts.insert(0, parts[1])
+        path = parts[0]
+        allparts.insert(0, parts[1])
     logger.trace("path: %s, allparts: %s", path, allparts)
     return allparts
 
@@ -173,21 +172,6 @@ def backup_file(directory, filename):
         os.rename(origfile, backupfile)
 
 
-def keras_backend_quiet():
-    """ Suppresses the "Using x backend" message when importing backend from keras.
-
-    Make sure output is redirected back to stderr if there is an error. """
-    stderr = sys.stderr
-    sys.stderr = open(os.devnull, 'w')
-    try:
-        from keras import backend as K  # pylint:disable=import-outside-toplevel
-    except:
-        sys.stderr = stderr
-        raise
-    sys.stderr = stderr
-    return K
-
-
 def set_system_verbosity(loglevel):
     """ Set the verbosity level of tensorflow and suppresses
         future and deprecation warnings from any modules
@@ -200,7 +184,7 @@ def set_system_verbosity(loglevel):
         3 - filter out ERROR logs  """
 
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    from lib.logger import get_loglevel
+    from lib.logger import get_loglevel  # pylint:disable=import-outside-toplevel
     numeric_level = get_loglevel(loglevel)
     loglevel = "2" if numeric_level > 15 else "0"
     logger.debug("System Verbosity level: %s", loglevel)
@@ -233,10 +217,10 @@ def safe_shutdown(got_error=False):
     """ Close queues, threads and processes in event of crash """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("Safely shutting down")
-    from lib.queue_manager import queue_manager
+    from lib.queue_manager import queue_manager  # pylint:disable=import-outside-toplevel
     queue_manager.terminate_queues()
     logger.debug("Cleanup complete. Shutting down queue manager and exiting")
-    exit(1 if got_error else 0)
+    sys.exit(1 if got_error else 0)
 
 
 class FaceswapError(Exception):
@@ -370,7 +354,7 @@ class GetModel():
         os.remove(self._model_zip_path)
 
     def download_model(self):
-        """ Download model zip to cache dir """
+        """ Download model zip to cache folder """
         self.logger.info("Downloading model: '%s' from: %s", self._model_name, self._url_download)
         for attempt in range(self.retries):
             try:
@@ -395,7 +379,7 @@ class GetModel():
                     self.logger.info("Alternatively, you can manually download the model from: %s "
                                      "and unzip the contents to: %s",
                                      self._url_download, self.cache_dir)
-                    exit(1)
+                    sys.exit(1)
 
     def write_zipfile(self, response, downloaded_size):
         """ Write the model zip file to disk """
@@ -421,17 +405,17 @@ class GetModel():
             pbar.close()
 
     def unzip_model(self):
-        """ Unzip the model file to the cachedir """
+        """ Unzip the model file to the cache folder """
         self.logger.info("Extracting: '%s'", self._model_name)
         try:
             zip_file = zipfile.ZipFile(self._model_zip_path, "r")
             self.write_model(zip_file)
         except Exception as err:  # pylint:disable=broad-except
             self.logger.error("Unable to extract model file: %s", str(err))
-            exit(1)
+            sys.exit(1)
 
     def write_model(self, zip_file):
-        """ Extract files from zipfile and write, with progress bar """
+        """ Extract files from zip file and write, with progress bar """
         length = sum(f.file_size for f in zip_file.infolist())
         fnames = zip_file.namelist()
         self.logger.debug("Zipfile: Filenames: %s, Total Size: %s", fnames, length)

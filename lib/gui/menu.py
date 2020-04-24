@@ -569,7 +569,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         if btntype.startswith("reload"):
             hlp = "Reload {} from disk".format(task)
         if btntype == "new":
-            hlp = "Crate a new {}...".format(task)
+            hlp = "Create a new {}...".format(task)
         if btntype.startswith("clear"):
             hlp = "Reset {} to default".format(task)
         elif btntype.startswith("save") and "_" not in btntype:
