@@ -2,16 +2,55 @@
 """ Settings manager for Keras Backend """
 
 import logging
+from importlib import import_module
 
 import tensorflow as tf
-from keras.layers import Activation
-from tensorflow.python import errors_impl as tf_error  # pylint:disable=no-name-in-module
-from keras.models import load_model as k_load_model, Model
+# pylint:disable=no-name-in-module,import-error
+from tensorflow.python import errors_impl as tf_error
 import numpy as np
 
 from lib.utils import get_backend, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+
+
+def get_keras(package=None):
+    """ Obtain a module, library or object from either :mod:`keras` (for AMD users) or
+    :mod:`tensorflow.keras` (nvidia users).
+
+    Parameters
+    ----------
+    package: str, optional
+        If a specific package is required then it should be added here. ``None`` will return the
+        correct keras version. If any value is placed here then that object will be returned from
+        the correct keras version
+
+    Returns
+    -------
+    python object
+        Either a keras library or an object from a keras library
+
+    Example
+    -------
+    Get the keras module appropriate for the backend:
+
+    >>> keras = get_keras()
+
+    Get an Activation layer from the correct keras:
+
+    >>> activation = get_keras(package="layers.Activation")
+    """
+    lib = "keras" if get_backend() == "amd" else "tensorflow.keras"
+    logger.debug("Selecting '%s' lib for '%s' backend. (package: %s)", lib, get_backend(), package)
+    lib = lib if package is None else ".".join([lib] + package.split(".")[:-1])
+    obj = None if package is None else package.split(".")[-1]
+    logger.debug("package: %s, new lib: %s, object: %s", package, lib, obj)
+    logger.debug("Importing from %s", lib)
+    mod = import_module(lib)
+    logger.debug("Imported lib: %s, type: %s", mod.__name__, type(mod))
+    retval = mod if obj is None else getattr(mod, obj)
+    logger.debug("Returning: %s, type: %s", retval.__name__, type(retval))
+    return retval
 
 
 class KSession():
@@ -22,6 +61,11 @@ class KSession():
 
     This is an early implementation of this class, and should be expanded out over time
     with relevant `AMD`, `CPU` and `NVIDIA` backend methods.
+
+    Notes
+    -----
+    The documentation refers to :mod:`keras`. This is a pseudonym for either :mod:`keras` or
+    :mod:`tensorflow.keras` depending on the backend in use.
 
     Parameters
     ----------
@@ -56,7 +100,7 @@ class KSession():
         ----------
         feed: numpy.ndarray or list
             The feed to be provided to the model as input. This should be a ``numpy.ndarray``
-            for single inputs or a ``list`` of ``numpy.ndarrays`` for multiple inputs.
+            for single inputs or a ``list`` of ``numpy.ndarray`` objects for multiple inputs.
         """
         if self._session is None:
             if batch_size is None:
@@ -69,14 +113,14 @@ class KSession():
 
     def _amd_predict_with_optimized_batchsizes(self, feed, batch_size):
         """ Minimizes the amount of kernels to be compiled when using
-        the ``Amd`` backend with varying batchsizes while trying to keep
+        the ``amd`` backend with varying batch sizes while trying to keep
         the batchsize as high as possible.
 
         Parameters
         ----------
         feed: numpy.ndarray or list
             The feed to be provided to the model as input. This should be a ``numpy.ndarray``
-            for single inputs or a ``list`` of ``numpy.ndarrays`` for multiple inputs.
+            for single inputs or a ``list`` of ``numpy.ndarray`` objects for multiple inputs.
         batch_size: int
             The upper batchsize to use.
         """
@@ -109,19 +153,20 @@ class KSession():
             return None
 
         self.graph = tf.Graph()
-        config = tf.ConfigProto()
         if allow_growth and get_backend() == "nvidia":
-            config.gpu_options.allow_growth = True
+            for gpu in tf.config.experimental.list_physical_devices('GPU'):
+                logger.info("Setting allow growth for GPU: %s", gpu)
+                tf.config.experimental.set_memory_growth(gpu, True)
         try:
-            session = tf.Session(graph=tf.Graph(), config=config)
+            session = tf.compat.v1.Session(graph=tf.Graph())
         except tf_error.InternalError as err:
             if "driver version is insufficient" in str(err):
                 msg = ("Your Nvidia Graphics Driver is insufficient for running Faceswap. "
                        "Please upgrade to the latest version.")
                 raise FaceswapError(msg) from err
             raise err
-        logger.debug("Created tf.session: (graph: %s, session: %s, config: %s)",
-                     session.graph, session, config)
+        logger.debug("Created tf.session: (graph: %s, session: %s)",
+                     session.graph, session)
         return session
 
     def load_model(self):
@@ -133,12 +178,13 @@ class KSession():
         class.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
+        load = get_keras("models.load_model")
         if self._session is None:
-            self._model = k_load_model(self._model_path, **self._model_kwargs)
+            self._model = load(self._model_path, **self._model_kwargs)
         else:
             with self._session.as_default():  # pylint: disable=not-context-manager
                 with self._session.graph.as_default():
-                    self._model = k_load_model(self._model_path, **self._model_kwargs)
+                    self._model = load(self._model_path, **self._model_kwargs)
 
     def define_model(self, function):
         """ Defines a given model in the correct session.
@@ -153,12 +199,13 @@ class KSession():
             ``outputs``. The function that generates these results should be passed in, NOT the
             results themselves, as the function needs to be executed within the correct context.
         """
+        model = get_keras("models.Model")
         if self._session is None:
-            self._model = Model(*function())
+            self._model = model(*function())
         else:
             with self._session.as_default():  # pylint: disable=not-context-manager
                 with self._session.graph.as_default():
-                    self._model = Model(*function())
+                    self._model = model(*function())
 
     def load_model_weights(self):
         """ Load model weights for a defined model inside the correct session.
@@ -179,7 +226,7 @@ class KSession():
         """ Append a softmax activation layer to a model
 
         Occasionally a softmax activation layer needs to be added to a model's output.
-        This is a convenience fuction to append this layer to the loaded model.
+        This is a convenience function to append this layer to the loaded model.
 
         Parameters
         ----------
@@ -188,5 +235,7 @@ class KSession():
             softmax activation layer. Default: -1 (The final layer of the model)
         """
         logger.debug("Appending Softmax Activation to model: (layer_index: %s)", layer_index)
-        softmax = Activation("softmax", name="softmax")(self._model.layers[layer_index].output)
-        self._model = Model(inputs=self._model.input, outputs=[softmax])
+        activation = get_keras("layers.Activation")
+        model = get_keras("model.Model")
+        softmax = activation("softmax", name="softmax")(self._model.layers[layer_index].output)
+        self._model = model(inputs=self._model.input, outputs=[softmax])

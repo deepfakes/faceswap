@@ -5,11 +5,11 @@
 """
 import cv2
 import numpy as np
-import keras
-from keras import backend as K
 
-from lib.model.session import KSession
+from lib.model.session import KSession, get_keras
 from ._base import Aligner, logger
+
+K = get_keras("backend")
 
 
 class Align(Aligner):
@@ -158,7 +158,7 @@ class Align(Aligner):
         logger.trace("Obtained points from prediction: %s", batch["landmarks"])
 
 
-class TorchBatchNorm2D(keras.engine.base_layer.Layer):
+class TorchBatchNorm2D(get_keras("layers.Layer")):
     # pylint:disable=too-many-instance-attributes
     """" Required for FAN_keras model """
     def __init__(self, axis=-1, momentum=0.99, epsilon=1e-3, **kwargs):
@@ -176,6 +176,15 @@ class TorchBatchNorm2D(keras.engine.base_layer.Layer):
         self.moving_variance = None
 
     def build(self, input_shape):
+        """Creates the layer weights.
+
+        Must be implemented on all layers that have weights.
+
+        Parameters
+        ----------
+        input_shape: Keras tensor (future input to layer) or list/tuple of Keras tensors
+            Used to reference for weight shape computations.
+        """
         dim = input_shape[self.axis]
         if dim is None:
             raise ValueError("Axis {} of input tensor should have a "
@@ -203,7 +212,20 @@ class TorchBatchNorm2D(keras.engine.base_layer.Layer):
                                                trainable=False)
         self.built = True
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
+        """This is where the layer's logic lives.
+
+        Parameters
+        ----------
+        inputs: Input tensor, or list/tuple of input tensors.
+            The input to the layer
+        **kwargs: Additional keyword arguments.
+            Required for parent class but unused
+        Returns
+        -------
+        A tensor or list/tuple of tensors.
+            The layer output
+        """
         input_shape = K.int_shape(inputs)
 
         broadcast_shape = [1] * len(input_shape)
@@ -225,6 +247,18 @@ class TorchBatchNorm2D(keras.engine.base_layer.Layer):
                + broadcast_beta)
 
     def get_config(self):
+        """ Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be re-instantiated later (without its trained weights) from this
+        configuration. The config of a layer does not include connectivity information, nor the
+        layer class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        -------
+        dict
+            The configuration for the layer
+        """
         config = {'axis': self.axis,
                   'momentum': self.momentum,
                   'epsilon': self.epsilon}
