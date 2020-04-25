@@ -1,22 +1,22 @@
 tqdm
 psutil
 pathlib
-numpy==1.17.4
-opencv-python==4.1.2.30
+numpy==1.18.3
+opencv-python==4.2.0.34
 scikit-image
-Pillow==6.2.1
+Pillow==7.1.1
 scikit-learn
 toposort
 fastcluster
-matplotlib==3.1.1
-imageio==2.6.1
+matplotlib==3.2.1
+imageio==2.8.0
 imageio-ffmpeg
 ffmpy==0.2.2
 # Revert back to nvidia-ml-py3 when windows/system32 patch is implemented
 git+https://github.com/deepfakes/nvidia-ml-py3.git
 #nvidia-ml-py3
-h5py==2.9.0
-Keras==2.2.4
+h5py==2.10.0
+#Keras==2.2.4
 pywin32 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
 

@@ -53,8 +53,8 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         FaceswapError
             If Tensorflow is not found, or is not between versions 1.12 and 1.15
         """
-        min_ver = 1.12
-        max_ver = 1.15
+        min_ver = 2.0
+        max_ver = 2.1
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
             os.environ["KMP_AFFINITY"] = "disabled"
