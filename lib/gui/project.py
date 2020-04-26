@@ -86,6 +86,28 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
             return None
         return self._options.get("tab_name", None)
 
+    @property
+    def _selected_to_choices(self):
+        """ dict: The selected value and valid choices for multi-option, radio or combo options.
+        """
+        valid_choices = {cmd: {opt: dict(choices=val["cpanel_option"].choices,
+                                         is_multi=val["cpanel_option"].is_multi_option)
+                               for opt, val in data.items()
+                               if isinstance(val, dict) and "cpanel_option" in val
+                               and val["cpanel_option"].choices is not None}
+                         for cmd, data in self._config.cli_opts.opts.items()}
+        logger.trace("valid_choices: %s", valid_choices)
+        retval = {command: {option: {"value": value,
+                                     "is_multi": valid_choices[command][option]["is_multi"],
+                                     "choices":  valid_choices[command][option]["choices"]}
+                            for option, value in options.items()
+                            if value and command in valid_choices
+                            and option in valid_choices[command]}
+                  for command, options in self._options.items()
+                  if isinstance(options, dict)}
+        logger.trace("returning: %s", retval)
+        return retval
+
     def _current_gui_state(self, command=None):
         """ The current state of the GUI.
 
@@ -319,11 +341,30 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         if self._file_exists:
             logger.debug("Loading config")
             self._options = self._serializer.load(self._filename)
+            self._check_valid_choices()
             retval = True
         else:
             logger.debug("File doesn't exist. Aborting")
             retval = False
         return retval
+
+    def _check_valid_choices(self):
+        """ Check whether the loaded file has any selected combo/radio/multi-option values that are
+        no longer valid and remove them so that they are not passed into faceswap. """
+        for command, options in self._selected_to_choices.items():
+            for option, data in options.items():
+                if ((data["is_multi"] and all(v in data["choices"] for v in data["value"].split()))
+                        or not data["is_multi"] and data["value"] in data["choices"]):
+                    continue
+                if data["is_multi"]:
+                    val = " ".join([v for v in data["value"].split() if v in data["choices"]])
+                else:
+                    val = ""
+                val = self._default_options[command][option] if not val else val
+                logger.debug("Updating invalid value to default: (command: '%s', option: '%s', "
+                             "original value: '%s', new value: '%s')", command, option,
+                             self._options[command][option], val)
+                self._options[command][option] = val
 
     def _save_as_to_filename(self, session_type):
         """ Set :attr:`_filename` from a save as dialog.
@@ -492,7 +533,6 @@ class Tasks(_GuiSession):
             The new filename of the updated tasks file
         """
         # TODO remove this code after a period of time. Implemented November 2019
-
         logger.debug("original filename: '%s'", filename)
         fname, ext = os.path.splitext(filename)
         if ext != ".fsw":
