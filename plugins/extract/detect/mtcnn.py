@@ -4,14 +4,11 @@
 from __future__ import absolute_import, division, print_function
 
 import cv2
-
 import numpy as np
-
-from lib.model.session import KSession, get_keras
+# pylint:disable=import-error
+from keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU
+from lib.model.session import KSession
 from ._base import Detector, logger
-
-_LAYERS = {layer: get_keras("layers.{}".format(layer))
-           for layer in ("Conv2D", "Dense", "Flatten", "Input", "MaxPool2D", "Permute", "PReLU")}
 
 
 class Detect(Detector):
@@ -116,16 +113,16 @@ class PNet(KSession):
     @staticmethod
     def model_definition():
         """ Keras PNetwork for MTCNN """
-        input_ = _LAYERS["Input"](shape=(None, None, 3))
-        var_x = _LAYERS["Conv2D"](10, (3, 3), strides=1, padding='valid', name='conv1')(input_)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='PReLU1')(var_x)
-        var_x = _LAYERS["MaxPool2D"](pool_size=2)(var_x)
-        var_x = _LAYERS["Conv2D"](16, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='PReLU2')(var_x)
-        var_x = _LAYERS["Conv2D"](32, (3, 3), strides=1, padding='valid', name='conv3')(var_x)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='PReLU3')(var_x)
-        classifier = _LAYERS["Conv2D"](2, (1, 1), activation='softmax', name='conv4-1')(var_x)
-        bbox_regress = _LAYERS["Conv2D"](4, (1, 1), name='conv4-2')(var_x)
+        input_ = Input(shape=(None, None, 3))
+        var_x = Conv2D(10, (3, 3), strides=1, padding='valid', name='conv1')(input_)
+        var_x = PReLU(shared_axes=[1, 2], name='PReLU1')(var_x)
+        var_x = MaxPool2D(pool_size=2)(var_x)
+        var_x = Conv2D(16, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
+        var_x = PReLU(shared_axes=[1, 2], name='PReLU2')(var_x)
+        var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv3')(var_x)
+        var_x = PReLU(shared_axes=[1, 2], name='PReLU3')(var_x)
+        classifier = Conv2D(2, (1, 1), activation='softmax', name='conv4-1')(var_x)
+        bbox_regress = Conv2D(4, (1, 1), name='conv4-2')(var_x)
         return [input_], [classifier, bbox_regress]
 
 
@@ -139,23 +136,23 @@ class RNet(KSession):
     @staticmethod
     def model_definition():
         """ Keras RNetwork for MTCNN """
-        input_ = _LAYERS["Input"](shape=(24, 24, 3))
-        var_x = _LAYERS["Conv2D"](28, (3, 3), strides=1, padding='valid', name='conv1')(input_)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='prelu1')(var_x)
-        var_x = _LAYERS["MaxPool2D"](pool_size=3, strides=2, padding='same')(var_x)
+        input_ = Input(shape=(24, 24, 3))
+        var_x = Conv2D(28, (3, 3), strides=1, padding='valid', name='conv1')(input_)
+        var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
+        var_x = MaxPool2D(pool_size=3, strides=2, padding='same')(var_x)
 
-        var_x = _LAYERS["Conv2D"](48, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='prelu2')(var_x)
-        var_x = _LAYERS["MaxPool2D"](pool_size=3, strides=2)(var_x)
+        var_x = Conv2D(48, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
+        var_x = PReLU(shared_axes=[1, 2], name='prelu2')(var_x)
+        var_x = MaxPool2D(pool_size=3, strides=2)(var_x)
 
-        var_x = _LAYERS["Conv2D"](64, (2, 2), strides=1, padding='valid', name='conv3')(var_x)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='prelu3')(var_x)
-        var_x = _LAYERS["Permute"]((3, 2, 1))(var_x)
-        var_x = _LAYERS["Flatten"]()(var_x)
-        var_x = _LAYERS["Dense"](128, name='conv4')(var_x)
-        var_x = _LAYERS["PReLU"](name='prelu4')(var_x)
-        classifier = _LAYERS["Dense"](2, activation='softmax', name='conv5-1')(var_x)
-        bbox_regress = _LAYERS["Dense"](4, name='conv5-2')(var_x)
+        var_x = Conv2D(64, (2, 2), strides=1, padding='valid', name='conv3')(var_x)
+        var_x = PReLU(shared_axes=[1, 2], name='prelu3')(var_x)
+        var_x = Permute((3, 2, 1))(var_x)
+        var_x = Flatten()(var_x)
+        var_x = Dense(128, name='conv4')(var_x)
+        var_x = PReLU(name='prelu4')(var_x)
+        classifier = Dense(2, activation='softmax', name='conv5-1')(var_x)
+        bbox_regress = Dense(4, name='conv5-2')(var_x)
         return [input_], [classifier, bbox_regress]
 
 
@@ -169,26 +166,26 @@ class ONet(KSession):
     @staticmethod
     def model_definition():
         """ Keras ONetwork for MTCNN """
-        input_ = _LAYERS["Input"](shape=(48, 48, 3))
-        var_x = _LAYERS["Conv2D"](32, (3, 3), strides=1, padding='valid', name='conv1')(input_)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='prelu1')(var_x)
-        var_x = _LAYERS["MaxPool2D"](pool_size=3, strides=2, padding='same')(var_x)
-        var_x = _LAYERS["Conv2D"](64, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='prelu2')(var_x)
-        var_x = _LAYERS["MaxPool2D"](pool_size=3, strides=2)(var_x)
-        var_x = _LAYERS["Conv2D"](64, (3, 3), strides=1, padding='valid', name='conv3')(var_x)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='prelu3')(var_x)
-        var_x = _LAYERS["MaxPool2D"](pool_size=2)(var_x)
-        var_x = _LAYERS["Conv2D"](128, (2, 2), strides=1, padding='valid', name='conv4')(var_x)
-        var_x = _LAYERS["PReLU"](shared_axes=[1, 2], name='prelu4')(var_x)
-        var_x = _LAYERS["Permute"]((3, 2, 1))(var_x)
-        var_x = _LAYERS["Flatten"]()(var_x)
-        var_x = _LAYERS["Dense"](256, name='conv5')(var_x)
-        var_x = _LAYERS["PReLU"](name='prelu5')(var_x)
+        input_ = Input(shape=(48, 48, 3))
+        var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv1')(input_)
+        var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
+        var_x = MaxPool2D(pool_size=3, strides=2, padding='same')(var_x)
+        var_x = Conv2D(64, (3, 3), strides=1, padding='valid', name='conv2')(var_x)
+        var_x = PReLU(shared_axes=[1, 2], name='prelu2')(var_x)
+        var_x = MaxPool2D(pool_size=3, strides=2)(var_x)
+        var_x = Conv2D(64, (3, 3), strides=1, padding='valid', name='conv3')(var_x)
+        var_x = PReLU(shared_axes=[1, 2], name='prelu3')(var_x)
+        var_x = MaxPool2D(pool_size=2)(var_x)
+        var_x = Conv2D(128, (2, 2), strides=1, padding='valid', name='conv4')(var_x)
+        var_x = PReLU(shared_axes=[1, 2], name='prelu4')(var_x)
+        var_x = Permute((3, 2, 1))(var_x)
+        var_x = Flatten()(var_x)
+        var_x = Dense(256, name='conv5')(var_x)
+        var_x = PReLU(name='prelu5')(var_x)
 
-        classifier = _LAYERS["Dense"](2, activation='softmax', name='conv6-1')(var_x)
-        bbox_regress = _LAYERS["Dense"](4, name='conv6-2')(var_x)
-        landmark_regress = _LAYERS["Dense"](10, name='conv6-3')(var_x)
+        classifier = Dense(2, activation='softmax', name='conv6-1')(var_x)
+        bbox_regress = Dense(4, name='conv6-2')(var_x)
+        landmark_regress = Dense(10, name='conv6-3')(var_x)
         return [input_], [classifier, bbox_regress, landmark_regress]
 
 

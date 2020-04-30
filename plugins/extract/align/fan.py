@@ -6,10 +6,11 @@
 import cv2
 import numpy as np
 
-from lib.model.session import KSession, get_keras
-from ._base import Aligner, logger
+import keras  # pylint:disable=import-error
+import keras.backend as K  # pylint:disable=import-error
 
-K = get_keras("backend")
+from lib.model.session import KSession
+from ._base import Aligner, logger
 
 
 class Align(Aligner):
@@ -158,7 +159,7 @@ class Align(Aligner):
         logger.trace("Obtained points from prediction: %s", batch["landmarks"])
 
 
-class TorchBatchNorm2D(get_keras("layers.Layer")):
+class TorchBatchNorm2D(keras.layers.Layer):
     # pylint:disable=too-many-instance-attributes
     """" Required for FAN_keras model """
     def __init__(self, axis=-1, momentum=0.99, epsilon=1e-3, **kwargs):

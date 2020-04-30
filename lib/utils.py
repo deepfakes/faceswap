@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
 
+import importlib
 import json
 import logging
 import os
@@ -252,7 +253,7 @@ class GetModel():
         """
 
     def __init__(self, model_filename, cache_dir, git_model_id):
-        self.logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+        self.logger = logging.getLogger(__name__)
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
         self.model_filename = model_filename
@@ -437,3 +438,69 @@ class GetModel():
                     out_file.write(buffer)
         zip_file.close()
         pbar.close()
+
+
+class KerasFinder(importlib.abc.MetaPathFinder):
+    """ Importlib Abstract Base Class for intercepting the import of Keras and returning either
+    Keras (AMD backend) or tensorflow.keras (any other backend).
+
+    The Importlib documentation is sparse at best, and real world examples are pretty much
+    non-existent. Coupled with this, the import ``tensorflow.keras`` does not resolve so we need
+    to split out to the actual location of Keras within ``tensorflow_core``. This method works, but
+    it relies on hard coded paths, and is likely to not be the most robust.
+
+    A custom loader is not used, as we can use the standard loader once we have returned the
+    correct spec.
+    """
+    def __init__(self):
+        self._logger = logging.getLogger(__name__)
+        self._backend = get_backend()
+        self._tf_keras_location = ["tensorflow_core", "python", "keras", "api", "_v2"]
+
+    def find_spec(self, fullname, path, target=None):  # pylint:disable=unused-argument
+        """ Obtain the spec for either keras or tensorflow.keras depending on the backend in use.
+
+        If keras is not passed in as part of the :attr:`fullname` or the path is not ``None``
+        (i.e this is a dependency import) then this returns ``None`` to use the standard import
+        library.
+
+        Parameters
+        ----------
+        fullname: str
+            The absolute name of the module to be imported
+        path: str
+            The search path for the module
+        target: module object, optional
+            Inherited from parent but unused
+
+        Returns
+        -------
+        :class:`importlib.ModuleSpec`
+            The spec for the Keras module to be imported
+        """
+        prefix = fullname.split(".")[0]
+        suffix = fullname.split(".")[-1]
+        if prefix != "keras" or path is not None:
+            return
+        self._logger.debug("Importing '%s' as keras for backend: '%s'",
+                           "keras" if self._backend == "amd" else "tf.keras", self._backend)
+        path = sys.path if path is None else path
+        for entry in path:
+            entry = os.path.join(entry,
+                                 *self._tf_keras_location) if self._backend != "amd" else entry
+            if os.path.isdir(os.path.join(entry, suffix)):
+                filename = os.path.join(entry, suffix, "__init__.py")
+                submodule_locations = [os.path.join(entry, suffix)]
+            else:
+                filename = os.path.join(entry, suffix + ".py")
+                submodule_locations = None
+            if not os.path.exists(filename):
+                continue
+            retval = importlib.util.spec_from_file_location(
+                fullname,
+                filename,
+                submodule_search_locations=submodule_locations)
+            self._logger.debug("Found spec: %s", retval)
+            return retval
+        self._logger.debug("Spec not found for '%s'. Falling back to default import", fullname)
+        return None

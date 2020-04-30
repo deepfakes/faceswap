@@ -2,55 +2,17 @@
 """ Settings manager for Keras Backend """
 
 import logging
-from importlib import import_module
 
+import numpy as np
 import tensorflow as tf
 # pylint:disable=no-name-in-module,import-error
 from tensorflow.python import errors_impl as tf_error
-import numpy as np
+from keras.layers import Activation
+from keras.models import load_model as k_load_model, Model
 
 from lib.utils import get_backend, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-
-
-def get_keras(package=None):
-    """ Obtain a module, library or object from either :mod:`keras` (for AMD users) or
-    :mod:`tensorflow.keras` (nvidia users).
-
-    Parameters
-    ----------
-    package: str, optional
-        If a specific package is required then it should be added here. ``None`` will return the
-        correct keras version. If any value is placed here then that object will be returned from
-        the correct keras version
-
-    Returns
-    -------
-    python object
-        Either a keras library or an object from a keras library
-
-    Example
-    -------
-    Get the keras module appropriate for the backend:
-
-    >>> keras = get_keras()
-
-    Get an Activation layer from the correct keras:
-
-    >>> activation = get_keras(package="layers.Activation")
-    """
-    lib = "keras" if get_backend() == "amd" else "tensorflow.keras"
-    logger.debug("Selecting '%s' lib for '%s' backend. (package: %s)", lib, get_backend(), package)
-    lib = lib if package is None else ".".join([lib] + package.split(".")[:-1])
-    obj = None if package is None else package.split(".")[-1]
-    logger.debug("package: %s, new lib: %s, object: %s", package, lib, obj)
-    logger.debug("Importing from %s", lib)
-    mod = import_module(lib)
-    logger.debug("Imported lib: %s, type: %s", mod.__name__, type(mod))
-    retval = mod if obj is None else getattr(mod, obj)
-    logger.debug("Returning: %s, type: %s", retval.__name__, type(retval))
-    return retval
 
 
 class KSession():
@@ -178,13 +140,12 @@ class KSession():
         class.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
-        load = get_keras("models.load_model")
         if self._session is None:
-            self._model = load(self._model_path, **self._model_kwargs)
+            self._model = k_load_model(self._model_path, **self._model_kwargs)
         else:
             with self._session.as_default():  # pylint: disable=not-context-manager
                 with self._session.graph.as_default():
-                    self._model = load(self._model_path, **self._model_kwargs)
+                    self._model = k_load_model(self._model_path, **self._model_kwargs)
 
     def define_model(self, function):
         """ Defines a given model in the correct session.
@@ -199,13 +160,12 @@ class KSession():
             ``outputs``. The function that generates these results should be passed in, NOT the
             results themselves, as the function needs to be executed within the correct context.
         """
-        model = get_keras("models.Model")
         if self._session is None:
-            self._model = model(*function())
+            self._model = Model(*function())
         else:
             with self._session.as_default():  # pylint: disable=not-context-manager
                 with self._session.graph.as_default():
-                    self._model = model(*function())
+                    self._model = Model(*function())
 
     def load_model_weights(self):
         """ Load model weights for a defined model inside the correct session.
@@ -235,7 +195,5 @@ class KSession():
             softmax activation layer. Default: -1 (The final layer of the model)
         """
         logger.debug("Appending Softmax Activation to model: (layer_index: %s)", layer_index)
-        activation = get_keras("layers.Activation")
-        model = get_keras("model.Model")
-        softmax = activation("softmax", name="softmax")(self._model.layers[layer_index].output)
-        self._model = model(inputs=self._model.input, outputs=[softmax])
+        softmax = Activation("softmax", name="softmax")(self._model.layers[layer_index].output)
+        self._model = Model(inputs=self._model.input, outputs=[softmax])

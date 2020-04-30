@@ -7,7 +7,7 @@ import sys
 
 from importlib import import_module
 from lib.logger import crash_log, log_setup
-from lib.utils import FaceswapError, get_backend, safe_shutdown, set_system_verbosity
+from lib.utils import FaceswapError, get_backend, KerasFinder, safe_shutdown, set_system_verbosity
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -142,6 +142,8 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         set_system_verbosity(arguments.loglevel)
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self._command, is_gui)
+        # Add Keras finder to the meta_path list as the first item
+        sys.meta_path.insert(0, KerasFinder())
         logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
         success = False
         if get_backend() == "amd":
