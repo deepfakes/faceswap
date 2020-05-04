@@ -455,7 +455,8 @@ class KerasFinder(importlib.abc.MetaPathFinder):
     def __init__(self):
         self._logger = logging.getLogger(__name__)
         self._backend = get_backend()
-        self._tf_keras_location = ["tensorflow_core", "python", "keras", "api", "_v2"]
+        self._tf_keras_locations = [["tensorflow_core", "python", "keras", "api", "_v2"],
+                                    ["tensorflow", "python", "keras", "api", "_v2"]]
 
     def find_spec(self, fullname, path, target=None):  # pylint:disable=unused-argument
         """ Obtain the spec for either keras or tensorflow.keras depending on the backend in use.
@@ -481,26 +482,29 @@ class KerasFinder(importlib.abc.MetaPathFinder):
         prefix = fullname.split(".")[0]
         suffix = fullname.split(".")[-1]
         if prefix != "keras" or path is not None:
-            return
+            return None
         self._logger.debug("Importing '%s' as keras for backend: '%s'",
                            "keras" if self._backend == "amd" else "tf.keras", self._backend)
         path = sys.path if path is None else path
         for entry in path:
-            entry = os.path.join(entry,
-                                 *self._tf_keras_location) if self._backend != "amd" else entry
-            if os.path.isdir(os.path.join(entry, suffix)):
-                filename = os.path.join(entry, suffix, "__init__.py")
-                submodule_locations = [os.path.join(entry, suffix)]
-            else:
-                filename = os.path.join(entry, suffix + ".py")
-                submodule_locations = None
-            if not os.path.exists(filename):
-                continue
-            retval = importlib.util.spec_from_file_location(
-                fullname,
-                filename,
-                submodule_search_locations=submodule_locations)
-            self._logger.debug("Found spec: %s", retval)
-            return retval
+            locations = ([os.path.join(entry, *location)
+                          for location in self._tf_keras_locations]
+                         if self._backend != "amd" else [entry])
+            for location in locations:
+                self._logger.debug("Scanning: '%s' for '%s'", location, suffix)
+                if os.path.isdir(os.path.join(location, suffix)):
+                    filename = os.path.join(location, suffix, "__init__.py")
+                    submodule_locations = [os.path.join(location, suffix)]
+                else:
+                    filename = os.path.join(location, suffix + ".py")
+                    submodule_locations = None
+                if not os.path.exists(filename):
+                    continue
+                retval = importlib.util.spec_from_file_location(
+                    fullname,
+                    filename,
+                    submodule_search_locations=submodule_locations)
+                self._logger.debug("Found spec: %s", retval)
+                return retval
         self._logger.debug("Spec not found for '%s'. Falling back to default import", fullname)
         return None
