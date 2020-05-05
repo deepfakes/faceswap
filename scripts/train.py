@@ -10,7 +10,6 @@ from time import sleep
 
 import cv2
 import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
 
 from lib.image import read_image
 from lib.keypress import KBHit
@@ -394,12 +393,10 @@ class Train():
 
         Enables the Tensorflow allow_growth option if requested in the command line arguments
         """
-        # pylint: disable=no-member
         logger.debug("Setting Tensorflow 'allow_growth' option")
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        config.gpu_options.visible_device_list = "0"
-        set_session(tf.Session(config=config))
+        for gpu in tf.config.experimental.list_physical_devices('GPU'):
+            logger.info("Setting allow growth for GPU: %s", gpu)
+            tf.config.experimental.set_memory_growth(gpu, True)
         logger.debug("Set Tensorflow 'allow_growth' option")
 
     def _show(self, image, name=""):

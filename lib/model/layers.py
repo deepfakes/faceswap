@@ -12,16 +12,18 @@ import inspect
 import tensorflow as tf
 import keras.backend as K
 
-from keras.engine import InputSpec, Layer
-from keras.utils import conv_utils
-from keras.utils.generic_utils import get_custom_objects
+from keras.layers import InputSpec, Layer
+from keras.utils import get_custom_objects
 from keras import initializers
-from keras.layers.pooling import _GlobalPooling2D
 
-if K.backend() == "plaidml.keras.backend":
+from lib.utils import get_backend
+
+if get_backend() == "amd":
     from lib.plaidml_utils import pad
+    from keras.utils import conv_utils
 else:
     from tensorflow import pad
+    from tensorflow.python.keras.utils import conv_utils
 
 class PixelShuffler(Layer):
     """ PixelShuffler layer for Keras
@@ -29,7 +31,10 @@ class PixelShuffler(Layer):
     # pylint: disable=C0103
     def __init__(self, size=(2, 2), data_format=None, **kwargs):
         super(PixelShuffler, self).__init__(**kwargs)
-        self.data_format = K.normalize_data_format(data_format)
+        if get_backend() == "amd":
+            self.data_format = K.normalize_data_format(data_format)
+        else:
+            self.data_format = conv_utils.normalize_data_format(data_format)
         self.size = conv_utils.normalize_tuple(size, 2, 'size')
 
     def call(self, inputs, **kwargs):
@@ -193,7 +198,10 @@ class SubPixelUpscaling(Layer):
         super(SubPixelUpscaling, self).__init__(**kwargs)
 
         self.scale_factor = scale_factor
-        self.data_format = K.normalize_data_format(data_format)
+        if get_backend() == "amd":
+            self.data_format = K.normalize_data_format(data_format)
+        else:
+            self.data_format = conv_utils.normalize_data_format(data_format)
 
     def build(self, input_shape):
         pass
@@ -351,6 +359,34 @@ class ReflectionPadding2D(Layer):
         config = {'stride': self.stride,
                   'kernel_size': self.kernel_size}
         base_config = super(ReflectionPadding2D, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+class _GlobalPooling2D(Layer):
+    """Abstract class for different global pooling 2D layers.
+
+    From keras as access to pooling is trickier in tensorflow.keras
+    """
+    def __init__(self, data_format=None, **kwargs):
+        super(_GlobalPooling2D, self).__init__(**kwargs)
+        if get_backend() == "amd":
+            self.data_format = K.normalize_data_format(data_format)
+        else:
+            self.data_format = conv_utils.normalize_data_format(data_format)
+        self.input_spec = InputSpec(ndim=4)
+
+    def compute_output_shape(self, input_shape):
+        if self.data_format == 'channels_last':
+            return (input_shape[0], input_shape[3])
+        else:
+            return (input_shape[0], input_shape[1])
+
+    def call(self, inputs):
+        raise NotImplementedError
+
+    def get_config(self):
+        config = {'data_format': self.data_format}
+        base_config = super(_GlobalPooling2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 

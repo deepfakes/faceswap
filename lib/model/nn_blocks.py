@@ -9,11 +9,9 @@ import logging
 import tensorflow as tf
 import keras.backend as K
 
-from keras.layers import (add, Add, BatchNormalization, concatenate, Lambda, regularizers,
-                          Permute, Reshape, SeparableConv2D, Softmax, UpSampling2D)
-from keras.layers.advanced_activations import LeakyReLU
-from keras.layers.convolutional import Conv2D
-from keras.layers.core import Activation
+from keras import regularizers
+from keras.layers import (Activation, add, Add, BatchNormalization, concatenate, Conv2D, Lambda,
+                          LeakyReLU, Permute, Reshape, SeparableConv2D, Softmax, UpSampling2D)
 from keras.initializers import he_uniform, VarianceScaling
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D, Scale

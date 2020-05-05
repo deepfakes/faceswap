@@ -17,6 +17,7 @@ git+https://github.com/deepfakes/nvidia-ml-py3.git
 #nvidia-ml-py3
 h5py==2.10.0
 #Keras==2.2.4
+tensorflow-probability
 pywin32 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
 

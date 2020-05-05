@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow as tf
 from keras import backend as K
 from keras import initializers
-from keras.utils.generic_utils import get_custom_objects
+from keras.utils import get_custom_objects
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -30,8 +30,10 @@ def icnr_keras(shape, dtype=None):
     new_shape = shape[:3] + [int(shape[3] / (scale ** 2))]
     var_x = initializer(new_shape, dtype)
     var_x = tf.transpose(var_x, perm=[2, 0, 1, 3])
-    var_x = tf.image.resize_nearest_neighbor(var_x, size=(shape[0] * scale, shape[1] * scale))
-    var_x = tf.space_to_depth(var_x, block_size=scale)
+    var_x = tf.image.resize(var_x,
+                            size=(shape[0] * scale, shape[1] * scale),
+                            method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+    var_x = tf.nn.space_to_depth(var_x, block_size=scale)
     var_x = tf.transpose(var_x, perm=[1, 2, 0, 3])
     return var_x
 
@@ -65,11 +67,10 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
             self.initializer = initializers.deserialize(self.initializer)
         var_x = self.initializer(new_shape, dtype)
         var_x = tf.transpose(var_x, perm=[2, 0, 1, 3])
-        var_x = tf.image.resize_nearest_neighbor(
-            var_x,
-            size=(shape[0] * self.scale, shape[1] * self.scale),
-            align_corners=True)
-        var_x = tf.space_to_depth(var_x, block_size=self.scale, data_format='NHWC')
+        var_x = tf.image.resize(var_x,
+                                size=(shape[0] * self.scale, shape[1] * self.scale),
+                                method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        var_x = tf.nn.space_to_depth(var_x, block_size=self.scale, data_format="NHWC")
         var_x = tf.transpose(var_x, perm=[1, 2, 0, 3])
         return var_x
 

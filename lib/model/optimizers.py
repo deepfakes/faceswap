@@ -12,15 +12,33 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Adam(KerasAdam):
+    def __init__(self, *args, **kwargs):
+        kwargs = {k: v for k, v in kwargs.items() if k != "cpu_mode"}
+        super().__init__(*args, **kwargs)
+
+
+# TODO tf keras and keras have diverged. Need to re-implement for cpu optimization
+class Adam_to_port(KerasAdam):
     """Adapted Keras Adam Optimizer to allow support of calculations
        on CPU for Tensorflow.
 
        Adapted from https://github.com/iperov/DeepFaceLab
     """
 
-    def __init__(self, lr=0.001, beta_1=0.9, beta_2=0.999,
-                 epsilon=None, decay=0., amsgrad=False, cpu_mode=0, **kwargs):
-        super().__init__(lr, beta_1, beta_2, epsilon, decay, **kwargs)
+    def __init__(self,
+                 learning_rate=0.001,
+                 beta_1=0.9,
+                 beta_2=0.999,
+                 epsilon=None,
+                 amsgrad=False,
+                 cpu_mode=0,
+                 **kwargs):
+        super().__init__(learning_rate=learning_rate,
+                         beta_1=beta_1,
+                         beta_2=beta_2,
+                         epsilon=epsilon,
+                         amsgrad=amsgrad,
+                         **kwargs)
         self.cpu_mode = self.set_cpu_mode(cpu_mode)
 
     @staticmethod
@@ -34,7 +52,7 @@ class Adam(KerasAdam):
         grads = self.get_gradients(loss, params)
         self.updates = [K.update_add(self.iterations, 1)]
 
-        lr = self.lr
+        lr = self.learning_rate
         if self.initial_decay > 0:
             lr = lr * (1. / (1. + self.decay * K.cast(self.iterations,
                                                       K.dtype(self.decay))))

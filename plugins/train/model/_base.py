@@ -24,7 +24,7 @@ from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask
                               generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
 from lib.model.nn_blocks import NNBlocks
 from lib.model.optimizers import Adam
-from lib.utils import deprecation_warning, FaceswapError
+from lib.utils import deprecation_warning, get_backend, FaceswapError
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -374,11 +374,11 @@ class ModelBase():
 
     def get_optimizer(self, lr=5e-5, beta_1=0.5, beta_2=0.999):  # pylint: disable=invalid-name
         """ Build and return Optimizer """
-        opt_kwargs = dict(lr=lr, beta_1=beta_1, beta_2=beta_2)
+        opt_kwargs = dict(learning_rate=lr, beta_1=beta_1, beta_2=beta_2)
         if (self.config.get("clipnorm", False) and
                 keras.backend.backend() != "plaidml.keras.backend"):
             # NB: Clipnorm is ballooning VRAM usage, which is not expected behavior
-            # and may be a bug in Keras/TF.
+            # and may be a bug in Keras/Tensorflow.
             # PlaidML has a bug regarding the clipnorm parameter
             # See: https://github.com/plaidml/plaidml/issues/228
             # Workaround by simply removing it.
@@ -445,7 +445,7 @@ class ModelBase():
             return None
         if not self.models_exist and self.predict:
             logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
-            exit(0)
+            sys.exit(1)
 
         if not self.is_legacy or not self.predict:
             K.clear_session()
@@ -791,7 +791,11 @@ class NNMeta():
         self.name = self.set_name()
         self.network = network
         self.is_output = is_output
-        self.network.name = self.name
+        if get_backend() == "amd":
+            self.network.name = self.name
+        else:
+            # No setter in tensorflow.keras
+            self.network._name = self.name
         self.config = network.get_config()  # For pingpong restore
         self.weights = network.get_weights()  # For pingpong restore
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -847,7 +851,11 @@ class NNMeta():
             return False
         self.config = network.get_config()
         self.network = network  # Update network with saved model
-        self.network.name = self.name
+        if get_backend() == "amd":
+            self.network.name = self.name
+        else:
+            # No setter in tensorflow.keras
+            self.network._name = self.name  # pylint:disable=protected-access
         return True
 
     def save(self, fullpath=None, backup_func=None):
@@ -864,7 +872,11 @@ class NNMeta():
         logger.info("Adding model topology to legacy weights file: '%s'", self.filename)
         self.network.load_weights(self.filename)
         self.save(backup_func=None)
-        self.network.name = self.type
+        if get_backend() == "amd":
+            self.network.name = self.type
+        else:
+            # No setter in tensorflow.keras
+            self.network._name = self.type  # pylint:disable=protected-access
 
 
 class State():
@@ -1014,7 +1026,7 @@ class State():
             set it to `mae`. Remove old `dssim_loss` item
 
             * masks - If `learn_mask` does not exist then it is set to ``True`` if `mask_type` is
-            not ``None`` otherwised it is set to ``False``.
+            not ``None`` otherwise it is set to ``False``.
 
             * masks type - Replace removed masks 'dfl_full' and 'facehull' with `components` mask
 

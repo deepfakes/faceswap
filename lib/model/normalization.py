@@ -6,10 +6,10 @@
 import sys
 import inspect
 
-from keras.engine import Layer, InputSpec
+from keras.layers import Layer, InputSpec
 from keras import initializers, regularizers, constraints
 from keras import backend as K
-from keras.utils.generic_utils import get_custom_objects
+from keras.utils import get_custom_objects
 
 
 def to_list(inp):

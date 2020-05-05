@@ -13,16 +13,19 @@ import keras.backend as K
 from keras.layers import Lambda, concatenate
 import numpy as np
 import tensorflow as tf
-from tensorflow.distributions import Beta
+from tensorflow_probability import distributions as tfd
 
+from lib.utils import get_backend
 from .normalization import InstanceNormalization
-if K.backend() == "plaidml.keras.backend":
+if get_backend() == "amd":
     from plaidml.op import extract_image_patches
 else:
-    from tensorflow import extract_image_patches  # pylint: disable=ungrouped-imports
+    # pylint: disable=ungrouped-imports
+    from tensorflow import image as tfi
+    extract_image_patches = tfi.extract_patches  # pylint:disable=invalid-name
 
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 def mask_loss_wrapper(loss_func, preprocessing_func=None):
@@ -320,7 +323,7 @@ def adversarial_loss(net_d, real, fake_abgr, distorted, gan_training="mixup_LSGA
     fake = alpha * fake_bgr + (1-alpha) * distorted
 
     if gan_training == "mixup_LSGAN":
-        dist = Beta(0.2, 0.2)
+        dist = tfd.Beta(0.2, 0.2)
         lam = dist.sample()
         mixup = lam * concatenate([real, distorted]) + (1 - lam) * concatenate([fake, distorted])
         pred_fake = net_d(concatenate([fake, distorted]))
@@ -404,7 +407,7 @@ def perceptual_loss(real, fake_abgr, distorted, vggface_feats, **weights):
 
     real_sz224 = tf.image.resize_images(real, [224, 224])
     real_sz224 = Lambda(preprocess_vggface)(real_sz224)
-    dist = Beta(0.2, 0.2)
+    dist = tfd.Beta(0.2, 0.2)
     lam = dist.sample()  # use mixup trick here to reduce foward pass from 2 times to 1.
     mixup = lam*fake_bgr + (1-lam)*fake
     fake_sz224 = tf.image.resize_images(mixup, [224, 224])
