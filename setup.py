@@ -576,7 +576,7 @@ class Install():
 
     def ask_continue(self):
         """ Ask Continue with Install """
-        inp = input("Please ensure your System Dependencies are met. Continue? [y/N] ")
+        inp = input("Please ensure your System Dependencies meets. Continue? [y/N] ")
         if inp in ("", "N", "n"):
             self.output.error("Please install system dependencies to continue")
             exit(1)
