@@ -89,6 +89,7 @@ install:
   - conda --version ; python --version ; pip --version;
   # We set up for plaidML as we can then use both the plaidML and Tensorflow backends for testing
   - python setup.py --installer --amd;
+  - conda install pytest
   # For debugging purposes
   - df -h
 
