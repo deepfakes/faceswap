@@ -33,6 +33,9 @@
 !plugins/train/*
 !plugins/convert/*
 !.pylintrc
+!tests
+!tests/*
+!tests/*/*
 !tools
 !tools/*
 !_travis

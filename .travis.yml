@@ -87,10 +87,18 @@ install:
   - conda env list | grep faceswap || conda create -q --name faceswap python=$CONDA_PYTHON;
   - conda activate faceswap;
   - conda --version ; python --version ; pip --version;
-  - python setup.py --installer;
+  # We set up for plaidML as we can then use both the plaidML and Tensorflow backends for testing
+  - python setup.py --installer --amd;
   # For debugging purposes
   - df -h
 
 script:
-  - python _travis/simple_tests.py;
-
+  - echo "Running plaidML Tests";
+  - rm -f ~/.plaidml;
+  - echo "{\"PLAIDML_DEVICE_IDS\":[\"llvm_cpu.0\"],\"PLAIDML_EXPERIMENTAL\":true}" > ~/.plaidml;
+  - FACESWAP_BACKEND="amd" KERAS_BACKEND="plaidml.keras.backend" PYTHONPATH=$PWD:$PYTHONPATH py.test -v tests/;
+  - rm -f ~/.plaidml;
+  - echo "Running Tensorflow Tests";
+  - FACESWAP_BACKEND="cpu" KERAS_BACKEND="tensorflow" PYTHONPATH=$PWD:$PYTHONPATH py.test -v tests/;
+  - echo "Running End-to-End Tests";
+  - FACESWAP_BACKEND="cpu" KERAS_BACKEND="tensorflow" python _travis/simple_tests.py;

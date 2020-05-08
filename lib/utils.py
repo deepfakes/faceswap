@@ -25,8 +25,10 @@ _video_extensions = [  # pylint:disable=invalid-name
 
 
 class Backend():
-    """ Return the backend from config/.faceswap
-        if file doesn't exist, create it """
+    """ Return the backend from config/.faceswap of from the `FACESWAP_BACKEND` Environment
+    Variable.
+
+    If file doesn't exist and a variable hasn't been set, create the config file. """
     def __init__(self):
         self.backends = {"1": "amd", "2": "cpu", "3": "nvidia"}
         self.config_file = self.get_config_file()
@@ -40,7 +42,14 @@ class Backend():
         return config_file
 
     def get_backend(self):
-        """ Return the backend from config/.faceswap """
+        """ Return the backend from either the `FACESWAP_BACKEND` Environment Variable or from
+        the :loc:`config/.faceswap` configuration file. """
+        # Check if environment variable is set, if so use that
+        if "FACESWAP_BACKEND" in os.environ:
+            fs_backend = os.environ["FACESWAP_BACKEND"].lower()
+            print("Setting Faceswap backend from environment variable to "
+                  "{}".format(fs_backend.upper()))
+            return fs_backend
         # Intercept for sphinx docs build
         if sys.argv[0].endswith("sphinx-build"):
             return "nvidia"
