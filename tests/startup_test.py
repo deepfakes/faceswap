@@ -3,12 +3,14 @@
 
 import inspect
 
+import pytest
 from keras import backend as K
 
 from lib.utils import get_backend
 
 
-def test_backend():
+@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
+def test_backend(dummy):  # pylint:disable=unused-argument
     """ Sanity check to ensure that Keras backend is returning the correct object type. """
     backend = get_backend()
     test_var = K.variable((1, 1, 4, 4))

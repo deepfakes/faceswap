@@ -10,10 +10,11 @@ import pytest
 import numpy as np
 
 from lib.model import initializers
+from lib.utils import get_backend
 
 
 CONV_SHAPE = (3, 3, 256, 2048)
-CONV_ID = "CONV_{}_{}_{}_{}".format(*(dim for dim in CONV_SHAPE))
+CONV_ID = get_backend().upper()
 
 
 def _runner(init, shape, target_mean=None, target_std=None,
