@@ -36,7 +36,6 @@ model.layers module
    ~lib.model.layers.L2_normalize
    ~lib.model.layers.PixelShuffler
    ~lib.model.layers.ReflectionPadding2D
-   ~lib.model.layers.Scale
    ~lib.model.layers.SubPixelUpscaling
    
 .. automodule:: lib.model.layers
@@ -44,6 +43,20 @@ model.layers module
    :undoc-members:
    :show-inheritance:
 
+model.normalization module
+--------------------------
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.model.normalization.InstanceNormalization
+   
+.. automodule:: lib.model.normalization
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 model.session module
 ---------------------

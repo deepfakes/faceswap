@@ -106,13 +106,6 @@ def test_pixel_shuffler(dummy):  # pylint:disable=unused-argument
     """ Pixel Shuffler layer test """
     layer_test(layers.PixelShuffler, input_shape=(2, 4, 4, 1024))
 
-
-@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
-def test_scale(dummy):  # pylint:disable=unused-argument
-    """ Scale layer test """
-    layer_test(layers.Scale, input_shape=(2, 4, 4, 1024))
-
-
 @pytest.mark.skipif(get_backend() == "amd", reason="amd does not support this layer")
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_subpixel_upscaling(dummy):  # pylint:disable=unused-argument
