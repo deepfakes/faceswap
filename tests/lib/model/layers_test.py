@@ -32,8 +32,8 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
         if not input_dtype:
             input_dtype = K.floatx()
         input_data_shape = list(input_shape)
-        for i, e in enumerate(input_data_shape):
-            if e is None:
+        for i, var_e in enumerate(input_data_shape):
+            if var_e is None:
                 input_data_shape[i] = np.random.randint(1, 4)
         input_data = (10 * np.random.random(input_data_shape))
         input_data = input_data.astype(input_dtype)
@@ -58,14 +58,14 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
 
     # test in functional API
     if fixed_batch_size:
-        x = Input(batch_shape=input_shape, dtype=input_dtype)
+        inp = Input(batch_shape=input_shape, dtype=input_dtype)
     else:
-        x = Input(shape=input_shape[1:], dtype=input_dtype)
-    y = layer(x)
-    assert K.dtype(y) == expected_output_dtype
+        inp = Input(shape=input_shape[1:], dtype=input_dtype)
+    outp = layer(inp)
+    assert K.dtype(outp) == expected_output_dtype
 
     # check with the functional API
-    model = Model(x, y)
+    model = Model(inp, outp)
 
     actual_output = model.predict(input_data)
     actual_output_shape = actual_output.shape
@@ -105,6 +105,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
 def test_pixel_shuffler(dummy):  # pylint:disable=unused-argument
     """ Pixel Shuffler layer test """
     layer_test(layers.PixelShuffler, input_shape=(2, 4, 4, 1024))
+
 
 @pytest.mark.skipif(get_backend() == "amd", reason="amd does not support this layer")
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
