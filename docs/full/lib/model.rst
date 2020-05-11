@@ -43,6 +43,14 @@ model.layers module
    :undoc-members:
    :show-inheritance:
 
+model.nn_blocks module
+----------------------
+
+.. automodule:: lib.model.nn_blocks
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 model.normalization module
 --------------------------
 
