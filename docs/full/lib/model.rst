@@ -66,6 +66,14 @@ model.normalization module
    :undoc-members:
    :show-inheritance:
 
+model.optimizers module
+-----------------------
+
+.. automodule:: lib.model.optimizers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 model.session module
 ---------------------
 
