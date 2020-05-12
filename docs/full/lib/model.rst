@@ -43,6 +43,29 @@ model.layers module
    :undoc-members:
    :show-inheritance:
 
+model.losses module
+-------------------
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~lib.model.losses.DSSIMObjective
+   ~lib.model.losses.PenalizedLoss
+   ~lib.model.losses.gaussian_blur
+   ~lib.model.losses.generalized_loss
+   ~lib.model.losses.gmsd_loss
+   ~lib.model.losses.gradient_loss
+   ~lib.model.losses.l_inf_norm
+   ~lib.model.losses.mask_loss_wrapper
+   ~lib.model.losses.scharr_edges
+
+.. automodule:: lib.model.losses
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 model.nn_blocks module
 ----------------------
 
