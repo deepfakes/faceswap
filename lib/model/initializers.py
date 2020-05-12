@@ -33,7 +33,7 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
 
     Example
     -------
-        >>> x = conv2d(... weights_initializer=ICNR(initializer=he_uniform(), scale=2))
+    >>> x = conv2d(... weights_initializer=ICNR(initializer=he_uniform(), scale=2))
 
     References
     ----------

@@ -31,7 +31,7 @@ def upscale2x_hyb(self, inp, filters, kernel_size=3, padding='same',
                   sr_ratio=0.5, scale_factor=2, interpolation='bilinear',
                   res_block_follows=False, **kwargs):
     """Hybrid Upscale Layer"""
-    name = self.get_name("upscale2x_hyb")
+    name = self._get_name("upscale2x_hyb")
     var_x = inp
 
     sr_filters = int(filters * sr_ratio)
@@ -56,7 +56,7 @@ def upscale2x_fast(self, inp, filters, kernel_size=3, padding='same',
                    sr_ratio=0.5, scale_factor=2, interpolation='bilinear',
                    res_block_follows=False, **kwargs):
     """Fast Upscale Layer"""
-    name = self.get_name("upscale2x_fast")
+    name = self._get_name("upscale2x_fast")
     var_x = inp
 
     var_x2 = self.conv2d(var_x, filters,  kernel_size=3, padding=padding,
