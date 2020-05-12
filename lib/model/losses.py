@@ -9,11 +9,14 @@ import keras.backend as K
 import numpy as np
 import tensorflow as tf
 
-if K.backend() == "plaidml.keras.backend":
+from lib.utils import get_backend
+
+if get_backend() == "amd":
     from plaidml.op import extract_image_patches
+    from lib.plaidml_utils import pad
 else:
     from tensorflow import extract_image_patches  # pylint: disable=ungrouped-imports
-
+    from tensorflow import pad
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -135,7 +138,6 @@ class DSSIMObjective():
         kernel = [self.kernel_size, self.kernel_size]
         y_true = K.reshape(y_true, [-1] + list(self.__int_shape(y_pred)[1:]))
         y_pred = K.reshape(y_pred, [-1] + list(self.__int_shape(y_pred)[1:]))
-
         patches_pred = self.extract_image_patches(y_pred,
                                                   kernel,
                                                   kernel,
@@ -497,35 +499,35 @@ def scharr_edges(image, magnitude):
     """
 
     # Define vertical and horizontal Scharr filters.
-    static_image_shape = image.get_shape()
+    static_image_shape = image.shape.dims if get_backend() == "amd" else image.get_shape()
     image_shape = K.shape(image)
 
     # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
-    matrix = [[[[0.00070, 0.00070]],
-               [[0.00520, 0.00370]],
-               [[0.03700, 0.00000]],
-               [[0.00520, -0.0037]],
-               [[0.00070, -0.0007]]],
-              [[[0.00370, 0.00520]],
-               [[0.11870, 0.11870]],
-               [[0.25890, 0.00000]],
-               [[0.11870, -0.1187]],
-               [[0.00370, -0.0052]]],
-              [[[0.00000, 0.03700]],
-               [[0.00000, 0.25890]],
-               [[0.00000, 0.00000]],
-               [[0.00000, -0.2589]],
-               [[0.00000, -0.0370]]],
-              [[[-0.0037, 0.00520]],
-               [[-0.1187, 0.11870]],
-               [[-0.2589, 0.00000]],
-               [[-0.1187, -0.1187]],
-               [[-0.0037, -0.0052]]],
-              [[[-0.0007, 0.00070]],
-               [[-0.0052, 0.00370]],
-               [[-0.0370, 0.00000]],
-               [[-0.0052, -0.0037]],
-               [[-0.0007, -0.0007]]]]
+    matrix = np.array([[[[0.00070, 0.00070]],
+                        [[0.00520, 0.00370]],
+                        [[0.03700, 0.00000]],
+                        [[0.00520, -0.0037]],
+                        [[0.00070, -0.0007]]],
+                       [[[0.00370, 0.00520]],
+                        [[0.11870, 0.11870]],
+                        [[0.25890, 0.00000]],
+                        [[0.11870, -0.1187]],
+                        [[0.00370, -0.0052]]],
+                       [[[0.00000, 0.03700]],
+                        [[0.00000, 0.25890]],
+                        [[0.00000, 0.00000]],
+                        [[0.00000, -0.2589]],
+                        [[0.00000, -0.0370]]],
+                       [[[-0.0037, 0.00520]],
+                        [[-0.1187, 0.11870]],
+                        [[-0.2589, 0.00000]],
+                        [[-0.1187, -0.1187]],
+                        [[-0.0037, -0.0052]]],
+                       [[[-0.0007, 0.00070]],
+                        [[-0.0052, 0.00370]],
+                        [[-0.0370, 0.00000]],
+                        [[-0.0052, -0.0037]],
+                        [[-0.0007, -0.0007]]]])
     num_kernels = [2]
     kernels = K.constant(matrix, dtype='float32')
     kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
@@ -533,7 +535,7 @@ def scharr_edges(image, magnitude):
     # Use depth-wise convolution to calculate edge maps per channel.
     # Output tensor has shape [batch_size, h, w, d * num_kernels].
     pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
-    padded = tf.pad(image, pad_sizes, mode='REFLECT')
+    padded = pad(image, pad_sizes, mode='REFLECT')
     output = K.depthwise_conv2d(padded, kernels)
 
     if not magnitude:  # direction of edges
@@ -541,7 +543,7 @@ def scharr_edges(image, magnitude):
         shape = K.concatenate([image_shape, num_kernels], axis=0)
         output = K.reshape(output, shape=shape)
         output.set_shape(static_image_shape.concatenate(num_kernels))
-        output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1]))
+        output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1], axis=None))
     # magnitude of edges -- unified x & y edges don't work well with Neural Networks
     return output
 

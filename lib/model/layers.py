@@ -12,10 +12,11 @@ import keras.backend as K
 from keras.engine import InputSpec, Layer
 from keras.utils import conv_utils
 from keras.utils.generic_utils import get_custom_objects
-from keras import initializers
 from keras.layers.pooling import _GlobalPooling2D
 
-if K.backend() == "plaidml.keras.backend":
+from lib.utils import get_backend
+
+if get_backend() == "amd":
     from lib.plaidml_utils import pad
 else:
     from tensorflow import pad
@@ -556,7 +557,7 @@ class GlobalStdDevPooling2D(_GlobalPooling2D):
         return pooled
 
 
-class L2_normalize(Layer):
+class L2_normalize(Layer):  # Pylint:disable=invalid-name
     """ Normalizes a tensor w.r.t. the L2 norm alongside the specified axis.
 
     Parameters
