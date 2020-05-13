@@ -136,13 +136,6 @@ class Config(FaceswapConfig):
                  "for this initialization technique are expensive. This will only impact starting "
                  "a new model.")
         self.add_item(
-            section=section, title="subpixel_upscaling", datatype=bool,
-            default=False, group="network",
-            info="Use subpixel upscaling rather than pixel shuffler. These techniques "
-                 "are both designed to produce better resolving upscaling than other "
-                 "methods. Each perform the same operations, but using different TF opts."
-                 "\n\t https://arxiv.org/pdf/1609.05158.pdf")
-        self.add_item(
             section=section, title="reflect_padding", datatype=bool,
             default=False, group="network",
             info="Use reflection padding rather than zero padding with convolutions. "

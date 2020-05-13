@@ -9,7 +9,7 @@ from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
 from keras.initializers import he_uniform, VarianceScaling
 from .initializers import ICNR, ConvolutionAware
-from .layers import PixelShuffler, SubPixelUpscaling, ReflectionPadding2D
+from .layers import PixelShuffler, ReflectionPadding2D
 from .normalization import InstanceNormalization
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -26,10 +26,6 @@ class NNBlocks():
 
     Parameters
     ----------
-    use_subpixel: bool, Optional
-        ``True`` if sub-pixel up-scaling layer should be used instead of pixel shuffler for
-        up-scaling. This option is deprecated as sub-pixel up-scaling is Nvidia only, but is kept
-        for legacy models. Default: ``False``
     use_icnr_init: bool, Optional
         ``True`` if ICNR initialization should be used rather than the default. Default: ``False``
     use_convaware_init: bool, Optional
@@ -44,18 +40,16 @@ class NNBlocks():
         is being reloaded. Default: ``True``
     """
     def __init__(self,
-                 use_subpixel=False,
                  use_icnr_init=False,
                  use_convaware_init=False,
                  use_reflect_padding=False,
                  first_run=True):
-        logger.debug("Initializing %s: (use_subpixel: %s, use_icnr_init: %s, use_convaware_init: "
-                     "%s, use_reflect_padding: %s, first_run: %s)",
-                     self.__class__.__name__, use_subpixel, use_icnr_init, use_convaware_init,
+        logger.debug("Initializing %s: (use_icnr_init: %s, use_convaware_init: %s, "
+                     "use_reflect_padding: %s, first_run: %s)",
+                     self.__class__.__name__, use_icnr_init, use_convaware_init,
                      use_reflect_padding, first_run)
         self.names = dict()
         self.first_run = first_run
-        self.use_subpixel = use_subpixel
         self.use_icnr_init = use_icnr_init
         self.use_convaware_init = use_convaware_init
         self.use_reflect_padding = use_reflect_padding
@@ -311,11 +305,7 @@ class NNBlocks():
             var_x = InstanceNormalization(name="{}_instancenorm".format(name))(var_x)
         if not res_block_follows:
             var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
-        if self.use_subpixel:
-            var_x = SubPixelUpscaling(name="{}_subpixel".format(name),
-                                      scale_factor=scale_factor)(var_x)
-        else:
-            var_x = PixelShuffler(name="{}_pixelshuffler".format(name), size=scale_factor)(var_x)
+        var_x = PixelShuffler(name="{}_pixelshuffler".format(name), size=scale_factor)(var_x)
         return var_x
 
     # <<< DFaker Model Blocks >>> #

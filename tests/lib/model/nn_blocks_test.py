@@ -15,14 +15,14 @@ from numpy.testing import assert_allclose
 from lib.model.nn_blocks import NNBlocks
 from lib.utils import get_backend
 
-_PARAMS = ["use_subpixel", "use_icnr_init", "use_convaware_init", "use_reflect_padding"]
+_PARAMS = ["use_icnr_init", "use_convaware_init", "use_reflect_padding"]
 _VALUES = list(product([True, False], repeat=len(_PARAMS)))
 _IDS = ["{}[{}]".format("|".join([_PARAMS[idx] for idx, b in enumerate(v) if b]),
                         get_backend().upper()) for v in _VALUES]
 
 
 def block_test(layer_func, kwargs={}, input_shape=None):
-    """Test routine for a faceswaps neural network blocks.
+    """Test routine for faceswap neural network blocks.
 
     Tests are simple and are to ensure that the blocks compile on both tensorflow
     and plaidml backends
@@ -62,13 +62,9 @@ def block_test(layer_func, kwargs={}, input_shape=None):
 
 
 @pytest.mark.parametrize(_PARAMS, _VALUES, ids=_IDS)
-def test_blocks(use_subpixel, use_icnr_init, use_convaware_init, use_reflect_padding):
+def test_blocks(use_icnr_init, use_convaware_init, use_reflect_padding):
     """ Test for all blocks contained within the NNBlocks Class """
-    if get_backend() == "amd" and use_subpixel:
-        # Subpixel upscaling does not work on plaidml so skip this test
-        pytest.skip("Subpixel upscaling not supported in plaidML")
-    cls_ = NNBlocks(use_subpixel=use_subpixel,
-                    use_icnr_init=use_icnr_init,
+    cls_ = NNBlocks(use_icnr_init=use_icnr_init,
                     use_convaware_init=use_convaware_init,
                     use_reflect_padding=use_reflect_padding)
     block_test(cls_.conv2d, input_shape=(2, 5, 5, 128), kwargs=dict(filters=1024, kernel_size=3))
