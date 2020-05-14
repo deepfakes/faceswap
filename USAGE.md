@@ -149,7 +149,7 @@ It should now start swapping faces of all these pictures.
 
 
 ## General Tips
-You can see the full list of arguments for training by hovering over the options in the GUI or passing the help flag. i.e:
+You can see the full list of arguments for Converting by hovering over the options in the GUI or passing the help flag. i.e:
 
 ```bash
 python faceswap.py convert -h

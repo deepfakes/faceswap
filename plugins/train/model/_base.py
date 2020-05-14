@@ -83,8 +83,7 @@ class ModelBase():
                            self.vram_savings.pingpong,
                            training_image_size)
 
-        self.blocks = NNBlocks(use_subpixel=self.config["subpixel_upscaling"],
-                               use_icnr_init=self.config["icnr_init"],
+        self.blocks = NNBlocks(use_icnr_init=self.config["icnr_init"],
                                use_convaware_init=self.config["conv_aware_init"],
                                use_reflect_padding=self.config["reflect_padding"],
                                first_run=self.state.first_run)
@@ -377,9 +376,9 @@ class ModelBase():
         opt_kwargs = dict(learning_rate=lr, beta_1=beta_1, beta_2=beta_2)
         if (self.config.get("clipnorm", False) and
                 keras.backend.backend() != "plaidml.keras.backend"):
-            # NB: Clipnorm is ballooning VRAM usage, which is not expected behavior
+            # NB: Clip-norm is ballooning VRAM usage, which is not expected behavior
             # and may be a bug in Keras/Tensorflow.
-            # PlaidML has a bug regarding the clipnorm parameter
+            # PlaidML has a bug regarding the clip-norm parameter
             # See: https://github.com/plaidml/plaidml/issues/228
             # Workaround by simply removing it.
             # TODO: Remove this as soon it is fixed in PlaidML.
@@ -581,7 +580,6 @@ class ModelBase():
         self.state.inputs = {"face:0": [64, 64, 3]}
         self.state.training_size = 256
         self.state.config["coverage"] = 62.5
-        self.state.config["subpixel_upscaling"] = False
         self.state.config["reflect_padding"] = False
         self.state.config["mask_type"] = None
         self.state.config["mask_blur_kernel"] = 3
