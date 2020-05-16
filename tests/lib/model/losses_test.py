@@ -37,7 +37,6 @@ def test_objective_shapes(loss_func, input_shape, output_shape):
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
-@pytest.mark.xfail(get_backend() == "amd", reason="plaidML generates NaNs")
 def test_dssim_channels_last(dummy):  # pylint:disable=unused-argument
     """ Basic test for DSSIM Loss """
     prev_data = K.image_data_format()

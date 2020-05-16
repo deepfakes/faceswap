@@ -16,6 +16,54 @@ from lib.utils import get_backend
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+def compute_fans(shape, data_format='channels_last'):
+    """Computes the number of input and output units for a weight shape.
+
+    Ported directly from Keras as the location moves between keras and tensorflow-keras
+    
+    Parameters
+    ----------
+    shape: tuple
+        shape tuple of integers
+    data_format: str
+        Image data format to use for convolution kernels. Note that all kernels in Keras are
+        standardized on the `"channels_last"` ordering (even when inputs are set to
+        `"channels_first"`).
+
+    Returns
+    -------
+    tuple
+            A tuple of scalars, `(fan_in, fan_out)`.
+    
+    Raises
+    ------
+    ValueError
+        In case of invalid `data_format` argument.
+    """
+    if len(shape) == 2:
+        fan_in = shape[0]
+        fan_out = shape[1]
+    elif len(shape) in {3, 4, 5}:
+        # Assuming convolution kernels (1D, 2D or 3D).
+        # TH kernel shape: (depth, input_depth, ...)
+        # TF kernel shape: (..., input_depth, depth)
+        if data_format == 'channels_first':
+            receptive_field_size = np.prod(shape[2:])
+            fan_in = shape[1] * receptive_field_size
+            fan_out = shape[0] * receptive_field_size
+        elif data_format == 'channels_last':
+            receptive_field_size = np.prod(shape[:-2])
+            fan_in = shape[-2] * receptive_field_size
+            fan_out = shape[-1] * receptive_field_size
+        else:
+            raise ValueError('Invalid data_format: ' + data_format)
+    else:
+        # No specific assumptions.
+        fan_in = np.sqrt(np.prod(shape))
+        fan_out = np.sqrt(np.prod(shape))
+    return fan_in, fan_out
+
+
 class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
     """ ICNR initializer for checkerboard artifact free sub pixel convolution
 
@@ -176,7 +224,10 @@ class ConvolutionAware(initializers.Initializer):
         tensor
             The modified kernel weights
         """
-        dtype = K.floatx() if dtype is None else dtype
+        # TODO Tensorflow appears to pass in a `tensorflow.python.framework.dtypes.DType` object
+        # which causes this to error, so currently just reverts to default dtype if a string is not
+        # passed in.
+        dtype = K.floatx() if not isinstance(dtype, str) else dtype
         if self._init:
             logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
         else:
@@ -189,7 +240,7 @@ class ConvolutionAware(initializers.Initializer):
         if self.seed is not None:
             np.random.seed(self.seed)
 
-        fan_in, _ = initializers._compute_fans(shape)  # pylint:disable=protected-access
+        fan_in, _ = compute_fans(shape)  # pylint:disable=protected-access
         variance = 2 / fan_in
 
         if rank == 3:
@@ -230,6 +281,8 @@ class ConvolutionAware(initializers.Initializer):
 
     def _create_basis(self, filters_size, filters, size, dtype):
         """ Create the basis for convolutional aware initialization """
+        logger.debug("filters_size: %s, filters: %s, size: %s, dtype: %s",
+                     filters_size, filters, size, dtype)
         if size == 1:
             return np.random.normal(0.0, self.eps_std, (filters_size, filters, size))
         nbb = filters // size + 1

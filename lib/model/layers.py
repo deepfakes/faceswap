@@ -312,7 +312,7 @@ class SubPixelUpscaling(Layer):
             data_format = K.image_data_format()
         data_format = data_format.lower()
         ipt = cls._preprocess_conv2d_input(ipt, data_format)
-        out = tf.depth_to_space(ipt, scale)
+        out = tf.nn.depth_to_space(ipt, scale)
         out = cls._postprocess_conv2d_output(out, data_format)
         return out
 
