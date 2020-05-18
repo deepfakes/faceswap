@@ -8,18 +8,16 @@ import logging
 import keras.backend as K
 import numpy as np
 import tensorflow as tf
-from tensorflow_probability import distributions as tfd
 
 from lib.utils import get_backend
-from .normalization import InstanceNormalization
+
+# pylint: disable=ungrouped-imports
 if get_backend() == "amd":
     from plaidml.op import extract_image_patches
     from lib.plaidml_utils import pad
 else:
-    # pylint: disable=ungrouped-imports
-    from tensorflow import image as tfi
+    from tensorflow.image import extract_patches as extract_image_patches
     from tensorflow import pad
-    extract_image_patches = tfi.extract_patches  # pylint:disable=invalid-name
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -303,7 +301,7 @@ def PenalizedLoss(mask, loss_func,  # pylint: disable=invalid-name
         Branching because TensorFlow's broadcasting is wonky and plaidML's concatenate is
         implemented inefficiently.
         """
-        if K.backend() == "plaidml.keras.backend":
+        if get_backend() == "amd":
             n_true = y_true * mask
             n_pred = y_pred * mask
         else:
