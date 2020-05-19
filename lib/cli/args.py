@@ -966,27 +966,6 @@ class TrainArgs(FaceSwapArgs):
             group="training",
             help="Number of GPUs to use for training"))
         argument_list.append(dict(
-            opts=("-msg", "--memory-saving-gradients"),
-            action="store_true",
-            dest="memory_saving_gradients",
-            default=False,
-            backend="nvidia",
-            group="VRAM Savings",
-            help="Trades off VRAM usage against computation time. Can fit larger models into "
-                 "memory at a cost of slower training speed. 50%%-150%% batch size increase "
-                 "for 20%%-50%% longer training time. NB: Launch time will be significantly "
-                 "delayed. Switching sides using ping-pong training will take longer."))
-        argument_list.append(dict(
-            opts=("-o", "--optimizer-savings"),
-            action="store_true",
-            dest="optimizer_savings",
-            default=False,
-            backend="nvidia",
-            group="VRAM Savings",
-            help="To save VRAM some optimizer gradient calculations can be performed on the "
-                 "CPU rather than the GPU. This allows you to increase batchsize at a training "
-                 "speed/system RAM cost."))
-        argument_list.append(dict(
             opts=("-pp", "--ping-pong"),
             action="store_true",
             dest="pingpong",

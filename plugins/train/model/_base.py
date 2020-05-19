@@ -15,6 +15,7 @@ from keras import losses
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model
+from keras.optimizers import Adam
 from keras.utils import get_custom_objects, multi_gpu_model
 
 from lib.serializer import get_serializer
@@ -22,7 +23,6 @@ from lib.model.backup_restore import Backup
 from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask_loss_wrapper,
                               generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
 from lib.model.nn_blocks import NNBlocks
-from lib.model.optimizers import Adam
 from lib.utils import deprecation_warning, get_backend, FaceswapError
 from plugins.train._config import Config
 
@@ -48,23 +48,20 @@ class ModelBase():
                  encoder_dim=None,
                  trainer="original",
                  pingpong=False,
-                 memory_saving_gradients=False,
-                 optimizer_savings=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
                      "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
                      "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
                      "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
-                     "pingpong: %s, memory_saving_gradients: %s, optimizer_savings: %s, "
-                     "predict: %s)",
+                     "pingpong: %s, predict: %s)",
                      self.__class__.__name__, model_dir, gpus, configfile, snapshot_interval,
                      no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
                      alignments_paths, preview_scale, input_shape, encoder_dim, trainer, pingpong,
-                     memory_saving_gradients, optimizer_savings, predict)
+                     predict)
 
         self.predict = predict
         self.model_dir = model_dir
-        self.vram_savings = VRAMSavings(pingpong, optimizer_savings, memory_saving_gradients)
+        self.vram_savings = VRAMSavings(pingpong)
 
         self.backup = Backup(self.model_dir, self.name)
         self.gpus = gpus
@@ -359,11 +356,7 @@ class ModelBase():
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        optimizer = Adam(learning_rate=self.config.get("learning_rate", 5e-5),
-                         beta_1=0.5,
-                         beta_2=0.99,
-                         clipnorm=self.config.get("clipnorm", False),
-                         cpu_mode=self.vram_savings.optimizer_savings)
+        optimizer = self._get_optimizer()
 
         for side, model in self.predictors.items():
             loss = Loss(model.inputs, model.outputs)
@@ -372,6 +365,34 @@ class ModelBase():
                 self.state.add_session_loss_names(side, loss.names)
                 self.history[side] = list()
         logger.debug("Compiled Predictors. Losses: %s", loss.names)
+
+    def _get_optimizer(self):
+        """ Return a Keras Adam Optimizer with user selected parameters.
+
+        Returns
+        -------
+        :class:`keras.optimizers.Adam`
+            An Adam Optimizer with the given user settings
+
+        Notes
+        -----
+        Clip-norm is ballooning VRAM usage, which is not expected behavior and may be a bug in
+        Keras/Tensorflow.
+
+        PlaidML has a bug regarding the clip-norm parameter See:
+        https://github.com/plaidml/plaidml/issues/228. We workaround by simply not adding this
+        parameter for AMD backend users.
+        """
+        # TODO add clipnorm in for plaidML when it is fixed in the main repository
+        clipnorm = get_backend() != "amd" and self.config.get("clipnorm", False)
+        learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
+        kwargs = dict(beta_1=0.5,
+                      beta_2=0.99,
+                      clipnorm=clipnorm)
+        kwargs[learning_rate] = self.config.get("learning_rate", 5e-5)
+        retval = Adam(**kwargs)
+        logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
+        return retval
 
     def converter(self, swap):
         """ Converter for autoencoder models """
@@ -586,14 +607,11 @@ class ModelBase():
 
 class VRAMSavings():
     """ VRAM Saving training methods """
-    def __init__(self, pingpong, optimizer_savings, memory_saving_gradients):
-        logger.debug("Initializing %s: (pingpong: %s, optimizer_savings: %s, "
-                     "memory_saving_gradients: %s)", self.__class__.__name__,
-                     pingpong, optimizer_savings, memory_saving_gradients)
+    def __init__(self, pingpong):
+        logger.debug("Initializing %s: (pingpong: %s)", self.__class__.__name__,
+                     pingpong)
         self.is_plaidml = get_backend() == "amd"
         self.pingpong = self.set_pingpong(pingpong)
-        self.optimizer_savings = self.set_optimizer_savings(optimizer_savings)
-        self.memory_saving_gradients = self.set_gradient_type(memory_saving_gradients)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def set_pingpong(self, pingpong):
@@ -605,28 +623,6 @@ class VRAMSavings():
         if pingpong:
             logger.info("Using Pingpong Training")
         return pingpong
-
-    def set_optimizer_savings(self, optimizer_savings):
-        """ Disable optimizer savings for plaidML users """
-        if optimizer_savings and self.is_plaidml:
-            logger.warning("Optimizer Savings not supported on plaidML. Disabling")
-            optimizer_savings = False
-        logger.debug("optimizer_savings: %s", optimizer_savings)
-        if optimizer_savings:
-            logger.info("Using Optimizer Savings")
-        return optimizer_savings
-
-    def set_gradient_type(self, memory_saving_gradients):
-        """ Monkey-patch Memory Saving Gradients if requested """
-        if memory_saving_gradients and self.is_plaidml:
-            logger.warning("Memory Saving Gradients not supported on plaidML. Disabling")
-            memory_saving_gradients = False
-        logger.debug("memory_saving_gradients: %s", memory_saving_gradients)
-        if memory_saving_gradients:
-            logger.info("Using Memory Saving Gradients")
-            from lib.model import memory_saving_gradients
-            K.__dict__["gradients"] = memory_saving_gradients.gradients_memory
-        return memory_saving_gradients
 
 
 class Loss():
