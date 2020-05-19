@@ -5,13 +5,114 @@
 
 import logging
 
+import six
 from keras.optimizers import Adam as KerasAdam
-from tensorflow.python.framework import ops
+import tensorflow as tf
+from tensorflow.python.framework import dtypes, ops
+from tensorflow.python.keras import backend, initializers
+from tensorflow.python.keras.engine import base_layer_utils
 from tensorflow.python.ops import variables as tf_variables
+
+from tensorflow.keras.optimizers import Optimizer as tf_optimizer
 
 from lib.utils import get_backend
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+tf.config.optimizer.set_experimental_options({"pin_to_host_optimization": True})
+
+# <<< START: MONKEY PATCH TENSORFLOW.KERAS OPTIMIZER >>> #
+_OLD_INIT = tf_optimizer.__init__
+
+
+def _patched_init(self, name, **kwargs):
+    """ Extract `cpu_mode` from the given key word arguments and set to :attr:`_cpu_mode` and
+    call the parent `__init__` with the remaining key word arguments.
+
+    Parameters
+    ----------
+    name: str
+        The name to use for accumulators created for the optimizer.
+    **kwargs: dict
+        keyword arguments. Allowed to be {`clipnorm`, `clipvalue`, `lr`, `decay`, `cpu_mode`}.
+        `clipnorm` is clip gradients by norm; `clipvalue` is clip gradients by value, `decay` is
+        included for backward compatibility to allow time inverse decay of learning rate. `lr` is
+        included for backward compatibility, recommended to use `learning_rate` instead. `cpu_mode`
+        is to perform some updates on CPU rather than GPU
+    """
+    # pylint:disable=protected-access
+    logger.debug("initial kwargs: %s", kwargs)
+    cpu_mode = False
+    if "cpu_mode" in kwargs:
+        cpu_mode = kwargs.pop("cpu_mode")
+    self._cpu_mode = False if get_backend() != "nvidia" else cpu_mode
+    logger.info("Optimizer CPU Mode set to %s", self._cpu_mode)
+    _OLD_INIT(self, name, **kwargs)
+
+
+def _patched_add_weight(self, name, shape,
+                        dtype=None,
+                        initializer="zeros",
+                        trainable=None,
+                        synchronization=tf_variables.VariableSynchronization.AUTO,
+                        aggregation=tf_variables.VariableAggregation.NONE):
+    """ Override of the original :func:`add_weight` method to allow explicit location of
+    variables on to the CPU.
+
+    See tensorflow documentation for details on this method
+    """
+    # pylint:disable=protected-access
+    if dtype is None:
+        dtype = dtypes.float32
+    if isinstance(initializer, six.string_types) or callable(initializer):
+        initializer = initializers.get(initializer)
+
+    if synchronization == tf_variables.VariableSynchronization.ON_READ:
+        if trainable:
+            raise ValueError(
+                "Synchronization value can be set to "
+                "VariableSynchronization.ON_READ only for non-trainable variables. "
+                "You have specified trainable=True and "
+                "synchronization=VariableSynchronization.ON_READ.")
+        # Set trainable to be false when variable is to be synced on read.
+        trainable = False
+    elif trainable is None:
+        trainable = True
+
+    if self._cpu_mode:
+        with ops.device("/CPU:0"):
+            variable = self._add_variable_with_custom_getter(
+                name=name,
+                shape=shape,
+                getter=base_layer_utils.make_variable,
+                overwrite=True,
+                initializer=initializer,
+                dtype=dtype,
+                trainable=trainable,
+                use_resource=True,
+                synchronization=synchronization,
+                aggregation=aggregation)
+    else:
+        variable = self._add_variable_with_custom_getter(
+            name=name,
+            shape=shape,
+            getter=base_layer_utils.make_variable,
+            overwrite=True,
+            initializer=initializer,
+            dtype=dtype,
+            trainable=trainable,
+            use_resource=True,
+            synchronization=synchronization,
+            aggregation=aggregation)
+    backend.track_variable(variable)
+    logger.info("Created variable for name '%s' on device '%s'", name, variable.device)
+    return variable
+
+
+tf_optimizer.__init__ = _patched_init
+tf_optimizer.add_weight = _patched_add_weight
+
+# <<< END: MONKEY PATCH TENSORFLOW.KERAS OPTIMIZER >>> #
 
 
 class Adam(KerasAdam):
@@ -49,14 +150,16 @@ class Adam(KerasAdam):
                  clipnorm=False,
                  cpu_mode=False,
                  **kwargs):
-        kwargs = self._rewrite_kwargs(learning_rate, clipnorm, kwargs)
+        kwargs = self._rewrite_kwargs(learning_rate, clipnorm, cpu_mode, kwargs)
         super().__init__(beta_1=beta_1, beta_2=beta_2, **kwargs)
-        self._cpu_mode = self._set_cpu_mode(cpu_mode)
 
     @staticmethod
-    def _rewrite_kwargs(learning_rate, clipnorm, kwargs):
+    def _rewrite_kwargs(learning_rate, clipnorm, cpu_mode, kwargs):
         """ Tensorflow Keras and Keras have diverged a little on key word argument naming
         so set the correct key word names for the backend.
+
+        Also extracts the cpu_mode flag from the key word arguments and only passes it along
+        if the backend is nvidia
 
         Notes
         -----
@@ -76,52 +179,7 @@ class Adam(KerasAdam):
             kwargs["learning_rate"] = learning_rate
             if clipnorm:
                 kwargs["clipnorm"] = 1.0
+        if get_backend() == "nvidia":
+            kwargs["cpu_mode"] = cpu_mode
         logger.info("Returning key word arguments: %s", kwargs)
         return kwargs
-
-    @staticmethod
-    def _set_cpu_mode(cpu_mode):
-        """ Sets the CPU mode to False if not using Nvidia backend, otherwise the given value.
-
-        Parameters
-        ----------
-        cpu_mode: bool
-            Set to ``True`` to perform some of the calculations on CPU for Nvidia backends,
-            otherwise ``False``.
-
-        Returns
-        -------
-        bool
-            ``True`` if some calculations should be performed on CPU otherwise ``False``
-        """
-        retval = False if get_backend() != "nvidia" else cpu_mode
-        logger.info("Optimizer CPU Mode set to %s", retval)
-        return retval
-
-    def _create_hypers(self):
-        """ Override the default tensorflow keras optimizer to allow placement on the CPU.
-
-        NB: Default keras does not have this method, so this should not run if running on plaidML.
-        Assertion is placed here in case this changes in future
-        """
-        assert get_backend() != "amd", "Keras backend has changed for plaidML"
-        if self._hypers_created:
-            return
-        # Iterate hyper values deterministically.
-        for name, value in sorted(self._hyper.items()):
-            if isinstance(value, (ops.Tensor, tf_variables.Variable)) or callable(value):
-                continue
-
-            if self._cpu_mode and get_backend() == "nvidia":
-                ops.device.__enter__()
-            self._hyper[name] = self.add_weight(
-                name,
-                shape=[],
-                trainable=False,
-                initializer=value,
-                aggregation=tf_variables.VariableAggregation.ONLY_FIRST_REPLICA)
-            if self._cpu_mode and get_backend() == "nvidia":
-                ops.device.__exit__(None, None, None)
-        for key, value in self._hyper.items():
-            logger.info("Created variable for name '%s' on device '%s'", key, value.device)
-        self._hypers_created = True
