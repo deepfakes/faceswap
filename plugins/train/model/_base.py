@@ -359,8 +359,11 @@ class ModelBase():
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
-        learning_rate = self.config.get("learning_rate", 5e-5)
-        optimizer = self.get_optimizer(lr=learning_rate, beta_1=0.5, beta_2=0.999)
+        optimizer = Adam(learning_rate=self.config.get("learning_rate", 5e-5),
+                         beta_1=0.5,
+                         beta_2=0.99,
+                         clipnorm=self.config.get("clipnorm", False),
+                         cpu_mode=self.vram_savings.optimizer_savings)
 
         for side, model in self.predictors.items():
             loss = Loss(model.inputs, model.outputs)
@@ -369,20 +372,6 @@ class ModelBase():
                 self.state.add_session_loss_names(side, loss.names)
                 self.history[side] = list()
         logger.debug("Compiled Predictors. Losses: %s", loss.names)
-
-    def get_optimizer(self, lr=5e-5, beta_1=0.5, beta_2=0.999):  # pylint: disable=invalid-name
-        """ Build and return Optimizer """
-        opt_kwargs = dict(learning_rate=lr, beta_1=beta_1, beta_2=beta_2)
-        if self.config.get("clipnorm", False) and get_backend() != "amd":
-            # NB: Clip-norm is ballooning VRAM usage, which is not expected behavior
-            # and may be a bug in Keras/Tensorflow.
-            # PlaidML has a bug regarding the clip-norm parameter
-            # See: https://github.com/plaidml/plaidml/issues/228
-            # Workaround by simply removing it.
-            # TODO: Remove this as soon it is fixed in PlaidML.
-            opt_kwargs["clipnorm"] = 1.0
-        logger.debug("Optimizer kwargs: %s", opt_kwargs)
-        return Adam(**opt_kwargs, cpu_mode=self.vram_savings.optimizer_savings)
 
     def converter(self, swap):
         """ Converter for autoencoder models """

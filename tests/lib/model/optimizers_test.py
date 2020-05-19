@@ -42,7 +42,6 @@ def _test_optimizer(optimizer, target=0.75):
                   metrics=["accuracy"])
 
     history = model.fit(x_train, y_train, epochs=2, batch_size=16, verbose=0)
-    # TODO this test fails
     accuracy = "acc" if get_backend() == "amd" else "accuracy"
     assert history.history[accuracy][-1] >= target
     config = k_optimizers.serialize(optimizer)
@@ -52,6 +51,9 @@ def _test_optimizer(optimizer, target=0.75):
     assert config == new_config
 
     # Test constraints.
+    if get_backend() == "amd":
+        # NB: PlaidML does not support constraints, so this test skipped for AMD backends
+        return
     model = Sequential()
     dense = Dense(10,
                   input_shape=(x_train.shape[1],),
@@ -71,7 +73,6 @@ def _test_optimizer(optimizer, target=0.75):
 
 
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
-@pytest.mark.xfail(reason="marginally fails the standard accuracy test")
 def test_adam(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """
     _test_optimizer(optimizers.Adam())
