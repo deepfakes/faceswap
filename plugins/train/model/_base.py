@@ -16,7 +16,7 @@ from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model
 from keras.optimizers import Adam
-from keras.utils import get_custom_objects, multi_gpu_model
+from keras.utils import get_custom_objects
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
@@ -34,7 +34,6 @@ class ModelBase():
     """ Base class that all models should inherit from """
     def __init__(self,
                  model_dir,
-                 gpus=1,
                  configfile=None,
                  snapshot_interval=0,
                  no_logs=False,
@@ -47,24 +46,25 @@ class ModelBase():
                  input_shape=None,
                  encoder_dim=None,
                  trainer="original",
+                 strategy="default",
                  pingpong=False,
                  predict=False):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', gpus: %s, configfile: %s, "
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', configfile: %s, "
                      "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
                      "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
                      "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
-                     "pingpong: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, gpus, configfile, snapshot_interval,
+                     "strategy: %s, pingpong: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, configfile, snapshot_interval,
                      no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
-                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer, pingpong,
-                     predict)
+                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer, strategy,
+                     pingpong, predict)
 
         self.predict = predict
         self.model_dir = model_dir
         self.vram_savings = VRAMSavings(pingpong)
 
         self.backup = Backup(self.model_dir, self.name)
-        self.gpus = gpus
+        self._strategy = strategy
         self.configfile = configfile
         self.input_shape = input_shape
         self.encoder_dim = encoder_dim
@@ -248,8 +248,6 @@ class ModelBase():
                        "\nYou should restore weights from a snapshot or from backup files. "
                        "You can use the 'Restore' Tool to restore from backup.")
                 raise FaceswapError(msg) from err
-            if "multi_gpu_model" in str(err).lower():
-                raise FaceswapError(str(err)) from err
             raise err
         self.log_summary()
         self.compile_predictors(initialize=True)
@@ -316,9 +314,6 @@ class ModelBase():
     def add_predictor(self, side, model):
         """ Add a predictor to the predictors dictionary """
         logger.debug("Adding predictor: (side: '%s', model: %s)", side, model)
-        if self.gpus > 1:
-            logger.debug("Converting to multi-gpu: side %s", side)
-            model = multi_gpu_model(model, self.gpus)
         self.predictors[side] = model
         if not self.state.inputs:
             self.store_input_shapes(model)

@@ -238,7 +238,6 @@ class Train():
         augment_color = not self._args.no_augment_color
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
-            gpus=self._args.gpus,
             configfile=configfile,
             snapshot_interval=self._args.snapshot_interval,
             no_logs=self._args.no_logs,
@@ -248,6 +247,7 @@ class Train():
             training_image_size=self._image_size,
             alignments_paths=self._alignments_paths,
             preview_scale=self._args.preview_scale,
+            strategy=self._args.distribution,
             pingpong=self._args.pingpong,
             predict=False)
         logger.debug("Loaded Model")

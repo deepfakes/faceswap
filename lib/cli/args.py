@@ -917,9 +917,9 @@ class TrainArgs(FaceSwapArgs):
                  "\nL|original: The original model created by /u/deepfakes."
                  "\nL|dfaker: 64px in/128px out model from dfaker. Enable 'warp-to-landmarks' "
                  "for full dfaker method."
-                 "\nL|dfl-h128. 128px in/out model from deepfacelab"
-                 "\nL|dfl-sae. Adaptable model from deepfacelab"
-                 "\nL|dlight. A lightweight, high resolution DFaker variant."
+                 "\nL|dfl-h128: 128px in/out model from deepfacelab"
+                 "\nL|dfl-sae: Adaptable model from deepfacelab"
+                 "\nL|dlight: A lightweight, high resolution DFaker variant."
                  "\nL|iae: A model that uses intermediate layers to try to get better details"
                  "\nL|lightweight: A lightweight model for low-end cards. Don't expect great "
                  "results. Can train as low as 1.6GB with batch size 8."
@@ -956,15 +956,23 @@ class TrainArgs(FaceSwapArgs):
                  "you want the model to stop automatically at a set number of iterations, you "
                  "can set that value here."))
         argument_list.append(dict(
-            opts=("-g", "--gpus"),
-            action=Slider,
-            min_max=(1, 10),
-            rounding=1,
-            type=int,
-            default=1,
+            opts=("-d", "--distribution"),
+            action=Radio,
+            type=str.lower,
+            default="default",
+            choices=["default", "mirrored", "central"],
             backend="nvidia",
             group="training",
-            help="Number of GPUs to use for training"))
+            help="R|Distribution strategies are a mechanism for distributing training over "
+                 "multiple devices. This can be used to train on multiple GPUs or to save VRAM "
+                 "by centralizing some operations onto the CPU. "
+                 "\nL|default: Don't use a specific distribution strategy. Just train the model "
+                 "as normal"
+                 "\nL|mirrored: Synchronous distributed training on multiple GPUs on one machine. "
+                 "Creates a copy of the training variables on each GPU."
+                 "\nL|central: Creates the variables on the CPU and performs the updates there. "
+                 "This will lead to VRAM savings and can be used for both single and multi GPU "
+                 "systems."))
         argument_list.append(dict(
             opts=("-pp", "--ping-pong"),
             action="store_true",
