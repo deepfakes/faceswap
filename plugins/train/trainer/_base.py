@@ -190,7 +190,7 @@ class TrainerBase():
             logger.verbose("TensorBoard logging disabled")
             return None
         if self._pingpong.active:
-            # Currently TensorBoard uses the tf.session, meaning that VRAM does not
+            # Currently TensorBoard uses the tensorflow.session, meaning that VRAM does not
             # get cleared when model switching
             # TODO find a fix for this
             logger.warning("Currently TensorBoard logging is not supported for Ping-Pong "
@@ -207,29 +207,18 @@ class TrainerBase():
                                    "{}_logs".format(self._model.name),
                                    side,
                                    "session_{}".format(self._model.state.session_id))
-            tbs = tf.keras.callbacks.TensorBoard(log_dir=log_dir, **self._tensorboard_kwargs)
+            tbs = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
+                                                 histogram_freq=0,  # Must be 0 or hangs
+                                                 write_graph=True,
+                                                 write_images=False,
+                                                 update_freq="batch",
+                                                 profile_batch=0,
+                                                 embeddings_freq=0,
+                                                 embeddings_metadata=None)
             tbs.set_model(self._model.predictors[side])
             tensorboard[side] = tbs
         logger.info("Enabled TensorBoard Logging")
         return tensorboard
-
-    @property
-    def _tensorboard_kwargs(self):
-        """ dict: The keyword arguments to be passed to :class:`tf.keras.callbacks.TensorBoard`.
-        NB: Tensorflow 1.13 + needs an additional keyword argument which is not valid for earlier
-        versions """
-        kwargs = dict(histogram_freq=0,  # Must be 0 or hangs
-                      batch_size=64,
-                      write_graph=True,
-                      write_grads=True)
-        tf_version = [int(ver) for ver in tf.__version__.split(".") if ver.isdigit()]
-        logger.debug("Tensorflow version: %s", tf_version)
-        if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 12):
-            kwargs["update_freq"] = "batch"
-        if tf_version[0] > 1 or (tf_version[0] == 1 and tf_version[1] > 13):
-            kwargs["profile_batch"] = 0
-        logger.debug(kwargs)
-        return kwargs
 
     def __print_loss(self, loss):
         """ Outputs the loss for the current iteration to the console.
