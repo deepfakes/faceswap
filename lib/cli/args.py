@@ -960,7 +960,7 @@ class TrainArgs(FaceSwapArgs):
             action=Radio,
             type=str.lower,
             default="default",
-            choices=["default", "mirrored", "central"],
+            choices=["default", "mirror", "central"],
             backend="nvidia",
             group="training",
             help="R|Distribution strategies are a mechanism for distributing training over "
@@ -968,7 +968,7 @@ class TrainArgs(FaceSwapArgs):
                  "by centralizing some operations onto the CPU. "
                  "\nL|default: Don't use a specific distribution strategy. Just train the model "
                  "as normal"
-                 "\nL|mirrored: Synchronous distributed training on multiple GPUs on one machine. "
+                 "\nL|mirror: Synchronous distributed training on multiple GPUs on one machine. "
                  "Creates a copy of the training variables on each GPU."
                  "\nL|central: Creates the variables on the CPU and performs the updates there. "
                  "This will lead to VRAM savings and can be used for both single and multi GPU "

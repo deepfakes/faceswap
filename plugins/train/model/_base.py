@@ -10,6 +10,7 @@ import sys
 import time
 
 from concurrent import futures
+from contextlib import nullcontext
 
 from keras import losses
 from keras import backend as K
@@ -17,6 +18,7 @@ from keras.layers import Input
 from keras.models import load_model, Model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects
+import tensorflow as tf
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
@@ -61,10 +63,10 @@ class ModelBase():
 
         self.predict = predict
         self.model_dir = model_dir
+        self._strategy = Strategy(strategy)
         self.vram_savings = VRAMSavings(pingpong)
-
         self.backup = Backup(self.model_dir, self.name)
-        self._strategy = strategy
+
         self.configfile = configfile
         self.input_shape = input_shape
         self.encoder_dim = encoder_dim
@@ -236,21 +238,22 @@ class ModelBase():
 
     def build(self):
         """ Build the model. Override for custom build methods """
-        self.add_networks()
-        self.load_models(swapped=False)
-        inputs = self.get_inputs()
-        try:
-            self.build_autoencoders(inputs)
-        except ValueError as err:
-            if "must be from the same graph" in str(err).lower():
-                msg = ("There was an error loading saved weights. This is most likely due to "
-                       "model corruption during a previous save."
-                       "\nYou should restore weights from a snapshot or from backup files. "
-                       "You can use the 'Restore' Tool to restore from backup.")
-                raise FaceswapError(msg) from err
-            raise err
-        self.log_summary()
-        self.compile_predictors(initialize=True)
+        with self._strategy.scope():
+            self.add_networks()
+            self.load_models(swapped=False)
+            inputs = self.get_inputs()
+            try:
+                self.build_autoencoders(inputs)
+            except ValueError as err:
+                if "must be from the same graph" in str(err).lower():
+                    msg = ("There was an error loading saved weights. This is most likely due to "
+                           "model corruption during a previous save."
+                           "\nYou should restore weights from a snapshot or from backup files. "
+                           "You can use the 'Restore' Tool to restore from backup.")
+                    raise FaceswapError(msg) from err
+                raise err
+            self.log_summary()
+            self.compile_predictors(initialize=True)
 
     def get_inputs(self):
         """ Return the inputs for the model """
@@ -380,6 +383,15 @@ class ModelBase():
         """
         # TODO add clipnorm in for plaidML when it is fixed in the main repository
         clipnorm = get_backend() != "amd" and self.config.get("clipnorm", False)
+        if self._strategy.use_strategy and clipnorm:
+            logger.warning("Clipnorm has been selected, but is unsupported when using "
+                           "distribution strategies, so has been disabled. If you wish to enable "
+                           "clipnorm, then you must use the `default` distribution strategy.")
+            clipnorm = False
+        # Tensorflow performs a check that clipping gradients is not enabled if using strategies
+        # (not currently supported). Unfortunately it checks for ```None`` rather than ```False``
+        # so we need to make sure that clipnorm is explicitly ``None`` if it not being used.
+        clipnorm = None if not clipnorm else clipnorm
         learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
         kwargs = dict(beta_1=0.5,
                       beta_2=0.99,
@@ -598,6 +610,74 @@ class ModelBase():
 
         self.state.replace_config(self.config_changeable_items)
         self.state.save()
+
+
+class Strategy():
+    """ Distribution Strategies for Tensorflow.
+
+    Tensorflow 2 uses distribution strategies for multi-GPU/system training. These are context
+    managers. To enable the code to be more readable, we handle strategies the same way for Nvidia
+    and AMD backends. PlaidML does not support strategies, but we need to still create a context
+    manager so that we don't need branching logic.
+
+    Parameters
+    ----------
+    strategy: ["default", "mirror", "central"]
+        The required strategy. `"default"` effectively means 'do not explicitly provide a strategy'
+        and let's Tensorflow handle things for itself. `"mirror" is Tensorflow Mirrored Strategy.
+        "`central`" is Tensorflow Central Storage Strategy with variables explicitly placed on the
+        CPU.
+    """
+    def __init__(self, strategy):
+        logger.debug("Initializing %s: (strategy: %s)", self.__class__.__name__, strategy)
+        self._strategy = self._get_strategy(strategy)
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def use_strategy(self):
+        """ bool: ``True`` if a distribution strategy is to be used otherwise ``False``. """
+        return self._strategy is not None
+
+    @staticmethod
+    def _get_strategy(strategy):
+        """ If we are running on Nvidia backend and the strategy is not `"default"` then return
+        the correct tensorflow distribution strategy, otherwise return ``None``.
+
+        Parameters
+        ----------
+        strategy: str
+            The request training strategy to use
+
+        Returns
+        -------
+        :class:`tensorflow.python.distribute.Strategy` or `None`
+            The request Tensorflow Strategy if the backend is Nvidia and the strategy is not
+            `"Default"` otherwise ``None``
+        """
+        if get_backend() != "nvidia":
+            retval = None
+        elif strategy == "mirror":
+            retval = tf.distribute.MirroredStrategy()
+        elif strategy == "central":
+            retval = tf.distribute.experimental.CentralStorageStrategy(parameter_device="/CPU:0")
+        else:
+            retval = None
+        logger.debug("Using strategy: %s", retval)
+        return retval
+
+    def scope(self):
+        """ Return the strategy scope if we have set a strategy, otherwise return a null
+        context.
+
+        Returns
+        -------
+        :func:`tensorflow.python.distribute.Strategy.scope` or :func:`contextlib.nullcontext`
+            The tensorflow strategy scope if a strategy is valid in the current scenario. A null
+            context manager if the strategy is not valid in the current scenario
+        """
+        retval = nullcontext() if self._strategy is None else self._strategy.scope()
+        logger.debug("Using strategy scope: %s", retval)
+        return retval
 
 
 class VRAMSavings():
