@@ -240,6 +240,7 @@ class Train():
             model_dir,
             configfile=configfile,
             snapshot_interval=self._args.snapshot_interval,
+            batch_size=self._args.batch_size,
             no_logs=self._args.no_logs,
             warp_to_landmarks=self._args.warp_to_landmarks,
             augment_color=augment_color,

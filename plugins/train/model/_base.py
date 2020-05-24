@@ -38,6 +38,7 @@ class ModelBase():
                  model_dir,
                  configfile=None,
                  snapshot_interval=0,
+                 batch_size=64,
                  no_logs=False,
                  warp_to_landmarks=False,
                  augment_color=True,
@@ -52,11 +53,11 @@ class ModelBase():
                  pingpong=False,
                  predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', configfile: %s, "
-                     "snapshot_interval: %s, no_logs: %s, warp_to_landmarks: %s, augment_color: "
-                     "%s, no_flip: %s, training_image_size, %s, alignments_paths: %s, "
-                     "preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
+                     "snapshot_interval: %s, batch_size: %s, no_logs: %s, warp_to_landmarks: %s, "
+                     "augment_color: %s, no_flip: %s, training_image_size, %s, alignments_paths: "
+                     "%s, preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
                      "strategy: %s, pingpong: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, configfile, snapshot_interval,
+                     self.__class__.__name__, model_dir, configfile, snapshot_interval, batch_size,
                      no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
                      alignments_paths, preview_scale, input_shape, encoder_dim, trainer, strategy,
                      pingpong, predict)
@@ -64,6 +65,7 @@ class ModelBase():
         self.predict = predict
         self.model_dir = model_dir
         self._strategy = Strategy(strategy)
+        self._batch_size = batch_size
         self.vram_savings = VRAMSavings(pingpong)
         self.backup = Backup(self.model_dir, self.name)
 
@@ -90,6 +92,7 @@ class ModelBase():
         self.rename_legacy()
         self.load_state_info()
 
+        self._mask_variable = None  # The variable holding masks if Penalized Loss is used
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.history = dict()  # Loss history per save iteration)
@@ -216,8 +219,30 @@ class ModelBase():
     @property
     def feed_mask(self):
         """ bool: ``True`` if the model expects a mask to be fed into input otherwise ``False`` """
-        return self.config["mask_type"] is not None and (self.config["learn_mask"] or
-                                                         self.config["penalized_mask_loss"])
+        return self.config["mask_type"] is not None and self.config["learn_mask"]
+
+    @property
+    def mask_variable(self):
+        """ :class:`keras.backend.variable` or ``None``. If Penalized Mask Loss is used then this
+        will return a Variable of (?, `h`, `w`, 1) corresponding to the size of the model input. If
+        Penalized Mask Loss is not used then this will return ``None`` """
+        if not self.config["penalized_mask_loss"]:
+            return None
+        if self._mask_variable is None:
+            output_network = [network for network in self.networks.values()
+                              if network.is_output][0]
+            mask_shape = output_network.output_shapes[-1][:-1] + (1, )
+            self._mask_variable = K.variable(
+                K.ones((self._batch_size, ) + mask_shape[1:], dtype="float32"),
+                dtype="float32",
+                name="penalized_mask_variable")
+            if get_backend() != "amd":
+                # trainable and shape don't have a setter, so we need to go to private property
+                # pylint:disable=protected-access
+                self._mask_variable._trainable = False
+                self._mask_variable._shape = tf.TensorShape(mask_shape)
+            logger.debug("Created mask variable: %s", self._mask_variable)
+        return self._mask_variable
 
     def load_config(self):
         """ Load the global config for reference in self.config """
@@ -261,8 +286,7 @@ class ModelBase():
         inputs = [Input(shape=self.input_shape, name="face_in")]
         output_network = [network for network in self.networks.values() if network.is_output][0]
         if self.feed_mask:
-            # TODO penalized mask doesn't have a mask output, so we can't use output shapes
-            # mask should always be last output..this needs to be a rule
+            # TODO Mask should always be last output... this needs to be a rule
             mask_shape = output_network.output_shapes[-1]
             inputs.append(Input(shape=(mask_shape[1:-1] + (1,)), name="mask_in"))
         logger.debug("Got inputs: %s", inputs)
@@ -357,7 +381,7 @@ class ModelBase():
         optimizer = self._get_optimizer()
 
         for side, model in self.predictors.items():
-            loss = Loss(model.inputs, model.outputs)
+            loss = Loss(model.inputs, model.outputs, self.mask_variable)
             model.compile(optimizer=optimizer, loss=loss.funcs)
             if initialize:
                 self.state.add_session_loss_names(side, loss.names)
@@ -387,11 +411,11 @@ class ModelBase():
             logger.warning("Clipnorm has been selected, but is unsupported when using "
                            "distribution strategies, so has been disabled. If you wish to enable "
                            "clipnorm, then you must use the `default` distribution strategy.")
-            clipnorm = False
+            clipnorm = None
         # Tensorflow performs a check that clipping gradients is not enabled if using strategies
         # (not currently supported). Unfortunately it checks for ```None`` rather than ```False``
         # so we need to make sure that clipnorm is explicitly ``None`` if it not being used.
-        clipnorm = None if not clipnorm else clipnorm
+        clipnorm = None if not clipnorm and get_backend() != "amd" else clipnorm
         learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
         kwargs = dict(beta_1=0.5,
                       beta_2=0.99,
@@ -702,11 +726,12 @@ class VRAMSavings():
 
 class Loss():
     """ Holds loss names and functions for an Autoencoder """
-    def __init__(self, inputs, outputs):
-        logger.debug("Initializing %s: (inputs: %s, outputs: %s)",
-                     self.__class__.__name__, inputs, outputs)
+    def __init__(self, inputs, outputs, mask_variable):
+        logger.debug("Initializing %s: (inputs: %s, outputs: %s, mask_variable: %s)",
+                     self.__class__.__name__, inputs, outputs, mask_variable)
         self.inputs = inputs
         self.outputs = outputs
+        self._mask_variable = mask_variable
         self.names = self.get_loss_names()
         self.funcs = self.get_loss_functions()
         if len(self.names) > 1:
@@ -774,9 +799,13 @@ class Loss():
     @property
     def mask_shape(self):
         """ Return the mask shape """
-        if self.mask_input is None:
+        if self.mask_input is None and self._mask_variable is None:
             return None
-        return K.int_shape(self.mask_input)[1:]
+        if self.mask_input:
+            retval = K.int_shape(self.mask_input)[1:]
+        else:
+            retval = K.int_shape(self._mask_variable)
+        return retval
 
     def get_loss_names(self):
         """ Return the loss names based on model output """
@@ -813,7 +842,7 @@ class Loss():
                 scaling = face_size / mask_size
                 logger.debug("face_size: %s mask_size: %s, mask_scaling: %s",
                              face_size, mask_size, scaling)
-                loss_funcs.append(PenalizedLoss(self.mask_input, self.selected_loss,
+                loss_funcs.append(PenalizedLoss(self._mask_variable, self.selected_loss,
                                                 mask_scaling=scaling,
                                                 preprocessing_func=self.mask_preprocessing_func))
             else:

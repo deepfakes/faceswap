@@ -155,7 +155,8 @@ class Config(FaceswapConfig):
             default="mae",
             choices=["mae", "mse", "logcosh", "smooth_loss", "l_inf_norm", "ssim", "gmsd",
                      "pixel_gradient_diff"],
-            info="\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
+            info="The loss function to use."
+                 "\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
                  "towards its median value in the training dataset. Robust to outliers but as "
                  "a median, it can potentially ignore some infrequent image types in the dataset."
                  "\n\t MSE - Mean squared error will guide reconstructions of each pixel "

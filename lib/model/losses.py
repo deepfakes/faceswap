@@ -5,7 +5,8 @@ from __future__ import absolute_import
 
 import logging
 
-import keras.backend as K
+from keras import backend as K
+
 import numpy as np
 import tensorflow as tf
 
@@ -226,17 +227,16 @@ class DSSIMObjective():
         return patches
 
 
-# <<< START: from Dfaker >>> #
-def PenalizedLoss(mask, loss_func,  # pylint: disable=invalid-name
-                  mask_prop=1.0, mask_scaling=1.0, preprocessing_func=None):
-    """ Plaidml and Tensorflow Penalized Loss function.
+# PENALIZED LOSS
+class _PenalizedLossShared():
+    """ Shared methods for Keras and Tensorflow.Keras Penalized Loss
 
     Applies the given loss function just to the masked area of the image.
 
     Parameters
     ----------
-    mask: input tensor
-        The mask for the current image
+    mask: Keras Variable
+        Variable holding masks for the current batch
     loss_func: function
         The actual loss function to use
     mask_prop: float, optional
@@ -249,23 +249,48 @@ def PenalizedLoss(mask, loss_func,  # pylint: disable=invalid-name
         The function should take a Keras Input as it's only argument. Set to ``None`` if no
         preprocessing is to be performed. Default: ``None``
     """
-    def _scale_mask(mask, scaling):
+    def __init__(self,
+                 mask,
+                 loss_func,
+                 mask_prop=1.0,
+                 mask_scaling=1.0,
+                 preprocessing_func=None):
+        self._mask = mask
+        self._loss_func = loss_func
+        self._mask_prop = mask_prop
+        self._mask_scaling = mask_scaling
+        self._preprocessing_func = preprocessing_func
+
+    def _prepare_mask(self):
+        """ Prepare the masks for calculating loss
+
+        Returns
+        -------
+        tensor
+            The prepared mask for applying to loss
+        """
+        mask = self._scale_mask(self._mask)
+        if self._preprocessing_func is not None:
+            mask = self._preprocessing_func(mask)
+        mask_as_k_inv_prop = 1 - self._mask_prop
+        mask = (mask * self._mask_prop) + mask_as_k_inv_prop
+        return mask
+
+    def _scale_mask(self, mask):
         """ Scale the input mask to be the same size as the input face
 
         Parameters
         ----------
         mask: input tensor
             The mask for the current image
-        scaling: float
-            The amount to scale the input mask by
 
         Returns
         -------
         tensor
             The resized input mask
         """
-        if scaling != 1.0:
-            size = round(1 / scaling)
+        if self._mask_scaling != 1.0:
+            size = round(1 / self._mask_scaling)
             mask = K.pool2d(mask,
                             pool_size=(size, size),
                             strides=(size, size),
@@ -275,16 +300,41 @@ def PenalizedLoss(mask, loss_func,  # pylint: disable=invalid-name
         logger.debug("resized tensor: %s", mask)
         return mask
 
-    mask = _scale_mask(mask, mask_scaling)
-    if preprocessing_func is not None:
-        mask = preprocessing_func(mask)
-    mask_as_k_inv_prop = 1 - mask_prop
-    mask = (mask * mask_prop) + mask_as_k_inv_prop
 
-    def _inner_loss(y_true, y_pred):
+class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
+    """ Tensorflow Penalized Loss function.
+
+    Applies the given loss function just to the masked area of the image.
+
+    Parameters
+    ----------
+    mask: Keras Variable
+        Variable holding masks for the current batch
+    loss_func: function
+        The actual loss function to use
+    mask_prop: float, optional
+        The amount of mask propagation. Default: `1.0`
+    mask_scaling: float, optional
+        For multi-decoder output the target mask will likely be at full size scaling, so this is
+        the scaling factor to reduce the mask by. Default: `1.0`
+    preprocessing_func: function, optional
+        If preprocessing is required on the input mask, then this should be the function to use.
+        The function should take a Keras Input as it's only argument. Set to ``None`` if no
+        preprocessing is to be performed. Default: ``None``
+    """
+    def __init__(self,
+                 mask,
+                 loss_func,
+                 mask_prop=1.0,
+                 mask_scaling=1.0,
+                 preprocessing_func=None):
+        super().__init__(mask, loss_func, mask_prop, mask_scaling, preprocessing_func)
+        super(_PenalizedLossShared, self).__init__(name="penalized_loss")
+
+    def call(self, y_true, y_pred):
         """ Apply the loss function to the masked area of the image.
 
-         Parameters
+        Parameters
         ----------
         y_true: tensor or variable
             The ground truth value
@@ -301,15 +351,56 @@ def PenalizedLoss(mask, loss_func,  # pylint: disable=invalid-name
         Branching because TensorFlow's broadcasting is wonky and plaidML's concatenate is
         implemented inefficiently.
         """
-        if get_backend() == "amd":
-            n_true = y_true * mask
-            n_pred = y_pred * mask
-        else:
-            n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-            n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        return loss_func(n_true, n_pred)
-    return _inner_loss
-# <<< END: from Dfaker >>> #
+        mask = self._prepare_mask()
+        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        return self._loss_func(n_true, n_pred)
+
+
+class PenalizedLossPlaid(_PenalizedLossShared):
+    """ PlaidML Penalized Loss function.
+
+    Applies the given loss function just to the masked area of the image.
+
+    Parameters
+    ----------
+    mask: Keras Variable
+        Variable holding masks for the current batch
+    loss_func: function
+        The actual loss function to use
+    mask_prop: float, optional
+        The amount of mask propagation. Default: `1.0`
+    mask_scaling: float, optional
+        For multi-decoder output the target mask will likely be at full size scaling, so this is
+        the scaling factor to reduce the mask by. Default: `1.0`
+    preprocessing_func: function, optional
+        If preprocessing is required on the input mask, then this should be the function to use.
+        The function should take a Keras Input as it's only argument. Set to ``None`` if no
+        preprocessing is to be performed. Default: ``None``
+    """
+
+    def __call__(self, y_true, y_pred):
+        """ Apply the loss function to the masked area of the image.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The Loss value
+        """
+        mask = self._prepare_mask()
+        n_true = y_true * mask
+        n_pred = y_pred * mask
+        return self._loss_func(n_true, n_pred)
+
+
+PenalizedLoss = PenalizedLossPlaid if get_backend() == "amd" else PenalizedLossTF
 
 
 def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):

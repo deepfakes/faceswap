@@ -51,13 +51,14 @@ import numpy as np
 
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from keras import backend as K
 from tqdm import tqdm
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.image import read_image_hash_batch
 from lib.training_data import TrainingDataGenerator
-from lib.utils import FaceswapError, get_folder, get_image_paths
+from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -125,10 +126,12 @@ class TrainerBase():
         self._tensorboard = self._set_tensorboard()
         self._samples = Samples(self._model,
                                 self._use_mask,
+                                self._model.training_opts["learn_mask"],
                                 self._model.training_opts["coverage_ratio"],
                                 self._model.training_opts["preview_scaling"])
         self._timelapse = Timelapse(self._model,
                                     self._use_mask,
+                                    self._model.training_opts["learn_mask"],
                                     self._model.training_opts["coverage_ratio"],
                                     self._config.get("preview_images", 14),
                                     self._batchers)
@@ -197,7 +200,6 @@ class TrainerBase():
                            "training. Session stats and graphing will not be available for this "
                            "training session.")
             return None
-
         logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
 
@@ -207,9 +209,12 @@ class TrainerBase():
                                    "{}_logs".format(self._model.name),
                                    side,
                                    "session_{}".format(self._model.state.session_id))
+            # Incompatibility between Keras and Tensorflow Keras means we can't write
+            # graph for plaidML
+            write_graph = False if get_backend() == "amd" else True
             tbs = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
                                                  histogram_freq=0,  # Must be 0 or hangs
-                                                 write_graph=True,
+                                                 write_graph=write_graph,
                                                  write_images=False,
                                                  update_freq="batch",
                                                  profile_batch=0,
@@ -409,6 +414,16 @@ class Batcher():
         """
         logger.trace("Training one step: (side: %s)", self._side)
         model_inputs, model_targets = self._get_next()
+        if self._model.mask_variable is not None:
+            # Split masks and assign to the mask variable for penalized mask loss
+            masks = model_inputs[-1]
+            if get_backend() == "amd":
+                K.set_value(self._model.mask_variable, masks)
+            else:
+                self._model.mask_variable.assign(masks)
+            if not self._model.training_opts["learn_mask"]:
+                # Remove masks from the model input if not learning a mask
+                model_inputs = model_inputs[0]
         try:
             loss = self._model.predictors[self._side].train_on_batch(model_inputs, model_targets)
         except tf_errors.ResourceExhaustedError as err:
@@ -565,8 +580,10 @@ class Samples():
     ----------
     model: plugin from :mod:`plugins.train.model`
         The selected model that will be running this trainer
-    use_mask: bool
+    display_mask: bool
         ``True`` if a mask should be displayed otherwise ``False``
+    feed_mask: bool
+        ``True`` if a mask should be fed to the model otherwise ``False``
     coverage_ratio: float
         Ratio of face to be cropped out of the training image.
     scaling: float, optional
@@ -579,11 +596,13 @@ class Samples():
         dictionary should contain 2 keys ("a" and "b") with the values being the training images
         for generating samples corresponding to each side.
     """
-    def __init__(self, model, use_mask, coverage_ratio, scaling=1.0):
-        logger.debug("Initializing %s: model: '%s', use_mask: %s, coverage_ratio: %s)",
-                     self.__class__.__name__, model, use_mask, coverage_ratio)
+    def __init__(self, model, display_mask, feed_mask, coverage_ratio, scaling=1.0):
+        logger.debug("Initializing %s: model: '%s', display_mask: %s, use_mask: %s, "
+                     "coverage_ratio: %s)", self.__class__.__name__, model, display_mask,
+                     feed_mask, coverage_ratio)
         self._model = model
-        self._use_mask = use_mask
+        self._display_mask = display_mask
+        self._feed_mask = feed_mask
         self.images = dict()
         self._coverage_ratio = coverage_ratio
         self._scaling = scaling
@@ -611,7 +630,7 @@ class Samples():
                 feeds[side] = feeds[side].reshape((-1, ) + self._model.input_shape)
             else:
                 feeds[side] = faces
-            if self._use_mask:
+            if self._feed_mask:
                 mask = samples[-1]
                 feeds[side] = [feeds[side], mask]
 
@@ -718,7 +737,7 @@ class Samples():
         if target_size != full_size:
             frame = self._frame_overlay(full, target_size, (0, 0, 255))
 
-        if self._use_mask:
+        if self._display_mask:
             images = self._compile_masked(images, samples[-1])
         images = [self._resize_sample(side, image, target_size) for image in images]
         if target_size != full_size:
@@ -896,8 +915,10 @@ class Timelapse():
     ----------
     model: plugin from :mod:`plugins.train.model`
         The selected model that will be running this trainer
-    use_mask: bool
+    display_mask: bool
         ``True`` if a mask should be displayed otherwise ``False``
+    feed_mask: bool
+        ``True`` if a mask should be fed to the model otherwise ``False``
     coverage_ratio: float
         Ratio of face to be cropped out of the training image.
     scaling: float, optional
@@ -908,12 +929,13 @@ class Timelapse():
         The dictionary should contain 2 keys ("a" and "b") with the values being the
         :class:`Batcher` for each side.
     """
-    def __init__(self, model, use_mask, coverage_ratio, image_count, batchers):
-        logger.debug("Initializing %s: model: %s, use_mask: %s, coverage_ratio: %s, "
-                     "image_count: %s, batchers: '%s')", self.__class__.__name__, model,
-                     use_mask, coverage_ratio, image_count, batchers)
+    def __init__(self, model, display_mask, feed_mask, coverage_ratio, image_count, batchers):
+        logger.debug("Initializing %s: model: %s, display_mask: %s, feed_mask: %s, "
+                     "coverage_ratio: %s, image_count: %s, batchers: '%s')",
+                     self.__class__.__name__, model, display_mask, feed_mask, coverage_ratio,
+                     image_count, batchers)
         self._num_images = image_count
-        self._samples = Samples(model, use_mask, coverage_ratio)
+        self._samples = Samples(model, display_mask, feed_mask, coverage_ratio)
         self._model = model
         self._batchers = batchers
         self._output_file = None
