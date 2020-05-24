@@ -570,13 +570,13 @@ class Install():
         self.install_missing_dep()
         if self.env.updater:
             return
-        self.output.info("All python3 dependencies are met.\r\nYou are good to go.\r\n\r\n"
+        self.output.info("All python3 dependencies meet.\r\nYou are good to go.\r\n\r\n"
                          "Enter:  'python faceswap.py -h' to see the options\r\n"
                          "        'python faceswap.py gui' to launch the GUI")
 
     def ask_continue(self):
         """ Ask Continue with Install """
-        inp = input("Please ensure your System Dependencies are met. Continue? [y/N] ")
+        inp = input("Please ensure your System Dependencies meet. Continue? [y/N] ")
         if inp in ("", "N", "n"):
             self.output.error("Please install system dependencies to continue")
             exit(1)
