@@ -17,7 +17,7 @@ if get_backend() == "amd":
     from plaidml.op import extract_image_patches
     from lib.plaidml_utils import pad
 else:
-    from tensorflow.image import extract_patches as extract_image_patches
+    extract_image_patches = tf.image.extract_patches  # pylint:disable=invalid-name
     from tensorflow import pad
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
@@ -400,7 +400,10 @@ class PenalizedLossPlaid(_PenalizedLossShared):
         return self._loss_func(n_true, n_pred)
 
 
-PenalizedLoss = PenalizedLossPlaid if get_backend() == "amd" else PenalizedLossTF
+if get_backend() == "amd":
+    PenalizedLoss = PenalizedLossPlaid  # pylint:disable=invalid-name
+else:
+    PenalizedLoss = PenalizedLossTF  # pylint:disable=invalid-name
 
 
 def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):

@@ -114,8 +114,7 @@ class ModelBase():
                               "mask_threshold": self.config["mask_threshold"],
                               "learn_mask": (self.config["learn_mask"] and
                                              self.config["mask_type"] is not None),
-                              "penalized_mask_loss": (self.config["penalized_mask_loss"] and
-                                                      self.config["mask_type"] is not None)}
+                              "penalized_mask_loss": self.config["penalized_mask_loss"]}
         logger.debug("training_opts: %s", self.training_opts)
 
         if self.multiple_models_in_folder:
@@ -224,24 +223,34 @@ class ModelBase():
     @property
     def mask_variable(self):
         """ :class:`keras.backend.variable` or ``None``. If Penalized Mask Loss is used then this
-        will return a Variable of (?, `h`, `w`, 1) corresponding to the size of the model input. If
-        Penalized Mask Loss is not used then this will return ``None`` """
-        if not self.config["penalized_mask_loss"]:
-            return None
-        if self._mask_variable is None:
-            output_network = [network for network in self.networks.values()
-                              if network.is_output][0]
-            mask_shape = output_network.output_shapes[-1][:-1] + (1, )
-            self._mask_variable = K.variable(
-                K.ones((self._batch_size, ) + mask_shape[1:], dtype="float32"),
-                dtype="float32",
-                name="penalized_mask_variable")
-            if get_backend() != "amd":
-                # trainable and shape don't have a setter, so we need to go to private property
-                # pylint:disable=protected-access
-                self._mask_variable._trainable = False
-                self._mask_variable._shape = tf.TensorShape(mask_shape)
-            logger.debug("Created mask variable: %s", self._mask_variable)
+        will return a Variable of (`batch size`, `h`, `w`, 1) corresponding to the size of the
+        model input. If Penalized Mask Loss is not used then this will return ``None``
+
+        Raises
+        ------
+        FaceswapError:
+            If Penalized Mask Loss has been selected, but a mask type has not been specified
+        """
+        if self._mask_variable is not None or not self.config["penalized_mask_loss"]:
+            return self._mask_variable
+
+        if self.config["penalized_mask_loss"] and self.config["mask_type"] is None:
+            raise FaceswapError("Penalized Mask Loss has been selected but you have not chosen a "
+                                "Mask to use. Please select a mask or disable Penalized Mask "
+                                "Loss.")
+
+        output_network = [network for network in self.networks.values() if network.is_output][0]
+        mask_shape = output_network.output_shapes[-1][:-1] + (1, )
+        self._mask_variable = K.variable(
+            K.ones((self._batch_size, ) + mask_shape[1:], dtype="float32"),
+            dtype="float32",
+            name="penalized_mask_variable")
+        if get_backend() != "amd":
+            # trainable and shape don't have a setter, so we need to go to private property
+            # pylint:disable=protected-access
+            self._mask_variable._trainable = False
+            self._mask_variable._shape = tf.TensorShape(mask_shape)
+        logger.debug("Created mask variable: %s", self._mask_variable)
         return self._mask_variable
 
     def load_config(self):
@@ -411,11 +420,7 @@ class ModelBase():
             logger.warning("Clipnorm has been selected, but is unsupported when using "
                            "distribution strategies, so has been disabled. If you wish to enable "
                            "clipnorm, then you must use the `default` distribution strategy.")
-            clipnorm = None
-        # Tensorflow performs a check that clipping gradients is not enabled if using strategies
-        # (not currently supported). Unfortunately it checks for ```None`` rather than ```False``
-        # so we need to make sure that clipnorm is explicitly ``None`` if it not being used.
-        clipnorm = None if not clipnorm and get_backend() != "amd" else clipnorm
+            clipnorm = False
         learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
         kwargs = dict(beta_1=0.5,
                       beta_2=0.99,
