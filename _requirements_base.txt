@@ -1,23 +1,23 @@
-tqdm
-psutil
-pathlib
-numpy==1.17.4
-opencv-python==4.1.2.30
-scikit-image
-Pillow==6.2.1
-scikit-learn
-toposort
-fastcluster
-matplotlib==3.1.1
-imageio==2.6.1
-imageio-ffmpeg
-ffmpy==0.2.2
+tqdm>=4.42
+psutil>=5.7.0
+pathlib==1.0.1
+numpy>=1.18.0
+opencv-python>=4.1.2.0
+scikit-image>=0.16.2
+Pillow>=7.0.0
+scikit-learn>=0.22.0
+toposort==1.5
+fastcluster==1.1.26
+matplotlib>=3.0.3
+imageio>=2.8.0
+imageio-ffmpeg>=0.4.2
+ffmpy==0.2.3
 # Revert back to nvidia-ml-py3 when windows/system32 patch is implemented
 git+https://github.com/deepfakes/nvidia-ml-py3.git
 #nvidia-ml-py3
-h5py==2.9.0
+h5py>=2.10.0
 Keras==2.2.4
-pywin32 ; sys_platform == "win32"
+pywin32>=227 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
 
 # tensorflow is included within the docker image.
