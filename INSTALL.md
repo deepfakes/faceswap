@@ -16,7 +16,7 @@
       - [Entering your virtual environment](#entering-your-virtual-environment)
     - [faceswap](#faceswap)
       - [Easy install](#easy-install)
-      - [Manual install](#manual-install)
+      - [Manual install](#manual-install-1)
   - [Running faceswap](#running-faceswap)
   - [Create a desktop shortcut](#create-a-desktop-shortcut)
   - [Updating faceswap](#updating-faceswap)
@@ -115,11 +115,12 @@ To enter the virtual environment:
 
 #### Manual install
 Do not follow these steps if the Easy Install above completed succesfully.
+If you are using an Nvidia card make sure you have the correct versions of Cuda/cuDNN installed for the required version of Tensorflow
 - Install tkinter (required for the GUI) by typing: `conda install tk`
-- Install requirements: `pip install -r requirements.txt`
-- Install Tensorflow (either GPU or CPU version depending on your setup):
-    - GPU Version: `conda install tensorflow-gpu`
-    - Non GPU Version: `conda install tensorflow`
+- Install requirements:
+  - For Nvidia GPU users: `pip install -r requirements_nvidia.txt`
+  - For AMD GPU users: `pip install -r requirements_amd.txt`
+  - For CPU users: `pip install -r requirements_cpu.txt`
 
 ## Running faceswap
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)

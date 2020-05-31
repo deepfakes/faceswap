@@ -5,12 +5,14 @@
 import ctypes
 import json
 import locale
+import platform
+import operator
 import os
 import re
 import sys
-import platform
-
 from subprocess import CalledProcessError, run, PIPE, Popen
+
+from pkg_resources import parse_requirements
 
 INSTALL_FAILED = False
 # Revisions of tensorflow-gpu and cuda/cudnn requirements
@@ -41,7 +43,7 @@ class Environment():
         self.enable_amd = False
         self.enable_docker = False
         self.enable_cuda = False
-        self.required_packages = self.get_required_packages()
+        self.required_packages = list()
         self.missing_packages = list()
         self.conda_missing_packages = list()
 
@@ -104,8 +106,7 @@ class Environment():
 
     def process_arguments(self):
         """ Process any cli arguments """
-        argv = [arg for arg in sys.argv]
-        for arg in argv:
+        for arg in sys.argv:
             if arg == "--installer":
                 self.is_installer = True
             if arg == "--nvidia":
@@ -113,18 +114,34 @@ class Environment():
             if arg == "--amd":
                 self.enable_amd = True
 
-    @staticmethod
-    def get_required_packages():
+    def get_required_packages(self):
         """ Load requirements list """
-        packages = list()
+        if self.enable_amd:
+            suffix = "amd.txt"
+        elif self.enable_cuda:
+            suffix = "nvidia.txt"
+        else:
+            suffix = "cpu.txt"
+        req_files = ["_requirements_base.txt", f"requirements_{suffix}"]
         pypath = os.path.dirname(os.path.realpath(__file__))
-        requirements_file = os.path.join(pypath, "requirements.txt")
-        with open(requirements_file) as req:
-            for package in req.readlines():
-                package = package.strip()
-                if package and (not package.startswith("#")):
-                    packages.append(package)
-        return packages
+        requirements = list()
+        git_requirements = list()
+        for req_file in req_files:
+            requirements_file = os.path.join(pypath, req_file)
+            with open(requirements_file) as req:
+                for package in req.readlines():
+                    package = package.strip()
+                    # parse_requirements can't handle git dependencies, so extract and then
+                    # manually add to final list
+                    if package and package.startswith("git+"):
+                        git_requirements.append((package, []))
+                        continue
+                    if package and (not package.startswith(("#", "-r"))):
+                        requirements.append(package)
+        self.required_packages = [(pkg.name, pkg.specs)
+                                  for pkg in parse_requirements(requirements)
+                                  if pkg.marker is None or pkg.marker.evaluate()]
+        self.required_packages.extend(git_requirements)
 
     def check_permission(self):
         """ Check for Admin permissions """
@@ -143,7 +160,7 @@ class Environment():
         self.output.info("Setup in %s %s" % (self.os_version[0], self.os_version[1]))
         if not self.updater and not self.os_version[0] in ["Windows", "Linux", "Darwin"]:
             self.output.error("Your system %s is not supported!" % self.os_version[0])
-            exit(1)
+            sys.exit(1)
 
     def check_python(self):
         """ Check python and virtual environment status """
@@ -154,7 +171,7 @@ class Environment():
                 and self.py_version[1] == "64bit") and not self.updater:
             self.output.error("Please run this script with Python version 3.3, 3.4, 3.5, 3.6 or "
                               "3.7 64bit and try again.")
-            exit(1)
+            sys.exit(1)
 
     def output_runtime_info(self):
         """ Output runtime info """
@@ -172,7 +189,7 @@ class Environment():
             import pip  # noqa pylint:disable=unused-import
         except ImportError:
             self.output.error("Import pip failed. Please Install python3-pip and try again")
-            exit(1)
+            sys.exit(1)
 
     def upgrade_pip(self):
         """ Upgrade pip to latest version """
@@ -216,12 +233,8 @@ class Environment():
 
     def update_tf_dep(self):
         """ Update Tensorflow Dependency """
-        if self.is_conda:
-            self.update_tf_dep_conda()
-            return
-
-        if not self.enable_cuda:
-            self.required_packages.append("tensorflow==1.15.0")
+        if self.is_conda or not self.enable_cuda:
+            # CPU/AMD doesn't need Cuda and Conda handles Cuda and cuDNN so nothing to do here
             return
 
         tf_ver = None
@@ -234,6 +247,10 @@ class Environment():
                 tf_ver = key
                 break
         if tf_ver:
+            # Remove the version of tensorflow in requirements.txt and add the correct version that
+            # corresponds to the installed Cuda/cuDNN versions
+            self.required_packages = [pkg for pkg in self.required_packages
+                                      if not pkg.startswith("tensorflow-gpu")]
             tf_ver = "tensorflow-gpu{}".format(tf_ver)
             self.required_packages.append(tf_ver)
             return
@@ -263,18 +280,6 @@ class Environment():
             self.output.error("{} is not a valid pip wheel".format(custom_tf))
         elif custom_tf:
             self.required_packages.append(custom_tf)
-
-    def update_tf_dep_conda(self):
-        """ Update Conda TF Dependency """
-        if not self.enable_cuda:
-            self.required_packages.append("tensorflow==1.15.0")
-        else:
-            self.required_packages.append("tensorflow-gpu==1.15.0")
-
-    def update_amd_dep(self):
-        """ Update amd dependency for AMD cards """
-        if self.enable_amd:
-            self.required_packages.extend(["plaidml-keras==0.6.4", "plaidml==0.6.4"])
 
     def set_config(self):
         """ Set the backend in the faceswap config file """
@@ -346,8 +351,6 @@ class Checks():
 
     # Checks not required for installer
         if self.env.is_installer:
-            self.env.update_tf_dep()
-            self.env.update_amd_dep()
             return
 
     # Ask AMD/Docker/Cuda
@@ -360,7 +363,7 @@ class Checks():
         if self.env.enable_docker:
             self.docker_tips()
             self.env.set_config()
-            exit(0)
+            sys.exit(0)
 
     # Check for CUDA and cuDNN
         if self.env.enable_cuda and self.env.is_conda:
@@ -374,7 +377,6 @@ class Checks():
             self.env.cuda_version = input("Manually specify CUDA version: ")
 
         self.env.update_tf_dep()
-        self.env.update_amd_dep()
         if self.env.os_version[0] == "Windows":
             self.tips.pip()
 
@@ -556,11 +558,17 @@ class Checks():
 class Install():
     """ Install the requirements """
     def __init__(self, environment):
+        self._operators = {"==": operator.eq,
+                           ">=": operator.ge,
+                           "<=": operator.le,
+                           ">": operator.gt,
+                           "<": operator.lt}
         self.output = environment.output
         self.env = environment
 
         if not self.env.is_installer and not self.env.updater:
             self.ask_continue()
+        self.env.get_required_packages()
         self.check_missing_dep()
         self.check_conda_missing_dep()
         if (self.env.updater and
@@ -579,39 +587,26 @@ class Install():
         inp = input("Please ensure your System Dependencies are met. Continue? [y/N] ")
         if inp in ("", "N", "n"):
             self.output.error("Please install system dependencies to continue")
-            exit(1)
+            sys.exit(1)
 
     def check_missing_dep(self):
         """ Check for missing dependencies """
-        for pkg in self.env.required_packages:
-            pkg = self.check_os_requirements(pkg)
-            if pkg is None:
-                continue
-            key = pkg.split("==")[0]
+        for key, specs in self.env.required_packages:
             if self.env.is_conda:
                 # Get Conda alias for Key
                 key = CONDA_MAPPING.get(key, (key, None))[0]
-            if key not in self.env.installed_packages:
-                self.env.missing_packages.append(pkg)
+            if (key == "git+https://github.com/deepfakes/nvidia-ml-py3.git" and
+                    self.env.installed_packages.get("nvidia-ml-py3", "") == "7.352.1"):
+                # Annoying explicit hack to get around our custom version of nvidia-ml=py3 being
+                # constantly re-downloaded
                 continue
-            else:
-                if len(pkg.split("==")) > 1:
-                    if pkg.split("==")[1] != self.env.installed_packages.get(key):
-                        self.env.missing_packages.append(pkg)
-                        continue
-
-    @staticmethod
-    def check_os_requirements(package):
-        """ Check that the required package is required for this OS """
-        if ";" not in package and "sys_platform" not in package:
-            return package
-        package = "".join(package.split())
-        pkg, tags = package.split(";")
-        tags = tags.split("==")
-        sys_platform = tags[tags.index("sys_platform") + 1].replace('"', "").replace("'", "")
-        if sys_platform == sys.platform:
-            return pkg
-        return None
+            if key not in self.env.installed_packages:
+                self.env.missing_packages.append((key, specs))
+                continue
+            installed_vers = self.env.installed_packages.get(key, "")
+            if specs and not all(self._operators[spec[0]](installed_vers, spec[1])
+                                 for spec in specs):
+                self.env.missing_packages.append((key, specs))
 
     def check_conda_missing_dep(self):
         """ Check for conda missing dependencies """
@@ -622,11 +617,10 @@ class Install():
             if key not in self.env.installed_packages:
                 self.env.conda_missing_packages.append(pkg)
                 continue
-            else:
-                if len(pkg[0].split("==")) > 1:
-                    if pkg[0].split("==")[1] != self.env.installed_conda_packages.get(key):
-                        self.env.conda_missing_packages.append(pkg)
-                        continue
+            if len(pkg[0].split("==")) > 1:
+                if pkg[0].split("==")[1] != self.env.installed_conda_packages.get(key):
+                    self.env.conda_missing_packages.append(pkg)
+                    continue
 
     def install_missing_dep(self):
         """ Install missing dependencies """
@@ -639,7 +633,9 @@ class Install():
     def install_python_packages(self):
         """ Install required pip packages """
         self.output.info("Installing Required Python Packages. This may take some time...")
-        for pkg in self.env.missing_packages:
+        for pkg, version in self.env.missing_packages:
+            if version:
+                pkg = "{}{}".format(pkg, ",".join("".join(spec) for spec in version))
             if self.env.is_conda and not pkg.startswith("git"):
                 verbose = pkg.startswith("tensorflow") or self.env.updater
                 pkg = CONDA_MAPPING.get(pkg, (pkg, None))
@@ -658,6 +654,9 @@ class Install():
 
     def conda_installer(self, package, channel=None, verbose=False, conda_only=False):
         """ Install a conda package """
+        #  Packages with special characters need to be enclosed in double quotes
+        if any(char in package for char in (" ", "<", ">", "*", "|")):
+            package = "\"{}\"".format(package)
         success = True
         condaexe = ["conda", "install", "-y"]
         if not verbose or self.env.updater:
@@ -805,5 +804,5 @@ if __name__ == "__main__":
     Checks(ENV)
     ENV.set_config()
     if INSTALL_FAILED:
-        exit(1)
+        sys.exit(1)
     Install(ENV)
