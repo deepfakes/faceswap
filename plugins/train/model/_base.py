@@ -420,7 +420,10 @@ class ModelBase():
             logger.warning("Clipnorm has been selected, but is unsupported when using "
                            "distribution strategies, so has been disabled. If you wish to enable "
                            "clipnorm, then you must use the `default` distribution strategy.")
-            clipnorm = False
+        if self._strategy.use_strategy:
+            # Tensorflow checks whether clipnorm is None rather than False when using distribution
+            # strategy so we need to explicitly set it to None.
+            clipnorm = None
         learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
         kwargs = dict(beta_1=0.5,
                       beta_2=0.99,
