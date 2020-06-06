@@ -12,13 +12,14 @@ import time
 from concurrent import futures
 from contextlib import nullcontext
 
+import tensorflow as tf
+
 from keras import losses
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects
-import tensorflow as tf
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
@@ -92,7 +93,8 @@ class ModelBase():
         self.rename_legacy()
         self.load_state_info()
 
-        self._mask_variable = None  # The variable holding masks if Penalized Loss is used
+        # The variables holding masks if Penalized Loss is used
+        self._mask_variables = dict(a=None, b=None)
         self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.history = dict()  # Loss history per save iteration)
@@ -221,18 +223,20 @@ class ModelBase():
         return self.config["mask_type"] is not None and self.config["learn_mask"]
 
     @property
-    def mask_variable(self):
-        """ :class:`keras.backend.variable` or ``None``. If Penalized Mask Loss is used then this
-        will return a Variable of (`batch size`, `h`, `w`, 1) corresponding to the size of the
-        model input. If Penalized Mask Loss is not used then this will return ``None``
+    def mask_variables(self):
+        """ dict: for each side a :class:`keras.backend.variable` or ``None``.
+        If Penalized Mask Loss is used then each side will return a Variable of
+        (`batch size`, `h`, `w`, 1) corresponding to the size of the model input.
+        If Penalized Mask Loss is not used then each side will return ``None``
 
         Raises
         ------
         FaceswapError:
             If Penalized Mask Loss has been selected, but a mask type has not been specified
         """
-        if self._mask_variable is not None or not self.config["penalized_mask_loss"]:
-            return self._mask_variable
+        if not self.config["penalized_mask_loss"] or all(val is not None
+                                                         for val in self._mask_variables.values()):
+            return self._mask_variables
 
         if self.config["penalized_mask_loss"] and self.config["mask_type"] is None:
             raise FaceswapError("Penalized Mask Loss has been selected but you have not chosen a "
@@ -241,17 +245,17 @@ class ModelBase():
 
         output_network = [network for network in self.networks.values() if network.is_output][0]
         mask_shape = output_network.output_shapes[-1][:-1] + (1, )
-        self._mask_variable = K.variable(
-            K.ones((self._batch_size, ) + mask_shape[1:], dtype="float32"),
-            dtype="float32",
-            name="penalized_mask_variable")
-        if get_backend() != "amd":
-            # trainable and shape don't have a setter, so we need to go to private property
-            # pylint:disable=protected-access
-            self._mask_variable._trainable = False
-            self._mask_variable._shape = tf.TensorShape(mask_shape)
-        logger.debug("Created mask variable: %s", self._mask_variable)
-        return self._mask_variable
+        for side in ("a", "b"):
+            var = K.variable(K.ones((self._batch_size, ) + mask_shape[1:], dtype="float32"),
+                             dtype="float32",
+                             name="penalized_mask_variable_{}".format(side))
+            if get_backend() != "amd":
+                # trainable and shape don't have a setter, so we need to go to private property
+                var._trainable = False  # pylint:disable=protected-access
+                var._shape = tf.TensorShape(mask_shape)  # pylint:disable=protected-access
+            self._mask_variables[side] = var
+        logger.info("Created mask variables: %s", self._mask_variables)
+        return self._mask_variables
 
     def load_config(self):
         """ Load the global config for reference in self.config """
@@ -390,7 +394,7 @@ class ModelBase():
         optimizer = self._get_optimizer()
 
         for side, model in self.predictors.items():
-            loss = Loss(model.inputs, model.outputs, self.mask_variable)
+            loss = Loss(model.inputs, model.outputs, self.mask_variables[side])
             model.compile(optimizer=optimizer, loss=loss.funcs)
             if initialize:
                 self.state.add_session_loss_names(side, loss.names)

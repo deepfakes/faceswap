@@ -414,13 +414,14 @@ class Batcher():
         """
         logger.trace("Training one step: (side: %s)", self._side)
         model_inputs, model_targets = self._get_next()
-        if self._model.mask_variable is not None:
+        print(all(val is not None for val in self._model.mask_variables.values()))
+        if all(val is not None for val in self._model.mask_variables.values()):
             # Split masks and assign to the mask variable for penalized mask loss
             masks = model_inputs[-1]
             if get_backend() == "amd":
-                K.set_value(self._model.mask_variable, masks)
+                K.set_value(self._model.mask_variables[self._side], masks)
             else:
-                self._model.mask_variable.assign(masks)
+                self._model.mask_variables[self._side].assign(masks)
             if not self._model.training_opts["learn_mask"]:
                 # Remove masks from the model input if not learning a mask
                 model_inputs = model_inputs[0]
