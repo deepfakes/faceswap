@@ -3,7 +3,7 @@
 
 import logging
 
-from keras.layers import Add, SeparableConv2D
+from keras.layers import Add, Concatenate, SeparableConv2D, UpSampling2D
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D
 from keras.layers.core import Activation
@@ -306,6 +306,87 @@ class NNBlocks():
         if not res_block_follows:
             var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
         var_x = PixelShuffler(name="{}_pixelshuffler".format(name), size=scale_factor)(var_x)
+        return var_x
+
+    # <<< DLight Model Blocks >>> #
+    def upscale2x(self, input_tensor, filters,
+                  kernel_size=3, padding="same", interpolation="bilinear", res_block_follows=False,
+                  sr_ratio=0.5, scale_factor=2, fast=False, **kwargs):
+        """ Custom hybrid upscale layer for sub-pixel up-scaling.
+
+        Most of up-scaling is approximating lighting gradients which can be accurately achieved
+        using linear fitting. This layer attempts to improve memory consumption by splitting
+        with bilinear and convolutional layers so that the sub-pixel update will get details
+        whilst the bilinear filter will get lighting.
+
+        Adds reflection padding if it has been selected by the user, and other post-processing
+        if requested by the plugin.
+
+        Parameters
+        ----------
+        input_tensor: tensor
+            The input tensor to the layer
+        filters: int
+            The dimensionality of the output space (i.e. the number of output filters in the
+            convolution)
+        kernel_size: int, optional
+            An integer or tuple/list of 2 integers, specifying the height and width of the 2D
+            convolution window. Can be a single integer to specify the same value for all spatial
+            dimensions. Default: 3
+        padding: ["valid", "same"], optional
+            The padding to use. Default: `"same"`
+        interpolation: ["nearest", "bilinear"], optional
+            Interpolation to use for up-sampling. Default: `"bilinear"`
+        res_block_follows: bool, optional
+            If a residual block will follow this layer, then this should be set to `True` to add
+            a leaky ReLu after the convolutional layer. Default: ``False``
+        scale_factor: int, optional
+            The amount to upscale the image. Default: `2`
+        sr_ratio: float, optional
+            The proportion of super resolution (pixel shuffler) filters to use. Non-fast mode only.
+            Default: `0.5`
+        kwargs: dict
+            Any additional Keras standard layer keyword arguments
+        fast: bool, optional
+            Use a faster up-scaling method that may appear more rugged. Default: ``False``
+
+        Returns
+        -------
+        tensor
+            The output tensor from the Upscale layer
+        """
+        name = self._get_name("upscale2x_{}".format("fast" if fast else "hyb"))
+        var_x = input_tensor
+        if not fast:
+            sr_filters = int(filters * sr_ratio)
+            filters = filters - sr_filters
+            var_x_sr = self.upscale(var_x, filters,
+                                    kernel_size=kernel_size,
+                                    padding=padding,
+                                    scale_factor=scale_factor,
+                                    res_block_follows=res_block_follows,
+                                    **kwargs)
+
+        if fast or (not fast and filters > 0):
+            var_x2 = self.conv2d(var_x, filters,
+                                 kernel_size=3,
+                                 padding=padding,
+                                 name="{}_conv2d".format(name),
+                                 **kwargs)
+            var_x2 = UpSampling2D(size=(scale_factor, scale_factor),
+                                  interpolation=interpolation,
+                                  name="{}_upsampling2D".format(name))(var_x2)
+            if fast:
+                var_x1 = self.upscale(var_x, filters,
+                                      kernel_size=kernel_size,
+                                      padding=padding,
+                                      scale_factor=scale_factor,
+                                      res_block_follows=res_block_follows, **kwargs)
+                var_x = Add()([var_x2, var_x1])
+            else:
+                var_x = Concatenate(name="{}_concatenate".format(name))([var_x_sr, var_x2])
+        else:
+            var_x = var_x_sr
         return var_x
 
     # <<< DFaker Model Blocks >>> #
