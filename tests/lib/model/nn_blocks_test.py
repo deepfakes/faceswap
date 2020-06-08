@@ -72,3 +72,5 @@ def test_blocks(use_icnr_init, use_convaware_init, use_reflect_padding):
     block_test(cls_.conv_sep, input_shape=(2, 8, 8, 32), kwargs=dict(filters=64))
     block_test(cls_.upscale, input_shape=(2, 4, 4, 128), kwargs=dict(filters=64))
     block_test(cls_.res_block, input_shape=(2, 2, 2, 64), kwargs=dict(filters=64))
+    block_test(cls_.upscale2x, input_shape=(2, 4, 4, 128), kwargs=dict(filters=64, fast=False))
+    block_test(cls_.upscale2x, input_shape=(2, 4, 4, 128), kwargs=dict(filters=64, fast=True))
