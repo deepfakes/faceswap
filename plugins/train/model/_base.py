@@ -254,7 +254,7 @@ class ModelBase():
                 var._trainable = False  # pylint:disable=protected-access
                 var._shape = tf.TensorShape(mask_shape)  # pylint:disable=protected-access
             self._mask_variables[side] = var
-        logger.info("Created mask variables: %s", self._mask_variables)
+        logger.debug("Created mask variables: %s", self._mask_variables)
         return self._mask_variables
 
     def load_config(self):
