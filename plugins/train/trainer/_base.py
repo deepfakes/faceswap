@@ -414,7 +414,6 @@ class Batcher():
         """
         logger.trace("Training one step: (side: %s)", self._side)
         model_inputs, model_targets = self._get_next()
-        print(all(val is not None for val in self._model.mask_variables.values()))
         if all(val is not None for val in self._model.mask_variables.values()):
             # Split masks and assign to the mask variable for penalized mask loss
             masks = model_inputs[-1]

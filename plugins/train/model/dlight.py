@@ -8,11 +8,8 @@
     DeepHomage for lots of testing
     """
 
-from keras.layers import Dense, Flatten, Input, Reshape, AveragePooling2D, LeakyReLU
-from keras.layers import UpSampling2D
-from keras.layers.core import Dropout
-from keras.layers.merge import Concatenate
-from keras.layers.normalization import BatchNormalization
+from keras.layers import (AveragePooling2D, BatchNormalization, Concatenate, Dense, Dropout,
+                          Flatten, Input, Reshape, LeakyReLU, UpSampling2D)
 from keras.models import Model as KerasModel
 
 from lib.utils import FaceswapError
