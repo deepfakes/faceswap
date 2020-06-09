@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ The Command Line Arguments for the Manual Editor tool. """
-from lib.cli import FaceSwapArgs, DirOrFileFullPaths, FileFullPaths, Slider
+from lib.cli.args import FaceSwapArgs, DirOrFileFullPaths, FileFullPaths, Slider
 
 _HELPTEXT = ("This command lets you perform various actions on frames, "
              "faces and alignments files using visual tools.")
