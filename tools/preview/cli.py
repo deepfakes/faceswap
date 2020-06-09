@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-from lib.cli import FaceSwapArgs
-from lib.cli import DirOrFileFullPaths, DirFullPaths, FileFullPaths
+from lib.cli.args import FaceSwapArgs
+from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths
 
 _HELPTEXT = "This command allows you to preview swaps to tweak convert settings."
 

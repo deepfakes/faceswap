@@ -38,7 +38,6 @@ class Extract():  # pylint:disable=too-few-public-methods
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self._args = arguments
-
         self._output_dir = str(get_folder(self._args.output_dir))
 
         logger.info("Output Directory: %s", self._args.output_dir)
@@ -51,9 +50,12 @@ class Extract():  # pylint:disable=too-few-public-methods
         self._post_process = PostProcess(arguments)
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
         normalization = None if self._args.normalization == "none" else self._args.normalization
+
+        maskers = ["components", "extended"]
+        maskers += self._args.masker if self._args.masker else []
         self._extractor = Extractor(self._args.detector,
                                     self._args.aligner,
-                                    [self._args.masker, "components", "extended"],
+                                    maskers,
                                     configfile=configfile,
                                     multiprocess=not self._args.singleprocess,
                                     rotate_images=self._args.rotate_images,
@@ -106,7 +108,7 @@ class Extract():  # pylint:disable=too-few-public-methods
     def process(self):
         """ The entry point for triggering the Extraction Process.
 
-        Should only be called from  :class:`lib.cli.ScriptExecutor`
+        Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
         """
         logger.info('Starting, this may take a while...')
         # from lib.queue_manager import queue_manager ; queue_manager.debug_monitor(3)
@@ -211,7 +213,8 @@ class Extract():  # pylint:disable=too-few-public-methods
                 self._check_thread_error()
                 if is_final:
                     self._output_processing(extract_media, size)
-                    self._output_faces(saver, extract_media)
+                    if not self._args.skip_saving_faces:
+                        self._output_faces(saver, extract_media)
                     if self._save_interval and (idx + 1) % self._save_interval == 0:
                         self._alignments.save()
                 else:

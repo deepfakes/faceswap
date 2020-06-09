@@ -170,14 +170,18 @@ def get_loglevel(loglevel):
 
 def crash_log():
     """ Write debug_buffer to a crash log on crash """
-    from lib.sysinfo import sysinfo
+    original_traceback = traceback.format_exc()
     path = os.path.dirname(os.path.realpath(sys.argv[0]))
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
-
     freeze_log = list(debug_buffer)
+    try:
+        from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
+    except Exception:  # pylint:disable=broad-except
+        sysinfo = ("\n\nThere was an error importing System Information from lib.sysinfo. This is "
+                   "probably a bug which should be fixed:\n{}".format(traceback.format_exc()))
     with open(filename, "w") as outfile:
         outfile.writelines(freeze_log)
-        traceback.print_exc(file=outfile)
+        outfile.write(original_traceback)
         outfile.write(sysinfo)
     return filename
 

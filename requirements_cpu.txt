@@ -1,0 +1,2 @@
+-r _requirements_base.txt
+tensorflow>=1.12.0,<=1.15.3

@@ -43,8 +43,9 @@ class Extractor():
         The name of a detector plugin as exists in :mod:`plugins.extract.detect`
     aligner: str
         The name of an aligner plugin as exists in :mod:`plugins.extract.align`
-    masker: str
-        The name of a masker plugin as exists in :mod:`plugins.extract.mask`
+    masker: str or list
+        The name of a masker plugin(s) as exists in :mod:`plugins.extract.mask`.
+        This can be a single masker or a list of multiple maskers
     configfile: str, optional
         The path to a custom ``extract.ini`` configfile. If ``None`` then the system
         :file:`config/extract.ini` file will be used.
@@ -65,7 +66,7 @@ class Extractor():
         images fed to the aligner.Default: ``None``
     image_is_aligned: bool, optional
         Used to set the :attr:`plugins.extract.mask.image_is_aligned` attribute. Indicates to the
-        masker that the fed in image is an aligned face rather than a frame.Default: ``False``
+        masker that the fed in image is an aligned face rather than a frame. Default: ``False``
 
     Attributes
     ----------

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
-from lib.cli import FaceSwapArgs
-from lib.cli import DirOrFileFullPaths, DirFullPaths, FilesFullPaths, Radio, Slider
+from lib.cli.args import FaceSwapArgs
+from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FilesFullPaths, Radio, Slider
 
 _HELPTEXT = "This command lets you perform various tasks pertaining to an alignments file."
 

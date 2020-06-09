@@ -3,7 +3,7 @@ gui package
 ***********
 
 The GUI Package contains the entire code base for Faceswap's optional GUI. The GUI itself itself
-is largely self-generated from the command line options specified in :mod:`lib.cli`.
+is largely self-generated from the command line options specified in :mod:`lib.cli.args`.
 
 .. contents:: Contents
    :local:
@@ -18,6 +18,7 @@ custom\_widgets module
    
    ~lib.gui.custom_widgets.ConsoleOut
    ~lib.gui.custom_widgets.ContextMenu
+   ~lib.gui.custom_widgets.MultiOption
    ~lib.gui.custom_widgets.RightClickMenu
    ~lib.gui.custom_widgets.StatusBar
    ~lib.gui.custom_widgets.Tooltip
