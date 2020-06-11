@@ -26,6 +26,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
     """
     def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
+        self._batch_size = 1000
         self._canvas = canvas
         self._det_faces = detected_faces
         self._updated_faces = detected_faces._updated_faces
@@ -33,100 +34,47 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         self._frame_count = canvas._globals.frame_count
         self._progress_bar = canvas._progress_bar
         self._launch_face_loader()
-        self._faces_cache.loader.launch()
         logger.debug("Initialized: %s ", self.__class__.__name__,)
 
     def _launch_face_loader(self):
         """ Launch the canvas face loader loop. """
         self._progress_bar.start(mode="determinate")
+        # Generate a cache of face_count per frame so we don't keep calculating on the fly
         face_count = self._det_faces.face_count_per_index
-        frame_faces_loaded = [False for _ in range(self._frame_count)]
-        self._load_faces(0, face_count, frame_faces_loaded)
+        self._load_faces(0, face_count)
 
-    def _load_faces(self, faces_seen, faces_count, frame_faces_loaded):
+    def _load_faces(self, start_index, faces_count):
         """ Load the currently available faces from :class:`tools.lib_manual.media.FacesCache`
         into the Faces Viewer.
 
-        Obtains the indices of all faces that have currently been loaded, and displays them in the
-        Faces Viewer. This process re-runs every 0.5 seconds until all faces have been loaded.
+        Face loading is batched so that we can update the user with face loading progress.
 
         Parameters
         ----------
-        faces_seen: int
-            The number of faces that have already been loaded. For tracking progress
+        start_index: int
+            The starting frame index for this iteration of face loading
         faces_count: list
             The number of faces that appear in each frame. List is of length :attr:`_frame_count`
             with each value being the number of faces that appear for the given index.
-        frame_faces_loaded: list
-            List of length :attr:`_frame_count` containing `bool` values indicating whether
-            annotations have been created for each frame or not.
         """
-        self._update_progress(faces_seen)
-        update_indices = self._faces_cache.loader.loaded_frame_indices[faces_seen:]
-        logger.debug("faces_seen: %s, update count: %s", faces_seen, len(update_indices))
-        tk_faces = self._faces_cache.tk_faces[update_indices]
-        self._faces_cache.loader.check_and_raise_error()
-        for frame_idx, faces in zip(update_indices, tk_faces):
+        self._update_progress(start_index)
+        end_idx = min(start_index + self._batch_size, self._frame_count)
+        logger.debug("start_idx: %s, end_idx: %s", start_index, end_idx)
+        for idx, faces in enumerate(self._faces_cache.tk_faces[start_index:end_idx]):
+            frame_idx = idx + start_index
             starting_idx = sum(faces_count[:frame_idx])
-            for idx, tk_face in enumerate(faces):
-                coords = self._canvas.coords_from_index(starting_idx + idx)
+            for face_idx, tk_face in enumerate(faces):
+                coords = self._canvas.coords_from_index(starting_idx + face_idx)
                 self._canvas.new_objects.create(coords, tk_face, frame_idx,
                                                 is_multi=len(faces) > 1)
-                self._reshape_canvas(coords)
-            if faces:
-                self._place_in_stack(frame_idx, frame_faces_loaded)
-
-        faces_seen += len(update_indices)
-        if faces_seen == self._frame_count:
+        if end_idx == self._frame_count:
             logger.debug("Load complete")
-            self._faces_cache.loader.join_threads()
             self._on_load_complete()
         else:
             logger.debug("Refreshing... (faces_seen: %s, frame_count: %s",
-                         faces_seen, self._frame_count)
-            self._canvas.after(500, self._load_faces, faces_seen, faces_count, frame_faces_loaded)
-
-    def _reshape_canvas(self, coordinates):
-        """ Scroll the canvas to the first row, when the first row has been received from the
-        Faces Cache (sometimes the first row doesn't load first).
-
-        Update the canvas scroll region to include any newly added objects
-
-        Parameters
-        ----------
-        coordinates: tuple
-            The (x, y) coordinates of the newly created object
-        """
-        if coordinates[1] == 0:  # Set the top of canvas when first row seen
-            logger.debug("Scrolling to top row")
-            self._canvas.yview_moveto(0.0)
-        if coordinates[0] == 0:  # Resize canvas on new line
-            logger.trace("Extending canvas")
-            self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-
-    def _place_in_stack(self, frame_index, frame_faces_loaded):
-        """ Place any out of order objects into their correct position in the stack.
-        As the images are loaded in parallel, the faces are not created in order on the stack.
-        For the viewer to work correctly, out of order items are placed back in the correct
-        position.
-
-        Parameters
-        ----------
-        frame_index: int
-            The index that the currently loading objects belong to
-        frame_faces_loaded: list
-            List of length :attr:`_frame_count` containing `bool` values indicating whether
-            annotations have been created for each frame or not.
-        """
-        frame_faces_loaded[frame_index] = True
-        offset = frame_index + 1
-        higher_frames = frame_faces_loaded[offset:]
-        if not any(higher_frames):
-            return
-        below_frame = next(idx for idx, loaded in enumerate(higher_frames) if loaded) + offset
-        logger.trace("Placing frame %s in stack below frame %s", frame_index, below_frame)
-        self._canvas.tag_lower("frame_id_{}".format(frame_index),
-                               "frame_id_{}".format(below_frame))
+                         end_idx, self._frame_count)
+            self._canvas.update_idletasks()
+            self._load_faces(end_idx, faces_count)
 
     def _update_progress(self, faces_seen):
         """ Update the progress bar prior to loading the latest faces.
@@ -136,7 +84,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         faces_seen: int
             The number of faces that have already been loaded
         """
-        position = faces_seen + 1
+        position = faces_seen
         progress = int(round((position / self._frame_count) * 100))
         msg = "Loading Faces: {}/{} - {}%".format(position, self._frame_count, progress)
         logger.debug("Progress update: %s", msg)
@@ -152,8 +100,10 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         Highlights the active face.
         Enables saving of an alignments file
         """
+        # TODO Remove all of this as loading faces now locks out the user
         # NB: Reversed as new assets are lowered into the correct place, so subsequent faces
         # must be placed first
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         index_offset = len(self._updated_faces) - 1
         for idx, faces in enumerate(reversed(self._updated_faces)):
             if faces is None:
@@ -172,7 +122,6 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         self._canvas.update_mesh_color()
         self._canvas.switch_filter()
         self._progress_bar.stop()
-        self._faces_cache.loader.set_load_complete()
         self._det_faces.enable_save()
         self._canvas.active_frame.reload_annotations()
 

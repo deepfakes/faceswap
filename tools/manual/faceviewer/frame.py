@@ -119,7 +119,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._configure_styles()
         self._buttons = self._add_buttons()
         lockout = tk.BooleanVar()
-        lockout.set(True)
+        lockout.set(False)
         lockout.trace("w", lambda *e: self._enable_disable_buttons())
         self._tk_vars["lockout"] = lockout
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -317,8 +317,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ Update the :class:`FacesViewer` canvas for the active filter.
             Executed when the user changes the selected filter pull down.
          """
-        if not self._faces_cache.is_initialized:
-            return
         filter_mode = self._globals.filter_mode.replace(" ", "_").lower()
         filter_mode = "all_frames" if filter_mode == "has_face(s)" else filter_mode
         current_dsp = self.active_filter.filter_type
@@ -390,8 +388,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     # << OPTIONAL ANNOTATION METHODS >> #
     def update_mesh_color(self):
         """ Update the mesh color when user updates the control panel. """
-        if not self._faces_cache.is_initialized:
-            return
         color = self.get_muted_color("Mesh")
         if self._annotation_colors["mesh"] == color:
             return

@@ -9,8 +9,6 @@ from time import sleep
 import cv2
 import numpy as np
 
-from lib.multithreading import MultiThread
-
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -37,11 +35,13 @@ class FaceCache():
         self._canvas = canvas
         self._tk_loading = tk_face_loading
 
-        self._loader = FaceCacheLoader(self, detected_faces)
         self._mask_loader = MaskLoader(self, detected_faces)
-
-        self._tk_faces = np.array([None for _ in range(self._canvas._globals.frame_count)])
-        self._initialized = False
+        self._tk_faces = np.array([[TKFace(face.aligned_landmarks,
+                                           size=self._face_size,
+                                           face=None,
+                                           mask=None)
+                                    for face in det_faces]
+                                   for det_faces in detected_faces._saved_faces])
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # << STANDARD PROPERTIES >> #
@@ -62,28 +62,12 @@ class FaceCache():
         """ bool: ``True`` if the faces are currently being updated otherwise ``False``. """
         return self._tk_loading.get()
 
-    @property
-    def is_initialized(self):
-        """ bool: ``True`` if the faces have completed initial loading otherwise ``False``. """
-        return self._initialized
-
     # << UTILITY FUNCTION PROPERTIES >> #
     @property
     def mask_loader(self):
         """ :class:`MaskLoader`: Handles the application of the selected mask on to each
         :class:`tkinter.PhotoImage`. """
         return self._mask_loader
-
-    @property
-    def loader(self):
-        """ :class:`FacesCacheLoader: Handles the initial loading of faces and mesh landmarks
-        into the :class:`FacesCache`. """
-        return self._loader
-
-    def set_initialized(self):
-        """ Set the :attr:`_initialized` to ``True``. Called from :class:`FacesCacheLoader` when
-        faces have completed loading. """
-        self._initialized = True
 
     def add(self, frame_index, face, landmarks, mask=None):
         """ Add a new :class:`TKFace` object to the :attr:`tk_faces` for the given frame index.
@@ -108,7 +92,7 @@ class FaceCache():
         logger.debug("Adding objects: (frame_index: %s, face: %s, landmarks: %s, mask: %s)",
                      frame_index, face.shape, landmarks.shape,
                      mask if mask is None else mask.shape)
-        tk_face = TKFace(face, landmarks, mask)
+        tk_face = TKFace(landmarks, size=self._face_size, face=face, mask=mask)
         self._tk_faces[frame_index].append(tk_face)
         return tk_face
 
@@ -164,17 +148,21 @@ class TKFace():
 
     Parameters
     ----------
-    face: :class:`numpy.ndarray`
-        The face, sized correctly, to create a :class:`tkinter.PhotoImage` from
     landmarks: :class:`numpy.ndarray`
         The 68 point aligned landmarks for the given face
+    size: int, optional
+        The pixel size of the face image. Default: `128`
+    face: :class:`numpy.ndarray` or ``None``, optional
+        The face, sized correctly, to create a :class:`tkinter.PhotoImage` from. Pass ``None`` if
+        an empty photo image should be created. Default: ``None``
     mask: :class:`numpy.ndarray` or ``None``, optional
         The mask to be applied to the face image. Pass ``None`` if no mask is to be used.
         Default ``None``
     """
-    def __init__(self, face, landmarks, mask=None):
-        logger.trace("Initializing %s: (face: %s, landmarks: %s, mask: %s)",
-                     self.__class__.__name__, face.shape, landmarks.shape,
+    def __init__(self, landmarks, size=128, face=None, mask=None):
+        logger.trace("Initializing %s: (landmarks: %s, face: %s, mask: %s)",
+                     self.__class__.__name__, landmarks.shape,
+                     face if face is None else face.shape,
                      mask if mask is None else mask.shape)
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
@@ -184,6 +172,7 @@ class TKFace():
                                       nose=(27, 36),
                                       jaw=(0, 17),
                                       chin=(8, 11))
+        self._size = size
         self._face = self._generate_tk_face_data(face, mask)
         self._mesh_points, self._mesh_is_poly = self._get_mesh_points(landmarks)
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -258,10 +247,13 @@ class TKFace():
         :class:`tkinter.PhotoImage`
             The face formatted for the :class:`~tools.manual.manual.FaceViewer` canvas.
         """
-        face_bytes = self._merge_mask_to_bytes(face, mask)
+        # TODO Look into this link for generating a can line hex string from numpy array
+        # rather than generating png:
+        # https://web.archive.org/web/20161228115604/http://tkinter.unpythonic.net/wiki/PhotoImage
+        face_bytes = "" if face is None else self._merge_mask_to_bytes(face, mask)
         for attempt in range(10):
             try:
-                tk_face = tk.PhotoImage(data=face_bytes)
+                tk_face = tk.PhotoImage(data=face_bytes, width=self._size, height=self._size)
                 break
             except RuntimeError as err:
                 if attempt == 9 or str(err) not in ("main thread is not in main loop",
@@ -327,85 +319,6 @@ class TKFace():
             is_poly.append(key in ("right_eye", "left_eye", "mouth"))
             mesh_points.append(landmarks[val[0]:val[1]])
         return mesh_points, is_poly
-
-
-class FaceCacheLoader():
-    """ Background loader for the face cache. Loads faces into the :class:`FacesCache` in
-    background threads, maintaining GUI usability.
-
-    Parameters
-    ----------
-    faces_cache: :class:`FacesCache`
-        The face cache that this loader will be populating faces for.
-    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
-        The :class:`~lib.faces_detect.DetectedFace` objects for this video
-    """
-    def __init__(self, faces_cache, detected_faces):
-        logger.debug("Initializing %s: (faces_cache: %s, detected_faces: %s)",
-                     self.__class__.__name__, faces_cache, detected_faces)
-        self._faces_cache = faces_cache
-        self._tk_loading = faces_cache._tk_loading
-        self._loaded_frame_indices = []
-
-        self._saved_faces = detected_faces._saved_faces
-        self._alignments = detected_faces._alignments
-
-        self._thread = MultiThread(self._load_from_folder)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def loaded_frame_indices(self):
-        """ list: Contains the frame indices that have currently been loaded. """
-        return self._loaded_frame_indices
-
-    # << PUBLIC METHODS >> #
-    def set_load_complete(self):
-        """ Callback to set the :attr:`FacesCache._initialized` to `True` and the
-        :attr:`FacesCache._tk_loading` state to ``False``.
-        Should be called after all post initial loading tasks are completed. """
-        self._tk_loading.set(False)
-        self._faces_cache.set_initialized()
-
-    def launch(self):
-        """ Loads the faces into the :attr:`_faces_cache.faces` scaled from 96px for GUI display.
-        """
-        self._thread.start()
-
-    def check_and_raise_error(self):
-        """ Monitor the loading threads for errors and raise if any occur. """
-        self._thread.check_and_raise_error()
-
-    def join_threads(self):
-        """ Join the loading threads """
-        logger.debug("Joining face viewer loading threads")
-        self._thread.join()
-
-    def _load_from_folder(self):
-        """ Loads faces from the given range of frame indices from a folder of images.
-
-        Each frame range is extracted in a different background thread.
-        """
-        for frame_idx, thumbs in enumerate(self._alignments.thumbnails.frame_order):
-            self._set_face_cache_objects(frame_idx, thumbs)
-
-    def _set_face_cache_objects(self, frame_index, thumbs):
-        """ Extracts the faces from the frame, as well as the aligned landmarks.
-
-        Populates :attr:`_faces_cache.faces` for the current frame index with the generated
-        :class:`TKFace` objects.
-
-        Appends the current frame index to :attr:`loaded_frame_indices` so that the viewer
-        can pick up the latest loaded faces and display them.
-        """
-        tk_faces = []
-        size = (self._faces_cache.size, self._faces_cache.size)
-        for face, thumb in zip(self._saved_faces[frame_index], thumbs):
-            face.load_aligned(None, size=self._faces_cache.size, force=True)
-            img = cv2.resize(cv2.imdecode(thumb, cv2.IMREAD_UNCHANGED), size)
-            tk_faces.append(TKFace(img, face.aligned_landmarks, mask=None))
-
-        self._faces_cache.tk_faces[frame_index] = tk_faces
-        self._loaded_frame_indices.append(frame_index)
 
 
 class MaskLoader():

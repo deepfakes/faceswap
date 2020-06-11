@@ -156,7 +156,6 @@ class ContextMenu():  # pylint:disable=too-few-public-methods
     def __init__(self, canvas):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
-        self._faces_cache = canvas._faces_cache
         self._menu = RightClickMenu(["Delete Face"], [self._delete_face])
         self._face_id = None
         self._canvas.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
@@ -171,8 +170,6 @@ class ContextMenu():  # pylint:disable=too-few-public-methods
         event: :class:`tkinter.Event`
             The mouse event that has triggered the pop up menu
         """
-        if not self._faces_cache.is_initialized:
-            return
         coords = (self._canvas.canvasx(event.x), self._canvas.canvasy(event.y))
         self._face_id = next((idx for idx in self._canvas.find_overlapping(*coords, *coords)
                               if self._canvas.type(idx) == "image"), None)
@@ -203,7 +200,6 @@ class ActiveFrame():
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
         self._det_faces = detected_faces
-        self._faces_cache = canvas._faces_cache
         self._size = canvas._faces_cache.size
         self._globals = canvas._globals
         self._highlighter = Highlighter(self)
@@ -233,15 +229,13 @@ class ActiveFrame():
     def reload_annotations(self):
         """ Refresh the highlighted annotations for faces in the currently selected frame on an
         add/remove face. """
-        if not self._faces_cache.is_initialized:
-            return
         logger.trace("Reloading annotations")
         self._highlighter.highlight_selected()
 
     def _update(self):
         """ Update the highlighted annotations for faces in the currently selected frame on an
         update, add or remove. """
-        if not self._det_faces.tk_edited.get() or not self._faces_cache.is_initialized:
+        if not self._det_faces.tk_edited.get():
             return
         logger.trace("Faces viewer update triggered")
         if self._add_remove_face():
