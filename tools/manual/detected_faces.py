@@ -7,13 +7,19 @@ import logging
 import os
 import tkinter as tk
 from copy import deepcopy
+from time import sleep
+from threading import Lock
 
 import cv2
+import imageio
 import numpy as np
+from tqdm import tqdm
 
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
+from lib.image import SingleFrameLoader
+from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -695,3 +701,225 @@ class FaceUpdate():
         self._last_updated_face = (frame_index, -1)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
+
+
+class ThumbsCreator():
+    """ Background loader to generate thumbnails for the alignments file. Generates low resolution
+    thumbnails in parallel threads for faster processing.
+
+    Parameters
+    ----------
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
+    input_location: str
+        The location of the input folder of frames or video file
+    """
+    def __init__(self, detected_faces, input_location):
+        logger.debug("Initializing %s: (detected_faces: %s, input_location: %s)",
+                     self.__class__.__name__, detected_faces, input_location)
+        self._size = 64
+        self._jpeg_quality = 50
+        self._pbar = None
+        self._lock = Lock()
+        self._location = input_location
+        self._key_frames = detected_faces.video_meta_data.get("keyframes", None)
+        self._pts_times = detected_faces.video_meta_data.get("pts_time", None)
+        self._alignments = detected_faces._alignments
+        self._saved_faces = detected_faces._saved_faces
+
+        self._is_video = self._key_frames is not None and self._pts_times is not None
+        self._num_threads = os.cpu_count() - 2
+        if self._is_video:
+            self._num_threads = min(self._num_threads, len(self._key_frames))
+        else:
+            self._num_threads = max(self._num_threads, 32)
+        self._threads = []
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def has_thumbs(self):
+        """ bool: ``True`` if the underlying alignments file holds thumbnail images
+        otherwise ``False``. """
+        return self._alignments.thumbnails.has_thumbails
+
+    def generate_cache(self):
+        """ Extract the face thumbnails from a video or folder of images into the
+        alignments file. """
+        self._pbar = tqdm(desc="Caching Thumbails", leave=False, total=len(self._saved_faces))
+        if self._is_video:
+            self._launch_video()
+        else:
+            self._launch_folder()
+        while True:
+            self._check_and_raise_error()
+            if all(not thread.is_alive() for thread in self._threads):
+                break
+            sleep(1)
+        self._join_threads()
+        self._pbar.close()
+        self._alignments.save()
+
+    # << PRIVATE METHODS >> #
+    def _check_and_raise_error(self):
+        """ Monitor the loading threads for errors and raise if any occur. """
+        for thread in self._threads:
+            thread.check_and_raise_error()
+
+    def _join_threads(self):
+        """ Join the loading threads """
+        logger.debug("Joining face viewer loading threads")
+        for thread in self._threads:
+            thread.join()
+
+    def _launch_video(self):
+        """ Launch multiple :class:`lib.multithreading.MultiThread` objects to load faces from
+        a video file.
+
+        Splits the video into segments and passes each of these segments to separate background
+        threads for some speed up.
+        """
+        key_frame_split = len(self._key_frames) // self._num_threads
+        for idx in range(self._num_threads):
+            is_final = idx == self._num_threads - 1
+            start_idx = idx * key_frame_split
+            keyframe_idx = len(self._key_frames) - 1 if is_final else start_idx + key_frame_split
+            end_idx = self._key_frames[keyframe_idx]
+            start_pts = self._pts_times[self._key_frames[start_idx]]
+            end_pts = False if idx + 1 == self._num_threads else self._pts_times[end_idx]
+            starting_index = self._pts_times.index(start_pts)
+            if end_pts:
+                segment_count = len(self._pts_times[self._key_frames[start_idx]:end_idx])
+            else:
+                segment_count = len(self._pts_times[self._key_frames[start_idx]:])
+            logger.debug("thread index: %s, start_idx: %s, end_idx: %s, start_pts: %s, "
+                         "end_pts: %s, starting_index: %s, segment_count: %s", idx, start_idx,
+                         end_idx, start_pts, end_pts, starting_index, segment_count)
+            thread = MultiThread(self._load_from_video,
+                                 start_pts,
+                                 end_pts,
+                                 starting_index,
+                                 segment_count)
+            thread.start()
+            self._threads.append(thread)
+
+    def _launch_folder(self):
+        """ Launch :class:`lib.multithreading.MultiThread` to retrieve faces from a
+        folder of images.
+
+        Goes through the file list one at a time, passing each file to a separate background
+        thread for some speed up.
+        """
+        reader = SingleFrameLoader(self._location)
+        num_threads = min(reader.count, self._num_threads)
+        frame_split = reader.count // self._num_threads
+        logger.debug("total images: %s, num_threads: %s, frames_per_thread: %s",
+                     reader.count, num_threads, frame_split)
+        for idx in range(num_threads):
+            is_final = idx == num_threads - 1
+            start_idx = idx * frame_split
+            end_idx = reader.count if is_final else start_idx + frame_split
+            thread = MultiThread(self._load_from_folder, reader, start_idx, end_idx)
+            thread.start()
+            self._threads.append(thread)
+
+    def _load_from_video(self, pts_start, pts_end, start_index, segment_count):
+        """ Loads faces from video for the given segment of the source video.
+
+        Each segment of the video is extracted from in a different background thread.
+
+        Parameters
+        ----------
+        pts_start: float
+            The start time to cut the segment out of the video
+        pts_end: float
+            The end time to cut the segment out of the video
+        start_index: int
+            The frame index that this segment starts from. Used for calculating the actual frame
+            index of each frame extracted
+        segment_count: int
+            The number of frames that appear in this segment. Used for ending early in case more
+            frames come out of the segment than should appear (sometimes more frames are picked up
+            at the end of the segment, so these are discarded)
+        """
+        logger.debug("pts_start: %s, pts_end: %s, start_index: %s, segment_count: %s",
+                     pts_start, pts_end, start_index, segment_count)
+        reader = self._get_reader(pts_start, pts_end)
+        idx = 0
+        vidname = os.path.splitext(os.path.basename(self._location))[0]
+        for idx, frame in enumerate(reader):
+            frame_idx = idx + start_index
+            filename = "{}_{:06d}.png".format(vidname, frame_idx + 1)
+            self._set_thumbail(filename, frame[..., ::-1], frame_idx)
+            if idx == segment_count - 1:
+                # Sometimes extra frames are picked up at the end of a segment, so stop
+                # processing when segment frame count has been hit.
+                break
+        reader.close()
+        logger.debug("Segment complete: (starting_frame_index: %s, processed_count: %s)",
+                     start_index, idx)
+
+    def _get_reader(self, pts_start, pts_end):
+        """ Get an imageio iterator for this thread's segment.
+
+        Parameters
+        ----------
+        pts_start: float
+            The start time to cut the segment out of the video
+        pts_end: float
+            The end time to cut the segment out of the video
+
+        Returns
+        -------
+        :class:`imageio.Reader`
+            A reader iterator for the requested segment of video
+        """
+        input_params = ["-ss", str(pts_start)]
+        if pts_end:
+            input_params.extend(["-to", str(pts_end)])
+        logger.debug("pts_start: %s, pts_end: %s, input_params: %s",
+                     pts_start, pts_end, input_params)
+        return imageio.get_reader(self._location, "ffmpeg", input_params=input_params)
+
+    def _load_from_folder(self, reader, start_index, end_index):
+        """ Loads faces from the given range of frame indices from a folder of images.
+
+        Each frame range is extracted in a different background thread.
+
+        Parameters
+        ----------
+        reader: :class:`lib.image.SingleFrameLoader`
+            The reader that is used to retrieve the requested frame
+        start_index: int
+            The starting frame index for the images to extract faces from
+        end_index: int
+            The end frame index for the images to extract faces from
+        """
+        logger.debug("reader: %s, start_index: %s, end_index: %s",
+                     reader, start_index, end_index)
+        for frame_index in range(start_index, end_index):
+            filename, frame = reader.image_from_index(frame_index)
+            self._set_thumbail(filename, frame, frame_index)
+        logger.debug("Segment complete: (start_index: %s, processed_count: %s)",
+                     start_index, end_index - start_index)
+
+    def _set_thumbail(self, filename, frame, frame_index):
+        """ Extracts the faces from the frame and adds to alignments file
+
+        Parameters
+        ----------
+        filename: str
+            The filename of the frame within the alignments file
+        frame: :class:`numpy.ndarray`
+            The frame that contains the faces
+        frame_index: int
+            The frame index of this frame in the :attr:`_saved_faces`
+        """
+        for face_idx, face in enumerate(self._saved_faces[frame_index]):
+            face.load_aligned(frame, size=self._size, force=True)
+            jpg = cv2.imencode(".jpg",
+                               face.aligned_face,
+                               [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])[1]
+            self._alignments.thumbnails.add_thumbnail(filename, face_idx, jpg)
+            face.aligned["face"] = None
+        with self._lock:
+            self._pbar.update(1)

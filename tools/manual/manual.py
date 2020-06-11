@@ -18,7 +18,7 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .detected_faces import DetectedFaces
+from .detected_faces import DetectedFaces, ThumbsCreator
 from .faceviewer.frame import FacesFrame
 from .frameviewer.frame import DisplayFrame
 
@@ -56,6 +56,7 @@ class Manual(tk.Tk):
         self._det_faces.load_faces()
         self._containers = self._create_containers()
         self._wait_for_threads(extractor, loader, video_meta_data)
+        self._generate_thumbs(arguments.frames)
 
         self._display = DisplayFrame(self._containers["top"],
                                      self._globals,
@@ -64,7 +65,6 @@ class Manual(tk.Tk):
                                        self._globals,
                                        self._det_faces,
                                        self._display,
-                                       arguments.frames,
                                        arguments.face_size)
 
         _Options(self._containers["top"], self._globals, self._display)
@@ -108,6 +108,21 @@ class Manual(tk.Tk):
         if any(val is None for val in video_meta_data.values()):
             logger.debug("Saving video meta data to alignments file")
             self._det_faces.save_video_meta_data(**loader.video_meta_data)
+
+    def _generate_thumbs(self, input_location):
+        """ Check whether thumbnails are stored in the alignments file and if not generate them.
+
+        Parameters
+        ----------
+        input_location: str
+            The input video or folder of images
+        """
+        thumbs = ThumbsCreator(self._det_faces, input_location)
+        if thumbs.has_thumbs:
+            return
+        logger.debug("Generating thumbnails cache")
+        thumbs.generate_cache()
+        logger.debug("Generated thumbnails cache")
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -519,8 +534,11 @@ class Aligner():
     def __init__(self, tk_globals):
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
-        self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
-        self._aligner = "FAN"
+        # TODO
+        self._aligners = {"cv2-dnn": None, "mask": None}
+        self._aligner = "cv2-dnn"
+        # self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
+        # self._aligner = "FAN"
         self._det_faces = None
         self._frame_index = None
         self._face_index = None
@@ -571,8 +589,8 @@ class Aligner():
         logger.debug("Initialize Aligner")
         # Make sure non-GPU aligner is allocated first
         # TODO
-        # for model in ("mask", "cv2-dnn"):
-        for model in ("mask", "cv2-dnn", "FAN"):
+        # for model in ("mask", "cv2-dnn", "FAN"):
+        for model in ("mask", "cv2-dnn"):
             logger.debug("Initializing aligner: %s", model)
             plugin = None if model == "mask" else model
             aligner = Extractor(None, plugin, ["components", "extended"],

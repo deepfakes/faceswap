@@ -7,10 +7,8 @@ from concurrent import futures
 from time import sleep
 
 import cv2
-import imageio
 import numpy as np
 
-from lib.image import SingleFrameLoader
 from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -26,22 +24,20 @@ class FaceCache():
         The :class:`~tools.manual.FacesViewer` canvas
     detected_faces: :class:`~tool.manual.faces.DetectedFaces`
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
-    input_location: str
-        The location of the input folder of frames or video file
     tk_face_loading: :class:`tkinter.BooleanVar`
         Variable to indicate whether faces are currently loading into the cache or not
     size: int
         The size, in pixels, to display the thumbnail images at
     """
-    def __init__(self, canvas, detected_faces, input_location, tk_face_loading, size):
-        logger.debug("Initializing %s: (canvas: %s, detected_faces: %s, input_location: %s, "
+    def __init__(self, canvas, detected_faces, tk_face_loading, size):
+        logger.debug("Initializing %s: (canvas: %s, detected_faces: %s, "
                      "tk_face_loading: %s,  size: %s)", self.__class__.__name__, canvas,
-                     detected_faces, input_location, tk_face_loading, size)
+                     detected_faces, tk_face_loading, size)
         self._face_size = size
         self._canvas = canvas
         self._tk_loading = tk_face_loading
 
-        self._loader = FaceCacheLoader(self, detected_faces, input_location)
+        self._loader = FaceCacheLoader(self, detected_faces)
         self._mask_loader = MaskLoader(self, detected_faces)
 
         self._tk_faces = np.array([None for _ in range(self._canvas._globals.frame_count)])
@@ -343,28 +339,18 @@ class FaceCacheLoader():
         The face cache that this loader will be populating faces for.
     detected_faces: :class:`~tool.manual.faces.DetectedFaces`
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
-    input_location: str
-        The location of the input folder of frames or video file
     """
-    def __init__(self, faces_cache, detected_faces, input_location):
-        logger.debug("Initializing %s: (faces_cache: %s, detected_faces: %s, input_location: %s)",
-                     self.__class__.__name__, faces_cache, detected_faces, input_location)
+    def __init__(self, faces_cache, detected_faces):
+        logger.debug("Initializing %s: (faces_cache: %s, detected_faces: %s)",
+                     self.__class__.__name__, faces_cache, detected_faces)
         self._faces_cache = faces_cache
-        self._location = input_location
         self._tk_loading = faces_cache._tk_loading
         self._loaded_frame_indices = []
 
-        self._key_frames = detected_faces.video_meta_data.get("keyframes", None)
-        self._pts_times = detected_faces.video_meta_data.get("pts_time", None)
         self._saved_faces = detected_faces._saved_faces
+        self._alignments = detected_faces._alignments
 
-        self._is_video = self._key_frames is not None and self._pts_times is not None
-        self._num_threads = os.cpu_count() - 2
-        if self._is_video:
-            self._num_threads = min(self._num_threads, len(self._key_frames))
-        else:
-            self._num_threads = max(self._num_threads, 32)
-        self._threads = []
+        self._thread = MultiThread(self._load_from_folder)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -383,153 +369,26 @@ class FaceCacheLoader():
     def launch(self):
         """ Loads the faces into the :attr:`_faces_cache.faces` scaled from 96px for GUI display.
         """
-        if self._is_video:
-            self._launch_video()
-        else:
-            self._launch_folder()
+        self._thread.start()
 
     def check_and_raise_error(self):
         """ Monitor the loading threads for errors and raise if any occur. """
-        for thread in self._threads:
-            thread.check_and_raise_error()
+        self._thread.check_and_raise_error()
 
     def join_threads(self):
         """ Join the loading threads """
         logger.debug("Joining face viewer loading threads")
-        for thread in self._threads:
-            thread.join()
+        self._thread.join()
 
-    # << PRIVATE METHODS >> #
-    def _launch_video(self):
-        """ Launch :class:`concurrent.futures.ThreadPoolExecutor` to retrieve faces from a
-        video file.
-
-        Splits the video into segments and passes each of these segments to separate background
-        threads for some speed up.
-        """
-        key_frame_split = len(self._key_frames) // self._num_threads
-        for idx in range(self._num_threads):
-            is_final = idx == self._num_threads - 1
-            start_idx = idx * key_frame_split
-            keyframe_idx = len(self._key_frames) - 1 if is_final else start_idx + key_frame_split
-            end_idx = self._key_frames[keyframe_idx]
-            start_pts = self._pts_times[self._key_frames[start_idx]]
-            end_pts = False if idx + 1 == self._num_threads else self._pts_times[end_idx]
-            starting_index = self._pts_times.index(start_pts)
-            if end_pts:
-                segment_count = len(self._pts_times[self._key_frames[start_idx]:end_idx])
-            else:
-                segment_count = len(self._pts_times[self._key_frames[start_idx]:])
-            logger.debug("thread index: %s, start_idx: %s, end_idx: %s, start_pts: %s, "
-                         "end_pts: %s, starting_index: %s, segment_count: %s", idx, start_idx,
-                         end_idx, start_pts, end_pts, starting_index, segment_count)
-            thread = MultiThread(self._load_from_video,
-                                 start_pts,
-                                 end_pts,
-                                 starting_index,
-                                 segment_count)
-            thread.start()
-            self._threads.append(thread)
-
-    def _launch_folder(self):
-        """ Launch :class:`concurrent.futures.ThreadPoolExecutor` to retrieve faces from a
-        folder of images.
-
-        Goes through the file list one at a time, passing each file to a separate background
-        thread for some speed up.
-        """
-        reader = SingleFrameLoader(self._location)
-        num_threads = min(reader.count, self._num_threads)
-        frame_split = reader.count // self._num_threads
-        logger.debug("total images: %s, num_threads: %s, frames_per_thread: %s",
-                     reader.count, num_threads, frame_split)
-        for idx in range(num_threads):
-            is_final = idx == num_threads - 1
-            start_idx = idx * frame_split
-            end_idx = reader.count if is_final else start_idx + frame_split
-            thread = MultiThread(self._load_from_folder, reader, start_idx, end_idx)
-            thread.start()
-            self._threads.append(thread)
-
-    def _load_from_video(self, pts_start, pts_end, start_index, segment_count):
-        """ Loads faces from video for the given segment of the source video.
-
-        Each segment of the video is extracted from in a different background thread.
-
-        Parameters
-        ----------
-        pts_start: float
-            The start time to cut the segment out of the video
-        pts_end: float
-            The end time to cut the segment out of the video
-        start_index: int
-            The frame index that this segment starts from. Used for calculating the actual frame
-            index of each frame extracted
-        segment_count: int
-            The number of frames that appear in this segment. Used for ending early in case more
-            frames come out of the segment than should appear (sometimes more frames are picked up
-            at the end of the segment, so these are discarded)
-        """
-        logger.debug("pts_start: %s, pts_end: %s, start_index: %s, segment_count: %s",
-                     pts_start, pts_end, start_index, segment_count)
-        reader = self._get_reader(pts_start, pts_end)
-        idx = 0
-        for idx, frame in enumerate(reader):
-            frame_idx = idx + start_index
-            self._set_face_cache_objects(frame[..., ::-1], frame_idx)
-            if idx == segment_count - 1:
-                # Sometimes extra frames are picked up at the end of a segment, so stop
-                # processing when segment frame count has been hit.
-                break
-        reader.close()
-        logger.debug("Segment complete: (starting_frame_index: %s, processed_count: %s)",
-                     start_index, idx)
-
-    def _get_reader(self, pts_start, pts_end):
-        """ Get an imageio iterator for this thread's segment.
-
-        Parameters
-        ----------
-        pts_start: float
-            The start time to cut the segment out of the video
-        pts_end: float
-            The end time to cut the segment out of the video
-
-        Returns
-        -------
-        :class:`imageio.Reader`
-            A reader iterator for the requested segment of video
-        """
-        input_params = ["-ss", str(pts_start)]
-        if pts_end:
-            input_params.extend(["-to", str(pts_end)])
-        logger.debug("pts_start: %s, pts_end: %s, input_params: %s",
-                     pts_start, pts_end, input_params)
-        return imageio.get_reader(self._location, "ffmpeg", input_params=input_params)
-
-    def _load_from_folder(self, reader, start_index, end_index):
+    def _load_from_folder(self):
         """ Loads faces from the given range of frame indices from a folder of images.
 
         Each frame range is extracted in a different background thread.
-
-        Parameters
-        ----------
-        reader: :class:`lib.image.SingleFrameLoader`
-            The reader that is used to retrieve the requested frame
-        start_index: int
-            The starting frame index for the images to extract faces from
-        end_index: int
-            The end frame index for the images to extract faces from
         """
-        logger.debug("reader: %s, start_index: %s, end_index: %s",
-                     reader, start_index, end_index)
-        for frame_index in range(start_index, end_index):
-            _, frame = reader.image_from_index(frame_index)
-            self._set_face_cache_objects(frame, frame_index)
-        logger.debug("Segment complete: (start_index: %s, processed_count: %s)",
-                     start_index, end_index - start_index)
+        for frame_idx, thumbs in enumerate(self._alignments.thumbnails.frame_order):
+            self._set_face_cache_objects(frame_idx, thumbs)
 
-    def _set_face_cache_objects(self, frame, frame_index):
+    def _set_face_cache_objects(self, frame_index, thumbs):
         """ Extracts the faces from the frame, as well as the aligned landmarks.
 
         Populates :attr:`_faces_cache.faces` for the current frame index with the generated
@@ -539,10 +398,11 @@ class FaceCacheLoader():
         can pick up the latest loaded faces and display them.
         """
         tk_faces = []
-        for face in self._saved_faces[frame_index]:
-            face.load_aligned(frame, size=self._faces_cache.size, force=True)
-            tk_faces.append(TKFace(face.aligned_face, face.aligned_landmarks, mask=None))
-            face.aligned["face"] = None
+        size = (self._faces_cache.size, self._faces_cache.size)
+        for face, thumb in zip(self._saved_faces[frame_index], thumbs):
+            face.load_aligned(None, size=self._faces_cache.size, force=True)
+            img = cv2.resize(cv2.imdecode(thumb, cv2.IMREAD_UNCHANGED), size)
+            tk_faces.append(TKFace(img, face.aligned_landmarks, mask=None))
 
         self._faces_cache.tk_faces[frame_index] = tk_faces
         self._loaded_frame_indices.append(frame_index)

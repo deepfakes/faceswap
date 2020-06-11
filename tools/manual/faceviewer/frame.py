@@ -30,15 +30,13 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
-    input_location: str
-        The location of the input folder of frames or video file
     size: int
         The size, in pixels, to display the thumbnail images at
     """
-    def __init__(self, parent, tk_globals, detected_faces, display_frame, input_location, size):
+    def __init__(self, parent, tk_globals, detected_faces, display_frame, size):
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, detected_faces: %s, "
-                     "display_frame: %s, input_location: %s, size: %s)", self.__class__.__name__,
-                     parent, tk_globals, detected_faces, display_frame, input_location, size)
+                     "display_frame: %s, size: %s)", self.__class__.__name__, parent, tk_globals,
+                     detected_faces, display_frame, size)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._actions_frame = FacesActionsFrame(self)
@@ -51,7 +49,6 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    tk_globals,
                                    self._actions_frame._tk_vars,
                                    detected_faces,
-                                   input_location,
                                    display_frame,
                                    progress_bar,
                                    size)
@@ -221,8 +218,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         as set by the buttons in the :class:`FacesActionsFrame`
     detected_faces: :class:`~tool.manual.faces.DetectedFaces`
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
-    input_location: str
-        The location of the input folder of frames or video file
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
     progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
@@ -230,13 +225,12 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     size: int
         The size, in pixels, to display the thumbnail images at
     """
-    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, input_location,
-                 display_frame, progress_bar, size):
+    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, display_frame,
+                 progress_bar, size):
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, tk_action_vars: %s, "
-                     "detected_faces: %s, input_location: %s, display_frame: %s, "
-                     "progress_bar: %s, size: %s)", self.__class__.__name__, parent, tk_globals,
-                     tk_action_vars, detected_faces, input_location, display_frame, progress_bar,
-                     size)
+                     "detected_faces: %s, display_frame: %s, progress_bar: %s, size: %s)",
+                     self.__class__.__name__, parent, tk_globals, tk_action_vars, detected_faces,
+                     display_frame, progress_bar, size)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._progress_bar = progress_bar
@@ -245,7 +239,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                          if key != "lockout"}
         self._faces_cache = FaceCache(self,
                                       detected_faces,
-                                      input_location,
                                       tk_action_vars["lockout"],
                                       int(round(size * get_config().scaling_factor)))
         self._display_frame = display_frame
