@@ -12,12 +12,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class FacesViewerLoader():  # pylint:disable=too-few-public-methods
-    """ Loads the faces into the :class:`tools.manual.FacesViewer` as they become available
-    in the :class:`tools.lib_manual.media.FacesCache`.
-
-    Faces are loaded into the Face Cache in a background thread. This class checks for the
-    availability of loaded faces (every 0.5 seconds until the faces are loaded) and updates
-    the display with the latest loaded faces.
+    """ Places the initial face placeholders and annotations into the
+    :class:`tools.manual.FacesViewer`.
 
     Parameters
     ----------
@@ -46,8 +42,8 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         self._load_faces(0, face_count)
 
     def _load_faces(self, start_index, faces_count):
-        """ Load the currently available faces from :class:`tools.lib_manual.media.FacesCache`
-        into the Faces Viewer.
+        """ Place the face placeholders and annotations from
+        :class:`tools.lib_manual.media.FacesCache` into the Faces Viewer.
 
         Face loading is batched so that we can update the user with face loading progress.
 
@@ -67,12 +63,19 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
             starting_idx = sum(faces_count[:frame_idx])
             for face_idx, tk_face in enumerate(faces):
                 coords = self._canvas.coords_from_index(starting_idx + face_idx)
-                self._canvas.new_objects.create(coords, tk_face, frame_idx,
-                                                is_multi=len(faces) > 1)
+                is_multi = len(faces) > 1
+                is_visible = coords[1] < self._canvas.winfo_height()
+                # TODO Update other new object create
+                self._canvas.new_objects.create(coords,
+                                                tk_face,
+                                                frame_idx,
+                                                face_idx,
+                                                is_multi=is_multi,
+                                                is_visible=is_visible)
         if end_idx == self._frame_count:
             self._on_load_complete()
         else:
-            logger.debug("Refreshing... (faces_seen: %s, frame_count: %s",
+            logger.debug("Refreshing... (faces_seen: %s, frame_count: %s)",
                          end_idx, self._frame_count)
             self._canvas.update_idletasks()
             self._load_faces(end_idx, faces_count)
@@ -108,15 +111,19 @@ class ObjectCreator():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
-    def __init__(self, canvas):
+    def __init__(self, canvas, detected_faces):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
+        self._detected_faces = detected_faces
         self._object_types = ("image", "mesh")
         self._current_face_id = 0
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def create(self, coordinates, tk_face, frame_index, is_multi=False):
+    def create(self, coordinates, tk_face, frame_index, face_index,
+               is_multi=False, is_visible=False):
         """ Create all of the annotations for a single Face Viewer face.
 
         Parameters
@@ -130,9 +137,14 @@ class ObjectCreator():
             The hex code holding the color that the mesh should be displayed as
         frame_index: int
             The frame index that this object appears in
-        is_multi: bool
+        face_index: int
+            The face index of the face within the current frame
+        is_multi: bool, optional
             ``True`` if there are multiple faces in the given frame, otherwise ``False``.
             Default: ``False``. Used for creating multi-face tags
+        is_visible: bool, optional
+            ``True`` if the object is being created in the visible canvas area otherwise ``False``.
+            Default: ``False``
 
         Returns
         -------
@@ -141,10 +153,14 @@ class ObjectCreator():
         mesh_ids: list
             List of item ids for the newly created mesh
         """
-        logger.trace("coordinates: %s, tk_face: %s, frame_index: %s, "
-                     "is_multi: %s", coordinates, tk_face, frame_index, is_multi)
-        tags = {obj: self._get_viewer_tags(obj, frame_index, is_multi)
+        logger.trace("coordinates: %s, tk_face: %s, frame_index: %s, face_index: %s, "
+                     "is_multi: %s, is_visible: %s", coordinates, tk_face, frame_index, face_index,
+                     is_multi, is_visible)
+        tags = {obj: self._get_viewer_tags(obj, frame_index, is_multi, is_visible)
                 for obj in self._object_types}
+        if is_visible:
+            thumb = self._detected_faces.get_thumbnail(frame_index, face_index)
+            tk_face.set_thumbnail(thumb)
         image_id = self._canvas.create_image(*coordinates,
                                              image=tk_face.face,
                                              anchor=tk.NW,
@@ -157,7 +173,7 @@ class ObjectCreator():
         logger.trace("image_id: %s, mesh_ids: %s", image_id, mesh_ids)
         return image_id, mesh_ids
 
-    def _get_viewer_tags(self, object_type, frame_index, is_multi):
+    def _get_viewer_tags(self, object_type, frame_index, is_multi, is_visible):
         """ Generates tags for the given object based on the frame index, the object type,
         the current face identifier and whether multiple faces appear in the given frame.
 
@@ -169,6 +185,8 @@ class ObjectCreator():
             The frame index that this object appears in
         is_multi: bool
             ``True`` if there are multiple faces in the given frame, otherwise ``False``
+        is_visible: bool
+            ``True`` if the object is visible on the canvas otherwise ``False``
 
         Returns
         -------
@@ -187,6 +205,9 @@ class ObjectCreator():
             tags.extend(["multi", "multi_{}".format(object_type)])
         else:
             tags.append("not_multi")
+        if object_type == "image":
+            visible_tag = "visible" if is_visible else "not_visible"
+            tags.append(visible_tag)
         logger.trace("tags: %s", tags)
         return tags
 

@@ -4,7 +4,6 @@ import logging
 import os
 import tkinter as tk
 from concurrent import futures
-from time import sleep
 
 import cv2
 import numpy as np
@@ -226,6 +225,24 @@ class TKFace():
                            cv2.IMREAD_UNCHANGED)
         self._face.put(self._merge_mask_to_bytes(img, mask))
 
+    def set_thumbnail(self, thumbnail, mask=None):
+        """ Set the jpg thumbnail to the :class:`tkinter.PhotoImage`.
+
+        Parameters
+        ----------
+        thumbnail: :class:`numpy.ndarray`
+            The jpg encoded thumbnail
+        mask: :class:`numpy.ndarray` or ``None``, optional
+            The mask to be applied to the face image. Pass ``None`` if no mask is to be used.
+            Default ``None``
+        """
+        img = cv2.imdecode(thumbnail, cv2.IMREAD_UNCHANGED)
+        interp = cv2.INTER_CUBIC if img.shape[0] < self._face.width() else cv2.INTER_AREA
+        if img.shape[0] != self._face.width():
+            img = cv2.resize(img, (self._face.width(), self._face.width()), interpolation=interp)
+        tk_face = self._merge_mask_to_bytes(img, mask)
+        self._face.put(tk_face)
+
     # << PRIVATE METHODS >> #
     def _generate_tk_face_data(self, face, mask):
         """ Create the :class:`tkinter.PhotoImage` face for the given face image.
@@ -247,23 +264,8 @@ class TKFace():
         :class:`tkinter.PhotoImage`
             The face formatted for the :class:`~tools.manual.manual.FaceViewer` canvas.
         """
-        # TODO Look into this link for generating a can line hex string from numpy array
-        # rather than generating png:
-        # https://web.archive.org/web/20161228115604/http://tkinter.unpythonic.net/wiki/PhotoImage
         face_bytes = "" if face is None else self._merge_mask_to_bytes(face, mask)
-        for attempt in range(10):
-            try:
-                tk_face = tk.PhotoImage(data=face_bytes, width=self._size, height=self._size)
-                break
-            except RuntimeError as err:
-                if attempt == 9 or str(err) not in ("main thread is not in main loop",
-                                                    "Too early to create image"):
-                    raise
-                if str(err) == "Too early to create image":
-                    # GUI has gone away. Probably quit during load
-                    return None
-                logger.debug("attempt: %s: %s", attempt + 1, str(err))
-                sleep(0.25)
+        tk_face = tk.PhotoImage(data=face_bytes, width=self._size, height=self._size)
         return tk_face
 
     @classmethod
@@ -280,9 +282,8 @@ class TKFace():
         ----------
         face: :class:`numpy.ndarray`
             The face, sized correctly, to create a :class:`tkinter.PhotoImage` from
-        mask: :class:`numpy.ndarray` or ``None``, optional
+        mask: :class:`numpy.ndarray` or ``None``
             The mask to be applied to the face image. Pass ``None`` if no mask is to be used.
-            Default ``None``
 
         Returns
         -------
@@ -294,6 +295,9 @@ class TKFace():
         if mask.shape[0] != face.shape[0]:
             mask = cv2.resize(mask, face.shape[:2], interpolation=cv2.INTER_AREA)
         image = np.concatenate((face[..., :3], mask[..., None]), axis=-1)
+        # TODO Look into this link for generating a scan line hex string from numpy array
+        # rather than generating png:
+        # https://web.archive.org/web/20161228115604/http://tkinter.unpythonic.net/wiki/PhotoImage
         return cv2.imencode(".png", image, [cv2.IMWRITE_PNG_COMPRESSION, 0])[1].tostring()
 
     def _get_mesh_points(self, landmarks):

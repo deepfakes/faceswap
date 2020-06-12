@@ -148,6 +148,22 @@ class DetectedFaces():
         if self._globals.is_video:
             self._alignments.save_video_meta_data(pts_time, keyframes)
 
+    def get_thumbnail(self, frame_index, face_index):
+        """ Obtain the compressed jpg thumbnail for the given face in the given frame.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that contains the face to return the thumbnail for
+        face_index: int
+            The face index within the given frame to return the thumbnail for
+
+        Returns
+        :class:`numpy.ndarray`
+            The encoded jpg thumbnail image
+        """
+        return self._alignments.thumbnails.frame_order[frame_index][face_index]
+
     def get_face_at_index(self, frame_index, face_index, image, size,
                           with_landmarks=False, with_mask=False):
         """ Return an aligned face for the given frame and face index sized at the given size.

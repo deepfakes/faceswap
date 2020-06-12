@@ -242,7 +242,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                       tk_action_vars["lockout"],
                                       int(round(size * get_config().scaling_factor)))
         self._display_frame = display_frame
-        self._utilities = dict(object_creator=ObjectCreator(self),
+        self._utilities = dict(object_creator=ObjectCreator(self, detected_faces),
                                hover_box=HoverBox(self, detected_faces),
                                active_filter=FaceFilter(self, "all_frames"),
                                active_frame=ActiveFrame(self, detected_faces),
