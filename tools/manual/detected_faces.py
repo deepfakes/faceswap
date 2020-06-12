@@ -132,12 +132,6 @@ class DetectedFaces():
         """ Save the alignments file with the latest edits. """
         self._children["io"]._save()  # pylint:disable=protected-access
 
-    def enable_save(self):
-        """ Enable saving of alignments file. Triggered when the
-        :class:`~tools.manual.faceviewer.frame.FacesViewer` has finished loading.
-        """
-        self._children["io"]._enable_save()  # pylint:disable=protected-access
-
     def save_video_meta_data(self, pts_time, keyframes):
         """ Save video meta data to the alignments file. This is executed if the video meta data
         does not already exist in the alignments file, so the video does not need to be scanned
@@ -281,7 +275,6 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         self._updated_faces = detected_faces._updated_faces
         self._tk_unsaved = detected_faces.tk_unsaved
         self._sorted_frame_names = sorted(self._alignments.data)
-        self._save_enabled = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _load(self):
@@ -305,11 +298,6 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
-        if not self._save_enabled:
-            tk.messagebox.showinfo(title="Save Alignments...",
-                                   message="Please wait for faces to completely load before "
-                                           "saving the alignments file.")
-            return
         to_save = [(idx, faces) for idx, faces in enumerate(self._updated_faces)
                    if faces is not None]
         logger.verbose("Saving alignments for %s updated frames", len(to_save))
@@ -322,12 +310,6 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         self._alignments.backup()
         self._alignments.save()
         self._tk_unsaved.set(False)
-
-    def _enable_save(self):
-        """ Enable saving of alignments file. Triggered when the
-        :class:`~tools.manual.faceviewer.frames.FacesViewer` has completed loading. """
-        logger.debug("Enabling Save")
-        self._save_enabled = True
 
 
 class Filter():

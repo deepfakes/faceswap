@@ -6,6 +6,8 @@ import tkinter as tk
 
 import cv2
 
+from lib.gui.utils import get_config
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -29,7 +31,6 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         self._batch_size = 1000
         self._canvas = canvas
         self._det_faces = detected_faces
-        self._updated_faces = detected_faces._updated_faces
         self._faces_cache = canvas._faces_cache
         self._frame_count = canvas._globals.frame_count
         self._progress_bar = canvas._progress_bar
@@ -38,6 +39,7 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
 
     def _launch_face_loader(self):
         """ Launch the canvas face loader loop. """
+        get_config().set_cursor_busy()
         self._progress_bar.start(mode="determinate")
         # Generate a cache of face_count per frame so we don't keep calculating on the fly
         face_count = self._det_faces.face_count_per_index
@@ -68,7 +70,6 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
                 self._canvas.new_objects.create(coords, tk_face, frame_idx,
                                                 is_multi=len(faces) > 1)
         if end_idx == self._frame_count:
-            logger.debug("Load complete")
             self._on_load_complete()
         else:
             logger.debug("Refreshing... (faces_seen: %s, frame_count: %s",
@@ -91,60 +92,12 @@ class FacesViewerLoader():  # pylint:disable=too-few-public-methods
         self._progress_bar.progress_update(msg, progress)
 
     def _on_load_complete(self):
-        """ Final actions to perform once the faces have finished loading into the Faces Viewer.
-
-        Updates any faces where edits have been made whilst the faces were loading.
-        Updates any color settings that were changed during load.
-        Sets the display to the currently selected filter.
-        Sets the load complete variable to ``True``
-        Highlights the active face.
-        Enables saving of an alignments file
-        """
-        # TODO Remove all of this as loading faces now locks out the user
-        # NB: Reversed as new assets are lowered into the correct place, so subsequent faces
-        # must be placed first
+        """ Final actions to perform once the faces have finished loading into the
+        Faces Viewer. """
+        logger.debug("Load complete")
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-        index_offset = len(self._updated_faces) - 1
-        for idx, faces in enumerate(reversed(self._updated_faces)):
-            if faces is None:
-                continue
-            frame_idx = index_offset - idx
-            image_ids = self._canvas.find_withtag("image_{}".format(frame_idx))
-            existing_count = len(image_ids)
-            new_count = len(faces)
-            self._on_load_remove_faces(existing_count, new_count, frame_idx)
-            for face_idx in range(new_count):
-                if face_idx + 1 > existing_count:
-                    self._canvas.update_face.add(frame_idx)
-                else:
-                    self._canvas.update_face.update(frame_idx, face_idx)
-        self._det_faces.tk_edited.set(False)
-        self._canvas.update_mesh_color()
-        self._canvas.switch_filter()
         self._progress_bar.stop()
-        self._det_faces.enable_save()
-        self._canvas.active_frame.reload_annotations()
-
-    def _on_load_remove_faces(self, existing_count, new_count, frame_index):
-        """ Remove any faces from the viewer for the given frame index of any faces
-        that have been deleted whilst face viewer was loading.
-
-        Parameters
-        ----------
-        existing_count: int
-            The number of faces that currently appear in the Faces Viewer for the given frame
-        new_count: int
-            The number of faces that should appear in the Faces Viewer for the given frame
-        frame_index: int
-            The frame index to remove faces for
-        """
-        logger.debug("existing_count: %s. new_count: %s, frame_index: %s",
-                     existing_count, new_count, frame_index)
-        if existing_count <= new_count:
-            return
-        for face_idx in reversed(range(new_count, existing_count)):
-            logger.debug("Deleting face at index %s for frame %s", face_idx, frame_index)
-            self._canvas.update_face.remove(frame_index, face_idx)
+        get_config().set_cursor_default()
 
 
 class ObjectCreator():
