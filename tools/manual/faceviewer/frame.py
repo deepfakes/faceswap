@@ -62,13 +62,25 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _add_scrollbar(self):
         """ Add a scrollbar to the faces frame """
         logger.debug("Add Faces Viewer Scrollbar")
-        scrollbar = ttk.Scrollbar(self._faces_frame, command=self._canvas.yview)
+        scrollbar = ttk.Scrollbar(self._faces_frame, command=self._on_scroll)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self._canvas.config(yscrollcommand=scrollbar.set)
         self.bind("<Configure>", self._update_scrollbar)
         logger.debug("Added Faces Viewer Scrollbar")
         self.update_idletasks()  # Update so scrollbar width is correct
         return scrollbar.winfo_width()
+
+    def _on_scroll(self, *event):
+        """ Callback on scrollbar scroll.
+        Updates the canvas location and displays/hides thumbnail images
+
+        Parameters
+        ----------
+        event :class:`tkinter.Event`
+            The scrollbar callback event
+        """
+        self._canvas.yview(*event)
+        self._canvas.set_visible_images(event)
 
     def _update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the faces frame scrollbar.
@@ -91,6 +103,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         amount = 1 if direction.endswith("down") else -1
         units = "pages" if direction.startswith("page") else "units"
         self._canvas.canvas_scroll(amount, units)
+        self._canvas.set_visible_images(-1)
 
     def set_annotation_display(self, key):
         """ Set the optional annotation overlay based on keyboard shortcut.
@@ -313,10 +326,10 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
         for opt, var in self._tk_optional_annotations.items():
             var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
-        self.bind("<Configure>", self._on_resize)
+        self.bind("<Configure>", self.set_visible_images)
 
-    def _on_resize(self, event):  # pylint:disable=unused-argument
-        """ Load and unload thumbnails on a canvas resize event
+    def set_visible_images(self, event):  # pylint:disable=unused-argument
+        """ Load and unload thumbnails on a canvas resize or scroll event.
 
         Parameters
         ----------
@@ -399,6 +412,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         else:
             adjust = 1
         self.canvas_scroll(-1 * adjust, "units", event)
+        self.set_visible_images(-1)
 
     def canvas_scroll(self, amount, units, event=None):
         """ Scroll the canvas on an up/down or page-up/page-down key press.
