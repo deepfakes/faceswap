@@ -4,6 +4,7 @@ import logging
 import platform
 import tkinter as tk
 from tkinter import ttk
+from math import floor, ceil
 
 import numpy as np
 
@@ -312,6 +313,36 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
         for opt, var in self._tk_optional_annotations.items():
             var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
+        self.bind("<Configure>", self._on_resize)
+
+    def _on_resize(self, event):  # pylint:disable=unused-argument
+        """ Load and unload thumbnails on a canvas resize event
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter Configure event. Required but unused
+        """
+        if self.bbox("all") is None:
+            return
+        visible = (0,
+                   floor(self.bbox("all")[3] * self.yview()[0]),
+                   self.winfo_width(),
+                   ceil(self.bbox("all")[3] * self.yview()[1]))
+        displayed = set(self.find_overlapping(*visible))
+        to_process = dict(show=displayed.intersection(set(self.find_withtag("not_visible"))),
+                          hide=set(self.find_withtag("visible")).difference(displayed))
+        funcs = dict(show=self._faces_cache.display_thumbnail,
+                     hide=self._faces_cache.hide_thumbnail)
+        tags = dict(show=("visible", "not_visible"), hide=("not_visible", "visible"))
+        for name, process in to_process.items():
+            logger.debug("processing: %s, item_ids: %s", name, process)
+            for item_id in process:
+                frame_idx = self.frame_index_from_object(item_id)
+                face_idx = self.find_withtag("image_{}".format(frame_idx)).index(item_id)
+                funcs[name](frame_idx, face_idx)
+                self.dtag(item_id, tags[name][1])
+                self.addtag_withtag(tags[name][0], item_id)
 
     def switch_filter(self):
         """ Update the :class:`FacesViewer` canvas for the active filter.

@@ -32,6 +32,7 @@ class FaceCache():
                      detected_faces, tk_face_loading, size)
         self._face_size = size
         self._canvas = canvas
+        self._detected_faces = detected_faces
         self._tk_loading = tk_face_loading
 
         self._mask_loader = MaskLoader(self, detected_faces)
@@ -67,6 +68,31 @@ class FaceCache():
         """ :class:`MaskLoader`: Handles the application of the selected mask on to each
         :class:`tkinter.PhotoImage`. """
         return self._mask_loader
+
+    def display_thumbnail(self, frame_index, face_index):
+        """ Load the low resolution jpg thumbnail for the given frame and face index.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the face is to have its thumbnail displayed
+        face_index: int
+            The face index within the given frame to display the thumbnail for
+        """
+        thumb = self._detected_faces.get_thumbnail(frame_index, face_index)
+        self._tk_faces[frame_index][face_index].set_thumbnail(thumb)
+
+    def hide_thumbnail(self, frame_index, face_index):
+        """ Unload the low resolution jpg thumbnail for the given frame and face index.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that the face is to have its thumbnail removed
+        face_index: int
+            The face index within the given frame to hide the thumbnail for
+        """
+        self._tk_faces[frame_index][face_index].remove_thumbnail()
 
     def add(self, frame_index, face, landmarks, mask=None):
         """ Add a new :class:`TKFace` object to the :attr:`tk_faces` for the given frame index.
@@ -242,6 +268,10 @@ class TKFace():
             img = cv2.resize(img, (self._face.width(), self._face.width()), interpolation=interp)
         tk_face = self._merge_mask_to_bytes(img, mask)
         self._face.put(tk_face)
+
+    def remove_thumbnail(self):
+        """ Remove the jpg thumbnail to the :class:`tkinter.PhotoImage`. """
+        self._face.blank()
 
     # << PRIVATE METHODS >> #
     def _generate_tk_face_data(self, face, mask):
