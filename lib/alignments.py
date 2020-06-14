@@ -673,6 +673,7 @@ class Thumbnails():
     def __init__(self, alignments):
         logger.debug("Initializing %s: (alignments: %s)", self.__class__.__name__, alignments)
         self._alignments_dict = alignments.data
+        self._frame_list = list(sorted(self._alignments_dict))
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -685,14 +686,24 @@ class Thumbnails():
         logger.trace(retval)
         return retval
 
-    @property
-    def frame_order(self):
-        """ list: list in frame order of the alignments file, with each entry containing a list of
-        thumbnails contained in that frame. """
-        sorted_frames = list(sorted(self._alignments_dict))
-        retval = [[face["thumb"] for face in self._alignments_dict[frame]["faces"]]
-                  for frame in sorted_frames]
-        logger.trace(retval)
+    def get_thumbnail_by_index(self, frame_index, face_index):
+        """ Obtain a jpg thumbnail from the given frame index for the given face index
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that contains the thumbnail
+        face_index: int
+            The face index within the frame to retrieve the thumbnail for
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The encoded jpg thumbnail
+        """
+        retval = self._alignments_dict[self._frame_list[frame_index]]["faces"][face_index]["thumb"]
+        logger.trace("frame index: %s, face_index: %s, thumb shape: %s",
+                     frame_index, face_index, retval.shape)
         return retval
 
     def add_thumbnail(self, frame, face_index, thumb):

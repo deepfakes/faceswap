@@ -162,7 +162,7 @@ class DetectedFaces():
         :class:`numpy.ndarray`
             The encoded jpg thumbnail image
         """
-        return self._alignments.thumbnails.frame_order[frame_index][face_index]
+        return self._alignments.thumbnails.get_thumbnail_by_index(frame_index, face_index)
 
     def get_face_at_index(self, frame_index, face_index, image, size,
                           with_landmarks=False, with_mask=False):

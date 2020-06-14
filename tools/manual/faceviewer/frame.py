@@ -352,7 +352,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             logger.debug("processing: %s, item_ids: %s", name, process)
             for item_id in process:
                 frame_idx = self.frame_index_from_object(item_id)
-                face_idx = self.find_withtag("image_{}".format(frame_idx)).index(item_id)
+                face_idx = self.face_index_from_object(item_id, frame_index=frame_idx)
                 funcs[name](frame_idx, face_idx)
                 self.dtag(item_id, tags[name][1])
                 self.addtag_withtag(tags[name][0], item_id)
@@ -412,7 +412,6 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         else:
             adjust = 1
         self.canvas_scroll(-1 * adjust, "units", event)
-        self.set_visible_images(-1)
 
     def canvas_scroll(self, amount, units, event=None):
         """ Scroll the canvas on an up/down or page-up/page-down key press.
@@ -428,6 +427,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             has been triggered by a keyboard shortcut
         """
         self.yview_scroll(int(amount), units)
+        self.set_visible_images(-1)
         self._utilities["hover_box"].on_hover(event)
 
     # << OPTIONAL ANNOTATION METHODS >> #
@@ -490,33 +490,25 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         logger.trace("item_id: %s, frame_id: %s", item_id, retval)
         return retval
 
-    def face_index_from_object(self, item_id):
+    def face_index_from_object(self, item_id, frame_index=None):
         """ Retrieve the index of the face within the current frame for the given canvas item id.
 
         Parameters
         ----------
         item_id: int
             The tkinter canvas object id
+        frame_index: int, optional
+            The frame index that this item resides in, pass ``None`` if the frame index is unknown.
+            Default: ``None``
 
         Returns
         -------
         int
             The index of the face within the current frame
         """
-        frame_id = self.frame_index_from_object(item_id)
-        faces = self.find_withtag("image_{}".format(frame_id))
-        logger.trace("frame_id: %s, face count: %s", frame_id, len(faces))
-        if len(faces) == 1:  # Only 1 face, so face index is 0
-            retval = 0
-        else:
-            face_group_id = self.face_id_from_object(item_id)
-            face_groups = [next(tag
-                                for tag in self.gettags(obj_id)
-                                if tag.startswith("face_id"))
-                           for obj_id in faces]
-            logger.trace("face_groups: %s, face_group_id: %s", face_groups, face_group_id)
-            retval = face_groups.index(face_group_id)
-        logger.trace("item_id: %s, face_index: %s", item_id, retval)
+        frame_id = self.frame_index_from_object(item_id) if frame_index is None else frame_index
+        retval = self.find_withtag("image_{}".format(frame_id)).index(item_id)
+        logger.trace("item_id: %s, frame_id: %s, face index: %s", item_id, frame_id, retval)
         return retval
 
     def face_id_from_object(self, item_id):
