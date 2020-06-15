@@ -21,15 +21,13 @@ class HoverBox():  # pylint:disable=too-few-public-methods
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.FacesViewer` canvas
-    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
-        The :class:`~lib.faces_detect.DetectedFace` objects for this video
     """
-    def __init__(self, canvas, detected_faces):
+    def __init__(self, canvas):
         logger.debug("Initializing: %s (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
+        self._grid = canvas.grid
         self._globals = canvas._globals
         self._navigation = canvas._display_frame.navigation
-        self._det_faces = detected_faces
         self._face_size = canvas._faces_cache.size
         self._box = self._canvas.create_rectangle(0, 0, self._face_size, self._face_size,
                                                   outline="#0000ff",
@@ -46,7 +44,8 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def on_hover(self, event):
-        """ The mouse cursor display as bound to the mouse#s <Motion> event.
+        """ The mouse cursor display as bound to the mouse's <Motion> event.
+
         The canvas only displays faces, so if the mouse is over an object change the cursor
         otherwise use default.
 
@@ -58,34 +57,28 @@ class HoverBox():  # pylint:disable=too-few-public-methods
             outside of a mouse event) then the location of the cursor will be calculated
         """
         if event is None:
+            # Get the current mouse pointer position if not triggered by an event
             pnts = np.array((self._canvas.winfo_pointerx(), self._canvas.winfo_pointery()))
             pnts -= np.array((self._canvas.winfo_rootx(), self._canvas.winfo_rooty()))
         else:
             pnts = (event.x, event.y)
 
-        coords = (self._canvas.canvasx(pnts[0]), self._canvas.canvasy(pnts[1]))
-        item_id = next((idx for idx in self._canvas.find_overlapping(*coords, *coords)
-                        if self._canvas.type(idx) == "image"), None)
-        if item_id is None or any(pnt < 0 for pnt in pnts):
-            self._clear()
-            self._canvas.config(cursor="")
-            self._current_frame_index = None
-            self._current_face_index = None
-            return
-
-        frame_idx = self._canvas.frame_index_from_object(item_id)
-        face_idx = self._canvas.face_index_from_object(item_id)
+        coords = (int(self._canvas.canvasx(pnts[0])), int(self._canvas.canvasy(pnts[1])))
+        face = self._grid.face_from_point(*coords)
+        frame_idx, face_idx = face[:2]
         is_zoomed = self._globals.is_zoomed
 
-        if (frame_idx == self._globals.frame_index and
-                (not is_zoomed or (is_zoomed and face_idx == self._globals.tk_face_index.get()))):
+        if (-1 in face or (frame_idx == self._globals.frame_index
+                           and (not is_zoomed or
+                                (is_zoomed and face_idx == self._globals.tk_face_index.get())))):
             self._clear()
             self._canvas.config(cursor="")
             self._current_frame_index = None
             self._current_face_index = None
             return
+
         self._canvas.config(cursor="hand1")
-        self._highlight(item_id)
+        self._highlight(face[2:])
         self._current_frame_index = frame_idx
         self._current_face_index = face_idx
 
@@ -94,15 +87,14 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         if self._canvas.itemcget(self._box, "state") != "hidden":
             self._canvas.itemconfig(self._box, state="hidden")
 
-    def _highlight(self, item_id):
-        """ Display the hover box around the face the the mouse is currently over.
+    def _highlight(self, top_left):
+        """ Display the hover box around the face that the mouse is currently over.
 
         Parameters
         ----------
-        item_id: int
-            The tkinter canvas object id that the mouse is over.
+        top_left: tuple
+            The top left point of the highlight box location
         """
-        top_left = np.array(self._canvas.coords(item_id))
         coords = (*top_left, *top_left + self._face_size)
         self._canvas.coords(self._box, *coords)
         self._canvas.itemconfig(self._box, state="normal")
@@ -118,31 +110,13 @@ class HoverBox():  # pylint:disable=too-few-public-methods
             return
         face_idx = self._current_face_index if is_zoomed else 0
         self._globals.tk_face_index.set(face_idx)
-        transport_id = self._transport_index_from_frame_index(frame_id)
+        transport_id = self._grid.transport_index_from_frame(frame_id)
         logger.trace("frame_index: %s, transport_id: %s, face_idx: %s",
                      frame_id, transport_id, face_idx)
         if transport_id is None:
             return
         self._navigation.stop_playback()
         self._globals.tk_transport_index.set(transport_id)
-
-    def _transport_index_from_frame_index(self, frame_index):
-        """ When a face is clicked on, the transport index for the frames in the editor view needs
-        to be retrieved based on the current filter criteria.
-
-        Parameters
-        ----------
-        frame_index: int
-            The absolute index for the frame within the full frames list
-
-        Returns
-        int
-            The index of the requested frame within the filtered frames view.
-        """
-        frames_list = self._det_faces.filter.frames_list
-        retval = frames_list.index(frame_index) if frame_index in frames_list else None
-        logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
-        return retval
 
 
 class ContextMenu():  # pylint:disable=too-few-public-methods

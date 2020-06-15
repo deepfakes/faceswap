@@ -218,6 +218,130 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             button.state([state])
 
 
+class Grid():
+    """ Holds information on current filter grid layout """
+    def __init__(self, canvas, detected_faces):
+        logger.debug("Initializing %s: (detected_faces: %s)",
+                     self.__class__.__name__, detected_faces)
+        # TODO Variable size
+        self._size = 128
+        self._canvas = canvas
+        self._detected_faces = detected_faces
+        self._filter = detected_faces.filter
+        self._canvas.update_idletasks()
+        self._grid = self._get_grid()
+
+    @property
+    def _dimensions(self):
+        """ tuple: The (`width`, `height`) required to hold all display images """
+        return tuple(dim * self._size for dim in reversed(self._grid.shape[1:]))
+
+    def _get_grid(self):
+        """ Get the grid information for faces currently displayed in the :class:`FacesViewer`.
+
+        Returns
+        :class:`numpy.ndarray`
+            A numpy array of shape (`4`, `rows`, `columns`) corresponding to the display grid.
+            1st dimension contains frame indices, 2nd dimension face indices. The 3rd and 4th
+            dimension contain the x and y position of the top left corner of the face respectively.
+
+            Any locations that are not populated by a face will have the frame and face index of -1
+        """
+        labels = self._get_labels()
+        x_coords = np.linspace(0,
+                               labels.shape[2] * self._size,
+                               num=labels.shape[2],
+                               endpoint=False,
+                               dtype="int")
+        y_coords = np.linspace(0,
+                               labels.shape[1] * self._size,
+                               num=labels.shape[1],
+                               endpoint=False,
+                               dtype="int")
+        retval = np.array((*labels, *np.meshgrid(x_coords, y_coords)), dtype="int")
+        logger.debug(retval.shape)
+        return retval
+
+    def _get_labels(self):
+        """ Get the frame and face index for each grid position for the current filter.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Array of dimensions (2, rows, columns) corresponding to the display grid, with frame
+            index as the first dimension and face index within the frame as the 2nd dimension.
+
+            Any remaining placeholders at the end of the grid which are not populated with a face
+            are given the index -1
+        """
+        indices = self._filter.raw_indices
+        face_count = len(indices["frame"])
+        columns = self._canvas.winfo_width() // self._size
+        rows = ceil(face_count / columns)
+        padding = [-1 for _ in range(columns - (face_count % columns))]
+        labels = np.array((indices["frame"] + padding,
+                           indices["face"] + padding), dtype="int").reshape((2, rows, columns))
+        logger.debug(labels.shape)
+        return labels
+
+    def face_from_point(self, point_x, point_y):
+        """ Get the face information for the face containing the given point.
+
+        Parameters
+        ----------
+        point_x: int
+            The x position on the canvas of the point to retrieve the face for
+        point_y: int
+            The y position on the canvas of the point to retrieve the face for
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Array of shape (4, ) containing the (`frame index`, `face index`, `x_point of top left
+            corner`, `y point of top left corner`) of the face that the mouse is currently over.
+
+            If the mouse is not over a face, then the frame and face indices will be -1
+        """
+        if point_x > self._dimensions[0]:
+            retval = np.array((-1, -1, -1, -1))
+        else:
+            x_idx = np.searchsorted(self._grid[2, 1, :], point_x, side="left") - 1
+            y_idx = np.searchsorted(self._grid[3, :, 1], point_y, side="left") - 1
+            retval = self._grid[:, y_idx, x_idx]
+        logger.debug(retval)
+        return retval
+
+    def transport_index_from_frame(self, frame_index):
+        """ Return the main frame's transport index for given frame index based on the current
+        filter criteria.
+
+        Parameters
+        ----------
+        frame_index: int
+            The absolute index for the frame within the full frames list
+
+        Returns
+        int
+            The index of the requested frame within the filtered frames view.
+        """
+        frames_list = self._filter.frames_list
+        retval = frames_list.index(frame_index) if frame_index in frames_list else None
+        logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
+        return retval
+
+    def _get_visible_area(self):
+        height = self._dimensions[1]
+        visible = (max(0, floor(height * self._canvas.yview()[0] - self._size)),
+                   ceil(height * self._canvas.yview()[1]))
+        logger.debug("visible: %s", visible)
+        y_points = self._grid[1, :, 1]
+        top = np.searchsorted(y_points, visible[0], side="left")
+        bottom = np.searchsorted(y_points, visible[1], side="right")
+        retval = self._grid[:, top:bottom, :]
+        logger.debug(retval)
+        return retval
+
+
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     """ The :class:`tkinter.Canvas` that holds the faces viewer part of the Manual Tool.
 
@@ -247,6 +371,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                      display_frame, progress_bar, size)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
+        self._grid = Grid(self, detected_faces)
         self._progress_bar = progress_bar
         self._globals = tk_globals
         self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
@@ -257,7 +382,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                       int(round(size * get_config().scaling_factor)))
         self._display_frame = display_frame
         self._utilities = dict(object_creator=ObjectCreator(self, detected_faces),
-                               hover_box=HoverBox(self, detected_faces),
+                               hover_box=HoverBox(self),
                                active_filter=FaceFilter(self, "all_frames"),
                                active_frame=ActiveFrame(self, detected_faces),
                                update_face=UpdateFace(self, detected_faces))
@@ -267,7 +392,13 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._column_count = None
         self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
         self._set_tk_callbacks()
+
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def grid(self):
+        """ :class:`Grid`: The grid for the current :class:`FacesViewer`. """
+        return self._grid
 
     @property
     def optional_annotations(self):

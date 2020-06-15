@@ -361,6 +361,23 @@ class Filter():
         return retval
 
     @property
+    def raw_indices(self):
+        """ dict: The frame and face indices that meet the current filter criteria for each
+        displayed face. """
+        frame_indices = []
+        face_indices = []
+        if self._globals.filter_mode != "No Faces":
+            for frame_idx, face_count in enumerate(self._det_faces.face_count_per_index):
+                if face_count <= 1 and self._globals.filter_mode == "Multiple Faces":
+                    continue
+                for face_idx in range(face_count):
+                    frame_indices.append(frame_idx)
+                    face_indices.append(face_idx)
+        logger.trace("frame_indices: %s, face_indices: %s", frame_indices, face_indices)
+        retval = dict(frame=frame_indices, face=face_indices)
+        return retval
+
+    @property
     def frames_list(self):
         """ list: The list of frame indices that meet the filter criteria returned by
         :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
