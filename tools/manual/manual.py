@@ -61,13 +61,14 @@ class Manual(tk.Tk):
         self._display = DisplayFrame(self._containers["top"],
                                      self._globals,
                                      self._det_faces)
+        _Options(self._containers["top"], self._globals, self._display)
+
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        self._globals,
                                        self._det_faces,
                                        self._display,
                                        arguments.face_size)
 
-        _Options(self._containers["top"], self._globals, self._display)
         self._display.tk_selected_action.set("View")
 
         self.bind("<Key>", self._handle_key_press)

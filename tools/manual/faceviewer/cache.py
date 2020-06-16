@@ -186,7 +186,7 @@ class TKFace():
     """
     def __init__(self, landmarks, size=128, face=None, mask=None):
         logger.trace("Initializing %s: (landmarks: %s, face: %s, mask: %s)",
-                     self.__class__.__name__, landmarks.shape,
+                     self.__class__.__name__, landmarks,
                      face if face is None else face.shape,
                      mask if mask is None else mask.shape)
         self._landmark_mapping = dict(mouth=(48, 68),
@@ -198,7 +198,10 @@ class TKFace():
                                       jaw=(0, 17),
                                       chin=(8, 11))
         self._size = size
-        self._face = self._generate_tk_face_data(face, mask)
+        self._face = tk.PhotoImage(data="", width=self._size, height=self._size)
+
+        # TODO Convert to jpg thumbnail version
+        # self._face = self._generate_tk_face_data(face, mask)
         self._mesh_points, self._mesh_is_poly = self._get_mesh_points(landmarks)
         logger.trace("Initialized %s", self.__class__.__name__)
 
@@ -237,6 +240,17 @@ class TKFace():
             The mask to be applied to the face image. Pass ``None`` if no mask is to be used
         """
         self._face = self._generate_tk_face_data(face, mask)
+        self._mesh_points, self._mesh_is_poly = self._get_mesh_points(landmarks)
+
+    def update_landmarks(self, landmarks):
+        """ Update the :attr:`face`, :attr:`mesh_points` and attr:`mesh_is_poly` objects with the
+        given information.
+
+        Parameters
+        ----------
+        landmarks: :class:`numpy.ndarray`
+            The updated 68 point aligned landmarks for the given face
+        """
         self._mesh_points, self._mesh_is_poly = self._get_mesh_points(landmarks)
 
     def update_mask(self, mask):

@@ -11,9 +11,10 @@ import numpy as np
 from lib.gui.custom_widgets import StatusBar, Tooltip
 from lib.gui.utils import get_images, get_config
 
-from .assets import FacesViewerLoader, ObjectCreator, UpdateFace
+from .assets import ObjectCreator, UpdateFace
 from .cache import FaceCache
-from .display import ActiveFrame, ContextMenu, FaceFilter, HoverBox
+from .display import ActiveFrame, ContextMenu, FaceFilter
+from .viewport import Viewport
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -54,9 +55,6 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    progress_bar,
                                    size)
         self._add_scrollbar()
-        self._canvas.set_column_count()
-
-        FacesViewerLoader(self._canvas, detected_faces)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -80,7 +78,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             The scrollbar callback event
         """
         self._canvas.yview(*event)
-        self._canvas.set_visible_images(event)
+        self._canvas._view.set_visible_images()
 
     def _update_scrollbar(self, event):  # pylint: disable=unused-argument
         """ Update the faces frame scrollbar.
@@ -103,7 +101,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         amount = 1 if direction.endswith("down") else -1
         units = "pages" if direction.startswith("page") else "units"
         self._canvas.canvas_scroll(amount, units)
-        self._canvas.set_visible_images(-1)
+        self._canvas._view.set_visible_images()
 
     def set_annotation_display(self, key):
         """ Set the optional annotation overlay based on keyboard shortcut.
@@ -184,7 +182,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                 image=get_images().icons[lookup],
                                 command=lambda t=display: self.on_click(t),
                                 style="display_deselected.TButton")
-            button.state(["!pressed", "!focus", "disabled"])
+            button.state(["!pressed", "!focus"])
             button.pack()
             Tooltip(button, text=self._helptext[display])
             buttons[display] = button
@@ -224,17 +222,44 @@ class Grid():
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
         # TODO Variable size
-        self._size = 128
+        self._size = canvas._size
         self._canvas = canvas
         self._detected_faces = detected_faces
         self._filter = detected_faces.filter
         self._canvas.update_idletasks()
         self._grid = self._get_grid()
+        self._canvas.create_rectangle(0, 0, *self._dimensions, tags=["backdrop"])
+        self._canvas.configure(scrollregion=(self._canvas.bbox("all")))
+
+    @property
+    def columns_rows(self):
+        """ tuple: the (`columns`, `rows`) required to hold all display images. """
+        return tuple(reversed(self._grid.shape[1:]))
 
     @property
     def _dimensions(self):
-        """ tuple: The (`width`, `height`) required to hold all display images """
+        """ tuple: The (`width`, `height`) required to hold all display images. """
         return tuple(dim * self._size for dim in reversed(self._grid.shape[1:]))
+
+    @property
+    def visible_area(self):
+        """:class:`numpy.ndarray`:  A numpy array of shape (`4`, `rows`, `columns`) corresponding
+        to the viewable area of the display grid. 1st dimension contains frame indices, 2nd
+        dimension face indices. The 3rd and 4th dimension contain the x and y position of the top
+        left corner of the face respectively.
+
+        Any locations that are not populated by a face will have a frame and face index of -1
+        """
+        height = self._dimensions[1]
+        visible = (max(0, floor(height * self._canvas.yview()[0] - self._size)),
+                   ceil(height * self._canvas.yview()[1]))
+        logger.trace("visible: %s", visible)
+        y_points = self._grid[3, :, 1]
+        top = np.searchsorted(y_points, visible[0], side="left")
+        bottom = np.searchsorted(y_points, visible[1], side="right")
+        retval = self._grid[:, top:bottom, :]
+        logger.trace(retval)
+        return retval
 
     def _get_grid(self):
         """ Get the grid information for faces currently displayed in the :class:`FacesViewer`.
@@ -245,7 +270,7 @@ class Grid():
             1st dimension contains frame indices, 2nd dimension face indices. The 3rd and 4th
             dimension contain the x and y position of the top left corner of the face respectively.
 
-            Any locations that are not populated by a face will have the frame and face index of -1
+            Any locations that are not populated by a face will have a frame and face index of -1
         """
         labels = self._get_labels()
         x_coords = np.linspace(0,
@@ -329,18 +354,6 @@ class Grid():
         logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
         return retval
 
-    def _get_visible_area(self):
-        height = self._dimensions[1]
-        visible = (max(0, floor(height * self._canvas.yview()[0] - self._size)),
-                   ceil(height * self._canvas.yview()[1]))
-        logger.debug("visible: %s", visible)
-        y_points = self._grid[1, :, 1]
-        top = np.searchsorted(y_points, visible[0], side="left")
-        bottom = np.searchsorted(y_points, visible[1], side="right")
-        retval = self._grid[:, top:bottom, :]
-        logger.debug(retval)
-        return retval
-
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     """ The :class:`tkinter.Canvas` that holds the faces viewer part of the Manual Tool.
@@ -371,7 +384,190 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                      display_frame, progress_bar, size)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
+        self._size = 128  # TODO Config
+
+        self._progress_bar = progress_bar
+        self._globals = tk_globals
+        self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
+                                         if key != "lockout"}
         self._grid = Grid(self, detected_faces)
+        self._display_frame = display_frame
+        self._view = Viewport(self)
+
+        ContextMenu(self)
+        self._bind_mouse_wheel_scrolling()
+        # Set in load_frames
+        self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
+        self._set_tk_callbacks()
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def grid(self):
+        """ :class:`Grid`: The grid for the current :class:`FacesViewer`. """
+        return self._grid
+
+    @property
+    def optional_annotations(self):
+        """ dict: The values currently set for the selectable optional annotations. """
+        return {opt: val.get() for opt, val in self._tk_optional_annotations.items()}
+
+    @property
+    def selected_mask(self):
+        """ str: The currently selected mask from the display frame control panel. """
+        return self._display_frame.tk_selected_mask.get().lower()
+
+    @property
+    def control_colors(self):
+        """ :dict: Editor key with the current user selected hex code as value. """
+        return {key: self._display_frame.colors[val.get()]
+                for key, val in self._display_frame.tk_control_colors.items()}
+
+    # << CALLBACK FUNCTIONS >> #
+    def _set_tk_callbacks(self):
+        """ Set the tkinter variable call backs.
+
+        Switches the Filter view when the filter drop down is updated.
+        Updates the Mesh annotation color when user amends the color drop down.
+        Updates the mask type when the user changes the selected mask types
+        Toggles the face viewer annotations on an optional annotation button press.
+        """
+        self._globals.tk_filter_mode.trace("w", lambda *e: self.switch_filter())
+        self._display_frame.tk_control_colors["Mesh"].trace("w",
+                                                            lambda *e: self.update_mesh_color())
+        self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
+        for opt, var in self._tk_optional_annotations.items():
+            var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
+        self.bind("<Configure>", lambda *e: self._view.set_visible_images())
+
+    def switch_filter(self):
+        """ Update the :class:`FacesViewer` canvas for the active filter.
+            Executed when the user changes the selected filter pull down.
+         """
+        filter_mode = self._globals.filter_mode.replace(" ", "_").lower()
+        filter_mode = "all_frames" if filter_mode == "has_face(s)" else filter_mode
+        # TODO
+        logger.warning("filter_mode: %s, SWITCH FILTER CODE", filter_mode)
+
+    def _update_mask_type(self):
+        """ Update the displayed mask in the :class:`FacesViewer` canvas when the user changes
+        the mask type. """
+        logger.warning("UPDATE MASK CODE. self.selected_mask: %s, "
+                       "self.optional_annotations['mask']: %s)",
+                       self.selected_mask, self.optional_annotations["mask"])
+
+    # << MOUSE HANDLING >>
+    def _bind_mouse_wheel_scrolling(self):
+        """ Bind mouse wheel to scroll the :class:`FacesViewer` canvas. """
+        if platform.system() == "Linux":
+            self.bind("<Button-4>", self._scroll)
+            self.bind("<Button-5>", self._scroll)
+        else:
+            self.bind("<MouseWheel>", self._scroll)
+
+    def _scroll(self, event):
+        """ Handle mouse wheel scrolling over the :class:`FacesViewer` canvas.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The event fired by the mouse scrolling
+        """
+        if platform.system() == "Darwin":
+            adjust = event.delta
+        elif platform.system() == "Windows":
+            adjust = event.delta / 120
+        elif event.num == 5:
+            adjust = -1
+        else:
+            adjust = 1
+        self.canvas_scroll(-1 * adjust, "units", event)
+
+    def canvas_scroll(self, amount, units, event=None):
+        """ Scroll the canvas on an up/down or page-up/page-down key press.
+
+        Parameters
+        ----------
+        amount: int
+            The number of units to scroll the canvas
+        units: ["page", "units"]
+            The unit type to scroll by
+        event: :class:`tkinter.Event` or ``None``, optional
+            The tkinter event (if scrolling by mouse wheel) or ``None`` if the scroll action
+            has been triggered by a keyboard shortcut
+        """
+        self.yview_scroll(int(amount), units)
+        self._view.set_visible_images()
+        self._view.hover_box.on_hover(event)
+
+    # << OPTIONAL ANNOTATION METHODS >> #
+    def update_mesh_color(self):
+        """ Update the mesh color when user updates the control panel. """
+        color = self.get_muted_color("Mesh")
+        if self._annotation_colors["mesh"] == color:
+            return
+        highlight_color = self.control_colors["Mesh"]
+        self.itemconfig("mesh_polygon", outline=color)
+        self.itemconfig("mesh_line", fill=color)
+        self.itemconfig("highlight_mesh_polygon", outline=highlight_color)
+        self.itemconfig("highlight_mesh_line", fill=highlight_color)
+        self._annotation_colors["mesh"] = color
+
+    def get_muted_color(self, color_key):
+        """ Creates a muted version of the given annotation color for non-active faces.
+
+        It is assumed that hex codes for annotations will always contain "ff" in one of the
+        R, G or B channels, so the given hex code has all of the F values updated to A.
+
+        Parameters
+        ----------
+        color_key: str
+            The annotation key to obtain the color for from :attr:`control_colors`
+        """
+        return self.control_colors[color_key].replace("f", "a")
+
+    def _toggle_annotations(self, annotation):
+        """ Toggle optional annotations on or off after the user depresses an optional button.
+
+        Parameters
+        ----------
+        annotation: ["mesh", "mask"]
+            The optional annotation to toggle on or off
+        """
+        logger.warning("annotation: %s, self.selected_mask: %s, "
+                       "self.optional_annotations[annotation]: %s",
+                       annotation, self.selected_mask, self.optional_annotations[annotation])
+
+
+class FacesViewer_old(tk.Canvas):   # pylint:disable=too-many-ancestors
+    """ The :class:`tkinter.Canvas` that holds the faces viewer part of the Manual Tool.
+
+    Parameters
+    ----------
+    parent: :class:`tkinter.ttk.Frame`
+        The parent frame for the canvas
+    tk_globals: :class:`~tools.manual.manual.TkGlobals`
+        The tkinter variables that apply to the whole of the GUI
+    tk_action_vars: dict
+        The :class:`tkinter.BooleanVar` objects for selectable optional annotations
+        as set by the buttons in the :class:`FacesActionsFrame`
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
+    display_frame: :class:`DisplayFrame`
+        The section of the Manual Tool that holds the frames viewer
+    progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
+        The progress bar object that displays in the bottom right of the GUI
+    size: int
+        The size, in pixels, to display the thumbnail images at
+    """
+    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, display_frame,
+                 progress_bar, size):
+        logger.debug("Initializing %s: (parent: %s, tk_globals: %s, tk_action_vars: %s, "
+                     "detected_faces: %s, display_frame: %s, progress_bar: %s, size: %s)",
+                     self.__class__.__name__, parent, tk_globals, tk_action_vars, detected_faces,
+                     display_frame, progress_bar, size)
+        super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
+        self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._progress_bar = progress_bar
         self._globals = tk_globals
         self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
@@ -380,9 +576,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                                       detected_faces,
                                       tk_action_vars["lockout"],
                                       int(round(size * get_config().scaling_factor)))
+        self._grid = Grid(self, detected_faces)
         self._display_frame = display_frame
+        self._view = Viewport(self)
+
         self._utilities = dict(object_creator=ObjectCreator(self, detected_faces),
-                               hover_box=HoverBox(self),
                                active_filter=FaceFilter(self, "all_frames"),
                                active_frame=ActiveFrame(self, detected_faces),
                                update_face=UpdateFace(self, detected_faces))
@@ -559,7 +757,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """
         self.yview_scroll(int(amount), units)
         self.set_visible_images(-1)
-        self._utilities["hover_box"].on_hover(event)
+        self._view.hover_box.on_hover(event)
 
     # << OPTIONAL ANNOTATION METHODS >> #
     def update_mesh_color(self):

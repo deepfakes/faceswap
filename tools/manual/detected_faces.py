@@ -301,9 +301,6 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             for item in self._alignments.data[key]["faces"]:
                 face = DetectedFace()
                 face.from_alignment(item)
-                # TODO Remove hard coding.
-                # Load aligned here to avoid second pass when populating TKFaces with landmarks
-                face.load_aligned(None, size=128)
                 this_frame_faces.append(face)
             self._saved_faces.append(this_frame_faces)
         self._updated_faces.extend([None for _ in range(len(self._saved_faces))])
