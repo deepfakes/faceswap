@@ -68,7 +68,6 @@ class Manual(tk.Tk):
                                        self._det_faces,
                                        self._display,
                                        arguments.face_size)
-
         self._display.tk_selected_action.set("View")
 
         self.bind("<Key>", self._handle_key_press)
@@ -351,6 +350,9 @@ class TkGlobals():
         self._tk_update = tk.BooleanVar()
         self._tk_update.set(False)
 
+        self._tk_update_active_viewport = tk.BooleanVar()
+        self._tk_update_active_viewport.set(False)
+
         self._tk_filter_mode = tk.StringVar()
         self._tk_is_zoomed = tk.BooleanVar()
         self._tk_is_zoomed.set(False)
@@ -396,6 +398,12 @@ class TkGlobals():
         """ :class:`tkinter.IntVar`: The variable that holds the face index of the selected face
         within the current frame when in zoomed mode. """
         return self._tk_face_index
+
+    @property
+    def tk_update_active_viewport(self):
+        """ :class:`tkinter.BooleanVar`: Boolean Variable that is traced by the viewport's active
+        frame to update.. """
+        return self._tk_update_active_viewport
 
     @property
     def face_index(self):
@@ -716,7 +724,7 @@ class FrameLoader():
         self._loader = None
         self._current_idx = 0
         self._init_thread = self._background_init_frames(frames_location, video_meta_data)
-        self._globals.tk_frame_index.trace("w", lambda *e: self._set_frame())
+        self._globals.tk_frame_index.trace("w", self._set_frame)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -752,7 +760,7 @@ class FrameLoader():
         self._loader = SingleFrameLoader(frames_location, video_meta_data=video_meta_data)
         self._globals.set_frame_count(self._loader.count)
 
-    def _set_frame(self, initialize=False):
+    def _set_frame(self, *args, initialize=False):  # pylint:disable=unused-argument
         """ Set the currently loaded frame to :attr:`_current_frame` and trigger a full GUI update.
 
         If the loader has not been initialized, or the navigation position is the same as the
@@ -760,6 +768,8 @@ class FrameLoader():
 
         Parameters
         ----------
+        args: tuple
+            :class:`tkinter.Event` arguments. Required but not used.
         initialize: bool, optional
             ``True`` if initializing for the first frame to be displayed otherwise ``False``.
             Default: ``False``
@@ -779,3 +789,4 @@ class FrameLoader():
         self._globals.set_current_frame(frame, filename)
         self._current_idx = position
         self._globals.tk_update.set(True)
+        self._globals.tk_update_active_viewport.set(True)

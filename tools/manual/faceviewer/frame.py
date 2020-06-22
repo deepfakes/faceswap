@@ -9,14 +9,20 @@ from math import floor, ceil
 import numpy as np
 
 from lib.gui.custom_widgets import StatusBar, Tooltip
-from lib.gui.utils import get_images, get_config
+from lib.gui.utils import get_images
 
-from .assets import ObjectCreator, UpdateFace
-from .cache import FaceCache
-from .display import ActiveFrame, ContextMenu, FaceFilter
+from .display import ContextMenu
 from .viewport import Viewport
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+from time import time
+_TIMES = dict()
+
+
+def _timeit(name, split):
+    split = time() - split
+    _TIMES[name] = _TIMES.setdefault(name, np.array([0, 0])) + np.array((split, 1))
 
 
 class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
@@ -63,7 +69,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         scrollbar = ttk.Scrollbar(self._faces_frame, command=self._on_scroll)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self._canvas.config(yscrollcommand=scrollbar.set)
-        self.bind("<Configure>", self._update_scrollbar)
+        self.bind("<Configure>", self._update_viewport)
         logger.debug("Added Faces Viewer Scrollbar")
         self.update_idletasks()  # Update so scrollbar width is correct
         return scrollbar.winfo_width()
@@ -80,14 +86,15 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._canvas.yview(*event)
         self._canvas._view.set_visible_images()
 
-    def _update_scrollbar(self, event):  # pylint: disable=unused-argument
-        """ Update the faces frame scrollbar.
+    def _update_viewport(self, event):  # pylint: disable=unused-argument
+        """ Update the faces viewport and scrollbar.
 
         Parameters
         ----------
         event: :class:`tkinter.Event`
             Unused but required
         """
+        self._canvas._view.set_visible_images()
         self._canvas.configure(scrollregion=self._canvas.bbox("all"))
 
     def canvas_scroll(self, direction):
@@ -224,10 +231,21 @@ class Grid():
         # TODO Variable size
         self._size = canvas._size
         self._canvas = canvas
-        self._detected_faces = detected_faces
-        self._filter = detected_faces.filter
+        self._raw_indices = detected_faces.filter.raw_indices
+        self._frames_list = detected_faces.filter.frames_list
+        self._detected_faces = detected_faces  # TODO Get rid
+        self._landmark_mapping = dict(mouth=(48, 68),
+                                      right_eyebrow=(17, 22),
+                                      left_eyebrow=(22, 27),
+                                      right_eye=(36, 42),
+                                      left_eye=(42, 48),
+                                      nose=(27, 36),
+                                      jaw=(0, 17),
+                                      chin=(8, 11))
+
         self._canvas.update_idletasks()
         self._grid = self._get_grid()
+        self._display_faces = self._get_display_faces(detected_faces)
         self._canvas.create_rectangle(0, 0, *self._dimensions, tags=["backdrop"])
         self._canvas.configure(scrollregion=(self._canvas.bbox("all")))
 
@@ -242,6 +260,20 @@ class Grid():
         return tuple(dim * self._size for dim in reversed(self._grid.shape[1:]))
 
     @property
+    def visible_row_indices(self):
+        """tuple: A 1 dimensional array of the (`top_row_index`, `bottom_row_index`) of the grid
+        currently in the viewable area.
+        """
+        height = self._dimensions[1]
+        visible = (max(0, floor(height * self._canvas.yview()[0]) - self._size),
+                   ceil(height * self._canvas.yview()[1]))
+        logger.trace("visible: %s", visible)
+        y_points = self._grid[3, :, 1]
+        top = np.searchsorted(y_points, visible[0], side="left")
+        bottom = np.searchsorted(y_points, visible[1], side="right")
+        return top, bottom
+
+    @property
     def visible_area(self):
         """:class:`numpy.ndarray`:  A numpy array of shape (`4`, `rows`, `columns`) corresponding
         to the viewable area of the display grid. 1st dimension contains frame indices, 2nd
@@ -250,14 +282,8 @@ class Grid():
 
         Any locations that are not populated by a face will have a frame and face index of -1
         """
-        height = self._dimensions[1]
-        visible = (max(0, floor(height * self._canvas.yview()[0] - self._size)),
-                   ceil(height * self._canvas.yview()[1]))
-        logger.trace("visible: %s", visible)
-        y_points = self._grid[3, :, 1]
-        top = np.searchsorted(y_points, visible[0], side="left")
-        bottom = np.searchsorted(y_points, visible[1], side="right")
-        retval = self._grid[:, top:bottom, :]
+        top, bottom = self.visible_row_indices
+        retval = self._grid[:, top:bottom, :], self._display_faces[:, top:bottom, :]
         logger.trace(retval)
         return retval
 
@@ -299,15 +325,40 @@ class Grid():
             Any remaining placeholders at the end of the grid which are not populated with a face
             are given the index -1
         """
-        indices = self._filter.raw_indices
-        face_count = len(indices["frame"])
+        face_count = len(self._raw_indices["frame"])
         columns = self._canvas.winfo_width() // self._size
         rows = ceil(face_count / columns)
         padding = [-1 for _ in range(columns - (face_count % columns))]
-        labels = np.array((indices["frame"] + padding,
-                           indices["face"] + padding), dtype="int").reshape((2, rows, columns))
+        labels = np.array((self._raw_indices["frame"] + padding,
+                           self._raw_indices["face"] + padding),
+                          dtype="int").reshape((2, rows, columns))
         logger.debug(labels.shape)
         return labels
+
+    def _get_display_faces(self, detected_faces):
+        """ Get the detected faces for the current filter and arrange to grid.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Array of dimensions (rows, columns) corresponding to the display grid, containing the
+            corresponding :class:`lib.faces_detect.DetectFace` object
+
+            Any remaining placeholders at the end of the grid which are not populated with a face
+            are replaced with ``None``
+        """
+        current_faces = detected_faces.current_faces
+        columns, rows = self.columns_rows
+        face_count = len(self._raw_indices["frame"])
+        padding = [None for _ in range(face_count, columns * rows)]
+        faces = np.array([[None if idx is None else current_faces[idx][face_idx],
+                           None if idx is None else detected_faces.get_thumbnail(idx, face_idx)]
+                          for idx, face_idx
+                          in zip(self._raw_indices["frame"] + padding,
+                                 self._raw_indices["face"] + padding)],
+                         dtype="object").reshape(rows, columns, 2).transpose(2, 0, 1)
+        logger.debug("faces: (shape: %s, dtype: %s)", faces.shape, faces.dtype)
+        return faces
 
     def face_from_point(self, point_x, point_y):
         """ Get the face information for the face containing the given point.
@@ -349,8 +400,7 @@ class Grid():
         int
             The index of the requested frame within the filtered frames view.
         """
-        frames_list = self._filter.frames_list
-        retval = frames_list.index(frame_index) if frame_index in frames_list else None
+        retval = self._frames_list.index(frame_index) if frame_index in self._frames_list else None
         logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
         return retval
 
@@ -390,8 +440,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._globals = tk_globals
         self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
                                          if key != "lockout"}
-        self._grid = Grid(self, detected_faces)
+
         self._display_frame = display_frame
+        self._grid = Grid(self, detected_faces)
         self._view = Viewport(self)
 
         ContextMenu(self)
@@ -534,344 +585,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         annotation: ["mesh", "mask"]
             The optional annotation to toggle on or off
         """
-        logger.warning("annotation: %s, self.selected_mask: %s, "
-                       "self.optional_annotations[annotation]: %s",
-                       annotation, self.selected_mask, self.optional_annotations[annotation])
-
-
-class FacesViewer_old(tk.Canvas):   # pylint:disable=too-many-ancestors
-    """ The :class:`tkinter.Canvas` that holds the faces viewer part of the Manual Tool.
-
-    Parameters
-    ----------
-    parent: :class:`tkinter.ttk.Frame`
-        The parent frame for the canvas
-    tk_globals: :class:`~tools.manual.manual.TkGlobals`
-        The tkinter variables that apply to the whole of the GUI
-    tk_action_vars: dict
-        The :class:`tkinter.BooleanVar` objects for selectable optional annotations
-        as set by the buttons in the :class:`FacesActionsFrame`
-    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
-        The :class:`~lib.faces_detect.DetectedFace` objects for this video
-    display_frame: :class:`DisplayFrame`
-        The section of the Manual Tool that holds the frames viewer
-    progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
-        The progress bar object that displays in the bottom right of the GUI
-    size: int
-        The size, in pixels, to display the thumbnail images at
-    """
-    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, display_frame,
-                 progress_bar, size):
-        logger.debug("Initializing %s: (parent: %s, tk_globals: %s, tk_action_vars: %s, "
-                     "detected_faces: %s, display_frame: %s, progress_bar: %s, size: %s)",
-                     self.__class__.__name__, parent, tk_globals, tk_action_vars, detected_faces,
-                     display_frame, progress_bar, size)
-        super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
-        self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
-        self._progress_bar = progress_bar
-        self._globals = tk_globals
-        self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
-                                         if key != "lockout"}
-        self._faces_cache = FaceCache(self,
-                                      detected_faces,
-                                      tk_action_vars["lockout"],
-                                      int(round(size * get_config().scaling_factor)))
-        self._grid = Grid(self, detected_faces)
-        self._display_frame = display_frame
-        self._view = Viewport(self)
-
-        self._utilities = dict(object_creator=ObjectCreator(self, detected_faces),
-                               active_filter=FaceFilter(self, "all_frames"),
-                               active_frame=ActiveFrame(self, detected_faces),
-                               update_face=UpdateFace(self, detected_faces))
-        ContextMenu(self)
-        self._bind_mouse_wheel_scrolling()
-        # Set in load_frames
-        self._column_count = None
-        self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
-        self._set_tk_callbacks()
-
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def grid(self):
-        """ :class:`Grid`: The grid for the current :class:`FacesViewer`. """
-        return self._grid
-
-    @property
-    def optional_annotations(self):
-        """ dict: The values currently set for the selectable optional annotations. """
-        return {opt: val.get() for opt, val in self._tk_optional_annotations.items()}
-
-    @property
-    def selected_mask(self):
-        """ str: The currently selected mask from the display frame control panel. """
-        return self._display_frame.tk_selected_mask.get().lower()
-
-    @property
-    def control_colors(self):
-        """ :dict: Editor key with the current user selected hex code as value. """
-        return {key: self._display_frame.colors[val.get()]
-                for key, val in self._display_frame.tk_control_colors.items()}
-
-    @property
-    def column_count(self):
-        """ int: The number of columns in use in the :class:`FacesViewer` canvas. """
-        return self._column_count
-
-    @property
-    def new_objects(self):
-        """ :class:`ObjectCreator`: Class to add new objects to the :class:`FacesViewer`
-        canvas. Call the :func:`create` method to add new annotations. """
-        return self._utilities["object_creator"]
-
-    @property
-    def active_filter(self):
-        """:class:`FaceFilter`: The currently selected filtered faces display. """
-        return self._utilities["active_filter"]
-
-    @property
-    def active_frame(self):
-        """:class:`ActiveFrame`: The currently active frame. """
-        return self._utilities["active_frame"]
-
-    @property
-    def update_face(self):
-        """:class:`UpdateFace`: Actions to add, remove or update a face in the viewer. """
-        return self._utilities["update_face"]
-
-    # << CALLBACK FUNCTIONS >> #
-    def _set_tk_callbacks(self):
-        """ Set the tkinter variable call backs.
-
-        Switches the Filter view when the filter drop down is updated.
-        Updates the Mesh annotation color when user amends the color drop down.
-        Updates the mask type when the user changes the selected mask types
-        Toggles the face viewer annotations on an optional annotation button press.
-        """
-        self._globals.tk_filter_mode.trace("w", lambda *e: self.switch_filter())
-        self._display_frame.tk_control_colors["Mesh"].trace("w",
-                                                            lambda *e: self.update_mesh_color())
-        self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
-        for opt, var in self._tk_optional_annotations.items():
-            var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
-        self.bind("<Configure>", self.set_visible_images)
-
-    def set_visible_images(self, event):  # pylint:disable=unused-argument
-        """ Load and unload thumbnails on a canvas resize or scroll event.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter Configure event. Required but unused
-        """
-        if self.bbox("all") is None:
-            return
-        visible = (0,
-                   floor(self.bbox("all")[3] * self.yview()[0]),
-                   self.winfo_width(),
-                   ceil(self.bbox("all")[3] * self.yview()[1]))
-        displayed = set(self.find_overlapping(*visible))
-        to_process = dict(show=displayed.intersection(set(self.find_withtag("not_visible"))),
-                          hide=set(self.find_withtag("visible")).difference(displayed))
-        funcs = dict(show=self._faces_cache.display_thumbnail,
-                     hide=self._faces_cache.hide_thumbnail)
-        tags = dict(show=("visible", "not_visible"), hide=("not_visible", "visible"))
-        for name, process in to_process.items():
-            logger.debug("processing: %s, item_ids: %s", name, process)
-            for item_id in process:
-                frame_idx = self.frame_index_from_object(item_id)
-                face_idx = self.face_index_from_object(item_id, frame_index=frame_idx)
-                funcs[name](frame_idx, face_idx)
-                self.dtag(item_id, tags[name][1])
-                self.addtag_withtag(tags[name][0], item_id)
-
-    def switch_filter(self):
-        """ Update the :class:`FacesViewer` canvas for the active filter.
-            Executed when the user changes the selected filter pull down.
-         """
-        filter_mode = self._globals.filter_mode.replace(" ", "_").lower()
-        filter_mode = "all_frames" if filter_mode == "has_face(s)" else filter_mode
-        current_dsp = self.active_filter.filter_type
-        logger.debug("Current Display: '%s', Requested Display: '%s'", current_dsp, filter_mode)
-        if filter_mode == current_dsp:
-            return
-        self.active_filter.de_initialize()
-        self._utilities["active_filter"] = FaceFilter(self, filter_mode)
-
-    def _update_mask_type(self):
-        """ Update the displayed mask in the :class:`FacesViewer` canvas when the user changes
-        the mask type. """
-        self._faces_cache.mask_loader.update_all(self.selected_mask,
-                                                 self.optional_annotations["mask"])
-        self.active_frame.reload_annotations()
-
-    # << POST INIT FUNCTIONS >> #
-    def set_column_count(self):
-        """ Set the column count for the displayed canvas. Must be done after
-        the canvas has been packed and the scrollbar added.
-        """
-        self._column_count = self.winfo_width() // self._faces_cache.size
-        logger.debug("Canvas width: %s, face thumbnail size: %s, column count: %s",
-                     self.winfo_width(), self._faces_cache.size, self._column_count)
-
-    # << MOUSE HANDLING >>
-    def _bind_mouse_wheel_scrolling(self):
-        """ Bind mouse wheel to scroll the :class:`FacesViewer` canvas. """
-        if platform.system() == "Linux":
-            self.bind("<Button-4>", self._scroll)
-            self.bind("<Button-5>", self._scroll)
-        else:
-            self.bind("<MouseWheel>", self._scroll)
-
-    def _scroll(self, event):
-        """ Handle mouse wheel scrolling over the :class:`FacesViewer` canvas.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The event fired by the mouse scrolling
-        """
-        if platform.system() == "Darwin":
-            adjust = event.delta
-        elif platform.system() == "Windows":
-            adjust = event.delta / 120
-        elif event.num == 5:
-            adjust = -1
-        else:
-            adjust = 1
-        self.canvas_scroll(-1 * adjust, "units", event)
-
-    def canvas_scroll(self, amount, units, event=None):
-        """ Scroll the canvas on an up/down or page-up/page-down key press.
-
-        Parameters
-        ----------
-        amount: int
-            The number of units to scroll the canvas
-        units: ["page", "units"]
-            The unit type to scroll by
-        event: :class:`tkinter.Event` or ``None``, optional
-            The tkinter event (if scrolling by mouse wheel) or ``None`` if the scroll action
-            has been triggered by a keyboard shortcut
-        """
-        self.yview_scroll(int(amount), units)
-        self.set_visible_images(-1)
-        self._view.hover_box.on_hover(event)
-
-    # << OPTIONAL ANNOTATION METHODS >> #
-    def update_mesh_color(self):
-        """ Update the mesh color when user updates the control panel. """
-        color = self.get_muted_color("Mesh")
-        if self._annotation_colors["mesh"] == color:
-            return
-        highlight_color = self.control_colors["Mesh"]
-        self.itemconfig("mesh_polygon", outline=color)
-        self.itemconfig("mesh_line", fill=color)
-        self.itemconfig("highlight_mesh_polygon", outline=highlight_color)
-        self.itemconfig("highlight_mesh_line", fill=highlight_color)
-        self._annotation_colors["mesh"] = color
-
-    def get_muted_color(self, color_key):
-        """ Creates a muted version of the given annotation color for non-active faces.
-
-        It is assumed that hex codes for annotations will always contain "ff" in one of the
-        R, G or B channels, so the given hex code has all of the F values updated to A.
-
-        Parameters
-        ----------
-        color_key: str
-            The annotation key to obtain the color for from :attr:`control_colors`
-        """
-        return self.control_colors[color_key].replace("f", "a")
-
-    def _toggle_annotations(self, annotation):
-        """ Toggle optional annotations on or off after the user depresses an optional button.
-
-        Parameters
-        ----------
-        annotation: ["mesh", "mask"]
-            The optional annotation to toggle on or off
-        """
-        if self._faces_cache.is_loading:
-            return
+        state = "normal" if self.optional_annotations[annotation] else "hidden"
+        logger.debug("Toggle annotation: (annotation: %s, state: %s)", annotation, state)
+        if annotation == "mesh":
+            self._view.toggle_mesh(state)
         if annotation == "mask":
-            self._faces_cache.mask_loader.update_all(self.selected_mask,
-                                                     self.optional_annotations[annotation])
-        else:
-            self.active_filter.toggle_annotation(self.optional_annotations[annotation])
-
-    def frame_index_from_object(self, item_id):
-        """ Retrieve the frame index that an object belongs to from it's tag.
-
-        Parameters
-        ----------
-        item_id: int
-            The tkinter canvas object id
-
-        Returns
-        -------
-        int
-            The frame index that the object belongs to or ``None`` if the tag cannot be found
-        """
-        retval = next((int(tag.replace("frame_id_", ""))
-                       for tag in self.gettags(item_id) if tag.startswith("frame_id_")), None)
-        logger.trace("item_id: %s, frame_id: %s", item_id, retval)
-        return retval
-
-    def face_index_from_object(self, item_id, frame_index=None):
-        """ Retrieve the index of the face within the current frame for the given canvas item id.
-
-        Parameters
-        ----------
-        item_id: int
-            The tkinter canvas object id
-        frame_index: int, optional
-            The frame index that this item resides in, pass ``None`` if the frame index is unknown.
-            Default: ``None``
-
-        Returns
-        -------
-        int
-            The index of the face within the current frame
-        """
-        frame_id = self.frame_index_from_object(item_id) if frame_index is None else frame_index
-        retval = self.find_withtag("image_{}".format(frame_id)).index(item_id)
-        logger.trace("item_id: %s, frame_id: %s, face index: %s", item_id, frame_id, retval)
-        return retval
-
-    def face_id_from_object(self, item_id):
-        """ Retrieve the face group id tag for the given canvas item id.
-
-        Parameters
-        ----------
-        item_id: int
-            The tkinter canvas object id
-
-        Returns
-        -------
-        str
-            The face group tag for the given object, or ``None`` if a tag can't be found
-        """
-        retval = next((tag for tag in self.gettags(item_id)
-                       if tag.startswith("face_id_")), None)
-        logger.trace("item_id: %s, tag: %s", item_id, retval)
-        return retval
-
-    def coords_from_index(self, index):
-        """ Returns the top left coordinates location for the canvas object based on an object's
-        absolute index.
-
-        Parameters
-        ----------
-        index: int
-            The absolute display index of the face that the coordinates should be calculated from
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The top left (x, y) co-ordinates that an object should be placed on the canvas
-            calculated from the given index.
-        """
-        return np.array(((index % self._column_count) * self._faces_cache.size,
-                         (index // self._column_count) * self._faces_cache.size), dtype="int")
+            self._view.toggle_mask(state, self.selected_mask)

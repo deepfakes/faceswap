@@ -732,8 +732,8 @@ class ThumbsCreator():
     def __init__(self, detected_faces, input_location):
         logger.debug("Initializing %s: (detected_faces: %s, input_location: %s)",
                      self.__class__.__name__, detected_faces, input_location)
-        self._size = 64
-        self._jpeg_quality = 50
+        self._size = 96
+        self._jpeg_quality = 75
         self._pbar = None
         self._lock = Lock()
         self._location = input_location
