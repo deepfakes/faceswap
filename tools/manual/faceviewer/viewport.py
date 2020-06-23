@@ -58,7 +58,7 @@ class Viewport():
     @property
     def mesh_kwargs(self):
         """ dict: The color and state keyword arguments for the objects that make up a single
-        face's mesg annotation based on the current user selected options. """
+        face's mesh annotation based on the current user selected options. """
         state = "normal" if self._canvas.optional_annotations["mesh"] else "hidden"
         color = self._canvas.get_muted_color("Mesh")
         kwargs = dict(polygon=dict(fill="", outline=color, state=state),
@@ -74,7 +74,7 @@ class Viewport():
         """ Toggles the mesh optional annotations off and on """
         logger.debug("Toggling mesh annotations to: %s", state)
         self._canvas.itemconfig("viewport_mesh", state=state)
-        self.set_visible_images()
+        self.update()
         if state == "hidden":
             self._active_frame.reload_annotations()
 
@@ -93,7 +93,7 @@ class Viewport():
         if state == "hidden":
             self._active_frame.reload_annotations()
 
-    def set_visible_images(self):
+    def update(self):
         """ Load and unload thumbnails on a canvas resize or scroll event.
         """
         # TODO remove testing code
@@ -114,9 +114,11 @@ class Viewport():
 
     def _update_viewport(self):
         """ Clear out unused faces and populate with visible faces """
+        if not self._grid.is_valid:
+            return
         split = time()
         self._discard_tk_faces()
-        # Unhide any hidden end of row meshes
+        # Display any hidden end of row meshes
         if self._canvas.optional_annotations["mesh"]:
             self._canvas.itemconfig("viewport_mesh", state="normal")
         _timeit("viewport discard", split)
@@ -179,7 +181,7 @@ class Viewport():
         face_index: int
             The face index of the face within the requested frame
         face: :class:`numpy.ndarray`
-            :class:`lib.faces_detect.DetectedFace` object on dimension 0. Jpg thumnail in
+            :class:`lib.faces_detect.DetectedFace` object on dimension 0. Jpg thumbnail in
             dimension 1
 
         Returns
@@ -216,9 +218,9 @@ class Viewport():
         Parameters
         ----------
         face: :class:`lib.faces_detect.DetectedFace`
-            A detected face object to creat the :class:`tools.manual.faceviewer.cache.TkFace` from
+            A detected face object to create the :class:`tools.manual.faceviewer.cache.TkFace` from
         thumbnail: :class:`numpy.ndarray`
-            The jpeg thumbnail for the face
+            The jpg thumbnail for the face
 
         Returns
         -------
@@ -256,7 +258,7 @@ class Viewport():
     def _show_mesh(self, mesh_ids, landmarks):
         """ Display the mesh annotations.
 
-        Paramaters
+        Parameters
         ----------
         mesh_ids: list
             The list of mesh id objects to set coordinates for
@@ -285,7 +287,7 @@ class Viewport():
 
             If the mouse is not over a face, then the frame and face indices will be -1
         """
-        if point_x > self._grid._dimensions[0]:
+        if point_x > self._grid.dimensions[0]:
             retval = np.array((-1, -1, -1, -1))
         else:
             x_idx = np.searchsorted(self._objects.visible_grid[2, 1, :], point_x, side="left") - 1
@@ -360,7 +362,7 @@ class VisibleObjects():
         """ Load and unload thumbnails on a canvas resize or scroll event.
         """
         self._visible_grid, self._visible_faces = self._grid.visible_area
-        required_rows = self._visible_grid.shape[1]
+        required_rows = self._visible_grid.shape[1] if self._grid.is_valid else 0
         existing_rows = len(self._images)
         logger.trace("existing_rows: %s. required_rows: %s", existing_rows, required_rows)
 
@@ -457,7 +459,7 @@ class VisibleObjects():
             ``True`` if the viewport was shifted otherwise ``False``
         """
         current_y = self._top_left[1]
-        required_y = self._visible_grid[3, 0, 0]
+        required_y = self._visible_grid[3, 0, 0] if self._grid.is_valid else 0
         logger.trace("current_y: %s, required_y: %s", current_y, required_y)
         if current_y == required_y:
             logger.trace("No move required")
@@ -594,12 +596,13 @@ class ActiveFrame():
         self._objects = viewport._objects
 
         self._viewport = viewport
+        self._grid = viewport._grid
         self._canvas = viewport._canvas
         self._globals = viewport._canvas._globals
         self._tk_selected_editor = self._canvas._display_frame.tk_selected_action
         self._optional_annotations = self._canvas.optional_annotations
         self._images = []
-        self._meshes = np.array([])  # TODO ????
+        self._meshes = []
         self._faces = []
         self._boxes = []
 
@@ -638,14 +641,20 @@ class ActiveFrame():
         if np.any(self._images):
             self._clear_previous()
 
-        rows, cols = np.where(self._objects.visible_grid[0] == self.frame_index)
-        self._images = self._objects.images[rows, cols]
-        self._meshes = self._objects.meshes[rows, cols]
-        self._faces = self._objects.visible_faces[:, rows, cols].T
+        if self._grid.is_valid:
+            rows, cols = np.where(self._objects.visible_grid[0] == self.frame_index)
+            self._images = self._objects.images[rows, cols]
+            self._meshes = self._objects.meshes[rows, cols]
+            self._faces = self._objects.visible_faces[:, rows, cols].T
+        else:
+            self._images = []
+            self._meshes = []
+            self._faces = []
+
         if not np.any(self._images):
             return
 
-        # self._move_to_top()  # TODO May be able to remove this when we autoscroll on frame change
+        # self._move_to_top()  # TODO Remove this when we autos croll on frame change?
         self._create_new_boxes()
 
         for face_idx, (image_id, mesh_ids, box_id, det_face), in enumerate(zip(self._images,
@@ -676,7 +685,7 @@ class ActiveFrame():
         item_id: int
             The tkinter canvas object identifier for the highlight box
         coordinates: :class:`numpy.ndarray`
-            The (x, y, xx, yy) coordinates of the top left corner of the box
+            The (x, y, x1, y1) coordinates of the top left corner of the box
         """
         self._canvas.coords(item_id, *coordinates)
         self._canvas.itemconfig(item_id, state="normal")
@@ -713,7 +722,7 @@ class ActiveFrame():
         top = self._canvas.coords(self._images[0])[1] / self._canvas.bbox("all")[3]
         if top != self._canvas.yview()[0] and self._canvas.yview()[1] < 1.0:
             self._canvas.yview_moveto(top)
-            self._viewport.set_visible_images()
+            self._viewport.update()
 
     def _create_new_boxes(self):
         """ The highlight boxes (border around selected faces) are the only additional annotations
@@ -737,7 +746,7 @@ class ActiveFrame():
 
     def _update(self):
         """ Update the highlighted annotations for faces in the currently selected frame on an
-        update, add or remove. 
+        update, add or remove.
         if not self._det_faces.tk_edited.get():
             return
         logger.trace("Faces viewer update triggered")
