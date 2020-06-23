@@ -296,6 +296,11 @@ class Viewport():
         logger.trace(retval)
         return retval
 
+    def move_active_to_top(self):
+        """ Check whether the active frame is going off the bottom of the frame and move
+        it to top. """
+        self._active_frame.move_to_top()
+
 
 class VisibleObjects():
     def __init__(self, viewport):
@@ -581,6 +586,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
             return
         self._navigation.stop_playback()
         self._globals.tk_transport_index.set(transport_id)
+        self._viewport.move_active_to_top()
 
 
 class ActiveFrame():
@@ -599,6 +605,7 @@ class ActiveFrame():
         self._grid = viewport._grid
         self._canvas = viewport._canvas
         self._globals = viewport._canvas._globals
+        self._navigation = viewport._canvas._display_frame.navigation
         self._tk_selected_editor = self._canvas._display_frame.tk_selected_action
         self._optional_annotations = self._canvas.optional_annotations
         self._images = []
@@ -654,7 +661,8 @@ class ActiveFrame():
         if not np.any(self._images):
             return
 
-        # self._move_to_top()  # TODO Remove this when we autos croll on frame change?
+        if self._navigation.tk_is_playing.get():
+            self.move_to_top()
         self._create_new_boxes()
 
         for face_idx, (image_id, mesh_ids, box_id, det_face), in enumerate(zip(self._images,
@@ -668,6 +676,7 @@ class ActiveFrame():
             self._show_box(box_id, coords)
             self._show_mesh(mesh_ids, face_idx, det_face[0], top_left)
             self._globals.tk_update_active_viewport.set(False)
+        self._canvas.tag_raise("active_highlighter")
 
     def _clear_previous(self):
         """ Clear the previously highlighted frame """
@@ -716,11 +725,12 @@ class ActiveFrame():
                 self._canvas.itemconfig(mesh_id, state=state, **kwarg)
                 self._canvas.addtag_withtag("active_mesh_{}".format(key), mesh_id)
 
-    def _move_to_top(self):
-        """ Move the currently selected frame's faces to the top of the viewport if they are not
-        already there """
+    def move_to_top(self):
+        """ Move the currently selected frame's faces to the top of the viewport if they are moving
+        off the bottom of the viewer. """
         top = self._canvas.coords(self._images[0])[1] / self._canvas.bbox("all")[3]
-        if top != self._canvas.yview()[0] and self._canvas.yview()[1] < 1.0:
+        bot = (self._canvas.coords(self._images[-1])[1] + self._size) / self._canvas.bbox("all")[3]
+        if top > self._canvas.yview()[0] and bot > self._canvas.yview()[1]:
             self._canvas.yview_moveto(top)
             self._viewport.update()
 

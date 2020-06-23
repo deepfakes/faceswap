@@ -483,7 +483,7 @@ class Grid():
         else:
             top, bottom = self._visible_row_indices
             retval = self._grid[:, top:bottom, :], self._display_faces[:, top:bottom, :]
-        logger.trace(retval)
+        logger.trace([r.shape for r in retval])
         return retval
 
     def update(self):
@@ -493,13 +493,13 @@ class Grid():
         underlying grid for the current filter view and updates the attributes :attr:`_grid`,
         :attr:`_display_faces`, :attr:`_raw_indices`, :attr:`_frames_list` and :attr:`is_valid`
         """
-
         self._raw_indices = self._detected_faces.filter.raw_indices
         self._frames_list = self._detected_faces.filter.frames_list
         self._get_grid()
         self._get_display_faces(self._detected_faces)
         self._canvas.coords("backdrop", 0, 0, *self.dimensions)
-        self._canvas.configure(scrollregion=(self._canvas.bbox("all")))
+        self._canvas.configure(scrollregion=(self._canvas.bbox("backdrop")))
+        self._canvas.yview_moveto(0.0)
 
     def _get_grid(self):
         """ Get the grid information for faces currently displayed in the :class:`FacesViewer`.
