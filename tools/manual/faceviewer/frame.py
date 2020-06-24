@@ -87,7 +87,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             Unused but required
         """
         self._canvas.viewport.update()
-        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+        self._canvas.configure(scrollregion=self._canvas.bbox("backdrop"))
 
     def canvas_scroll(self, direction):
         """ Scroll the canvas on an up/down or page-up/page-down key press.

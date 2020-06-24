@@ -4,9 +4,9 @@
 import logging
 import tkinter as tk
 
+import cv2
 import numpy as np
-
-from .cache import TKFace
+from PIL import Image, ImageTk
 
 from time import time
 
@@ -36,6 +36,7 @@ class Viewport():
         logger.debug("Initializing: %s: (canvas: %s)", self.__class__.__name__, canvas)
         self._canvas = canvas
         self._grid = canvas.grid
+        self._tk_selected_editor = canvas._display_frame.tk_selected_action
         self._landmark_mapping = dict(mouth=(48, 68),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
@@ -49,6 +50,8 @@ class Viewport():
         self._objects = VisibleObjects(self)
         self._hoverbox = HoverBox(self)
         self._active_frame = ActiveFrame(self)
+        self._tk_selected_editor.trace(
+            "w", lambda *e: self._active_frame.reload_annotations(force=True))
 
     @property
     def face_size(self):
@@ -69,6 +72,11 @@ class Viewport():
     def hover_box(self):
         """ :class:`HoverBox`: The hover box for the viewport. """
         return self._hoverbox
+
+    @property
+    def selected_editor(self):
+        """ str: The currently selected editor. """
+        return self._tk_selected_editor.get().lower()
 
     def toggle_mesh(self, state):
         """ Toggles the mesh optional annotations off and on """
@@ -110,7 +118,7 @@ class Viewport():
         _timeit("set_vis total", start)
         # print("category", "action", "count", "total", "average", "average_per_face")
         # for k, v in _TIMES.items():
-        #     print(k, *reversed(v), v[0] / v[1], v[0] / _TIMES["set_vis preamble"][1])
+        #    print(k, *reversed(v), v[0] / v[1], v[0] / _TIMES["set_vis preamble"][1])
 
     def _update_viewport(self):
         """ Clear out unused faces and populate with visible faces """
@@ -203,14 +211,14 @@ class Viewport():
                 det_face.aligned = dict()
             else:
                 det_face, image = face
-            tk_face = self._get_tk_face_object(det_face, image)
+            tk_face = self._get_tk_face_object(det_face, image, is_active)
             self._tk_faces[key] = tk_face
         else:
             logger.trace("tk_face exists: %s", key)
             tk_face = self._tk_faces[key]
         return tk_face
 
-    def _get_tk_face_object(self, face, thumbnail):
+    def _get_tk_face_object(self, face, thumbnail, is_active):
         """ Obtain an existing unallocated, or a newly created
         :class:`tools.manual.faceviewer.cache.TkFace` and populate it with face information from
         the requested frame and face index.
@@ -221,6 +229,8 @@ class Viewport():
             A detected face object to create the :class:`tools.manual.faceviewer.cache.TkFace` from
         thumbnail: :class:`numpy.ndarray`
             The jpg thumbnail for the face
+        is_active: bool
+            ``True`` if the face in the currently active frame otherwise ``False``
 
         Returns
         -------
@@ -228,7 +238,8 @@ class Viewport():
             An object for displaying in the faces viewer canvas populated with the aligned mesh
             landmarks and face thumbnail
         """
-        if self._canvas.optional_annotations["mask"]:
+        if self._canvas.optional_annotations["mask"] or (is_active and
+                                                         self.selected_editor == "mask"):
             mask = face.mask.get(self._canvas.selected_mask, None)
         else:
             mask = None
@@ -603,11 +614,12 @@ class ActiveFrame():
 
         self._viewport = viewport
         self._grid = viewport._grid
+        self._tk_faces = viewport._tk_faces
         self._canvas = viewport._canvas
         self._globals = viewport._canvas._globals
         self._navigation = viewport._canvas._display_frame.navigation
         self._tk_selected_editor = self._canvas._display_frame.tk_selected_action
-        self._optional_annotations = self._canvas.optional_annotations
+        self._last_frame_idx = -1
         self._images = []
         self._meshes = []
         self._faces = []
@@ -634,10 +646,9 @@ class ActiveFrame():
         return self._viewport.face_size
 
     @property
-    # TODO Change
-    def face_count(self):
-        """ int: The count of faces in the currently selected frame. """
-        return len(self._images)
+    def _optional_annotations(self):
+        """ dict: The currently selected optional annotations """
+        return self._canvas.optional_annotations
 
     def reload_annotations(self, force=False):
         """ Refresh the highlighted annotations for faces in the currently selected frame on an
@@ -675,16 +686,23 @@ class ActiveFrame():
             self._canvas.itemconfig(image_id, image=tk_face.photo)
             self._show_box(box_id, coords)
             self._show_mesh(mesh_ids, face_idx, det_face[0], top_left)
-            self._globals.tk_update_active_viewport.set(False)
         self._canvas.tag_raise("active_highlighter")
+        self._globals.tk_update_active_viewport.set(False)
 
     def _clear_previous(self):
         """ Clear the previously highlighted frame """
         self._canvas.itemconfig("active_highlighter", state="hidden")
+
         for key in ("polygon", "line"):
             tag = "active_mesh_{}".format(key)
             self._canvas.itemconfig(tag, **self._viewport.mesh_kwargs[key])
             self._canvas.dtag(tag)
+
+        if self._viewport.selected_editor == "mask" and not self._optional_annotations["mask"]:
+            for key, tk_face in self._tk_faces.items():
+                if key.startswith("{}_".format(self._last_frame_idx)):
+                    tk_face.update_mask(None)
+        self._last_frame_idx = self.frame_index
 
     def _show_box(self, item_id, coordinates):
         """ Display the highlight box around the given coordinates.
@@ -728,6 +746,7 @@ class ActiveFrame():
     def move_to_top(self):
         """ Move the currently selected frame's faces to the top of the viewport if they are moving
         off the bottom of the viewer. """
+        # TODO Catch position if play hit when active frame not in view
         top = self._canvas.coords(self._images[0])[1] / self._canvas.bbox("all")[3]
         bot = (self._canvas.coords(self._images[-1])[1] + self._size) / self._canvas.bbox("all")[3]
         if top > self._canvas.yview()[0] and bot > self._canvas.yview()[1]:
@@ -792,3 +811,106 @@ class ActiveFrame():
         """
         # TODO
         pass
+
+
+class TKFace():
+    """ An object that holds a single :class:`tkinter.PhotoImage` face, ready for placement in the
+    :class:`~tools.manual.faceviewer.frames.FacesViewer` canvas, along with the face's associated
+    mesh annotation coordinates.
+
+    Parameters
+    ----------
+    size: int, optional
+        The pixel size of the face image. Default: `128`
+    face: :class:`numpy.ndarray` or ``None``, optional
+        The face, sized correctly, to create a :class:`tkinter.PhotoImage` from. Pass ``None`` if
+        an empty photo image should be created. Default: ``None``
+    mask: :class:`numpy.ndarray` or ``None``, optional
+        The mask to be applied to the face image. Pass ``None`` if no mask is to be used.
+        Default ``None``
+    """
+    def __init__(self, face, size=128, mask=None):
+        logger.trace("Initializing %s: (face: %s, size: %s, mask: %s)",
+                     self.__class__.__name__,
+                     face if face is None else face.shape,
+                     size,
+                     mask if mask is None else mask.shape)
+        self._size = size
+        if face.ndim == 2 and face.shape[1] == 1:
+            self._face = self._image_from_jpg(face)
+        else:
+            self._face = face[..., 2::-1]
+        self._photo = ImageTk.PhotoImage(self._generate_tk_face_data(mask))
+
+        logger.trace("Initialized %s", self.__class__.__name__)
+
+    # << PUBLIC PROPERTIES >> #
+    @property
+    def photo(self):
+        """ :class:`tkinter.PhotoImage`: The face in a format that can be placed on the
+        :class:`~tools.manual.manual.FaceViewer` canvas. """
+        return self._photo
+
+    # << PUBLIC METHODS >> #
+    def update(self, face, mask):
+        """ Update the :attr:`face`, :attr:`mesh_points` and attr:`mesh_is_poly` objects with the
+        given information.
+
+        Parameters
+        ----------
+        face: :class:`numpy.ndarray`
+            The face, sized correctly, to be updated in :attr:`tk_faces`
+        mask: :class:`numpy.ndarray` or ``None``
+            The mask to be applied to the face image. Pass ``None`` if no mask is to be used
+        """
+        self._face = face[..., 2::-1]
+        self._photo.paste(self._generate_tk_face_data(mask))
+
+    def update_mask(self, mask):
+        """ Update the mask in the 4th channel of :attr:`face` to the given mask.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray` or ``None``
+            The mask to be applied to the face image. Pass ``None`` if no mask is to be used
+        """
+        self._photo.paste(self._generate_tk_face_data(mask))
+
+    # << PRIVATE METHODS >> #
+    def _image_from_jpg(self, face):
+        """ Convert an encoded jpg into 3 channel BGR image.
+
+        Parameters
+        ----------
+        face: :class:`numpy.ndarray`
+            The encoded jpg as a two dimension numpy array
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The decoded jpg as a 3 channel BGR image
+        """
+        face = cv2.imdecode(face, cv2.IMREAD_UNCHANGED)
+        interp = cv2.INTER_CUBIC if face.shape[0] < self._size else cv2.INTER_AREA
+        if face.shape[0] != self._size:
+            face = cv2.resize(face, (self._size, self._size), interpolation=interp)
+        return face[..., 2::-1]
+
+    def _generate_tk_face_data(self, mask):
+        """ Create the :class:`tkinter.PhotoImage` face for the given face image.
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray` or ``None``
+            The mask to add to the image. ``None`` if a mask is not being used
+
+        Returns
+        -------
+        :class:`tkinter.PhotoImage`
+            The face formatted for the :class:`~tools.manual.manual.FaceViewer` canvas.
+        """
+        mask = np.ones(self._face.shape[:2], dtype="uint8") * 255 if mask is None else mask
+        if mask.shape[0] != self._size:
+            mask = cv2.resize(mask, self._face.shape[:2], interpolation=cv2.INTER_AREA)
+        img = np.concatenate((self._face, mask[..., None]), axis=-1)
+        return Image.fromarray(img)
