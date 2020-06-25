@@ -89,6 +89,12 @@ class DetectedFaces():
         meaning a GUI redraw needs to be triggered. """
         return self._tk_vars["edited"]
 
+    @property
+    def tk_face_count_changed(self):
+        """ :class:`tkinter.BooleanVar`: The variable indicating whether a face has been added or
+        removed meaning the :class:`FaceViewer` grid redraw needs to be triggered. """
+        return self._tk_vars["face_count_changed"]
+
     # << STATISTICS >> #
     @property
     def available_masks(self):
@@ -244,7 +250,7 @@ class DetectedFaces():
             The internal variable name as key with the tkinter variable as value
         """
         retval = dict()
-        for name in ("unsaved", "edited"):
+        for name in ("unsaved", "edited", "face_count_changed"):
             var = tk.BooleanVar()
             var.set(False)
             retval[name] = var
@@ -453,12 +459,23 @@ class FaceUpdate():
         return self._det_faces.tk_edited
 
     @property
+    def _tk_face_count_changed(self):
+        """ :class:`tkinter.BooleanVar`: The variable indicating whether an edit has occurred
+        meaning a GUI redraw needs to be triggered.
+
+        Notes
+        -----
+        The variable is still a ``None`` when this class is initialized, so referenced explicitly.
+        """
+        return self._det_faces.tk_face_count_changed
+
+    @property
     def _zoomed_size(self):
         """ int: The size of the face when the editor is in zoomed in mode
         """
         return self._det_faces._zoomed_size  # pylint:disable=protected-access
 
-    def _current_faces_at_index(self, frame_index):
+    def _faces_at_frame_index(self, frame_index):
         """ Checks whether there are already new alignments in :attr:`_alignments`. If not
         then saved alignments are copied to :attr:`_updated_faces` ready for update.
 
@@ -467,7 +484,6 @@ class FaceUpdate():
         frame_index: int
             The frame index to check whether there are updated alignments available
         """
-        # TODO This may now be obsolete
         self._updated_frame_indices.add(frame_index)
         retval = self._frame_faces[frame_index]
         return retval
@@ -489,10 +505,11 @@ class FaceUpdate():
         height: int
             The height of the bounding box
         """
-        faces = self._current_faces_at_index(frame_index)
+        faces = self._faces_at_frame_index(frame_index)
         faces.append(DetectedFace())
         face_index = len(faces) - 1
         self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
+        self._tk_face_count_changed.set(True)
 
     def delete(self, frame_index, face_index):
         """ Delete the :class:`~lib.faces_detect.DetectedFace` object for the given frame and face
@@ -506,9 +523,9 @@ class FaceUpdate():
             The face index within the frame
         """
         logger.debug("Deleting face at frame index: %s face index: %s", frame_index, face_index)
-        faces = self._current_faces_at_index(frame_index)
+        faces = self._faces_at_frame_index(frame_index)
         del faces[face_index]
-        self._tk_edited.set(True)
+        self._tk_face_count_changed.set(True)
         self._globals.tk_update.set(True)
 
     def bounding_box(self, frame_index, face_index, pnt_x, width, pnt_y, height, aligner="FAN"):
@@ -535,7 +552,7 @@ class FaceUpdate():
         """
         logger.trace("frame_index: %s, face_index %s, pnt_x %s, width %s, pnt_y %s, height %s, "
                      "aligner: %s", frame_index, face_index, pnt_x, width, pnt_y, height, aligner)
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.x = pnt_x
         face.w = width
         face.y = pnt_y
@@ -564,7 +581,7 @@ class FaceUpdate():
         is_zoomed: bool
             ``True`` if landmarks are being adjusted on a zoomed image otherwise ``False``
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         if is_zoomed:
             landmark = face.aligned_landmarks[landmark_index]
             landmark += (shift_x, shift_y)
@@ -602,7 +619,7 @@ class FaceUpdate():
         Whilst the bounding box does not need to be shifted, it is anyway, to ensure that it is
         aligned with the newly adjusted landmarks.
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.x += shift_x
         face.y += shift_y
         face.landmarks_xy += (shift_x, shift_y)
@@ -626,7 +643,7 @@ class FaceUpdate():
         center: :class:`numpy.ndarray`
             The center point of the Landmark's Extract Box
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         rot_mat = cv2.getRotationMatrix2D(tuple(center), angle, 1.)
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
@@ -650,7 +667,7 @@ class FaceUpdate():
         center: :class:`numpy.ndarray`
             The center point of the Landmark's Extract Box
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
         face.mask = self._extractor.get_masks(frame_index, face_index)
         self._tk_edited.set(True)
@@ -671,7 +688,7 @@ class FaceUpdate():
         mask_type: str
             The name of the mask that is to be replaced
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.mask[mask_type].replace_mask(mask)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
@@ -689,7 +706,7 @@ class FaceUpdate():
             frame with alignments
         """
         logger.debug("frame: %s, direction: %s", frame_index, direction)
-        faces = self._current_faces_at_index(frame_index)
+        faces = self._faces_at_frame_index(frame_index)
         frames_with_faces = [idx for idx, faces in enumerate(self._det_faces.current_faces)
                              if len(faces) > 0]
         if direction == "prev":
@@ -702,7 +719,7 @@ class FaceUpdate():
             # No previous/next frame available
             return
         logger.debug("Copying alignments from frame %s to frame: %s", idx, frame_index)
-        faces.extend(deepcopy(self._current_faces_at_index(idx)))
+        faces.extend(deepcopy(self._faces_at_frame_index(idx)))
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 

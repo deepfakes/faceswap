@@ -702,8 +702,10 @@ class ActiveFrame():
         """ Move the currently selected frame's faces to the top of the viewport if they are moving
         off the bottom of the viewer. """
         # TODO Catch position if play hit when active frame not in view
-        top = self._canvas.coords(self._images[0])[1] / self._canvas.bbox("all")[3]
-        bot = (self._canvas.coords(self._images[-1])[1] + self._size) / self._canvas.bbox("all")[3]
+        # Also occurs when first frame has no face, filter changed, then click on face (lod)
+        height = self._canvas.bbox("backdrop")[3]
+        top = self._canvas.coords(self._images[0])[1] / height
+        bot = (self._canvas.coords(self._images[-1])[1] + self._size) / height
         if top > self._canvas.yview()[0] and bot > self._canvas.yview()[1]:
             self._canvas.yview_moveto(top)
             self._viewport.update()

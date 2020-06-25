@@ -8,10 +8,9 @@ from math import floor, ceil
 
 import numpy as np
 
-from lib.gui.custom_widgets import StatusBar, Tooltip
+from lib.gui.custom_widgets import RightClickMenu, StatusBar, Tooltip
 from lib.gui.utils import get_images
 
-from .display import ContextMenu
 from .viewport import Viewport
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -255,11 +254,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._grid = Grid(self, detected_faces)
         self._view = Viewport(self, detected_faces.tk_edited)
 
-        ContextMenu(self)
+        ContextMenu(self, detected_faces)
         self._bind_mouse_wheel_scrolling()
         # Set in load_frames
         self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
-        self._set_tk_callbacks()
+        self._set_tk_callbacks(detected_faces)
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -291,7 +290,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
                 for key, val in self._display_frame.tk_control_colors.items()}
 
     # << CALLBACK FUNCTIONS >> #
-    def _set_tk_callbacks(self):
+    def _set_tk_callbacks(self, detected_faces):
         """ Set the tkinter variable call backs.
 
         Switches the Filter view when the filter drop down is updated.
@@ -299,7 +298,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         Updates the mask type when the user changes the selected mask types
         Toggles the face viewer annotations on an optional annotation button press.
         """
-        self._globals.tk_filter_mode.trace("w", lambda *e: self.switch_filter())
+        var_filt = self._globals.tk_filter_mode
+        var_det = detected_faces.tk_face_count_changed
+        var_filt.trace("w", lambda *e, v=var_filt: self.refresh_grid(v))
+        var_det.trace("w", lambda *e, v=var_det: self.refresh_grid(v, retain_position=True))
+
         self._display_frame.tk_control_colors["Mesh"].trace("w",
                                                             lambda *e: self.update_mesh_color())
         self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
@@ -307,12 +310,17 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
         self.bind("<Configure>", lambda *e: self._view.update())
 
-    def switch_filter(self):
-        """ Update the :class:`FacesViewer` canvas for the active filter.
-            Executed when the user changes the selected filter pull down.
-         """
+    def refresh_grid(self, trigger_var, retain_position=False):
+        """ Recalculate the full grid and redraw. Used when the active filter pull down is used or
+        a face has been added or removed. """
+        if not trigger_var.get():
+            return
+        move_to = self.yview()[0] if retain_position else 0.0
         self._grid.update()
+        if move_to != 0.0:
+            self.yview_moveto(move_to)
         self._view.update()
+        trigger_var.set(False)
 
     def _update_mask_type(self):
         """ Update the displayed mask in the :class:`FacesViewer` canvas when the user changes
@@ -483,7 +491,7 @@ class Grid():
         else:
             top, bottom = self._visible_row_indices
             retval = self._grid[:, top:bottom, :], self._display_faces[:, top:bottom, :]
-        logger.trace([r.shape for r in retval])
+        logger.trace([r if r is None else r.shape for r in retval])
         return retval
 
     def update(self):
@@ -601,3 +609,50 @@ class Grid():
         retval = self._frames_list.index(frame_index) if frame_index in self._frames_list else None
         logger.trace("frame_index: %s, transport_index: %s", frame_index, retval)
         return retval
+
+
+class ContextMenu():  # pylint:disable=too-few-public-methods
+    """  Enables a right click context menu for the :class:`~tool.manual.FacesViewer`.
+
+    Parameters
+    ----------
+    canvas: :class:`tkinter.Canvas`
+        The :class:`~tools.manual.FacesViewer` canvas
+    """
+    def __init__(self, canvas, detected_faces):
+        logger.debug("Initializing: %s (canvas: %s, detected_faces: %s)",
+                     self.__class__.__name__, canvas, detected_faces)
+        self._canvas = canvas
+        self._detected_faces = detected_faces
+        self._menu = RightClickMenu(["Delete Face"], [self._delete_face])
+        self._frame_index = None
+        self._face_index = None
+        self._canvas.bind("<Button-2>" if platform.system() == "Darwin" else "<Button-3>",
+                          self._pop_menu)
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    def _pop_menu(self, event):
+        """ Pop up the context menu on a right click mouse event.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The mouse event that has triggered the pop up menu
+        """
+        frame_idx, face_idx = self._canvas.viewport.face_from_point(
+            self._canvas.canvasx(event.x), self._canvas.canvasy(event.y))[:2]
+        if frame_idx == -1:
+            logger.trace("No valid item under mouse")
+            self._frame_index = self._face_index = None
+            return
+        self._frame_index = frame_idx
+        self._face_index = face_idx
+        logger.trace("Popping right click menu")
+        self._menu.popup(event)
+
+    def _delete_face(self):
+        """ Delete the selected face on a right click mouse delete action. """
+        logger.trace("Right click delete received. frame_id: %s, face_id: %s",
+                     self._frame_index, self._face_index)
+        self._detected_faces.update.delete(self._frame_index, self._face_index)
+        self._frame_index = self._face_index = None
