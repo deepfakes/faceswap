@@ -57,7 +57,7 @@ class Viewport():
     @property
     def face_size(self):
         """ int: The pixel size of each thumbnail """
-        return self._canvas._size
+        return self._grid._face_size
 
     @property
     def mesh_kwargs(self):
@@ -101,6 +101,11 @@ class Viewport():
 
         if state == "hidden":
             self._active_frame.reload_annotations()
+
+    def reset(self):
+        """ Reset the viewport on a grid change """
+        self._landmarks = dict()
+        self._tk_faces = dict()
 
     def update(self):
         """ Load and unload thumbnails on a canvas resize or scroll event.
@@ -302,8 +307,8 @@ class Viewport():
         if point_x > self._grid.dimensions[0]:
             retval = np.array((-1, -1, -1, -1))
         else:
-            x_idx = np.searchsorted(self._objects.visible_grid[2, 1, :], point_x, side="left") - 1
-            y_idx = np.searchsorted(self._objects.visible_grid[3, :, 1], point_y, side="left") - 1
+            x_idx = np.searchsorted(self._objects.visible_grid[2, 0, :], point_x, side="left") - 1
+            y_idx = np.searchsorted(self._objects.visible_grid[3, :, 0], point_y, side="left") - 1
             retval = self._objects.visible_grid[:, y_idx, x_idx]
         logger.trace(retval)
         return retval
@@ -379,6 +384,9 @@ class VisibleObjects():
         """ Load and unload thumbnails on a canvas resize or scroll event.
         """
         self._visible_grid, self._visible_faces = self._grid.visible_area
+        if (isinstance(self._images, np.ndarray) and
+                self._visible_grid.shape[-1] != self._images.shape[-1]):
+            self._reset_layout()
         required_rows = self._visible_grid.shape[1] if self._grid.is_valid else 0
         existing_rows = len(self._images)
         logger.trace("existing_rows: %s. required_rows: %s", existing_rows, required_rows)
@@ -392,6 +400,34 @@ class VisibleObjects():
             self._add_rows(existing_rows, required_rows)
 
         self._shift()
+
+    def _reset_layout(self):
+        """ On a column count change, the face size has changed.
+
+        Add any extra objects to :attr:`_images` and :attr:`_meshes` required to fit the new
+        sized grid,
+        Resize all existing objects to the new grid layout
+        """
+        self._size = self._viewport.face_size
+        columns = self._grid.columns_rows[0]
+        remainder = self._images.size % columns
+        if remainder != 0:
+            images = np.array([self._canvas.create_image(0, 0,
+                                                         anchor=tk.NW,
+                                                         tags=["viewport", "viewport_image"])
+                               for _ in range(remainder, columns)])
+            meshes = np.array([self._create_mesh() for _ in range(remainder, columns)])
+            self._images = np.concatenate((self._images.flatten(), images)).reshape(-1, columns)
+            self._meshes = np.concatenate((self._meshes.flatten(), meshes)).reshape(-1, columns)
+        else:
+            self._images = self._images.reshape(-1, columns)
+            self._meshes = self._meshes.reshape(-1, columns)
+
+        base_coords = [(col * self._size, 0) for col in range(columns)]
+        for idx, row in enumerate(self._images):
+            y_coord = base_coords[0][1] + (idx * self._size)
+            for image_id, coords in zip(row, base_coords):
+                self._canvas.coords(image_id, coords[0], y_coord)
 
     def _add_rows(self, existing_rows, required_rows):
         """ Add objects to the viewport
@@ -792,28 +828,6 @@ class ActiveFrame():
                     self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
                 self._canvas.itemconfig(mesh_id, state=state, **kwarg)
                 self._canvas.addtag_withtag("active_mesh_{}".format(key), mesh_id)
-
-    def _add_remove_face(self):
-        """ Check the number of displayed faces against the number of faces stored in the
-        alignments data for the currently selected frame, and add or remove if appropriate.
-        alignment_faces = len(self._det_faces.current_faces[self.frame_index])
-        logger.trace("alignment_faces: %s, face_count: %s", alignment_faces, self.face_count)
-        if alignment_faces > self.face_count:
-            logger.debug("Adding face")
-            self._canvas.update_face.add(self.frame_index)
-            retval = True
-        elif alignment_faces < self._canvas.active_frame.face_count:
-            logger.debug("Removing face")
-            self._canvas.update_face.remove(*self._det_faces.update.last_updated_face)
-            retval = True
-        else:
-            logger.trace("Face count unchanged")
-            retval = False
-        logger.trace(retval)
-        return retval
-        """
-        # TODO
-        pass
 
 
 class TKFace():

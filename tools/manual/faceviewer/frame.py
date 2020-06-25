@@ -8,8 +8,8 @@ from math import floor, ceil
 
 import numpy as np
 
-from lib.gui.custom_widgets import RightClickMenu, StatusBar, Tooltip
-from lib.gui.utils import get_images
+from lib.gui.custom_widgets import RightClickMenu, Tooltip
+from lib.gui.utils import get_config, get_images
 
 from .viewport import Viewport
 
@@ -29,18 +29,15 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
-    size: int
-        The size, in pixels, to display the thumbnail images at
     """
-    def __init__(self, parent, tk_globals, detected_faces, display_frame, size):
+    def __init__(self, parent, tk_globals, detected_faces, display_frame):
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, detected_faces: %s, "
-                     "display_frame: %s, size: %s)", self.__class__.__name__, parent, tk_globals,
-                     detected_faces, display_frame, size)
+                     "display_frame: %s)", self.__class__.__name__, parent, tk_globals,
+                     detected_faces, display_frame)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._actions_frame = FacesActionsFrame(self)
 
-        progress_bar = StatusBar(parent, hide_status=True)
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack_propagate(0)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -48,9 +45,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                                    tk_globals,
                                    self._actions_frame._tk_vars,
                                    detected_faces,
-                                   display_frame,
-                                   progress_bar,
-                                   size)
+                                   display_frame)
         self._add_scrollbar()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -230,22 +225,15 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
-    progress_bar: :class:`~lib.gui.custom_widgets.StatusBar`
-        The progress bar object that displays in the bottom right of the GUI
-    size: int
-        The size, in pixels, to display the thumbnail images at
     """
-    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, display_frame,
-                 progress_bar, size):
+    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, display_frame):
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, tk_action_vars: %s, "
-                     "detected_faces: %s, display_frame: %s, progress_bar: %s, size: %s)",
-                     self.__class__.__name__, parent, tk_globals, tk_action_vars, detected_faces,
-                     display_frame, progress_bar, size)
+                     "detected_faces: %s, display_frame: %s)", self.__class__.__name__, parent,
+                     tk_globals, tk_action_vars, detected_faces, display_frame)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
-        self._size = 128  # TODO Config
+        self._sizes = dict(tiny=32, small=64, medium=96, large=128, extralarge=192)
 
-        self._progress_bar = progress_bar
         self._globals = tk_globals
         self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
                                          if key != "lockout"}
@@ -261,6 +249,13 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._set_tk_callbacks(detected_faces)
 
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def face_size(self):
+        """ int: The currently selected thumbnail size in pixels """
+        scaling = get_config().scaling_factor
+        size = self._sizes[self._globals.tk_faces_size.get().lower().replace(" ", "")]
+        return int(round(size * scaling))
 
     @property
     def viewport(self):
@@ -298,10 +293,10 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         Updates the mask type when the user changes the selected mask types
         Toggles the face viewer annotations on an optional annotation button press.
         """
-        var_filt = self._globals.tk_filter_mode
-        var_det = detected_faces.tk_face_count_changed
-        var_filt.trace("w", lambda *e, v=var_filt: self.refresh_grid(v))
-        var_det.trace("w", lambda *e, v=var_det: self.refresh_grid(v, retain_position=True))
+        for var in (self._globals.tk_faces_size, self._globals.tk_filter_mode):
+            var.trace("w", lambda *e, v=var: self.refresh_grid(v))
+        var = detected_faces.tk_face_count_changed
+        var.trace("w", lambda *e, v=var: self.refresh_grid(v, retain_position=True))
 
         self._display_frame.tk_control_colors["Mesh"].trace("w",
                                                             lambda *e: self.update_mesh_color())
@@ -315,12 +310,16 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         a face has been added or removed. """
         if not trigger_var.get():
             return
+        size_change = isinstance(trigger_var, tk.StringVar)
         move_to = self.yview()[0] if retain_position else 0.0
         self._grid.update()
         if move_to != 0.0:
             self.yview_moveto(move_to)
+        if size_change:
+            self._view.reset()
         self._view.update()
-        trigger_var.set(False)
+        if not size_change:
+            trigger_var.set(False)
 
     def _update_mask_type(self):
         """ Update the displayed mask in the :class:`FacesViewer` canvas when the user changes
@@ -420,8 +419,6 @@ class Grid():
     def __init__(self, canvas, detected_faces):
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
-        # TODO Variable size
-        self._size = canvas._size
         self._canvas = canvas
         self._detected_faces = detected_faces
         self._raw_indices = detected_faces.filter.raw_indices
@@ -436,6 +433,7 @@ class Grid():
                                       jaw=(0, 17),
                                       chin=(8, 11))
         self._is_valid = False
+        self._face_size = None
         self._grid = None
         self._display_faces = None
 
@@ -458,7 +456,7 @@ class Grid():
     def dimensions(self):
         """ tuple: The (`width`, `height`) required to hold all display images. """
         if self._is_valid:
-            retval = tuple(dim * self._size for dim in reversed(self._grid.shape[1:]))
+            retval = tuple(dim * self._face_size for dim in reversed(self._grid.shape[1:]))
         else:
             retval = (0, 0)
         return retval
@@ -469,7 +467,7 @@ class Grid():
         currently in the viewable area.
         """
         height = self.dimensions[1]
-        visible = (max(0, floor(height * self._canvas.yview()[0]) - self._size),
+        visible = (max(0, floor(height * self._canvas.yview()[0]) - self._face_size),
                    ceil(height * self._canvas.yview()[1]))
         logger.trace("visible: %s", visible)
         y_points = self._grid[3, :, 1]
@@ -501,6 +499,7 @@ class Grid():
         underlying grid for the current filter view and updates the attributes :attr:`_grid`,
         :attr:`_display_faces`, :attr:`_raw_indices`, :attr:`_frames_list` and :attr:`is_valid`
         """
+        self._face_size = self._canvas.face_size
         self._raw_indices = self._detected_faces.filter.raw_indices
         self._frames_list = self._detected_faces.filter.frames_list
         self._get_grid()
@@ -526,12 +525,12 @@ class Grid():
             self._grid = None
             return
         x_coords = np.linspace(0,
-                               labels.shape[2] * self._size,
+                               labels.shape[2] * self._face_size,
                                num=labels.shape[2],
                                endpoint=False,
                                dtype="int")
         y_coords = np.linspace(0,
-                               labels.shape[1] * self._size,
+                               labels.shape[1] * self._face_size,
                                num=labels.shape[1],
                                endpoint=False,
                                dtype="int")
@@ -554,7 +553,7 @@ class Grid():
         self._is_valid = face_count != 0
         if not self._is_valid:
             return None
-        columns = self._canvas.winfo_width() // self._size
+        columns = self._canvas.winfo_width() // self._face_size
         rows = ceil(face_count / columns)
         padding = [-1 for _ in range(columns - (face_count % columns))]
 

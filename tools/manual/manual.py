@@ -66,8 +66,7 @@ class Manual(tk.Tk):
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        self._globals,
                                        self._det_faces,
-                                       self._display,
-                                       arguments.face_size)
+                                       self._display)
         self._display.tk_selected_action.set("View")
 
         self.bind("<Key>", self._handle_key_press)
@@ -270,11 +269,13 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         The Traceback must be set after the panel has first been packed as otherwise it interferes
         with the loading of the faces pane.
         """
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         panels = dict()
         for name, editor in self._display_frame.editors.items():
             logger.debug("Initializing control panel for '%s' editor", name)
             controls = editor.controls
-            panel = ControlPanel(self, controls["controls"],
+            panel = ControlPanel(frame, controls["controls"],
                                  option_columns=3,
                                  columns=1,
                                  max_columns=1,
@@ -284,7 +285,23 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
                                  scrollbar=False)
             panel.pack_forget()
             panels[name] = panel
+        self._initialize_face_options()
         return panels
+
+    def _initialize_face_options(self):
+        """ TODO """
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
+        size_frame = ttk.Frame(frame)
+        size_frame.pack(side=tk.LEFT)
+        lbl = ttk.Label(size_frame, text="Face Size:")
+        lbl.pack(side=tk.LEFT)
+        cmb = ttk.Combobox(size_frame,
+                           value=["Tiny", "Small", "Medium", "Large", "Extra Large"],
+                           state="readonly",
+                           textvariable=self._globals.tk_faces_size)
+        self._globals.tk_faces_size.set("Medium")
+        cmb.pack(side=tk.RIGHT, padx=5)
 
     def _set_tk_callbacks(self):
         """ Sets the callback to change to the relevant control panel options when the selected
@@ -354,6 +371,7 @@ class TkGlobals():
         self._tk_update_active_viewport.set(False)
 
         self._tk_filter_mode = tk.StringVar()
+        self._tk_faces_size = tk.StringVar()
         self._tk_is_zoomed = tk.BooleanVar()
         self._tk_is_zoomed.set(False)
 
@@ -436,6 +454,12 @@ class TkGlobals():
         """ :class:`tkinter.StringVar`: The variable holding the currently selected navigation
         filter mode. """
         return self._tk_filter_mode
+
+    @property
+    def tk_faces_size(self):
+        """ :class:`tkinter.StringVar`: The variable holding the currently selected Faces Viewer
+        thumbnail size. """
+        return self._tk_faces_size
 
     @property
     def is_video(self):
