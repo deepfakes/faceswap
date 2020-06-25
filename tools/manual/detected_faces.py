@@ -321,9 +321,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
-        to_save = [(idx, faces) for idx, faces in zip(
-            list(self._updated_frame_indices),
-            np.array(self._frame_faces)[np.array(self._updated_frame_indices)])]
+        to_save = zip(list(self._updated_frame_indices),
+                      np.array(self._frame_faces)[np.array(self._updated_frame_indices)])
         logger.verbose("Saving alignments for %s updated frames", len(to_save))
 
         for idx, faces in to_save:
