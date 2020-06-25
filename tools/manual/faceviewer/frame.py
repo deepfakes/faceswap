@@ -253,7 +253,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
         self._display_frame = display_frame
         self._grid = Grid(self, detected_faces)
-        self._view = Viewport(self)
+        self._view = Viewport(self, detected_faces.tk_edited)
 
         ContextMenu(self)
         self._bind_mouse_wheel_scrolling()
@@ -496,7 +496,7 @@ class Grid():
         self._raw_indices = self._detected_faces.filter.raw_indices
         self._frames_list = self._detected_faces.filter.frames_list
         self._get_grid()
-        self._get_display_faces(self._detected_faces)
+        self._get_display_faces()
         self._canvas.coords("backdrop", 0, 0, *self.dimensions)
         self._canvas.configure(scrollregion=(self._canvas.bbox("backdrop")))
         self._canvas.yview_moveto(0.0)
@@ -556,7 +556,7 @@ class Grid():
         logger.debug(labels.shape)
         return labels
 
-    def _get_display_faces(self, detected_faces):
+    def _get_display_faces(self):
         """ Get the detected faces for the current filter and arrange to grid.
 
         Returns
@@ -572,13 +572,13 @@ class Grid():
             logger.debug("Setting display_faces to None for no faces.")
             self._display_faces = None
             return
-        current_faces = detected_faces.current_faces
+        current_faces = self._detected_faces.current_faces
         columns, rows = self.columns_rows
         face_count = len(self._raw_indices["frame"])
         padding = [None for _ in range(face_count, columns * rows)]
         self._display_faces = np.array(
             [[None if idx is None else current_faces[idx][face_idx],
-              None if idx is None else detected_faces.get_thumbnail(idx, face_idx)]
+              None if idx is None else self._detected_faces.get_thumbnail(idx, face_idx)]
              for idx, face_idx
              in zip(self._raw_indices["frame"] + padding, self._raw_indices["face"] + padding)],
             dtype="object").reshape(rows, columns, 2).transpose(2, 0, 1)

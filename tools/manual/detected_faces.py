@@ -46,8 +46,8 @@ class DetectedFaces():
                      "extractor: %s)", self.__class__.__name__, tk_globals, alignments_path,
                      input_location, extractor)
         self._globals = tk_globals
-        self._saved_faces = []
-        self._updated_faces = []
+        self._frame_faces = []
+        self._updated_frame_indices = set()
         self._extract_size = min(self._globals.frame_display_dims)
 
         self._alignments = self._get_alignments(alignments_path, input_location)
@@ -100,8 +100,7 @@ class DetectedFaces():
     def current_faces(self):
         """ list: The most up to date full list of :class:`~lib.faces_detect.DetectedFace`
         objects. """
-        return [saved_faces if updated_faces is None else updated_faces
-                for saved_faces, updated_faces in zip(self._saved_faces, self._updated_faces)]
+        return self._frame_faces
 
     @property
     def video_meta_data(self):
@@ -121,16 +120,26 @@ class DetectedFaces():
     def is_frame_updated(self, frame_index):
         """ bool: ``True`` if the given frame index has updated faces within it otherwise
         ``False`` """
-        return self._updated_faces[frame_index] is not None
+        return frame_index in self._updated_frame_indices
 
     def load_faces(self):
         """ Load the faces as :class:`~lib.faces_detect.DetectedFace` objects from the alignments
         file. """
-        self._children["io"]._load()  # pylint:disable=protected-access
+        self._children["io"]._load()
 
     def save(self):
         """ Save the alignments file with the latest edits. """
-        self._children["io"]._save()  # pylint:disable=protected-access
+        self._children["io"]._save()
+
+    def revert_to_saved(self, frame_index):
+        """ Revert the frame's alignments to their saved version for the given frame index.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame that should have their faces reverted to their saved version
+        """
+        self._children["io"].revert_to_saved(frame_index)
 
     def save_video_meta_data(self, pts_time, keyframes):
         """ Save video meta data to the alignments file. This is executed if the video meta data
@@ -287,23 +296,24 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
         self._alignments = detected_faces._alignments
-        self._saved_faces = detected_faces._saved_faces
-        self._updated_faces = detected_faces._updated_faces
+        self._frame_faces = detected_faces._frame_faces
+        self._updated_frame_indices = detected_faces._updated_frame_indices
         self._tk_unsaved = detected_faces.tk_unsaved
+        self._tk_edited = detected_faces.tk_edited
+        self._globals = detected_faces._globals
         self._sorted_frame_names = sorted(self._alignments.data)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _load(self):
         """ Load the faces from the alignments file, convert to
-        :class:`~lib.faces_detect.DetectedFace`. objects and add to :attr:`_saved_faces`. """
+        :class:`~lib.faces_detect.DetectedFace`. objects and add to :attr:`_frame_faces`. """
         for key in sorted(self._alignments.data):
             this_frame_faces = []
             for item in self._alignments.data[key]["faces"]:
                 face = DetectedFace()
                 face.from_alignment(item)
                 this_frame_faces.append(face)
-            self._saved_faces.append(this_frame_faces)
-        self._updated_faces.extend([None for _ in range(len(self._saved_faces))])
+            self._frame_faces.append(this_frame_faces)
 
     def _save(self):
         """ Convert updated :class:`~lib.faces_detect.DetectedFace` objects to alignments format
@@ -311,18 +321,39 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
-        to_save = [(idx, faces) for idx, faces in enumerate(self._updated_faces)
-                   if faces is not None]
+        to_save = [(idx, faces) for idx, faces in zip(
+            list(self._updated_frame_indices),
+            np.array(self._frame_faces)[np.array(self._updated_frame_indices)])]
         logger.verbose("Saving alignments for %s updated frames", len(to_save))
 
         for idx, faces in to_save:
             frame = self._sorted_frame_names[idx]
             self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
-            self._saved_faces[idx] = faces
-            self._updated_faces[idx] = None
+
         self._alignments.backup()
         self._alignments.save()
+        self._updated_frame_indices.clear()
         self._tk_unsaved.set(False)
+
+    def revert_to_saved(self, frame_index):
+        """ Revert the frame's alignments to their saved version for the given frame index.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame that should have their faces reverted to their saved version
+        """
+        if frame_index not in self._updated_frame_indices:
+            logger.debug("Alignments not amended. Returning")
+            return
+        logger.debug("Reverting alignments for frame_index %s", frame_index)
+        faces = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
+        # TODO Add or removed frames
+        for detected_face, face in zip(self._frame_faces[frame_index], faces):
+            detected_face.from_alignment(face)
+        self._updated_frame_indices.remove(frame_index)
+        self._tk_edited.set(True)
+        self._globals.tk_update.set(True)
 
 
 class Filter():
@@ -405,11 +436,10 @@ class FaceUpdate():
                      self.__class__.__name__, detected_faces)
         self._det_faces = detected_faces
         self._globals = detected_faces._globals
-        self._saved_faces = detected_faces._saved_faces
-        self._updated_faces = detected_faces._updated_faces
+        self._frame_faces = detected_faces._frame_faces
+        self._updated_frame_indices = detected_faces._updated_frame_indices
         self._tk_unsaved = detected_faces.tk_unsaved
         self._extractor = detected_faces.extractor
-        self._last_updated_face = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -429,15 +459,6 @@ class FaceUpdate():
         """
         return self._det_faces._zoomed_size  # pylint:disable=protected-access
 
-    @property
-    def last_updated_face(self):
-        """ tuple: (`frame index`, `face index`) of the last face to be updated.
-
-        This attribute is populated after any update, just before :attr:`DetectedFaces.tk_edited`
-        is triggered, so that any process picking up the update knows which face to update.
-        """
-        return self._last_updated_face
-
     def _current_faces_at_index(self, frame_index):
         """ Checks whether there are already new alignments in :attr:`_alignments`. If not
         then saved alignments are copied to :attr:`_updated_faces` ready for update.
@@ -447,13 +468,9 @@ class FaceUpdate():
         frame_index: int
             The frame index to check whether there are updated alignments available
         """
-        if self._updated_faces[frame_index] is None:
-            retval = [deepcopy(face) for face in self._saved_faces[frame_index]]
-            self._updated_faces[frame_index] = retval
-            if not self._tk_unsaved.get():
-                self._tk_unsaved.set(True)
-        else:
-            retval = self._updated_faces[frame_index]
+        # TODO This may now be obsolete
+        self._updated_frame_indices.add(frame_index)
+        retval = self._frame_faces[frame_index]
         return retval
 
     def add(self, frame_index, pnt_x, width, pnt_y, height):
@@ -492,7 +509,6 @@ class FaceUpdate():
         logger.debug("Deleting face at frame index: %s face index: %s", frame_index, face_index)
         faces = self._current_faces_at_index(frame_index)
         del faces[face_index]
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -526,7 +542,6 @@ class FaceUpdate():
         face.y = pnt_y
         face.h = height
         face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         # TODO Link this in to edited
         self._globals.tk_update.set(True)
@@ -564,7 +579,6 @@ class FaceUpdate():
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -594,7 +608,6 @@ class FaceUpdate():
         face.y += shift_y
         face.landmarks_xy += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -619,7 +632,6 @@ class FaceUpdate():
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -642,7 +654,6 @@ class FaceUpdate():
         face = self._current_faces_at_index(frame_index)[face_index]
         face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -663,7 +674,6 @@ class FaceUpdate():
         """
         face = self._current_faces_at_index(frame_index)[face_index]
         face.mask[mask_type].replace_mask(mask)
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -694,26 +704,6 @@ class FaceUpdate():
             return
         logger.debug("Copying alignments from frame %s to frame: %s", idx, frame_index)
         faces.extend(deepcopy(self._current_faces_at_index(idx)))
-        face_index = len(self._det_faces.current_faces[frame_index]) - 1
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
-        self._globals.tk_update.set(True)
-
-    def revert_to_saved(self, frame_index):
-        """ Revert the frame's alignments to their saved version for the given frame index.
-
-        Parameters
-        ----------
-        frame_index: int
-            The frame that should have their faces reverted to their saved version
-
-        """
-        if self._updated_faces[frame_index] is None:
-            logger.debug("Alignments not amended. Returning")
-            return
-        logger.debug("Reverting alignments for frame_index %s", frame_index)
-        self._updated_faces[frame_index] = None
-        self._last_updated_face = (frame_index, -1)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -740,7 +730,7 @@ class ThumbsCreator():
         self._key_frames = detected_faces.video_meta_data.get("keyframes", None)
         self._pts_times = detected_faces.video_meta_data.get("pts_time", None)
         self._alignments = detected_faces._alignments
-        self._saved_faces = detected_faces._saved_faces
+        self._frame_faces = detected_faces._frame_faces
 
         self._is_video = self._key_frames is not None and self._pts_times is not None
         self._num_threads = os.cpu_count() - 2
@@ -760,7 +750,7 @@ class ThumbsCreator():
     def generate_cache(self):
         """ Extract the face thumbnails from a video or folder of images into the
         alignments file. """
-        self._pbar = tqdm(desc="Caching Thumbails", leave=False, total=len(self._saved_faces))
+        self._pbar = tqdm(desc="Caching Thumbails", leave=False, total=len(self._frame_faces))
         if self._is_video:
             self._launch_video()
         else:
@@ -927,9 +917,9 @@ class ThumbsCreator():
         frame: :class:`numpy.ndarray`
             The frame that contains the faces
         frame_index: int
-            The frame index of this frame in the :attr:`_saved_faces`
+            The frame index of this frame in the :attr:`_frame_faces`
         """
-        for face_idx, face in enumerate(self._saved_faces[frame_index]):
+        for face_idx, face in enumerate(self._frame_faces[frame_index]):
             face.load_aligned(frame, size=self._size, force=True)
             jpg = cv2.imencode(".jpg",
                                face.aligned_face,

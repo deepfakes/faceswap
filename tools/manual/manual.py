@@ -206,7 +206,7 @@ class Manual(tk.Tk):
             "c": lambda f=tk_pos.get(), d="previous": self._det_faces.update.copy(f, d),
             "v": lambda f=tk_pos.get(), d="next": self._det_faces.update.copy(f, d),
             "ctrl_s": self._det_faces.save,
-            "r": lambda f=tk_pos.get(): self._det_faces.update.revert_to_saved(f)}
+            "r": lambda f=tk_pos.get(): self._det_faces.revert_to_saved(f)}
 
         # Allow keypad keys to be used for numbers
         press = event.keysym.replace("KP_", "") if event.keysym.startswith("KP_") else event.keysym

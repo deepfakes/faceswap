@@ -394,7 +394,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for action in ("copy_prev", "copy_next", "reload"):
             if action == "reload":
                 icon = "reload3"
-                cmd = lambda f=tk_frame_index: self._det_faces.update.revert_to_saved(f.get())
+                cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())
                 helptext = "Revert to saved Alignments ({})".format(lookup[action][1])
             else:
                 icon = action
