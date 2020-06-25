@@ -177,7 +177,12 @@ class DetectedFaces():
         :class:`numpy.ndarray`
             The encoded jpg thumbnail image
         """
-        return self._alignments.thumbnails.get_thumbnail_by_index(frame_index, face_index)
+        face = self._frame_faces[frame_index][face_index]
+        if not hasattr(face, "thumbnail"):
+            setattr(face,
+                    "thumbnail",
+                    self._alignments.thumbnails.get_thumbnail_by_index(frame_index, face_index))
+        return face.thumbnail
 
     def get_face_at_index(self, frame_index, face_index, image, size,
                           with_landmarks=False, with_mask=False):
@@ -505,10 +510,17 @@ class FaceUpdate():
         height: int
             The height of the bounding box
         """
+        face = DetectedFace()
         faces = self._faces_at_frame_index(frame_index)
-        faces.append(DetectedFace())
+        faces.append(face)
         face_index = len(faces) - 1
+
         self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
+        # TODO Thumbnail size as var, jpg quality as var
+        face.load_aligned(self._globals.current_frame["image"], 96, force=True)
+        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 70])[1]
+        setattr(face, "thumbnail", jpg)
+        face.aligned = dict()
         self._tk_face_count_changed.set(True)
 
     def delete(self, frame_index, face_index):
