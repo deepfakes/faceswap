@@ -524,7 +524,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             self._sub_group_frames[subgroup] = AutoFillContainer(sub_frame,
                                                                  self.option_columns,
                                                                  self.option_columns)
-            sub_frame.pack(anchor=tk.W)
+            sub_frame.pack(anchor=tk.W, expand=True, fill=tk.X)
             logger.debug("Added Subgroup Frame: %s", subgroup)
         return self._sub_group_frames[subgroup]
 
@@ -990,7 +990,7 @@ class ControlBuilder():
         ctl.bind("<Button-1>", lambda *e, c=ctl, t=self.option.title: self._ask_color(c, t))
         ctl.pack(side=tk.LEFT, anchor=tk.W)
         lbl = ttk.Label(frame, text=self.option.title, width=self.label_width, anchor=tk.W)
-        lbl.pack(padx=5, pady=5, side=tk.RIGHT, anchor=tk.N)
+        lbl.pack(padx=2, pady=5, side=tk.RIGHT, anchor=tk.N)
         frame.pack(side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
             _get_tooltip(lbl, text=self.option.helptext, wraplength=600)
