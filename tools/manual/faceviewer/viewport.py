@@ -506,14 +506,15 @@ class VisibleObjects():
                     self._canvas.itemconfig(mesh_id, **kwargs[key])
             logger.trace("Recycled mesh: %s", mesh)
         else:
+            tags = ["viewport", "viewport_mesh"]
             mesh = dict(polygon=[self._canvas.create_polygon(0, 0,
                                                              width=1,
-                                                             tags=["viewport", "viewport_mesh"],
+                                                             tags=tags + ["viewport_polygon"],
                                                              **kwargs["polygon"])
                                  for _ in range(3)],
                         line=[self._canvas.create_line(0, 0, 0, 0,
                                                        width=1,
-                                                       tags=["viewport", "viewport_mesh"],
+                                                       tags=tags + ["viewport_line"],
                                                        **kwargs["line"])
                               for _ in range(5)])
             logger.trace("Created new mesh: %s", mesh)

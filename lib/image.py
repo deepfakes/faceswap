@@ -470,6 +470,40 @@ def batch_convert_color(batch, colorspace):
     return batch.reshape(original_shape)
 
 
+def hex_to_rgb(hexcode):
+    """ Convert a hex number to it's RGB counterpart.
+
+    Parameters
+    ----------
+    hexcode: str
+        The hex code to convert (e.g. `"#0d25ac"`)
+
+    Returns
+    -------
+    tuple
+        The hex code as a 3 integer (`R`, `G`, `B`) tuple
+    """
+    value = hexcode.lstrip("#")
+    chars = len(value)
+    return tuple(int(value[i:i + chars // 3], 16) for i in range(0, chars, chars // 3))
+
+
+def rgb_to_hex(rgb):
+    """ Convert an RGB tuple to it's hex counterpart.
+
+    Parameters
+    ----------
+    rgb: tuple
+        The (`R`, `G`, `B`) integer values to convert (e.g. `(0, 255, 255)`)
+
+    Returns
+    -------
+    str:
+        The 6 digit hex code with leading `#` applied
+    """
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
 # ################### #
 # <<< VIDEO UTILS >>> #
 # ################### #

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ The Faces Viewer Frame and Canvas for Faceswap's Manual Tool. """
+import colorsys
 import logging
 import platform
 import tkinter as tk
@@ -10,6 +11,7 @@ import numpy as np
 
 from lib.gui.custom_widgets import RightClickMenu, Tooltip
 from lib.gui.utils import get_config, get_images
+from lib.image import hex_to_rgb, rgb_to_hex
 
 from .viewport import Viewport
 
@@ -123,10 +125,6 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._tk_vars = dict()
         self._configure_styles()
         self._buttons = self._add_buttons()
-        lockout = tk.BooleanVar()
-        lockout.set(False)
-        lockout.trace("w", lambda *e: self._enable_disable_buttons())
-        self._tk_vars["lockout"] = lockout
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -198,16 +196,6 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         btn.state(state)
         self._tk_vars[display].set(is_pressed)
 
-    def _enable_disable_buttons(self):
-        """ Enable or disable the optional annotation buttons when the face cache is idle or
-        loading.
-        """
-        lockout_state = self._tk_vars["lockout"].get()
-        state = "disabled" if lockout_state else "!disabled"
-        logger.debug("lockout_state: %s, button state: %s", lockout_state, state)
-        for button in self._buttons.values():
-            button.state([state])
-
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     """ The :class:`tkinter.Canvas` that holds the faces viewer part of the Manual Tool.
@@ -235,9 +223,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._sizes = dict(tiny=32, small=64, medium=96, large=128, extralarge=192)
 
         self._globals = tk_globals
-        self._tk_optional_annotations = {key: val for key, val in tk_action_vars.items()
-                                         if key != "lockout"}
-
+        self._tk_optional_annotations = tk_action_vars
         self._display_frame = display_frame
         self._grid = Grid(self, detected_faces)
         self._view = Viewport(self, detected_faces.tk_edited)
@@ -245,7 +231,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         ContextMenu(self, detected_faces)
         self._bind_mouse_wheel_scrolling()
         # Set in load_frames
-        self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"))
+        self._annotation_colors = dict(mesh=self.get_muted_color("Mesh"),
+                                       box=self.control_colors["ExtractBox"])
         self._set_tk_callbacks(detected_faces)
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -297,11 +284,15 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         var = detected_faces.tk_face_count_changed
         var.trace("w", lambda *e, v=var: self.refresh_grid(v, retain_position=True))
 
-        self._display_frame.tk_control_colors["Mesh"].trace("w",
-                                                            lambda *e: self.update_mesh_color())
+        self._display_frame.tk_control_colors["Mesh"].trace(
+            "w", lambda *e: self._update_mesh_color())
+        self._display_frame.tk_control_colors["ExtractBox"].trace(
+            "w", lambda *e: self._update_box_color())
         self._display_frame.tk_selected_mask.trace("w", lambda *e: self._update_mask_type())
+
         for opt, var in self._tk_optional_annotations.items():
             var.trace("w", lambda *e, o=opt: self._toggle_annotations(o))
+
         self.bind("<Configure>", lambda *e: self._view.update())
 
     def refresh_grid(self, trigger_var, retain_position=False):
@@ -372,30 +363,43 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         self._view.hover_box.on_hover(event)
 
     # << OPTIONAL ANNOTATION METHODS >> #
-    def update_mesh_color(self):
+    def _update_mesh_color(self):
         """ Update the mesh color when user updates the control panel. """
         color = self.get_muted_color("Mesh")
         if self._annotation_colors["mesh"] == color:
             return
         highlight_color = self.control_colors["Mesh"]
-        self.itemconfig("mesh_polygon", outline=color)
-        self.itemconfig("mesh_line", fill=color)
-        self.itemconfig("highlight_mesh_polygon", outline=highlight_color)
-        self.itemconfig("highlight_mesh_line", fill=highlight_color)
+
+        self.itemconfig("viewport_polygon", outline=color)
+        self.itemconfig("viewport_line", fill=color)
+        self.itemconfig("active_mesh_polygon", outline=highlight_color)
+        self.itemconfig("active_mesh_line", fill=highlight_color)
         self._annotation_colors["mesh"] = color
+
+    def _update_box_color(self):
+        """ Update the active box color when user updates the control panel. """
+        color = self.control_colors["ExtractBox"]
+
+        if self._annotation_colors["box"] == color:
+            return
+        self.itemconfig("active_highlighter", outline=color)
+        self._annotation_colors["box"] = color
 
     def get_muted_color(self, color_key):
         """ Creates a muted version of the given annotation color for non-active faces.
-
-        It is assumed that hex codes for annotations will always contain "ff" in one of the
-        R, G or B channels, so the given hex code has all of the F values updated to A.
 
         Parameters
         ----------
         color_key: str
             The annotation key to obtain the color for from :attr:`control_colors`
         """
-        return self.control_colors[color_key].replace("f", "a")
+        scale = 0.65
+        hls = np.array(colorsys.rgb_to_hls(*hex_to_rgb(self.control_colors[color_key])))
+        scale = (1 - scale) + 1 if hls[1] < 120 else scale
+        hls[1] = max(0., min(256., scale * hls[1]))
+        rgb = np.clip(np.rint(colorsys.hls_to_rgb(*hls)).astype("uint8"), 0, 255)
+        retval = rgb_to_hex(rgb)
+        return retval
 
     def _toggle_annotations(self, annotation):
         """ Toggle optional annotations on or off after the user depresses an optional button.

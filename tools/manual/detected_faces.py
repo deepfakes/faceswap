@@ -356,12 +356,14 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         if frame_index not in self._updated_frame_indices:
             logger.debug("Alignments not amended. Returning")
             return
-        logger.debug("Reverting alignments for frame_index %s", frame_index)
+        logger.verbose("Reverting alignments for frame_index %s", frame_index)
         faces = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
         # TODO Add or removed frames
         for detected_face, face in zip(self._frame_faces[frame_index], faces):
             detected_face.from_alignment(face)
         self._updated_frame_indices.remove(frame_index)
+        if not self._updated_frame_indices:
+            self._tk_unsaved.set(False)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -489,6 +491,8 @@ class FaceUpdate():
         frame_index: int
             The frame index to check whether there are updated alignments available
         """
+        if not self._updated_frame_indices and not self._tk_unsaved.get():
+            self._tk_unsaved.set(True)
         self._updated_frame_indices.add(frame_index)
         retval = self._frame_faces[frame_index]
         return retval
