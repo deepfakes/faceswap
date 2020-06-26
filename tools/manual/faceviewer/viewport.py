@@ -331,6 +331,7 @@ class VisibleObjects():
         self._visible_faces = None
         self._images = []
         self._meshes = []
+        self._recycled = dict(images=[], meshes=[])
 
     @property
     def visible_grid(self):
@@ -386,7 +387,8 @@ class VisibleObjects():
         self._visible_grid, self._visible_faces = self._grid.visible_area
         if (isinstance(self._images, np.ndarray) and
                 self._visible_grid.shape[-1] != self._images.shape[-1]):
-            self._reset_layout()
+            self._recycle_objects()
+
         required_rows = self._visible_grid.shape[1] if self._grid.is_valid else 0
         existing_rows = len(self._images)
         logger.trace("existing_rows: %s. required_rows: %s", existing_rows, required_rows)
@@ -401,33 +403,28 @@ class VisibleObjects():
 
         self._shift()
 
-    def _reset_layout(self):
-        """ On a column count change, the face size has changed.
-
-        Add any extra objects to :attr:`_images` and :attr:`_meshes` required to fit the new
-        sized grid,
-        Resize all existing objects to the new grid layout
-        """
+    def _recycle_objects(self):
+        """  On a column count change, place all existing objects into the recycle bin so that
+        they can be used for the new grid shape and reset the objects size to the new size. """
         self._size = self._viewport.face_size
-        columns = self._grid.columns_rows[0]
-        remainder = self._images.size % columns
-        if remainder != 0:
-            images = np.array([self._canvas.create_image(0, 0,
-                                                         anchor=tk.NW,
-                                                         tags=["viewport", "viewport_image"])
-                               for _ in range(remainder, columns)])
-            meshes = np.array([self._create_mesh() for _ in range(remainder, columns)])
-            self._images = np.concatenate((self._images.flatten(), images)).reshape(-1, columns)
-            self._meshes = np.concatenate((self._meshes.flatten(), meshes)).reshape(-1, columns)
-        else:
-            self._images = self._images.reshape(-1, columns)
-            self._meshes = self._meshes.reshape(-1, columns)
+        images = self._images.flatten().tolist()
+        meshes = self._meshes.flatten().tolist()
 
-        base_coords = [(col * self._size, 0) for col in range(columns)]
-        for idx, row in enumerate(self._images):
-            y_coord = base_coords[0][1] + (idx * self._size)
-            for image_id, coords in zip(row, base_coords):
-                self._canvas.coords(image_id, coords[0], y_coord)
+        for image_id in images:
+            self._canvas.itemconfig(image_id, image="")
+            self._canvas.coords(image_id, 0, 0)
+        for mesh in meshes:
+            for key, mesh_ids in mesh.items():
+                coords = (0, 0, 0, 0) if key == "line" else (0, 0)
+                for mesh_id in mesh_ids:
+                    self._canvas.coords(mesh_id, *coords)
+
+        self._recycled["images"].extend(images)
+        self._recycled["meshes"].extend(meshes)
+        logger.trace("Recycled objects: %s", self._recycled)
+
+        self._images = []
+        self._meshes = []
 
     def _add_rows(self, existing_rows, required_rows):
         """ Add objects to the viewport
@@ -448,14 +445,9 @@ class VisibleObjects():
         meshes = []
         for row in range(existing_rows, required_rows):
             y_coord = base_coords[0][1] + (row * self._size)
-            images.append(np.array([
-                self._canvas.create_image(
-                    coords[0],
-                    y_coord,
-                    anchor=tk.NW,
-                    tags=["viewport", "viewport_image"])
-                for coords in base_coords]))
-            meshes.append(np.array([self._create_mesh() for _ in range(columns)]))
+            images.append(np.array([self._get_image((coords[0], y_coord))
+                                    for coords in base_coords]))
+            meshes.append(np.array([self._get_mesh() for _ in range(columns)]))
         images = np.array(images)
         meshes = np.array(meshes)
 
@@ -471,36 +463,61 @@ class VisibleObjects():
             self._meshes = np.concatenate((self._meshes, meshes))
         logger.debug("self._images: %s, self._meshes: %s", self._images.shape, self._meshes.shape)
 
-    def _create_mesh(self):
-        """ Creates the mesh annotation for the landmarks. This is made up of a series of polygons
-        or lines, depending on which part of the face is being annotated.
+    def _get_image(self, coordinates):
+        """ Create or recycle a tkinter canvas image object with the given coordinates.
 
         Parameters
         ----------
-        row: int
-            The row number that this mesh exists in within the viewport
-        coordinates: :class:`numpy.ndarray`
-            The top left co-ordinates of the face that corresponds to the given landmarks.
-            The mesh annotations will be offset by this amount, to place them in the correct
-            place on the canvas
-        tk_face: :class:`~manual.facesviewer.cache.TKFace`
-            The tk face object containing the face to be used for the image annotation and the
-            mesh landmarks
+        coordinates: tuple
+            The (`x`, `y`) coordinates for the top left corner of the image
 
         Returns
         -------
-        list
-            The canvas object ids for the created mesh annotations
+        int
+            The canvas object id for the created image
         """
-        tags = ["viewport", "viewport_mesh"]
+        if self._recycled["images"]:
+            image_id = self._recycled["images"].pop()
+            self._canvas.coords(image_id, *coordinates)
+            logger.trace("Recycled image: %s", image_id)
+        else:
+            image_id = self._canvas.create_image(*coordinates,
+                                                 anchor=tk.NW,
+                                                 tags=["viewport", "viewport_image"])
+            logger.trace("Created new image: %s", image_id)
+        return image_id
+
+    def _get_mesh(self):
+        """ Get the mesh annotation for the landmarks. This is made up of a series of polygons
+        or lines, depending on which part of the face is being annotated. Creates a new series of
+        objects, or pulls existing objects from the recycled objects pool if they are available.
+
+        Returns
+        -------
+        dict
+            The dictionary of line and polygon tkinter canvas object ids for the mesh annotation
+        """
         kwargs = self._viewport.mesh_kwargs
-        logger.trace("tag: %s, self.mesh_kwargs: %s", tags, kwargs)
-        retval = dict(
-            polygon=[self._canvas.create_polygon(0, 0, width=1, tags=tags, **kwargs["polygon"])
-                     for _ in range(3)],
-            line=[self._canvas.create_line(0, 0, 0, 0, width=1, tags=tags, **kwargs["line"])
-                  for _ in range(5)])
-        return retval
+        logger.trace("self.mesh_kwargs: %s", kwargs)
+        if self._recycled["meshes"]:
+            mesh = self._recycled["meshes"].pop()
+            for key, mesh_ids in mesh.items():
+                for mesh_id in mesh_ids:
+                    self._canvas.itemconfig(mesh_id, **kwargs[key])
+            logger.trace("Recycled mesh: %s", mesh)
+        else:
+            mesh = dict(polygon=[self._canvas.create_polygon(0, 0,
+                                                             width=1,
+                                                             tags=["viewport", "viewport_mesh"],
+                                                             **kwargs["polygon"])
+                                 for _ in range(3)],
+                        line=[self._canvas.create_line(0, 0, 0, 0,
+                                                       width=1,
+                                                       tags=["viewport", "viewport_mesh"],
+                                                       **kwargs["line"])
+                              for _ in range(5)])
+            logger.trace("Created new mesh: %s", mesh)
+        return mesh
 
     def _shift(self):
         """ Shift the viewport in the y direction if required

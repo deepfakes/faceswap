@@ -554,8 +554,8 @@ class Grid():
             return None
         columns = self._canvas.winfo_width() // self._face_size
         rows = ceil(face_count / columns)
-        padding = [-1 for _ in range(columns - (face_count % columns))]
-
+        remainder = face_count % columns
+        padding = [] if remainder == 0 else [-1 for _ in range(columns - remainder)]
         labels = np.array((self._raw_indices["frame"] + padding,
                            self._raw_indices["face"] + padding),
                           dtype="int").reshape((2, rows, columns))
