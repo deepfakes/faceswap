@@ -321,7 +321,6 @@ class Viewport():
 
 class VisibleObjects():
     def __init__(self, viewport):
-        # TODO Check if any reload is needed  prior to updating all objects
         self._viewport = viewport
         self._canvas = viewport._canvas
         self._grid = viewport._grid

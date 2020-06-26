@@ -120,7 +120,7 @@ class DetectedFaces():
 
         The list needs to be calculated on the fly as the number of faces in a frame
         can change based on user actions. """
-        return [len(faces) for faces in self.current_faces]
+        return [len(faces) for faces in self._frame_faces]
 
     # <<<< PUBLIC METHODS >>>> #
     def is_frame_updated(self, frame_index):
@@ -131,11 +131,11 @@ class DetectedFaces():
     def load_faces(self):
         """ Load the faces as :class:`~lib.faces_detect.DetectedFace` objects from the alignments
         file. """
-        self._children["io"]._load()
+        self._children["io"].load()
 
     def save(self):
         """ Save the alignments file with the latest edits. """
-        self._children["io"]._save()
+        self._children["io"].save()
 
     def revert_to_saved(self, frame_index):
         """ Revert the frame's alignments to their saved version for the given frame index.
@@ -184,11 +184,8 @@ class DetectedFaces():
                     self._alignments.thumbnails.get_thumbnail_by_index(frame_index, face_index))
         return face.thumbnail
 
-    def get_face_at_index(self, frame_index, face_index, image, size,
-                          with_landmarks=False, with_mask=False):
+    def get_face_at_index(self, frame_index, face_index, image, size):
         """ Return an aligned face for the given frame and face index sized at the given size.
-
-        Optionally also return aligned landmarks and mask objects for the requested face.l
 
         Parameters
         ----------
@@ -202,41 +199,23 @@ class DetectedFaces():
             The required pixel size of the aligned face. NB The default size is set for a zoomed
             display frame image. Rather than resize the underlying Detected Face object, the
             returned results are adjusted for the requested size
-        with_landmarks: bool, optional
-            Set to `True` if the aligned landmarks should be returned with the aligned face.
-            Default: ``False``
-        with_mask: bool
-            Set to `True` if the Detected Face's Mask object should be returned with the aligned
-            face. Default: ``False``
 
         Returns
         -------
-        :class:`numpy.ndarray` or tuple
-            If :attr:`with_landmarks` and :attr:`with_mask` are both set to ``False`` then just the
-            aligned face will be returned.
-            If any of these attributes are set to ``True`` then a tuple will be returned with the
-            aligned face in position 0 and the requested additional data populated in the following
-            order (`aligned face`, `aligned landmarks`, `mask objects`)
+        :class:`numpy.ndarray`
+            The aligned face at the requested size
         """
-        logger.trace("frame_index: %s, face_index: %s, image: %s, size: %s, with_landmarks: %s, "
-                     "with_mask: %s", frame_index, face_index, image.shape, size, with_landmarks,
-                     with_mask)
-        face = self.current_faces[frame_index][face_index]
+        logger.trace("frame_index: %s, face_index: %s, image: %s, size: %s",
+                     frame_index, face_index, image.shape, size)
+        face = self._frame_faces[frame_index][face_index]
         resize = self._extract_size != size
         logger.trace("Requires resize: %s", resize)
         face.load_aligned(image, size=self._extract_size, force=True)
 
         retval = cv2.resize(face.aligned_face,
                             (size, size)) if resize else face.aligned_face.copy()
-        retval = [retval] if with_landmarks or with_mask else retval
         face.aligned["face"] = None
-        if with_landmarks:
-            retval.append(face.aligned_landmarks * (size / self._extract_size)
-                          if resize else face.aligned_landmarks)
-        if with_mask:
-            retval.append(face.mask)
-        logger.trace("returning: %s", [item.shape if isinstance(item, np.ndarray) else item
-                                       for item in retval])
+        logger.trace("returning: %s", retval.shape)
         return retval
 
     # <<<< PRIVATE METHODS >>> #
@@ -311,11 +290,12 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         self._updated_frame_indices = detected_faces._updated_frame_indices
         self._tk_unsaved = detected_faces.tk_unsaved
         self._tk_edited = detected_faces.tk_edited
+        self._tk_face_count_changed = detected_faces.tk_face_count_changed
         self._globals = detected_faces._globals
         self._sorted_frame_names = sorted(self._alignments.data)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _load(self):
+    def load(self):
         """ Load the faces from the alignments file, convert to
         :class:`~lib.faces_detect.DetectedFace`. objects and add to :attr:`_frame_faces`. """
         for key in sorted(self._alignments.data):
@@ -326,7 +306,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                 this_frame_faces.append(face)
             self._frame_faces.append(this_frame_faces)
 
-    def _save(self):
+    def save(self):
         """ Convert updated :class:`~lib.faces_detect.DetectedFace` objects to alignments format
         and save the alignments file. """
         if not self._tk_unsaved.get():
@@ -336,6 +316,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                       np.array(self._frame_faces)[np.array(self._updated_frame_indices)])
         logger.verbose("Saving alignments for %s updated frames", len(to_save))
 
+        # TODO Save thumbnails
         for idx, faces in to_save:
             frame = self._sorted_frame_names[idx]
             self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
@@ -357,15 +338,39 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             logger.debug("Alignments not amended. Returning")
             return
         logger.verbose("Reverting alignments for frame_index %s", frame_index)
-        faces = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
-        # TODO Add or removed frames
-        for detected_face, face in zip(self._frame_faces[frame_index], faces):
+        alignments = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
+        faces = self._frame_faces[frame_index]
+
+        reset_grid = self._add_remove_faces(alignments, faces)
+
+        for detected_face, face in zip(faces, alignments):
             detected_face.from_alignment(face)
+
         self._updated_frame_indices.remove(frame_index)
         if not self._updated_frame_indices:
             self._tk_unsaved.set(False)
-        self._tk_edited.set(True)
+
+        if reset_grid:
+            self._tk_face_count_changed.set(True)
+        else:
+            self._tk_edited.set(True)
         self._globals.tk_update.set(True)
+
+    @classmethod
+    def _add_remove_faces(cls, alignments, faces):
+        """ On a revert, ensure that the alignments and detected face object counts for each frame
+        are in sync. """
+        num_alignments = len(alignments)
+        num_faces = len(faces)
+        if num_alignments == num_faces:
+            retval = False
+        elif num_alignments > num_faces:
+            faces.extend([DetectedFace() for _ in range(num_faces, num_alignments)])
+            retval = True
+        else:
+            del faces[num_alignments:]
+            retval = True
+        return retval
 
 
 class Filter():
@@ -520,7 +525,6 @@ class FaceUpdate():
         face_index = len(faces) - 1
 
         self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
-        # TODO Thumbnail size as var, jpg quality as var
         face.load_aligned(self._globals.current_frame["image"], 96, force=True)
         jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 70])[1]
         setattr(face, "thumbnail", jpg)
@@ -575,7 +579,6 @@ class FaceUpdate():
         face.h = height
         face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
         self._tk_edited.set(True)
-        # TODO Link this in to edited
         self._globals.tk_update.set(True)
 
     def landmark(self, frame_index, face_index, landmark_index, shift_x, shift_y, is_zoomed):
