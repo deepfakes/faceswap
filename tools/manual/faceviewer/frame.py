@@ -281,8 +281,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
     @property
     def control_colors(self):
         """ :dict: Editor key with the current user selected hex code as value. """
-        return {key: self._display_frame.colors[val.get()]
-                for key, val in self._display_frame.tk_control_colors.items()}
+        return ({key: val.get() for key, val in self._display_frame.tk_control_colors.items()})
 
     # << CALLBACK FUNCTIONS >> #
     def _set_tk_callbacks(self, detected_faces):

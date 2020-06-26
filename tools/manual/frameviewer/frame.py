@@ -122,11 +122,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         return self._canvas.control_tk_vars["Mask"]["display"]["MaskType"]
 
     @property
-    def colors(self):
-        """ :dict: color name to hex code mapping """
-        return self._canvas.colors
-
-    @property
     def _filter_modes(self):
         """ list: The filter modes combo box values """
         return ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"]
@@ -626,18 +621,6 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         offset_y = (self._globals.frame_display_dims[1] - frame_dims[1]) / 2
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
         return offset_x, offset_y
-
-    @property
-    def colors(self):
-        """ dict: Available colors for annotations """
-        return dict(black="#000000",
-                    red="#ff0000",
-                    green="#00ff00",
-                    blue="#0000ff",
-                    cyan="#00ffff",
-                    yellow="#ffff00",
-                    magenta="#ff00ff",
-                    white="#ffffff")
 
     def _get_editors(self):
         """ Get the object editors for the canvas.

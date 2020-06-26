@@ -54,11 +54,11 @@ class Editor():
     @property
     def _default_colors(self):
         """ dict: The default colors for each annotation """
-        return {"BoundingBox": "blue",
-                "ExtractBox": "green",
-                "Landmarks": "magenta",
-                "Mask": "red",
-                "Mesh": "cyan"}
+        return {"BoundingBox": "#0000ff",
+                "ExtractBox": "#00ff00",
+                "Landmarks": "#ff00ff",
+                "Mask": "#ff0000",
+                "Mesh": "#00ffff"}
 
     @property
     def _is_active(self):
@@ -99,7 +99,7 @@ class Editor():
     def _control_color(self):
         """ str: The hex color code set in the control panel for the current editor. """
         annotation = self.__class__.__name__
-        return self._canvas.colors[self._annotation_formats[annotation]["color"].get()]
+        return self._annotation_formats[annotation]["color"].get()
 
     @property
     def _annotation_formats(self):
@@ -590,9 +590,9 @@ class Editor():
                 colors = ControlPanelOption(editor,
                                             str,
                                             group="Color",
-                                            choices=sorted(self._canvas.colors),
+                                            subgroup="colors",
+                                            choices="colorchooser",
                                             default=self._default_colors[annotation_key],
-                                            is_radio=False,
                                             helptext="Set the annotation color")
                 colors.set(self._default_colors[annotation_key])
                 self._annotation_formats.setdefault(annotation_key, dict())["color"] = colors

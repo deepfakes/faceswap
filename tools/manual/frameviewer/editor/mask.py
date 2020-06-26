@@ -62,7 +62,7 @@ class Mask(Editor):
     @property
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
-        return self._canvas.colors[self._control_vars["brush"]["CursorColor"].get().lower()]
+        return self._control_vars["brush"]["CursorColor"].get()
 
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
@@ -100,8 +100,8 @@ class Mask(Editor):
         self._add_control(ControlPanelOption("Cursor Color",
                                              str,
                                              group="Brush",
-                                             choices=sorted(self._canvas.colors),
-                                             default="White",
+                                             choices="colorchooser",
+                                             default="#ffffff",
                                              helptext="Select the brush cursor color."))
 
     def _set_tk_mask_change_callback(self):
@@ -134,7 +134,7 @@ class Mask(Editor):
         mask_type = self._control_vars["display"]["MaskType"].get().lower()
         color = self._control_color[1:]
         rgb_color = np.array(tuple(int(color[i:i + 2], 16) for i in (0, 2, 4)))
-        roi_color = self._canvas.colors[self._annotation_formats["ExtractBox"]["color"].get()]
+        roi_color = self._annotation_formats["ExtractBox"]["color"].get()
         opacity = self._opacity
         for idx, face in enumerate(self._face_iterator):
             face_idx = self._globals.face_index if self._globals.is_zoomed else idx
