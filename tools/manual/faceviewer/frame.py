@@ -6,6 +6,7 @@ import platform
 import tkinter as tk
 from tkinter import ttk
 from math import floor, ceil
+from threading import Thread, Event
 
 import numpy as np
 
@@ -43,12 +44,15 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._faces_frame = ttk.Frame(self)
         self._faces_frame.pack_propagate(0)
         self._faces_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._event = Event()
         self._canvas = FacesViewer(self._faces_frame,
                                    tk_globals,
                                    self._actions_frame._tk_vars,
                                    detected_faces,
-                                   display_frame)
+                                   display_frame,
+                                   self._event)
         self._add_scrollbar()
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _add_scrollbar(self):
@@ -88,15 +92,29 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def canvas_scroll(self, direction):
         """ Scroll the canvas on an up/down or page-up/page-down key press.
 
+        Notes
+        -----
+        To protect against a held down key press stacking tasks and locking up the GUI
+        a background thread is launched and discards subsequent key presses whilst the
+        previous update occurs.
+
         Parameters
         ----------
         direction: ["up", "down", "page-up", "page-down"]
             The request page scroll direction and amount.
         """
+
+        if self._event.is_set():
+            logger.trace("Update already running. Aborting repeated keypress")
+            return
+        logger.trace("Running update on received key press: %s", direction)
+
         amount = 1 if direction.endswith("down") else -1
         units = "pages" if direction.startswith("page") else "units"
-        self._canvas.canvas_scroll(amount, units)
-        self._canvas.viewport.update()
+        self._event.set()
+        thread = Thread(target=self._canvas.canvas_scroll,
+                        args=(amount, units, self._event))
+        thread.start()
 
     def set_annotation_display(self, key):
         """ Set the optional annotation overlay based on keyboard shortcut.
@@ -213,17 +231,20 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         The :class:`~lib.faces_detect.DetectedFace` objects for this video
     display_frame: :class:`DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
+    event: :class:`threading.Event`
+        The threading event object for repeated key press protection
     """
-    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, display_frame):
+    def __init__(self, parent, tk_globals, tk_action_vars, detected_faces, display_frame, event):
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, tk_action_vars: %s, "
-                     "detected_faces: %s, display_frame: %s)", self.__class__.__name__, parent,
-                     tk_globals, tk_action_vars, detected_faces, display_frame)
+                     "detected_faces: %s, display_frame: %s, event: %s)", self.__class__.__name__,
+                     parent, tk_globals, tk_action_vars, detected_faces, display_frame, event)
         super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._sizes = dict(tiny=32, small=64, medium=96, large=128, extralarge=192)
 
         self._globals = tk_globals
         self._tk_optional_annotations = tk_action_vars
+        self._event = event
         self._display_frame = display_frame
         self._grid = Grid(self, detected_faces)
         self._view = Viewport(self, detected_faces.tk_edited)
@@ -335,6 +356,9 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         event: :class:`tkinter.Event`
             The event fired by the mouse scrolling
         """
+        if self._event.is_set():
+            logger.trace("Update already running. Aborting repeated mousewheel")
+            return
         if platform.system() == "Darwin":
             adjust = event.delta
         elif platform.system() == "Windows":
@@ -343,9 +367,11 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             adjust = -1
         else:
             adjust = 1
-        self.canvas_scroll(-1 * adjust, "units", event)
+        self._event.set()
+        thread = Thread(target=self.canvas_scroll, args=(-1 * adjust, "units", self._event))
+        thread.start()
 
-    def canvas_scroll(self, amount, units, event=None):
+    def canvas_scroll(self, amount, units, event):
         """ Scroll the canvas on an up/down or page-up/page-down key press.
 
         Parameters
@@ -354,13 +380,13 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             The number of units to scroll the canvas
         units: ["page", "units"]
             The unit type to scroll by
-        event: :class:`tkinter.Event` or ``None``, optional
-            The tkinter event (if scrolling by mouse wheel) or ``None`` if the scroll action
-            has been triggered by a keyboard shortcut
+        event: :class:`threading.Event`
+            event to indicate to the calling process whether the scroll is still updating
         """
         self.yview_scroll(int(amount), units)
         self._view.update()
-        self._view.hover_box.on_hover(event)
+        self._view.hover_box.on_hover(None)
+        event.clear()
 
     # << OPTIONAL ANNOTATION METHODS >> #
     def _update_mesh_color(self):

@@ -21,8 +21,8 @@ def _timeit(name, split):
     _TIMES[name] = _TIMES.setdefault(name, np.array([0, 0])) + np.array((split, 1))
 
 
-# TODO Put scroll/page_down to a queue. Check if queue is empty, if not remove the current item and
-# put the new item. Probably will work with frames too
+# TODO Mask view doesn't reset to normal when editing mask + changing frames on Windows
+# Mesh annotations don't adjust properly on thumb resize
 
 class Viewport():
     """ Handles the display of faces and annotations in the currently viewable area of the canvas.
