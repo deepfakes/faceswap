@@ -132,10 +132,6 @@ class Manual(tk.Tk):
         initialize_images()
         get_config().set_geometry(940, 600, fullscreen=True)
         self.title("Faceswap.py - Visual Alignments")
-        self.tk.call(
-            "wm",
-            "iconphoto",
-            self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
 
     def _create_containers(self):
@@ -217,8 +213,18 @@ class Manual(tk.Tk):
             bindings[key_press.lower()]()
 
     def _set_initial_layout(self):
-        """ Set the bottom frame position to correct location to display full frame window. """
+        """ Set the favicon and the bottom frame position to correct location to display full
+        frame window.
+
+        Notes
+        -----
+        The favicon pops the tkinter GUI (without loaded elements) as soon as it is called, so
+        this is set last.
+        """
         logger.debug("Setting initial layout")
+        self.tk.call("wm",
+                     "iconphoto",
+                     self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         self.update_idletasks()
         location = self._display.winfo_reqheight() + 5
         self._containers["main"].sash_place(0, 1, location)
