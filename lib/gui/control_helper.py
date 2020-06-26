@@ -4,7 +4,7 @@ import logging
 import re
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import colorchooser, ttk
 from itertools import zip_longest
 from functools import partial
 
@@ -986,7 +986,7 @@ class ControlBuilder():
                        cursor="hand1",
                        relief=tk.SUNKEN,
                        width=round(int(20 * get_config().scaling_factor)),
-                       height=round(int(10 * get_config().scaling_factor)))
+                       height=round(int(12 * get_config().scaling_factor)))
         ctl.bind("<Button-1>", lambda *e, c=ctl, t=self.option.title: self._ask_color(c, t))
         ctl.pack(side=tk.LEFT, anchor=tk.W)
         lbl = ttk.Label(frame, text=self.option.title, width=self.label_width, anchor=tk.W)
@@ -1000,7 +1000,7 @@ class ControlBuilder():
     def _ask_color(self, frame, title):
         """ Pop ask color dialog set to variable and change frame color """
         color = self.option.tk_var.get()
-        chosen = tk.colorchooser.askcolor(color=color, title="{} Color".format(title))[1]
+        chosen = colorchooser.askcolor(color=color, title="{} Color".format(title))[1]
         if chosen is None:
             return
         frame.config(bg=chosen)
