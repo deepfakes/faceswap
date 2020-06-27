@@ -191,10 +191,13 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
+        self.aligned = dict()
+        self.feed = dict()
+        self.reference = dict()
         landmarks = alignment["landmarks_xy"]
         if not isinstance(landmarks, np.ndarray):
             landmarks = np.array(landmarks, dtype="float32")
-        self.landmarks_xy = landmarks
+        self.landmarks_xy = landmarks.copy()
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         # Manual tool and legacy alignments will not have a mask
