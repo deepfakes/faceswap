@@ -315,7 +315,10 @@ class Viewport():
         else:
             x_idx = np.searchsorted(self._objects.visible_grid[2, 0, :], point_x, side="left") - 1
             y_idx = np.searchsorted(self._objects.visible_grid[3, :, 0], point_y, side="left") - 1
-            retval = self._objects.visible_grid[:, y_idx, x_idx]
+            if x_idx < 0 or y_idx < 0:
+                retval = np.array((-1, -1, -1, -1))
+            else:
+                retval = self._objects.visible_grid[:, y_idx, x_idx]
         logger.trace(retval)
         return retval
 
