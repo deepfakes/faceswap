@@ -471,6 +471,11 @@ class Grid():
         self.update()
 
     @property
+    def face_size(self):
+        """ int: The pixel size of each thumbnail. """
+        return self._face_size
+    
+    @property
     def is_valid(self):
         """ bool: ``True`` if the current filter means that the grid holds faces. ``False`` if
         there are no faces displayed in the grid. """

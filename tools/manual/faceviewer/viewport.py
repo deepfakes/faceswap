@@ -8,17 +8,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from time import time
-
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-_TIMES = dict()
-
-
-def _timeit(name, split):
-    split = time() - split
-    _TIMES[name] = _TIMES.setdefault(name, np.array([0, 0])) + np.array((split, 1))
 
 
 # TODO Mask view doesn't reset to normal when editing mask + changing frames on Windows
@@ -31,6 +22,8 @@ class Viewport():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas
+    tk_edited_variable: :class:`tkinter.BooleanVar`
+        The variable that indicates that a face has been edited
     """
     def __init__(self, canvas, tk_edited_variable):
         logger.debug("Initializing: %s: (canvas: %s, tk_edited_variable: %s)",
@@ -57,12 +50,13 @@ class Viewport():
     @property
     def face_size(self):
         """ int: The pixel size of each thumbnail """
-        return self._grid._face_size
+        return self._grid.face_size
 
     @property
     def mesh_kwargs(self):
         """ dict: The color and state keyword arguments for the objects that make up a single
-        face's mesh annotation based on the current user selected options. """
+        face's mesh annotation based on the current user selected options. Key is the object
+        type (`polygon` or `line`), value are the keyword arguments for that type. """
         state = "normal" if self._canvas.optional_annotations["mesh"] else "hidden"
         color = self._canvas.get_muted_color("Mesh")
         kwargs = dict(polygon=dict(fill="", outline=color, state=state),
@@ -80,13 +74,27 @@ class Viewport():
         return self._tk_selected_editor.get().lower()
 
     def toggle_mesh(self, state):
-        """ Toggles the mesh optional annotations off and on """
+        """ Toggles the mesh optional annotations on and off.
+
+        Parameters
+        ----------
+        state: ["hidden", "normal"]
+            The state to set the mesh annotations to
+        """
         logger.debug("Toggling mesh annotations to: %s", state)
         self._canvas.itemconfig("viewport_mesh", state=state)
         self.update()
 
     def toggle_mask(self, state, mask_type):
-        """ Toggles the mesh optional annotations off and on """
+        """ Toggles the mask optional annotation on and off.
+
+        Parameters
+        ----------
+        state: ["hidden", "normal"]
+            Whether the mask should be displayed or hidden
+        mask_type: str
+            The type of mask to overlay onto the face
+        """
         logger.debug("Toggling mask annotations to: %s. mask_type: %s", state, mask_type)
         for (frame_idx, face_idx), det_faces in zip(
                 self._objects.visible_grid[:2].transpose(1, 2, 0).reshape(-1, 2),
@@ -98,39 +106,32 @@ class Viewport():
         self.update()
 
     def reset(self):
-        """ Reset the viewport on a grid change """
+        """ Reset all the cached objects on a face size change. """
         self._landmarks = dict()
         self._tk_faces = dict()
 
     def update(self):
-        """ Load and unload thumbnails on a canvas resize or scroll event.
-        """
-        # TODO remove testing code
-        start = time()
-        split = time()
+        """ Update the viewport.
+
+        Obtains the objects that are currently visible. Updates the visible area of the canvas
+        and reloads the active frame's annotations. """
         self._objects.update()
-        _timeit("set_vis preamble", split)
-        split = time()
         self._update_viewport()
-        _timeit("set_vis viewport", split)
-        split = time()
         self._active_frame.reload_annotations()
-        _timeit("set_vis active_frame", split)
-        _timeit("set_vis total", start)
-        # print("category", "action", "count", "total", "average", "average_per_face")
-        # for k, v in _TIMES.items():
-        #    print(k, *reversed(v), v[0] / v[1], v[0] / _TIMES["set_vis preamble"][1])
 
     def _update_viewport(self):
-        """ Clear out unused faces and populate with visible faces """
+        """ Update the viewport
+
+        Clear out cached objects that are not currently in view. Populate the cache for any
+        faces that are now in view. Populate the correct face image and annotations for each
+        object in the viewport based on current location. If optional mesh annotations are
+        enabled, then calculates newly displayed meshes. """
         if not self._grid.is_valid:
             return
-        split = time()
         self._discard_tk_faces()
-        # Display any hidden end of row meshes
-        if self._canvas.optional_annotations["mesh"]:
+
+        if self._canvas.optional_annotations["mesh"]:  # Display any hidden end of row meshes
             self._canvas.itemconfig("viewport_mesh", state="normal")
-        _timeit("viewport discard", split)
 
         for row, images, meshes, faces in zip(self._objects.visible_grid.transpose(1, 2, 0),
                                               self._objects.images,
@@ -141,7 +142,6 @@ class Viewport():
                                                                                      images,
                                                                                      meshes,
                                                                                      faces):
-                split = time()
                 top_left = np.array((pnt_x, pnt_y))
                 if frame_idx == self._active_frame.frame_index:
                     logger.trace("Skipping active frame: %s", frame_idx)
@@ -154,23 +154,15 @@ class Viewport():
                             self._canvas.itemconfig(mesh_id, state="hidden")
                     continue
 
-                _timeit("viewport preamble", split)
-
-                split = time()
                 tk_face = self.get_tk_face(frame_idx, face_idx, face)
-                _timeit("viewport tk_face", split)
-                split = time()
                 self._canvas.itemconfig(image_id, image=tk_face.photo)
-                _timeit("viewport config_face", split)
-                split = time()
                 if (self._canvas.optional_annotations["mesh"]
                         or frame_idx == self._active_frame.frame_index):
                     landmarks = self.get_landmarks(frame_idx, face_idx, face[0], top_left)
-                    self._show_mesh(mesh_ids, landmarks)
-                _timeit("viewport config_mesh", split)
+                    self._locate_mesh(mesh_ids, landmarks)
 
     def _discard_tk_faces(self):
-        """ Remove any tk_faces not used in the current viewport. """
+        """ Remove any :class:`TKFace` objects from the cache that are not currently displayed. """
         keys = ["{}_{}".format(pnt_x, pnt_y)
                 for pnt_x, pnt_y in self._objects.visible_grid[:2].T.reshape(-1, 2)]
         for key in list(self._tk_faces):
@@ -179,9 +171,10 @@ class Viewport():
         logger.trace("keys: %s allocated_faces: %s", keys, len(self._tk_faces))
 
     def get_tk_face(self, frame_index, face_index, face):
-        """ Obtain the :class:`tools.manual.cache.TKFace` object for the given face from
-        :attr:`_tk_faces`. If the face does not exist in the dictionary then it is added
-        prior to returning
+        # TODO Jpg thumbnail in numpy array position 1? Surely we now have jpg as asset of
+        # detected_face? Make sure documentation updated too if changed
+        """ Obtain the :class:`TKFace` object for the given face from the cache. If the face does
+        not exist in the cache, then it is generated and added prior to returning.
 
         Parameters
         ----------
@@ -195,7 +188,7 @@ class Viewport():
 
         Returns
         -------
-        :class:`tools.manual.faceviewer.cache.TkFace`
+        :class:`TKFace`
             An object for displaying in the faces viewer canvas populated with the aligned mesh
             landmarks and face thumbnail
         """
@@ -220,14 +213,16 @@ class Viewport():
         return tk_face
 
     def _get_tk_face_object(self, face, image, is_active):
-        """ Obtain an existing unallocated, or a newly created
-        :class:`tools.manual.faceviewer.cache.TkFace` and populate it with face information from
-        the requested frame and face index.
+        """ Obtain an existing unallocated, or a newly created :class:`TKFace` and populate it with
+        face information from the requested frame and face index.
+
+        If the face is currently active, then the face is generated from the currently displayed
+        frame, otherwise it is generated from the jpg thumbnail.
 
         Parameters
         ----------
         face: :class:`lib.faces_detect.DetectedFace`
-            A detected face object to create the :class:`tools.manual.faceviewer.cache.TkFace` from
+            A detected face object to create the :class:`TKFace` from
         image: :class:`numpy.ndarray`
             The jpg thumbnail or the 3 channel image for the face
         is_active: bool
@@ -235,26 +230,44 @@ class Viewport():
 
         Returns
         -------
-        :class:`tools.manual.faceviewer.cache.TkFace`
-            An object for displaying in the faces viewer canvas populated with the aligned mesh
-            landmarks and face image
+        :class:`TKFace`
+            An object for displaying in the faces viewer canvas populated with the aligned face
+            image with a mask applied, if required.
         """
-        if self._canvas.optional_annotations["mask"] or (is_active and
-                                                         self.selected_editor == "mask"):
-            mask = face.mask.get(self._canvas.selected_mask, None)
-        else:
-            mask = None
+        get_mask = (self._canvas.optional_annotations["mask"] or
+                    (is_active and self.selected_editor == "mask"))
+        mask = face.mask.get(self._canvas.selected_mask, None) if get_mask else None
         mask = mask if mask is None else mask.mask.squeeze()
-
-        tk_face = TKFace(image,
-                         size=self.face_size,
-                         mask=mask)
-
+        tk_face = TKFace(image, size=self.face_size, mask=mask)
         logger.trace("face: %s, tk_face: %s", face, tk_face)
         return tk_face
 
     def get_landmarks(self, frame_index, face_index, face, top_left, refresh=False):
-        """ Obtain the landmark points for each mesh annotation """
+        """ Obtain the landmark points for each mesh annotation.
+
+        First tries to obtain the aligned landmarks from the cache. If the landmarks do not exist
+        in the cache, or a refresh has been requested, then the landmarks are calculated from the
+        detected face object.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index to obtain the face for
+        face_index: int
+            The face index of the face within the requested frame
+        top_left: tuple
+            The top left (x, y) points of the face's bounding box within the viewport
+        refresh: bool, optional
+            Whether to force a reload of the face's aligned landmarks, even if they already exist
+            within the cache. Default: ``False``
+
+        Returns
+        -------
+        dict
+            The key is the tkinter canvas object type for each part of the mesh annotation
+            (`polygon`, `line`). The value is a list containing the (x, y) coordinates of each
+            part of the mesh annotation, from the top left corner location.
+        """
         key = "{}_{}".format(frame_index, face_index)
         landmarks = self._landmarks.get(key, None)
         if not landmarks or refresh:
@@ -267,8 +280,8 @@ class Viewport():
             self._landmarks[key] = landmarks
         return landmarks
 
-    def _show_mesh(self, mesh_ids, landmarks):
-        """ Display the mesh annotations.
+    def _locate_mesh(self, mesh_ids, landmarks):
+        """ Place the mesh annotation canvas objects in the correct location.
 
         Parameters
         ----------
@@ -282,7 +295,8 @@ class Viewport():
                 self._canvas.coords(mesh_id, *coords.flatten())
 
     def face_from_point(self, point_x, point_y):
-        """ Get the face information for the face containing the given point.
+        """ Given an (x, y) point on the :class:`Viewport`, obtain the face information at that
+        location.
 
         Parameters
         ----------
@@ -295,9 +309,10 @@ class Viewport():
         -------
         :class:`numpy.ndarray`
             Array of shape (4, ) containing the (`frame index`, `face index`, `x_point of top left
-            corner`, `y point of top left corner`) of the face that the mouse is currently over.
+            corner`, `y point of top left corner`) of the face at the given coordinates.
 
-            If the mouse is not over a face, then the frame and face indices will be -1
+            If the given coordinates are not over a face, then the frame and face indices will be
+            -1
         """
         if point_x > self._grid.dimensions[0]:
             retval = np.array((-1, -1, -1, -1))
@@ -309,12 +324,20 @@ class Viewport():
         return retval
 
     def move_active_to_top(self):
-        """ Check whether the active frame is going off the bottom of the frame and move
-        it to top. """
+        """ Check whether the active frame is going off the bottom of the viewport, if so: move it
+        to the top of the viewport. """
         self._active_frame.move_to_top()
 
 
 class VisibleObjects():
+    """ Holds the objects from the :class:`~tools.manual.faceviewer.frame.Grid` that appear in the
+    viewable area of the :class:`Viewport`.
+
+    Parameters
+    ----------
+    viewport: :class:`Viewport`
+        The viewport object for the :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas
+    """
     def __init__(self, viewport):
         self._viewport = viewport
         self._canvas = viewport._canvas
@@ -329,7 +352,8 @@ class VisibleObjects():
 
     @property
     def visible_grid(self):
-        """ :class:`numpy.ndarray`: The currently visible section of :attr:`_grid`.
+        """ :class:`numpy.ndarray`: The currently visible section of the
+        :class:`~tools.manual.faceviewer.frame.Grid`
 
         A numpy array of shape (`4`, `rows`, `columns`) corresponding to the viewable area of the
         display grid. 1st dimension contains frame indices, 2nd dimension face indices. The 3rd and
@@ -340,7 +364,8 @@ class VisibleObjects():
 
     @property
     def visible_faces(self):
-        """ :class:`numpy.ndarray`: The currently visible :class:`lib.faces_detect.DetectedFace`
+        # TODO jpg attr
+        """ :class:`numpy.ndarray`: The currently visible :class:`~lib.faces_detect.DetectedFace`
         objects.
 
         A numpy array of shape (2, `rows`, `columns`) corresponding to the viewable area of the
@@ -376,8 +401,7 @@ class VisibleObjects():
         return np.array(self._canvas.coords(self._images[0][0]), dtype="int")
 
     def update(self):
-        """ Load and unload thumbnails on a canvas resize or scroll event.
-        """
+        """ Load and unload thumbnails in the visible area of the faces viewer. """
         self._visible_grid, self._visible_faces = self._grid.visible_area
         if (isinstance(self._images, np.ndarray) and
                 self._visible_grid.shape[-1] != self._images.shape[-1]):
@@ -421,12 +445,14 @@ class VisibleObjects():
         self._meshes = []
 
     def _add_rows(self, existing_rows, required_rows):
-        """ Add objects to the viewport
+        """ Add rows to the viewport.
 
         Parameters
         ----------
-        number: int
-            The number of objects to add to the viewport
+        existing_rows: int
+            The number of existing rows within the viewport
+        required_rows: int
+            The number of rows required by the viewport
         """
         columns = self._grid.columns_rows[0]
         if not isinstance(self._images, np.ndarray):
@@ -601,7 +627,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
             self._current_face_index = None
             return
 
-        self._canvas.config(cursor="hand1")
+        self._canvas.config(cursor="hand2")
         self._highlight(face[2:])
         self._current_frame_index = frame_idx
         self._current_face_index = face_idx
@@ -642,6 +668,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         self._navigation.stop_playback()
         self._globals.tk_transport_index.set(transport_id)
         self._viewport.move_active_to_top()
+        self.on_hover(None)
 
 
 class ActiveFrame():
@@ -664,11 +691,8 @@ class ActiveFrame():
         self._globals = viewport._canvas._globals
         self._navigation = viewport._canvas._display_frame.navigation
         self._tk_selected_editor = self._canvas._display_frame.tk_selected_action
-        self._last_frame_idx = -1
-        self._images = []
-        self._meshes = []
-        self._faces = []
-        self._boxes = []
+        self._last_frame_idx = -1  # TODO Reset on grid change
+        self._assets = dict(images=[], meshes=[], faces=[], boxes=[])
 
         self._globals.tk_update_active_viewport.trace("w", lambda *e: self._reload_callback())
         self._tk_edited.trace("w", lambda *e: self._update_on_edit())
@@ -708,11 +732,11 @@ class ActiveFrame():
         editor selections.
         """
         logger.trace("Reloading annotations")
-        if np.any(self._images):
+        if np.any(self._assets["images"]):
             self._clear_previous()
 
         self._set_active_objects()
-        if not np.any(self._images):
+        if not np.any(self._assets["images"]):
             return
 
         if self._navigation.tk_is_playing.get():
@@ -742,13 +766,13 @@ class ActiveFrame():
         """ Collect the objects that exist in the currently active frame from the main grid. """
         if self._grid.is_valid:
             rows, cols = np.where(self._objects.visible_grid[0] == self.frame_index)
-            self._images = self._objects.images[rows, cols]
-            self._meshes = self._objects.meshes[rows, cols]
-            self._faces = self._objects.visible_faces[:, rows, cols].T
+            self._assets["images"] = self._objects.images[rows, cols]
+            self._assets["meshes"] = self._objects.meshes[rows, cols]
+            self._assets["faces"] = self._objects.visible_faces[:, rows, cols].T
         else:
-            self._images = []
-            self._meshes = []
-            self._faces = []
+            self._assets["images"] = []
+            self._assets["meshes"] = []
+            self._assets["faces"] = []
 
     def move_to_top(self):
         """ Move the currently selected frame's faces to the top of the viewport if they are moving
@@ -756,8 +780,8 @@ class ActiveFrame():
         # TODO Catch position if play hit when active frame not in view
         # Also occurs when first frame has no face, filter changed, then click on face (lod)
         height = self._canvas.bbox("backdrop")[3]
-        top = self._canvas.coords(self._images[0])[1] / height
-        bot = (self._canvas.coords(self._images[-1])[1] + self._size) / height
+        top = self._canvas.coords(self._assets["images"][0])[1] / height
+        bot = (self._canvas.coords(self._assets["images"][-1])[1] + self._size) / height
         if top > self._canvas.yview()[0] and bot > self._canvas.yview()[1]:
             self._canvas.yview_moveto(top)
             self._viewport.update()
@@ -767,7 +791,7 @@ class ActiveFrame():
         that are required for the highlighter. If more faces are displayed in the current frame
         than highlight boxes are available, then new boxes are created to accommodate the
         additional faces. """
-        new_boxes_count = max(0, len(self._images) - len(self._boxes))
+        new_boxes_count = max(0, len(self._assets["images"]) - len(self._assets["boxes"]))
         if new_boxes_count == 0:
             return
         logger.debug("new_boxes_count: %s", new_boxes_count)
@@ -780,7 +804,7 @@ class ActiveFrame():
                                                 state="hidden",
                                                 tags=["active_highlighter"])
             logger.trace("Created new highlight_box: %s", box)
-            self._boxes.append(box)
+            self._assets["boxes"].append(box)
 
     def _update_on_edit(self):
         """ Update the active faces on a frame edit. """
@@ -792,10 +816,11 @@ class ActiveFrame():
 
     def _update_face(self):
         """ Update the highlighted annotations for faces in the currently selected frame. """
-        for face_idx, (image_id, mesh_ids, box_id, det_face), in enumerate(zip(self._images,
-                                                                               self._meshes,
-                                                                               self._boxes,
-                                                                               self._faces)):
+        for face_idx, (image_id, mesh_ids, box_id, det_face), in enumerate(
+                zip(self._assets["images"],
+                    self._assets["meshes"],
+                    self._assets["boxes"],
+                    self._assets["faces"])):
             top_left = np.array(self._canvas.coords(image_id))
             coords = (*top_left, *top_left + self._size)
             tk_face = self._viewport.get_tk_face(self.frame_index, face_idx, det_face)
