@@ -304,6 +304,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             for item in self._alignments.data[key]["faces"]:
                 face = DetectedFace()
                 face.from_alignment(item)
+                # TODO Move to core
+                setattr(face, "thumbnail", item["thumb"])
                 this_frame_faces.append(face)
             self._frame_faces.append(this_frame_faces)
 

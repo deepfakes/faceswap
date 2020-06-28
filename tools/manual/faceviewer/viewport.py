@@ -98,7 +98,7 @@ class Viewport():
         logger.debug("Toggling mask annotations to: %s. mask_type: %s", state, mask_type)
         for (frame_idx, face_idx), det_faces in zip(
                 self._objects.visible_grid[:2].transpose(1, 2, 0).reshape(-1, 2),
-                self._objects.visible_faces[0].flatten()):
+                self._objects.visible_faces.flatten()):
             key = "_".join([str(frame_idx), str(face_idx)])
             mask = None if state == "hidden" else det_faces.mask.get(mask_type, None)
             mask = mask if mask is None else mask.mask.squeeze()
@@ -136,7 +136,7 @@ class Viewport():
         for row, images, meshes, faces in zip(self._objects.visible_grid.transpose(1, 2, 0),
                                               self._objects.images,
                                               self._objects.meshes,
-                                              self._objects.visible_faces.transpose(1, 2, 0)):
+                                              self._objects.visible_faces):
 
             for (frame_idx, face_idx, pnt_x, pnt_y), image_id, mesh_ids, face in zip(row,
                                                                                      images,
@@ -158,7 +158,7 @@ class Viewport():
                 self._canvas.itemconfig(image_id, image=tk_face.photo)
                 if (self._canvas.optional_annotations["mesh"]
                         or frame_idx == self._active_frame.frame_index):
-                    landmarks = self.get_landmarks(frame_idx, face_idx, face[0], top_left)
+                    landmarks = self.get_landmarks(frame_idx, face_idx, face, top_left)
                     self._locate_mesh(mesh_ids, landmarks)
 
     def _discard_tk_faces(self):
@@ -171,8 +171,6 @@ class Viewport():
         logger.trace("keys: %s allocated_faces: %s", keys, len(self._tk_faces))
 
     def get_tk_face(self, frame_index, face_index, face):
-        # TODO Jpg thumbnail in numpy array position 1? Surely we now have jpg as asset of
-        # detected_face? Make sure documentation updated too if changed
         """ Obtain the :class:`TKFace` object for the given face from the cache. If the face does
         not exist in the cache, then it is generated and added prior to returning.
 
@@ -182,9 +180,8 @@ class Viewport():
             The frame index to obtain the face for
         face_index: int
             The face index of the face within the requested frame
-        face: :class:`numpy.ndarray`
-            :class:`lib.faces_detect.DetectedFace` object on dimension 0. Jpg thumbnail in
-            dimension 1
+        face: :class:`~lib.faces_detect.DetectedFace`
+            The detected face object, containing the thumbnail jpg
 
         Returns
         -------
@@ -197,15 +194,14 @@ class Viewport():
         if key not in self._tk_faces or is_active:
             logger.trace("creating new tk_face: (key: %s, is_active: %s)", key, is_active)
             if is_active:
-                det_face = face[0]
-                det_face.load_aligned(self._active_frame.current_frame,
-                                      size=self.face_size,
-                                      force=True)
-                image = det_face.aligned_face
-                det_face.aligned = dict()
+                face.load_aligned(self._active_frame.current_frame,
+                                  size=self.face_size,
+                                  force=True)
+                image = face.aligned_face
+                face.aligned = dict()
             else:
-                det_face, image = face
-            tk_face = self._get_tk_face_object(det_face, image, is_active)
+                image = face.thumbnail
+            tk_face = self._get_tk_face_object(face, image, is_active)
             self._tk_faces[key] = tk_face
         else:
             logger.trace("tk_face exists: %s", key)
@@ -364,13 +360,11 @@ class VisibleObjects():
 
     @property
     def visible_faces(self):
-        # TODO jpg attr
         """ :class:`numpy.ndarray`: The currently visible :class:`~lib.faces_detect.DetectedFace`
         objects.
 
-        A numpy array of shape (2, `rows`, `columns`) corresponding to the viewable area of the
-        display grid and containing the detected faces in dimension 0 and the jpg thumbnail at
-        dimension 1 at their currently viewable position.
+        A numpy array of shape (`rows`, `columns`) corresponding to the viewable area of the
+        display grid and containing the detected faces at their currently viewable position.
 
         Any locations that are not populated by a face will have ``None`` in it's place. """
         return self._visible_faces
@@ -691,7 +685,7 @@ class ActiveFrame():
         self._globals = viewport._canvas._globals
         self._navigation = viewport._canvas._display_frame.navigation
         self._tk_selected_editor = self._canvas._display_frame.tk_selected_action
-        self._last_frame_idx = -1  # TODO Reset on grid change
+        self._last_frame_idx = -1
         self._assets = dict(images=[], meshes=[], faces=[], boxes=[])
 
         self._globals.tk_update_active_viewport.trace("w", lambda *e: self._reload_callback())
@@ -736,16 +730,20 @@ class ActiveFrame():
             self._clear_previous()
 
         self._set_active_objects()
+        self._check_active_in_view()
+
         if not np.any(self._assets["images"]):
+            self._last_frame_idx = self.frame_index
             return
 
-        if self._navigation.tk_is_playing.get():
+        if self._last_frame_idx != self.frame_index:
             self.move_to_top()
         self._create_new_boxes()
 
         self._update_face()
         self._canvas.tag_raise("active_highlighter")
         self._globals.tk_update_active_viewport.set(False)
+        self._last_frame_idx = self.frame_index
 
     def _clear_previous(self):
         """ Reverts the previously selected annotations to their default state. """
@@ -760,7 +758,6 @@ class ActiveFrame():
             for key, tk_face in self._tk_faces.items():
                 if key.startswith("{}_".format(self._last_frame_idx)):
                     tk_face.update_mask(None)
-        self._last_frame_idx = self.frame_index
 
     def _set_active_objects(self):
         """ Collect the objects that exist in the currently active frame from the main grid. """
@@ -768,22 +765,39 @@ class ActiveFrame():
             rows, cols = np.where(self._objects.visible_grid[0] == self.frame_index)
             self._assets["images"] = self._objects.images[rows, cols]
             self._assets["meshes"] = self._objects.meshes[rows, cols]
-            self._assets["faces"] = self._objects.visible_faces[:, rows, cols].T
+            self._assets["faces"] = self._objects.visible_faces[rows, cols]
         else:
             self._assets["images"] = []
             self._assets["meshes"] = []
             self._assets["faces"] = []
 
+    def _check_active_in_view(self):
+        """  If the frame has changed, there are faces in the frame, but they don't appear in the
+        viewport, then bring the active faces to the top of the viewport. """
+        if (not np.any(self._assets["images"]) and
+                self._last_frame_idx != self.frame_index and
+                self._grid.frame_has_faces(self.frame_index)):
+            y_coord = self._grid.y_coord_from_frame(self.frame_index)
+            self._canvas.yview_moveto(y_coord / self._canvas.bbox("backdrop")[3])
+            self._viewport.update()
+
     def move_to_top(self):
         """ Move the currently selected frame's faces to the top of the viewport if they are moving
         off the bottom of the viewer. """
-        # TODO Catch position if play hit when active frame not in view
-        # Also occurs when first frame has no face, filter changed, then click on face (lod)
         height = self._canvas.bbox("backdrop")[3]
-        top = self._canvas.coords(self._assets["images"][0])[1] / height
-        bot = (self._canvas.coords(self._assets["images"][-1])[1] + self._size) / height
-        if top > self._canvas.yview()[0] and bot > self._canvas.yview()[1]:
-            self._canvas.yview_moveto(top)
+        bot = int(self._canvas.coords(self._assets["images"][-1])[1] + self._size)
+
+        y_top, y_bot = (int(round(pnt * height)) for pnt in self._canvas.yview())
+
+        if y_top < bot < y_bot:  # bottom face is still in fully visible area
+            return
+        top = int(self._canvas.coords(self._assets["images"][0])[1])
+
+        if self._canvas.winfo_height() > self._size:
+            self._canvas.yview_moveto(top / height)
+            self._viewport.update()
+        elif self._canvas.winfo_height() <= self._size and y_top != top:
+            self._canvas.yview_moveto(top / height)
             self._viewport.update()
 
     def _create_new_boxes(self):
@@ -826,7 +840,7 @@ class ActiveFrame():
             tk_face = self._viewport.get_tk_face(self.frame_index, face_idx, det_face)
             self._canvas.itemconfig(image_id, image=tk_face.photo)
             self._show_box(box_id, coords)
-            self._show_mesh(mesh_ids, face_idx, det_face[0], top_left)
+            self._show_mesh(mesh_ids, face_idx, det_face, top_left)
 
     def _show_box(self, item_id, coordinates):
         """ Display the highlight box around the given coordinates.

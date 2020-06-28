@@ -474,7 +474,7 @@ class Grid():
     def face_size(self):
         """ int: The pixel size of each thumbnail. """
         return self._face_size
-    
+
     @property
     def is_valid(self):
         """ bool: ``True`` if the current filter means that the grid holds faces. ``False`` if
@@ -522,9 +522,38 @@ class Grid():
             retval = None, None
         else:
             top, bottom = self._visible_row_indices
-            retval = self._grid[:, top:bottom, :], self._display_faces[:, top:bottom, :]
+            retval = self._grid[:, top:bottom, :], self._display_faces[top:bottom, :]
         logger.trace([r if r is None else r.shape for r in retval])
         return retval
+
+    def y_coord_from_frame(self, frame_index):
+        """ Return the y coordinate for the first face that appears in the given frame.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index to locate in the grid
+
+        Returns
+        -------
+        int
+            The y coordinate of the first face for the given frame
+        """
+        return min(self._grid[3][np.where(self._grid[0] == frame_index)])
+
+    def frame_has_faces(self, frame_index):
+        """ Check whether the given frame index contains any faces.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index to locate in the grid
+
+        Returns
+        -------
+        bool: ``True`` if there are faces in the given frame otherwise ``False``
+        """
+        return np.any(self._grid[0] == frame_index)
 
     def update(self):
         """ Update the underlying grid.
@@ -617,12 +646,11 @@ class Grid():
         columns, rows = self.columns_rows
         face_count = len(self._raw_indices["frame"])
         padding = [None for _ in range(face_count, columns * rows)]
-        self._display_faces = np.array(
-            [[None if idx is None else current_faces[idx][face_idx],
-              None if idx is None else self._detected_faces.get_thumbnail(idx, face_idx)]
-             for idx, face_idx
-             in zip(self._raw_indices["frame"] + padding, self._raw_indices["face"] + padding)],
-            dtype="object").reshape(rows, columns, 2).transpose(2, 0, 1)
+        self._display_faces = np.array([None if idx is None else current_faces[idx][face_idx]
+                                        for idx, face_idx
+                                        in zip(self._raw_indices["frame"] + padding,
+                                               self._raw_indices["face"] + padding)],
+                                       dtype="object").reshape(rows, columns)
         logger.debug("faces: (shape: %s, dtype: %s)",
                      self._display_faces.shape, self._display_faces.dtype)
 
