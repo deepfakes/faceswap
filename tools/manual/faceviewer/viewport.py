@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Handles the visible area of the canvas. """
+""" Handles the visible area of the :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas. """
 
 import logging
 import tkinter as tk
@@ -30,7 +30,7 @@ class Viewport():
     Parameters
     ----------
     canvas: :class:`tkinter.Canvas`
-        The :class:`~tools.manual.FacesViewer` canvas
+        The :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas
     """
     def __init__(self, canvas, tk_edited_variable):
         logger.debug("Initializing: %s: (canvas: %s, tk_edited_variable: %s)",
@@ -52,7 +52,7 @@ class Viewport():
         self._hoverbox = HoverBox(self)
         self._active_frame = ActiveFrame(self, tk_edited_variable)
         self._tk_selected_editor.trace(
-            "w", lambda *e: self._active_frame.reload_annotations(force=True))
+            "w", lambda *e: self._active_frame.reload_annotations())
 
     @property
     def face_size(self):
@@ -84,13 +84,10 @@ class Viewport():
         logger.debug("Toggling mesh annotations to: %s", state)
         self._canvas.itemconfig("viewport_mesh", state=state)
         self.update()
-        if state == "hidden":
-            self._active_frame.reload_annotations()
 
     def toggle_mask(self, state, mask_type):
         """ Toggles the mesh optional annotations off and on """
         logger.debug("Toggling mask annotations to: %s. mask_type: %s", state, mask_type)
-
         for (frame_idx, face_idx), det_faces in zip(
                 self._objects.visible_grid[:2].transpose(1, 2, 0).reshape(-1, 2),
                 self._objects.visible_faces[0].flatten()):
@@ -98,9 +95,7 @@ class Viewport():
             mask = None if state == "hidden" else det_faces.mask.get(mask_type, None)
             mask = mask if mask is None else mask.mask.squeeze()
             self._tk_faces[key].update_mask(mask)
-
-        if state == "hidden":
-            self._active_frame.reload_annotations()
+        self.update()
 
     def reset(self):
         """ Reset the viewport on a grid change """
@@ -119,7 +114,7 @@ class Viewport():
         self._update_viewport()
         _timeit("set_vis viewport", split)
         split = time()
-        self._active_frame.reload_annotations(force=True)
+        self._active_frame.reload_annotations()
         _timeit("set_vis active_frame", split)
         _timeit("set_vis total", start)
         # print("category", "action", "count", "total", "average", "average_per_face")
@@ -540,7 +535,7 @@ class VisibleObjects():
 
 
 class HoverBox():  # pylint:disable=too-few-public-methods
-    """ Handle the current mouse location in the :class:`~tools.manual.FacesViewer`.
+    """ Handle the current mouse location when over the :class:`Viewport`.
 
     Highlights the face currently underneath the cursor and handles actions when clicking
     on a face.
@@ -548,7 +543,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
     Parameters
     ----------
     viewport: :class:`Viewport`
-        The viewport object for the :class:`~tools.manual.FacesViewer` canvas
+        The viewport object for the :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas
     """
     def __init__(self, viewport):
         logger.debug("Initializing: %s (viewport: %s)", self.__class__.__name__, viewport)
@@ -573,24 +568,20 @@ class HoverBox():  # pylint:disable=too-few-public-methods
 
     @property
     def _size(self):
-        """ int: the currently set viewport face size. """
+        """ int: the currently set viewport face size in pixels. """
         return self._viewport.face_size
 
     def on_hover(self, event):
-        """ The mouse cursor display as bound to the mouse's <Motion> event.
-
-        The canvas only displays faces, so if the mouse is over an object change the cursor
-        otherwise use default.
+        """ Highlight the face and set the mouse cursor for the mouse's current location.
 
         Parameters
         ----------
         event: :class:`tkinter.Event` or `None`
-            The tkinter mouse event. Provides the current location of the mouse cursor.
-            If `None` is passed as the event (for example when this function is being called
-            outside of a mouse event) then the location of the cursor will be calculated
+            The tkinter mouse event. Provides the current location of the mouse cursor. If `None`
+            is passed as the event (for example when this function is being called outside of a
+            mouse event) then the location of the cursor will be calculated
         """
         if event is None:
-            # Get the current mouse pointer position if not triggered by an event
             pnts = np.array((self._canvas.winfo_pointerx(), self._canvas.winfo_pointery()))
             pnts -= np.array((self._canvas.winfo_rootx(), self._canvas.winfo_rooty()))
         else:
@@ -635,7 +626,7 @@ class HoverBox():  # pylint:disable=too-few-public-methods
 
     def _select_frame(self):
         """ Select the face and the subsequent frame (in the editor view) when a face is clicked
-        on in :class:`~tools.manual.FacesViewer`.
+        on in the :class:`Viewport`.
         """
         frame_id = self._current_frame_index
         is_zoomed = self._globals.is_zoomed
@@ -654,12 +645,12 @@ class HoverBox():  # pylint:disable=too-few-public-methods
 
 
 class ActiveFrame():
-    """ Holds the objects and handles faces for the currently selected frame.
+    """ Handles the display of faces and annotations for the currently active frame.
 
     Parameters
     ----------
     canvas: :class:`tkinter.Canvas`
-        The :class:`~tools.manual.FacesViewer` canvas
+        The :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas
     """
     def __init__(self, viewport, tk_edited_variable):
         logger.debug("Initializing: %s (viewport: %s, tk_edited_variable: %s)",
@@ -679,23 +670,23 @@ class ActiveFrame():
         self._faces = []
         self._boxes = []
 
-        self._globals.tk_update_active_viewport.trace("w", lambda *e: self.reload_annotations())
+        self._globals.tk_update_active_viewport.trace("w", lambda *e: self._reload_callback())
         self._tk_edited.trace("w", lambda *e: self._update_on_edit())
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
     def frame_index(self):
-        """ int: The current globally displayed frame's index """
+        """ int: The frame index of the currently displayed frame. """
         return self._globals.frame_index
 
     @property
     def current_frame(self):
-        """ :class:`numpy.ndarray`: The frame currently being displayed. """
+        """ :class:`numpy.ndarray`: A BGR version of the frame currently being displayed. """
         return self._globals.current_frame["image"]
 
     @property
     def _size(self):
-        """ int: the currently set viewport face size. """
+        """ int: The size of the thumbnails displayed in the viewport, in pixels. """
         return self._viewport.face_size
 
     @property
@@ -703,11 +694,19 @@ class ActiveFrame():
         """ dict: The currently selected optional annotations """
         return self._canvas.optional_annotations
 
-    def reload_annotations(self, force=False):
-        """ Refresh the highlighted annotations for faces in the currently selected frame on an
-        add/remove face. """
-        if not self._globals.tk_update_active_viewport.get() and not force:
-            return
+    def _reload_callback(self):
+        """ If a frame has changed, triggering the variable, then update the active frame. Return
+        having done nothing if the variable is resetting. """
+        if self._globals.tk_update_active_viewport.get():
+            self.reload_annotations()
+
+    def reload_annotations(self):
+        """ Handles the reloading of annotations for the currently active faces.
+
+        Highlights the faces within the viewport of those faces that exist in the currently
+        displaying frame. Applies annotations based on the optional annotations and current
+        editor selections.
+        """
         logger.trace("Reloading annotations")
         if np.any(self._images):
             self._clear_previous()
@@ -725,7 +724,7 @@ class ActiveFrame():
         self._globals.tk_update_active_viewport.set(False)
 
     def _clear_previous(self):
-        """ Clear the previously highlighted frame """
+        """ Reverts the previously selected annotations to their default state. """
         self._canvas.itemconfig("active_highlighter", state="hidden")
 
         for key in ("polygon", "line"):
@@ -740,7 +739,7 @@ class ActiveFrame():
         self._last_frame_idx = self.frame_index
 
     def _set_active_objects(self):
-        """ Collect the objects that are currently active from the main grid """
+        """ Collect the objects that exist in the currently active frame from the main grid. """
         if self._grid.is_valid:
             rows, cols = np.where(self._objects.visible_grid[0] == self.frame_index)
             self._images = self._objects.images[rows, cols]
@@ -818,13 +817,19 @@ class ActiveFrame():
         self._canvas.itemconfig(item_id, state="normal")
 
     def _show_mesh(self, mesh_ids, face_index, detected_face, top_left):
-        """ Display the highlight box around the given coordinates.
+        """ Display the mesh annotation for the given face, at the given location.
 
         Parameters
         ----------
-        mesh_ids: list
-            The list of tkinter canvas object identifiers that make up a single face mesh
-            annotation
+        mesh_ids: dict
+            Dictionary containing the `polygon` and `line` tkinter canvas identifiers that make up
+            the mesh for the given face
+        face_index: int
+            The face index within the frame for the given face
+        detected_face: :class:`~lib.faces_detect.DetectedFace`
+            The detected face object that contains the landmarks for generating the mesh
+        top_left: tuple
+            The (x, y) top left co-ordinates of the mesh's bounding box
         """
         state = "normal" if (self._tk_selected_editor.get() != "Mask" or
                              self._optional_annotations["mesh"]) else "hidden"
@@ -849,16 +854,16 @@ class ActiveFrame():
 
 class TKFace():
     """ An object that holds a single :class:`tkinter.PhotoImage` face, ready for placement in the
-    :class:`~tools.manual.faceviewer.frames.FacesViewer` canvas, along with the face's associated
-    mesh annotation coordinates.
+    :class:`Viewport`, Handles the placement of and removal of masks for the face as well as
+    updates on any edits.
 
     Parameters
     ----------
+    face: :class:`numpy.ndarray`
+        The face, sized correctly as a 3 channel BGR image or an encoded jpg to create a
+        :class:`tkinter.PhotoImage` from
     size: int, optional
         The pixel size of the face image. Default: `128`
-    face: :class:`numpy.ndarray` or ``None``, optional
-        The face, sized correctly, to create a :class:`tkinter.PhotoImage` from. Pass ``None`` if
-        an empty photo image should be created. Default: ``None``
     mask: :class:`numpy.ndarray` or ``None``, optional
         The mask to be applied to the face image. Pass ``None`` if no mask is to be used.
         Default ``None``
@@ -882,18 +887,17 @@ class TKFace():
     @property
     def photo(self):
         """ :class:`tkinter.PhotoImage`: The face in a format that can be placed on the
-        :class:`~tools.manual.manual.FaceViewer` canvas. """
+         :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas. """
         return self._photo
 
     # << PUBLIC METHODS >> #
     def update(self, face, mask):
-        """ Update the :attr:`face`, :attr:`mesh_points` and attr:`mesh_is_poly` objects with the
-        given information.
+        """ Update the :attr:`photo` with the given face and mask.
 
         Parameters
         ----------
         face: :class:`numpy.ndarray`
-            The face, sized correctly, to be updated in :attr:`tk_faces`
+            The face, sized correctly as a 3 channel BGR image
         mask: :class:`numpy.ndarray` or ``None``
             The mask to be applied to the face image. Pass ``None`` if no mask is to be used
         """
@@ -901,7 +905,7 @@ class TKFace():
         self._photo.paste(self._generate_tk_face_data(mask))
 
     def update_mask(self, mask):
-        """ Update the mask in the 4th channel of :attr:`face` to the given mask.
+        """ Update the mask in the 4th channel of :attr:`photo` to the given mask.
 
         Parameters
         ----------
@@ -931,7 +935,7 @@ class TKFace():
         return face[..., 2::-1]
 
     def _generate_tk_face_data(self, mask):
-        """ Create the :class:`tkinter.PhotoImage` face for the given face image.
+        """ Create the :class:`tkinter.PhotoImage` from the currant :attr:`_face`.
 
         Parameters
         ----------
@@ -941,7 +945,7 @@ class TKFace():
         Returns
         -------
         :class:`tkinter.PhotoImage`
-            The face formatted for the :class:`~tools.manual.manual.FaceViewer` canvas.
+            The face formatted for the  :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas.
         """
         mask = np.ones(self._face.shape[:2], dtype="uint8") * 255 if mask is None else mask
         if mask.shape[0] != self._size:

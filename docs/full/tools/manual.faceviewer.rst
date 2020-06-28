@@ -7,40 +7,6 @@ Handles the display of faces in the Face Viewer section of Faceswap's Manual Too
 .. contents:: Contents
    :local:
 
-cache module
-============
-
-.. rubric:: Module Summary
-
-.. autosummary::
-   :nosignatures:
-   
-   ~tools.manual.faceviewer.cache.TKFace
-
-.. rubric:: Module
-
-.. automodule:: tools.manual.faceviewer.cache
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-display module
-==============
-
-.. rubric:: Module Summary
-
-.. autosummary::
-   :nosignatures:
-   
-   ~tools.manual.faceviewer.display.ContextMenu
-
-.. rubric:: Module
-
-.. automodule:: tools.manual.faceviewer.display
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 frame module
 ============
 
@@ -49,13 +15,36 @@ frame module
 .. autosummary::
    :nosignatures:
    
+   ~tools.manual.faceviewer.frame.ContextMenu
    ~tools.manual.faceviewer.frame.FacesActionsFrame
    ~tools.manual.faceviewer.frame.FacesFrame
    ~tools.manual.faceviewer.frame.FacesViewer
-
+   ~tools.manual.faceviewer.frame.Grid
+   
 .. rubric:: Module
 
 .. automodule:: tools.manual.faceviewer.frame
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+viewport module
+===============
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~tools.manual.faceviewer.viewport.ActiveFrame
+   ~tools.manual.faceviewer.viewport.HoverBox
+   ~tools.manual.faceviewer.viewport.TKFace
+   ~tools.manual.faceviewer.viewport.Viewport
+   ~tools.manual.faceviewer.viewport.VisibleObjects   
+
+.. rubric:: Module
+
+.. automodule:: tools.manual.faceviewer.viewport
    :members:
    :undoc-members:
    :show-inheritance:

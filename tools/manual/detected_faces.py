@@ -174,6 +174,7 @@ class DetectedFaces():
             The face index within the given frame to return the thumbnail for
 
         Returns
+        -------
         :class:`numpy.ndarray`
             The encoded jpg thumbnail image
         """
