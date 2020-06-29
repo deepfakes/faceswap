@@ -281,9 +281,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             this_frame_faces = []
             for item in self._alignments.data[key]["faces"]:
                 face = DetectedFace()
-                face.from_alignment(item)
-                # TODO Move to core
-                setattr(face, "thumbnail", item["thumb"])
+                face.from_alignment(item, with_thumb=True)
                 this_frame_faces.append(face)
             self._frame_faces.append(this_frame_faces)
 
@@ -293,12 +291,10 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
-        to_save = zip(list(self._updated_frame_indices),
-                      np.array(self._frame_faces)[np.array(self._updated_frame_indices)])
-        logger.verbose("Saving alignments for %s updated frames", len(to_save))
+        frames = list(self._updated_frame_indices)
+        logger.verbose("Saving alignments for %s updated frames", len(frames))
 
-        # TODO Save thumbnails
-        for idx, faces in to_save:
+        for idx, faces in zip(frames, np.array(self._frame_faces)[np.array(frames)]):
             frame = self._sorted_frame_names[idx]
             self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
 
@@ -483,6 +479,20 @@ class FaceUpdate():
         retval = self._frame_faces[frame_index]
         return retval
 
+    def _generate_thumbnail(self, face):
+        """ Generate the jpg thumbnail from the currently active frame for the detected face and
+        assign to it's `thumbnail` attribute.
+
+        Parameters
+        ----------
+        face: class:`~lib.faces_detect.DetectedFace`
+            The detected face object to generate the thumbnail for
+        """
+        face.load_aligned(self._globals.current_frame["image"], 96, force=True)
+        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 70])[1]
+        face.thumbnail = jpg
+        face.aligned = dict()
+
     def add(self, frame_index, pnt_x, width, pnt_y, height):
         """ Add a :class:`~lib.faces_detect.DetectedFace` object to the current frame with the
         given dimensions.
@@ -506,10 +516,6 @@ class FaceUpdate():
         face_index = len(faces) - 1
 
         self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
-        face.load_aligned(self._globals.current_frame["image"], 96, force=True)
-        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 70])[1]
-        setattr(face, "thumbnail", jpg)
-        face.aligned = dict()
         self._tk_face_count_changed.set(True)
 
     def delete(self, frame_index, face_index):
@@ -559,6 +565,7 @@ class FaceUpdate():
         face.y = pnt_y
         face.h = height
         face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
+        self._generate_thumbnail(face)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -595,6 +602,7 @@ class FaceUpdate():
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
+        self._generate_thumbnail(face)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -624,6 +632,7 @@ class FaceUpdate():
         face.y += shift_y
         face.landmarks_xy += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
+        self._generate_thumbnail(face)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -648,6 +657,7 @@ class FaceUpdate():
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
         face.mask = self._extractor.get_masks(frame_index, face_index)
+        self._generate_thumbnail(face)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -670,6 +680,7 @@ class FaceUpdate():
         face = self._faces_at_frame_index(frame_index)[face_index]
         face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
         face.mask = self._extractor.get_masks(frame_index, face_index)
+        self._generate_thumbnail(face)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 

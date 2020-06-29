@@ -85,6 +85,7 @@ class DetectedFace():
         self.y = y  # pylint:disable=invalid-name
         self.h = h  # pylint:disable=invalid-name
         self.landmarks_xy = landmarks_xy
+        self.thumbnail = None
         self.mask = dict() if mask is None else mask
         self.hash = None
 
@@ -153,9 +154,9 @@ class DetectedFace():
         -------
         alignment: dict
             The alignment dict will be returned with the keys ``x``, ``w``, ``y``, ``h``,
-            ``landmarks_xy``, ``mask``, ``hash``.
+            ``landmarks_xy``, ``mask``, ``hash``. The additional key ``thumb`` will be provided
+            if the detected face object contains a thumbnail.
         """
-
         alignment = dict()
         alignment["x"] = self.x
         alignment["w"] = self.w
@@ -164,10 +165,12 @@ class DetectedFace():
         alignment["landmarks_xy"] = self.landmarks_xy
         alignment["hash"] = self.hash
         alignment["mask"] = {name: mask.to_dict() for name, mask in self.mask.items()}
+        if self.thumbnail is not None:
+            alignment["thumb"] = self.thumbnail
         logger.trace("Returning: %s", alignment)
         return alignment
 
-    def from_alignment(self, alignment, image=None):
+    def from_alignment(self, alignment, image=None, with_thumb=False):
         """ Set the attributes of this class from an alignments file and optionally load the face
         into the ``image`` attribute.
 
@@ -176,6 +179,8 @@ class DetectedFace():
         alignment: dict
             A dictionary entry for a face from an alignments file containing the keys
             ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``.
+            Optionally the key ``thumb`` will be provided. This is for use in the manual tool and
+            contains the compressed jpg thumbnail of the face to be allocated to :attr:`thumbnail.
             Optionally the key ``hash`` will be provided, but not all use cases will know the
             face hash at this time.
             Optionally the key ``mask`` will be provided, but legacy alignments will not have
@@ -183,6 +188,9 @@ class DetectedFace():
         image: numpy.ndarray, optional
             If an image is passed in, then the ``image`` attribute will
             be set to the cropped face based on the passed in bounding box co-ordinates
+        with_thumb: bool, optional
+            Whether to load the jpg thumbnail into the detected face object, if provided.
+            Default: ``False``
         """
 
         logger.trace("Creating from alignment: (alignment: %s, has_image: %s)",
@@ -191,16 +199,21 @@ class DetectedFace():
         self.w = alignment["w"]
         self.y = alignment["y"]
         self.h = alignment["h"]
-        self.aligned = dict()
-        self.feed = dict()
-        self.reference = dict()
         landmarks = alignment["landmarks_xy"]
         if not isinstance(landmarks, np.ndarray):
             landmarks = np.array(landmarks, dtype="float32")
         self.landmarks_xy = landmarks.copy()
+
+        if with_thumb:
+            # Thumbnails currently only used for manual tool. Default to None
+            self.thumbnail = alignment.get("thumb", None)
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         # Manual tool and legacy alignments will not have a mask
+        self.aligned = dict()
+        self.feed = dict()
+        self.reference = dict()
+
         if alignment.get("mask", None) is not None:
             self.mask = dict()
             for name, mask_dict in alignment["mask"].items():
