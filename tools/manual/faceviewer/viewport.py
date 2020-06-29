@@ -12,9 +12,6 @@ from PIL import Image, ImageTk
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-# TODO Mask view doesn't reset to normal when editing mask + changing frames on Windows
-# Mesh annotations don't adjust properly on thumb resize
-
 class Viewport():
     """ Handles the display of faces and annotations in the currently viewable area of the canvas.
 
@@ -133,15 +130,11 @@ class Viewport():
         if self._canvas.optional_annotations["mesh"]:  # Display any hidden end of row meshes
             self._canvas.itemconfig("viewport_mesh", state="normal")
 
-        for row, images, meshes, faces in zip(self._objects.visible_grid.transpose(1, 2, 0),
-                                              self._objects.images,
-                                              self._objects.meshes,
-                                              self._objects.visible_faces):
-
-            for (frame_idx, face_idx, pnt_x, pnt_y), image_id, mesh_ids, face in zip(row,
-                                                                                     images,
-                                                                                     meshes,
-                                                                                     faces):
+        for collection in zip(self._objects.visible_grid.transpose(1, 2, 0),
+                              self._objects.images,
+                              self._objects.meshes,
+                              self._objects.visible_faces):
+            for (frame_idx, face_idx, pnt_x, pnt_y), image_id, mesh_ids, face in zip(*collection):
                 top_left = np.array((pnt_x, pnt_y))
                 if frame_idx == self._active_frame.frame_index:
                     logger.trace("Skipping active frame: %s", frame_idx)
@@ -267,7 +260,7 @@ class Viewport():
         key = "{}_{}".format(frame_index, face_index)
         landmarks = self._landmarks.get(key, None)
         if not landmarks or refresh:
-            face.load_aligned(None, size=self.face_size)
+            face.load_aligned(None, size=self.face_size, force=True)
             landmarks = dict(polygon=[], line=[])
             for area, val in self._landmark_mapping.items():
                 points = face.aligned_landmarks[val[0]:val[1]] + top_left
@@ -675,24 +668,26 @@ class ActiveFrame():
     ----------
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas
+    tk_edited_variable: :class:`tkinter.BooleanVar`
+        The tkinter callback variable indicating that a face has been edited
     """
     def __init__(self, viewport, tk_edited_variable):
         logger.debug("Initializing: %s (viewport: %s, tk_edited_variable: %s)",
                      self.__class__.__name__, viewport, tk_edited_variable)
         self._objects = viewport._objects
-        self._tk_edited = tk_edited_variable
         self._viewport = viewport
         self._grid = viewport._grid
         self._tk_faces = viewport._tk_faces
         self._canvas = viewport._canvas
         self._globals = viewport._canvas._globals
         self._navigation = viewport._canvas._display_frame.navigation
-        self._tk_selected_editor = self._canvas._display_frame.tk_selected_action
-        self._last_frame_idx = -1
+        self._last_execution = dict(frame_index=-1, size=viewport.face_size)
+        self._tk_vars = dict(selected_editor=self._canvas._display_frame.tk_selected_action,
+                             edited=tk_edited_variable)
         self._assets = dict(images=[], meshes=[], faces=[], boxes=[])
 
         self._globals.tk_update_active_viewport.trace("w", lambda *e: self._reload_callback())
-        self._tk_edited.trace("w", lambda *e: self._update_on_edit())
+        tk_edited_variable.trace("w", lambda *e: self._update_on_edit())
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -736,17 +731,17 @@ class ActiveFrame():
         self._check_active_in_view()
 
         if not np.any(self._assets["images"]):
-            self._last_frame_idx = self.frame_index
+            self._last_execution["frame_index"] = self.frame_index
             return
 
-        if self._last_frame_idx != self.frame_index:
+        if self._last_execution["frame_index"] != self.frame_index:
             self.move_to_top()
         self._create_new_boxes()
 
         self._update_face()
         self._canvas.tag_raise("active_highlighter")
         self._globals.tk_update_active_viewport.set(False)
-        self._last_frame_idx = self.frame_index
+        self._last_execution["frame_index"] = self.frame_index
 
     def _clear_previous(self):
         """ Reverts the previously selected annotations to their default state. """
@@ -759,7 +754,7 @@ class ActiveFrame():
 
         if self._viewport.selected_editor == "mask" and not self._optional_annotations["mask"]:
             for key, tk_face in self._tk_faces.items():
-                if key.startswith("{}_".format(self._last_frame_idx)):
+                if key.startswith("{}_".format(self._last_execution["frame_index"])):
                     tk_face.update_mask(None)
 
     def _set_active_objects(self):
@@ -778,7 +773,7 @@ class ActiveFrame():
         """  If the frame has changed, there are faces in the frame, but they don't appear in the
         viewport, then bring the active faces to the top of the viewport. """
         if (not np.any(self._assets["images"]) and
-                self._last_frame_idx != self.frame_index and
+                self._last_execution["frame_index"] != self.frame_index and
                 self._grid.frame_has_faces(self.frame_index)):
             y_coord = self._grid.y_coord_from_frame(self.frame_index)
             self._canvas.yview_moveto(y_coord / self._canvas.bbox("backdrop")[3])
@@ -825,11 +820,11 @@ class ActiveFrame():
 
     def _update_on_edit(self):
         """ Update the active faces on a frame edit. """
-        if not self._tk_edited.get():
+        if not self._tk_vars["edited"].get():
             return
         self._set_active_objects()
         self._update_face()
-        self._tk_edited.set(False)
+        self._tk_vars["edited"].set(False)
 
     def _update_face(self):
         """ Update the highlighted annotations for faces in the currently selected frame. """
@@ -844,6 +839,7 @@ class ActiveFrame():
             self._canvas.itemconfig(image_id, image=tk_face.photo)
             self._show_box(box_id, coords)
             self._show_mesh(mesh_ids, face_idx, det_face, top_left)
+        self._last_execution["size"] = self._viewport.face_size
 
     def _show_box(self, item_id, coordinates):
         """ Display the highlight box around the given coordinates.
@@ -873,13 +869,15 @@ class ActiveFrame():
         top_left: tuple
             The (x, y) top left co-ordinates of the mesh's bounding box
         """
-        state = "normal" if (self._tk_selected_editor.get() != "Mask" or
+        state = "normal" if (self._tk_vars["selected_editor"].get() != "Mask" or
                              self._optional_annotations["mesh"]) else "hidden"
         kwargs = dict(polygon=dict(fill="", outline=self._canvas.control_colors["Mesh"]),
                       line=dict(fill=self._canvas.control_colors["Mesh"]))
 
-        edited = self._tk_edited.get() and self._tk_selected_editor.get() not in ("Mask", "View")
-        relocate = state == "normal" and not self._optional_annotations["mesh"]
+        edited = (self._tk_vars["edited"].get() and
+                  self._tk_vars["selected_editor"].get() not in ("Mask", "View"))
+        relocate = self._viewport.face_size != self._last_execution["size"] or (
+            state == "normal" and not self._optional_annotations["mesh"])
         if relocate or edited:
             landmarks = self._viewport.get_landmarks(self.frame_index,
                                                      face_index,
