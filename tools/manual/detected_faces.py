@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class DetectedFaces():
     """ Handles the manipulation of :class:`~lib.faces_detect.DetectedFace` objects stored
     in the alignments file. Acts as a parent class for the IO operations (saving and loading from
-    and alignments file), the face update operations (when changes are made to alignments in the
+    an alignments file), the face update operations (when changes are made to alignments in the
     GUI) and the face filters (when a user changes the filter navigation mode.)
 
     Parameters
@@ -162,28 +162,6 @@ class DetectedFaces():
         """
         if self._globals.is_video:
             self._alignments.save_video_meta_data(pts_time, keyframes)
-
-    def get_thumbnail(self, frame_index, face_index):
-        """ Obtain the compressed jpg thumbnail for the given face in the given frame.
-
-        Parameters
-        ----------
-        frame_index: int
-            The frame index that contains the face to return the thumbnail for
-        face_index: int
-            The face index within the given frame to return the thumbnail for
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The encoded jpg thumbnail image
-        """
-        face = self._frame_faces[frame_index][face_index]
-        if not hasattr(face, "thumbnail"):
-            setattr(face,
-                    "thumbnail",
-                    self._alignments.thumbnails.get_thumbnail_by_index(frame_index, face_index))
-        return face.thumbnail
 
     def get_face_at_index(self, frame_index, face_index, image, size):
         """ Return an aligned face for the given frame and face index sized at the given size.
@@ -389,14 +367,14 @@ class Filter():
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
         self._globals = detected_faces._globals
-        self._det_faces = detected_faces
+        self._detected_faces = detected_faces
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def count(self):
         """ int: The number of frames that meet the filter criteria returned by
         :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
-        face_count_per_index = self._det_faces.face_count_per_index
+        face_count_per_index = self._detected_faces.face_count_per_index
         if self._globals.filter_mode == "No Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount == 0)
         elif self._globals.filter_mode == "Has Face(s)":
@@ -415,7 +393,7 @@ class Filter():
         frame_indices = []
         face_indices = []
         if self._globals.filter_mode != "No Faces":
-            for frame_idx, face_count in enumerate(self._det_faces.face_count_per_index):
+            for frame_idx, face_count in enumerate(self._detected_faces.face_count_per_index):
                 if face_count <= 1 and self._globals.filter_mode == "Multiple Faces":
                     continue
                 for face_idx in range(face_count):
@@ -429,7 +407,7 @@ class Filter():
     def frames_list(self):
         """ list: The list of frame indices that meet the filter criteria returned by
         :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
-        face_count_per_index = self._det_faces.face_count_per_index
+        face_count_per_index = self._detected_faces.face_count_per_index
         if self._globals.filter_mode == "No Faces":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count == 0]
         elif self._globals.filter_mode == "Multiple Faces":
@@ -454,7 +432,7 @@ class FaceUpdate():
     def __init__(self, detected_faces):
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
-        self._det_faces = detected_faces
+        self._detected_faces = detected_faces
         self._globals = detected_faces._globals
         self._frame_faces = detected_faces._frame_faces
         self._updated_frame_indices = detected_faces._updated_frame_indices
@@ -471,7 +449,7 @@ class FaceUpdate():
         -----
         The variable is still a ``None`` when this class is initialized, so referenced explicitly.
         """
-        return self._det_faces.tk_edited
+        return self._detected_faces.tk_edited
 
     @property
     def _tk_face_count_changed(self):
@@ -482,22 +460,22 @@ class FaceUpdate():
         -----
         The variable is still a ``None`` when this class is initialized, so referenced explicitly.
         """
-        return self._det_faces.tk_face_count_changed
-
-    @property
-    def _zoomed_size(self):
-        """ int: The size of the face when the editor is in zoomed in mode
-        """
-        return self._det_faces._zoomed_size  # pylint:disable=protected-access
+        return self._detected_faces.tk_face_count_changed
 
     def _faces_at_frame_index(self, frame_index):
-        """ Checks whether there are already new alignments in :attr:`_alignments`. If not
-        then saved alignments are copied to :attr:`_updated_faces` ready for update.
+        """ Checks whether the frame has already been added to :attr:`_updated_frame_indices` and
+        adds it. Triggers the unsaved variable if this is the first edited frame. Returns the
+        detected face objects for the given frame.
 
         Parameters
         ----------
         frame_index: int
             The frame index to check whether there are updated alignments available
+
+        Returns
+        -------
+        list
+            The :class:`~lib.faces_detect.DetectedFace` objects for the requested frame
         """
         if not self._updated_frame_indices and not self._tk_unsaved.get():
             self._tk_unsaved.set(True)
@@ -729,7 +707,7 @@ class FaceUpdate():
         """
         logger.debug("frame: %s, direction: %s", frame_index, direction)
         faces = self._faces_at_frame_index(frame_index)
-        frames_with_faces = [idx for idx, faces in enumerate(self._det_faces.current_faces)
+        frames_with_faces = [idx for idx, faces in enumerate(self._detected_faces.current_faces)
                              if len(faces) > 0]
         if direction == "prev":
             idx = next((idx for idx in reversed(frames_with_faces)
@@ -762,18 +740,17 @@ class ThumbsCreator():
                      self.__class__.__name__, detected_faces, input_location)
         self._size = 96
         self._jpeg_quality = 75
-        self._pbar = None
-        self._lock = Lock()
+        self._pbar = dict(pbar=None, lock=Lock())
+        self._meta = dict(key_frames=detected_faces.video_meta_data.get("keyframes", None),
+                          pts_times=detected_faces.video_meta_data.get("pts_time", None))
         self._location = input_location
-        self._key_frames = detected_faces.video_meta_data.get("keyframes", None)
-        self._pts_times = detected_faces.video_meta_data.get("pts_time", None)
         self._alignments = detected_faces._alignments
         self._frame_faces = detected_faces._frame_faces
 
-        self._is_video = self._key_frames is not None and self._pts_times is not None
+        self._is_video = all(val is not None for val in self._meta.values())
         self._num_threads = os.cpu_count() - 2
         if self._is_video:
-            self._num_threads = min(self._num_threads, len(self._key_frames))
+            self._num_threads = min(self._num_threads, len(self._meta["key_frames"]))
         else:
             self._num_threads = max(self._num_threads, 32)
         self._threads = []
@@ -788,7 +765,9 @@ class ThumbsCreator():
     def generate_cache(self):
         """ Extract the face thumbnails from a video or folder of images into the
         alignments file. """
-        self._pbar = tqdm(desc="Caching Thumbails", leave=False, total=len(self._frame_faces))
+        self._pbar["pbar"] = tqdm(desc="Caching Thumbails",
+                                  leave=False,
+                                  total=len(self._frame_faces))
         if self._is_video:
             self._launch_video()
         else:
@@ -799,7 +778,7 @@ class ThumbsCreator():
                 break
             sleep(1)
         self._join_threads()
-        self._pbar.close()
+        self._pbar["pbar"].close()
         self._alignments.save()
 
     # << PRIVATE METHODS >> #
@@ -821,19 +800,21 @@ class ThumbsCreator():
         Splits the video into segments and passes each of these segments to separate background
         threads for some speed up.
         """
-        key_frame_split = len(self._key_frames) // self._num_threads
+        key_frame_split = len(self._meta["key_frames"]) // self._num_threads
+        key_frames = self._meta["key_frames"]
+        pts_times = self._meta["pts_times"]
         for idx in range(self._num_threads):
             is_final = idx == self._num_threads - 1
             start_idx = idx * key_frame_split
-            keyframe_idx = len(self._key_frames) - 1 if is_final else start_idx + key_frame_split
-            end_idx = self._key_frames[keyframe_idx]
-            start_pts = self._pts_times[self._key_frames[start_idx]]
-            end_pts = False if idx + 1 == self._num_threads else self._pts_times[end_idx]
-            starting_index = self._pts_times.index(start_pts)
+            keyframe_idx = len(key_frames) - 1 if is_final else start_idx + key_frame_split
+            end_idx = key_frames[keyframe_idx]
+            start_pts = pts_times[key_frames[start_idx]]
+            end_pts = False if idx + 1 == self._num_threads else pts_times[end_idx]
+            starting_index = pts_times.index(start_pts)
             if end_pts:
-                segment_count = len(self._pts_times[self._key_frames[start_idx]:end_idx])
+                segment_count = len(pts_times[key_frames[start_idx]:end_idx])
             else:
-                segment_count = len(self._pts_times[self._key_frames[start_idx]:])
+                segment_count = len(pts_times[key_frames[start_idx]:])
             logger.debug("thread index: %s, start_idx: %s, end_idx: %s, start_pts: %s, "
                          "end_pts: %s, starting_index: %s, segment_count: %s", idx, start_idx,
                          end_idx, start_pts, end_pts, starting_index, segment_count)
@@ -964,5 +945,5 @@ class ThumbsCreator():
                                [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])[1]
             self._alignments.thumbnails.add_thumbnail(filename, face_idx, jpg)
             face.aligned["face"] = None
-        with self._lock:
-            self._pbar.update(1)
+        with self._pbar["lock"]:
+            self._pbar["pbar"].update(1)

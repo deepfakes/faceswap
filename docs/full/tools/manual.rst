@@ -47,6 +47,7 @@ detected_faces module
    ~tools.manual.detected_faces.DetectedFaces
    ~tools.manual.detected_faces.FaceUpdate
    ~tools.manual.detected_faces.Filter
+   ~tools.manual.detected_faces.ThumbsCreator
 
 .. rubric:: Module
 
