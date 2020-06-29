@@ -90,7 +90,6 @@ class Manual(tk.Tk):
         -----
         Because some of the initialize checks perform extra work once their threads are complete,
         they should only return ``True`` once, and should not be queried again.
-
         """
         extractor_init = False
         frames_init = False
@@ -295,7 +294,7 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         return panels
 
     def _initialize_face_options(self):
-        """ TODO """
+        """ Set the Face Viewer options panel, beneath the standard control options. """
         frame = ttk.Frame(self)
         frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
         size_frame = ttk.Frame(frame)
@@ -361,25 +360,7 @@ class TkGlobals():
     def __init__(self, input_location):
         logger.debug("Initializing %s: (input_location: %s)",
                      self.__class__.__name__, input_location)
-        self._tk_frame_index = tk.IntVar()
-        self._tk_frame_index.set(0)
-
-        self._tk_transport_index = tk.IntVar()
-        self._tk_transport_index.set(0)
-
-        self._tk_face_index = tk.IntVar()
-        self._tk_face_index.set(0)
-
-        self._tk_update = tk.BooleanVar()
-        self._tk_update.set(False)
-
-        self._tk_update_active_viewport = tk.BooleanVar()
-        self._tk_update_active_viewport.set(False)
-
-        self._tk_filter_mode = tk.StringVar()
-        self._tk_faces_size = tk.StringVar()
-        self._tk_is_zoomed = tk.BooleanVar()
-        self._tk_is_zoomed.set(False)
+        self._tk_vars = self._get_tk_vars()
 
         self._is_video = self._check_input(input_location)
         self._frame_count = 0  # set by FrameLoader
@@ -391,6 +372,28 @@ class TkGlobals():
                                    display_dims=None,
                                    filename=None)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @classmethod
+    def _get_tk_vars(cls):
+        """ Create and initialize the tkinter variables.
+
+        Returns
+        -------
+        dict
+            The variable name as key, the variable as value
+        """
+        retval = dict()
+        for name in ("frame_index", "transport_index", "face_index"):
+            var = tk.IntVar()
+            var.set(0)
+            retval[name] = var
+        for name in ("update", "update_active_viewport", "is_zoomed"):
+            var = tk.BooleanVar()
+            var.set(False)
+            retval[name] = var
+        for name in ("filter_mode", "faces_size"):
+            retval[name] = tk.StringVar()
+        return retval
 
     @property
     def current_frame(self):
@@ -421,18 +424,18 @@ class TkGlobals():
     def tk_face_index(self):
         """ :class:`tkinter.IntVar`: The variable that holds the face index of the selected face
         within the current frame when in zoomed mode. """
-        return self._tk_face_index
+        return self._tk_vars["face_index"]
 
     @property
     def tk_update_active_viewport(self):
         """ :class:`tkinter.BooleanVar`: Boolean Variable that is traced by the viewport's active
         frame to update.. """
-        return self._tk_update_active_viewport
+        return self._tk_vars["update_active_viewport"]
 
     @property
     def face_index(self):
         """ int: The currently displayed face index when in zoomed mode. """
-        return self._tk_face_index.get()
+        return self._tk_vars["face_index"].get()
 
     @property
     def frame_display_dims(self):
@@ -441,31 +444,31 @@ class TkGlobals():
 
     @property
     def frame_index(self):
-        """ int: The currently displayed frame index. NB: This returns -1 if there are no frames
+        """ int: The currently displayed frame index. NB This returns -1 if there are no frames
         that meet the currently selected filter criteria. """
-        return self._tk_frame_index.get()
+        return self._tk_vars["frame_index"].get()
 
     @property
     def tk_frame_index(self):
-        """ :class:`tkinter.IntVar`: The variable holding current frame index. """
-        return self._tk_frame_index
+        """ :class:`tkinter.IntVar`: The variable holding the current frame index. """
+        return self._tk_vars["frame_index"]
 
     @property
     def filter_mode(self):
         """ str: The currently selected navigation mode. """
-        return self._tk_filter_mode.get()
+        return self._tk_vars["filter_mode"].get()
 
     @property
     def tk_filter_mode(self):
         """ :class:`tkinter.StringVar`: The variable holding the currently selected navigation
         filter mode. """
-        return self._tk_filter_mode
+        return self._tk_vars["filter_mode"]
 
     @property
     def tk_faces_size(self):
         """ :class:`tkinter.StringVar`: The variable holding the currently selected Faces Viewer
         thumbnail size. """
-        return self._tk_faces_size
+        return self._tk_vars["faces_size"]
 
     @property
     def is_video(self):
@@ -476,24 +479,24 @@ class TkGlobals():
     def tk_is_zoomed(self):
         """ :class:`tkinter.BooleanVar`: The variable holding the value indicating whether the
         frame viewer is zoomed into a face or zoomed out to the full frame. """
-        return self._tk_is_zoomed
+        return self._tk_vars["is_zoomed"]
 
     @property
     def is_zoomed(self):
         """ bool: ``True`` if the frame viewer is zoomed into a face, ``False`` if the frame viewer
         is displaying a full frame. """
-        return self._tk_is_zoomed.get()
+        return self._tk_vars["is_zoomed"].get()
 
     @property
     def tk_transport_index(self):
         """ :class:`tkinter.IntVar`: The current index of the display frame's transport slider. """
-        return self._tk_transport_index
+        return self._tk_vars["transport_index"]
 
     @property
     def tk_update(self):
         """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that a full
         update needs to occur. """
-        return self._tk_update
+        return self._tk_vars["update"]
 
     @staticmethod
     def _check_input(frames_location):
@@ -507,12 +510,6 @@ class TkGlobals():
         Returns
         -------
         bool: 'True' if input is a video 'False' if it is a folder.
-
-        Raises
-        ------
-        FaceswapError
-            If the given location is a file and does not have a valid video extension.
-
         """
         if os.path.isdir(frames_location):
             retval = False
@@ -573,11 +570,8 @@ class Aligner():
     def __init__(self, tk_globals):
         logger.debug("Initializing: %s (tk_globals: %s)", self.__class__.__name__, tk_globals)
         self._globals = tk_globals
-        # TODO
-        self._aligners = {"cv2-dnn": None, "mask": None}
-        self._aligner = "cv2-dnn"
-        # self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
-        # self._aligner = "FAN"
+        self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
+        self._aligner = "FAN"
         self._det_faces = None
         self._frame_index = None
         self._face_index = None
@@ -627,9 +621,7 @@ class Aligner():
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # Make sure non-GPU aligner is allocated first
-        # TODO
-        # for model in ("mask", "cv2-dnn", "FAN"):
-        for model in ("mask", "cv2-dnn"):
+        for model in ("mask", "cv2-dnn", "FAN"):
             logger.debug("Initializing aligner: %s", model)
             plugin = None if model == "mask" else model
             aligner = Extractor(None, plugin, ["components", "extended"],
@@ -724,8 +716,6 @@ class Aligner():
         method: str
             The normalization method to use
         """
-        # TODO
-        # return
         logger.debug("Setting normalization method to: '%s'", method)
         for plugin, aligner in self._aligners.items():
             if plugin == "mask":
@@ -734,8 +724,8 @@ class Aligner():
 
 
 class FrameLoader():
-    """ Loads the frames, sets the frame count to :attr:`TKGlobals.frame_count` and handles the
-    return of correct frame for the GUI.
+    """ Loads the frames, sets the frame count to :attr:`TkGlobals.frame_count` and handles the
+    return of the correct frame for the GUI.
 
     Parameters
     ----------
@@ -759,7 +749,8 @@ class FrameLoader():
 
     @property
     def is_initialized(self):
-        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        """ bool: ``True`` if the Frame Loader has completed initialization otherwise
+        ``False``. """
         thread_is_alive = self._init_thread.is_alive()
         if thread_is_alive:
             self._init_thread.check_and_raise_error()
