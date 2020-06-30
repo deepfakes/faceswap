@@ -488,8 +488,8 @@ class FaceUpdate():
         face: class:`~lib.faces_detect.DetectedFace`
             The detected face object to generate the thumbnail for
         """
-        face.load_aligned(self._globals.current_frame["image"], 96, force=True)
-        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 70])[1]
+        face.load_aligned(self._globals.current_frame["image"], 80, force=True)
+        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
         face.thumbnail = jpg
         face.aligned = dict()
 
@@ -746,11 +746,12 @@ class ThumbsCreator():
     input_location: str
         The location of the input folder of frames or video file
     """
-    def __init__(self, detected_faces, input_location):
-        logger.debug("Initializing %s: (detected_faces: %s, input_location: %s)",
-                     self.__class__.__name__, detected_faces, input_location)
-        self._size = 96
-        self._jpeg_quality = 75
+    def __init__(self, detected_faces, input_location, single_process):
+        logger.debug("Initializing %s: (detected_faces: %s, input_location: %s, "
+                     "single_process: %s)", self.__class__.__name__, detected_faces,
+                     input_location, single_process)
+        self._size = 80
+        self._jpeg_quality = 60
         self._pbar = dict(pbar=None, lock=Lock())
         self._meta = dict(key_frames=detected_faces.video_meta_data.get("keyframes", None),
                           pts_times=detected_faces.video_meta_data.get("pts_time", None))
@@ -760,7 +761,9 @@ class ThumbsCreator():
 
         self._is_video = all(val is not None for val in self._meta.values())
         self._num_threads = os.cpu_count() - 2
-        if self._is_video:
+        if self._is_video and single_process:
+            self._num_threads = 1
+        elif self._is_video and not single_process:
             self._num_threads = min(self._num_threads, len(self._meta["key_frames"]))
         else:
             self._num_threads = max(self._num_threads, 32)
@@ -954,6 +957,7 @@ class ThumbsCreator():
             jpg = cv2.imencode(".jpg",
                                face.aligned_face,
                                [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])[1]
+            face.thumbnail = jpg
             self._alignments.thumbnails.add_thumbnail(filename, face_idx, jpg)
             face.aligned["face"] = None
         with self._pbar["lock"]:

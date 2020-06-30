@@ -25,6 +25,9 @@ from .frameviewer.frame import DisplayFrame
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+# TODO
+# Recursion Error when lots of face, max frame size and tries to roll frame over
+
 class Manual(tk.Tk):
     """ The main entry point for Faceswap's Manual Editor Tool. This tool is part of the Faceswap
     Tools suite and should be called from ``python tools.py manual`` command.
@@ -45,27 +48,27 @@ class Manual(tk.Tk):
         self._globals = TkGlobals(arguments.frames)
 
         extractor = Aligner(self._globals)
-        self._det_faces = DetectedFaces(self._globals,
-                                        arguments.alignments_path,
-                                        arguments.frames,
-                                        extractor)
+        self._detected_faces = DetectedFaces(self._globals,
+                                             arguments.alignments_path,
+                                             arguments.frames,
+                                             extractor)
 
-        video_meta_data = self._det_faces.video_meta_data
+        video_meta_data = self._detected_faces.video_meta_data
         loader = FrameLoader(self._globals, arguments.frames, video_meta_data)
 
-        self._det_faces.load_faces()
+        self._detected_faces.load_faces()
         self._containers = self._create_containers()
         self._wait_for_threads(extractor, loader, video_meta_data)
-        self._generate_thumbs(arguments.frames)
+        self._generate_thumbs(arguments.frames, arguments.thumb_regen, arguments.single_process)
 
         self._display = DisplayFrame(self._containers["top"],
                                      self._globals,
-                                     self._det_faces)
+                                     self._detected_faces)
         _Options(self._containers["top"], self._globals, self._display)
 
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        self._globals,
-                                       self._det_faces,
+                                       self._detected_faces,
                                        self._display)
         self._display.tk_selected_action.set("View")
 
@@ -102,21 +105,27 @@ class Manual(tk.Tk):
             logger.debug("Threads not initialized. Waiting...")
             sleep(1)
 
-        extractor.link_faces(self._det_faces)
+        extractor.link_faces(self._detected_faces)
         if any(val is None for val in video_meta_data.values()):
             logger.debug("Saving video meta data to alignments file")
-            self._det_faces.save_video_meta_data(**loader.video_meta_data)
+            self._detected_faces.save_video_meta_data(**loader.video_meta_data)
 
-    def _generate_thumbs(self, input_location):
+    def _generate_thumbs(self, input_location, force, single_process):
         """ Check whether thumbnails are stored in the alignments file and if not generate them.
 
         Parameters
         ----------
         input_location: str
             The input video or folder of images
+        force: bool
+            ``True`` if the thumbnails should be regenerated even if they exist, otherwise
+            ``False``
+        single_process: bool
+            ``True`` will extract thumbs from a video in a single process, ``False`` will run
+            parallel threads
         """
-        thumbs = ThumbsCreator(self._det_faces, input_location)
-        if thumbs.has_thumbs:
+        thumbs = ThumbsCreator(self._detected_faces, input_location, single_process)
+        if thumbs.has_thumbs and not force:
             return
         logger.debug("Generating thumbnails cache")
         thumbs.generate_cache()
@@ -197,10 +206,10 @@ class Manual(tk.Tk):
             "f5": lambda k=event.keysym: self._display.set_action(k),
             "f9": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
             "f10": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
-            "c": lambda f=tk_pos.get(), d="previous": self._det_faces.update.copy(f, d),
-            "v": lambda f=tk_pos.get(), d="next": self._det_faces.update.copy(f, d),
-            "ctrl_s": self._det_faces.save,
-            "r": lambda f=tk_pos.get(): self._det_faces.revert_to_saved(f)}
+            "c": lambda f=tk_pos.get(), d="previous": self._detected_faces.update.copy(f, d),
+            "v": lambda f=tk_pos.get(), d="next": self._detected_faces.update.copy(f, d),
+            "ctrl_s": self._detected_faces.save,
+            "r": lambda f=tk_pos.get(): self._detected_faces.revert_to_saved(f)}
 
         # Allow keypad keys to be used for numbers
         press = event.keysym.replace("KP_", "") if event.keysym.startswith("KP_") else event.keysym
@@ -572,7 +581,7 @@ class Aligner():
         self._globals = tk_globals
         self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
         self._aligner = "FAN"
-        self._det_faces = None
+        self._detected_faces = None
         self._frame_index = None
         self._face_index = None
         self._init_thread = self._background_init_aligner()
@@ -587,10 +596,11 @@ class Aligner():
     def _feed_face(self):
         """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
         aligner, formatted for the pipeline """
+        face = self._detected_faces.current_faces[self._frame_index][self._face_index]
         return ExtractMedia(
             self._globals.current_frame["filename"],
             self._globals.current_frame["image"],
-            detected_faces=[self._det_faces.current_faces[self._frame_index][self._face_index]])
+            detected_faces=[face])
 
     @property
     def is_initialized(self):
@@ -647,7 +657,7 @@ class Aligner():
             current Manual session
         """
         logger.debug("Linking detected_faces: %s", detected_faces)
-        self._det_faces = detected_faces
+        self._detected_faces = detected_faces
 
     def get_landmarks(self, frame_index, face_index, aligner):
         """ Feed the detected face into the alignment pipeline and retrieve the landmarks.

@@ -19,20 +19,38 @@ class ManualArgs(FaceSwapArgs):
     def get_argument_list():
         """ Generate the command line argument list for the Manual Tool. """
         argument_list = list()
-        argument_list.append({
-            "opts": ("-al", "--alignments"),
-            "action": FileFullPaths,
-            "filetypes": "alignments",
-            "type": str,
-            "group": "data",
-            "dest": "alignments_path",
-            "help": "Path to the alignments file for the input, if not at the default location"})
-        argument_list.append({
-            "opts": ("-fr", "--frames"),
-            "action": DirOrFileFullPaths,
-            "filetypes": "video",
-            "required": True,
-            "group": "data",
-            "help": "Video file or directory containing source frames that faces were extracted "
-                    "from."})
+        argument_list.append(dict(
+            opts=("-al", "--alignments"),
+            action=FileFullPaths,
+            filetypes="alignments",
+            type=str,
+            group="data",
+            dest="alignments_path",
+            help="Path to the alignments file for the input, if not at the default location"))
+        argument_list.append(dict(
+            opts=("-fr", "--frames"),
+            action=DirOrFileFullPaths,
+            filetypes="video",
+            required=True,
+            group="data",
+            help="Video file or directory containing source frames that faces were extracted "
+                 "from."))
+        argument_list.append(dict(
+            opts=("-t", "--thumb-regen"),
+            action="store_true",
+            dest="thumb_regen",
+            default=False,
+            group="options",
+            help="Force regeneration of the low resolution jpg thumbnails in the alignments "
+                 "file."))
+        argument_list.append(dict(
+            opts=("-s", "--single-process"),
+            action="store_true",
+            dest="single_process",
+            default=False,
+            group="options",
+            help="The process attempts to speed up generation of thumbnails by extracting from "
+                 "the video in parallel threads. For some videos, this causes the caching "
+                 "process to hang. If this happens, then set this option to generate the "
+                 "thumbnails in a slower, but more stable single thread."))
         return argument_list
