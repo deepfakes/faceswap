@@ -203,7 +203,7 @@ class Manual(tk.Tk):
             "f5": lambda k=event.keysym: self._display.set_action(k),
             "f9": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
             "f10": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
-            "c": lambda f=tk_pos.get(), d="previous": self._detected_faces.update.copy(f, d),
+            "c": lambda f=tk_pos.get(), d="prev": self._detected_faces.update.copy(f, d),
             "v": lambda f=tk_pos.get(), d="next": self._detected_faces.update.copy(f, d),
             "ctrl_s": self._detected_faces.save,
             "r": lambda f=tk_pos.get(): self._detected_faces.revert_to_saved(f)}

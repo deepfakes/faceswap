@@ -497,7 +497,8 @@ class Grid():
     @property
     def columns_rows(self):
         """ tuple: the (`columns`, `rows`) required to hold all display images. """
-        return tuple(reversed(self._grid.shape[1:]))
+        retval = tuple(reversed(self._grid.shape[1:])) if self._is_valid else (0, 0)
+        return retval
 
     @property
     def dimensions(self):
@@ -567,7 +568,7 @@ class Grid():
         bool
             ``True`` if there are faces in the given frame otherwise ``False``
         """
-        return np.any(self._grid[0] == frame_index)
+        return self._is_valid and np.any(self._grid[0] == frame_index)
 
     def update(self):
         """ Update the underlying grid.
