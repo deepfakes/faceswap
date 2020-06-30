@@ -96,6 +96,8 @@ class Viewport():
         for (frame_idx, face_idx), det_faces in zip(
                 self._objects.visible_grid[:2].transpose(1, 2, 0).reshape(-1, 2),
                 self._objects.visible_faces.flatten()):
+            if frame_idx == -1:
+                continue
             key = "_".join([str(frame_idx), str(face_idx)])
             mask = None if state == "hidden" else det_faces.mask.get(mask_type, None)
             mask = mask if mask is None else mask.mask.squeeze()
