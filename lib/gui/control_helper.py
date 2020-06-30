@@ -983,7 +983,7 @@ class ControlBuilder():
         ctl = tk.Frame(frame,
                        bg=self.option.default,
                        bd=2,
-                       cursor="hand1",
+                       cursor="hand2",
                        relief=tk.SUNKEN,
                        width=round(int(20 * get_config().scaling_factor)),
                        height=round(int(12 * get_config().scaling_factor)))
