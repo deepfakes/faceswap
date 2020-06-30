@@ -731,6 +731,7 @@ class ActiveFrame():
         self._check_active_in_view()
 
         if not np.any(self._assets["images"]):
+            logger.trace("No active faces. Returning")
             self._last_execution["frame_index"] = self.frame_index
             return
 
@@ -745,6 +746,7 @@ class ActiveFrame():
 
     def _clear_previous(self):
         """ Reverts the previously selected annotations to their default state. """
+        logger.trace("Clearing previous active frame")
         self._canvas.itemconfig("active_highlighter", state="hidden")
 
         for key in ("polygon", "line"):
@@ -761,10 +763,12 @@ class ActiveFrame():
         """ Collect the objects that exist in the currently active frame from the main grid. """
         if self._grid.is_valid:
             rows, cols = np.where(self._objects.visible_grid[0] == self.frame_index)
+            logger.trace("Setting active objects: (rows: %s, columns: %s)", rows, cols)
             self._assets["images"] = self._objects.images[rows, cols]
             self._assets["meshes"] = self._objects.meshes[rows, cols]
             self._assets["faces"] = self._objects.visible_faces[rows, cols]
         else:
+            logger.trace("No valid grid. Clearing active objects")
             self._assets["images"] = []
             self._assets["meshes"] = []
             self._assets["faces"] = []
@@ -776,6 +780,7 @@ class ActiveFrame():
                 self._last_execution["frame_index"] != self.frame_index and
                 self._grid.frame_has_faces(self.frame_index)):
             y_coord = self._grid.y_coord_from_frame(self.frame_index)
+            logger.trace("Active not in view. Moving to: %s", y_coord)
             self._canvas.yview_moveto(y_coord / self._canvas.bbox("backdrop")[3])
             self._viewport.update()
 
@@ -788,13 +793,22 @@ class ActiveFrame():
         y_top, y_bot = (int(round(pnt * height)) for pnt in self._canvas.yview())
 
         if y_top < bot < y_bot:  # bottom face is still in fully visible area
+            logger.trace("Active faces in frame. Returning")
             return
+
         top = int(self._canvas.coords(self._assets["images"][0])[1])
+        if y_top == top:
+            logger.trace("Top face already on top row. Returning")
+            return
 
         if self._canvas.winfo_height() > self._size:
+            logger.trace("Viewport taller than single face height. Moving Active faces to top: %s",
+                         top)
             self._canvas.yview_moveto(top / height)
             self._viewport.update()
         elif self._canvas.winfo_height() <= self._size and y_top != top:
+            logger.trace("Viewport shorter than single face height. Moving Active faces to "
+                         "top: %s", top)
             self._canvas.yview_moveto(top / height)
             self._viewport.update()
 

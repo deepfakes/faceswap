@@ -25,9 +25,6 @@ from .frameviewer.frame import DisplayFrame
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-# TODO
-# Recursion Error when lots of face, max frame size and tries to roll frame over
-
 class Manual(tk.Tk):
     """ The main entry point for Faceswap's Manual Editor Tool. This tool is part of the Faceswap
     Tools suite and should be called from ``python tools.py manual`` command.
