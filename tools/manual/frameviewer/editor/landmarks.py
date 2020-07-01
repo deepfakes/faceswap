@@ -183,6 +183,19 @@ class Landmarks(Editor):
             self._drag_data["current_location"] = (event.x, event.y)
             self._drag_callback = self._move
 
+    def _drag_stop(self, event):  # pylint: disable=unused-argument
+        """ Trigger a viewport thumbnail update on click + drag release
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Required but unused.
+        """
+        if self._mouse_location is None:
+            return
+        self._det_faces.update.post_edit_trigger(self._globals.frame_index,
+                                                 self._mouse_location[0])
+
     def _move(self, event):
         """ Moves the selected landmark point box and updates the underlying landmark on a point
         drag event.

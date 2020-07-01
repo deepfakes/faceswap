@@ -285,6 +285,19 @@ class BoundingBox(Editor):
             self._update_cursor(event)
             self._drag_start(event)
 
+    def _drag_stop(self, event):  # pylint: disable=unused-argument
+        """ Trigger a viewport thumbnail update on click + drag release
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Required but unused.
+        """
+        if self._mouse_location is None:
+            return
+        face_idx = int(self._mouse_location[1].split("_")[0])
+        self._det_faces.update.post_edit_trigger(self._globals.frame_index, face_idx)
+
     def _create_new_bounding_box(self, event):
         """ Create a new bounding box when user clicks on image, outside of existing boxes.
 

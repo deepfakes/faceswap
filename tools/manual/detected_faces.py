@@ -565,8 +565,6 @@ class FaceUpdate():
         face.y = pnt_y
         face.h = height
         face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
-        self._generate_thumbnail(face)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def landmark(self, frame_index, face_index, landmark_index, shift_x, shift_y, is_zoomed):
@@ -602,8 +600,6 @@ class FaceUpdate():
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._generate_thumbnail(face)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def landmarks(self, frame_index, face_index, shift_x, shift_y):
@@ -632,8 +628,6 @@ class FaceUpdate():
         face.y += shift_y
         face.landmarks_xy += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._generate_thumbnail(face)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def landmarks_rotate(self, frame_index, face_index, angle, center):
@@ -657,8 +651,6 @@ class FaceUpdate():
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._generate_thumbnail(face)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def landmarks_scale(self, frame_index, face_index, scale, center):
@@ -680,8 +672,6 @@ class FaceUpdate():
         face = self._faces_at_frame_index(frame_index)[face_index]
         face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._generate_thumbnail(face)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def mask(self, frame_index, face_index, mask, mask_type):
@@ -733,6 +723,23 @@ class FaceUpdate():
         faces.extend(deepcopy(self._faces_at_frame_index(idx)))
         self._tk_face_count_changed.set(True)
         self._globals.tk_update.set(True)
+
+    def post_edit_trigger(self, frame_index, face_index):
+        """ Update the jpg thumbnail and the viewport thumbnail on a face edit.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame that the face is being set for
+        face_index: int
+            The face index within the frame
+        """
+        face = self._frame_faces[frame_index][face_index]
+        face.load_aligned(self._globals.current_frame["image"], 80, force=True)
+        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
+        face.thumbnail = jpg
+        face.aligned = dict()
+        self._tk_edited.set(True)
 
 
 class ThumbsCreator():
