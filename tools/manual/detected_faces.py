@@ -731,7 +731,7 @@ class FaceUpdate():
             return
         logger.debug("Copying alignments from frame %s to frame: %s", idx, frame_index)
         faces.extend(deepcopy(self._faces_at_frame_index(idx)))
-        self._tk_edited.set(True)
+        self._tk_face_count_changed.set(True)
         self._globals.tk_update.set(True)
 
 

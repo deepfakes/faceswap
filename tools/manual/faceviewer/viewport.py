@@ -28,7 +28,8 @@ class Viewport():
         self._canvas = canvas
         self._grid = canvas.grid
         self._tk_selected_editor = canvas._display_frame.tk_selected_action
-        self._landmark_mapping = dict(mouth=(48, 68),
+        self._landmark_mapping = dict(mouth_inner=(60, 68),
+                                      mouth_outer=(48, 60),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
                                       right_eye=(36, 42),
@@ -266,7 +267,7 @@ class Viewport():
             landmarks = dict(polygon=[], line=[])
             for area, val in self._landmark_mapping.items():
                 points = face.aligned_landmarks[val[0]:val[1]] + top_left
-                shape = "polygon" if area in ("right_eye", "left_eye", "mouth") else "line"
+                shape = "polygon" if area.endswith("eye") or area.startswith("mouth") else "line"
                 landmarks[shape].append(points)
             self._landmarks[key] = landmarks
         return landmarks
@@ -523,7 +524,7 @@ class VisibleObjects():
                                                              width=1,
                                                              tags=tags + ["viewport_polygon"],
                                                              **kwargs["polygon"])
-                                 for _ in range(3)],
+                                 for _ in range(4)],
                         line=[self._canvas.create_line(0, 0, 0, 0,
                                                        width=1,
                                                        tags=tags + ["viewport_line"],
