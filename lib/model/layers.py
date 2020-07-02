@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-""" Custom Layers for faceswap.py
-    Layers from:
-        the original https://www.reddit.com/r/deepfakes/ code sample + contribs
-        shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
+""" Custom Layers for faceswap.py. """
 
 from __future__ import absolute_import
 
@@ -15,25 +12,75 @@ import keras.backend as K
 from keras.engine import InputSpec, Layer
 from keras.utils import conv_utils
 from keras.utils.generic_utils import get_custom_objects
-from keras import initializers
 from keras.layers.pooling import _GlobalPooling2D
 
-if K.backend() == "plaidml.keras.backend":
+from lib.utils import get_backend
+
+if get_backend() == "amd":
     from lib.plaidml_utils import pad
 else:
     from tensorflow import pad
 
+
 class PixelShuffler(Layer):
-    """ PixelShuffler layer for Keras
-       by t-ae: https://gist.github.com/t-ae/6e1016cc188104d123676ccef3264981 """
-    # pylint: disable=C0103
+    """ PixelShuffler layer for Keras.
+
+    This layer requires a Convolution2D prior to it, having output filters computed according to
+    the formula :math:`filters = k * (scale_factor * scale_factor)` where `k` is a user defined
+    number of filters (generally larger than 32) and `scale_factor` is the up-scaling factor
+    (generally 2).
+
+    This layer performs the depth to space operation on the convolution filters, and returns a
+    tensor with the size as defined below.
+
+    Notes
+    -----
+    In practice, it is useful to have a second convolution layer after the
+    :class:`PixelShuffler` layer to speed up the learning process. However, if you are stacking
+    multiple :class:`PixelShuffler` blocks, it may increase the number of parameters greatly,
+    so the Convolution layer after :class:`PixelShuffler` layer can be removed.
+
+    Example
+    -------
+    >>> # A standard sub-pixel up-scaling block
+    >>> x = Convolution2D(256, 3, 3, padding="same", activation="relu")(...)
+    >>> u = PixelShuffler(size=(2, 2))(x)
+    [Optional]
+    >>> x = Convolution2D(256, 3, 3, padding="same", activation="relu")(u)
+
+    Parameters
+    ----------
+    size: tuple, optional
+        The (`h`, `w`) scaling factor for up-scaling. Default: `(2, 2)`
+    data_format: ["channels_first", "channels_last", ``None``], optional
+        The data format for the input. Default: ``None``
+    kwargs: dict
+        The standard Keras Layer keyword arguments (if any)
+
+    References
+    ----------
+    https://gist.github.com/t-ae/6e1016cc188104d123676ccef3264981
+    """
     def __init__(self, size=(2, 2), data_format=None, **kwargs):
-        super(PixelShuffler, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.data_format = K.normalize_data_format(data_format)
-        self.size = conv_utils.normalize_tuple(size, 2, 'size')
+        self.size = conv_utils.normalize_tuple(size, 2, "size")
 
     def call(self, inputs, **kwargs):
+        """This is where the layer's logic lives.
 
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        kwargs: dict
+            Additional keyword arguments
+
+        Returns
+        -------
+        tensor
+            A tensor or list/tuple of tensors
+        """
         input_shape = K.int_shape(inputs)
         if len(input_shape) != 4:
             raise ValueError('Inputs should have rank ' +
@@ -41,31 +88,45 @@ class PixelShuffler(Layer):
                              '; Received input shape:', str(input_shape))
 
         if self.data_format == 'channels_first':
-            batch_size, c, h, w = input_shape
+            batch_size, channels, height, width = input_shape
             if batch_size is None:
                 batch_size = -1
-            rh, rw = self.size
-            oh, ow = h * rh, w * rw
-            oc = c // (rh * rw)
+            r_height, r_width = self.size
+            o_height, o_width = height * r_height, width * r_width
+            o_channels = channels // (r_height * r_width)
 
-            out = K.reshape(inputs, (batch_size, rh, rw, oc, h, w))
+            out = K.reshape(inputs, (batch_size, r_height, r_width, o_channels, height, width))
             out = K.permute_dimensions(out, (0, 3, 4, 1, 5, 2))
-            out = K.reshape(out, (batch_size, oc, oh, ow))
+            out = K.reshape(out, (batch_size, o_channels, o_height, o_width))
         elif self.data_format == 'channels_last':
-            batch_size, h, w, c = input_shape
+            batch_size, height, width, channels = input_shape
             if batch_size is None:
                 batch_size = -1
-            rh, rw = self.size
-            oh, ow = h * rh, w * rw
-            oc = c // (rh * rw)
+            r_height, r_width = self.size
+            o_height, o_width = height * r_height, width * r_width
+            o_channels = channels // (r_height * r_width)
 
-            out = K.reshape(inputs, (batch_size, h, w, rh, rw, oc))
+            out = K.reshape(inputs, (batch_size, height, width, r_height, r_width, o_channels))
             out = K.permute_dimensions(out, (0, 1, 3, 2, 4, 5))
-            out = K.reshape(out, (batch_size, oh, ow, oc))
+            out = K.reshape(out, (batch_size, o_height, o_width, o_channels))
         return out
 
     def compute_output_shape(self, input_shape):
+        """Computes the output shape of the layer.
 
+        Assumes that the layer will be built to match that input shape provided.
+
+        Parameters
+        ----------
+        input_shape: tuple or list of tuples
+            Shape tuple (tuple of integers) or list of shape tuples (one per output tensor of the
+            layer).  Shape tuples can include None for free dimensions, instead of an integer.
+
+        Returns
+        -------
+        tuple
+            An input shape tuple
+        """
         if len(input_shape) != 4:
             raise ValueError('Inputs should have rank ' +
                              str(4) +
@@ -106,6 +167,20 @@ class PixelShuffler(Layer):
         return retval
 
     def get_config(self):
+        """Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be reinstated later (without its trained weights) from this
+        configuration.
+
+        The configuration of a layer does not include connectivity information, nor the layer
+        class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
         config = {'size': self.size,
                   'data_format': self.data_format}
         base_config = super(PixelShuffler, self).get_config()
@@ -113,80 +188,49 @@ class PixelShuffler(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class Scale(Layer):
-    """
-    GAN Custom Scal Layer
-    Code borrows from https://github.com/flyyufelix/cnn_finetune
-    """
-    def __init__(self, weights=None, axis=-1, gamma_init='zero', **kwargs):
-        self.axis = axis
-        self.gamma = None
-        self.gamma_init = initializers.get(gamma_init)
-        self.initial_weights = weights
-        super(Scale, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        self.input_spec = [InputSpec(shape=input_shape)]
-
-        # Compatibility with TensorFlow >= 1.0.0
-        self.gamma = K.variable(self.gamma_init((1,)), name='{}_gamma'.format(self.name))
-        self.trainable_weights = [self.gamma]
-
-        if self.initial_weights is not None:
-            self.set_weights(self.initial_weights)
-            del self.initial_weights
-
-    def call(self, x, mask=None):
-        return self.gamma * x
-
-    def get_config(self):
-        config = {"axis": self.axis}
-        base_config = super(Scale, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
-
-
 class SubPixelUpscaling(Layer):
-    # pylint: disable=C0103
-    """ Sub-pixel convolutional upscaling layer based on the paper "Real-Time
-    Single Image and Video Super-Resolution Using an Efficient Sub-Pixel
-    Convolutional Neural Network" (https://arxiv.org/abs/1609.05158).
-    This layer requires a Convolution2D prior to it, having output filters
-    computed according to the formula :
-        filters = k * (scale_factor * scale_factor)
-        where k = a user defined number of filters (generally larger than 32)
-              scale_factor = the upscaling factor (generally 2)
-    This layer performs the depth to space operation on the convolution
-    filters, and returns a tensor with the size as defined below.
-    # Example :
-    ```python
-        # A standard subpixel upscaling block
-        x = Convolution2D(256, 3, 3, padding="same", activation="relu")(...)
-        u = SubPixelUpscaling(scale_factor=2)(x)
-        [Optional]
-        x = Convolution2D(256, 3, 3, padding="same", activation="relu")(u)
-    ```
-        In practice, it is useful to have a second convolution layer after the
-        SubPixelUpscaling layer to speed up the learning process.
-        However, if you are stacking multiple SubPixelUpscaling blocks,
-        it may increase the number of parameters greatly, so the Convolution
-        layer after SubPixelUpscaling layer can be removed.
-    # Arguments
-        scale_factor: Upscaling factor.
-        data_format: Can be None, "channels_first" or "channels_last".
-    # Input shape
-        4D tensor with shape:
-        `(samples, k * (scale_factor * scale_factor) channels, rows, cols)`
-            if data_format="channels_first"
-        or 4D tensor with shape:
-        `(samples, rows, cols, k * (scale_factor * scale_factor) channels)`
-            if data_format="channels_last".
-    # Output shape
-        4D tensor with shape:
-        `(samples, k channels, rows * scale_factor, cols * scale_factor))`
-            if data_format="channels_first"
-        or 4D tensor with shape:
-        `(samples, rows * scale_factor, cols * scale_factor, k channels)`
-            if data_format="channels_last".
+    """ Sub-pixel convolutional up-scaling layer.
+
+    This layer requires a Convolution2D prior to it, having output filters computed according to
+    the formula :math:`filters = k * (scale_factor * scale_factor)` where `k` is a user defined
+    number of filters (generally larger than 32) and `scale_factor` is the up-scaling factor
+    (generally 2).
+
+    This layer performs the depth to space operation on the convolution filters, and returns a
+    tensor with the size as defined below.
+
+    Notes
+    -----
+    This method is deprecated as it just performs the same as :class:`PixelShuffler`
+    using explicit Tensorflow ops. The method is kept in the repository to support legacy
+    models that have been created with this layer.
+
+    In practice, it is useful to have a second convolution layer after the
+    :class:`SubPixelUpscaling` layer to speed up the learning process. However, if you are stacking
+    multiple :class:`SubPixelUpscaling` blocks, it may increase the number of parameters greatly,
+    so the Convolution layer after :class:`SubPixelUpscaling` layer can be removed.
+
+    Example
+    -------
+    >>> # A standard sub-pixel up-scaling block
+    >>> x = Convolution2D(256, 3, 3, padding="same", activation="relu")(...)
+    >>> u = SubPixelUpscaling(scale_factor=2)(x)
+    [Optional]
+    >>> x = Convolution2D(256, 3, 3, padding="same", activation="relu")(u)
+
+    Parameters
+    ----------
+    size: int, optional
+        The up-scaling factor. Default: `2`
+    data_format: ["channels_first", "channels_last", ``None``], optional
+        The data format for the input. Default: ``None``
+    kwargs: dict
+        The standard Keras Layer keyword arguments (if any)
+
+    References
+    ----------
+    based on the paper "Real-Time Single Image and Video Super-Resolution Using an Efficient
+    Sub-Pixel Convolutional Neural Network" (https://arxiv.org/abs/1609.05158).
     """
 
     def __init__(self, scale_factor=2, data_format=None, **kwargs):
@@ -196,29 +240,67 @@ class SubPixelUpscaling(Layer):
         self.data_format = K.normalize_data_format(data_format)
 
     def build(self, input_shape):
+        """Creates the layer weights.
+
+        Must be implemented on all layers that have weights.
+
+        Parameters
+        ----------
+        input_shape: tensor
+            Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
+            reference for weight shape computations.
+        """
         pass
 
-    def call(self, x, mask=None):
-        y = self.depth_to_space(x, self.scale_factor, self.data_format)
-        return y
+    def call(self, input_tensor, mask=None):  # pylint:disable=unused-argument,arguments-differ
+        """This is where the layer's logic lives.
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        kwargs: dict
+            Additional keyword arguments
+
+        Returns
+        -------
+        tensor
+            A tensor or list/tuple of tensors
+        """
+        retval = self._depth_to_space(input_tensor, self.scale_factor, self.data_format)
+        return retval
 
     def compute_output_shape(self, input_shape):
+        """Computes the output shape of the layer.
+
+        Assumes that the layer will be built to match that input shape provided.
+
+        Parameters
+        ----------
+        input_shape: tuple or list of tuples
+            Shape tuple (tuple of integers) or list of shape tuples (one per output tensor of the
+            layer).  Shape tuples can include None for free dimensions, instead of an integer.
+
+        Returns
+        -------
+        tuple
+            An input shape tuple
+        """
         if self.data_format == "channels_first":
-            b, k, r, c = input_shape
-            return (b,
-                    k // (self.scale_factor ** 2),
-                    r * self.scale_factor,
-                    c * self.scale_factor)
-        b, r, c, k = input_shape
-        return (b,
-                r * self.scale_factor,
-                c * self.scale_factor,
-                k // (self.scale_factor ** 2))
+            batch, channels, rows, columns = input_shape
+            return (batch,
+                    channels // (self.scale_factor ** 2),
+                    rows * self.scale_factor,
+                    columns * self.scale_factor)
+        batch, rows, columns, channels = input_shape
+        return (batch,
+                rows * self.scale_factor,
+                columns * self.scale_factor,
+                channels // (self.scale_factor ** 2))
 
     @classmethod
-    def depth_to_space(cls, ipt, scale, data_format=None):
-        """ Uses phase shift algorithm to convert channels/depth
-            for spatial resolution """
+    def _depth_to_space(cls, ipt, scale, data_format=None):
+        """ Uses phase shift algorithm to convert channels/depth for spatial resolution """
         if data_format is None:
             data_format = K.image_data_format()
         data_format = data_format.lower()
@@ -228,42 +310,69 @@ class SubPixelUpscaling(Layer):
         return out
 
     @staticmethod
-    def _postprocess_conv2d_output(x, data_format):
+    def _postprocess_conv2d_output(input_tensor, data_format):
         """Transpose and cast the output from conv2d if needed.
-        # Arguments
-            x: A tensor.
-            data_format: string, `"channels_last"` or `"channels_first"`.
-        # Returns
-            A tensor.
+
+        Parameters
+        ----------
+        input_tensor: tensor
+            The input that requires transposing and casting
+        data_format: str
+            `"channels_last"` or `"channels_first"`
+
+        Returns
+        -------
+        tensor
+            The transposed and cast input tensor
         """
 
         if data_format == "channels_first":
-            x = tf.transpose(x, (0, 3, 1, 2))
+            input_tensor = tf.transpose(input_tensor, (0, 3, 1, 2))
 
         if K.floatx() == "float64":
-            x = tf.cast(x, "float64")
-        return x
+            input_tensor = tf.cast(input_tensor, "float64")
+        return input_tensor
 
     @staticmethod
-    def _preprocess_conv2d_input(x, data_format):
+    def _preprocess_conv2d_input(input_tensor, data_format):
         """Transpose and cast the input before the conv2d.
-        # Arguments
-            x: input tensor.
-            data_format: string, `"channels_last"` or `"channels_first"`.
-        # Returns
-            A tensor.
+
+        Parameters
+        ----------
+        input_tensor: tensor
+            The input that requires transposing and casting
+        data_format: str
+            `"channels_last"` or `"channels_first"`
+
+        Returns
+        -------
+        tensor
+            The transposed and cast input tensor
         """
-        if K.dtype(x) == "float64":
-            x = tf.cast(x, "float32")
+        if K.dtype(input_tensor) == "float64":
+            input_tensor = tf.cast(input_tensor, "float32")
         if data_format == "channels_first":
-            # TF uses the last dimension as channel dimension,
-            # instead of the 2nd one.
-            # TH input shape: (samples, input_depth, rows, cols)
-            # TF input shape: (samples, rows, cols, input_depth)
-            x = tf.transpose(x, (0, 2, 3, 1))
-        return x
+            # Tensorflow uses the last dimension as channel dimension, instead of the 2nd one.
+            # Theano input shape: (samples, input_depth, rows, cols)
+            # Tensorflow input shape: (samples, rows, cols, input_depth)
+            input_tensor = tf.transpose(input_tensor, (0, 2, 3, 1))
+        return input_tensor
 
     def get_config(self):
+        """Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be reinstated later (without its trained weights) from this
+        configuration.
+
+        The configuration of a layer does not include connectivity information, nor the layer
+        class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
         config = {"scale_factor": self.scale_factor,
                   "data_format": self.data_format}
         base_config = super(SubPixelUpscaling, self).get_config()
@@ -272,37 +381,53 @@ class SubPixelUpscaling(Layer):
 
 class ReflectionPadding2D(Layer):
     """Reflection-padding layer for 2D input (e.g. picture).
-    This layer can add rows and columns
-    at the top, bottom, left and right side of an image tensor.
-    Input shape:  ONLY WORKS ON CHANNELS LAST NOW
-      4D tensor with shape:
-      - If `data_format` is `"channels_last"`:
-          `(batch, rows, cols, channels)`
-      - If `data_format` is `"channels_first"`:
-          `(batch, channels, rows, cols)`
-    Output shape:
-      4D tensor with shape:
-      - If `data_format` is `"channels_last"`:
-          `(batch, padded_rows, padded_cols, channels)`
-      - If `data_format` is `"channels_first"`:
-          `(batch, channels, padded_rows, padded_cols)`
+
+    This layer can add rows and columns at the top, bottom, left and right side of an image tensor.
+
+    Parameters
+    ----------
+    stride: int, optional
+        The stride of the following convolution. Default: `2`
+    kernel_size: int, optional
+        The kernel size of the following convolution. Default: `5`
+    kwargs: dict
+        The standard Keras Layer keyword arguments (if any)
     """
     def __init__(self, stride=2, kernel_size=5, **kwargs):
-        '''
-        # Arguments
-            stride: stride of following convolution (2)
-            kernel_size: kernel size of following convolution (5,5)
-        '''
         self.stride = stride
         self.kernel_size = kernel_size
-        super(ReflectionPadding2D, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def build(self, input_shape):
+        """Creates the layer weights.
+
+        Must be implemented on all layers that have weights.
+
+        Parameters
+        ----------
+        input_shape: tensor
+            Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
+            reference for weight shape computations.
+        """
         self.input_spec = [InputSpec(shape=input_shape)]
-        super(ReflectionPadding2D, self).build(input_shape)
+        super().build(input_shape)
 
     def compute_output_shape(self, input_shape):
-        """ If you are using "channels_last" configuration"""
+        """Computes the output shape of the layer.
+
+        Assumes that the layer will be built to match that input shape provided.
+
+        Parameters
+        ----------
+        input_shape: tuple or list of tuples
+            Shape tuple (tuple of integers) or list of shape tuples (one per output tensor of the
+            layer).  Shape tuples can include None for free dimensions, instead of an integer.
+
+        Returns
+        -------
+        tuple
+            An input shape tuple
+        """
         input_shape = self.input_spec[0].shape
         in_width, in_height = input_shape[2], input_shape[1]
         kernel_width, kernel_height = self.kernel_size, self.kernel_size
@@ -314,14 +439,28 @@ class ReflectionPadding2D(Layer):
         if (in_width % self.stride) == 0:
             padding_width = max(kernel_width - self.stride, 0)
         else:
-            padding_width = max(kernel_width- (in_width % self.stride), 0)
+            padding_width = max(kernel_width - (in_width % self.stride), 0)
 
         return (input_shape[0],
                 input_shape[1] + padding_height,
                 input_shape[2] + padding_width,
                 input_shape[3])
 
-    def call(self, x, mask=None):
+    def call(self, x, mask=None):  # pylint:disable=unused-argument,arguments-differ
+        """This is where the layer's logic lives.
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        kwargs: dict
+            Additional keyword arguments
+
+        Returns
+        -------
+        tensor
+            A tensor or list/tuple of tensors
+        """
         input_shape = self.input_spec[0].shape
         in_width, in_height = input_shape[2], input_shape[1]
         kernel_width, kernel_height = self.kernel_size, self.kernel_size
@@ -333,7 +472,7 @@ class ReflectionPadding2D(Layer):
         if (in_width % self.stride) == 0:
             padding_width = max(kernel_width - self.stride, 0)
         else:
-            padding_width = max(kernel_width- (in_width % self.stride), 0)
+            padding_width = max(kernel_width - (in_width % self.stride), 0)
 
         padding_top = padding_height // 2
         padding_bot = padding_height - padding_top
@@ -348,6 +487,20 @@ class ReflectionPadding2D(Layer):
                    'REFLECT')
 
     def get_config(self):
+        """Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be reinstated later (without its trained weights) from this
+        configuration.
+
+        The configuration of a layer does not include connectivity information, nor the layer
+        class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
         config = {'stride': self.stride,
                   'kernel_size': self.kernel_size}
         base_config = super(ReflectionPadding2D, self).get_config()
@@ -355,31 +508,23 @@ class ReflectionPadding2D(Layer):
 
 
 class GlobalMinPooling2D(_GlobalPooling2D):
-    """Global minimum pooling operation for spatial data.
-    # Arguments
-        data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
-            The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
-            corresponds to inputs with shape
-            `(batch, channels, height, width)`.
-            It defaults to the `image_data_format` value found in your
-            Keras config file at `~/.keras/keras.json`.
-            If you never set it, then it will be "channels_last".
-    # Input shape
-        - If `data_format='channels_last'`:
-            4D tensor with shape:
-            `(batch_size, rows, cols, channels)`
-        - If `data_format='channels_first'`:
-            4D tensor with shape:
-            `(batch_size, channels, rows, cols)`
-    # Output shape
-        2D tensor with shape:
-        `(batch_size, channels)`
-    """
+    """Global minimum pooling operation for spatial data. """
 
     def call(self, inputs):
+        """This is where the layer's logic lives.
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        kwargs: dict
+            Additional keyword arguments
+
+        Returns
+        -------
+        tensor
+            A tensor or list/tuple of tensors
+        """
         if self.data_format == 'channels_last':
             pooled = K.min(inputs, axis=[1, 2])
         else:
@@ -388,50 +533,79 @@ class GlobalMinPooling2D(_GlobalPooling2D):
 
 
 class GlobalStdDevPooling2D(_GlobalPooling2D):
-    """Global standard deviation pooling operation for spatial data.
-    # Arguments
-        data_format: A string,
-            one of `channels_last` (default) or `channels_first`.
-            The ordering of the dimensions in the inputs.
-            `channels_last` corresponds to inputs with shape
-            `(batch, height, width, channels)` while `channels_first`
-            corresponds to inputs with shape
-            `(batch, channels, height, width)`.
-            It defaults to the `image_data_format` value found in your
-            Keras config file at `~/.keras/keras.json`.
-            If you never set it, then it will be "channels_last".
-    # Input shape
-        - If `data_format='channels_last'`:
-            4D tensor with shape:
-            `(batch_size, rows, cols, channels)`
-        - If `data_format='channels_first'`:
-            4D tensor with shape:
-            `(batch_size, channels, rows, cols)`
-    # Output shape
-        2D tensor with shape:
-        `(batch_size, channels)`
-    """
+    """Global standard deviation pooling operation for spatial data. """
 
     def call(self, inputs):
+        """This is where the layer's logic lives.
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        kwargs: dict
+            Additional keyword arguments
+
+        Returns
+        -------
+        tensor
+            A tensor or list/tuple of tensors
+        """
         if self.data_format == 'channels_last':
             pooled = K.std(inputs, axis=[1, 2])
         else:
             pooled = K.std(inputs, axis=[2, 3])
         return pooled
 
-class L2_normalize(Layer):
+
+class L2_normalize(Layer):  # Pylint:disable=invalid-name
+    """ Normalizes a tensor w.r.t. the L2 norm alongside the specified axis.
+
+    Parameters
+    ----------
+    axis: int
+        The axis to perform normalization across
+    kwargs: dict
+        The standard Keras Layer keyword arguments (if any)
+    """
     def __init__(self, axis, **kwargs):
         self.axis = axis
         super(L2_normalize, self).__init__(**kwargs)
 
-    def call(self, x):
-        return K.l2_normalize(x, self.axis)
+    def call(self, inputs):  # pylint:disable=arguments-differ
+        """This is where the layer's logic lives.
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        kwargs: dict
+            Additional keyword arguments
+
+        Returns
+        -------
+        tensor
+            A tensor or list/tuple of tensors
+        """
+        return K.l2_normalize(inputs, self.axis)
 
     def get_config(self):
+        """Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be reinstated later (without its trained weights) from this
+        configuration.
+
+        The configuration of a layer does not include connectivity information, nor the layer
+        class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
         config = super(L2_normalize, self).get_config()
         config["axis"] = self.axis
         return config
-
 
 
 # Update layers into Keras custom objects

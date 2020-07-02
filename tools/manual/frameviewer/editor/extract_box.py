@@ -54,7 +54,7 @@ class ExtractBox(Editor):
                                 self._zoomed_roi[2], self._zoomed_roi[3],
                                 self._zoomed_roi[0], self._zoomed_roi[3]))
             else:
-                face.load_aligned(None)
+                face.load_aligned(None, force=True)
                 box = self._scale_to_display(face.original_roi).flatten()
             top_left = box[:2] - 10
             kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
@@ -224,6 +224,19 @@ class ExtractBox(Editor):
         self._drag_data["current_location"] = np.array((event.x, event.y))
         callback = dict(anchor=self._resize, rotate=self._rotate, box=self._move)
         self._drag_callback = callback[self._mouse_location[0]]
+
+    def _drag_stop(self, event):  # pylint: disable=unused-argument
+        """ Trigger a viewport thumbnail update on click + drag release
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Required but unused.
+        """
+        if self._mouse_location is None:
+            return
+        self._det_faces.update.post_edit_trigger(self._globals.frame_index,
+                                                 self._mouse_location[1])
 
     def _move(self, event):
         """ Updates the underlying detected faces landmarks based on mouse dragging delta,

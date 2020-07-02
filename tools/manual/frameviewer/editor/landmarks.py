@@ -183,6 +183,19 @@ class Landmarks(Editor):
             self._drag_data["current_location"] = (event.x, event.y)
             self._drag_callback = self._move
 
+    def _drag_stop(self, event):  # pylint: disable=unused-argument
+        """ Trigger a viewport thumbnail update on click + drag release
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse event. Required but unused.
+        """
+        if self._mouse_location is None:
+            return
+        self._det_faces.update.post_edit_trigger(self._globals.frame_index,
+                                                 self._mouse_location[0])
+
     def _move(self, event):
         """ Moves the selected landmark point box and updates the underlying landmark on a point
         drag event.
@@ -222,7 +235,8 @@ class Mesh(Editor):
         The _detected_faces data for this manual session
     """
     def __init__(self, canvas, detected_faces):
-        self._landmark_mapping = dict(mouth=(48, 68),
+        self._landmark_mapping = dict(mouth_inner=(60, 68),
+                                      mouth_outer=(48, 60),
                                       right_eyebrow=(17, 22),
                                       left_eyebrow=(22, 27),
                                       right_eye=(36, 42),
@@ -249,7 +263,7 @@ class Mesh(Editor):
             for idx, (segment, val) in enumerate(self._landmark_mapping.items()):
                 key = "mesh_{}".format(idx)
                 pts = landmarks[val[0]:val[1]].flatten()
-                if segment in ("right_eye", "left_eye", "mouth"):
+                if segment in ("right_eye", "left_eye", "mouth_inner", "mouth_outer"):
                     kwargs = dict(fill="", outline=color, width=1)
                     self._object_tracker(key, "polygon", face_index, pts, kwargs)
                 else:

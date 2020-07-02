@@ -18,7 +18,7 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .detected_faces import DetectedFaces
+from .detected_faces import DetectedFaces, ThumbsCreator
 from .faceviewer.frame import FacesFrame
 from .frameviewer.frame import DisplayFrame
 
@@ -45,29 +45,28 @@ class Manual(tk.Tk):
         self._globals = TkGlobals(arguments.frames)
 
         extractor = Aligner(self._globals)
-        self._det_faces = DetectedFaces(self._globals,
-                                        arguments.alignments_path,
-                                        arguments.frames,
-                                        extractor)
+        self._detected_faces = DetectedFaces(self._globals,
+                                             arguments.alignments_path,
+                                             arguments.frames,
+                                             extractor)
 
-        video_meta_data = self._det_faces.video_meta_data
+        video_meta_data = self._detected_faces.video_meta_data
         loader = FrameLoader(self._globals, arguments.frames, video_meta_data)
 
-        self._det_faces.load_faces()
+        self._detected_faces.load_faces()
         self._containers = self._create_containers()
         self._wait_for_threads(extractor, loader, video_meta_data)
+        self._generate_thumbs(arguments.frames, arguments.thumb_regen, arguments.single_process)
 
         self._display = DisplayFrame(self._containers["top"],
                                      self._globals,
-                                     self._det_faces)
+                                     self._detected_faces)
+        _Options(self._containers["top"], self._globals, self._display)
+
         self._faces_frame = FacesFrame(self._containers["bottom"],
                                        self._globals,
-                                       self._det_faces,
-                                       self._display,
-                                       arguments.frames,
-                                       arguments.face_size)
-
-        _Options(self._containers["top"], self._globals, self._display)
+                                       self._detected_faces,
+                                       self._display)
         self._display.tk_selected_action.set("View")
 
         self.bind("<Key>", self._handle_key_press)
@@ -91,7 +90,6 @@ class Manual(tk.Tk):
         -----
         Because some of the initialize checks perform extra work once their threads are complete,
         they should only return ``True`` once, and should not be queried again.
-
         """
         extractor_init = False
         frames_init = False
@@ -104,10 +102,31 @@ class Manual(tk.Tk):
             logger.debug("Threads not initialized. Waiting...")
             sleep(1)
 
-        extractor.link_faces(self._det_faces)
+        extractor.link_faces(self._detected_faces)
         if any(val is None for val in video_meta_data.values()):
             logger.debug("Saving video meta data to alignments file")
-            self._det_faces.save_video_meta_data(**loader.video_meta_data)
+            self._detected_faces.save_video_meta_data(**loader.video_meta_data)
+
+    def _generate_thumbs(self, input_location, force, single_process):
+        """ Check whether thumbnails are stored in the alignments file and if not generate them.
+
+        Parameters
+        ----------
+        input_location: str
+            The input video or folder of images
+        force: bool
+            ``True`` if the thumbnails should be regenerated even if they exist, otherwise
+            ``False``
+        single_process: bool
+            ``True`` will extract thumbs from a video in a single process, ``False`` will run
+            parallel threads
+        """
+        thumbs = ThumbsCreator(self._detected_faces, input_location, single_process)
+        if thumbs.has_thumbs and not force:
+            return
+        logger.debug("Generating thumbnails cache")
+        thumbs.generate_cache()
+        logger.debug("Generated thumbnails cache")
 
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
@@ -118,10 +137,6 @@ class Manual(tk.Tk):
         initialize_images()
         get_config().set_geometry(940, 600, fullscreen=True)
         self.title("Faceswap.py - Visual Alignments")
-        self.tk.call(
-            "wm",
-            "iconphoto",
-            self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
 
     def _create_containers(self):
@@ -188,10 +203,10 @@ class Manual(tk.Tk):
             "f5": lambda k=event.keysym: self._display.set_action(k),
             "f9": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
             "f10": lambda k=event.keysym: self._faces_frame.set_annotation_display(k),
-            "c": lambda f=tk_pos.get(), d="previous": self._det_faces.update.copy(f, d),
-            "v": lambda f=tk_pos.get(), d="next": self._det_faces.update.copy(f, d),
-            "ctrl_s": self._det_faces.save,
-            "r": lambda f=tk_pos.get(): self._det_faces.update.revert_to_saved(f)}
+            "c": lambda f=tk_pos.get(), d="prev": self._detected_faces.update.copy(f, d),
+            "v": lambda f=tk_pos.get(), d="next": self._detected_faces.update.copy(f, d),
+            "ctrl_s": self._detected_faces.save,
+            "r": lambda f=tk_pos.get(): self._detected_faces.revert_to_saved(f)}
 
         # Allow keypad keys to be used for numbers
         press = event.keysym.replace("KP_", "") if event.keysym.startswith("KP_") else event.keysym
@@ -203,11 +218,21 @@ class Manual(tk.Tk):
             bindings[key_press.lower()]()
 
     def _set_initial_layout(self):
-        """ Set the bottom frame position to correct location to display full frame window. """
+        """ Set the favicon and the bottom frame position to correct location to display full
+        frame window.
+
+        Notes
+        -----
+        The favicon pops the tkinter GUI (without loaded elements) as soon as it is called, so
+        this is set last.
+        """
         logger.debug("Setting initial layout")
-        self.update_idletasks()
-        location = self._display.winfo_reqheight() + 5
+        self.tk.call("wm",
+                     "iconphoto",
+                     self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
+        location = int(self.winfo_screenheight() // 1.5)
         self._containers["main"].sash_place(0, 1, location)
+        self.update_idletasks()
 
     def process(self):
         """ The entry point for the Visual Alignments tool from :mod:`lib.tools.manual.cli`.
@@ -233,7 +258,8 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, display_frame: %s)",
                      self.__class__.__name__, parent, tk_globals, display_frame)
         super().__init__(parent)
-        self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.pack(side=tk.RIGHT, fill=tk.Y)
+
         self._globals = tk_globals
         self._display_frame = display_frame
         self._control_panels = self._initialize()
@@ -255,11 +281,13 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         The Traceback must be set after the panel has first been packed as otherwise it interferes
         with the loading of the faces pane.
         """
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         panels = dict()
         for name, editor in self._display_frame.editors.items():
             logger.debug("Initializing control panel for '%s' editor", name)
             controls = editor.controls
-            panel = ControlPanel(self, controls["controls"],
+            panel = ControlPanel(frame, controls["controls"],
                                  option_columns=3,
                                  columns=1,
                                  max_columns=1,
@@ -269,7 +297,23 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
                                  scrollbar=False)
             panel.pack_forget()
             panels[name] = panel
+        self._initialize_face_options()
         return panels
+
+    def _initialize_face_options(self):
+        """ Set the Face Viewer options panel, beneath the standard control options. """
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
+        size_frame = ttk.Frame(frame)
+        size_frame.pack(side=tk.LEFT)
+        lbl = ttk.Label(size_frame, text="Face Size:")
+        lbl.pack(side=tk.LEFT)
+        cmb = ttk.Combobox(size_frame,
+                           value=["Tiny", "Small", "Medium", "Large", "Extra Large"],
+                           state="readonly",
+                           textvariable=self._globals.tk_faces_size)
+        self._globals.tk_faces_size.set("Medium")
+        cmb.pack(side=tk.RIGHT, padx=5)
 
     def _set_tk_callbacks(self):
         """ Sets the callback to change to the relevant control panel options when the selected
@@ -323,21 +367,7 @@ class TkGlobals():
     def __init__(self, input_location):
         logger.debug("Initializing %s: (input_location: %s)",
                      self.__class__.__name__, input_location)
-        self._tk_frame_index = tk.IntVar()
-        self._tk_frame_index.set(0)
-
-        self._tk_transport_index = tk.IntVar()
-        self._tk_transport_index.set(0)
-
-        self._tk_face_index = tk.IntVar()
-        self._tk_face_index.set(0)
-
-        self._tk_update = tk.BooleanVar()
-        self._tk_update.set(False)
-
-        self._tk_filter_mode = tk.StringVar()
-        self._tk_is_zoomed = tk.BooleanVar()
-        self._tk_is_zoomed.set(False)
+        self._tk_vars = self._get_tk_vars()
 
         self._is_video = self._check_input(input_location)
         self._frame_count = 0  # set by FrameLoader
@@ -349,6 +379,28 @@ class TkGlobals():
                                    display_dims=None,
                                    filename=None)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @classmethod
+    def _get_tk_vars(cls):
+        """ Create and initialize the tkinter variables.
+
+        Returns
+        -------
+        dict
+            The variable name as key, the variable as value
+        """
+        retval = dict()
+        for name in ("frame_index", "transport_index", "face_index"):
+            var = tk.IntVar()
+            var.set(0)
+            retval[name] = var
+        for name in ("update", "update_active_viewport", "is_zoomed"):
+            var = tk.BooleanVar()
+            var.set(False)
+            retval[name] = var
+        for name in ("filter_mode", "faces_size"):
+            retval[name] = tk.StringVar()
+        return retval
 
     @property
     def current_frame(self):
@@ -379,39 +431,51 @@ class TkGlobals():
     def tk_face_index(self):
         """ :class:`tkinter.IntVar`: The variable that holds the face index of the selected face
         within the current frame when in zoomed mode. """
-        return self._tk_face_index
+        return self._tk_vars["face_index"]
+
+    @property
+    def tk_update_active_viewport(self):
+        """ :class:`tkinter.BooleanVar`: Boolean Variable that is traced by the viewport's active
+        frame to update.. """
+        return self._tk_vars["update_active_viewport"]
 
     @property
     def face_index(self):
         """ int: The currently displayed face index when in zoomed mode. """
-        return self._tk_face_index.get()
+        return self._tk_vars["face_index"].get()
 
     @property
     def frame_display_dims(self):
-        """ tuple: The (`width`, `height`) of the display image with scaling factor applied. """
+        """ tuple: The (`width`, `height`) of the video display frame in pixels. """
         return self._frame_display_dims
 
     @property
     def frame_index(self):
-        """ int: The currently displayed frame index. NB: This returns -1 if there are no frames
+        """ int: The currently displayed frame index. NB This returns -1 if there are no frames
         that meet the currently selected filter criteria. """
-        return self._tk_frame_index.get()
+        return self._tk_vars["frame_index"].get()
 
     @property
     def tk_frame_index(self):
-        """ :class:`tkinter.IntVar`: The variable holding current frame index. """
-        return self._tk_frame_index
+        """ :class:`tkinter.IntVar`: The variable holding the current frame index. """
+        return self._tk_vars["frame_index"]
 
     @property
     def filter_mode(self):
         """ str: The currently selected navigation mode. """
-        return self._tk_filter_mode.get()
+        return self._tk_vars["filter_mode"].get()
 
     @property
     def tk_filter_mode(self):
         """ :class:`tkinter.StringVar`: The variable holding the currently selected navigation
         filter mode. """
-        return self._tk_filter_mode
+        return self._tk_vars["filter_mode"]
+
+    @property
+    def tk_faces_size(self):
+        """ :class:`tkinter.StringVar`: The variable holding the currently selected Faces Viewer
+        thumbnail size. """
+        return self._tk_vars["faces_size"]
 
     @property
     def is_video(self):
@@ -422,24 +486,24 @@ class TkGlobals():
     def tk_is_zoomed(self):
         """ :class:`tkinter.BooleanVar`: The variable holding the value indicating whether the
         frame viewer is zoomed into a face or zoomed out to the full frame. """
-        return self._tk_is_zoomed
+        return self._tk_vars["is_zoomed"]
 
     @property
     def is_zoomed(self):
         """ bool: ``True`` if the frame viewer is zoomed into a face, ``False`` if the frame viewer
         is displaying a full frame. """
-        return self._tk_is_zoomed.get()
+        return self._tk_vars["is_zoomed"].get()
 
     @property
     def tk_transport_index(self):
         """ :class:`tkinter.IntVar`: The current index of the display frame's transport slider. """
-        return self._tk_transport_index
+        return self._tk_vars["transport_index"]
 
     @property
     def tk_update(self):
         """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that a full
         update needs to occur. """
-        return self._tk_update
+        return self._tk_vars["update"]
 
     @staticmethod
     def _check_input(frames_location):
@@ -453,12 +517,6 @@ class TkGlobals():
         Returns
         -------
         bool: 'True' if input is a video 'False' if it is a folder.
-
-        Raises
-        ------
-        FaceswapError
-            If the given location is a file and does not have a valid video extension.
-
         """
         if os.path.isdir(frames_location):
             retval = False
@@ -504,6 +562,30 @@ class TkGlobals():
         logger.trace({k: v.shape if isinstance(v, np.ndarray) else v
                       for k, v in self._current_frame.items()})
 
+    def set_frame_display_dims(self, width, height):
+        """ Set the size, in pixels, of the video frame display window and resize the displayed
+        frame.
+
+        Used on a frame resize callback, sets the :attr:frame_display_dims`.
+
+        Parameters
+        ----------
+        width: int
+            The width of the frame holding the video canvas in pixels
+        height: int
+            The height of the frame holding the video canvas in pixels
+        """
+        self._frame_display_dims = (int(width), int(height))
+        image = self._current_frame["image"]
+        scale = min(self.frame_display_dims[0] / image.shape[1],
+                    self.frame_display_dims[1] / image.shape[0])
+        self._current_frame["scale"] = scale
+        self._current_frame["interpolation"] = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
+        self._current_frame["display_dims"] = (int(round(image.shape[1] * scale)),
+                                               int(round(image.shape[0] * scale)))
+        logger.trace({k: v.shape if isinstance(v, np.ndarray) else v
+                      for k, v in self._current_frame.items()})
+
 
 class Aligner():
     """ The :class:`Aligner` class sets up an extraction pipeline for each of the current Faceswap
@@ -521,7 +603,7 @@ class Aligner():
         self._globals = tk_globals
         self._aligners = {"cv2-dnn": None, "FAN": None, "mask": None}
         self._aligner = "FAN"
-        self._det_faces = None
+        self._detected_faces = None
         self._frame_index = None
         self._face_index = None
         self._init_thread = self._background_init_aligner()
@@ -536,10 +618,11 @@ class Aligner():
     def _feed_face(self):
         """ :class:`plugins.extract.pipeline.ExtractMedia`: The current face for feeding into the
         aligner, formatted for the pipeline """
+        face = self._detected_faces.current_faces[self._frame_index][self._face_index]
         return ExtractMedia(
             self._globals.current_frame["filename"],
             self._globals.current_frame["image"],
-            detected_faces=[self._det_faces.current_faces[self._frame_index][self._face_index]])
+            detected_faces=[face])
 
     @property
     def is_initialized(self):
@@ -570,8 +653,6 @@ class Aligner():
         """ Initialize Aligner in a background thread, and set it to :attr:`_aligner`. """
         logger.debug("Initialize Aligner")
         # Make sure non-GPU aligner is allocated first
-        # TODO
-        # for model in ("mask", "cv2-dnn"):
         for model in ("mask", "cv2-dnn", "FAN"):
             logger.debug("Initializing aligner: %s", model)
             plugin = None if model == "mask" else model
@@ -598,7 +679,7 @@ class Aligner():
             current Manual session
         """
         logger.debug("Linking detected_faces: %s", detected_faces)
-        self._det_faces = detected_faces
+        self._detected_faces = detected_faces
 
     def get_landmarks(self, frame_index, face_index, aligner):
         """ Feed the detected face into the alignment pipeline and retrieve the landmarks.
@@ -667,8 +748,6 @@ class Aligner():
         method: str
             The normalization method to use
         """
-        # TODO
-        # return
         logger.debug("Setting normalization method to: '%s'", method)
         for plugin, aligner in self._aligners.items():
             if plugin == "mask":
@@ -677,8 +756,8 @@ class Aligner():
 
 
 class FrameLoader():
-    """ Loads the frames, sets the frame count to :attr:`TKGlobals.frame_count` and handles the
-    return of correct frame for the GUI.
+    """ Loads the frames, sets the frame count to :attr:`TkGlobals.frame_count` and handles the
+    return of the correct frame for the GUI.
 
     Parameters
     ----------
@@ -697,12 +776,13 @@ class FrameLoader():
         self._loader = None
         self._current_idx = 0
         self._init_thread = self._background_init_frames(frames_location, video_meta_data)
-        self._globals.tk_frame_index.trace("w", lambda *e: self._set_frame())
+        self._globals.tk_frame_index.trace("w", self._set_frame)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def is_initialized(self):
-        """ bool: ``True`` if the aligner has completed initialization otherwise ``False``. """
+        """ bool: ``True`` if the Frame Loader has completed initialization otherwise
+        ``False``. """
         thread_is_alive = self._init_thread.is_alive()
         if thread_is_alive:
             self._init_thread.check_and_raise_error()
@@ -733,7 +813,7 @@ class FrameLoader():
         self._loader = SingleFrameLoader(frames_location, video_meta_data=video_meta_data)
         self._globals.set_frame_count(self._loader.count)
 
-    def _set_frame(self, initialize=False):
+    def _set_frame(self, *args, initialize=False):  # pylint:disable=unused-argument
         """ Set the currently loaded frame to :attr:`_current_frame` and trigger a full GUI update.
 
         If the loader has not been initialized, or the navigation position is the same as the
@@ -741,6 +821,8 @@ class FrameLoader():
 
         Parameters
         ----------
+        args: tuple
+            :class:`tkinter.Event` arguments. Required but not used.
         initialize: bool, optional
             ``True`` if initializing for the first frame to be displayed otherwise ``False``.
             Default: ``False``
@@ -760,3 +842,4 @@ class FrameLoader():
         self._globals.set_current_frame(frame, filename)
         self._current_idx = position
         self._globals.tk_update.set(True)
+        self._globals.tk_update_active_viewport.set(True)

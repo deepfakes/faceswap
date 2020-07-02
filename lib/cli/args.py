@@ -538,6 +538,13 @@ class ExtractArgs(ExtractConvertArgs):
             default=False,
             group="settings",
             help="Skip frames that already have detected faces in the alignments file"))
+        argument_list.append(dict(
+            opts=("-ssf", "--skip-saving-faces"),
+            action="store_true",
+            dest="skip_saving_faces",
+            default=False,
+            group="settings",
+            help="Skip saving out the face images"))
         return argument_list
 
 

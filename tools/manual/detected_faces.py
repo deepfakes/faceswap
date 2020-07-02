@@ -7,13 +7,19 @@ import logging
 import os
 import tkinter as tk
 from copy import deepcopy
+from time import sleep
+from threading import Lock
 
 import cv2
+import imageio
 import numpy as np
+from tqdm import tqdm
 
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
+from lib.image import SingleFrameLoader
+from lib.multithreading import MultiThread
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -21,7 +27,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class DetectedFaces():
     """ Handles the manipulation of :class:`~lib.faces_detect.DetectedFace` objects stored
     in the alignments file. Acts as a parent class for the IO operations (saving and loading from
-    and alignments file), the face update operations (when changes are made to alignments in the
+    an alignments file), the face update operations (when changes are made to alignments in the
     GUI) and the face filters (when a user changes the filter navigation mode.)
 
     Parameters
@@ -40,8 +46,8 @@ class DetectedFaces():
                      "extractor: %s)", self.__class__.__name__, tk_globals, alignments_path,
                      input_location, extractor)
         self._globals = tk_globals
-        self._saved_faces = []
-        self._updated_faces = []
+        self._frame_faces = []
+        self._updated_frame_indices = set()
         self._extract_size = min(self._globals.frame_display_dims)
 
         self._alignments = self._get_alignments(alignments_path, input_location)
@@ -83,6 +89,12 @@ class DetectedFaces():
         meaning a GUI redraw needs to be triggered. """
         return self._tk_vars["edited"]
 
+    @property
+    def tk_face_count_changed(self):
+        """ :class:`tkinter.BooleanVar`: The variable indicating whether a face has been added or
+        removed meaning the :class:`FaceViewer` grid redraw needs to be triggered. """
+        return self._tk_vars["face_count_changed"]
+
     # << STATISTICS >> #
     @property
     def available_masks(self):
@@ -94,8 +106,7 @@ class DetectedFaces():
     def current_faces(self):
         """ list: The most up to date full list of :class:`~lib.faces_detect.DetectedFace`
         objects. """
-        return [saved_faces if updated_faces is None else updated_faces
-                for saved_faces, updated_faces in zip(self._saved_faces, self._updated_faces)]
+        return self._frame_faces
 
     @property
     def video_meta_data(self):
@@ -109,28 +120,32 @@ class DetectedFaces():
 
         The list needs to be calculated on the fly as the number of faces in a frame
         can change based on user actions. """
-        return [len(faces) for faces in self.current_faces]
+        return [len(faces) for faces in self._frame_faces]
 
     # <<<< PUBLIC METHODS >>>> #
     def is_frame_updated(self, frame_index):
         """ bool: ``True`` if the given frame index has updated faces within it otherwise
         ``False`` """
-        return self._updated_faces[frame_index] is not None
+        return frame_index in self._updated_frame_indices
 
     def load_faces(self):
         """ Load the faces as :class:`~lib.faces_detect.DetectedFace` objects from the alignments
         file. """
-        self._children["io"]._load()  # pylint:disable=protected-access
+        self._children["io"].load()
 
     def save(self):
         """ Save the alignments file with the latest edits. """
-        self._children["io"]._save()  # pylint:disable=protected-access
+        self._children["io"].save()
 
-    def enable_save(self):
-        """ Enable saving of alignments file. Triggered when the
-        :class:`~tools.manual.faceviewer.frame.FacesViewer` has finished loading.
+    def revert_to_saved(self, frame_index):
+        """ Revert the frame's alignments to their saved version for the given frame index.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame that should have their faces reverted to their saved version
         """
-        self._children["io"]._enable_save()  # pylint:disable=protected-access
+        self._children["io"].revert_to_saved(frame_index)
 
     def save_video_meta_data(self, pts_time, keyframes):
         """ Save video meta data to the alignments file. This is executed if the video meta data
@@ -148,11 +163,8 @@ class DetectedFaces():
         if self._globals.is_video:
             self._alignments.save_video_meta_data(pts_time, keyframes)
 
-    def get_face_at_index(self, frame_index, face_index, image, size,
-                          with_landmarks=False, with_mask=False):
+    def get_face_at_index(self, frame_index, face_index, image, size):
         """ Return an aligned face for the given frame and face index sized at the given size.
-
-        Optionally also return aligned landmarks and mask objects for the requested face.l
 
         Parameters
         ----------
@@ -166,41 +178,23 @@ class DetectedFaces():
             The required pixel size of the aligned face. NB The default size is set for a zoomed
             display frame image. Rather than resize the underlying Detected Face object, the
             returned results are adjusted for the requested size
-        with_landmarks: bool, optional
-            Set to `True` if the aligned landmarks should be returned with the aligned face.
-            Default: ``False``
-        with_mask: bool
-            Set to `True` if the Detected Face's Mask object should be returned with the aligned
-            face. Default: ``False``
 
         Returns
         -------
-        :class:`numpy.ndarray` or tuple
-            If :attr:`with_landmarks` and :attr:`with_mask` are both set to ``False`` then just the
-            aligned face will be returned.
-            If any of these attributes are set to ``True`` then a tuple will be returned with the
-            aligned face in position 0 and the requested additional data populated in the following
-            order (`aligned face`, `aligned landmarks`, `mask objects`)
+        :class:`numpy.ndarray`
+            The aligned face at the requested size
         """
-        logger.trace("frame_index: %s, face_index: %s, image: %s, size: %s, with_landmarks: %s, "
-                     "with_mask: %s", frame_index, face_index, image.shape, size, with_landmarks,
-                     with_mask)
-        face = self.current_faces[frame_index][face_index]
+        logger.trace("frame_index: %s, face_index: %s, image: %s, size: %s",
+                     frame_index, face_index, image.shape, size)
+        face = self._frame_faces[frame_index][face_index]
         resize = self._extract_size != size
         logger.trace("Requires resize: %s", resize)
         face.load_aligned(image, size=self._extract_size, force=True)
 
         retval = cv2.resize(face.aligned_face,
                             (size, size)) if resize else face.aligned_face.copy()
-        retval = [retval] if with_landmarks or with_mask else retval
         face.aligned["face"] = None
-        if with_landmarks:
-            retval.append(face.aligned_landmarks * (size / self._extract_size)
-                          if resize else face.aligned_landmarks)
-        if with_mask:
-            retval.append(face.mask)
-        logger.trace("returning: %s", [item.shape if isinstance(item, np.ndarray) else item
-                                       for item in retval])
+        logger.trace("returning: %s", retval.shape)
         return retval
 
     # <<<< PRIVATE METHODS >>> #
@@ -219,7 +213,7 @@ class DetectedFaces():
             The internal variable name as key with the tkinter variable as value
         """
         retval = dict()
-        for name in ("unsaved", "edited"):
+        for name in ("unsaved", "edited", "face_count_changed"):
             var = tk.BooleanVar()
             var.set(False)
             retval[name] = var
@@ -271,54 +265,89 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
         self._alignments = detected_faces._alignments
-        self._saved_faces = detected_faces._saved_faces
-        self._updated_faces = detected_faces._updated_faces
+        self._frame_faces = detected_faces._frame_faces
+        self._updated_frame_indices = detected_faces._updated_frame_indices
         self._tk_unsaved = detected_faces.tk_unsaved
+        self._tk_edited = detected_faces.tk_edited
+        self._tk_face_count_changed = detected_faces.tk_face_count_changed
+        self._globals = detected_faces._globals
         self._sorted_frame_names = sorted(self._alignments.data)
-        self._save_enabled = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _load(self):
+    def load(self):
         """ Load the faces from the alignments file, convert to
-        :class:`~lib.faces_detect.DetectedFace`. objects and add to :attr:`_saved_faces`. """
+        :class:`~lib.faces_detect.DetectedFace`. objects and add to :attr:`_frame_faces`. """
         for key in sorted(self._alignments.data):
             this_frame_faces = []
             for item in self._alignments.data[key]["faces"]:
                 face = DetectedFace()
-                face.from_alignment(item)
+                face.from_alignment(item, with_thumb=True)
                 this_frame_faces.append(face)
-            self._saved_faces.append(this_frame_faces)
-        self._updated_faces.extend([None for _ in range(len(self._saved_faces))])
+            self._frame_faces.append(this_frame_faces)
 
-    def _save(self):
+    def save(self):
         """ Convert updated :class:`~lib.faces_detect.DetectedFace` objects to alignments format
         and save the alignments file. """
         if not self._tk_unsaved.get():
             logger.debug("Alignments not updated. Returning")
             return
-        if not self._save_enabled:
-            tk.messagebox.showinfo(title="Save Alignments...",
-                                   message="Please wait for faces to completely load before "
-                                           "saving the alignments file.")
-            return
-        to_save = [(idx, faces) for idx, faces in enumerate(self._updated_faces)
-                   if faces is not None]
-        logger.verbose("Saving alignments for %s updated frames", len(to_save))
+        frames = list(self._updated_frame_indices)
+        logger.verbose("Saving alignments for %s updated frames", len(frames))
 
-        for idx, faces in to_save:
+        for idx, faces in zip(frames, np.array(self._frame_faces)[np.array(frames)]):
             frame = self._sorted_frame_names[idx]
             self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
-            self._saved_faces[idx] = faces
-            self._updated_faces[idx] = None
+
         self._alignments.backup()
         self._alignments.save()
+        self._updated_frame_indices.clear()
         self._tk_unsaved.set(False)
 
-    def _enable_save(self):
-        """ Enable saving of alignments file. Triggered when the
-        :class:`~tools.manual.faceviewer.frames.FacesViewer` has completed loading. """
-        logger.debug("Enabling Save")
-        self._save_enabled = True
+    def revert_to_saved(self, frame_index):
+        """ Revert the frame's alignments to their saved version for the given frame index.
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame that should have their faces reverted to their saved version
+        """
+        if frame_index not in self._updated_frame_indices:
+            logger.debug("Alignments not amended. Returning")
+            return
+        logger.verbose("Reverting alignments for frame_index %s", frame_index)
+        alignments = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
+        faces = self._frame_faces[frame_index]
+
+        reset_grid = self._add_remove_faces(alignments, faces)
+
+        for detected_face, face in zip(faces, alignments):
+            detected_face.from_alignment(face)
+
+        self._updated_frame_indices.remove(frame_index)
+        if not self._updated_frame_indices:
+            self._tk_unsaved.set(False)
+
+        if reset_grid:
+            self._tk_face_count_changed.set(True)
+        else:
+            self._tk_edited.set(True)
+        self._globals.tk_update.set(True)
+
+    @classmethod
+    def _add_remove_faces(cls, alignments, faces):
+        """ On a revert, ensure that the alignments and detected face object counts for each frame
+        are in sync. """
+        num_alignments = len(alignments)
+        num_faces = len(faces)
+        if num_alignments == num_faces:
+            retval = False
+        elif num_alignments > num_faces:
+            faces.extend([DetectedFace() for _ in range(num_faces, num_alignments)])
+            retval = True
+        else:
+            del faces[num_alignments:]
+            retval = True
+        return retval
 
 
 class Filter():
@@ -334,14 +363,14 @@ class Filter():
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
         self._globals = detected_faces._globals
-        self._det_faces = detected_faces
+        self._detected_faces = detected_faces
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def count(self):
         """ int: The number of frames that meet the filter criteria returned by
         :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
-        face_count_per_index = self._det_faces.face_count_per_index
+        face_count_per_index = self._detected_faces.face_count_per_index
         if self._globals.filter_mode == "No Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount == 0)
         elif self._globals.filter_mode == "Has Face(s)":
@@ -354,10 +383,27 @@ class Filter():
         return retval
 
     @property
+    def raw_indices(self):
+        """ dict: The frame and face indices that meet the current filter criteria for each
+        displayed face. """
+        frame_indices = []
+        face_indices = []
+        if self._globals.filter_mode != "No Faces":
+            for frame_idx, face_count in enumerate(self._detected_faces.face_count_per_index):
+                if face_count <= 1 and self._globals.filter_mode == "Multiple Faces":
+                    continue
+                for face_idx in range(face_count):
+                    frame_indices.append(frame_idx)
+                    face_indices.append(face_idx)
+        logger.trace("frame_indices: %s, face_indices: %s", frame_indices, face_indices)
+        retval = dict(frame=frame_indices, face=face_indices)
+        return retval
+
+    @property
     def frames_list(self):
         """ list: The list of frame indices that meet the filter criteria returned by
         :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
-        face_count_per_index = self._det_faces.face_count_per_index
+        face_count_per_index = self._detected_faces.face_count_per_index
         if self._globals.filter_mode == "No Faces":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count == 0]
         elif self._globals.filter_mode == "Multiple Faces":
@@ -382,13 +428,12 @@ class FaceUpdate():
     def __init__(self, detected_faces):
         logger.debug("Initializing %s: (detected_faces: %s)",
                      self.__class__.__name__, detected_faces)
-        self._det_faces = detected_faces
+        self._detected_faces = detected_faces
         self._globals = detected_faces._globals
-        self._saved_faces = detected_faces._saved_faces
-        self._updated_faces = detected_faces._updated_faces
+        self._frame_faces = detected_faces._frame_faces
+        self._updated_frame_indices = detected_faces._updated_frame_indices
         self._tk_unsaved = detected_faces.tk_unsaved
         self._extractor = detected_faces.extractor
-        self._last_updated_face = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -400,40 +445,53 @@ class FaceUpdate():
         -----
         The variable is still a ``None`` when this class is initialized, so referenced explicitly.
         """
-        return self._det_faces.tk_edited
+        return self._detected_faces.tk_edited
 
     @property
-    def _zoomed_size(self):
-        """ int: The size of the face when the editor is in zoomed in mode
+    def _tk_face_count_changed(self):
+        """ :class:`tkinter.BooleanVar`: The variable indicating whether an edit has occurred
+        meaning a GUI redraw needs to be triggered.
+
+        Notes
+        -----
+        The variable is still a ``None`` when this class is initialized, so referenced explicitly.
         """
-        return self._det_faces._zoomed_size  # pylint:disable=protected-access
+        return self._detected_faces.tk_face_count_changed
 
-    @property
-    def last_updated_face(self):
-        """ tuple: (`frame index`, `face index`) of the last face to be updated.
-
-        This attribute is populated after any update, just before :attr:`DetectedFaces.tk_edited`
-        is triggered, so that any process picking up the update knows which face to update.
-        """
-        return self._last_updated_face
-
-    def _current_faces_at_index(self, frame_index):
-        """ Checks whether there are already new alignments in :attr:`_alignments`. If not
-        then saved alignments are copied to :attr:`_updated_faces` ready for update.
+    def _faces_at_frame_index(self, frame_index):
+        """ Checks whether the frame has already been added to :attr:`_updated_frame_indices` and
+        adds it. Triggers the unsaved variable if this is the first edited frame. Returns the
+        detected face objects for the given frame.
 
         Parameters
         ----------
         frame_index: int
             The frame index to check whether there are updated alignments available
+
+        Returns
+        -------
+        list
+            The :class:`~lib.faces_detect.DetectedFace` objects for the requested frame
         """
-        if self._updated_faces[frame_index] is None:
-            retval = [deepcopy(face) for face in self._saved_faces[frame_index]]
-            self._updated_faces[frame_index] = retval
-            if not self._tk_unsaved.get():
-                self._tk_unsaved.set(True)
-        else:
-            retval = self._updated_faces[frame_index]
+        if not self._updated_frame_indices and not self._tk_unsaved.get():
+            self._tk_unsaved.set(True)
+        self._updated_frame_indices.add(frame_index)
+        retval = self._frame_faces[frame_index]
         return retval
+
+    def _generate_thumbnail(self, face):
+        """ Generate the jpg thumbnail from the currently active frame for the detected face and
+        assign to it's `thumbnail` attribute.
+
+        Parameters
+        ----------
+        face: class:`~lib.faces_detect.DetectedFace`
+            The detected face object to generate the thumbnail for
+        """
+        face.load_aligned(self._globals.current_frame["image"], 80, force=True)
+        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
+        face.thumbnail = jpg
+        face.aligned = dict()
 
     def add(self, frame_index, pnt_x, width, pnt_y, height):
         """ Add a :class:`~lib.faces_detect.DetectedFace` object to the current frame with the
@@ -452,10 +510,13 @@ class FaceUpdate():
         height: int
             The height of the bounding box
         """
-        faces = self._current_faces_at_index(frame_index)
-        faces.append(DetectedFace())
+        face = DetectedFace()
+        faces = self._faces_at_frame_index(frame_index)
+        faces.append(face)
         face_index = len(faces) - 1
+
         self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
+        self._tk_face_count_changed.set(True)
 
     def delete(self, frame_index, face_index):
         """ Delete the :class:`~lib.faces_detect.DetectedFace` object for the given frame and face
@@ -469,10 +530,9 @@ class FaceUpdate():
             The face index within the frame
         """
         logger.debug("Deleting face at frame index: %s face index: %s", frame_index, face_index)
-        faces = self._current_faces_at_index(frame_index)
+        faces = self._faces_at_frame_index(frame_index)
         del faces[face_index]
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
+        self._tk_face_count_changed.set(True)
         self._globals.tk_update.set(True)
 
     def bounding_box(self, frame_index, face_index, pnt_x, width, pnt_y, height, aligner="FAN"):
@@ -499,15 +559,12 @@ class FaceUpdate():
         """
         logger.trace("frame_index: %s, face_index %s, pnt_x %s, width %s, pnt_y %s, height %s, "
                      "aligner: %s", frame_index, face_index, pnt_x, width, pnt_y, height, aligner)
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.x = pnt_x
         face.w = width
         face.y = pnt_y
         face.h = height
         face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
-        # TODO Link this in to edited
         self._globals.tk_update.set(True)
 
     def landmark(self, frame_index, face_index, landmark_index, shift_x, shift_y, is_zoomed):
@@ -529,7 +586,7 @@ class FaceUpdate():
         is_zoomed: bool
             ``True`` if landmarks are being adjusted on a zoomed image otherwise ``False``
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         if is_zoomed:
             landmark = face.aligned_landmarks[landmark_index]
             landmark += (shift_x, shift_y)
@@ -543,8 +600,6 @@ class FaceUpdate():
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def landmarks(self, frame_index, face_index, shift_x, shift_y):
@@ -568,13 +623,11 @@ class FaceUpdate():
         Whilst the bounding box does not need to be shifted, it is anyway, to ensure that it is
         aligned with the newly adjusted landmarks.
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.x += shift_x
         face.y += shift_y
         face.landmarks_xy += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def landmarks_rotate(self, frame_index, face_index, angle, center):
@@ -593,13 +646,11 @@ class FaceUpdate():
         center: :class:`numpy.ndarray`
             The center point of the Landmark's Extract Box
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         rot_mat = cv2.getRotationMatrix2D(tuple(center), angle, 1.)
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def landmarks_scale(self, frame_index, face_index, scale, center):
@@ -618,11 +669,9 @@ class FaceUpdate():
         center: :class:`numpy.ndarray`
             The center point of the Landmark's Extract Box
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
         face.mask = self._extractor.get_masks(frame_index, face_index)
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
     def mask(self, frame_index, face_index, mask, mask_type):
@@ -640,9 +689,8 @@ class FaceUpdate():
         mask_type: str
             The name of the mask that is to be replaced
         """
-        face = self._current_faces_at_index(frame_index)[face_index]
+        face = self._faces_at_frame_index(frame_index)[face_index]
         face.mask[mask_type].replace_mask(mask)
-        self._last_updated_face = (frame_index, face_index)
         self._tk_edited.set(True)
         self._globals.tk_update.set(True)
 
@@ -659,8 +707,8 @@ class FaceUpdate():
             frame with alignments
         """
         logger.debug("frame: %s, direction: %s", frame_index, direction)
-        faces = self._current_faces_at_index(frame_index)
-        frames_with_faces = [idx for idx, faces in enumerate(self._det_faces.current_faces)
+        faces = self._faces_at_frame_index(frame_index)
+        frames_with_faces = [idx for idx, faces in enumerate(self._detected_faces.current_faces)
                              if len(faces) > 0]
         if direction == "prev":
             idx = next((idx for idx in reversed(frames_with_faces)
@@ -672,26 +720,252 @@ class FaceUpdate():
             # No previous/next frame available
             return
         logger.debug("Copying alignments from frame %s to frame: %s", idx, frame_index)
-        faces.extend(deepcopy(self._current_faces_at_index(idx)))
-        face_index = len(self._det_faces.current_faces[frame_index]) - 1
-        self._last_updated_face = (frame_index, face_index)
-        self._tk_edited.set(True)
+        faces.extend(deepcopy(self._faces_at_frame_index(idx)))
+        self._tk_face_count_changed.set(True)
         self._globals.tk_update.set(True)
 
-    def revert_to_saved(self, frame_index):
-        """ Revert the frame's alignments to their saved version for the given frame index.
+    def post_edit_trigger(self, frame_index, face_index):
+        """ Update the jpg thumbnail and the viewport thumbnail on a face edit.
 
         Parameters
         ----------
         frame_index: int
-            The frame that should have their faces reverted to their saved version
-
+            The frame that the face is being set for
+        face_index: int
+            The face index within the frame
         """
-        if self._updated_faces[frame_index] is None:
-            logger.debug("Alignments not amended. Returning")
-            return
-        logger.debug("Reverting alignments for frame_index %s", frame_index)
-        self._updated_faces[frame_index] = None
-        self._last_updated_face = (frame_index, -1)
+        face = self._frame_faces[frame_index][face_index]
+        face.load_aligned(self._globals.current_frame["image"], 80, force=True)
+        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
+        face.thumbnail = jpg
+        face.aligned = dict()
         self._tk_edited.set(True)
-        self._globals.tk_update.set(True)
+
+
+class ThumbsCreator():
+    """ Background loader to generate thumbnails for the alignments file. Generates low resolution
+    thumbnails in parallel threads for faster processing.
+
+    Parameters
+    ----------
+    detected_faces: :class:`~tool.manual.faces.DetectedFaces`
+        The :class:`~lib.faces_detect.DetectedFace` objects for this video
+    input_location: str
+        The location of the input folder of frames or video file
+    """
+    def __init__(self, detected_faces, input_location, single_process):
+        logger.debug("Initializing %s: (detected_faces: %s, input_location: %s, "
+                     "single_process: %s)", self.__class__.__name__, detected_faces,
+                     input_location, single_process)
+        self._size = 80
+        self._jpeg_quality = 60
+        self._pbar = dict(pbar=None, lock=Lock())
+        self._meta = dict(key_frames=detected_faces.video_meta_data.get("keyframes", None),
+                          pts_times=detected_faces.video_meta_data.get("pts_time", None))
+        self._location = input_location
+        self._alignments = detected_faces._alignments
+        self._frame_faces = detected_faces._frame_faces
+
+        self._is_video = all(val is not None for val in self._meta.values())
+        self._num_threads = os.cpu_count() - 2
+        if self._is_video and single_process:
+            self._num_threads = 1
+        elif self._is_video and not single_process:
+            self._num_threads = min(self._num_threads, len(self._meta["key_frames"]))
+        else:
+            self._num_threads = max(self._num_threads, 32)
+        self._threads = []
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def has_thumbs(self):
+        """ bool: ``True`` if the underlying alignments file holds thumbnail images
+        otherwise ``False``. """
+        return self._alignments.thumbnails.has_thumbails
+
+    def generate_cache(self):
+        """ Extract the face thumbnails from a video or folder of images into the
+        alignments file. """
+        self._pbar["pbar"] = tqdm(desc="Caching Thumbails",
+                                  leave=False,
+                                  total=len(self._frame_faces))
+        if self._is_video:
+            self._launch_video()
+        else:
+            self._launch_folder()
+        while True:
+            self._check_and_raise_error()
+            if all(not thread.is_alive() for thread in self._threads):
+                break
+            sleep(1)
+        self._join_threads()
+        self._pbar["pbar"].close()
+        self._alignments.save()
+
+    # << PRIVATE METHODS >> #
+    def _check_and_raise_error(self):
+        """ Monitor the loading threads for errors and raise if any occur. """
+        for thread in self._threads:
+            thread.check_and_raise_error()
+
+    def _join_threads(self):
+        """ Join the loading threads """
+        logger.debug("Joining face viewer loading threads")
+        for thread in self._threads:
+            thread.join()
+
+    def _launch_video(self):
+        """ Launch multiple :class:`lib.multithreading.MultiThread` objects to load faces from
+        a video file.
+
+        Splits the video into segments and passes each of these segments to separate background
+        threads for some speed up.
+        """
+        key_frame_split = len(self._meta["key_frames"]) // self._num_threads
+        key_frames = self._meta["key_frames"]
+        pts_times = self._meta["pts_times"]
+        for idx in range(self._num_threads):
+            is_final = idx == self._num_threads - 1
+            start_idx = idx * key_frame_split
+            keyframe_idx = len(key_frames) - 1 if is_final else start_idx + key_frame_split
+            end_idx = key_frames[keyframe_idx]
+            start_pts = pts_times[key_frames[start_idx]]
+            end_pts = False if idx + 1 == self._num_threads else pts_times[end_idx]
+            starting_index = pts_times.index(start_pts)
+            if end_pts:
+                segment_count = len(pts_times[key_frames[start_idx]:end_idx])
+            else:
+                segment_count = len(pts_times[key_frames[start_idx]:])
+            logger.debug("thread index: %s, start_idx: %s, end_idx: %s, start_pts: %s, "
+                         "end_pts: %s, starting_index: %s, segment_count: %s", idx, start_idx,
+                         end_idx, start_pts, end_pts, starting_index, segment_count)
+            thread = MultiThread(self._load_from_video,
+                                 start_pts,
+                                 end_pts,
+                                 starting_index,
+                                 segment_count)
+            thread.start()
+            self._threads.append(thread)
+
+    def _launch_folder(self):
+        """ Launch :class:`lib.multithreading.MultiThread` to retrieve faces from a
+        folder of images.
+
+        Goes through the file list one at a time, passing each file to a separate background
+        thread for some speed up.
+        """
+        reader = SingleFrameLoader(self._location)
+        num_threads = min(reader.count, self._num_threads)
+        frame_split = reader.count // self._num_threads
+        logger.debug("total images: %s, num_threads: %s, frames_per_thread: %s",
+                     reader.count, num_threads, frame_split)
+        for idx in range(num_threads):
+            is_final = idx == num_threads - 1
+            start_idx = idx * frame_split
+            end_idx = reader.count if is_final else start_idx + frame_split
+            thread = MultiThread(self._load_from_folder, reader, start_idx, end_idx)
+            thread.start()
+            self._threads.append(thread)
+
+    def _load_from_video(self, pts_start, pts_end, start_index, segment_count):
+        """ Loads faces from video for the given segment of the source video.
+
+        Each segment of the video is extracted from in a different background thread.
+
+        Parameters
+        ----------
+        pts_start: float
+            The start time to cut the segment out of the video
+        pts_end: float
+            The end time to cut the segment out of the video
+        start_index: int
+            The frame index that this segment starts from. Used for calculating the actual frame
+            index of each frame extracted
+        segment_count: int
+            The number of frames that appear in this segment. Used for ending early in case more
+            frames come out of the segment than should appear (sometimes more frames are picked up
+            at the end of the segment, so these are discarded)
+        """
+        logger.debug("pts_start: %s, pts_end: %s, start_index: %s, segment_count: %s",
+                     pts_start, pts_end, start_index, segment_count)
+        reader = self._get_reader(pts_start, pts_end)
+        idx = 0
+        vidname = os.path.splitext(os.path.basename(self._location))[0]
+        for idx, frame in enumerate(reader):
+            frame_idx = idx + start_index
+            filename = "{}_{:06d}.png".format(vidname, frame_idx + 1)
+            self._set_thumbail(filename, frame[..., ::-1], frame_idx)
+            if idx == segment_count - 1:
+                # Sometimes extra frames are picked up at the end of a segment, so stop
+                # processing when segment frame count has been hit.
+                break
+        reader.close()
+        logger.debug("Segment complete: (starting_frame_index: %s, processed_count: %s)",
+                     start_index, idx)
+
+    def _get_reader(self, pts_start, pts_end):
+        """ Get an imageio iterator for this thread's segment.
+
+        Parameters
+        ----------
+        pts_start: float
+            The start time to cut the segment out of the video
+        pts_end: float
+            The end time to cut the segment out of the video
+
+        Returns
+        -------
+        :class:`imageio.Reader`
+            A reader iterator for the requested segment of video
+        """
+        input_params = ["-ss", str(pts_start)]
+        if pts_end:
+            input_params.extend(["-to", str(pts_end)])
+        logger.debug("pts_start: %s, pts_end: %s, input_params: %s",
+                     pts_start, pts_end, input_params)
+        return imageio.get_reader(self._location, "ffmpeg", input_params=input_params)
+
+    def _load_from_folder(self, reader, start_index, end_index):
+        """ Loads faces from the given range of frame indices from a folder of images.
+
+        Each frame range is extracted in a different background thread.
+
+        Parameters
+        ----------
+        reader: :class:`lib.image.SingleFrameLoader`
+            The reader that is used to retrieve the requested frame
+        start_index: int
+            The starting frame index for the images to extract faces from
+        end_index: int
+            The end frame index for the images to extract faces from
+        """
+        logger.debug("reader: %s, start_index: %s, end_index: %s",
+                     reader, start_index, end_index)
+        for frame_index in range(start_index, end_index):
+            filename, frame = reader.image_from_index(frame_index)
+            self._set_thumbail(filename, frame, frame_index)
+        logger.debug("Segment complete: (start_index: %s, processed_count: %s)",
+                     start_index, end_index - start_index)
+
+    def _set_thumbail(self, filename, frame, frame_index):
+        """ Extracts the faces from the frame and adds to alignments file
+
+        Parameters
+        ----------
+        filename: str
+            The filename of the frame within the alignments file
+        frame: :class:`numpy.ndarray`
+            The frame that contains the faces
+        frame_index: int
+            The frame index of this frame in the :attr:`_frame_faces`
+        """
+        for face_idx, face in enumerate(self._frame_faces[frame_index]):
+            face.load_aligned(frame, size=self._size, force=True)
+            jpg = cv2.imencode(".jpg",
+                               face.aligned_face,
+                               [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])[1]
+            face.thumbnail = jpg
+            self._alignments.thumbnails.add_thumbnail(filename, face_idx, jpg)
+            face.aligned["face"] = None
+        with self._pbar["lock"]:
+            self._pbar["pbar"].update(1)

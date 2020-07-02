@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-""" Custom Initializers for faceswap.py
-    Initializers from:
-        shoanlu GAN: https://github.com/shaoanlu/faceswap-GAN"""
+""" Custom Initializers for faceswap.py """
 
 import logging
 import sys
@@ -13,50 +11,55 @@ from keras import backend as K
 from keras import initializers
 from keras.utils.generic_utils import get_custom_objects
 
+from lib.utils import get_backend
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def icnr_keras(shape, dtype=None):
-    """
-    Custom initializer for subpix upscaling
-    From https://github.com/kostyaev/ICNR
-    Note: upscale factor is fixed to 2, and the base initializer is fixed to random normal.
-    """
-    # TODO Roll this into ICNR_init when porting GAN 2.2
-    shape = list(shape)
-    scale = 2
-    initializer = tf.keras.initializers.RandomNormal(0, 0.02)
-
-    new_shape = shape[:3] + [int(shape[3] / (scale ** 2))]
-    var_x = initializer(new_shape, dtype)
-    var_x = tf.transpose(var_x, perm=[2, 0, 1, 3])
-    var_x = tf.image.resize_nearest_neighbor(var_x, size=(shape[0] * scale, shape[1] * scale))
-    var_x = tf.space_to_depth(var_x, block_size=scale)
-    var_x = tf.transpose(var_x, perm=[1, 2, 0, 3])
-    return var_x
-
-
 class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
-    '''
-    ICNR initializer for checkerboard artifact free sub pixel convolution
+    """ ICNR initializer for checkerboard artifact free sub pixel convolution
 
-    Andrew Aitken et al. Checkerboard artifact free sub-pixel convolution
-    https://arxiv.org/pdf/1707.02937.pdf	https://distill.pub/2016/deconv-checkerboard/
+    Parameters
+    ----------
+    initializer: :class:`keras.initializers.Initializer`
+        The initializer used for sub kernels (orthogonal, glorot uniform, etc.)
+    scale: int
+        scaling factor of sub pixel convolution (up sampling from 8x8 to 16x16 is scale 2)
 
-    Parameters:
-        initializer: initializer used for sub kernels (orthogonal, glorot uniform, etc.)
-        scale: scale factor of sub pixel convolution (upsampling from 8x8 to 16x16 is scale 2)
-    Return:
+    Returns
+    -------
+    tensor
         The modified kernel weights
-    Example:
-        x = conv2d(... weights_initializer=ICNR(initializer=he_uniform(), scale=2))
-    '''
+
+    Example
+    -------
+    >>> x = conv2d(... weights_initializer=ICNR(initializer=he_uniform(), scale=2))
+
+    References
+    ----------
+    Andrew Aitken et al. Checkerboard artifact free sub-pixel convolution
+    https://arxiv.org/pdf/1707.02937.pdf,  https://distill.pub/2016/deconv-checkerboard/
+    """
 
     def __init__(self, initializer, scale=2):
         self.scale = scale
         self.initializer = initializer
 
-    def __call__(self, shape, dtype='float32'):  # tf needs partition_info=None
+    def __call__(self, shape, dtype="float32"):
+        """ Call function for the ICNR initializer.
+
+        Parameters
+        ----------
+        shape: tuple or list
+            The required resized shape for the output tensor
+        dtype: str
+            The data type for the tensor
+
+        Returns
+        -------
+        tensor
+            The modified kernel weights
+        """
         shape = list(shape)
         if self.scale == 1:
             return self.initializer(shape)
@@ -64,18 +67,82 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
         if isinstance(self.initializer, dict):
             self.initializer = initializers.deserialize(self.initializer)
         var_x = self.initializer(new_shape, dtype)
-        var_x = tf.transpose(var_x, perm=[2, 0, 1, 3])
-        var_x = tf.image.resize_nearest_neighbor(
-            var_x,
-            size=(shape[0] * self.scale, shape[1] * self.scale),
-            align_corners=True)
-        var_x = tf.space_to_depth(var_x, block_size=self.scale, data_format='NHWC')
-        var_x = tf.transpose(var_x, perm=[1, 2, 0, 3])
+        var_x = K.permute_dimensions(var_x, [2, 0, 1, 3])
+        var_x = self._resize_nearest_neighbour(var_x,
+                                               (shape[0] * self.scale, shape[1] * self.scale))
+        var_x = self._space_to_depth(var_x)
+        var_x = K.permute_dimensions(var_x, [1, 2, 0, 3])
+        logger.debug("Output: %s", var_x)
         return var_x
 
+    def _resize_nearest_neighbour(self, input_tensor, size):
+        """ Resize a tensor using nearest neighbor interpolation.
+
+        Notes
+        -----
+        Tensorflow has a bug that resizes the image incorrectly if :attr:`align_corners` is not set
+        to ``True``. Keras Backend does not set this flag, so we explicitly call the Tensorflow
+        operation for non-amd backends.
+
+        Parameters
+        ----------
+        input_tensor: tensor
+            The tensor to be resized
+        tuple: int
+            The (`h`, `w`) that the tensor should be resized to (used for non-amd backends only)
+
+        Returns
+        -------
+        tensor
+            The input tensor resized to the given size
+        """
+        if get_backend() == "amd":
+            retval = K.resize_images(input_tensor, self.scale, self.scale, "channels_last",
+                                     interpolation="nearest")
+        else:
+            retval = tf.image.resize_nearest_neighbor(input_tensor, size=size, align_corners=True)
+        logger.debug("Input Tensor: %s, Output Tensor: %s", input_tensor, retval)
+        return retval
+
+    def _space_to_depth(self, input_tensor):
+        """ Space to depth implementation.
+
+        PlaidML does not have a space to depth operation, so calculate if backend is amd
+        otherwise returns the :func:`tensorflow.space_to_depth` operation.
+
+        Parameters
+        ----------
+        input_tensor: tensor
+            The tensor to be manipulated
+
+        Returns
+        -------
+        tensor
+            The manipulated input tensor
+        """
+        if get_backend() == "amd":
+            batch, height, width, depth = input_tensor.shape.dims
+            new_height = height // self.scale
+            new_width = width // self.scale
+            reshaped = K.reshape(input_tensor,
+                                 (batch, new_height, self.scale, new_width, self.scale, depth))
+            retval = K.reshape(K.permute_dimensions(reshaped, [0, 1, 3, 2, 4, 5]),
+                               (batch, new_height, new_width, -1))
+        else:
+            retval = tf.space_to_depth(input_tensor, block_size=self.scale, data_format="NHWC")
+        logger.debug("Input Tensor: %s, Output Tensor: %s", input_tensor, retval)
+        return retval
+
     def get_config(self):
-        config = {'scale': self.scale,
-                  'initializer': self.initializer
+        """ Return the ICNR Initializer configuration.
+
+        Returns
+        -------
+        dict
+            The configuration for ICNR Initialization
+        """
+        config = {"scale": self.scale,
+                  "initializer": self.initializer
                   }
         base_config = super(ICNR, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -83,25 +150,37 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
 
 class ConvolutionAware(initializers.Initializer):
     """
-    Initializer that generates orthogonal convolution filters in the fourier
-    space. If this initializer is passed a shape that is not 3D or 4D,
-    orthogonal initialization will be used.
-    # Arguments
-        eps_std: Standard deviation for the random normal noise used to break
-        symmetry in the inverse fourier transform.
-        seed: A Python integer. Used to seed the random generator.
-    # References
-        Armen Aghajanyan, https://arxiv.org/abs/1702.06295
-    # Adapted, fixed and optimized from:
+    Initializer that generates orthogonal convolution filters in the Fourier space. If this
+    initializer is passed a shape that is not 3D or 4D, orthogonal initialization will be used.
+
+    Adapted, fixed and optimized from:
     https://github.com/keras-team/keras-contrib/blob/master/keras_contrib/initializers/convaware.py
+
+    Parameters
+    ----------
+    eps_std: float
+        The Standard deviation for the random normal noise used to break symmetry in the inverse
+        Fourier transform.
+    seed: int, optional
+        Used to seed the random generator. Default: ``None``
+
+    Returns
+    -------
+    tensor
+        The modified kernel weights
+
+    References
+    ----------
+    Armen Aghajanyan, https://arxiv.org/abs/1702.06295
+
+    Notes
+    -----
+    Convolutional Aware Initialization takes a long time. Keras model loading loads a model,
+    performs initialization and then loads weights, which is an unnecessary waste of time.
+    init defaults to False so that this is bypassed when loading a saved model passing zeros.
     """
 
     def __init__(self, eps_std=0.05, seed=None, init=False):
-        # Convolutional Aware Initialization takes a long time.
-        # Keras model loading loads a model, performs initialization and then
-        # loads weights, which is an unnecessary waste of time.
-        # init defaults to False so that this is bypassed when loading a saved model
-        # passing zeros
         self._init = init
         self.eps_std = eps_std
         self.seed = seed
@@ -109,6 +188,20 @@ class ConvolutionAware(initializers.Initializer):
         self.he_uniform = initializers.he_uniform()
 
     def __call__(self, shape, dtype=None):
+        """ Call function for the ICNR initializer.
+
+        Parameters
+        ----------
+        shape: tuple or list
+            The required shape for the output tensor
+        dtype: str
+            The data type for the tensor
+
+        Returns
+        -------
+        tensor
+            The modified kernel weights
+        """
         dtype = K.floatx() if dtype is None else dtype
         if self._init:
             logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
@@ -162,6 +255,7 @@ class ConvolutionAware(initializers.Initializer):
         return K.variable(init.transpose(transpose_dimensions), dtype=dtype, name="conv_aware")
 
     def _create_basis(self, filters_size, filters, size, dtype):
+        """ Create the basis for convolutional aware initialization """
         if size == 1:
             return np.random.normal(0.0, self.eps_std, (filters_size, filters, size))
         nbb = filters // size + 1
@@ -173,6 +267,7 @@ class ConvolutionAware(initializers.Initializer):
 
     @staticmethod
     def _symmetrize(var_a):
+        """ Make the given tensor symmetrical. """
         var_b = np.transpose(var_a, axes=(0, 1, 3, 2))
         diag = var_a.diagonal(axis1=2, axis2=3)
         var_c = np.array([[np.diag(arr) for arr in batch] for batch in diag])
@@ -180,14 +275,22 @@ class ConvolutionAware(initializers.Initializer):
 
     @staticmethod
     def _scale_filters(filters, variance):
+        """ Scale the given filters. """
         c_var = np.var(filters)
         var_p = np.sqrt(variance / c_var)
         return filters * var_p
 
     def get_config(self):
+        """ Return the Convolutional Aware Initializer configuration.
+
+        Returns
+        -------
+        dict
+            The configuration for ICNR Initialization
+        """
         return {
-            'eps_std': self.eps_std,
-            'seed': self.seed
+            "eps_std": self.eps_std,
+            "seed": self.seed
         }
 
 

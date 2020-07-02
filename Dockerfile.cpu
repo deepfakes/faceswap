@@ -6,9 +6,9 @@ RUN add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /opt/
+COPY _requirements_base.txt /opt/
 RUN pip3 install --upgrade pip
-RUN pip3 --no-cache-dir install -r /opt/requirements.txt && rm /opt/requirements.txt
+RUN pip3 --no-cache-dir install -r /opt/_requirements_base.txt && rm /opt/_requirements_base.txt
 
 WORKDIR "/srv"
 CMD ["/bin/bash"]

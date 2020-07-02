@@ -213,7 +213,8 @@ class Extract():  # pylint:disable=too-few-public-methods
                 self._check_thread_error()
                 if is_final:
                     self._output_processing(extract_media, size)
-                    self._output_faces(saver, extract_media)
+                    if not self._args.skip_saving_faces:
+                        self._output_faces(saver, extract_media)
                     if self._save_interval and (idx + 1) % self._save_interval == 0:
                         self._alignments.save()
                 else:

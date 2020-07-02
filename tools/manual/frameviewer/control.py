@@ -154,8 +154,6 @@ class BackgroundImage():
         self._canvas = canvas
         self._globals = canvas._globals
         self._det_faces = canvas._det_faces
-        zoom_size = (min(self._globals.frame_display_dims), min(self._globals.frame_display_dims))
-        self._zoom_padding = self._get_padding(zoom_size)
         placeholder = np.ones((*reversed(self._globals.frame_display_dims), 3), dtype="uint8")
         self._tk_frame = ImageTk.PhotoImage(Image.fromarray(placeholder))
         self._tk_face = ImageTk.PhotoImage(Image.fromarray(placeholder))
@@ -171,25 +169,6 @@ class BackgroundImage():
         retval = "face" if self._globals.is_zoomed else "frame"
         logger.trace(retval)
         return retval
-
-    def _get_padding(self, size):
-        """ Obtain the Left, Top, Right, Bottom padding required to place the square face or frame
-        in to the Photo Image
-
-        Returns
-        -------
-        tuple
-            The (Left, Top, Right, Bottom) padding to apply to the face image in pixels
-        """
-        pad_lt = ((self._globals.frame_display_dims[1] - size[0]) // 2,
-                  (self._globals.frame_display_dims[0] - size[1]) // 2)
-        padding = (pad_lt[0],
-                   self._globals.frame_display_dims[1] - size[0] - pad_lt[0],
-                   pad_lt[1],
-                   self._globals.frame_display_dims[0] - size[1] - pad_lt[1])
-        logger.debug("Frame dimensions: %s, size: %s, padding: %s",
-                     self._globals.frame_display_dims, size, padding)
-        return padding
 
     def refresh(self, view_mode):
         """ Update the displayed frame.
@@ -223,7 +202,12 @@ class BackgroundImage():
     def _update_tk_face(self):
         """ Update the currently zoomed face. """
         face = self._get_zoomed_face()
-        face = cv2.copyMakeBorder(face, *self._zoom_padding, cv2.BORDER_CONSTANT)
+        padding = self._get_padding((min(self._globals.frame_display_dims),
+                                     min(self._globals.frame_display_dims)))
+        face = cv2.copyMakeBorder(face, *padding, cv2.BORDER_CONSTANT)
+        if self._tk_frame.height() != face.shape[0]:
+            self._resize_frame()
+
         logger.trace("final shape: %s", face.shape)
         self._tk_face.paste(Image.fromarray(face))
 
@@ -265,4 +249,41 @@ class BackgroundImage():
         if any(padding):
             img = cv2.copyMakeBorder(img, *padding, cv2.BORDER_CONSTANT)
         logger.trace("final shape: %s", img.shape)
+
+        if self._tk_frame.height() != img.shape[0]:
+            self._resize_frame()
+
         self._tk_frame.paste(Image.fromarray(img))
+
+    def _get_padding(self, size):
+        """ Obtain the Left, Top, Right, Bottom padding required to place the square face or frame
+        in to the Photo Image
+
+        Returns
+        -------
+        tuple
+            The (Left, Top, Right, Bottom) padding to apply to the face image in pixels
+        """
+        pad_lt = ((self._globals.frame_display_dims[1] - size[0]) // 2,
+                  (self._globals.frame_display_dims[0] - size[1]) // 2)
+        padding = (pad_lt[0],
+                   self._globals.frame_display_dims[1] - size[0] - pad_lt[0],
+                   pad_lt[1],
+                   self._globals.frame_display_dims[0] - size[1] - pad_lt[1])
+        logger.debug("Frame dimensions: %s, size: %s, padding: %s",
+                     self._globals.frame_display_dims, size, padding)
+        return padding
+
+    def _resize_frame(self):
+        """ Resize the :attr:`_tk_frame`, attr:`_tk_face` photo images, update the canvas to
+        offset the image correctly.
+        """
+        logger.trace("Resizing video frame on resize event: %s", self._globals.frame_display_dims)
+        placeholder = np.ones((*reversed(self._globals.frame_display_dims), 3), dtype="uint8")
+        self._tk_frame = ImageTk.PhotoImage(Image.fromarray(placeholder))
+        self._tk_face = ImageTk.PhotoImage(Image.fromarray(placeholder))
+        self._canvas.coords(self._image,
+                            self._globals.frame_display_dims[0] / 2,
+                            self._globals.frame_display_dims[1] / 2)
+        img = self._tk_face if self._current_view_mode == "face" else self._tk_frame
+        self._canvas.itemconfig(self._image, image=img)

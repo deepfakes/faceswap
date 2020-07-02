@@ -41,6 +41,7 @@ class Alignments():
         self._data = self._load()
         self._update_legacy()
         self._hashes_to_frame = dict()
+        self._thumbnails = Thumbnails(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # << PROPERTIES >> #
@@ -125,6 +126,12 @@ class Alignments():
                 keyframes.append(idx)
         retval = dict(pts_time=pts_time, keyframes=keyframes)
         return retval
+
+    @property
+    def thumbnails(self):
+        """ :class:`~lib.alignments.Thumbnails`: The low resolution thumbnail images that exist
+        within the alignments file """
+        return self._thumbnails
 
     # << INIT FUNCTIONS >> #
 
@@ -475,7 +482,6 @@ class Alignments():
                                  filename, idx)
 
     # << GENERATORS >> #
-
     def yield_faces(self):
         """ Generator to obtain all faces with meta information from :attr:`data`. The results
         are yielded by frame.
@@ -651,3 +657,67 @@ class Alignments():
                     alignment["landmarks_xy"] = np.array(test, dtype="float32")
                     update_count += 1
         logger.debug("Updated landmarks_xy: %s", update_count)
+
+
+class Thumbnails():
+    """ Thumbnail images stored in the alignments file.
+
+    The thumbnails are stored as low resolution (64px), low quality jpg in the alignments file
+    and are used for the Manual Alignments tool.
+
+    Parameters
+    ----------
+    alignments: :class:'~lib.alignments.Alignments`
+        The parent alignments class that these thumbs belong to
+    """
+    def __init__(self, alignments):
+        logger.debug("Initializing %s: (alignments: %s)", self.__class__.__name__, alignments)
+        self._alignments_dict = alignments.data
+        self._frame_list = list(sorted(self._alignments_dict))
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def has_thumbails(self):
+        """ bool: ``True`` if all faces in the alignments file contain thumbnail images
+        otherwise ``False``. """
+        retval = all("thumb" in face
+                     for frame in self._alignments_dict.values()
+                     for face in frame["faces"])
+        logger.trace(retval)
+        return retval
+
+    def get_thumbnail_by_index(self, frame_index, face_index):
+        """ Obtain a jpg thumbnail from the given frame index for the given face index
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that contains the thumbnail
+        face_index: int
+            The face index within the frame to retrieve the thumbnail for
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The encoded jpg thumbnail
+        """
+        retval = self._alignments_dict[self._frame_list[frame_index]]["faces"][face_index]["thumb"]
+        logger.trace("frame index: %s, face_index: %s, thumb shape: %s",
+                     frame_index, face_index, retval.shape)
+        return retval
+
+    def add_thumbnail(self, frame, face_index, thumb):
+        """ Add a thumbnail for the given face index for the given frame.
+
+        Parameters
+        ----------
+        frame: str
+            The name of the frame to add the thumbnail for
+        face_index: int
+            The face index within the given frame to add the thumbnail for
+        thumb: :class:`numpy.ndarray`
+            The encoded jpg thumbnail at 64px to add to the alignments file
+        """
+        logger.debug("frame: %s, face_index: %s, thumb shape: %s thumb dtype: %s",
+                     frame, face_index, thumb.shape, thumb.dtype)
+        self._alignments_dict[frame]["faces"][face_index]["thumb"] = thumb

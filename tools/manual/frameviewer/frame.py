@@ -34,20 +34,18 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, detected_faces: %s)",
                      self.__class__.__name__, parent, tk_globals, detected_faces)
         super().__init__(parent)
-        self.pack(side=tk.LEFT, anchor=tk.NW)
+        self.pack(side=tk.LEFT, anchor=tk.NW, expand=True, fill=tk.BOTH)
 
         self._globals = tk_globals
         self._det_faces = detected_faces
 
         self._actions_frame = ActionsFrame(self)
         main_frame = ttk.Frame(self)
-        main_frame.pack(side=tk.RIGHT)
-        self._video_frame = ttk.Frame(main_frame,
-                                      width=self._globals.frame_display_dims[0],
-                                      height=self._globals.frame_display_dims[1])
+        main_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
 
-        self._video_frame.pack(side=tk.TOP, expand=True)
-        self._video_frame.pack_propagate(False)
+        self._video_frame = ttk.Frame(main_frame)
+        self._video_frame.pack(side=tk.TOP, expand=True, fill=tk.BOTH)
+        self._video_frame.bind("<Configure>", self._resize)
 
         self._canvas = FrameViewer(self._video_frame,
                                    self._globals,
@@ -120,11 +118,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ :dict: Editor key with :class:`tkinter.StringVar` containing the selected color hex
         code for each annotation """
         return self._canvas.control_tk_vars["Mask"]["display"]["MaskType"]
-
-    @property
-    def colors(self):
-        """ :dict: color name to hex code mapping """
-        return self._canvas.colors
 
     @property
     def _filter_modes(self):
@@ -236,6 +229,13 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         # Allow key pad keys for numeric presses
         key = key.replace("KP_", "") if key.startswith("KP_") else key
         self._actions_frame.on_click(self._actions_frame.key_bindings[key])
+
+    def _resize(self, event):
+        """  Resize the image to fit the frame, maintaining aspect ratio """
+        framesize = (event.width, event.height)
+        logger.trace("Resizing video frame. Framesize: %s", framesize)
+        self._globals.set_frame_display_dims(*framesize)
+        self._globals.tk_update.set(True)
 
     # << TRANSPORT >> #
     def _play(self, *args, frame_count=None):  # pylint:disable=unused-argument
@@ -394,7 +394,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for action in ("copy_prev", "copy_next", "reload"):
             if action == "reload":
                 icon = "reload3"
-                cmd = lambda f=tk_frame_index: self._det_faces.update.revert_to_saved(f.get())
+                cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())
                 helptext = "Revert to saved Alignments ({})".format(lookup[action][1])
             else:
                 icon = action
@@ -626,18 +626,6 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         offset_y = (self._globals.frame_display_dims[1] - frame_dims[1]) / 2
         logger.trace("offset_x: %s, offset_y: %s", offset_x, offset_y)
         return offset_x, offset_y
-
-    @property
-    def colors(self):
-        """ dict: Available colors for annotations """
-        return dict(black="#000000",
-                    red="#ff0000",
-                    green="#00ff00",
-                    blue="#0000ff",
-                    cyan="#00ffff",
-                    yellow="#ffff00",
-                    magenta="#ff00ff",
-                    white="#ffffff")
 
     def _get_editors(self):
         """ Get the object editors for the canvas.
