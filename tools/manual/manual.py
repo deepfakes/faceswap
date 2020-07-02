@@ -230,9 +230,9 @@ class Manual(tk.Tk):
         self.tk.call("wm",
                      "iconphoto",
                      self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
-        self.update_idletasks()
-        location = self._display.winfo_reqheight() + 5
+        location = int(self.winfo_screenheight() // 1.5)
         self._containers["main"].sash_place(0, 1, location)
+        self.update_idletasks()
 
     def process(self):
         """ The entry point for the Visual Alignments tool from :mod:`lib.tools.manual.cli`.
@@ -258,7 +258,8 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, display_frame: %s)",
                      self.__class__.__name__, parent, tk_globals, display_frame)
         super().__init__(parent)
-        self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.pack(side=tk.RIGHT, fill=tk.Y)
+
         self._globals = tk_globals
         self._display_frame = display_frame
         self._control_panels = self._initialize()
@@ -445,7 +446,7 @@ class TkGlobals():
 
     @property
     def frame_display_dims(self):
-        """ tuple: The (`width`, `height`) of the display image with scaling factor applied. """
+        """ tuple: The (`width`, `height`) of the video display frame in pixels. """
         return self._frame_display_dims
 
     @property
@@ -554,6 +555,30 @@ class TkGlobals():
                     self.frame_display_dims[1] / image.shape[0])
         self._current_frame["image"] = image
         self._current_frame["filename"] = filename
+        self._current_frame["scale"] = scale
+        self._current_frame["interpolation"] = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
+        self._current_frame["display_dims"] = (int(round(image.shape[1] * scale)),
+                                               int(round(image.shape[0] * scale)))
+        logger.trace({k: v.shape if isinstance(v, np.ndarray) else v
+                      for k, v in self._current_frame.items()})
+
+    def set_frame_display_dims(self, width, height):
+        """ Set the size, in pixels, of the video frame display window and resize the displayed
+        frame.
+
+        Used on a frame resize callback, sets the :attr:frame_display_dims`.
+
+        Parameters
+        ----------
+        width: int
+            The width of the frame holding the video canvas in pixels
+        height: int
+            The height of the frame holding the video canvas in pixels
+        """
+        self._frame_display_dims = (int(width), int(height))
+        image = self._current_frame["image"]
+        scale = min(self.frame_display_dims[0] / image.shape[1],
+                    self.frame_display_dims[1] / image.shape[0])
         self._current_frame["scale"] = scale
         self._current_frame["interpolation"] = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
         self._current_frame["display_dims"] = (int(round(image.shape[1] * scale)),

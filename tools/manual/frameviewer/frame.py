@@ -34,20 +34,18 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, detected_faces: %s)",
                      self.__class__.__name__, parent, tk_globals, detected_faces)
         super().__init__(parent)
-        self.pack(side=tk.LEFT, anchor=tk.NW)
+        self.pack(side=tk.LEFT, anchor=tk.NW, expand=True, fill=tk.BOTH)
 
         self._globals = tk_globals
         self._det_faces = detected_faces
 
         self._actions_frame = ActionsFrame(self)
         main_frame = ttk.Frame(self)
-        main_frame.pack(side=tk.RIGHT)
-        self._video_frame = ttk.Frame(main_frame,
-                                      width=self._globals.frame_display_dims[0],
-                                      height=self._globals.frame_display_dims[1])
+        main_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
 
-        self._video_frame.pack(side=tk.TOP, expand=True)
-        self._video_frame.pack_propagate(False)
+        self._video_frame = ttk.Frame(main_frame)
+        self._video_frame.pack(side=tk.TOP, expand=True, fill=tk.BOTH)
+        self._video_frame.bind("<Configure>", self._resize)
 
         self._canvas = FrameViewer(self._video_frame,
                                    self._globals,
@@ -231,6 +229,13 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         # Allow key pad keys for numeric presses
         key = key.replace("KP_", "") if key.startswith("KP_") else key
         self._actions_frame.on_click(self._actions_frame.key_bindings[key])
+
+    def _resize(self, event):
+        """  Resize the image to fit the frame, maintaining aspect ratio """
+        framesize = (event.width, event.height)
+        logger.trace("Resizing video frame. Framesize: %s", framesize)
+        self._globals.set_frame_display_dims(*framesize)
+        self._globals.tk_update.set(True)
 
     # << TRANSPORT >> #
     def _play(self, *args, frame_count=None):  # pylint:disable=unused-argument
