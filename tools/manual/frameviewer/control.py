@@ -232,11 +232,11 @@ class BackgroundImage():
         if faces_in_frame == 0:
             face = np.ones((size, size, 3), dtype="uint8")
         else:
+            det_face = self._det_faces.current_faces[frame_idx][face_idx]
+            det_face.load_aligned(self._globals.current_frame["image"], size=size, force=True)
+            face = det_face.aligned_face.copy()
+            det_face.aligned["image"] = None
 
-            face = self._det_faces.get_face_at_index(frame_idx,
-                                                     self._globals.face_index,
-                                                     self._globals.current_frame["image"],
-                                                     size)
         logger.trace("face shape: %s", face.shape)
         return face[..., 2::-1]
 

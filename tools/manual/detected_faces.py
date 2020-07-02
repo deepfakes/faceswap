@@ -48,7 +48,6 @@ class DetectedFaces():
         self._globals = tk_globals
         self._frame_faces = []
         self._updated_frame_indices = set()
-        self._extract_size = min(self._globals.frame_display_dims)
 
         self._alignments = self._get_alignments(alignments_path, input_location)
         self._extractor = extractor
@@ -162,40 +161,6 @@ class DetectedFaces():
         """
         if self._globals.is_video:
             self._alignments.save_video_meta_data(pts_time, keyframes)
-
-    def get_face_at_index(self, frame_index, face_index, image, size):
-        """ Return an aligned face for the given frame and face index sized at the given size.
-
-        Parameters
-        ----------
-        frame_index: int
-            The frame that the required face exists in
-        face_index: int
-            The face index within the frame to retrieve the face for
-        image: :class:`numpy.ndarray`
-            The original frame that contains the face to be extracted
-        size: int
-            The required pixel size of the aligned face. NB The default size is set for a zoomed
-            display frame image. Rather than resize the underlying Detected Face object, the
-            returned results are adjusted for the requested size
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The aligned face at the requested size
-        """
-        logger.trace("frame_index: %s, face_index: %s, image: %s, size: %s",
-                     frame_index, face_index, image.shape, size)
-        face = self._frame_faces[frame_index][face_index]
-        resize = self._extract_size != size
-        logger.trace("Requires resize: %s", resize)
-        face.load_aligned(image, size=self._extract_size, force=True)
-
-        retval = cv2.resize(face.aligned_face,
-                            (size, size)) if resize else face.aligned_face.copy()
-        face.aligned["face"] = None
-        logger.trace("returning: %s", retval.shape)
-        return retval
 
     # <<<< PRIVATE METHODS >>> #
     # << INIT >> #
@@ -588,6 +553,8 @@ class FaceUpdate():
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
         if is_zoomed:
+            if not np.any(face.aligned_landmarks):  # This will be None on a resize
+                face.load_aligned(None, size=min(self._globals.frame_display_dims))
             landmark = face.aligned_landmarks[landmark_index]
             landmark += (shift_x, shift_y)
             matrix = AlignerExtract.transform_matrix(face.aligned["matrix"],

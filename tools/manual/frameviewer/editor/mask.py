@@ -250,9 +250,10 @@ class Mask(Editor):
             The opacity to apply to the mask
         """
         mask = (self._meta["mask"][face_index] * opacity).astype("uint8")
+        zoomed_offset = self._zoomed_roi[:2]
         if self._globals.is_zoomed:
             display_image = self._update_mask_image_zoomed(mask, rgb_color)
-            top_left = self._zoomed_roi[:2]
+            top_left = zoomed_offset
             # Hide all masks and only display selected
             self._canvas.itemconfig("Mask", state="hidden")
             self._canvas.itemconfig("Mask_face_{}".format(face_index), state="normal")
@@ -338,10 +339,8 @@ class Mask(Editor):
             The hex color code that the mask should be displayed as
         """
         if self._globals.is_zoomed:
-            box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
-                            self._zoomed_roi[2], self._zoomed_roi[1],
-                            self._zoomed_roi[2], self._zoomed_roi[3],
-                            self._zoomed_roi[0], self._zoomed_roi[3]))
+            roi = self._zoomed_roi
+            box = np.array((roi[0], roi[1], roi[2], roi[1], roi[2], roi[3], roi[0], roi[3]))
         else:
             box = self._scale_to_display(mask.original_roi).flatten()
         top_left = box[:2] - 10

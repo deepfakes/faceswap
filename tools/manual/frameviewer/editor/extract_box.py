@@ -46,13 +46,11 @@ class ExtractBox(Editor):
     def update_annotation(self):
         """ Draw the latest Extract Boxes around the faces. """
         color = self._control_color
+        roi = self._zoomed_roi
         for idx, face in enumerate(self._face_iterator):
             logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
             if self._globals.is_zoomed:
-                box = np.array((self._zoomed_roi[0], self._zoomed_roi[1],
-                                self._zoomed_roi[2], self._zoomed_roi[1],
-                                self._zoomed_roi[2], self._zoomed_roi[3],
-                                self._zoomed_roi[0], self._zoomed_roi[3]))
+                box = np.array((roi[0], roi[1], roi[2], roi[1], roi[2], roi[3], roi[0], roi[3]))
             else:
                 face.load_aligned(None, force=True)
                 box = self._scale_to_display(face.original_roi).flatten()

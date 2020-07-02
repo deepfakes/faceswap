@@ -44,7 +44,6 @@ class Editor():
         self._add_controls()
         self._add_annotation_format_controls()
 
-        self._zoomed_roi = self._get_zoomed_roi()
         self._mouse_location = None
         self._drag_data = dict()
         self._drag_callback = None
@@ -80,10 +79,23 @@ class Editor():
         return retval
 
     @property
+    def _zoomed_roi(self):
+        """ :class:`numpy.ndarray`: The (`left`, `top`, `right`, `bottom`) roi of the zoomed face
+        in the display frame. """
+        half_size = min(self._globals.frame_display_dims) / 2
+        left = self._globals.frame_display_dims[0] / 2 - half_size
+        top = 0
+        right = self._globals.frame_display_dims[0] / 2 + half_size
+        bottom = self._globals.frame_display_dims[1]
+        retval = np.rint(np.array((left, top, right, bottom))).astype("int32")
+        logger.trace("Zoomed ROI: %s", retval)
+        return retval
+
+    @property
     def _zoomed_dims(self):
-        """ tuple: The (`width`, `height`) of the zoomed ROI """
-        return (self._zoomed_roi[2] - self._zoomed_roi[0],
-                self._zoomed_roi[3] - self._zoomed_roi[1])
+        """ tuple: The (`width`, `height`) of the zoomed ROI. """
+        roi = self._zoomed_roi
+        return (roi[2] - roi[0], roi[3] - roi[1])
 
     @property
     def _control_vars(self):
@@ -168,25 +180,6 @@ class Editor():
                               cnr[0] + grab_radius, cnr[1] + grab_radius)
                              for cnr in bounding_box)
         return display_anchors, grab_anchors
-
-    def _get_zoomed_roi(self):
-        """ Get the Region of Interest for when the face is zoomed.
-
-        The ROI is dictated by display frame size, so it will be constant for every face
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The (`left`, `top`, `right`, `bottom`) roi of the zoomed face in the display frame
-        """
-        half_size = min(self._globals.frame_display_dims) / 2
-        left = self._globals.frame_display_dims[0] / 2 - half_size
-        top = 0
-        right = self._globals.frame_display_dims[0] / 2 + half_size
-        bottom = self._globals.frame_display_dims[1]
-        retval = np.rint(np.array((left, top, right, bottom))).astype("int32")
-        logger.debug("Zoomed ROI: %s", retval)
-        return retval
 
     def update_annotation(self):  # pylint:disable=no-self-use
         """ Update the display annotations for the current objects.
