@@ -288,7 +288,7 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
             logger.debug("Initializing control panel for '%s' editor", name)
             controls = editor.controls
             panel = ControlPanel(frame, controls["controls"],
-                                 option_columns=3,
+                                 option_columns=2,
                                  columns=1,
                                  max_columns=1,
                                  header_text=controls["header"],
