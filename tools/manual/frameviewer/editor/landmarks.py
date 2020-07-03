@@ -350,6 +350,24 @@ class Landmarks(Editor):
         self._drag_data["face_index"] = face_idx.pop()
         self._drag_data["landmarks"] = landmark_indices
         self._canvas.itemconfig("lm_selected", outline="#ffff00")
+        self._snap_selection_to_points()
+
+    def _snap_selection_to_points(self):
+        """ Snap the selection box to the selected points.
+
+        As the landmarks are calculated and redrawn, the selection box can drift. This is
+        particularly true in zoomed mode. The selection box is therefore redrawn to bind just
+        outside of the selected points.
+        """
+        all_coords = np.array([self._canvas.coords(item_id)
+                               for item_id in self._drag_data["selected"]])
+        mins = np.min(all_coords, axis=0)
+        maxes = np.max(all_coords, axis=0)
+        box_coords = [np.min(mins[[0, 2]] - 5),
+                      np.min(mins[[1, 3]] - 5),
+                      np.max(maxes[[0, 2]] + 5),
+                      np.max(maxes[[1, 3]]) + 5]
+        self._canvas.coords(self._selection_box, *box_coords)
 
     def _move(self, event):
         """ Moves the selected landmark point box and updates the underlying landmark on a point
@@ -386,7 +404,7 @@ class Landmarks(Editor):
         if self._canvas.itemcget(self._selection_box, "state") == "hidden":
             self._canvas.itemconfig(self._selection_box, state="normal")
         coords = (*self._drag_data["start_location"], event.x, event.y)
-        self._canvas.coords(self._selection_box, * coords)
+        self._canvas.coords(self._selection_box, *coords)
         enclosed = set(self._canvas.find_enclosed(*coords))
         landmarks = set(self._canvas.find_withtag("lm_dsp"))
         self._drag_data["selected"] = list(enclosed.intersection(landmarks))
@@ -407,6 +425,7 @@ class Landmarks(Editor):
                                         self._drag_data["landmarks"],
                                         *scaled_shift,
                                         self._globals.is_zoomed)
+        self._snap_selection_to_points()
         self._drag_data["start_location"] = (event.x, event.y)
 
     def _reset_selection(self, event=None):
