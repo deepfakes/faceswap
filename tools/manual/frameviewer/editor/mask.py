@@ -250,10 +250,9 @@ class Mask(Editor):
             The opacity to apply to the mask
         """
         mask = (self._meta["mask"][face_index] * opacity).astype("uint8")
-        zoomed_offset = self._zoomed_roi[:2]
         if self._globals.is_zoomed:
             display_image = self._update_mask_image_zoomed(mask, rgb_color)
-            top_left = zoomed_offset
+            top_left = self._zoomed_roi[:2]
             # Hide all masks and only display selected
             self._canvas.itemconfig("Mask", state="hidden")
             self._canvas.itemconfig("Mask_face_{}".format(face_index), state="normal")
@@ -262,16 +261,21 @@ class Mask(Editor):
             top_left = self._meta["top_left"][face_index]
 
         if len(self._tk_faces) < face_index + 1:
-            logger.debug("Adding new Photo Image for face index: %s", face_index)
-            self._tk_faces.append(display_image)
+            logger.trace("Adding new Photo Image for face index: %s", face_index)
+            self._tk_faces.append(ImageTk.PhotoImage(display_image))
+        elif self._tk_faces[face_index].width() != display_image.width:
+            logger.trace("Replacing existing Photo Image on width change for face index: %s",
+                         face_index)
+            self._tk_faces[face_index] = ImageTk.PhotoImage(display_image)
         else:
-            self._tk_faces[face_index] = display_image
+            logger.trace("Updating existing image")
+            self._tk_faces[face_index].paste(display_image)
 
         self._object_tracker(key,
                              "image",
                              face_index,
                              top_left,
-                             dict(image=display_image, anchor=tk.NW))
+                             dict(image=self._tk_faces[face_index], anchor=tk.NW))
 
     def _update_mask_image_zoomed(self, mask, rgb_color):
         """ Update the mask image when zoomed in.
@@ -285,7 +289,7 @@ class Mask(Editor):
 
         Returns
         -------
-        :class: `ImageTk.PhotoImage`
+        :class: `PIL.Image`
             The zoomed mask image formatted for display
         """
         rgb = np.tile(rgb_color, self._zoomed_dims + (1, )).astype("uint8")
@@ -293,8 +297,7 @@ class Mask(Editor):
                           tuple(reversed(self._zoomed_dims)),
                           interpolation=cv2.INTER_CUBIC)[..., None]
         rgba = np.concatenate((rgb, mask), axis=2)
-        tk_face = ImageTk.PhotoImage(Image.fromarray(rgba))
-        return tk_face
+        return Image.fromarray(rgba)
 
     def _update_mask_image_full_frame(self, mask, rgb_color, face_index):
         """ Update the mask image when in full frame view.
@@ -310,7 +313,7 @@ class Mask(Editor):
 
         Returns
         -------
-        :class: `ImageTk.PhotoImage`
+        :class: `PIL.Image`
             The full frame mask image formatted for display
         """
         frame_dims = self._globals.current_frame["display_dims"]
@@ -325,8 +328,7 @@ class Mask(Editor):
                               borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]][..., None]
         rgb = np.tile(rgb_color, mask.shape).astype("uint8")
         rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
-        tk_face = ImageTk.PhotoImage(Image.fromarray(rgba))
-        return tk_face
+        return Image.fromarray(rgba)
 
     def _update_roi_box(self, mask, face_index, color):
         """ Update the region of interest box for the current mask.
