@@ -542,8 +542,9 @@ class FaceUpdate():
             The frame that the face is being set for
         face_index: int
             The face index within the frame
-        landmark_index: int
-            The landmark index to shift
+        landmark_index: int or list
+            The landmark index to shift. If a list is provided, this should be a list of landmark
+            indices to be shifted
         shift_x: int
             The amount to shift the landmark by along the x axis
         shift_y: int
@@ -561,9 +562,15 @@ class FaceUpdate():
                                                      face.aligned["size"],
                                                      face.aligned["padding"])
             matrix = cv2.invertAffineTransform(matrix)
-            landmark = np.reshape(landmark, (1, 1, 2))
-            landmark = cv2.transform(landmark, matrix, landmark.shape).squeeze()
-            face.landmarks_xy[landmark_index] = landmark
+            if landmark.ndim == 1:
+                landmark = np.reshape(landmark, (1, 1, 2))
+                landmark = cv2.transform(landmark, matrix, landmark.shape).squeeze()
+                face.landmarks_xy[landmark_index] = landmark
+            else:
+                for lmk, idx in zip(landmark, landmark_index):
+                    lmk = np.reshape(lmk, (1, 1, 2))
+                    lmk = cv2.transform(lmk, matrix, lmk.shape).squeeze()
+                    face.landmarks_xy[idx] = lmk
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
         face.mask = self._extractor.get_masks(frame_index, face_index)

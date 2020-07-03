@@ -411,6 +411,9 @@ class Mask(Editor):
         ----------
         event: :class:`tkinter.Event`
             The tkinter mouse event.
+        control_click: bool, optional
+            Indicates whether the control button is depressed when drag has commenced. If ``True``
+            then the opposite of the selected action is performed. Default: ``False``
         """
         face_idx = self._mouse_location[1]
         if face_idx is None:
@@ -419,6 +422,9 @@ class Mask(Editor):
         else:
             self._drag_data["starting_location"] = np.array((event.x, event.y))
             self._drag_data["control_click"] = control_click
+            self._drag_data["color"] = np.array(tuple(int(self._control_color[1:][i:i + 2], 16)
+                                                      for i in (0, 2, 4)))
+            self._drag_data["opacity"] = self._opacity
             self._drag_callback = self._paint
 
     def _paint(self, event):
@@ -441,8 +447,11 @@ class Mask(Editor):
                  tuple(line[1]),
                  color,
                  brush_radius * 2)
+        self._update_mask_image("mask",
+                                face_idx,
+                                self._drag_data["color"],
+                                self._drag_data["opacity"])
         self._drag_data["starting_location"] = np.array((event.x, event.y))
-        self._globals.tk_update.set(True)
         self._update_cursor(event)
 
     def _transform_points(self, face_index, points):
