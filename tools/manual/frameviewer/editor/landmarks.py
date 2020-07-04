@@ -19,7 +19,8 @@ class Landmarks(Editor):
     """
     def __init__(self, canvas, detected_faces):
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
-                        " - Click and drag individual landmark points to relocate.")
+                        " - Point mode: Click and drag individual points to relocate.\n"
+                        " - Select Mode: Draw a box to select multiple points to relocate.")
         self._selection_box = canvas.create_rectangle(0, 0, 0, 0,
                                                       dash=(2, 4),
                                                       state="hidden",
@@ -47,7 +48,7 @@ class Landmarks(Editor):
         self._add_action("select", "selection", "Selected Points Editor",
                          group="mode", hotkey="O")
         self._actions["magnify"]["tk_var"].trace("w", self._toggle_zoom)
-        self._actions["select"]["tk_var"].trace("w", self._toggle_grab_points)
+        self._actions["select"]["tk_var"].trace("w", self._toggle_edit_mode_annotations)
 
     # CALLBACKS
     def _toggle_zoom(self, *args):  # pylint:disable=unused-argument
@@ -62,8 +63,13 @@ class Landmarks(Editor):
             self._reset_selection()
         self._globals.tk_update.set(True)
 
-    def _toggle_grab_points(self, *args):  # pylint:disable=unused-argument
-        """ Toggle the individual landmark grabbers off and on depending on edit mode.
+    def _toggle_edit_mode_annotations(self, *args):  # pylint:disable=unused-argument
+        """ Toggle the annotations that should be available depending on edit mode.
+
+        Individual landmark grabbers turned off when entering Select mode and on when entering
+        point mode.
+
+        Selection box reset when entering point mode.
 
         Parameters
         ----------
@@ -72,6 +78,8 @@ class Landmarks(Editor):
         """
         state = "hidden" if self._actions["select"]["tk_var"].get() else "normal"
         self._canvas.itemconfig("lm_grb", state=state)
+        if state != "hidden" and self._drag_data:
+            self._reset_selection()
 
     def _clear_selection(self, *args):  # pylint:disable=unused-argument
         """ Callback to clear any active selections on an editor or frame change.
@@ -137,7 +145,7 @@ class Landmarks(Editor):
         landmark_index: int
             The index point of this landmark
         """
-        if not self._is_active:
+        if not self._is_active or self._edit_mode == "select":
             return
         top_left = np.array(bounding_box[:2]) - 16
         # NB The text must be visible to be able to get the bounding box, so set to hidden
@@ -168,7 +176,7 @@ class Landmarks(Editor):
         landmark_index: int
             The index point of this landmark
         """
-        if not self._is_active:
+        if not self._is_active or self._edit_mode == "select":
             return
         radius = 6
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
