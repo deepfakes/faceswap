@@ -17,8 +17,10 @@ from tqdm import tqdm
 from lib.serializer import get_serializer_from_filename
 from lib.faces_detect import DetectedFace
 from lib.image import ImagesLoader, read_image
+from lib.utils import get_backend
 from lib.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.extract.pipeline import Extractor, ExtractMedia
+from plugins.extract._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -56,7 +58,13 @@ class Sort():
 
         # Load VGG Face if sorting by face
         if self.args.sort_method.lower() == "face":
-            self.vgg_face = VGGFace(backend=self.args.backend, loglevel=self.args.loglevel)
+            conf = Config("global", configfile=self.args.configfile)
+            allow_growth = (conf.config_dict["allow_growth"] and
+                            self.args.backend.lower() == "gpu" and
+                            get_backend() == "nvidia")
+            self.vgg_face = VGGFace(backend=self.args.backend,
+                                    allow_growth=allow_growth,
+                                    loglevel=self.args.loglevel)
 
         # If logging is enabled, prepare container
         if self.args.log_changes:
