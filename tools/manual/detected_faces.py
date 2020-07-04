@@ -755,12 +755,12 @@ class ThumbsCreator():
     def has_thumbs(self):
         """ bool: ``True`` if the underlying alignments file holds thumbnail images
         otherwise ``False``. """
-        return self._alignments.thumbnails.has_thumbails
+        return self._alignments.thumbnails.has_thumbnails
 
     def generate_cache(self):
         """ Extract the face thumbnails from a video or folder of images into the
         alignments file. """
-        self._pbar["pbar"] = tqdm(desc="Caching Thumbails",
+        self._pbar["pbar"] = tqdm(desc="Caching Thumbnails",
                                   leave=False,
                                   total=len(self._frame_faces))
         if self._is_video:
@@ -864,7 +864,8 @@ class ThumbsCreator():
                      pts_start, pts_end, start_index, segment_count)
         reader = self._get_reader(pts_start, pts_end)
         idx = 0
-        vidname = os.path.splitext(os.path.basename(self._location))[0]
+        sample_filename = next(fname for fname in self._alignments.data)
+        vidname = sample_filename[:sample_filename.rfind("_")]
         for idx, frame in enumerate(reader):
             frame_idx = idx + start_index
             filename = "{}_{:06d}.png".format(vidname, frame_idx + 1)
