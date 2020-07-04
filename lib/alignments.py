@@ -236,10 +236,14 @@ class Alignments():
         keyframes: list
             A list of frame indices corresponding to the key frames in the input video
         """
+        if pts_time[0] != 0:
+            pts_time, keyframes = self._pad_leading_frames(pts_time, keyframes)
+
         sample_filename = next(fname for fname in self.data)
         basename = sample_filename[:sample_filename.rfind("_")]
         logger.debug("sample filename: %s, base filename: %s", sample_filename, basename)
         logger.info("Saving video meta information to Alignments file")
+
         for idx, pts in enumerate(pts_time):
             meta = dict(pts_time=pts, keyframe=idx in keyframes)
             key = "{}_{:06d}.png".format(basename, idx + 1)
@@ -247,6 +251,7 @@ class Alignments():
                 self.data[key] = dict(video_meta=meta, faces=[])
             else:
                 self.data[key]["video_meta"] = meta
+
         logger.debug("Alignments count: %s, timestamp count: %s", len(self.data), len(pts_time))
         if len(self.data) != len(pts_time):
             raise FaceswapError(
@@ -255,14 +260,51 @@ class Alignments():
                 "\nThis can be caused by a number of issues:"
                 "\n  - The video has a Variable Frame Rate and FFMPEG is having a hard time "
                 "calculating the correct number of frames."
-                "\n  - The video was not cut on a key frame and FFMPEG has dummied in some extra "
-                "frames to fill the gap."
                 "\n  - You are working with a Merged Alignments file. This is not supported for "
                 "your current use case."
                 "\nYou should either extract the video to individual frames, re-encode the "
                 "video at a constant frame rate and re-run extraction or work with a dedicated "
                 "alignments file for your requested video.".format(len(pts_time), len(self.data)))
         self.save()
+
+    @classmethod
+    def _pad_leading_frames(cls, pts_time, keyframes):
+        """ Calculate the number of frames to pad the video by when the first frame is not
+        a key frame.
+
+        A somewhat crude method by obtaining the gaps between existing frames and calculating
+        how many frames should be inserted at the beginning based on the first presentation
+        timestamp.
+
+        Parameters
+        ----------
+         pts_time: list
+            A list of presentation timestamps (`float`) in frame index order for every frame in
+            the input video
+
+        Returns
+        -------
+        tuple
+            The presentation time stamps with extra frames padded to the beginning and the
+            keyframes adjusted to include the new frames
+        """
+        start_pts = pts_time[0]
+        logger.debug("Video not cut on keyframe. Start pts: %s", start_pts)
+        gaps = []
+        prev_time = None
+        for item in pts_time:
+            if prev_time is not None:
+                gaps.append(item - prev_time)
+            prev_time = item
+        data_points = len(gaps)
+        avg_gap = sum(gaps) / data_points
+        frame_count = int(round(start_pts / avg_gap))
+        pad_pts = [avg_gap * i for i in range(frame_count)]
+        logger.debug("data_points: %s, avg_gap: %s, frame_count: %s, pad_pts: %s",
+                     data_points, avg_gap, frame_count, pad_pts)
+        pts_time = pad_pts + pts_time
+        keyframes = [i + frame_count for i in keyframes]
+        return pts_time, keyframes
 
     # << VALIDATION >> #
 
@@ -677,7 +719,7 @@ class Thumbnails():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def has_thumbails(self):
+    def has_thumbnails(self):
         """ bool: ``True`` if all faces in the alignments file contain thumbnail images
         otherwise ``False``. """
         retval = all("thumb" in face
