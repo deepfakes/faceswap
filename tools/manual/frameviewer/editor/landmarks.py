@@ -19,8 +19,8 @@ class Landmarks(Editor):
     """
     def __init__(self, canvas, detected_faces):
         control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
-                        " - Point mode: Click and drag individual points to relocate.\n"
-                        " - Select Mode: Draw a box to select multiple points to relocate.")
+                        " - Click and drag individual points to relocate.\n"
+                        " - Draw a box to select multiple points to relocate.")
         self._selection_box = canvas.create_rectangle(0, 0, 0, 0,
                                                       dash=(2, 4),
                                                       state="hidden",
@@ -29,26 +29,14 @@ class Landmarks(Editor):
                                                       stipple="gray12")
         super().__init__(canvas, detected_faces, control_text)
         # Clear selection box on an editor or frame change
-        self._canvas._tk_action_var.trace("w", self._clear_selection)
-        self._globals.tk_frame_index.trace("w", self._clear_selection)
-
-    @property
-    def _edit_mode(self):
-        """ str: The currently selected edit mode based on optional action button.
-        One of "point" or "select" """
-        action = [name for name, option in self._actions.items()
-                  if option["group"] == "mode" and option["tk_var"].get()]
-        return "point" if not action else action[0]
+        self._canvas._tk_action_var.trace("w", lambda *e: self._reset_selection())
+        self._globals.tk_frame_index.trace("w", lambda *e: self._reset_selection())
 
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Point, Select
         and Zoom. """
         self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
-        self._add_action("point", "point", "Individual Point Editor", group="mode", hotkey="P")
-        self._add_action("select", "selection", "Selected Points Editor",
-                         group="mode", hotkey="O")
         self._actions["magnify"]["tk_var"].trace("w", self._toggle_zoom)
-        self._actions["select"]["tk_var"].trace("w", self._toggle_edit_mode_annotations)
 
     # CALLBACKS
     def _toggle_zoom(self, *args):  # pylint:disable=unused-argument
@@ -59,39 +47,22 @@ class Landmarks(Editor):
         args: tuple
             tkinter callback arguments. Required but unused.
         """
-        if self._edit_mode == "select":
-            self._reset_selection()
+        self._reset_selection()
         self._globals.tk_update.set(True)
 
-    def _toggle_edit_mode_annotations(self, *args):  # pylint:disable=unused-argument
-        """ Toggle the annotations that should be available depending on edit mode.
-
-        Individual landmark grabbers turned off when entering Select mode and on when entering
-        point mode.
-
-        Selection box reset when entering point mode.
-
-        Parameters
-        ----------
-        args: tuple
-            tkinter callback arguments. Required but unused.
-        """
-        state = "hidden" if self._actions["select"]["tk_var"].get() else "normal"
-        self._canvas.itemconfig("lm_grb", state=state)
-        if state != "hidden" and self._drag_data:
-            self._reset_selection()
-
-    def _clear_selection(self, *args):  # pylint:disable=unused-argument
-        """ Callback to clear any active selections on an editor or frame change.
-
-        Parameters
-        ----------
-        args: tuple
-            tkinter callback arguments. Required but unused.
-        """
-        if self._edit_mode == "select" and self._drag_data:
-            logger.debug("Resetting active selection")
-            self._reset_selection()
+    def _reset_selection(self, event=None):  # pylint:disable=unused-argument
+        """ Reset the selection box and the selected landmark annotations. """
+        self._canvas.itemconfig("lm_selected", outline=self._control_color)
+        self._canvas.dtag("lm_selected")
+        self._canvas.itemconfig(self._selection_box,
+                                stipple="gray12",
+                                fill="blue",
+                                outline="gray",
+                                state="hidden")
+        self._canvas.coords(self._selection_box, 0, 0, 0, 0)
+        self._drag_data = dict()
+        if event is not None:
+            self._drag_start(event)
 
     def update_annotation(self):
         """ Get the latest Landmarks points and update. """
@@ -145,9 +116,9 @@ class Landmarks(Editor):
         landmark_index: int
             The index point of this landmark
         """
-        if not self._is_active or self._edit_mode == "select":
+        if not self._is_active:
             return
-        top_left = np.array(bounding_box[:2]) - 16
+        top_left = np.array(bounding_box[:2]) - 20
         # NB The text must be visible to be able to get the bounding box, so set to hidden
         # after the bounding box has been retrieved
 
@@ -176,17 +147,16 @@ class Landmarks(Editor):
         landmark_index: int
             The index point of this landmark
         """
-        if not self._is_active or self._edit_mode == "select":
+        if not self._is_active:
             return
-        radius = 6
+        radius = 7
         bbox = (bounding_box[0] - radius, bounding_box[1] - radius,
                 bounding_box[0] + radius, bounding_box[1] + radius)
         key = "lm_grb_{}".format(landmark_index)
         kwargs = dict(outline="",
                       fill="",
-                      width=radius,
-                      activeoutline="black",
-                      activefill="white")
+                      width=1,
+                      dash=(1, 1))
         self._object_tracker(key, "oval", face_index, bbox, kwargs)
 
     # << MOUSE HANDLING >>
@@ -201,45 +171,55 @@ class Landmarks(Editor):
         event: :class:`tkinter.Event`
             The current tkinter mouse event
         """
-        if self._edit_mode == "point":
-            self._update_cursor_point_mode()
-        else:
-            self._update_cursor_select_mode(event)
-
-    def _update_cursor_point_mode(self):
-        """ Update the cursor when in individual landmark point editor mode.
-
-        Update :attr:`_mouse_location` with the current cursor position and display appropriate
-        icon.
-
-        Checks whether the mouse is over a landmark grab anchor and pops the
-        grab icon and the landmark label.
-        """
         self._hide_labels()
-        objs = self._canvas.find_withtag("lm_grb_face_{}".format(self._globals.face_index)
-                                         if self._globals.is_zoomed else "lm_grb")
-        item_ids = set(self._canvas.find_withtag("current")).intersection(objs)
-        if not item_ids:
-            self._canvas.config(cursor="")
-            self._mouse_location = None
-            return
-        item_id = list(item_ids)[0]
-        tags = self._canvas.gettags(item_id)
-        face_idx = int(next(tag for tag in tags if tag.startswith("face_")).split("_")[-1])
-
-        lm_idx = int(next(tag for tag in tags if tag.startswith("lm_grb_")).split("_")[-1])
-        obj_idx = (face_idx, lm_idx)
-        self._canvas.config(cursor="fleur")
-        for prefix in ("lm_lbl_", "lm_lbl_bg_"):
-            tag = "{}{}_face_{}".format(prefix, lm_idx, face_idx)
-            logger.trace("Displaying: %s tag: %s", self._canvas.type(tag), tag)
-            self._canvas.itemconfig(tag, state="normal")
-        self._mouse_location = obj_idx
+        if self._drag_data:
+            self._update_cursor_select_mode(event)
+        else:
+            objs = self._canvas.find_withtag("lm_grb_face_{}".format(self._globals.face_index)
+                                             if self._globals.is_zoomed else "lm_grb")
+            item_ids = set(self._canvas.find_overlapping(event.x - 6,
+                                                         event.y - 6,
+                                                         event.x + 6,
+                                                         event.y + 6)).intersection(objs)
+            bboxes = [self._canvas.bbox(idx) for idx in item_ids]
+            item_id = next((idx for idx, bbox in zip(item_ids, bboxes)
+                            if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]),
+                           None)
+            if item_id:
+                self._update_cursor_point_mode(item_id)
+            else:
+                self._canvas.config(cursor="")
+                self._mouse_location = None
+                return
 
     def _hide_labels(self):
         """ Clear all landmark text labels from display """
         self._canvas.itemconfig("lm_lbl", state="hidden")
         self._canvas.itemconfig("lm_lbl_bg", state="hidden")
+        self._canvas.itemconfig("lm_grb", fill="", outline="")
+
+    def _update_cursor_point_mode(self, item_id):
+        """ Update the cursor when the mouse is over an individual landmark's grab anchor. Displays
+        the landmark label for the landmark under the cursor. Updates :attr:`_mouse_location` with
+        the current cursor position.
+
+        Parameters
+        ----------
+        item_id: int
+            The tkinter canvas object id for the landmark point that the cursor is over
+        """
+        self._canvas.itemconfig(item_id, outline="yellow")
+        tags = self._canvas.gettags(item_id)
+        face_idx = int(next(tag for tag in tags if tag.startswith("face_")).split("_")[-1])
+        lm_idx = int(next(tag for tag in tags if tag.startswith("lm_grb_")).split("_")[-1])
+        obj_idx = (face_idx, lm_idx)
+
+        self._canvas.config(cursor="none")
+        for prefix in ("lm_lbl_", "lm_lbl_bg_"):
+            tag = "{}{}_face_{}".format(prefix, lm_idx, face_idx)
+            logger.trace("Displaying: %s tag: %s", self._canvas.type(tag), tag)
+            self._canvas.itemconfig(tag, state="normal")
+        self._mouse_location = obj_idx
 
     def _update_cursor_select_mode(self, event):
         """ Update the mouse cursor when in select mode.
@@ -252,9 +232,6 @@ class Landmarks(Editor):
         event: :class:`tkinter.Event`
             The current tkinter mouse event
         """
-        if not self._drag_data:  # New selection box, standard cursor
-            self._canvas.config(cursor="")
-            return
         bbox = self._canvas.coords(self._selection_box)
         if bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
             self._canvas.config(cursor="fleur")
@@ -272,34 +249,20 @@ class Landmarks(Editor):
         event: :class:`tkinter.Event`
             The tkinter mouse event.
         """
-        if self._edit_mode == "select":
-            self._drag_start_select(event)
-        elif self._mouse_location is None:
-            self._drag_data = dict()
-            self._drag_callback = None
-        else:
+        sel_box = self._canvas.coords(self._selection_box)
+        if self._mouse_location is not None:  # Point edit mode
             self._drag_data["start_location"] = (event.x, event.y)
-            self._drag_callback = self._move
-
-    def _drag_start_select(self, event):
-        """ The actions to perform when the user starts clicking and dragging the mouse when in
-        multiple landmark selection edit mode.
-
-        Can be called to either set a new selection or to move an existing selection.
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The tkinter mouse event.
-        """
-        bbox = self._canvas.coords(self._selection_box)
-        if not self._drag_data:
+            self._drag_callback = self._move_point
+        elif not self._drag_data:  # Initial point selection box
             self._drag_data["start_location"] = (event.x, event.y)
             self._drag_callback = self._select
-        elif self._drag_data and bbox[0] <= event.x <= bbox[2] and bbox[1] <= event.y <= bbox[3]:
+        elif sel_box[0] <= event.x <= sel_box[2] and sel_box[1] <= event.y <= sel_box[3]:
+            # Move point selection box
             self._drag_data["start_location"] = (event.x, event.y)
             self._drag_callback = self._move_selection
-        else:
+        else:  # Reset
+            self._drag_data = dict()
+            self._drag_callback = None
             self._reset_selection(event)
 
     def _drag_stop(self, event):  # pylint: disable=unused-argument
@@ -307,49 +270,50 @@ class Landmarks(Editor):
 
         In point mode: trigger a viewport thumbnail update on click + drag release
 
+        If there is drag data, and there are selected points in the drag data then
+        trigger the selected points stop code.
+
+        Otherwise reset the selection box and return
+
         Parameters
         ----------
         event: :class:`tkinter.Event`
             The tkinter mouse event. Required but unused.
         """
-        if self._edit_mode == "select":
-            self._drag_stop_selected()
-        elif self._mouse_location is not None:
+        if self._mouse_location is not None:  # Point edit mode
             self._det_faces.update.post_edit_trigger(self._globals.frame_index,
                                                      self._mouse_location[0])
+            self._mouse_location = None
+            self._drag_data = dict()
+        elif self._drag_data and self._drag_data.get("selected", False):
+            self._drag_stop_selected()
+        else:
+            logger.debug("No selected data. Clearing. drag_data: %s", self._drag_data)
+            self._reset_selection()
 
     def _drag_stop_selected(self):
         """ Action to perform when mouse drag is stopped in selected points editor mode.
 
-        If no drag data, or no selected points, then clear selection box.
-
         If there is already a selection, update the viewport thumbnail
 
-        If this is a new selection, then track the selected objects
+        If this is a new selection, then obtain the selected points and track
         """
-        if not self._drag_data or not self._drag_data.get("selected", False):
-            logger.debug("No selected data. Clearing. drag_data: %s", self._drag_data)
-            self._reset_selection()
-            return
-
-        if "face_index" in self._drag_data:
+        if "face_index" in self._drag_data:  # Selected data has been moved
             self._det_faces.update.post_edit_trigger(self._globals.frame_index,
                                                      self._drag_data["face_index"])
             return
 
-        self._canvas.itemconfig(self._selection_box, stipple="", fill="")
+        # This is a new selection
         face_idx = set()
         landmark_indices = []
 
-        for item_id in self._drag_data["selected"]:
+        for item_id in self._canvas.find_withtag("lm_selected"):
             tags = self._canvas.gettags(item_id)
             face_idx.add(next(int(tag.split("_")[-1])
                               for tag in tags if tag.startswith("face_")))
             landmark_indices.append(next(int(tag.split("_")[-1])
                                          for tag in tags
                                          if tag.startswith("lm_dsp_") and "face" not in tag))
-            self._canvas.addtag_withtag("lm_selected", item_id)
-
         if len(face_idx) != 1:
             logger.info("More than 1 face in selection. Aborting. Face indices: %s", face_idx)
             self._reset_selection()
@@ -357,7 +321,7 @@ class Landmarks(Editor):
 
         self._drag_data["face_index"] = face_idx.pop()
         self._drag_data["landmarks"] = landmark_indices
-        self._canvas.itemconfig("lm_selected", outline="#ffff00")
+        self._canvas.itemconfig(self._selection_box, stipple="", fill="", outline="#ffff00")
         self._snap_selection_to_points()
 
     def _snap_selection_to_points(self):
@@ -368,7 +332,7 @@ class Landmarks(Editor):
         outside of the selected points.
         """
         all_coords = np.array([self._canvas.coords(item_id)
-                               for item_id in self._drag_data["selected"]])
+                               for item_id in self._canvas.find_withtag("lm_selected")])
         mins = np.min(all_coords, axis=0)
         maxes = np.max(all_coords, axis=0)
         box_coords = [np.min(mins[[0, 2]] - 5),
@@ -377,7 +341,7 @@ class Landmarks(Editor):
                       np.max(maxes[[1, 3]]) + 5]
         self._canvas.coords(self._selection_box, *box_coords)
 
-    def _move(self, event):
+    def _move_point(self, event):
         """ Moves the selected landmark point box and updates the underlying landmark on a point
         drag event.
 
@@ -415,7 +379,11 @@ class Landmarks(Editor):
         self._canvas.coords(self._selection_box, *coords)
         enclosed = set(self._canvas.find_enclosed(*coords))
         landmarks = set(self._canvas.find_withtag("lm_dsp"))
-        self._drag_data["selected"] = list(enclosed.intersection(landmarks))
+
+        for item_id in list(enclosed.intersection(landmarks)):
+            self._canvas.addtag_withtag("lm_selected", item_id)
+        self._canvas.itemconfig("lm_selected", outline="#ffff00")
+        self._drag_data["selected"] = True
 
     def _move_selection(self, event):
         """ Move a selection box and the landmarks contained when in "select" mode and a selection
@@ -435,16 +403,6 @@ class Landmarks(Editor):
                                         self._globals.is_zoomed)
         self._snap_selection_to_points()
         self._drag_data["start_location"] = (event.x, event.y)
-
-    def _reset_selection(self, event=None):
-        """ Reset the selection box and the selected landmark annotations. """
-        self._canvas.itemconfig("lm_selected", outline=self._control_color)
-        self._canvas.dtag("lm_selected")
-        self._canvas.itemconfig(self._selection_box, stipple="gray12", fill="blue", state="hidden")
-        self._canvas.coords(self._selection_box, 0, 0, 0, 0)
-        self._drag_data = dict()
-        if event is not None:
-            self._drag_start(event)
 
 
 class Mesh(Editor):
