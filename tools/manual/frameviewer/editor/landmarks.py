@@ -156,7 +156,7 @@ class Landmarks(Editor):
         kwargs = dict(outline="",
                       fill="",
                       width=1,
-                      dash=(1, 1))
+                      dash=(2, 4))
         self._object_tracker(key, "oval", face_index, bbox, kwargs)
 
     # << MOUSE HANDLING >>
@@ -315,7 +315,7 @@ class Landmarks(Editor):
                                          for tag in tags
                                          if tag.startswith("lm_dsp_") and "face" not in tag))
         if len(face_idx) != 1:
-            logger.info("More than 1 face in selection. Aborting. Face indices: %s", face_idx)
+            logger.trace("Not exactly 1 face in selection. Aborting. Face indices: %s", face_idx)
             self._reset_selection()
             return
 
