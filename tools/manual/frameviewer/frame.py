@@ -34,33 +34,35 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, detected_faces: %s)",
                      self.__class__.__name__, parent, tk_globals, detected_faces)
         super().__init__(parent)
-        self.pack(side=tk.LEFT, anchor=tk.NW, expand=True, fill=tk.BOTH)
 
         self._globals = tk_globals
         self._det_faces = detected_faces
 
         self._actions_frame = ActionsFrame(self)
         main_frame = ttk.Frame(self)
-        main_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
 
-        self._video_frame = ttk.Frame(main_frame)
-        self._video_frame.pack(side=tk.TOP, expand=True, fill=tk.BOTH)
-        self._video_frame.bind("<Configure>", self._resize)
+        self._transport_frame = ttk.Frame(main_frame)
+        self._nav = self._add_nav()
+        self._navigation = Navigation(self)
+        self._buttons = self._add_transport()
+        self._add_transport_tk_trace()
 
-        self._canvas = FrameViewer(self._video_frame,
+        video_frame = ttk.Frame(main_frame)
+        video_frame.bind("<Configure>", self._resize)
+
+        self._canvas = FrameViewer(video_frame,
                                    self._globals,
                                    self._det_faces,
                                    self._actions_frame.actions,
                                    self._actions_frame.tk_selected_action)
 
-        self._transport_frame = ttk.Frame(main_frame)
-        self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
-
-        self._nav = self._add_nav()
-        self._navigation = Navigation(self)
-        self._buttons = self._add_transport()
-        self._add_transport_tk_trace()
         self._actions_frame.add_optional_buttons(self.editors)
+
+        self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
+        video_frame.pack(side=tk.TOP, expand=True, fill=tk.BOTH)
+        main_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
+        self.pack(side=tk.LEFT, anchor=tk.NW, expand=True, fill=tk.BOTH)
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property

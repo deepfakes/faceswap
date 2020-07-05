@@ -258,13 +258,13 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, display_frame: %s)",
                      self.__class__.__name__, parent, tk_globals, display_frame)
         super().__init__(parent)
-        self.pack(side=tk.RIGHT, fill=tk.Y)
 
         self._globals = tk_globals
         self._display_frame = display_frame
         self._control_panels = self._initialize()
         self._set_tk_callbacks()
         self._update_options()
+        self.pack(side=tk.RIGHT, fill=tk.Y)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _initialize(self):
@@ -281,6 +281,7 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         The Traceback must be set after the panel has first been packed as otherwise it interferes
         with the loading of the faces pane.
         """
+        self._initialize_face_options()
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         panels = dict()
@@ -297,7 +298,6 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
                                  scrollbar=False)
             panel.pack_forget()
             panels[name] = panel
-        self._initialize_face_options()
         return panels
 
     def _initialize_face_options(self):
