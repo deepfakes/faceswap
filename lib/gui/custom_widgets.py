@@ -793,6 +793,7 @@ class PopupProgress(tk.Toplevel):
                          "help", "none")
         # Leaves only the label and removes the app window
         self.wm_overrideredirect(True)
+        self.attributes('-topmost', 'true')
         self.transient()
 
         self._lbl_title = self._set_title(title)
