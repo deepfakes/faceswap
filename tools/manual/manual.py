@@ -305,7 +305,7 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame = ttk.Frame(self)
         frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
         size_frame = ttk.Frame(frame)
-        size_frame.pack(side=tk.LEFT)
+        size_frame.pack(side=tk.RIGHT)
         lbl = ttk.Label(size_frame, text="Face Size:")
         lbl.pack(side=tk.LEFT)
         cmb = ttk.Combobox(size_frame,

@@ -18,8 +18,12 @@ from tqdm import tqdm
 from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
-from lib.image import SingleFrameLoader
+from lib.gui.custom_widgets import PopupProgress
+from lib.gui.utils import FileHandler
+from lib.image import SingleFrameLoader, ImagesLoader, ImagesSaver, encode_image_with_hash
 from lib.multithreading import MultiThread
+from lib.utils import get_folder
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -52,7 +56,9 @@ class DetectedFaces():
         self._alignments = self._get_alignments(alignments_path, input_location)
         self._extractor = extractor
         self._tk_vars = self._set_tk_vars()
-        self._children = dict(io=_DiskIO(self), update=FaceUpdate(self), filter=Filter(self))
+        self._children = dict(io=_DiskIO(self, input_location),
+                              update=FaceUpdate(self),
+                              filter=Filter(self))
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<<< PUBLIC PROPERTIES >>>> #
@@ -146,6 +152,10 @@ class DetectedFaces():
         """
         self._children["io"].revert_to_saved(frame_index)
 
+    def extract(self):
+        """ Extract the faces in the current video to a user supplied folder. """
+        self._children["io"].extract()
+
     def save_video_meta_data(self, pts_time, keyframes):
         """ Save video meta data to the alignments file. This is executed if the video meta data
         does not already exist in the alignments file, so the video does not need to be scanned
@@ -225,10 +235,13 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
     ----------
     detected_faces: :class:`DetectedFaces`
         The parent :class:`DetectedFaces` object
+    input_location: str
+        The location of the input folder of frames or video file
     """
-    def __init__(self, detected_faces):
-        logger.debug("Initializing %s: (detected_faces: %s)",
-                     self.__class__.__name__, detected_faces)
+    def __init__(self, detected_faces, input_location):
+        logger.debug("Initializing %s: (detected_faces: %s, input_location: %s)",
+                     self.__class__.__name__, detected_faces, input_location)
+        self._input_location = input_location
         self._alignments = detected_faces._alignments
         self._frame_faces = detected_faces._frame_faces
         self._updated_frame_indices = detected_faces._updated_frame_indices
@@ -313,6 +326,42 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             del faces[num_alignments:]
             retval = True
         return retval
+
+    def extract(self):
+        """ Extract the current faces to a folder. """
+        dirname = FileHandler("dir", None,
+                              initialdir=os.path.dirname(self._input_location),
+                              title="Select output folder...").retfile
+        if not dirname:
+            return
+        logger.debug(dirname)
+
+        saver = ImagesSaver(str(get_folder(dirname)), as_bytes=True)
+        loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
+        pbar = PopupProgress("Extracting Faces...", self._alignments.frames_count + 1)
+
+        for frame_idx, (filename, image) in enumerate(loader.load()):
+            logger.trace("Outputting frame: %s: %s", frame_idx, filename)
+            frame_name, extension = os.path.splitext(filename)
+            final_faces = []
+            pbar.step(1)
+            for face_idx, face in enumerate(self._frame_faces[frame_idx]):
+                output = "{}_{}{}".format(frame_name, str(face_idx), extension)
+                face.load_aligned(image, size=256, force=True)  # TODO user selectable size
+                face.hash, b_image = encode_image_with_hash(face.aligned_face, extension)
+                saver.save(output, b_image)
+                final_faces.append(face.to_alignment())
+                face.aligned = dict()
+            self._alignments.data[filename]["faces"] = final_faces
+        saver.close()
+
+        # Update hashes in alignments file.
+        pbar.update_title("Saving Alignments...")
+        self._alignments.backup()
+        self._alignments.save()
+        self._updated_frame_indices.clear()
+        self._tk_unsaved.set(False)
+        pbar.stop()
 
 
 class Filter():

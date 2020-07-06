@@ -58,7 +58,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self._actions_frame.add_optional_buttons(self.editors)
 
-        self._transport_frame.pack(side=tk.BOTTOM, padx=5, pady=5, fill=tk.X)
+        self._transport_frame.pack(side=tk.BOTTOM, padx=5, fill=tk.X)
         video_frame.pack(side=tk.TOP, expand=True, fill=tk.BOTH)
         main_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH)
         self.pack(side=tk.LEFT, anchor=tk.NW, expand=True, fill=tk.BOTH)
@@ -74,6 +74,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             prev="Go to Previous Frame (Z)",
             next="Go to Next Frame (X)",
             end="Go to Last Frame (END)",
+            extract="Extract the faces to a folder... (Ctrl+E)",
             save="Save the Alignments file (Ctrl+S)",
             mode="Filter Frames to only those Containing the Selected Item (F)")
 
@@ -85,6 +86,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                        prev=self._navigation.decrement_frame,
                        next=self._navigation.increment_frame,
                        end=self._navigation.goto_last_frame,
+                       extract=self._det_faces.extract,
                        save=self._det_faces.save)
         return actions
 
@@ -179,12 +181,13 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         frame.pack(side=tk.BOTTOM, fill=tk.X)
         icons = get_images().icons
         buttons = dict()
-        for action in ("play", "beginning", "prev", "next", "end", "save", "mode"):
+        for action in ("play", "beginning", "prev", "next", "end", "save", "extract", "mode"):
             padx = (0, 6) if action in ("play", "prev", "mode") else (0, 0)
-            side = tk.RIGHT if action in ("save", "mode") else tk.LEFT
+            side = tk.RIGHT if action in ("extract", "save", "mode") else tk.LEFT
             state = ["!disabled"] if action != "save" else ["disabled"]
             if action != "mode":
-                wgt = ttk.Button(frame, image=icons[action], command=self._btn_action[action])
+                icon = action if action != "extract" else "folder"
+                wgt = ttk.Button(frame, image=icons[icon], command=self._btn_action[action])
                 wgt.state(state)
             else:
                 wgt = self._add_filter_mode_combo(frame)
