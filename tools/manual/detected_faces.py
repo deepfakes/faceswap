@@ -7,6 +7,7 @@ import logging
 import os
 import tkinter as tk
 from copy import deepcopy
+from queue import Queue, Empty
 from time import sleep
 from threading import Lock
 
@@ -328,7 +329,12 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         return retval
 
     def extract(self):
-        """ Extract the current faces to a folder. """
+        """ Extract the current faces to a folder.
+
+        To stop the GUI becoming completely unresponsive (particularly in Windows) the extract is
+        done in a background thread, with the process count passed back in a queue to the main
+        thread to update the progress bar.
+        """
         dirname = FileHandler("dir", None,
                               initial_folder=os.path.dirname(self._input_location),
                               title="Select output folder...").retfile
@@ -336,15 +342,62 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             return
         logger.debug(dirname)
 
-        saver = ImagesSaver(str(get_folder(dirname)), as_bytes=True)
-        loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
+        queue = Queue()
         pbar = PopupProgress("Extracting Faces...", self._alignments.frames_count + 1)
+        thread = MultiThread(self._background_extract, dirname, queue)
+        thread.start()
+        self._monitor_extract(thread, queue, pbar)
 
+    def _monitor_extract(self, thread, queue, pbar):
+        """ Monitor the extraction thread, and update the progress bar.
+
+        On completion, save alignments and clear progress bar.
+
+        Parameters
+        ----------
+        thread: :class:`lib.multithreading.MultiThread`
+            The thread that is performing the extraction task
+        queue: :class:`queue.Queue`
+            The queue that the worker thread is putting it's incremental counts to
+        pbar: :class:`lib.gui.custom_widget.PopupProgress`
+            The popped up progress bar
+        """
+        thread.check_and_raise_error()
+        if not thread.is_alive():
+            thread.join()
+            # Update hashes in alignments file.
+            pbar.update_title("Saving Alignments...")
+            self._alignments.backup()
+            self._alignments.save()
+            self._updated_frame_indices.clear()
+            self._tk_unsaved.set(False)
+            pbar.stop()
+            return
+
+        while True:
+            try:
+                pbar.step(queue.get(False, 0))
+            except Empty:
+                break
+        pbar.after(100, self._monitor_extract, thread, queue, pbar)
+
+    def _background_extract(self, output_folder, progress_queue):
+        """ Perform the background extraction in a thread so GUI doesn't become unresponsive.
+
+        Parameters
+        ----------
+        output_folder: str
+            The location to save the output faces to
+        progress_queue: :class:`queue.Queue`
+            The queue to place incrememental counts to for updating the GUI's progress bar
+        """
+        saver = ImagesSaver(str(get_folder(output_folder)), as_bytes=True)
+        loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
         for frame_idx, (filename, image) in enumerate(loader.load()):
             logger.trace("Outputting frame: %s: %s", frame_idx, filename)
             frame_name, extension = os.path.splitext(filename)
             final_faces = []
-            pbar.step(1)
+            progress_queue.put(1)
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
                 output = "{}_{}{}".format(frame_name, str(face_idx), extension)
                 face.load_aligned(image, size=256, force=True)  # TODO user selectable size
@@ -354,14 +407,6 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                 face.aligned = dict()
             self._alignments.data[filename]["faces"] = final_faces
         saver.close()
-
-        # Update hashes in alignments file.
-        pbar.update_title("Saving Alignments...")
-        self._alignments.backup()
-        self._alignments.save()
-        self._updated_frame_indices.clear()
-        self._tk_unsaved.set(False)
-        pbar.stop()
 
 
 class Filter():
