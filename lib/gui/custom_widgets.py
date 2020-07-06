@@ -8,6 +8,8 @@ import sys
 import tkinter as tk
 from tkinter import ttk, TclError
 
+import numpy as np
+
 from .utils import get_config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -760,3 +762,118 @@ class MultiOption(ttk.Checkbutton):  # pylint: disable=too-many-ancestors
         state = self._value in self._master_list
         logger.trace("Setting '%s' to %s", self._value, state)
         self._tk_var.set(state)
+
+
+class PopupProgress(tk.Toplevel):
+    """ A simple pop up progress bar that appears of the center of the root window.
+
+    When this is called, the root will be disabled until the :func:`close` method is called.
+
+    Parameters
+    ----------
+    title: str
+        The title to appear above the progress bar
+    total: int or float
+        The total count of items for the progress bar
+
+    Example
+    -------
+    >>> total = 100
+    >>> progress = PopupProgress("My title...", total)
+    >>> for i in range(total):
+    >>>     progress.update(1)
+    >>> progress.close()
+    """
+    def __init__(self, title, total):
+        super().__init__()
+        self._total = total
+        if platform.system() == "Darwin":  # For Mac OS
+            self.tk.call("::tk::unsupported::MacWindowStyle",
+                         "style", self._w,  # pylint:disable=protected-access
+                         "help", "none")
+        # Leaves only the label and removes the app window
+        self.wm_overrideredirect(True)
+        self.transient()
+
+        self._lbl_title = self._set_title(title)
+        self._progress_bar = self._get_progress_bar()
+
+        offset = np.array((self.master.winfo_rootx(), self.master.winfo_rooty()))
+        # TODO find way to get dimensions of the pop up without it flicking onto the screen
+        self.update_idletasks()
+        center = np.array((
+            (self.master.winfo_width() // 2) - (self.winfo_width() // 2),
+            (self.master.winfo_height() // 2) - (self.winfo_height() // 2))) + offset
+        self.wm_geometry("+{}+{}".format(*center))
+        get_config().set_cursor_busy()
+        self.grab_set()
+
+    @property
+    def progress_bar(self):
+        """ :class:`tkinter.ttk.Progressbar`: The progress bar object within the pop up window. """
+        return self._progress_bar
+
+    def _set_title(self, title):
+        """ Set the initial title of the pop up progress bar.
+
+        Parameters
+        ----------
+        title: str
+            The title to appear above the progress bar
+
+        Returns
+        -------
+        :class:`tkinter.ttk.Label`
+            The heading label for the progress bar
+        """
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.TOP, padx=5, pady=5)
+        lbl = ttk.Label(frame, text=title)
+        lbl.pack(side=tk.TOP, pady=(5, 0), expand=True, fill=tk.X)
+        return lbl
+
+    def _get_progress_bar(self):
+        """ Set up the progress bar with the supplied total.
+
+        Returns
+        -------
+        :class:`tkinter.ttk.Progressbar`
+            The configured progress bar for the pop up window
+        """
+        frame = ttk.Frame(self)
+        frame.pack(side=tk.BOTTOM, padx=5, pady=(0, 5))
+        pbar = ttk.Progressbar(frame,
+                               length=400,
+                               maximum=self._total,
+                               mode="determinate")
+        pbar.pack(side=tk.LEFT)
+        return pbar
+
+    def step(self, amount):
+        """ Increment the progress bar.
+
+        Parameters
+        ----------
+        amount: int or float
+            The amount to increment the progress bar by
+        """
+        self._progress_bar.step(amount)
+        self._progress_bar.update_idletasks()
+
+    def stop(self):
+        """ Stop the progress bar, re-enable the root window and destroy the pop up window. """
+        self._progress_bar.stop()
+        get_config().set_cursor_default()
+        self.grab_release()
+        self.destroy()
+
+    def update_title(self, title):
+        """ Update the title that displays above the progress bar.
+
+        Parameters
+        ----------
+        title: str
+            The title to appear above the progress bar
+        """
+        self._lbl_title.config(text=title)
+        self._lbl_title.update_idletasks()
