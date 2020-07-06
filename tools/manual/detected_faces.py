@@ -330,7 +330,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
     def extract(self):
         """ Extract the current faces to a folder. """
         dirname = FileHandler("dir", None,
-                              initialdir=os.path.dirname(self._input_location),
+                              initial_folder=os.path.dirname(self._input_location),
                               title="Select output folder...").retfile
         if not dirname:
             return
