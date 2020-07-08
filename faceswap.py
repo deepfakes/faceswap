@@ -14,8 +14,9 @@ if sys.version_info[0] == 3 and sys.version_info[1] < 6:
 _PARSER = args.FullHelpArgumentParser()
 
 
-def _bad_args():
+def _bad_args(*args):  # pylint:disable=unused-argument
     """ Print help to console when bad arguments are provided. """
+    print(args)
     _PARSER.print_help()
     sys.exit(0)
 
