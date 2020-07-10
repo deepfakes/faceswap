@@ -7,7 +7,7 @@ import sys
 
 from tqdm import tqdm
 
-from lib.image import encode_image_with_hash, ImagesLoader, ImagesSaver
+from lib.image import encode_image_with_hash, generate_thumbnail, ImagesLoader, ImagesSaver
 from lib.multithreading import MultiThread
 from lib.utils import get_folder
 from plugins.extract.pipeline import Extractor, ExtractMedia
@@ -236,7 +236,8 @@ class Extract():  # pylint:disable=too-few-public-methods
     def _output_processing(self, extract_media, size):
         """ Prepare faces for output
 
-        Loads the aligned face, perform any processing actions and verify the output.
+        Loads the aligned face, generate the thumbnail, perform any processing actions and verify
+        the output.
 
         Parameters
         ----------
@@ -247,7 +248,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         """
         for face in extract_media.detected_faces:
             face.load_aligned(extract_media.image, size=size)
-
+            face.thumbnail = generate_thumbnail(face.aligned_face, size=80, quality=60)
         self._post_process.do_actions(extract_media)
         extract_media.remove_image()
 

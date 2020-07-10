@@ -385,7 +385,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         cfgfile = self._file_handler("save",
                                      "config_{}".format(session_type),
                                      title=title,
-                                     initialdir=self._dirname).retfile
+                                     initial_folder=self._dirname).retfile
         if not cfgfile:
             logger.debug("No filename provided. session_type: '%s'", session_type)
             return False
@@ -851,7 +851,7 @@ class Project(_GuiSession):
         cfgfile = self._file_handler("save",
                                      "config_project",
                                      title="New Project...",
-                                     initialdir=self._basename).retfile
+                                     initial_folder=self._basename).retfile
         if not cfgfile:
             logger.debug("No filename selected")
             return

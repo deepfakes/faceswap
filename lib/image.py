@@ -427,6 +427,32 @@ def encode_image_with_hash(image, extension):
     return image_hash, encoded_image
 
 
+def generate_thumbnail(image, size=80, quality=60):
+    """ Generate a jpg thumbnail for the given image.
+
+    Parameters
+    ----------
+    image: :class:`numpy.ndarray`
+        Three channel BGR image to convert to a jpg thumbnail
+    size: int
+        The width and height, in pixels, that the thumbnail should be generated at
+    quality: int
+        The jpg quality setting to use
+
+    Returns
+    :class:`numpy.ndarray`
+        The given image encoded to a jpg at the given size and quality settings
+    """
+    logger.trace("Input shape: %s, size: %s, quality: %s", image.shape, size, quality)
+    orig_size = image.shape[0]
+    if orig_size != size:
+        interp = cv2.INTER_AREA if orig_size > size else cv2.INTER_CUBIC
+        image = cv2.resize(image, (size, size), interpolation=interp)
+    retval = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])[1]
+    logger.trace("Output shape: %s", retval.shape)
+    return retval
+
+
 def batch_convert_color(batch, colorspace):
     """ Convert a batch of images from one color space to another.
 
@@ -468,6 +494,40 @@ def batch_convert_color(batch, colorspace):
     batch = batch.reshape((original_shape[0] * original_shape[1], *original_shape[2:]))
     batch = cv2.cvtColor(batch, getattr(cv2, "COLOR_{}".format(colorspace)))
     return batch.reshape(original_shape)
+
+
+def hex_to_rgb(hexcode):
+    """ Convert a hex number to it's RGB counterpart.
+
+    Parameters
+    ----------
+    hexcode: str
+        The hex code to convert (e.g. `"#0d25ac"`)
+
+    Returns
+    -------
+    tuple
+        The hex code as a 3 integer (`R`, `G`, `B`) tuple
+    """
+    value = hexcode.lstrip("#")
+    chars = len(value)
+    return tuple(int(value[i:i + chars // 3], 16) for i in range(0, chars, chars // 3))
+
+
+def rgb_to_hex(rgb):
+    """ Convert an RGB tuple to it's hex counterpart.
+
+    Parameters
+    ----------
+    rgb: tuple
+        The (`R`, `G`, `B`) integer values to convert (e.g. `(0, 255, 255)`)
+
+    Returns
+    -------
+    str:
+        The 6 digit hex code with leading `#` applied
+    """
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
 
 
 # ################### #

@@ -41,6 +41,7 @@ class Alignments():
         self._data = self._load()
         self._update_legacy()
         self._hashes_to_frame = dict()
+        self._thumbnails = Thumbnails(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # << PROPERTIES >> #
@@ -125,6 +126,12 @@ class Alignments():
                 keyframes.append(idx)
         retval = dict(pts_time=pts_time, keyframes=keyframes)
         return retval
+
+    @property
+    def thumbnails(self):
+        """ :class:`~lib.alignments.Thumbnails`: The low resolution thumbnail images that exist
+        within the alignments file """
+        return self._thumbnails
 
     # << INIT FUNCTIONS >> #
 
@@ -229,10 +236,14 @@ class Alignments():
         keyframes: list
             A list of frame indices corresponding to the key frames in the input video
         """
+        if pts_time[0] != 0:
+            pts_time, keyframes = self._pad_leading_frames(pts_time, keyframes)
+
         sample_filename = next(fname for fname in self.data)
         basename = sample_filename[:sample_filename.rfind("_")]
         logger.debug("sample filename: %s, base filename: %s", sample_filename, basename)
         logger.info("Saving video meta information to Alignments file")
+
         for idx, pts in enumerate(pts_time):
             meta = dict(pts_time=pts, keyframe=idx in keyframes)
             key = "{}_{:06d}.png".format(basename, idx + 1)
@@ -240,6 +251,7 @@ class Alignments():
                 self.data[key] = dict(video_meta=meta, faces=[])
             else:
                 self.data[key]["video_meta"] = meta
+
         logger.debug("Alignments count: %s, timestamp count: %s", len(self.data), len(pts_time))
         if len(self.data) != len(pts_time):
             raise FaceswapError(
@@ -248,14 +260,51 @@ class Alignments():
                 "\nThis can be caused by a number of issues:"
                 "\n  - The video has a Variable Frame Rate and FFMPEG is having a hard time "
                 "calculating the correct number of frames."
-                "\n  - The video was not cut on a key frame and FFMPEG has dummied in some extra "
-                "frames to fill the gap."
                 "\n  - You are working with a Merged Alignments file. This is not supported for "
                 "your current use case."
                 "\nYou should either extract the video to individual frames, re-encode the "
                 "video at a constant frame rate and re-run extraction or work with a dedicated "
                 "alignments file for your requested video.".format(len(pts_time), len(self.data)))
         self.save()
+
+    @classmethod
+    def _pad_leading_frames(cls, pts_time, keyframes):
+        """ Calculate the number of frames to pad the video by when the first frame is not
+        a key frame.
+
+        A somewhat crude method by obtaining the gaps between existing frames and calculating
+        how many frames should be inserted at the beginning based on the first presentation
+        timestamp.
+
+        Parameters
+        ----------
+         pts_time: list
+            A list of presentation timestamps (`float`) in frame index order for every frame in
+            the input video
+
+        Returns
+        -------
+        tuple
+            The presentation time stamps with extra frames padded to the beginning and the
+            keyframes adjusted to include the new frames
+        """
+        start_pts = pts_time[0]
+        logger.debug("Video not cut on keyframe. Start pts: %s", start_pts)
+        gaps = []
+        prev_time = None
+        for item in pts_time:
+            if prev_time is not None:
+                gaps.append(item - prev_time)
+            prev_time = item
+        data_points = len(gaps)
+        avg_gap = sum(gaps) / data_points
+        frame_count = int(round(start_pts / avg_gap))
+        pad_pts = [avg_gap * i for i in range(frame_count)]
+        logger.debug("data_points: %s, avg_gap: %s, frame_count: %s, pad_pts: %s",
+                     data_points, avg_gap, frame_count, pad_pts)
+        pts_time = pad_pts + pts_time
+        keyframes = [i + frame_count for i in keyframes]
+        return pts_time, keyframes
 
     # << VALIDATION >> #
 
@@ -475,7 +524,6 @@ class Alignments():
                                  filename, idx)
 
     # << GENERATORS >> #
-
     def yield_faces(self):
         """ Generator to obtain all faces with meta information from :attr:`data`. The results
         are yielded by frame.
@@ -651,3 +699,67 @@ class Alignments():
                     alignment["landmarks_xy"] = np.array(test, dtype="float32")
                     update_count += 1
         logger.debug("Updated landmarks_xy: %s", update_count)
+
+
+class Thumbnails():
+    """ Thumbnail images stored in the alignments file.
+
+    The thumbnails are stored as low resolution (64px), low quality jpg in the alignments file
+    and are used for the Manual Alignments tool.
+
+    Parameters
+    ----------
+    alignments: :class:'~lib.alignments.Alignments`
+        The parent alignments class that these thumbs belong to
+    """
+    def __init__(self, alignments):
+        logger.debug("Initializing %s: (alignments: %s)", self.__class__.__name__, alignments)
+        self._alignments_dict = alignments.data
+        self._frame_list = list(sorted(self._alignments_dict))
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def has_thumbnails(self):
+        """ bool: ``True`` if all faces in the alignments file contain thumbnail images
+        otherwise ``False``. """
+        retval = all("thumb" in face
+                     for frame in self._alignments_dict.values()
+                     for face in frame["faces"])
+        logger.trace(retval)
+        return retval
+
+    def get_thumbnail_by_index(self, frame_index, face_index):
+        """ Obtain a jpg thumbnail from the given frame index for the given face index
+
+        Parameters
+        ----------
+        frame_index: int
+            The frame index that contains the thumbnail
+        face_index: int
+            The face index within the frame to retrieve the thumbnail for
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The encoded jpg thumbnail
+        """
+        retval = self._alignments_dict[self._frame_list[frame_index]]["faces"][face_index]["thumb"]
+        logger.trace("frame index: %s, face_index: %s, thumb shape: %s",
+                     frame_index, face_index, retval.shape)
+        return retval
+
+    def add_thumbnail(self, frame, face_index, thumb):
+        """ Add a thumbnail for the given face index for the given frame.
+
+        Parameters
+        ----------
+        frame: str
+            The name of the frame to add the thumbnail for
+        face_index: int
+            The face index within the given frame to add the thumbnail for
+        thumb: :class:`numpy.ndarray`
+            The encoded jpg thumbnail at 64px to add to the alignments file
+        """
+        logger.debug("frame: %s, face_index: %s, thumb shape: %s thumb dtype: %s",
+                     frame, face_index, thumb.shape, thumb.dtype)
+        self._alignments_dict[frame]["faces"][face_index]["thumb"] = thumb
