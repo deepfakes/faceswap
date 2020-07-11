@@ -634,13 +634,14 @@ class Install():
         """ Install required pip packages """
         self.output.info("Installing Required Python Packages. This may take some time...")
         for pkg, version in self.env.missing_packages:
+            if self.env.is_conda:
+                pkg = CONDA_MAPPING.get(pkg, (pkg, None))
+                channel = None if len(pkg) != 2 else pkg[1]
+                pkg = pkg[0]
             if version:
                 pkg = "{}{}".format(pkg, ",".join("".join(spec) for spec in version))
             if self.env.is_conda and not pkg.startswith("git"):
                 verbose = pkg.startswith("tensorflow") or self.env.updater
-                pkg = CONDA_MAPPING.get(pkg, (pkg, None))
-                channel = None if len(pkg) != 2 else pkg[1]
-                pkg = pkg[0]
                 if self.conda_installer(pkg, verbose=verbose, channel=channel, conda_only=False):
                     continue
             self.pip_installer(pkg)
@@ -664,7 +665,7 @@ class Install():
         if channel:
             condaexe.extend(["-c", channel])
         condaexe.append(package)
-        self.output.info("Installing {}".format(package))
+        self.output.info("Installing {}".format(package.replace("\"", "")))
         shell = self.env.os_version[0] == "Windows"
         try:
             if verbose:
