@@ -65,7 +65,6 @@ class ModelBase():
 
         self.predict = predict
         self.model_dir = model_dir
-        self._strategy = Strategy(strategy)
         self._batch_size = batch_size
         self.vram_savings = VRAMSavings(pingpong)
         self.backup = Backup(self.model_dir, self.name)
@@ -76,6 +75,7 @@ class ModelBase():
         self.trainer = trainer
 
         self.load_config()  # Load config if plugin has not already referenced it
+        self._strategy = Strategy(strategy)
 
         self.state = State(self.model_dir,
                            self.name,
@@ -679,6 +679,12 @@ class Strategy():
         """ If we are running on Nvidia backend and the strategy is not `"default"` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.
 
+        Notes
+        -----
+        By default Tensorflow defaults mirrored strategy to use the Nvidia NCCL method for
+        reductions, however this is only available in Linux, so the method used is configurable
+        from the training config file.
+
         Parameters
         ----------
         strategy: str
@@ -693,7 +699,15 @@ class Strategy():
         if get_backend() != "nvidia":
             retval = None
         elif strategy == "mirror":
-            retval = tf.distribute.MirroredStrategy()
+            method = _CONFIG.get("cross_device_method", "nccl")
+            if method == "nccl":
+                cross_device_ops = tf.distribute.NcclAllReduce()
+            elif method == "hierarchical":
+                cross_device_ops = tf.distribute.HierarchicalCopyAllReduce()
+            else:
+                cross_device_ops = tf.distribute.ReductionToOneDevice()
+            logger.debug("cross_device_ops: %s", cross_device_ops)
+            retval = tf.distribute.MirroredStrategy(cross_device_ops=cross_device_ops)
         elif strategy == "central":
             retval = tf.distribute.experimental.CentralStorageStrategy(parameter_device="/CPU:0")
         else:
