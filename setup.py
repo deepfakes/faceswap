@@ -16,7 +16,7 @@ from pkg_resources import parse_requirements
 
 INSTALL_FAILED = False
 # Revisions of tensorflow-gpu and cuda/cudnn requirements
-TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.3": ["10.1", "7.6"]}
+TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.3.0": ["10.1", "7.6"]}
 # Mapping of Python packages to their conda names if different from pypi or in non-default channel
 CONDA_MAPPING = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
@@ -185,7 +185,7 @@ class Environment():
         if self.updater:
             return
         try:
-            import pip  # noqa pylint:disable=unused-import
+            import pip  # noqa pylint:disable=unused-import,import-outside-toplevel
         except ImportError:
             self.output.error("Import pip failed. Please Install python3-pip and try again")
             sys.exit(1)
@@ -201,7 +201,7 @@ class Environment():
                 pipexe.append("--user")
             pipexe.append("pip")
             run(pipexe)
-        import pip
+        import pip  # pylint:disable=import-outside-toplevel
         pip_version = pip.__version__
         self.output.info("Installed pip: {}".format(pip_version))
 
@@ -255,7 +255,7 @@ class Environment():
             return
 
         self.output.warning(
-            "The minimum Tensorflow requirement is 1.12. \n"
+            "The minimum Tensorflow requirement is 2.2 \n"
             "Tensorflow currently has no official prebuild for your CUDA, cuDNN "
             "combination.\nEither install a combination that Tensorflow supports or "
             "build and install your own tensorflow-gpu.\r\n"
@@ -460,7 +460,7 @@ class Checks():
                     break
         if not chk:
             self.output.error("CUDA not found. Install and try again.\n"
-                              "Recommended version:      CUDA 9.0     cuDNN 7.1.3\n"
+                              "Recommended version:      CUDA 10.1     cuDNN 7.6\n"
                               "CUDA: https://developer.nvidia.com/cuda-downloads\n"
                               "cuDNN: https://developer.nvidia.com/rdp/cudnn-download")
             return
@@ -643,6 +643,8 @@ class Install():
                 verbose = pkg.startswith("tensorflow") or self.env.updater
                 if self.conda_installer(pkg, verbose=verbose, channel=channel, conda_only=False):
                     continue
+                if pkg.startswith("tensorflow-gpu"):
+                    self._tensorflow_dependency_install()
             self.pip_installer(pkg)
 
     def install_conda_packages(self):
@@ -686,7 +688,7 @@ class Install():
         pipexe = [sys.executable, "-m", "pip"]
         # hide info/warning and fix cache hang
         pipexe.extend(["install", "--no-cache-dir"])
-        if not self.env.updater:
+        if not self.env.updater and not package.startswith("tensorflow"):
             pipexe.append("-qq")
         # install as user to solve perm restriction
         if not self.env.is_admin and not self.env.is_virtualenv:
@@ -699,6 +701,25 @@ class Install():
         except CalledProcessError:
             self.output.warning("Couldn't install {} with pip. "
                                 "Please install this package manually".format(package))
+
+    def _tensorflow_dependency_install(self):
+        """ Install the Cuda/cuDNN dependencies from Conda when tensorflow is not available
+        in Conda """
+        # TODO This will need to be more robust if/when we accept multiple Tensorflow Versions
+        versions = list(TENSORFLOW_REQUIREMENTS.values())[-1]
+        condaexe = ["conda", "search"]
+        pkgs = ["cudatoolkit", "cudnn"]
+        for pkg in pkgs:
+            chk = Popen(condaexe + [pkg], shell=True, stdout=PIPE)
+            available = [line.split()
+                         for line in chk.communicate()[0].decode(self.env.encoding).splitlines()
+                         if line.startswith(pkg)]
+            compatible = [req for req in available
+                          if (pkg == "cudatoolkit" and req[1].startswith(versions[0]))
+                          or (pkg == "cudnn" and versions[0] in req[2]
+                              and req[1].startswith(versions[1]))]
+            candidate = "==".join(sorted(compatible, key=lambda x: x[1])[-1][:2])
+            self.conda_installer(candidate, verbose=True, conda_only=True)
 
 
 class Tips():
