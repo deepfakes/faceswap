@@ -4,7 +4,7 @@ pathlib==1.0.1
 numpy>=1.18.0
 opencv-python>=4.1.2.0
 scikit-image>=0.16.2
-Pillow>=7.0.0
+pillow>=7.0.0
 scikit-learn>=0.22.0
 toposort==1.5
 fastcluster==1.1.26
