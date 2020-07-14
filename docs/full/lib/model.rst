@@ -6,6 +6,13 @@ The Model Package handles interfacing with the neural network backend and holds 
 .. contents:: Contents
    :local:
 
+model.backup_restore module
+---------------------------
+
+.. automodule:: lib.model.backup_restore
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 model.initializers module
 -------------------------
