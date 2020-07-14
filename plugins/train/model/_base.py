@@ -711,7 +711,7 @@ class Strategy():
         elif strategy == "central":
             retval = tf.distribute.experimental.CentralStorageStrategy(parameter_device="/CPU:0")
         else:
-            retval = None
+            retval = tf.distribute.get_strategy()
         logger.debug("Using strategy: %s", retval)
         return retval
 
