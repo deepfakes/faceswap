@@ -3,7 +3,6 @@
 
 import logging
 import os
-import platform
 import sys
 
 from importlib import import_module
@@ -144,22 +143,6 @@ class Config(FaceswapConfig):
                  "sizing. More complex padding schemes can reduce artifacts at the "
                  "border of the image."
                  "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
-        self.add_item(
-            section=section, title="cross_device_method", datatype=str, group="network",
-            default="hierarchical" if platform.system().lower() == "windows" else "nccl",
-            choices=["nccl", "hierarchical", "reduction"], gui_radio=True, fixed=False,
-            info="Method for copying variables to multiple GPUs when using the 'mirror' training "
-                 "strategy. NCCL is the fastest, but it is only available on Linux operating "
-                 "systems. The alternative strategies will vary in performance on a by device "
-                 "basis, so you will need to choose the one which works best for your setup. "
-                 "\n\t nccl - Nvidia NCCL reduction method. NCCL is only available, by default, "
-                 "on Linux, but this will be the fastest method if it is available to you."
-                 "\n\t hierarchical - This is a reduction created for Nvidia DGX-1 which assumes "
-                 "GPUs connects like that on DGX-1 machine. If you have different GPU "
-                 "inter-connections, it is likely that this would be slower than the 'reduction'"
-                 "method."
-                 "\n\t reduction - Batch reduction is done by reduction on each element one by "
-                 "one.")
         self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool,
             default=True, group="loss",

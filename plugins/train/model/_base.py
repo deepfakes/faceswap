@@ -6,6 +6,7 @@
 """
 import logging
 import os
+import platform
 import sys
 import time
 
@@ -682,8 +683,8 @@ class Strategy():
         Notes
         -----
         By default Tensorflow defaults mirrored strategy to use the Nvidia NCCL method for
-        reductions, however this is only available in Linux, so the method used is configurable
-        from the training config file.
+        reductions, however this is only available in Linux, so the method used falls back to
+        `Hierarchical Copy All Reduce` if the OS is not Linux.
 
         Parameters
         ----------
@@ -699,13 +700,10 @@ class Strategy():
         if get_backend() != "nvidia":
             retval = None
         elif strategy == "mirror":
-            method = _CONFIG.get("cross_device_method", "nccl")
-            if method == "nccl":
+            if platform.system().lower() == "linux":
                 cross_device_ops = tf.distribute.NcclAllReduce()
-            elif method == "hierarchical":
-                cross_device_ops = tf.distribute.HierarchicalCopyAllReduce()
             else:
-                cross_device_ops = tf.distribute.ReductionToOneDevice()
+                cross_device_ops = tf.distribute.HierarchicalCopyAllReduce()
             logger.debug("cross_device_ops: %s", cross_device_ops)
             retval = tf.distribute.MirroredStrategy(cross_device_ops=cross_device_ops)
         elif strategy == "central":
