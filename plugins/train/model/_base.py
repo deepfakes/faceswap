@@ -4,6 +4,7 @@
     When inheriting model_data should be a list of NNMeta objects.
     See the class for details.
 """
+import inspect
 import logging
 import os
 import platform
@@ -17,7 +18,7 @@ import tensorflow as tf
 
 from keras import losses
 from keras import backend as K
-from keras.layers import Input
+from keras.layers import Input, Layer
 from keras.models import load_model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects
@@ -32,6 +33,9 @@ from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
+
+# TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
+# TODO Mask Input
 
 
 class ModelBase():
@@ -85,13 +89,10 @@ class ModelBase():
                            self._args.no_logs,
                            training_image_size)
 
-        self.is_legacy = False
-        self.rename_legacy()
         self.load_state_info()
 
         # The variables holding masks if Penalized Loss is used
         self._mask_variables = dict(a=None, b=None)
-        self.networks = dict()  # Networks for the model
         self.predictors = dict()  # Predictors for model
         self.history = dict()  # Loss history per save iteration)
 
@@ -126,6 +127,18 @@ class ModelBase():
         return self._model_dir
 
     @property
+    def _filename(self):
+        """str: The filename for this model."""
+        return os.path.join(self._model_dir, "{}.h5".format(self.name))
+
+    @property
+    def _model_exists(self):
+        """ bool: ``True`` if a model of the type being loaded exists within the model folder
+        location otherwise ``False``
+        """
+        return os.path.isfile(self._filename)
+
+    @property
     def config_section(self):
         """ The section name for loading config """
         retval = ".".join(self.__module__.split(".")[-2:])
@@ -154,13 +167,6 @@ class ModelBase():
         basename = os.path.basename(sys.modules[self.__module__].__file__)
         retval = os.path.splitext(basename)[0].lower()
         logger.debug("model name: '%s'", retval)
-        return retval
-
-    @property
-    def models_exist(self):
-        """ Return if all files exist and clear session """
-        retval = all([os.path.isfile(model.filename) for model in self.networks.values()])
-        logger.debug("Pre-existing models exist: %s", retval)
         return retval
 
     @property
@@ -282,22 +288,14 @@ class ModelBase():
     def build(self):
         """ Build the model. Override for custom build methods """
         with self._strategy.scope():
-            # self.load_models(swapped=False)
-            # inputs = self.get_inputs()
-            # #try:
-            #     self.build_autoencoders(inputs)
-            # except ValueError as err:
-            #     if "must be from the same graph" in str(err).lower():
-            #         msg = ("There was an error loading saved weights. This is most likely due to "
-            #                "model corruption during a previous save."
-            #                "\nYou should restore weights from a snapshot or from backup files. "
-            #                "You can use the 'Restore' Tool to restore from backup.")
-            #         raise FaceswapError(msg) from err
-            #     raise err
-            inputs = self.get_inputs()
-            self._model = self.build_model(inputs)
-            self.compile_predictors(initialize=True)
-            self.log_summary()
+            if self._model_exists:
+                self._load_model()
+            else:
+                inputs = self.get_inputs()
+                self._model = self.build_model(inputs)
+            self._compile_model(initialize=True)
+        if not self._is_predict:
+            self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
 
     def get_inputs(self):
         """ Return the inputs for the model """
@@ -340,6 +338,7 @@ class ModelBase():
         logger.debug("Setting input shape from state file: %s", input_shape)
         self.input_shape = input_shape
 
+    # TODO (store inputs)
     def add_predictor(self, side, model):
         """ Add a predictor to the predictors dictionary """
         logger.debug("Adding predictor: (side: '%s', model: %s)", side, model)
@@ -359,22 +358,24 @@ class ModelBase():
         self.state.inputs = inputs
         logger.debug("Added input shapes: %s", self.state.inputs)
 
-    def compile_predictors(self, initialize=True):
-        """ Compile the predictors """
+    def _compile_model(self, initialize=True):
+        """ Compile the model to include the Optimizer and Loss Function.
+
+        If the model is being compiled for the first time then add the loss names to the
+        state file.
+
+        Parameters
+        ----------
+        initialize: bool
+            ``True`` if this is a new model otherwise ``False``
+        """
+        # TODO Remove initialize parameter and decide pathway based on if model file exists
         logger.debug("Compiling Predictors")
         optimizer = self._get_optimizer()
         loss = Loss(self._model.inputs, self._model.outputs, None)
         self._model.compile(optimizer=optimizer, loss=loss.funcs)
         if initialize:
             self.state.add_session_loss_names("both", loss.names)
-            self.history = list()
-
-#        for side, model in self.predictors.items():
-#            loss = Loss(model.inputs, model.outputs, self.mask_variables[side])
-#            model.compile(optimizer=optimizer, loss=loss.funcs)
-#            if initialize:
-#                self.state.add_session_loss_names(side, loss.names)
-#                self.history[side] = list()
         logger.info("Compiled Predictors. Losses: %s", loss.names)
 
     def _get_optimizer(self):
@@ -413,6 +414,7 @@ class ModelBase():
         logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
         return retval
 
+    # TODO
     def converter(self, swap):
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
@@ -443,48 +445,46 @@ class ModelBase():
         logger.debug("Mapped models: (models_map: %s)", models_map)
         return models_map
 
-    def log_summary(self):
-        """ Verbose log the model summaries """
-        if self._is_predict:
-            return
-        self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
-
     def do_snapshot(self):
         """ Perform a model snapshot """
         logger.debug("Performing snapshot")
         self._backup.snapshot_models(self.iterations)
         logger.debug("Performed snapshot")
 
-    def load_models(self, swapped):
-        """ Load models from file """
-        logger.debug("Load model: (swapped: %s)", swapped)
+    def _load_model(self):
+        """ Loads the model from disk and sets to :attr:`_model`
 
-        if not self.models_exist and not self._is_predict:
-            logger.info("Creating new '%s' model in folder: '%s'", self.name, self._model_dir)
-            return None
-        if not self.models_exist and self._is_predict:
+        If the predict function is to be called and the model cannot be found in the model folder
+        then an error is logged and the process exits.
+
+        When loading the model, the plugin model folder is scanned for custom layers which are
+        added to Keras' custom objects.
+        """
+        logger.debug("Loading model: %s", self._filename)
+        if self._is_predict and not self._model_exists:
             logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
-        if not self.is_legacy or not self._is_predict:
+        if not self._is_predict:
             K.clear_session()
-        model_mapping = self.map_models(swapped)
-        for network in self.networks.values():
-            if not network.side:
-                is_loaded = network.load()
-            else:
-                is_loaded = network.load(fullpath=model_mapping[network.side][network.type])
-            if not is_loaded:
-                break
-        if is_loaded:
-            logger.info("Loaded model from disk: '%s'", self._model_dir)
-        return is_loaded
+        self._add_custom_objects()
+        self._model = load_model(self._filename)
+        logger.info("Loaded model from disk: '%s'", self._filename)
+
+    def _add_custom_objects(self):
+        """ Add the plugin's layers to Keras custom objects """
+        custom_objects = {name: obj
+                          for name, obj in inspect.getmembers(sys.modules[self.__module__])
+                          if (inspect.isclass(obj)
+                              and obj.__module__ == self.__module__
+                              and Layer in obj.__bases__)}
+        logger.debug("Adding custom objects: %s", custom_objects)
+        get_custom_objects().update(custom_objects)
 
     def save_models(self):
         """ Backup and save the models """
         # TODO
-        filename = os.path.join(self._model_dir, "{}.h5".format(self.name))
-        self._model.save(filename, include_optimizer=False)
+        self._model.save(self._filename, include_optimizer=False)
         return
         logger.debug("Backing up and saving models")
         # Insert a new line to avoid spamming the same row as loss output
@@ -564,62 +564,6 @@ class ModelBase():
             return True
         logger.debug("Loss for '%s' has not dropped", side)
         return False
-
-    def rename_legacy(self):
-        """ Legacy Original, LowMem and IAE models had inconsistent naming conventions
-            Rename them if they are found and update """
-        legacy_mapping = {"iae": [("IAE_decoder.h5", "iae_decoder.h5"),
-                                  ("IAE_encoder.h5", "iae_encoder.h5"),
-                                  ("IAE_inter_A.h5", "iae_intermediate_A.h5"),
-                                  ("IAE_inter_B.h5", "iae_intermediate_B.h5"),
-                                  ("IAE_inter_both.h5", "iae_inter.h5")],
-                          "original": [("encoder.h5", "original_encoder.h5"),
-                                       ("decoder_A.h5", "original_decoder_A.h5"),
-                                       ("decoder_B.h5", "original_decoder_B.h5"),
-                                       ("lowmem_encoder.h5", "original_encoder.h5"),
-                                       ("lowmem_decoder_A.h5", "original_decoder_A.h5"),
-                                       ("lowmem_decoder_B.h5", "original_decoder_B.h5")]}
-        if self.name not in legacy_mapping.keys():
-            return
-        logger.debug("Renaming legacy files")
-
-        set_lowmem = False
-        updated = False
-        for old_name, new_name in legacy_mapping[self.name]:
-            old_path = os.path.join(self._model_dir, old_name)
-            new_path = os.path.join(self._model_dir, new_name)
-            if os.path.exists(old_path) and not os.path.exists(new_path):
-                logger.info("Updating legacy model name from: '%s' to '%s'", old_name, new_name)
-                os.rename(old_path, new_path)
-                if old_name.startswith("lowmem"):
-                    set_lowmem = True
-                updated = True
-
-        if not updated:
-            logger.debug("No legacy files to rename")
-            return
-
-        self.is_legacy = True
-        logger.debug("Creating state file for legacy model")
-        self.state.inputs = {"face:0": [64, 64, 3]}
-        self.state.training_size = 256
-        self.state.config["coverage"] = 62.5
-        self.state.config["reflect_padding"] = False
-        self.state.config["mask_type"] = None
-        self.state.config["mask_blur_kernel"] = 3
-        self.state.config["mask_threshold"] = 4
-        self.state.config["learn_mask"] = False
-        self.state.config["lowmem"] = False
-        # TODO
-        self.encoder_dim = 1024
-
-        if set_lowmem:
-            logger.debug("Setting encoder_dim and lowmem flag for legacy lowmem model")
-            self.encoder_dim = 512
-            self.state.config["lowmem"] = True
-
-        self.state.replace_config(self.config_changeable_items)
-        self.state.save()
 
 
 class Strategy():

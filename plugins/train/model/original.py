@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Original Model
-    Based on the original https://www.reddit.com/r/deepfakes/
-    code sample + contribs """
+    Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions. """
 import os
 from keras.layers import Dense, Flatten, Reshape, Layer, Conv2D
 
@@ -26,18 +25,13 @@ class Model(ModelBase):
 
         input_a = inputs[0]
         input_b = inputs[1]
-        if self.feed_mask:
-            input_a, mask_a = input_a
-            input_b, mask_b = input_b
-        else:
-            mask_a = mask_b = []
 
         encoder = Encoder(self.config["lowmem"])
         encoder_a = encoder(input_a)
         encoder_b = encoder(input_b)
 
-        decoder_a = Decoder("a", self.config["learn_mask"])([encoder_a, mask_a])
-        decoder_b = Decoder("b", self.config["learn_mask"])([encoder_b, mask_b])
+        decoder_a = Decoder("a", self.config["learn_mask"])(encoder_a)
+        decoder_b = Decoder("b", self.config["learn_mask"])(encoder_b)
 
         autoencoder = KerasModel(inputs, [decoder_a, decoder_b],
                                  name=os.path.splitext(os.path.basename(__file__).lower())[0])
@@ -127,6 +121,7 @@ class Decoder(Layer):
     def __init__(self, side, learn_mask, **kwargs):
         super().__init__(name="original_decoder_{}".format(side), **kwargs)
         self.learn_mask = learn_mask
+        self.side = side
 
         self._upscale1 = Upscale(256)
         self._upscale2 = Upscale(128)
@@ -138,7 +133,7 @@ class Decoder(Layer):
                             strides=(1, 1),
                             padding="same",
                             activation="sigmoid",
-                            name="face_out_{}".format(side))
+                            name="face_out_{}".format(self.side))
 
         if self.learn_mask:
             self._mask_upscale1 = Upscale(256)
@@ -149,7 +144,7 @@ class Decoder(Layer):
                                      strides=(1, 1),
                                      padding="same",
                                      activation="sigmoid",
-                                     name="mask_out_{}".format(side))
+                                     name="mask_out_{}".format(self.side))
 
     def call(self, inputs):
         """ Call the Original Decoder Layer.
@@ -164,9 +159,9 @@ class Decoder(Layer):
         Tensor
             The output from the layer
         """
-        face_input, mask_input = inputs
+        mask_input = None
 
-        var_x = self._upscale1(face_input)
+        var_x = self._upscale1(inputs)
         var_x = self._upscale2(var_x)
         var_x = self._upscale3(var_x)
         var_x = self._conv(var_x)
@@ -197,4 +192,5 @@ class Decoder(Layer):
         dict
             A python dictionary containing the layer configuration
         """
-        return dict(learn_mask=self.learn_mask)
+        return dict(side=self.side,
+                    learn_mask=self.learn_mask)
