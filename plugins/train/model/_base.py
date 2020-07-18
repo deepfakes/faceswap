@@ -85,7 +85,7 @@ class ModelBase():
 
         self.state = State(self._model_dir,
                            self.name,
-                           self.config_changeable_items,
+                           self._config_changeable_items,
                            self._args.no_logs,
                            training_image_size)
 
@@ -115,7 +115,7 @@ class ModelBase():
                               "penalized_mask_loss": self.config["penalized_mask_loss"]}
         logger.debug("training_opts: %s", self.training_opts)
 
-        if self.multiple_models_in_folder:
+        if self._multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
                                 additional_info="Please split each model into separate folders to "
                                                 "avoid issues in future.")
@@ -139,43 +139,43 @@ class ModelBase():
         return os.path.isfile(self._filename)
 
     @property
-    def config_section(self):
-        """ The section name for loading config """
-        retval = ".".join(self.__module__.split(".")[-2:])
-        logger.debug(retval)
+    def _config_section(self):
+        """ str: The section name for the current plugin for loading configuration options from the
+        config file. """
+        return ".".join(self.__module__.split(".")[-2:])
+
+    @property
+    def _config_changeable_items(self):
+        """ dict: The configuration options that can be updated after the model has already been
+            created. """
+        return Config(self._config_section, configfile=self._configfile).changeable_items
+
+    # TODO
+    @property
+    def _multiple_models_in_folder(self):
+        """ :bool: ``True`` if there are multiple model types in the same folder otherwise
+        ``false``. """
+        model_files = [fname for fname in os.listdir(self._model_dir) if fname.endswith(".h5")]
+        retval = False if not model_files else os.path.commonprefix(model_files) == ""
+        logger.debug("model_files: %s, retval: %s", model_files, retval)
         return retval
 
     @property
     def config(self):
-        """ Return config dict for current plugin """
+        """ dict: The configuration dictionary for current plugin. """
+        # TODO Check if config still needs to be globalled now that build is called explicitly
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
-            model_name = self.config_section
+            model_name = self._config_section
             logger.debug("Loading config for: %s", model_name)
             _CONFIG = Config(model_name, configfile=self._configfile).config_dict
         return _CONFIG
 
     @property
-    def config_changeable_items(self):
-        """ Return the dict of config items that can be updated after the model
-            has been created """
-        return Config(self.config_section, configfile=self._configfile).changeable_items
-
-    @property
     def name(self):
-        """ Set the model name based on the subclass """
+        """ str: The name of this model based on the plugin name. """
         basename = os.path.basename(sys.modules[self.__module__].__file__)
-        retval = os.path.splitext(basename)[0].lower()
-        logger.debug("model name: '%s'", retval)
-        return retval
-
-    @property
-    def multiple_models_in_folder(self):
-        """ Return true if there are multiple model types in the same folder, else false """
-        model_files = [fname for fname in os.listdir(self._model_dir) if fname.endswith(".h5")]
-        retval = False if not model_files else os.path.commonprefix(model_files) == ""
-        logger.debug("model_files: %s, retval: %s", model_files, retval)
-        return retval
+        return os.path.splitext(basename)[0].lower()
 
     @property
     def output_shapes(self):
@@ -268,7 +268,7 @@ class ModelBase():
         configuration options in `lib.model.nn_blocks` """
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
-            model_name = self.config_section
+            model_name = self._config_section
             logger.debug("Loading config for: %s", model_name)
             _CONFIG = Config(model_name, configfile=self._configfile).config_dict
 
