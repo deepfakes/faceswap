@@ -18,7 +18,7 @@ import tensorflow as tf
 from keras import losses
 from keras import backend as K
 from keras.layers import Input
-from keras.models import load_model, Model
+from keras.models import load_model
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects
 
@@ -35,52 +35,54 @@ _CONFIG = None
 
 
 class ModelBase():
-    """ Base class that all models should inherit from """
+    """ Base class that all models should inherit from.
+
+    Parameters
+    ----------
+    model_dir: str
+        The full path to the model save location
+    arguments: :class:`argparse.Namespace`
+        The arguments that were passed to the train or convert process as generated from
+        Faceswap's command line arguments
+    """
     def __init__(self,
                  model_dir,
-                 configfile=None,
+                 arguments,
                  snapshot_interval=0,
-                 batch_size=64,
-                 no_logs=False,
                  warp_to_landmarks=False,
                  augment_color=True,
                  no_flip=False,
                  training_image_size=256,
                  alignments_paths=None,
                  preview_scale=100,
-                 trainer="original",
-                 strategy="default",
-                 pingpong=False,
                  predict=False):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', configfile: %s, "
-                     "snapshot_interval: %s, batch_size: %s, no_logs: %s, warp_to_landmarks: %s, "
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', arguments: %s, "
+                     "snapshot_interval: %s, warp_to_landmarks: %s, "
                      "augment_color: %s, no_flip: %s, training_image_size, %s, alignments_paths: "
-                     "%s, preview_scale: %s, trainer: %s, strategy: %s, pingpong: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, configfile, snapshot_interval, batch_size,
-                     no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
-                     alignments_paths, preview_scale, trainer, strategy, pingpong, predict)
+                     "%s, preview_scale: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, arguments, snapshot_interval,
+                     warp_to_landmarks, augment_color, no_flip, training_image_size,
+                     alignments_paths, preview_scale, predict)
 
         self.input_shape = None  # Must be set within the plugin after initializing
         self.output_shape = None  # Must be set within the plugin after initializing
-        self.configfile = configfile
+        self.trainer = "original"  # Override for plugin specific trainer
+
+        self._model_dir = model_dir
+        self._args = arguments
+        self._is_predict = predict
+        self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
 
         self._model = None
-        self._is_predict = predict
-        self.model_dir = model_dir
-        self._batch_size = batch_size
-        self.vram_savings = VRAMSavings(pingpong)
-        self.backup = Backup(self.model_dir, self.name)
-
-        self.trainer = trainer
+        self._backup = Backup(self._model_dir, self.name)
 
         self._load_config()  # Load config if plugin has not already referenced it
-        self._strategy = Strategy(strategy)
+        self._strategy = Strategy(self._args.distribution)
 
-        self.state = State(self.model_dir,
+        self.state = State(self._model_dir,
                            self.name,
                            self.config_changeable_items,
-                           no_logs,
-                           self.vram_savings.pingpong,
+                           self._args.no_logs,
                            training_image_size)
 
         self.is_legacy = False
@@ -100,7 +102,6 @@ class ModelBase():
                               "warp_to_landmarks": warp_to_landmarks,
                               "augment_color": augment_color,
                               "no_flip": no_flip,
-                              "pingpong": self.vram_savings.pingpong,
                               "snapshot_interval": snapshot_interval,
                               "training_size": self.state.training_size,
                               "no_logs": self.state.current_session["no_logs"],
@@ -120,6 +121,11 @@ class ModelBase():
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
+    def model_dir(self):
+        """str: The full path to the model folder location. """
+        return self._model_dir
+
+    @property
     def config_section(self):
         """ The section name for loading config """
         retval = ".".join(self.__module__.split(".")[-2:])
@@ -133,14 +139,14 @@ class ModelBase():
         if not _CONFIG:
             model_name = self.config_section
             logger.debug("Loading config for: %s", model_name)
-            _CONFIG = Config(model_name, configfile=self.configfile).config_dict
+            _CONFIG = Config(model_name, configfile=self._configfile).config_dict
         return _CONFIG
 
     @property
     def config_changeable_items(self):
         """ Return the dict of config items that can be updated after the model
             has been created """
-        return Config(self.config_section, configfile=self.configfile).changeable_items
+        return Config(self.config_section, configfile=self._configfile).changeable_items
 
     @property
     def name(self):
@@ -160,7 +166,7 @@ class ModelBase():
     @property
     def multiple_models_in_folder(self):
         """ Return true if there are multiple model types in the same folder, else false """
-        model_files = [fname for fname in os.listdir(str(self.model_dir)) if fname.endswith(".h5")]
+        model_files = [fname for fname in os.listdir(self._model_dir) if fname.endswith(".h5")]
         retval = False if not model_files else os.path.commonprefix(model_files) == ""
         logger.debug("model_files: %s, retval: %s", model_files, retval)
         return retval
@@ -240,7 +246,7 @@ class ModelBase():
         output_network = [network for network in self.networks.values() if network.is_output][0]
         mask_shape = output_network.output_shapes[-1][:-1] + (1, )
         for side in ("a", "b"):
-            var = K.variable(K.ones((self._batch_size, ) + mask_shape[1:], dtype="float32"),
+            var = K.variable(K.ones((self._args.batch_size, ) + mask_shape[1:], dtype="float32"),
                              dtype="float32",
                              name="penalized_mask_variable_{}".format(side))
             if get_backend() != "amd":
@@ -258,7 +264,7 @@ class ModelBase():
         if not _CONFIG:
             model_name = self.config_section
             logger.debug("Loading config for: %s", model_name)
-            _CONFIG = Config(model_name, configfile=self.configfile).config_dict
+            _CONFIG = Config(model_name, configfile=self._configfile).config_dict
 
         nn_block_keys = ['icnr_init', 'conv_aware_init', 'reflect_padding']
         set_nnblock_config({key: _CONFIG.pop(key)
@@ -353,24 +359,6 @@ class ModelBase():
         self.state.inputs = inputs
         logger.debug("Added input shapes: %s", self.state.inputs)
 
-    def reset_pingpong(self):
-        """ Reset the models for pingpong training """
-        logger.debug("Resetting models")
-
-        # Clear models and graph
-        self.predictors = dict()
-        K.clear_session()
-
-        # Load Models for current training run
-        for model in self.networks.values():
-            model.network = Model.from_config(model.config)
-            model.network.set_weights(model.weights)
-
-        inputs = self.get_inputs()
-        self.build_autoencoders(inputs)
-        self.compile_predictors(initialize=False)
-        logger.debug("Reset models")
-
     def compile_predictors(self, initialize=True):
         """ Compile the predictors """
         logger.debug("Compiling Predictors")
@@ -464,7 +452,7 @@ class ModelBase():
     def do_snapshot(self):
         """ Perform a model snapshot """
         logger.debug("Performing snapshot")
-        self.backup.snapshot_models(self.iterations)
+        self._backup.snapshot_models(self.iterations)
         logger.debug("Performed snapshot")
 
     def load_models(self, swapped):
@@ -472,10 +460,10 @@ class ModelBase():
         logger.debug("Load model: (swapped: %s)", swapped)
 
         if not self.models_exist and not self._is_predict:
-            logger.info("Creating new '%s' model in folder: '%s'", self.name, self.model_dir)
+            logger.info("Creating new '%s' model in folder: '%s'", self.name, self._model_dir)
             return None
         if not self.models_exist and self._is_predict:
-            logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
+            logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
         if not self.is_legacy or not self._is_predict:
@@ -489,20 +477,20 @@ class ModelBase():
             if not is_loaded:
                 break
         if is_loaded:
-            logger.info("Loaded model from disk: '%s'", self.model_dir)
+            logger.info("Loaded model from disk: '%s'", self._model_dir)
         return is_loaded
 
     def save_models(self):
         """ Backup and save the models """
         # TODO
-        filename = os.path.join(str(self.model_dir), "{}.h5".format(self.name))
+        filename = os.path.join(self._model_dir, "{}.h5".format(self.name))
         self._model.save(filename, include_optimizer=False)
         return
         logger.debug("Backing up and saving models")
         # Insert a new line to avoid spamming the same row as loss output
         print("")
         save_averages = self.get_save_averages()
-        backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
+        backup_func = self._backup.backup_model if self.should_backup(save_averages) else None
         if backup_func:
             logger.info("Backing up models...")
         executor = futures.ThreadPoolExecutor()
@@ -598,8 +586,8 @@ class ModelBase():
         set_lowmem = False
         updated = False
         for old_name, new_name in legacy_mapping[self.name]:
-            old_path = os.path.join(str(self.model_dir), old_name)
-            new_path = os.path.join(str(self.model_dir), new_name)
+            old_path = os.path.join(self._model_dir, old_name)
+            new_path = os.path.join(self._model_dir, new_name)
             if os.path.exists(old_path) and not os.path.exists(new_path):
                 logger.info("Updating legacy model name from: '%s' to '%s'", old_name, new_name)
                 os.rename(old_path, new_path)
@@ -711,26 +699,6 @@ class Strategy():
         retval = nullcontext() if self._strategy is None else self._strategy.scope()
         logger.debug("Using strategy scope: %s", retval)
         return retval
-
-
-class VRAMSavings():
-    """ VRAM Saving training methods """
-    def __init__(self, pingpong):
-        logger.debug("Initializing %s: (pingpong: %s)", self.__class__.__name__,
-                     pingpong)
-        self.is_plaidml = get_backend() == "amd"
-        self.pingpong = self.set_pingpong(pingpong)
-        logger.debug("Initialized: %s", self.__class__.__name__)
-
-    def set_pingpong(self, pingpong):
-        """ Disable pingpong for plaidML users """
-        if pingpong and self.is_plaidml:
-            logger.warning("Pingpong training not supported on plaidML. Disabling")
-            pingpong = False
-        logger.debug("pingpong: %s", pingpong)
-        if pingpong:
-            logger.info("Using Pingpong Training")
-        return pingpong
 
 
 class Loss():
@@ -976,14 +944,14 @@ class NNMeta():
 class State():
     """ Class to hold the model's current state and autoencoder structure """
     def __init__(self, model_dir, model_name, config_changeable_items,
-                 no_logs, pingpong, training_image_size):
+                 no_logs, training_image_size):
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
-                     "config_changeable_items: '%s', no_logs: %s, pingpong: %s, "
+                     "config_changeable_items: '%s', no_logs: %s, "
                      "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
-                     config_changeable_items, no_logs, pingpong, training_image_size)
+                     config_changeable_items, no_logs, training_image_size)
         self.serializer = get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.file_extension)
-        self.filename = str(model_dir / filename)
+        self.filename = os.path.join(model_dir, filename)
         self.name = model_name
         self.iterations = 0
         self.session_iterations = 0
@@ -994,7 +962,7 @@ class State():
         self.config = dict()
         self.load(config_changeable_items)
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs, pingpong, config_changeable_items)
+        self.create_new_session(no_logs, config_changeable_items)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
@@ -1031,12 +999,11 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs, pingpong, config_changeable_items):
+    def create_new_session(self, no_logs, config_changeable_items):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
-                                          "pingpong": pingpong,
                                           "loss_names": dict(),
                                           "batchsize": 0,
                                           "iterations": 0,

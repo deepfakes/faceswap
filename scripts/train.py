@@ -21,7 +21,7 @@ from plugins.plugin_loader import PluginLoader
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Train():
+class Train():  # pylint:disable=too-few-public-methods
     """ The Faceswap Training Process.
 
     The training process is responsible for training a model on a set of source faces and a set of
@@ -233,23 +233,18 @@ class Train():
             The requested model plugin
         """
         logger.debug("Loading Model")
-        model_dir = get_folder(self._args.model_dir)
-        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
+        model_dir = str(get_folder(self._args.model_dir))
         augment_color = not self._args.no_augment_color
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
-            configfile=configfile,
+            self._args,
             snapshot_interval=self._args.snapshot_interval,
-            batch_size=self._args.batch_size,
-            no_logs=self._args.no_logs,
             warp_to_landmarks=self._args.warp_to_landmarks,
             augment_color=augment_color,
             no_flip=self._args.no_flip,
             training_image_size=self._image_size,
             alignments_paths=self._alignments_paths,
             preview_scale=self._args.preview_scale,
-            strategy=self._args.distribution,
-            pingpong=self._args.pingpong,
             predict=False)
         model.build()
         logger.debug("Loaded Model")
@@ -307,11 +302,7 @@ class Train():
                 break
             if save_iteration:
                 logger.trace("Save Iteration: (iteration: %s", iteration)
-                if self._args.pingpong:
-                    model.save_models()
-                    trainer.pingpong.switch()
-                else:
-                    model.save_models()
+                model.save_models()
             elif self._save_now:
                 logger.trace("Save Requested: (iteration: %s", iteration)
                 model.save_models()

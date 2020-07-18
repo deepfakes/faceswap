@@ -38,8 +38,6 @@ This class heavily references the :attr:`plugins.train.model._base.ModelBase.tra
     * **augment_color** ('bool') - Whether to use color augmentation.
 
     * **no_flip** ('bool') - Whether to turn off random horizontal flipping.
-
-    * **pingpong** ('bool') - Train each side separately per save iteration rather than together.
 """
 
 import logging
@@ -51,8 +49,8 @@ import numpy as np
 
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
-from keras import backend as K
 from tqdm import tqdm
+from keras import backend as K
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
@@ -113,8 +111,6 @@ class TrainerBase():
         self._sides = sorted(key for key in self._images.keys())
 
         self._process_training_opts()
-        self._pingpong = PingPong(model, self._sides)
-
         self._batcher = Batcher(images, self._model, self._use_mask, batch_size, self._config)
 #        self._batchers = {side: Batcher(side,
 #                                        images[side],
@@ -137,11 +133,6 @@ class TrainerBase():
                                     self._config.get("preview_images", 14),
                                     self._batcher)
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def pingpong(self):
-        """ :class:`pingpong`: Ping-pong object for ping-pong memory saving training. """
-        return self._pingpong
 
     @property
     def _timestamp(self):
@@ -192,14 +183,6 @@ class TrainerBase():
         """
         if self._model.training_opts["no_logs"]:
             logger.verbose("TensorBoard logging disabled")
-            return None
-        if self._pingpong.active:
-            # Currently TensorBoard uses the tensorflow.session, meaning that VRAM does not
-            # get cleared when model switching
-            # TODO find a fix for this
-            logger.warning("Currently TensorBoard logging is not supported for Ping-Pong "
-                           "training. Session stats and graphing will not be available for this "
-                           "training session.")
             return None
         logger.debug("Enabling TensorBoard Logging")
         tensorboard = dict()
@@ -297,8 +280,6 @@ class TrainerBase():
         # TODO
 #        try:
 #            for side, batcher in self._batchers.items():
-#                if self._pingpong.active and side != self._pingpong.side:
-#                    continue
 #                loss[side] = batcher.train_one_batch()
 #                if not do_preview and not do_timelapse:
 #                    continue
@@ -314,12 +295,7 @@ class TrainerBase():
 #                self._store_history(side, side_loss)
 #                self._log_tensorboard(side, side_loss)
 #
-#            if not self._pingpong.active:
-#                self.__print_loss(loss)
-#            else:
-#                for key, val in loss.items():
-#                    self._pingpong.loss[key] = val
-#                self.__print_loss(self._pingpong.loss)
+#            self.__print_loss(loss)
 #
 #            if do_preview:
 #                samples = self._samples.show_sample()
@@ -1010,52 +986,6 @@ class Timelapse():
 
         cv2.imwrite(filename, image)
         logger.debug("Created time-lapse: '%s'", filename)
-
-
-class PingPong():
-    """ Side switcher for ping-pong training (memory saving feature)
-
-    Parameters
-    ----------
-    model: plugin from :mod:`plugins.train.model`
-        The selected model that will be running this trainer
-    sides: list
-        The sorted sides that are to be trained. Generally ["a", "b"]
-
-    Attributes
-    ----------
-    side: str
-        The side that is currently being trained
-    loss: dict
-        The loss for each side for ping pong training for the current ping pong session
-    """
-    def __init__(self, model, sides):
-        logger.debug("Initializing %s: (model: '%s')", self.__class__.__name__, model)
-        self._model = model
-        self._sides = sides
-        self.side = sorted(sides)[0]
-        self.loss = {side: [0] for side in sides}
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def active(self):
-        """ bool: ``True`` if Ping Pong training is active otherwise ``False``. """
-        return self._model.training_opts.get("pingpong", False)
-
-    def switch(self):
-        """ Switch ping-pong training from one side of the model to the other """
-        if not self.active:
-            return
-        retval = [side for side in self._sides if side != self.side][0]
-        logger.info("Switching training to side %s", retval.title())
-        self.side = retval
-        self._reload_model()
-
-    def _reload_model(self):
-        """ Clear out the model from VRAM and reload for the next side to be trained with ping-pong
-        training """
-        logger.verbose("Ping-Pong re-loading model")
-        self._model.reset_pingpong()
 
 
 class TrainingAlignments():

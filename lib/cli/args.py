@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """ The Command Line Argument options for faceswap.py """
+
+# pylint:disable=too-many-lines
 import argparse
 import logging
 import re
@@ -973,17 +975,6 @@ class TrainArgs(FaceSwapArgs):
                  "\nL|central: Creates the variables on the CPU and performs the updates there. "
                  "This will lead to VRAM savings and can be used for both single and multi GPU "
                  "systems."))
-        argument_list.append(dict(
-            opts=("-pp", "--ping-pong"),
-            action="store_true",
-            dest="pingpong",
-            default=False,
-            backend="nvidia",
-            group="VRAM Savings",
-            help="Enable ping pong training. Trains one side at a time, switching sides at "
-                 "each save iteration. Training will take 2 to 4 times longer, with about a "
-                 "30%%-50%% reduction in VRAM useage. NB: Preview won't show until both sides "
-                 "have been trained once."))
         argument_list.append(dict(
             opts=("-s", "--save-interval"),
             action=Slider,

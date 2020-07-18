@@ -232,7 +232,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         smooth_amount_var = get_config().tk_vars["smoothgraph"]
         if session.initialized and session.logging_disabled:
             logger.trace("Logs disabled. Hiding graph")
-            self.set_info("Graph is disabled as 'no-logs' or 'pingpong' has been selected")
+            self.set_info("Graph is disabled as 'no-logs' has been selected")
             self.display_item = None
             if self.trace_var is not None:
                 smooth_amount_var.trace_vdelete("w", self.trace_var)
