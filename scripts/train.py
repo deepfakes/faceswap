@@ -251,6 +251,7 @@ class Train():
             strategy=self._args.distribution,
             pingpong=self._args.pingpong,
             predict=False)
+        model.build()
         logger.debug("Loaded Model")
         return model
 

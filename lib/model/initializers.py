@@ -20,7 +20,7 @@ def compute_fans(shape, data_format='channels_last'):
     """Computes the number of input and output units for a weight shape.
 
     Ported directly from Keras as the location moves between keras and tensorflow-keras
-    
+
     Parameters
     ----------
     shape: tuple
@@ -34,7 +34,7 @@ def compute_fans(shape, data_format='channels_last'):
     -------
     tuple
             A tuple of scalars, `(fan_in, fan_out)`.
-    
+
     Raises
     ------
     ValueError
@@ -194,16 +194,9 @@ class ConvolutionAware(initializers.Initializer):
     References
     ----------
     Armen Aghajanyan, https://arxiv.org/abs/1702.06295
-
-    Notes
-    -----
-    Convolutional Aware Initialization takes a long time. Keras model loading loads a model,
-    performs initialization and then loads weights, which is an unnecessary waste of time.
-    init defaults to False so that this is bypassed when loading a saved model passing zeros.
     """
 
-    def __init__(self, eps_std=0.05, seed=None, init=False):
-        self._init = init
+    def __init__(self, eps_std=0.05, seed=None):
         self.eps_std = eps_std
         self.seed = seed
         self.orthogonal = initializers.Orthogonal()
@@ -228,14 +221,7 @@ class ConvolutionAware(initializers.Initializer):
         # which causes this to error, so currently just reverts to default dtype if a string is not
         # passed in.
         dtype = K.floatx() if not isinstance(dtype, str) else dtype
-        if self._init:
-            logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
-        else:
-            logger.debug("Bypassing Convolutional Aware Initializer for saved model")
-            # Dummy in he_uniform just in case there aren't any weighs being loaded
-            # and it needs some kind of initialization
-            return self.he_uniform(shape, dtype=dtype)
-
+        logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
         rank = len(shape)
         if self.seed is not None:
             np.random.seed(self.seed)
@@ -315,10 +301,8 @@ class ConvolutionAware(initializers.Initializer):
         dict
             The configuration for ICNR Initialization
         """
-        return {
-            "eps_std": self.eps_std,
-            "seed": self.seed
-        }
+        return dict(eps_std=self.eps_std,
+                    seed=self.seed)
 
 
 # Update initializers into Keras custom objects

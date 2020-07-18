@@ -3,14 +3,34 @@
 
 import logging
 
-from keras.layers import (Activation, add, Add, Concatenate, Conv2D, LeakyReLU, SeparableConv2D,
-                          UpSampling2D)
+from keras.layers import (Activation, Add, Concatenate, Conv2D, LeakyReLU, SeparableConv2D,
+                          UpSampling2D, Layer)
 from keras.initializers import he_uniform, VarianceScaling
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D
 from .normalization import InstanceNormalization
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
+_CONFIG = dict()
+
+
+def set_config(configuration):
+    """ Set the global configuration parameters from the user's config file.
+
+    These options are used when creating layers for new models.
+
+    Parameters
+    ----------
+    configuration: dict
+        The configuration options that exist in the training configuration files that pertain
+        specifically to Custom Faceswap Layers. The keys should be: `icnr_init`, `conv_aware_init`
+        and 'reflect_padding'
+     """
+    global _CONFIG  # pylint:disable=global-statement
+    _CONFIG = configuration
+    logger.debug("Set NNBlock configuration to: %s", _CONFIG)
 
 
 class NNBlocks():
@@ -52,7 +72,7 @@ class NNBlocks():
         self.use_convaware_init = use_convaware_init
         self.use_reflect_padding = use_reflect_padding
         if self.use_convaware_init and self.first_run:
-            logger.info("Using Convolutional Aware Initialization. Model generation will take a "
+            logger.info("Using Convolutional Aware Initialization. Model generation may take a "
                         "few minutes...")
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -178,132 +198,6 @@ class NNBlocks():
                        strides=strides,
                        padding=padding,
                        **kwargs)(input_tensor)
-        return var_x
-
-    # <<< Original Model Blocks >>> #
-    def conv(self, input_tensor, filters, kernel_size=5, strides=2, padding="same",
-             use_instance_norm=False, res_block_follows=False, **kwargs):
-        """ A standard Convolution 2D layer which applies user specified configuration to the
-        layer.
-
-        Adds reflection padding if it has been selected by the user, and other post-processing
-        if requested by the plugin.
-
-        Parameters
-        ----------
-        input_tensor: tensor
-            The input tensor to the layer
-        filters: int
-            The dimensionality of the output space (i.e. the number of output filters in the
-            convolution)
-        kernel_size: int, optional
-            An integer or tuple/list of 2 integers, specifying the height and width of the 2D
-            convolution window. Can be a single integer to specify the same value for all spatial
-            dimensions. Default: 5
-        strides: tuple or int, optional
-            An integer or tuple/list of 2 integers, specifying the strides of the convolution along
-            the height and width. Can be a single integer to specify the same value for all spatial
-            dimensions. Default: `2`
-        padding: ["valid", "same"], optional
-            The padding to use. Default: `"same"`
-        use_instance_norm: bool, optional
-            ``True`` if instance normalization should be applied after the convolutional layer.
-            Default: ``False``
-        res_block_follows: bool, optional
-            If a residual block will follow this layer, then this should be set to `True` to add
-            a leaky ReLu after the convolutional layer. Default: ``False``
-        kwargs: dict
-            Any additional Keras standard layer keyword arguments
-
-        Returns
-        -------
-        tensor
-            The output tensor from the Convolution 2D Layer
-        """
-        logger.debug("input_tensor: %s, filters: %s, kernel_size: %s, strides: %s, "
-                     "use_instance_norm: %s, kwargs: %s)", input_tensor, filters, kernel_size,
-                     strides, use_instance_norm, kwargs)
-        name = self._get_name("conv_{}".format(input_tensor.shape[1]))
-        if self.use_reflect_padding:
-            input_tensor = ReflectionPadding2D(
-                stride=strides,
-                kernel_size=kernel_size,
-                name="{}_reflectionpadding2d".format(name))(input_tensor)
-            padding = "valid"
-        var_x = self.conv2d(input_tensor, filters,
-                            kernel_size=kernel_size,
-                            strides=strides,
-                            padding=padding,
-                            name="{}_conv2d".format(name),
-                            **kwargs)
-        if use_instance_norm:
-            var_x = InstanceNormalization(name="{}_instancenorm".format(name))(var_x)
-        if not res_block_follows:
-            var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
-        return var_x
-
-    def upscale(self, input_tensor, filters, kernel_size=3, padding="same",
-                use_instance_norm=False, res_block_follows=False, scale_factor=2, **kwargs):
-        """ An upscale layer for sub-pixel up-scaling.
-
-        Adds reflection padding if it has been selected by the user, and other post-processing
-        if requested by the plugin.
-
-        Parameters
-        ----------
-        input_tensor: tensor
-            The input tensor to the layer
-        filters: int
-            The dimensionality of the output space (i.e. the number of output filters in the
-            convolution)
-        kernel_size: int, optional
-            An integer or tuple/list of 2 integers, specifying the height and width of the 2D
-            convolution window. Can be a single integer to specify the same value for all spatial
-            dimensions. Default: 3
-        padding: ["valid", "same"], optional
-            The padding to use. Default: `"same"`
-        use_instance_norm: bool, optional
-            ``True`` if instance normalization should be applied after the convolutional layer.
-            Default: ``False``
-        res_block_follows: bool, optional
-            If a residual block will follow this layer, then this should be set to `True` to add
-            a leaky ReLu after the convolutional layer. Default: ``False``
-        scale_factor: int, optional
-            The amount to upscale the image. Default: `2`
-        kwargs: dict
-            Any additional Keras standard layer keyword arguments
-
-        Returns
-        -------
-        tensor
-            The output tensor from the Upscale layer
-        """
-        logger.debug("input_tensor: %s, filters: %s, kernel_size: %s, use_instance_norm: %s, "
-                     "kwargs: %s)", input_tensor, filters, kernel_size, use_instance_norm, kwargs)
-        name = self._get_name("upscale_{}".format(input_tensor.shape[1]))
-        if self.use_reflect_padding:
-            input_tensor = ReflectionPadding2D(
-                stride=1,
-                kernel_size=kernel_size,
-                name="{}_reflectionpadding2d".format(name))(input_tensor)
-            padding = "valid"
-        kwargs = self._set_default_initializer(kwargs)
-        if self.use_icnr_init:
-            original_init = self._switch_kernel_initializer(
-                kwargs,
-                ICNR(initializer=kwargs["kernel_initializer"]))
-        var_x = self.conv2d(input_tensor, filters * scale_factor * scale_factor,
-                            kernel_size=kernel_size,
-                            padding=padding,
-                            name="{}_conv2d".format(name),
-                            **kwargs)
-        if self.use_icnr_init:
-            self._switch_kernel_initializer(kwargs, original_init)
-        if use_instance_norm:
-            var_x = InstanceNormalization(name="{}_instancenorm".format(name))(var_x)
-        if not res_block_follows:
-            var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(name))(var_x)
-        var_x = PixelShuffler(name="{}_pixelshuffler".format(name), size=scale_factor)(var_x)
         return var_x
 
     # <<< DLight Model Blocks >>> #
@@ -485,4 +379,242 @@ class NNBlocks():
                                 name="{}_seperableconv2d".format(name),
                                 **kwargs)(input_tensor)
         var_x = Activation("relu", name="{}_relu".format(name))(var_x)
+        return var_x
+
+
+_NAMES = dict()
+
+
+def _get_name(name):
+    """ Return unique layer name for requested block.
+
+    As blocks can be used multiple times, auto appends an integer to the end of the requested
+    name to keep all block names unique
+
+    Parameters
+    ----------
+    name: str
+        The requested name for the layer
+
+    Returns
+    -------
+    str
+        The unique name for this layer
+    """
+    global _NAMES  # pylint:disable=global-statement
+    _NAMES[name] = _NAMES.setdefault(name, -1) + 1
+    name = "{}_{}".format(name, _NAMES[name])
+    logger.debug("Generating block name: %s", name)
+    return name
+
+# TODO Output Name
+
+
+def _get_default_initializer():
+    """ Returns a default initializer of Convolutional Aware or he_uniform for convolutional
+    layers.
+
+    Returns
+    -------
+    :class:`keras.initializers.Initializer`
+        The kernel initializer to use for this convolutional layer. Either he_uniform or
+        convolutional aware (if selected in config options)
+    """
+    retval = ConvolutionAware() if _CONFIG["conv_aware_init"] else he_uniform()
+    logger.debug("Set default kernel_initializer: %s", retval)
+    return retval
+
+
+class FSConv2D(Layer):
+    """ A standard Convolution 2D layer which applies user specified configuration to the
+    layer.
+
+    Adds reflection padding if it has been selected by the user, and other post-processing
+    if requested by the plugin.
+
+    Parameters
+    ----------
+    filters: int
+        The dimensionality of the output space (i.e. the number of output filters in the
+        convolution)
+    kernel_size: int, optional
+        An integer or tuple/list of 2 integers, specifying the height and width of the 2D
+        convolution window. Can be a single integer to specify the same value for all spatial
+        dimensions. Default: 5
+    strides: tuple or int, optional
+        An integer or tuple/list of 2 integers, specifying the strides of the convolution along the
+        height and width. Can be a single integer to specify the same value for all spatial
+        dimensions. Default: `2`
+    padding: ["valid", "same"], optional
+        The padding to use. NB: If reflect padding has been selected in the user configuration
+        options, then this argument will be ignored in favour of reflect padding. Default: `"same"`
+    use_instance_norm: bool, optional
+        ``True`` if instance normalization should be applied after the convolutional layer.
+        Default: ``False``
+    res_block_follows: bool, optional
+        If a residual block will follow this layer, then this should be set to `True` to add a
+        leaky ReLu after the convolutional layer. Default: ``False``
+    kwargs: dict
+        Any additional Keras standard layer keyword arguments
+    """
+    def __init__(self, filters,
+                 kernel_size=5,
+                 strides=2,
+                 padding="same",
+                 use_instance_norm=False,
+                 res_block_follows=False,
+                 **kwargs):
+        logger.debug("filters: %s, kernel_size: %s, strides: %s, padding: %s, use_instance_norm: "
+                     "%s, res_block_follows: %s, kwargs: %s)", filters, kernel_size, strides,
+                     padding, use_instance_norm, res_block_follows, kwargs)
+        if "name" in kwargs:
+            name = kwargs.pop("name")
+        else:
+            name = _get_name("conv_{}".format(filters))
+        super().__init__(name=name)
+
+        self.res_block_follows = res_block_follows
+        self.use_instance_norm = use_instance_norm
+        self.use_reflect_padding = _CONFIG["reflect_padding"]
+
+        if not self.res_block_follows:
+            self._leaky_relu = LeakyReLU(0.1, name="{}_leakyrelu".format(name))
+        if self.use_instance_norm:
+            self._instance_norm = InstanceNormalization(name="{}_instancenorm".format(name))
+        if self.use_reflect_padding:
+            padding = "valid"
+            self._reflect_padding = ReflectionPadding2D(stride=strides,
+                                                        kernel_size=kernel_size,
+                                                        name="{}_reflectionpadding2d".format(name))
+
+        initializer = kwargs.pop("kernel_initializer", None)
+        if initializer is None:
+            initializer = _get_default_initializer()
+        else:
+            logger.debug("Using model supplied initializer: %s", initializer)
+        self._conv2d = Conv2D(filters,
+                              kernel_size=kernel_size,
+                              strides=strides,
+                              padding=padding,
+                              name="{}_conv2d".format(name),
+                              kernel_initializer=initializer,
+                              **kwargs)
+
+    def call(self, inputs):
+        """ Call the Faceswap Convolutional Layer.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The input to the layer
+
+        Returns
+        -------
+        Tensor
+            The output tensor from the Convolution 2D Layer
+        """
+        if self.use_reflect_padding:
+            inputs = self._reflect_padding(inputs)
+        var_x = self._conv2d(inputs)
+        if self.use_instance_norm:
+            var_x = self._instance_norm(var_x)
+        if not self.res_block_follows:
+            var_x = self._leaky_relu(var_x)
+        return var_x
+
+    def get_config(self):
+        """Serializable configuration of the layer.
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
+        return dict(use_reflect_padding=self.use_reflect_padding,
+                    use_instance_norm=self.use_instance_norm,
+                    res_block_follows=self.res_block_follows)
+
+
+class Upscale(Layer):
+    """ An upscale layer for sub-pixel up-scaling.
+
+    Adds reflection padding if it has been selected by the user, and other post-processing
+    if requested by the plugin.
+
+    Parameters
+    ----------
+    input_tensor: tensor
+        The input tensor to the layer
+    filters: int
+        The dimensionality of the output space (i.e. the number of output filters in the
+        convolution)
+    kernel_size: int, optional
+        An integer or tuple/list of 2 integers, specifying the height and width of the 2D
+        convolution window. Can be a single integer to specify the same value for all spatial
+        dimensions. Default: 3
+    padding: ["valid", "same"], optional
+        The padding to use. NB: If reflect padding has been selected in the user configuration
+        options, then this argument will be ignored in favour of reflect padding. Default: `"same"`
+    use_instance_norm: bool, optional
+        ``True`` if instance normalization should be applied after the convolutional layer.
+        Default: ``False``
+    res_block_follows: bool, optional
+        If a residual block will follow this layer, then this should be set to `True` to add
+        a leaky ReLu after the convolutional layer. Default: ``False``
+    scale_factor: int, optional
+        The amount to upscale the image. Default: `2`
+    kwargs: dict
+        Any additional Keras standard layer keyword arguments
+    """
+
+    def __init__(self, filters,
+                 kernel_size=3,
+                 padding="same",
+                 scale_factor=2,
+                 use_instance_norm=False,
+                 res_block_follows=False,
+                 **kwargs):
+        logger.debug("filters: %s, kernel_size: %s, padding: %s, scale_factor: %s, "
+                     "use_instance_norm: %s, res_block_follows: %s, kwargs: %s)", filters,
+                     kernel_size, padding, scale_factor, use_instance_norm, res_block_follows,
+                     kwargs)
+        name = _get_name("upscale_{}".format(filters))
+        super().__init__(name=name)
+
+        initializer = kwargs.pop("kernel_initializer", None)
+        if initializer is None:
+            initializer = _get_default_initializer()
+        else:
+            logger.debug("Using model supplied initializer: %s", initializer)
+        if _CONFIG["icnr_init"]:
+            initializer = ICNR(initializer=initializer)
+            logger.debug("Using ICNR Initializer: %s", initializer)
+
+        self._conv2d = FSConv2D(filters * scale_factor * scale_factor,
+                                kernel_size=kernel_size,
+                                strides=(1, 1),
+                                padding=padding,
+                                use_instance_norm=use_instance_norm,
+                                res_block_follows=res_block_follows,
+                                name="{}_conv2d".format(name),
+                                kernel_initializer=initializer,
+                                **kwargs)
+        self._pixel_shuffler = PixelShuffler(name="{}_pixelshuffler".format(name),
+                                             size=scale_factor)
+
+    def call(self, inputs):
+        """ Call the Faceswap Convolutional Layer.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The input to the layer
+
+        Returns
+        -------
+        Tensor
+            The output tensor from the Upscale Layer
+        """
+        var_x = self._conv2d(inputs)
+        var_x = self._pixel_shuffler(var_x)
         return var_x

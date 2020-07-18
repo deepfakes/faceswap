@@ -2,11 +2,11 @@
 """ Original Model
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contribs """
-
-from keras.layers import Dense, Flatten, Input, Reshape
+import os
+from keras.layers import Dense, Flatten, Reshape, Layer, Conv2D
 
 from keras.models import Model as KerasModel
-
+from lib.model.nn_blocks import FSConv2D, Upscale
 from ._base import ModelBase, logger
 
 
@@ -15,73 +15,186 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         logger.debug("Initializing %s: (args: %s, kwargs: %s",
                      self.__class__.__name__, args, kwargs)
-
-        self.configfile = kwargs.get("configfile", None)
-        if "input_shape" not in kwargs:
-            kwargs["input_shape"] = (64, 64, 3)
-        if "encoder_dim" not in kwargs:
-            kwargs["encoder_dim"] = 512 if self.config["lowmem"] else 1024
-
         super().__init__(*args, **kwargs)
+        self.input_shape = (64, 64, 3)
+        self.output_shape = (64, 64, 3)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def add_networks(self):
-        """ Add the original model weights """
-        logger.debug("Adding networks")
-        self.add_network("decoder", "a", self.decoder(), is_output=True)
-        self.add_network("decoder", "b", self.decoder(), is_output=True)
-        self.add_network("encoder", None, self.encoder())
-        logger.debug("Added networks")
-
-    def build_autoencoders(self, inputs):
+    def build_model(self, inputs):
         """ Initialize original model """
         logger.debug("Initializing model")
-        for side in ("a", "b"):
-            logger.debug("Adding Autoencoder. Side: %s", side)
-            decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inputs[0]))
-            autoencoder = KerasModel(inputs, output)
-            self.add_predictor(side, autoencoder)
-        logger.debug("Initialized model")
 
-    def encoder(self):
-        """ Encoder Network """
-        input_ = Input(shape=self.input_shape)
-        var_x = input_
-        var_x = self.blocks.conv(var_x, 128)
-        var_x = self.blocks.conv(var_x, 256)
-        var_x = self.blocks.conv(var_x, 512)
-        if not self.config.get("lowmem", False):
-            var_x = self.blocks.conv(var_x, 1024)
-        var_x = Dense(self.encoder_dim)(Flatten()(var_x))
-        var_x = Dense(4 * 4 * 1024)(var_x)
-        var_x = Reshape((4, 4, 1024))(var_x)
-        var_x = self.blocks.upscale(var_x, 512)
-        return KerasModel(input_, var_x)
+        input_a = inputs[0]
+        input_b = inputs[1]
+        if self.feed_mask:
+            input_a, mask_a = input_a
+            input_b, mask_b = input_b
+        else:
+            mask_a = mask_b = []
 
-    def decoder(self):
-        """ Decoder Network """
-        input_ = Input(shape=(8, 8, 512))
-        var_x = input_
-        var_x = self.blocks.upscale(var_x, 256)
-        var_x = self.blocks.upscale(var_x, 128)
-        var_x = self.blocks.upscale(var_x, 64)
-        var_x = self.blocks.conv2d(var_x, 3,
-                                   kernel_size=5,
-                                   padding="same",
-                                   activation="sigmoid",
-                                   name="face_out")
-        outputs = [var_x]
+        encoder = Encoder(self.config["lowmem"])
+        encoder_a = encoder(input_a)
+        encoder_b = encoder(input_b)
 
-        if self.config.get("learn_mask", False):
-            var_y = input_
-            var_y = self.blocks.upscale(var_y, 256)
-            var_y = self.blocks.upscale(var_y, 128)
-            var_y = self.blocks.upscale(var_y, 64)
-            var_y = self.blocks.conv2d(var_y, 1,
-                                       kernel_size=5,
-                                       padding="same",
-                                       activation="sigmoid",
-                                       name="mask_out")
-            outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs)
+        decoder_a = Decoder("a", self.config["learn_mask"])([encoder_a, mask_a])
+        decoder_b = Decoder("b", self.config["learn_mask"])([encoder_b, mask_b])
+
+        autoencoder = KerasModel(inputs, [decoder_a, decoder_b],
+                                 name=os.path.splitext(os.path.basename(__file__).lower())[0])
+        return autoencoder
+
+
+class Encoder(Layer):
+    """Original Encoder Network
+
+    Parameters
+    ----------
+    low_mem: bool
+        ``True`` if the model should be run in low memory mode otherwise ``False``
+    kwargs: dict
+        Any additional standard Keras layer key word arguments
+    """
+    def __init__(self, low_mem, **kwargs):
+        super().__init__(name="original_encoder", **kwargs)
+        self.low_mem = low_mem
+        encoder_dims = 512 if self.low_mem else 1024
+
+        self._conv1 = FSConv2D(128)
+        self._conv2 = FSConv2D(256)
+        self._conv3 = FSConv2D(512)
+        if not self.low_mem:
+            self._conv4 = FSConv2D(1024)
+        self._dense1 = Dense(encoder_dims)
+        self._dense2 = Dense(4 * 4 * 1024)
+        self._flatten = Flatten()
+        self._reshape = Reshape((4, 4, 1024))
+        self._upscale = Upscale(512)
+
+    def call(self, inputs):
+        """ Call the Original Encoder Layer.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The input to the layer
+
+        Returns
+        -------
+        Tensor
+            The output from the layer
+        """
+        var_x = self._conv1(inputs)
+        var_x = self._conv2(var_x)
+        var_x = self._conv3(var_x)
+        if not self.low_mem:
+            var_x = self._conv4(var_x)
+        var_x = self._dense1(self._flatten(var_x))
+        var_x = self._dense2(var_x)
+        var_x = self._reshape(var_x)
+        var_x = self._upscale(var_x)
+        return var_x
+
+    def get_config(self):
+        """Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be reinstated later (without its trained weights) from this
+        configuration.
+
+        The configuration of a layer does not include connectivity information, nor the layer
+        class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
+        return dict(low_mem=self.low_mem)
+
+
+class Decoder(Layer):
+    """ Original Decoder Network
+
+    Parameters
+    ----------
+    side: ['a', 'b']
+        The side that this decoder resides on. Used for naming
+    learn_mask: bool
+        ``True`` if the model should learn the mask otherwise ``False``
+    kwargs: dict
+        Any additional standard Keras layer key word arguments
+    """
+    def __init__(self, side, learn_mask, **kwargs):
+        super().__init__(name="original_decoder_{}".format(side), **kwargs)
+        self.learn_mask = learn_mask
+
+        self._upscale1 = Upscale(256)
+        self._upscale2 = Upscale(128)
+        self._upscale3 = Upscale(64)
+        # TODO Need to move this to NN Blocks so we use our initializers etc. See also mask conv
+        # TODO Output name does not appear to cascade, so need a mechanism for naming
+        self._conv = Conv2D(3,
+                            kernel_size=5,
+                            strides=(1, 1),
+                            padding="same",
+                            activation="sigmoid",
+                            name="face_out_{}".format(side))
+
+        if self.learn_mask:
+            self._mask_upscale1 = Upscale(256)
+            self._mask_upscale2 = Upscale(128)
+            self._mask_upscale3 = Upscale(64)
+            self._mask_conv = Conv2D(1,
+                                     kernel_size=5,
+                                     strides=(1, 1),
+                                     padding="same",
+                                     activation="sigmoid",
+                                     name="mask_out_{}".format(side))
+
+    def call(self, inputs):
+        """ Call the Original Decoder Layer.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The input to the layer
+
+        Returns
+        -------
+        Tensor
+            The output from the layer
+        """
+        face_input, mask_input = inputs
+
+        var_x = self._upscale1(face_input)
+        var_x = self._upscale2(var_x)
+        var_x = self._upscale3(var_x)
+        var_x = self._conv(var_x)
+
+        if self.learn_mask:
+            var_y = self._mask_upscale1(mask_input)
+            var_y = self._mask_upscale2(var_y)
+            var_y = self._mask_upscale3(var_y)
+            var_y = self._mask_conv(var_y)
+            output = [var_x, var_y]
+        else:
+            output = var_x
+
+        return output
+
+    def get_config(self):
+        """Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be reinstated later (without its trained weights) from this
+        configuration.
+
+        The configuration of a layer does not include connectivity information, nor the layer
+        class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
+        return dict(learn_mask=self.learn_mask)

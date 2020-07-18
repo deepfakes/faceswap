@@ -467,7 +467,7 @@ class ImageAugmentation():
             * **masks** (`numpy.ndarray`) - A 4-dimensional array containing the target masks in \
             the format (`batchsize`, `height`, `width`, `1`).
         """
-        logger.trace("Compiling targets")
+        logger.trace("Compiling targets: batch shape: %s", batch.shape)
         slices = self._constants["tgt_slices"]
         target_batch = [np.array([cv2.resize(image[slices, slices, :],
                                              (size, size),
