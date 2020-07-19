@@ -265,18 +265,20 @@ class TrainerBase():
                    "\n4) Use a more lightweight model, or select the model's 'LowMem' option "
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
-        loss = loss if isinstance(loss, list) else [loss]
-        print(loss)
-        if not do_preview and not do_timelapse:
-            return
+        self._model.state.increment_iterations()
+        self._store_history(loss)
+
+        print("\r{}".format(loss), end="")
+
+        if do_snapshot:
+            self._model.snapshot()
+
         if do_preview:
             self._batcher.generate_preview(do_preview)
             self._samples.images = self._batcher.compile_sample(None)
             samples = self._samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
-
-        return
         # TODO
 #        try:
 #            for side, batcher in self._batchers.items():
@@ -310,19 +312,20 @@ class TrainerBase():
 #        except Exception as err:
 #            raise err
 
-    def _store_history(self, side, loss):
+    def _store_history(self, loss):
         """ Store the loss for this step into :attr:`model.history`.
 
         Parameters
         ----------
-        side: {"a", "b"}
-            The side to store the loss for
         loss: list
-            The list of loss ``floats`` for this side
+            The list of loss ``floats`` for this iteration.
         """
-        logger.trace("Updating loss history: '%s'", side)
-        self._model.history[side].append(loss[0])  # Either only loss or total loss
-        logger.trace("Updated loss history: '%s'", side)
+        save_loss = loss[1:]
+        split = len(save_loss) // 2
+        a_loss, b_loss = sum(save_loss[:split]), sum(save_loss[split:])
+        logger.trace("a_loss: %s, b_loss: %s", a_loss, b_loss)
+        self._model.history[0].append(a_loss)
+        self._model.history[1].append(b_loss)
 
     def _log_tensorboard(self, side, loss):
         """ Log current loss to Tensorboard log files

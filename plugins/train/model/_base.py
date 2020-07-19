@@ -11,7 +11,6 @@ import platform
 import sys
 import time
 
-from concurrent import futures
 from contextlib import nullcontext
 
 import tensorflow as tf
@@ -72,29 +71,29 @@ class ModelBase():
         self.output_shape = None  # Must be set within the plugin after initializing
         self.trainer = "original"  # Override for plugin specific trainer
 
-        self._model_dir = model_dir
         self._args = arguments
+        self._io = IO(self, model_dir, predict)
+
         self._is_predict = predict
         self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
 
         self._model = None
-        self._backup = Backup(self._model_dir, self.name)
 
         self._load_config()  # Load config if plugin has not already referenced it
         self._strategy = Strategy(self._args.distribution)
 
-        self.state = State(self._model_dir,
+        self.state = State(model_dir,
                            self.name,
                            self._config_changeable_items,
                            self._args.no_logs,
                            training_image_size)
 
-        self.load_state_info()
+        self._load_state_info()
 
         # The variables holding masks if Penalized Loss is used
         self._mask_variables = dict(a=None, b=None)
         self.predictors = dict()  # Predictors for model
-        self.history = dict()  # Loss history per save iteration)
+        self.history = [[], []]  # Loss histories per save iteration
 
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
@@ -106,7 +105,7 @@ class ModelBase():
                               "snapshot_interval": snapshot_interval,
                               "training_size": self.state.training_size,
                               "no_logs": self.state.current_session["no_logs"],
-                              "coverage_ratio": self.calculate_coverage_ratio(),
+                              "coverage_ratio": self._calculate_coverage_ratio(),
                               "mask_type": self.config["mask_type"],
                               "mask_blur_kernel": self.config["mask_blur_kernel"],
                               "mask_threshold": self.config["mask_threshold"],
@@ -115,7 +114,7 @@ class ModelBase():
                               "penalized_mask_loss": self.config["penalized_mask_loss"]}
         logger.debug("training_opts: %s", self.training_opts)
 
-        if self._multiple_models_in_folder:
+        if self._io.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
                                 additional_info="Please split each model into separate folders to "
                                                 "avoid issues in future.")
@@ -124,19 +123,7 @@ class ModelBase():
     @property
     def model_dir(self):
         """str: The full path to the model folder location. """
-        return self._model_dir
-
-    @property
-    def _filename(self):
-        """str: The filename for this model."""
-        return os.path.join(self._model_dir, "{}.h5".format(self.name))
-
-    @property
-    def _model_exists(self):
-        """ bool: ``True`` if a model of the type being loaded exists within the model folder
-        location otherwise ``False``
-        """
-        return os.path.isfile(self._filename)
+        return self._io._model_dir  # pylint:disable=protected-access
 
     @property
     def _config_section(self):
@@ -150,20 +137,9 @@ class ModelBase():
             created. """
         return Config(self._config_section, configfile=self._configfile).changeable_items
 
-    # TODO
-    @property
-    def _multiple_models_in_folder(self):
-        """ :bool: ``True`` if there are multiple model types in the same folder otherwise
-        ``false``. """
-        model_files = [fname for fname in os.listdir(self._model_dir) if fname.endswith(".h5")]
-        retval = False if not model_files else os.path.commonprefix(model_files) == ""
-        logger.debug("model_files: %s, retval: %s", model_files, retval)
-        return retval
-
     @property
     def config(self):
         """ dict: The configuration dictionary for current plugin. """
-        # TODO Check if config still needs to be globalled now that build is called explicitly
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
             model_name = self._config_section
@@ -263,6 +239,11 @@ class ModelBase():
         logger.debug("Created mask variables: %s", self._mask_variables)
         return self._mask_variables
 
+    @property
+    def iterations(self):
+        """ int: The total number of iterations that the model has trained. """
+        return self.state.iterations
+
     def _load_config(self):
         """ Load the global config for reference in :attr:`config` and set the faceswap blocks
         configuration options in `lib.model.nn_blocks` """
@@ -276,7 +257,7 @@ class ModelBase():
         set_nnblock_config({key: _CONFIG.pop(key)
                             for key in nn_block_keys})
 
-    def calculate_coverage_ratio(self):
+    def _calculate_coverage_ratio(self):
         """ Coverage must be a ratio, leading to a cropped shape divisible by 2 """
         coverage_ratio = self.config.get("coverage", 62.5) / 100
         logger.debug("Requested coverage_ratio: %s", coverage_ratio)
@@ -286,22 +267,43 @@ class ModelBase():
         return coverage_ratio
 
     def build(self):
-        """ Build the model. Override for custom build methods """
+        """ Build the model.
+
+        Within the defined strategy scope, either builds the model from scratch or loads an
+        existing model if one exists. The model is then compiled with the optimizer and chosen
+        loss function(s), Finally, a model summary is outputted to the logger at verbose level.
+
+        The compiled model is allocated to :attr:`_model`.
+        """
         with self._strategy.scope():
-            if self._model_exists:
-                self._load_model()
+            if self._io.model_exists:
+                self._model = self._io.load()
             else:
-                inputs = self.get_inputs()
+                inputs = self._get_inputs()
                 self._model = self.build_model(inputs)
             self._compile_model(initialize=True)
         if not self._is_predict:
             self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
 
-    def get_inputs(self):
-        """ Return the inputs for the model """
+    def _get_inputs(self):
+        """ Obtain the standardized inputs for the model.
+
+        The inputs will be returned for the "A" and "B" sides in the shape as defined by
+        :attr:`input_shape`.
+
+        Returns
+        -------
+        list
+            A list of :class:`keras.layers.Input` tensors. If just a face is being fed in then this
+            will be a list of 2 tensors (one for each side) each of shape :attr:`input_shape`. If a
+            mask is to be passed into the model, then the list will contain 2 sub-lists (one for
+            each side), with each sub-list containing the input tenor for the face of
+            :attr:`input_shape` and the input tensor for the mask, with the same shape as the face,
+            but with just a single channel.
+        """
         logger.debug("Getting inputs")
         if self.feed_mask:
-            mask_shape = self.output_shape[:2] + (1, )
+            mask_shape = self.input_shape[:2] + (1, )
             logger.info("mask_shape: %s", mask_shape)
         inputs = []
         for side in ("a", "b"):
@@ -315,16 +317,34 @@ class ModelBase():
         return inputs
 
     def build_model(self, inputs):
-        """ Override for Model Specific autoencoder builds
+        """ Override for Model Specific autoencoder builds.
 
-            Inputs is defined in self.get_inputs() and is standardized for all models
-                if will generally be in the order:
-                [face (the input for image),
-                 mask (the input for mask if it is used)]
+        Parameters
+        ----------
+        inputs: list
+            The inputs to the model as returned from the :func:`_get_inputs`. This will be a list
+            of :class:`keras.layers.Input` tensors. If just a face is being fed in then this will
+            be a list of 2 tensors (one for each side) each of shape :attr:`input_shape`. If a mask
+            is to be passed into the model, then the list will contain 2 sub-lists (one for each
+            side), with each sub-list containing the input tenor for the face of
+            :attr:`input_shape` and the input tensor for the mask, with the same shape as the face,
+            but with just a single channel.
         """
         raise NotImplementedError
 
-    def load_state_info(self):
+    def save(self):
+        """ Save the model to disk.
+
+        Saves the serialized model, with weights, to the folder location specified when
+        initializing the plugin.
+        """
+        self._io._save()  # pylint:disable=protected-access
+
+    def snapshot(self):
+        """ Create a snapshot of the model folder. """
+        self._io._snapshot()  # pylint:disable=protected-access
+
+    def _load_state_info(self):
         """ Load the input shape from state file if it exists """
         logger.debug("Loading Input Shape from State file")
         if not self.state.inputs:
@@ -427,143 +447,166 @@ class ModelBase():
         logger.debug("Got Converter: %s", retval)
         return retval
 
+
+class IO():
+    """ Model saving and loading functions.
+
+    Handles the loading and saving of the plugin model from disk as well as the model backup and
+    snapshot functions.
+
+    Parameters
+    ----------
+    plugin: :class:`Model`
+        The parent plugin class that owns the IO functions.
+    model_dir: str
+        The full path to the model save location
+    is_predict: bool
+        ``True`` if the model is being loaded for inference. ``False`` if the model is being loaded
+        for training.
+    """
+    def __init__(self, plugin, model_dir, is_predict):
+        self._plugin = plugin
+        self._is_predict = is_predict
+        self._model_dir = model_dir
+        self._backup = Backup(self._model_dir, self._plugin.name)
+
     @property
-    def iterations(self):
-        "Get current training iteration number"
-        return self.state.iterations
+    def _filename(self):
+        """str: The filename for this model."""
+        return os.path.join(self._model_dir, "{}.h5".format(self._plugin.name))
 
-    def map_models(self, swapped):
-        """ Map the models for A/B side for swapping """
-        logger.debug("Map models: (swapped: %s)", swapped)
-        models_map = {"a": dict(), "b": dict()}
-        sides = ("a", "b") if not swapped else ("b", "a")
-        for network in self.networks.values():
-            if network.side == sides[0]:
-                models_map["a"][network.type] = network.filename
-            if network.side == sides[1]:
-                models_map["b"][network.type] = network.filename
-        logger.debug("Mapped models: (models_map: %s)", models_map)
-        return models_map
+    @property
+    def model_exists(self):
+        """ bool: ``True`` if a model of the type being loaded exists within the model folder
+        location otherwise ``False``.
+        """
+        return os.path.isfile(self._filename)
 
-    def do_snapshot(self):
-        """ Perform a model snapshot """
-        logger.debug("Performing snapshot")
-        self._backup.snapshot_models(self.iterations)
-        logger.debug("Performed snapshot")
+    # TODO
+    @property
+    def multiple_models_in_folder(self):
+        """ :bool: ``True`` if there are multiple model types in the same folder otherwise
+        ``false``. """
+        model_files = [fname for fname in os.listdir(self._model_dir) if fname.endswith(".h5")]
+        retval = False if not model_files else os.path.commonprefix(model_files) == ""
+        logger.debug("model_files: %s, retval: %s", model_files, retval)
+        return retval
 
-    def _load_model(self):
-        """ Loads the model from disk and sets to :attr:`_model`
+    def load(self):
+        """ Loads the model from disk
 
         If the predict function is to be called and the model cannot be found in the model folder
         then an error is logged and the process exits.
 
         When loading the model, the plugin model folder is scanned for custom layers which are
         added to Keras' custom objects.
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The saved model loaded from disk
         """
         logger.debug("Loading model: %s", self._filename)
-        if self._is_predict and not self._model_exists:
+        if self._is_predict and not self.model_exists:
             logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
         if not self._is_predict:
             K.clear_session()
         self._add_custom_objects()
-        self._model = load_model(self._filename)
+        model = load_model(self._filename)
         logger.info("Loaded model from disk: '%s'", self._filename)
+        return model
 
     def _add_custom_objects(self):
         """ Add the plugin's layers to Keras custom objects """
         custom_objects = {name: obj
-                          for name, obj in inspect.getmembers(sys.modules[self.__module__])
+                          for name, obj in inspect.getmembers(sys.modules[self._plugin.__module__])
                           if (inspect.isclass(obj)
-                              and obj.__module__ == self.__module__
+                              and obj.__module__ == self._plugin.__module__
                               and Layer in obj.__bases__)}
         logger.debug("Adding custom objects: %s", custom_objects)
         get_custom_objects().update(custom_objects)
 
-    def save_models(self):
-        """ Backup and save the models """
-        # TODO
-        self._model.save(self._filename, include_optimizer=False)
-        return
+    def _save(self):
+        """ Backup and save the models.
+
+        Notes
+        -----
+        The backup function actually backups the model from the previous save iteration rather than
+        the current save iteration. This is not a bug, but protection against long save times, as
+        models can get quite large, so renaming the current model file rather than copying it can
+        save quite a large amount of time.
+        """
         logger.debug("Backing up and saving models")
-        # Insert a new line to avoid spamming the same row as loss output
-        print("")
-        save_averages = self.get_save_averages()
-        backup_func = self._backup.backup_model if self.should_backup(save_averages) else None
-        if backup_func:
-            logger.info("Backing up models...")
-        executor = futures.ThreadPoolExecutor()
-        save_threads = [executor.submit(network.save, backup_func=backup_func)
-                        for network in self.networks.values()]
-        save_threads.append(executor.submit(self.state.save, backup_func=backup_func))
-        futures.wait(save_threads)
-        # call result() to capture errors
-        _ = [thread.result() for thread in save_threads]
+        print("")  # Insert a new line to avoid spamming the same row as loss output
+        save_averages = self._get_save_averages()
+        if save_averages and self._should_backup(save_averages):
+            self._backup.backup_model(self._filename)
+
+        self._plugin._model.save(self._filename, include_optimizer=False)
+
         msg = "[Saved models]"
         if save_averages:
-            lossmsg = ["{}_{}: {:.5f}".format(self.state.loss_names[side][0],
-                                              side.capitalize(),
-                                              save_averages[side])
-                       for side in sorted(list(save_averages.keys()))]
-            msg += " - Average since last save: {}".format(", ".join(lossmsg))
+            lossmsg = ["face_{}: {:.5f}".format(side, avg)
+                       for side, avg in zip(("a", "b"), save_averages)]
+            msg += " - Average loss since last save: {}".format(", ".join(lossmsg))
         logger.info(msg)
 
-    def get_save_averages(self):
+    def _get_save_averages(self):
         """ Return the average loss since the last save iteration and reset historical loss """
         logger.debug("Getting save averages")
-        avgs = dict()
-        for side, loss in self.history.items():
-            if not loss:
-                logger.debug("No loss in self.history: %s", side)
-                break
-            avgs[side] = sum(loss) / len(loss)
-            self.history[side] = list()  # Reset historical loss
-        logger.debug("Average losses since last save: %s", avgs)
-        return avgs
+        if not all(loss for loss in self._plugin.history):
+            logger.debug("No loss in history")
+            retval = []
+        else:
+            retval = [sum(loss) / len(loss) for loss in self._plugin.history]
+            self._plugin.history = [[], []]  # Reset historical loss
+        logger.debug("Average losses since last save: %s", retval)
+        return retval
 
-    def should_backup(self, save_averages):
-        """ Check whether the loss averages for all losses is the lowest that has been seen.
+    def _should_backup(self, save_averages):
+        """ Check whether the loss averages for this save iteration is the lowest that has been
+        seen.
 
-            This protects against model corruption by only backing up the model
-            if any of the loss values have fallen.
-            TODO This is not a perfect system. If the model corrupts on save_iteration - 1
-            then model may still backup
+        This protects against model corruption by only backing up the model if both sides have
+        seen a total fall in loss.
+
+        Notes
+        -----
+        This is by no means a perfect system. If the model corrupts at an iteration close
+        to a save iteration, then the averages may still be pushed lower than a previous
+        save average, resulting in backing up a corrupted model.
+
+        Parameters
+        ----------
+        save_averages: list
+            The average loss for each side for this save iteration
         """
         backup = True
-
-        if not save_averages:
-            logger.debug("No save averages. Not backing up")
-            return False
-
-        for side, loss in save_averages.items():
-            if not self.state.lowest_avg_loss.get(side, None):
-                logger.debug("Setting initial save iteration loss average for '%s': %s",
-                             side, loss)
-                self.state.lowest_avg_loss[side] = loss
+        for side, loss in zip(("a", "b"), save_averages):
+            if not self._plugin.state.lowest_avg_loss.get(side, None):
+                logger.debug("Set initial save iteration loss average for '%s': %s", side, loss)
+                self._plugin.state.lowest_avg_loss[side] = loss
                 continue
-            if backup:
-                # Only run this if backup is true. All losses must have dropped for a valid backup
-                backup = self.check_loss_drop(side, loss)
+            backup = loss < self._plugin.state.lowest_avg_loss[side] if backup else backup
 
-        logger.debug("Lowest historical save iteration loss average: %s",
-                     self.state.lowest_avg_loss)
+        if backup:  # Update lowest loss values to the state file
+            # pylint:disable=unnecessary-comprehension
+            old_avgs = {key: val for key, val in self._plugin.state.lowest_avg_loss.items()}
+            self._plugin.state.lowest_avg_loss["a"] = save_averages[0]
+            self._plugin.state.lowest_avg_loss["b"] = save_averages[1]
+            logger.debug("Updated lowest historical save iteration averages from: %s to: %s",
+                         old_avgs, self._plugin.state.lowest_avg_loss)
 
-        if backup:  # Update lowest loss values to the state
-            for side, avg_loss in save_averages.items():
-                logger.debug("Updating lowest save iteration average for '%s': %s", side, avg_loss)
-                self.state.lowest_avg_loss[side] = avg_loss
-
-        logger.debug("Backing up: %s", backup)
+        logger.debug("Should backup: %s", backup)
         return backup
 
-    def check_loss_drop(self, side, avg):
-        """ Check whether total loss has dropped since lowest loss """
-        if avg < self.state.lowest_avg_loss[side]:
-            logger.debug("Loss for '%s' has dropped", side)
-            return True
-        logger.debug("Loss for '%s' has not dropped", side)
-        return False
+    def _snapshot(self):
+        """ Perform a model snapshot. """
+        logger.debug("Performing snapshot. Iterations: %s", self._plugin.iterations)
+        self._backup.snapshot_models(self._plugin.iterations)
+        logger.debug("Performed snapshot")
 
 
 class Strategy():
