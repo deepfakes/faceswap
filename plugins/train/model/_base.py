@@ -277,11 +277,11 @@ class ModelBase():
         """
         with self._strategy.scope():
             if self._io.model_exists:
-                self._model = self._io.load()
+                self._model = self._io._load()  # pylint:disable=protected-access
             else:
                 inputs = self._get_inputs()
                 self._model = self.build_model(inputs)
-            self._compile_model(initialize=True)
+            self._compile_model()
         if not self._is_predict:
             self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
 
@@ -378,25 +378,13 @@ class ModelBase():
         self.state.inputs = inputs
         logger.debug("Added input shapes: %s", self.state.inputs)
 
-    def _compile_model(self, initialize=True):
-        """ Compile the model to include the Optimizer and Loss Function.
-
-        If the model is being compiled for the first time then add the loss names to the
-        state file.
-
-        Parameters
-        ----------
-        initialize: bool
-            ``True`` if this is a new model otherwise ``False``
-        """
-        # TODO Remove initialize parameter and decide pathway based on if model file exists
-        logger.debug("Compiling Predictors")
+    def _compile_model(self):
+        """ Compile the model to include the Optimizer and Loss Function(s). """
+        logger.debug("Compiling Model")
         optimizer = self._get_optimizer()
         loss = Loss(self._model.inputs, self._model.outputs, None)
         self._model.compile(optimizer=optimizer, loss=loss.funcs)
-        if initialize:
-            self.state.add_session_loss_names("both", loss.names)
-        logger.info("Compiled Predictors. Losses: %s", loss.names)
+        logger.debug("Compiled Model: %s", self._model)
 
     def _get_optimizer(self):
         """ Return a Keras Adam Optimizer with user selected parameters.
@@ -492,7 +480,7 @@ class IO():
         logger.debug("model_files: %s, retval: %s", model_files, retval)
         return retval
 
-    def load(self):
+    def _load(self):
         """ Loads the model from disk
 
         If the predict function is to be called and the model cannot be found in the model folder
@@ -529,22 +517,24 @@ class IO():
         get_custom_objects().update(custom_objects)
 
     def _save(self):
-        """ Backup and save the models.
+        """ Backup and save the model and state file.
 
         Notes
         -----
         The backup function actually backups the model from the previous save iteration rather than
         the current save iteration. This is not a bug, but protection against long save times, as
         models can get quite large, so renaming the current model file rather than copying it can
-        save quite a large amount of time.
+        save substantial amount of time.
         """
         logger.debug("Backing up and saving models")
         print("")  # Insert a new line to avoid spamming the same row as loss output
         save_averages = self._get_save_averages()
         if save_averages and self._should_backup(save_averages):
             self._backup.backup_model(self._filename)
+            self._backup.backup_model(self._plugin.state.filename)
 
         self._plugin._model.save(self._filename, include_optimizer=False)
+        self._plugin.state.save()
 
         msg = "[Saved models]"
         if save_averages:
@@ -603,9 +593,15 @@ class IO():
         return backup
 
     def _snapshot(self):
-        """ Perform a model snapshot. """
+        """ Perform a model snapshot.
+
+        Notes
+        -----
+        Snapshot function is called 1 iteration after the model was saved, so that it is built from
+        the latest save, hence iteration being reduced by 1.
+        """
         logger.debug("Performing snapshot. Iterations: %s", self._plugin.iterations)
-        self._backup.snapshot_models(self._plugin.iterations)
+        self._backup.snapshot_models(self._plugin.iterations - 1)
         logger.debug("Performed snapshot")
 
 
@@ -694,12 +690,8 @@ class Loss():
         logger.debug("Initializing %s: (inputs: %s, outputs: %s, mask_variable: %s)",
                      self.__class__.__name__, inputs, outputs, mask_variable)
         self.inputs = inputs
-        self.outputs = outputs
         self._mask_variable = mask_variable
-        self.names = self.get_loss_names()
-        self.funcs = self.get_loss_functions()
-        if len(self.names) > 1:
-            self.names.insert(0, "total_loss")
+        self.funcs = self._get_loss_functions(outputs)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -748,11 +740,6 @@ class Loss():
         return retval
 
     @property
-    def output_shapes(self):
-        """ The shapes of the output nodes """
-        return [K.int_shape(output)[1:] for output in self.outputs]
-
-    @property
     def mask_input(self):
         """ Return the mask input or None """
         mask_inputs = [inp for inp in self.inputs if inp.name.startswith("mask")]
@@ -771,37 +758,26 @@ class Loss():
             retval = K.int_shape(self._mask_variable)
         return retval
 
-    def get_loss_names(self):
-        """ Return the loss names based on model output """
-        output_names = [output.name for output in self.outputs]
-        logger.info("Model output names: %s", output_names)
-        loss_names = [name[name.find("/") + 1:name.rfind("/")].replace("_out", "")
-                      for name in output_names]
-        if not all(name.startswith("face") or name.startswith("mask") for name in loss_names):
-            # Handle incorrectly named/legacy outputs
-            logger.info("Renaming loss names from: %s", loss_names)
-            loss_names = self.update_loss_names()
-        loss_names = ["{}_loss".format(name) for name in loss_names]
-        logger.info(loss_names)
-        return loss_names
+    def _get_loss_functions(self, outputs):
+        """ Set the loss functions.
 
-    def update_loss_names(self):
-        """ Update loss names if named incorrectly or legacy model """
-        output_types = ["mask" if shape[-1] == 1 else "face" for shape in self.output_shapes]
-        loss_names = ["{}{}".format(name,
-                                    "" if output_types.count(name) == 1 else "_{}".format(idx))
-                      for idx, name in enumerate(output_types)]
-        logger.debug("Renamed loss names to: %s", loss_names)
-        return loss_names
+        Parameters
+        ----------
+        outputs: list
+            A list of output tensors from the model plugin
 
-    def get_loss_functions(self):
-        """ Set the loss function """
+        list
+            A list of loss functions to apply to the model
+        """
+        # TODO naming for masks and multi-scale
         loss_funcs = []
-        for idx, loss_name in enumerate(self.names):
-            if loss_name.startswith("mask"):
+        output_shapes = [K.int_shape(output)[1:] for output in outputs]
+        output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
+        for idx, loss_type in enumerate(output_types):
+            if loss_type == "mask":
                 loss_funcs.append(self.selected_mask_loss)
             elif self.config["penalized_mask_loss"] and self.config["mask_type"] is not None:
-                face_size = self.output_shapes[idx][1]
+                face_size = output_shapes[idx][1]
                 mask_size = self.mask_shape[1]
                 scaling = face_size / mask_size
                 logger.debug("face_size: %s mask_size: %s, mask_scaling: %s",
@@ -811,7 +787,7 @@ class Loss():
                                                 preprocessing_func=self.mask_preprocessing_func))
             else:
                 loss_funcs.append(self.selected_loss)
-            logger.debug("%s: %s", loss_name, loss_funcs[-1])
+            logger.debug("%s: %s", loss_type, loss_funcs[-1])
         logger.debug(loss_funcs)
         return loss_funcs
 
@@ -963,11 +939,6 @@ class State():
         return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
 
     @property
-    def loss_names(self):
-        """ Return the loss names for this session """
-        return self.sessions[self.session_id]["loss_names"]
-
-    @property
     def current_session(self):
         """ Return the current session dict """
         return self.sessions[self.session_id]
@@ -991,15 +962,9 @@ class State():
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
-                                          "loss_names": dict(),
                                           "batchsize": 0,
                                           "iterations": 0,
                                           "config": config_changeable_items}
-
-    def add_session_loss_names(self, side, loss_names):
-        """ Add the session loss names to the sessions dictionary """
-        logger.debug("Adding session loss_names. (side: '%s', loss_names: %s", side, loss_names)
-        self.sessions[self.session_id]["loss_names"][side] = loss_names
 
     def add_session_batchsize(self, batchsize):
         """ Add the session batchsize to the sessions dictionary """
@@ -1028,11 +993,9 @@ class State():
         logger.debug("Loaded state: %s", state)
         self.replace_config(config_changeable_items)
 
-    def save(self, backup_func=None):
+    def save(self):
         """ Save iteration number to state file """
         logger.debug("Saving State")
-        if backup_func:
-            backup_func(self.filename)
         state = {"name": self.name,
                  "sessions": self.sessions,
                  "lowest_avg_loss": self.lowest_avg_loss,

@@ -204,23 +204,6 @@ class TrainerBase():
         logger.info("Enabled TensorBoard Logging")
         return tensorboard
 
-    def __print_loss(self, loss):
-        """ Outputs the loss for the current iteration to the console.
-
-        Parameters
-        ----------
-        loss: dict
-            The loss for each side. The dictionary should contain 2 keys ("a" and "b") with the
-            values being a list of loss values for the current iteration corresponding to
-            each side.
-         """
-        logger.trace(loss)
-        output = ["Loss {}: {:.5f}".format(side.capitalize(), loss[side][0])
-                  for side in sorted(loss.keys())]
-        output = ", ".join(output)
-        output = "[{}] [#{:05d}] {}".format(self._timestamp, self._model.iterations, output)
-        print("\r{}".format(output), end="")
-
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Running training on a batch of images for each side.
 
@@ -245,10 +228,9 @@ class TrainerBase():
         do_timelapse = timelapse_kwargs is not None
         snapshot_interval = self._model.training_opts.get("snapshot_interval", 0)
         do_snapshot = (snapshot_interval != 0 and
-                       self._model.iterations >= snapshot_interval and
-                       self._model.iterations % snapshot_interval == 0)
+                       self._model.iterations - 1 >= snapshot_interval and
+                       (self._model.iterations - 1) % snapshot_interval == 0)
 
-        loss = dict()
         model_inputs, model_targets = self._batcher.get_batch()
 
         try:
@@ -265,10 +247,9 @@ class TrainerBase():
                    "\n4) Use a more lightweight model, or select the model's 'LowMem' option "
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
-        self._model.state.increment_iterations()
-        self._store_history(loss)
 
-        print("\r{}".format(loss), end="")
+        loss = self._collate_and_store_loss(loss[1:])
+        self._print_loss(loss)
 
         if do_snapshot:
             self._model.snapshot()
@@ -279,6 +260,9 @@ class TrainerBase():
             samples = self._samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
+
+        self._model.state.increment_iterations()
+
         # TODO
 #        try:
 #            for side, batcher in self._batchers.items():
@@ -312,20 +296,39 @@ class TrainerBase():
 #        except Exception as err:
 #            raise err
 
-    def _store_history(self, loss):
-        """ Store the loss for this step into :attr:`model.history`.
+    def _collate_and_store_loss(self, loss):
+        """ Collate the loss into totals for each side and store in :attr:`model.history`.
 
         Parameters
         ----------
         loss: list
             The list of loss ``floats`` for this iteration.
+
+        Returns
+        -------
+        list
+            List of 2 ``floats`` which is the total loss for each side
         """
-        save_loss = loss[1:]
-        split = len(save_loss) // 2
-        a_loss, b_loss = sum(save_loss[:split]), sum(save_loss[split:])
-        logger.trace("a_loss: %s, b_loss: %s", a_loss, b_loss)
-        self._model.history[0].append(a_loss)
-        self._model.history[1].append(b_loss)
+        split = len(loss) // 2
+        combined_loss = [sum(loss[:split]), sum(loss[split:])]
+        self._model.history[0].append(combined_loss[0])
+        self._model.history[1].append(combined_loss[1])
+        logger.trace("original loss: %s, comibed_loss: %s", loss, combined_loss)
+        return combined_loss
+
+    def _print_loss(self, loss):
+        """ Outputs the loss for the current iteration to the console.
+
+        Parameters
+        ----------
+        loss: list
+            The loss for each side. List should contain 2 ``floats`` side "a" in position 0 and
+            side "b" in position `.
+         """
+        output = ", ".join(["Loss {}: {:.5f}".format(side, side_loss)
+                            for side, side_loss in zip(("A", "B"), loss)])
+        output = "[{}] [#{:05d}] {}".format(self._timestamp, self._model.iterations, output)
+        print("\r{}".format(output), end="")
 
     def _log_tensorboard(self, side, loss):
         """ Log current loss to Tensorboard log files
