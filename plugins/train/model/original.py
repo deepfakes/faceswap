@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """ Original Model
     Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions. """
-from keras.layers import Dense, Flatten, Reshape, Conv2D, Input
+from keras.layers import Dense, Flatten, Reshape, Input
 
-from lib.model.nn_blocks import FSConv2D, FSUpscale
+from lib.model.nn_blocks import Conv2D, Conv2DBlock, FSUpscale
 from ._base import KerasModel, ModelBase, logger
 
 
@@ -100,11 +100,11 @@ class Model(ModelBase):
         """
         input_ = Input(shape=self.input_shape)
         var_x = input_
-        var_x = FSConv2D(128)(var_x)
-        var_x = FSConv2D(256)(var_x)
-        var_x = FSConv2D(512)(var_x)
+        var_x = Conv2DBlock(128)(var_x)
+        var_x = Conv2DBlock(256)(var_x)
+        var_x = Conv2DBlock(512)(var_x)
         if not self.low_mem:
-            var_x = FSConv2D(1024)(var_x)
+            var_x = Conv2DBlock(1024)(var_x)
         var_x = Dense(self.encoder_dim)(Flatten()(var_x))
         var_x = Dense(4 * 4 * 1024)(var_x)
         var_x = Reshape((4, 4, 1024))(var_x)
@@ -129,13 +129,7 @@ class Model(ModelBase):
         var_x = FSUpscale(256)(var_x)
         var_x = FSUpscale(128)(var_x)
         var_x = FSUpscale(64)(var_x)
-        # TODO
-        var_x = Conv2D(3,
-                       kernel_size=5,
-                       strides=(1, 1),
-                       padding="same",
-                       activation="sigmoid",
-                       name="face_out_{}".format(side))(var_x)
+        var_x = Conv2D(3, 5, activation="sigmoid", name="face_out_{}".format(side))(var_x)
         outputs = [var_x]
 
         if self.learn_mask:
@@ -143,11 +137,6 @@ class Model(ModelBase):
             var_x = FSUpscale(256)(var_y)
             var_x = FSUpscale(128)(var_y)
             var_x = FSUpscale(64)(var_y)
-            # TODO
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out_{}".format(side))(var_y)
+            var_y = Conv2D(1, 5, activation="sigmoid", name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))

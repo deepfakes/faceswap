@@ -3,8 +3,8 @@
 
 import logging
 
-from keras.layers import (Activation, Add, Concatenate, Conv2D, LeakyReLU, SeparableConv2D,
-                          UpSampling2D)
+from keras.layers import (Activation, Add, Concatenate, Conv2D as KConv2D, LeakyReLU,
+                          SeparableConv2D, UpSampling2D)
 from keras.initializers import he_uniform, VarianceScaling
 
 from .initializers import ICNR, ConvolutionAware
@@ -158,48 +158,6 @@ class NNBlocks():
         kwargs["kernel_initializer"] = initializer
         logger.debug("Switched kernel_initializer from %s to %s", original, initializer)
         return original
-
-    def conv2d(self, input_tensor, filters, kernel_size, strides=(1, 1), padding="same", **kwargs):
-        """ A standard Convolution 2D layer with correct initialization.
-
-        This layer creates a convolution kernel that is convolved with the layer input to produce
-        a tensor of outputs.
-
-        Parameters
-        ----------
-        input_tensor: tensor
-            The input tensor to the layer
-        filters: int
-            The dimensionality of the output space (i.e. the number of output filters in the
-            convolution)
-        kernel_size: int
-            An integer or tuple/list of 2 integers, specifying the height and width of the 2D
-            convolution window. Can be a single integer to specify the same value for all spatial
-            dimensions
-        strides: tuple, optional
-            An integer or tuple/list of 2 integers, specifying the strides of the convolution along
-            the height and width. Can be a single integer to specify the same value for all spatial
-            dimensions. Default: `(1, 1)`
-        padding: ["valid", "same"], optional
-            The padding to use. Default: `"same"`
-        kwargs: dict
-            Any additional Keras standard layer keyword arguments
-
-        Returns
-        -------
-        tensor
-            The output tensor from the Convolution 2D Layer
-        """
-        logger.debug("input_tensor: %s, filters: %s, kernel_size: %s, strides: %s, padding: %s, "
-                     "kwargs: %s)", input_tensor, filters, kernel_size, strides, padding, kwargs)
-        if kwargs.get("name", None) is None:
-            kwargs["name"] = self._get_name("conv2d_{}".format(input_tensor.shape[1]))
-        kwargs = self._set_default_initializer(kwargs)
-        var_x = Conv2D(filters, kernel_size,
-                       strides=strides,
-                       padding=padding,
-                       **kwargs)(input_tensor)
-        return var_x
 
     # <<< DLight Model Blocks >>> #
     def upscale2x(self, input_tensor, filters,
@@ -411,38 +369,69 @@ def _get_name(name):
 # TODO Output Name
 
 
-def _get_default_initializer(initializer):
-    """ Returns a default initializer of Convolutional Aware or he_uniform for convolutional
-    layers.
+class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods
+    """ A standard Keras Convolution 2D layer with parameters updated to be more appropriate for
+     Faceswap architecture.
+
+    Parameters are the same, with the same defaults, as a standard :class:``keras.layers.Conv2D``
+    except where listed below. The default initializer is updated to he_uniform or convolutional
+    aware based on user config settings.
 
     Parameters
     ----------
-    initializer: :class:`keras.initializers.Initializer` or None
-        The initializer that has been passed into the model. If this value is ``None`` then a
-        default initializer will be returned based on the configuration choices, otherwise
-        the given initializer will be returned.
-
-    Returns
-    -------
-    :class:`keras.initializers.Initializer`
-        The kernel initializer to use for this convolutional layer. Either the original given
-        initializer, he_uniform or convolutional aware (if selected in config options)
+    padding: str, optional
+        One of `"valid"` or `"same"` (case-insensitive). Default: `"same"`. Note that `"same"` is
+        slightly inconsistent across backends with `strides` != 1, as described
+        [here](https://github.com/keras-team/keras/pull/9473#issuecomment-372166860)
+    check_icnr_init: `bool`, optional
+        ``True`` if the user configuration options should be checked to apply ICNR initialization
+        to the layer. This should only be passed in from :class:`FSUpscale` layers.
+        Default: ``False``
     """
-    if initializer is None:
-        retval = ConvolutionAware() if _CONFIG["conv_aware_init"] else he_uniform()
-        logger.debug("Set default kernel_initializer: %s", retval)
-    else:
-        retval = initializer
-        logger.debug("Using model supplied initializer: %s", retval)
-    return retval
+    def __init__(self, *args, padding="same", check_icnr_init=False, **kwargs):
+        if kwargs.get("name", None) is None:
+            kwargs["name"] = self._get_name("conv2d_{}".format(args[0]))
+        initializer = self._get_default_initializer(kwargs.pop("kernel_initializer", None))
+        if check_icnr_init and _CONFIG["icnr_init"]:
+            initializer = ICNR(initializer=initializer)
+            logger.debug("Using ICNR Initializer: %s", initializer)
+        super().__init__(*args, padding=padding, kernel_initializer=initializer, **kwargs)
+
+    @classmethod
+    def _get_default_initializer(cls, initializer):
+        """ Returns a default initializer of Convolutional Aware or he_uniform for convolutional
+        layers.
+
+        Parameters
+        ----------
+        initializer: :class:`keras.initializers.Initializer` or None
+            The initializer that has been passed into the model. If this value is ``None`` then a
+            default initializer will be returned based on the configuration choices, otherwise
+            the given initializer will be returned.
+
+        Returns
+        -------
+        :class:`keras.initializers.Initializer`
+            The kernel initializer to use for this convolutional layer. Either the original given
+            initializer, he_uniform or convolutional aware (if selected in config options)
+        """
+        if initializer is None:
+            retval = ConvolutionAware() if _CONFIG["conv_aware_init"] else he_uniform()
+            logger.debug("Set default kernel_initializer: %s", retval)
+        else:
+            retval = initializer
+            logger.debug("Using model supplied initializer: %s", retval)
+        return retval
 
 
-class FSConv2D():
+class Conv2DBlock():  # pylint:disable=too-few-public-methods
     """ A standard Convolution 2D layer which applies user specified configuration to the
     layer.
 
     Adds reflection padding if it has been selected by the user, and other post-processing
     if requested by the plugin.
+
+    Adds instance normalization if requested. Adds a LeakyReLU if a residual block follows.
 
     Parameters
     ----------
@@ -469,7 +458,8 @@ class FSConv2D():
     kwargs: dict
         Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
     """
-    def __init__(self, filters,
+    def __init__(self,
+                 filters,
                  kernel_size=5,
                  strides=2,
                  padding="same",
@@ -480,6 +470,8 @@ class FSConv2D():
                      "%s, res_block_follows: %s, kwargs: %s)", filters, kernel_size, strides,
                      padding, use_instance_norm, res_block_follows, kwargs)
         self._use_reflect_padding = _CONFIG["reflect_padding"]
+        self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
+            "conv_{}".format(filters))
 
         self._filters = filters
         self._kernel_size = kernel_size
@@ -488,10 +480,6 @@ class FSConv2D():
         self._kwargs = kwargs
         self._use_instance_norm = use_instance_norm
         self._res_block_follows = res_block_follows
-
-        self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
-            "conv_{}".format(filters))
-        self._initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
 
     def __call__(self, inputs):
         """ Call the Faceswap Convolutional Layer.
@@ -511,11 +499,10 @@ class FSConv2D():
                                          kernel_size=self._kernel_size,
                                          name="{}_reflectionpadding2d".format(self._name))(inputs)
         var_x = Conv2D(self._filters,
-                       kernel_size=self._kernel_size,
+                       self._kernel_size,
                        strides=self._strides,
                        padding=self._padding,
                        name="{}_conv2d".format(self._name),
-                       kernel_initializer=self._initializer,
                        **self._kwargs)(inputs)
         if self._use_instance_norm:
             var_x = InstanceNormalization(name="{}_instancenorm".format(self._name))(var_x)
@@ -524,7 +511,7 @@ class FSConv2D():
         return var_x
 
 
-class FSUpscale():
+class FSUpscale():  # pylint:disable=too-few-public-methods
     """ An upscale layer for sub-pixel up-scaling.
 
     Adds reflection padding if it has been selected by the user, and other post-processing
@@ -532,8 +519,6 @@ class FSUpscale():
 
     Parameters
     ----------
-    input_tensor: tensor
-        The input tensor to the layer
     filters: int
         The dimensionality of the output space (i.e. the number of output filters in the
         convolution)
@@ -544,19 +529,20 @@ class FSUpscale():
     padding: ["valid", "same"], optional
         The padding to use. NB: If reflect padding has been selected in the user configuration
         options, then this argument will be ignored in favor of reflect padding. Default: `"same"`
+    scale_factor: int, optional
+        The amount to upscale the image. Default: `2`
     use_instance_norm: bool, optional
         ``True`` if instance normalization should be applied after the convolutional layer.
         Default: ``False``
     res_block_follows: bool, optional
         If a residual block will follow this layer, then this should be set to `True` to add
         a leaky ReLu after the convolutional layer. Default: ``False``
-    scale_factor: int, optional
-        The amount to upscale the image. Default: `2`
     kwargs: dict
-        Any additional Keras standard layer keyword arguments
+        Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
     """
 
-    def __init__(self, filters,
+    def __init__(self,
+                 filters,
                  kernel_size=3,
                  padding="same",
                  scale_factor=2,
@@ -567,6 +553,8 @@ class FSUpscale():
                      "use_instance_norm: %s, res_block_follows: %s, kwargs: %s)", filters,
                      kernel_size, padding, scale_factor, use_instance_norm, res_block_follows,
                      kwargs)
+        self._name = _get_name("upscale_{}".format(filters))
+
         self._filters = filters
         self._kernel_size = kernel_size
         self._padding = padding
@@ -574,13 +562,6 @@ class FSUpscale():
         self._use_instance_norm = use_instance_norm
         self._res_block_follows = res_block_follows
         self._kwargs = kwargs
-
-        self._name = _get_name("upscale_{}".format(filters))
-
-        self._initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
-        if _CONFIG["icnr_init"]:
-            self._initializer = ICNR(initializer=self._initializer)
-            logger.debug("Using ICNR Initializer: %s", self._initializer)
 
     def __call__(self, inputs):
         """ Call the Faceswap Convolutional Layer.
@@ -595,15 +576,15 @@ class FSUpscale():
         Tensor
             The output tensor from the Upscale Layer
         """
-        var_x = FSConv2D(self._filters * self._scale_factor * self._scale_factor,
-                         kernel_size=self._kernel_size,
-                         strides=(1, 1),
-                         padding=self._padding,
-                         use_instance_norm=self._use_instance_norm,
-                         res_block_follows=self._res_block_follows,
-                         name="{}_conv2d".format(self._name),
-                         kernel_initializer=self._initializer,
-                         **self._kwargs)(inputs)
+        var_x = Conv2DBlock(self._filters * self._scale_factor * self._scale_factor,
+                            self._kernel_size,
+                            strides=(1, 1),
+                            padding=self._padding,
+                            use_instance_norm=self._use_instance_norm,
+                            res_block_follows=self._res_block_follows,
+                            name="{}_conv2d".format(self._name),
+                            check_icnr_init=_CONFIG["icnr_init"],
+                            **self._kwargs)(inputs)
         var_x = PixelShuffler(name="{}_pixelshuffler".format(self._name),
                               size=self._scale_factor)(var_x)
         return var_x
