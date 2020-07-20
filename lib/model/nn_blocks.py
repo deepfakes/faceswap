@@ -496,7 +496,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         self._kwargs = kwargs
 
     def __call__(self, inputs):
-        """ Call the Faceswap Res Block.
+        """ Call the Faceswap Residual Block.
 
         Parameters
         ----------

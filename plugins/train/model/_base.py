@@ -35,6 +35,8 @@ _CONFIG = None
 
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
 # TODO Mask Input
+# TODO Load input shape from state file if variable input shapes for saved model, or (preferably)
+# read this straight from the model file
 
 
 class ModelBase():
@@ -88,8 +90,6 @@ class ModelBase():
                            self._args.no_logs,
                            training_image_size)
 
-        self._load_state_info()
-
         # The variables holding masks if Penalized Loss is used
         self._mask_variables = dict(a=None, b=None)
         self.predictors = dict()  # Predictors for model
@@ -121,21 +121,14 @@ class ModelBase():
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
+    def model(self):
+        """:class:`Keras.models.Model: The compiled model for this plugin. """
+        return self._model
+
+    @property
     def model_dir(self):
         """str: The full path to the model folder location. """
         return self._io._model_dir  # pylint:disable=protected-access
-
-    @property
-    def _config_section(self):
-        """ str: The section name for the current plugin for loading configuration options from the
-        config file. """
-        return ".".join(self.__module__.split(".")[-2:])
-
-    @property
-    def _config_changeable_items(self):
-        """ dict: The configuration options that can be updated after the model has already been
-            created. """
-        return Config(self._config_section, configfile=self._configfile).changeable_items
 
     @property
     def config(self):
@@ -244,6 +237,19 @@ class ModelBase():
         """ int: The total number of iterations that the model has trained. """
         return self.state.iterations
 
+    # Private properties
+    @property
+    def _config_section(self):
+        """ str: The section name for the current plugin for loading configuration options from the
+        config file. """
+        return ".".join(self.__module__.split(".")[-2:])
+
+    @property
+    def _config_changeable_items(self):
+        """ dict: The configuration options that can be updated after the model has already been
+            created. """
+        return Config(self._config_section, configfile=self._configfile).changeable_items
+
     def _load_config(self):
         """ Load the global config for reference in :attr:`config` and set the faceswap blocks
         configuration options in `lib.model.nn_blocks` """
@@ -350,20 +356,6 @@ class ModelBase():
     def snapshot(self):
         """ Create a snapshot of the model folder. """
         self._io._snapshot()  # pylint:disable=protected-access
-
-    def _load_state_info(self):
-        """ Load the input shape from state file if it exists """
-        logger.debug("Loading Input Shape from State file")
-        if not self.state.inputs:
-            logger.debug("No input shapes saved. Using model config")
-            return
-        if not self.state.face_shapes:
-            logger.warning("Input shapes stored in State file, but no matches for 'face'."
-                           "Using model config")
-            return
-        input_shape = self.state.face_shapes[0]
-        logger.debug("Setting input shape from state file: %s", input_shape)
-        self.input_shape = input_shape
 
     # TODO (store inputs)
     def add_predictor(self, side, model):
@@ -506,8 +498,6 @@ class IO():
             logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
-        if not self._is_predict:
-            K.clear_session()
         self._add_custom_objects()
         model = load_model(self._filename)
         logger.info("Loaded model from disk: '%s'", self._filename)
@@ -540,7 +530,7 @@ class IO():
             self._backup.backup_model(self._filename)
             self._backup.backup_model(self._plugin.state.filename)
 
-        self._plugin._model.save(self._filename, include_optimizer=False)
+        self._plugin.model.save(self._filename, include_optimizer=False)
         self._plugin.state.save()
 
         msg = "[Saved models]"
@@ -797,118 +787,6 @@ class Loss():
             logger.debug("%s: %s", loss_type, loss_funcs[-1])
         logger.debug(loss_funcs)
         return loss_funcs
-
-
-class NNMeta():
-    """ Class to hold a neural network and it's meta data
-
-    filename:   The full path and filename of the model file for this network.
-    type:       The type of network. For networks that can be swapped
-                The type should be identical for the corresponding
-                A and B networks, and should be unique for every A/B pair.
-                Otherwise the type should be completely unique.
-    side:       A, B or None. Used to identify which networks can
-                be swapped.
-    network:    Define network to this.
-    is_output:  Set to True to indicate that this network is an output to the Autoencoder
-    """
-
-    def __init__(self, filename, network_type, side, network, is_output):
-        logger.debug("Initializing %s: (filename: '%s', network_type: '%s', side: '%s', "
-                     "network: %s, is_output: %s", self.__class__.__name__, filename,
-                     network_type, side, network, is_output)
-        self.filename = filename
-        self.type = network_type.lower()
-        self.side = side
-        self.name = self.set_name()
-        self.network = network
-        self.is_output = is_output
-        if get_backend() == "amd":
-            self.network.name = self.name
-        else:
-            # No setter in tensorflow.keras
-            self.network._name = self.name
-        self.config = network.get_config()  # For pingpong restore
-        self.weights = network.get_weights()  # For pingpong restore
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def output_shapes(self):
-        """ Return the output shapes from the stored network """
-        return [K.int_shape(output) for output in self.network.outputs]
-
-    def set_name(self):
-        """ Set the network name """
-        name = self.type
-        if self.side:
-            name += "_{}".format(self.side)
-        return name
-
-    @property
-    def output_names(self):
-        """ Return output node names """
-        output_names = [output.name for output in self.network.outputs]
-        if self.is_output and not any(name.startswith("face_out") for name in output_names):
-            # Saved models break if their layer names are changed, so dummy
-            # in correct output names for legacy models
-            output_names = self.get_output_names()
-        return output_names
-
-    def get_output_names(self):
-        """ Return the output names based on number of channels and instances """
-        output_types = ["mask_out" if K.int_shape(output)[-1] == 1 else "face_out"
-                        for output in self.network.outputs]
-        output_names = ["{}{}".format(name,
-                                      "" if output_types.count(name) == 1 else "_{}".format(idx))
-                        for idx, name in enumerate(output_types)]
-        logger.debug("Overridden output_names: %s", output_names)
-        return output_names
-
-    def load(self, fullpath=None):
-        """ Load model """
-        fullpath = fullpath if fullpath else self.filename
-        logger.debug("Loading model: '%s'", fullpath)
-        try:
-            network = load_model(self.filename, custom_objects=get_custom_objects())
-        except ValueError as err:
-            if str(err).lower().startswith("cannot create group in read only mode"):
-                self.convert_legacy_weights()
-                return True
-            logger.warning("Failed loading existing training data. Generating new models")
-            logger.debug("Exception: %s", str(err))
-            return False
-        except OSError as err:  # pylint: disable=broad-except
-            logger.warning("Failed loading existing training data. Generating new models")
-            logger.debug("Exception: %s", str(err))
-            return False
-        self.config = network.get_config()
-        self.network = network  # Update network with saved model
-        if get_backend() == "amd":
-            self.network.name = self.name
-        else:
-            # No setter in tensorflow.keras
-            self.network._name = self.name  # pylint:disable=protected-access
-        return True
-
-    def save(self, fullpath=None, backup_func=None):
-        """ Save model """
-        fullpath = fullpath if fullpath else self.filename
-        if backup_func:
-            backup_func(fullpath)
-        logger.debug("Saving model: '%s'", fullpath)
-        self.weights = self.network.get_weights()
-        self.network.save(fullpath)
-
-    def convert_legacy_weights(self):
-        """ Convert legacy weights files to hold the model topology """
-        logger.info("Adding model topology to legacy weights file: '%s'", self.filename)
-        self.network.load_weights(self.filename)
-        self.save(backup_func=None)
-        if get_backend() == "amd":
-            self.network.name = self.type
-        else:
-            # No setter in tensorflow.keras
-            self.network._name = self.type  # pylint:disable=protected-access
 
 
 class State():
