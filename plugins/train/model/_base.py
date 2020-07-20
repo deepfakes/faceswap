@@ -80,23 +80,10 @@ class ModelBase():
                            self._config_changeable_items,
                            self._args.no_logs,
                            training_image_size)
-
         # The variables holding masks if Penalized Loss is used
         self._mask_variables = dict(a=None, b=None)
         self.predictors = dict()  # Predictors for model
         self.history = [[], []]  # Loss histories per save iteration
-
-        # Training information specific to the model should be placed in this
-        # dict for reference by the trainer.
-        self.training_opts = {"training_size": self.state.training_size,
-                              "coverage_ratio": self._calculate_coverage_ratio(),
-                              "mask_type": self.config["mask_type"],
-                              "mask_blur_kernel": self.config["mask_blur_kernel"],
-                              "mask_threshold": self.config["mask_threshold"],
-                              "learn_mask": (self.config["learn_mask"] and
-                                             self.config["mask_type"] is not None),
-                              "penalized_mask_loss": self.config["penalized_mask_loss"]}
-        logger.debug("training_opts: %s", self.training_opts)
 
         if self._io.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
@@ -114,6 +101,16 @@ class ModelBase():
         """ :class:`argparse.Namespace`: The command line arguments passed to the model plugin from
         either the train or convert script """
         return self._args
+
+    @property
+    def coverage_ratio(self):
+        """ float: The ratio of the training image to crop out and train on. """
+        coverage_ratio = self.config.get("coverage", 62.5) / 100
+        logger.debug("Requested coverage_ratio: %s", coverage_ratio)
+        cropped_size = (self.state.training_size * coverage_ratio) // 2 * 2
+        retval = cropped_size / self.state.training_size
+        logger.debug("Final coverage_ratio: %s", retval)
+        return retval
 
     @property
     def model_dir(self):
@@ -252,15 +249,6 @@ class ModelBase():
         nn_block_keys = ['icnr_init', 'conv_aware_init', 'reflect_padding']
         set_nnblock_config({key: _CONFIG.pop(key)
                             for key in nn_block_keys})
-
-    def _calculate_coverage_ratio(self):
-        """ Coverage must be a ratio, leading to a cropped shape divisible by 2 """
-        coverage_ratio = self.config.get("coverage", 62.5) / 100
-        logger.debug("Requested coverage_ratio: %s", coverage_ratio)
-        cropped_size = (self.state.training_size * coverage_ratio) // 2 * 2
-        coverage_ratio = cropped_size / self.state.training_size
-        logger.debug("Final coverage_ratio: %s", coverage_ratio)
-        return coverage_ratio
 
     def build(self):
         """ Build the model.

@@ -4,23 +4,6 @@ this class.
 
 At present there is only the :class:`~plugins.train.trainer.original` plugin, so that entirely
 inherits from this class.
-
-This class heavily references the :attr:`plugins.train.model._base.ModelBase.training_opts`
-``dict``. The following keys are expected from this ``dict``:
-
-    * **training_size** ('int') - Size of the training images in pixels.
-
-    * **coverage_ratio** ('float') - Ratio of face to be cropped out of the training image.
-
-    * **mask_type** ('str') - The type of mask to select from the alignments file.
-
-    * **mask_blur_kernel** ('int') - The size of the kernel to use for gaussian blurring the mask.
-
-    * **mask_threshold** ('int') - The threshold for min/maxing mask to 0/100.
-
-    * **learn_mask** ('bool') - Whether the mask should be trained in the model.
-
-    * **penalized_mask_loss** ('bool') - Whether the mask should be penalized from loss.
 """
 
 import logging
@@ -93,8 +76,12 @@ class TrainerBase():
         self._images = images
         self._sides = sorted(key for key in self._images.keys())
 
-        self._process_training_opts()
-        self._batcher = Batcher(images, self._model, self._use_mask, batch_size, self._config)
+        self._batcher = Batcher(images,
+                                self._model,
+                                self._use_mask,
+                                batch_size,
+                                self._config,
+                                self._get_alignments_data())
 #        self._batchers = {side: Batcher(side,
 #                                        images[side],
 #                                        self._model,
@@ -106,13 +93,13 @@ class TrainerBase():
         self._tensorboard = self._set_tensorboard()
         self._samples = Samples(self._model,
                                 self._use_mask,
-                                self._model.training_opts["learn_mask"],
-                                self._model.training_opts["coverage_ratio"],
+                                self._model.feed_mask,
+                                self._model.coverage_ratio,
                                 self._model.command_line_arguments.preview_scale)
         self._timelapse = Timelapse(self._model,
                                     self._use_mask,
-                                    self._model.training_opts["learn_mask"],
-                                    self._model.training_opts["coverage_ratio"],
+                                    self._model.feed_mask,
+                                    self._model.coverage_ratio,
                                     self._config.get("preview_images", 14),
                                     self._batcher)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -132,29 +119,34 @@ class TrainerBase():
     @property
     def _use_mask(self):
         """ bool: ``True`` if a mask is required otherwise ``False`` """
-        retval = (self._model.training_opts["learn_mask"] or
-                  self._model.training_opts["penalized_mask_loss"])
+        retval = (self._model.feed_mask or self._model.config["penalized_mask_loss"])
         logger.debug(retval)
         return retval
 
-    def _process_training_opts(self):
-        """ Extrapolate alignments and masks from the alignments file into
-        :attr:`_model.training_opts`."""
+    def _get_alignments_data(self):
+        """ Extrapolate alignments and masks from the alignments file into a `dict` for the
+        training data generator.
 
-        logger.debug(self._model.training_opts)
+        Returns
+        -------
+        dict:
+            Includes the key `landmarks` if landmarks are required for training and the key `masks`
+            if the masks are required for training. """
+        retval = dict()
         if not self._landmarks_required and not self._use_mask:
-            return
+            return retval
 
-        alignments = TrainingAlignments(self._model.command_line_arguments,
-                                        self._model.training_opts,
-                                        self._images)
+        alignments = TrainingAlignments(self._model, self._images)
+
         if self._landmarks_required:
             logger.debug("Adding landmarks to training opts dict")
-            self._model.training_opts["landmarks"] = alignments.landmarks
+            retval["landmarks"] = alignments.landmarks
 
         if self._use_mask:
             logger.debug("Adding masks to training opts dict")
-            self._model.training_opts["masks"] = alignments.masks
+            retval["masks"] = alignments.masks
+        logger.debug(retval)
+        return retval
 
     def _set_tensorboard(self):
         """ Set up Tensorboard callback for logging loss.
@@ -179,7 +171,7 @@ class TrainerBase():
                                "session_{}".format(self._model.state.session_id))
         tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
                                                      histogram_freq=0,  # Must be 0 or hangs
-                                                     write_graph=not get_backend() == "amd",
+                                                     write_graph=get_backend() != "amd",
                                                      write_images=False,
                                                      update_freq="batch",
                                                      profile_batch=0,
@@ -361,14 +353,17 @@ class Batcher():
         The size of the batch to be processed at each iteration
     config: :class:`lib.config.FaceswapConfig`
         The configuration for this trainer
+    alignments: dict
+        A dictionary containing landmarks and masks if these are required for training
     """
-    def __init__(self, images, model, use_mask, batch_size, config):
+    def __init__(self, images, model, use_mask, batch_size, config, alignments):
         logger.debug("Initializing %s: num_images: %s, use_mask: %s, batch_size: %s, config: %s)",
                      self.__class__.__name__, len(images), use_mask, batch_size, config)
         self._model = model
         self._use_mask = use_mask
         self._images = images
         self._config = config
+        self._alignments = alignments
         self._target = dict()
         self._samples = dict()
         self._masks = dict()
@@ -387,10 +382,11 @@ class Batcher():
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
                                           output_shapes,
+                                          self._model.coverage_ratio,
                                           not self._model.command_line_arguments.no_augment_color,
                                           self._model.command_line_arguments.no_flip,
                                           self._model.command_line_arguments.warp_to_landmarks,
-                                          self._model.training_opts,
+                                          self._alignments,
                                           self._config)
         return generator
 
@@ -427,7 +423,7 @@ class Batcher():
                     K.set_value(self._model.mask_variables[side], masks)
                 else:
                     self._model.mask_variables[side].assign(masks)
-                if not self._model.training_opts["learn_mask"]:
+                if not self._model.feed_mask:
                     # Remove masks from the model input if not learning a mask
                     side_inputs = side_inputs[0]
             model_inputs.extend(side_inputs)
@@ -447,7 +443,7 @@ class Batcher():
         """
         logger.trace("Generating targets")
         batch = next(self._feed[side])
-        targets_use_mask = self._model.training_opts["learn_mask"]
+        targets_use_mask = self._model.feed_mask
         model_inputs = batch["feed"] + batch["masks"] if self._use_mask else batch["feed"]
         model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
         return model_inputs, model_targets
@@ -987,22 +983,18 @@ class TrainingAlignments():
 
     Parameters
     ----------
-    arguments: :class:`argparse.Namespace`
-        The arguments that were passed to the train or convert process as generated from
-        Faceswap's command line arguments
-    training_opts: dict
-        The dictionary of model training options (see module doc-string for information about
-        contents)
+    model: plugin from :mod:`plugins.train.model`
+        The model that will be running this trainer
     image_list: dict
         The file paths for the images to be trained on for each side. The dictionary should contain
         2 keys ("a" and "b") with the values being a list of full paths corresponding to each side.
     """
-    def __init__(self, arguments, training_opts, image_list):
-        logger.debug("Initializing %s: (arguments: %s, training_opts: '%s', image counts: %s)",
-                     self.__class__.__name__, arguments, training_opts,
-                     {k: len(v) for k, v in image_list.items()})
-        self._args = arguments
-        self._training_opts = training_opts
+    def __init__(self, model, image_list):
+        logger.debug("Initializing %s: (model: %s, image counts: %s)",
+                     self.__class__.__name__, model, {k: len(v) for k, v in image_list.items()})
+        self._args = model.command_line_arguments
+        self._config = model.config
+        self._training_size = model.state.training_image_size
         self._alignments_paths = self._get_alignments_paths()
         self._hashes = self._get_image_hashes(image_list)
         self._detected_faces = self._load_alignments()
@@ -1064,7 +1056,7 @@ class TrainingAlignments():
         """
         landmarks = dict()
         for face in detected_faces.values():
-            face.load_aligned(None, size=self._training_opts["training_size"])
+            face.load_aligned(None, size=self._training_size)
             for filename in self._hash_to_filenames(side, face.hash):
                 landmarks[filename] = face.aligned_landmarks
         return landmarks
@@ -1099,9 +1091,9 @@ class TrainingAlignments():
 
         masks = dict()
         for fhash, face in detected_faces.items():
-            mask = face.mask[self._training_opts["mask_type"]]
-            mask.set_blur_and_threshold(blur_kernel=self._training_opts["mask_blur_kernel"],
-                                        threshold=self._training_opts["mask_threshold"])
+            mask = face.mask[self._config["mask_type"]]
+            mask.set_blur_and_threshold(blur_kernel=self._config["mask_blur_kernel"],
+                                        threshold=self._config["mask_threshold"])
             for filename in self._hash_to_filenames(side, fhash):
                 masks[filename] = mask
         return masks
@@ -1226,7 +1218,7 @@ class TrainingAlignments():
         FaceswapError
             If the current face doesn't pass validation
         """
-        mask_type = self._training_opts["mask_type"]
+        mask_type = self._config["mask_type"]
         if mask_type is not None and "mask" not in face:
             msg = ("You have selected a Mask Type in your training configuration options but at "
                    "least one face has no mask stored for it.\nYou should generate the required "

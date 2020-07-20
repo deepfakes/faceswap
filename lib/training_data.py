@@ -31,6 +31,10 @@ class TrainingDataGenerator():
     model_output_shapes: list
         A list of tuples defining the output shapes from the model, in the order that the outputs
         are returned. The tuples should be in (`height`, `width`, `channels`) format.
+    coverage_ratio: float
+        The ratio of the training image to be trained on. Dictates how much of the image will be
+        cropped out. E.G: a coverage ratio of 0.625 will result in cropping a 160px box from a
+        256px image (256 * 0.625 = 160).
     augment_color: bool
         ``True`` if color is to be augmented, otherwise ``False``
     no_flip: bool:
@@ -39,16 +43,9 @@ class TrainingDataGenerator():
     warp_to_landmarks: bool
         ``True`` if the random warp method should warp to similar landmarks from the other side,
         ``False`` if the standard random warp method should be used. If ``True`` then
-        the key ``landmarks`` must be provided in the training_opts dictionary.
-    training_opts: dict
-        This is a dictionary of model training options as defined in
-        :mod:`plugins.train.model._base`. These options will be defined by the user from the
-        provided cli options or from the model ``config.ini``. At a minimum this ``dict`` should
-        contain the following keys:
-
-        * **coverage_ratio** (`float`) - The ratio of the training image to be trained on. \
-        Dictates how much of the image will be cropped out. E.G: a coverage ratio of 0.625 \
-        will result in cropping a 160px box from a 256px image (256 * 0.625 = 160).
+        the key ``landmarks`` must be provided in the alignments dictionary.
+    alignments: dict
+        A dictionary containing landmarks and masks if these are required for training:
 
         * **landmarks** (`dict`, `optional`). Required if :attr:`warp_to_landmarks` is \
         ``True``. Returning dictionary has a key of **side** (`str`) the value of which is a \
@@ -57,33 +54,27 @@ class TrainingDataGenerator():
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
         :attr:`learn_mask` is ``True``. Returning dictionary has a key of **side** (`str`) the \
         value of which is a `dict` of {**filename** (`str`): :class:`lib.faces_detect.Mask`}.
-
     config: dict
         The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
         plugin configuration options.
     """
-    def __init__(self, model_input_size, model_output_shapes, augment_color, no_flip,
-                 warp_to_landmarks, training_opts, config):
+    def __init__(self, model_input_size, model_output_shapes, coverage_ratio, augment_color,
+                 no_flip, warp_to_landmarks, alignments, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
-                     "augment_color: %s, no_flip: %s, warp_to_landmarks: %s, training_opts: %s, "
-                     "landmarks: %s, masks: %s, config: %s)",
-                     self.__class__.__name__, model_input_size, model_output_shapes, augment_color,
-                     no_flip, warp_to_landmarks,
-                     {key: val
-                      for key, val in training_opts.items() if key not in ("landmarks", "masks")},
-                     {key: len(val)
-                      for key, val in training_opts.get("landmarks", dict()).items()},
-                     {key: len(val) for key, val in training_opts.get("masks", dict()).items()},
-                     config)
+                     "coverage_ratio: %s, augment_color: %s, no_flip: %s, warp_to_landmarks: %s, "
+                     "alignments: %s, config: %s)",
+                     self.__class__.__name__, model_input_size, model_output_shapes,
+                     coverage_ratio, augment_color, no_flip, warp_to_landmarks,
+                     list(alignments.keys()), config)
         self._config = config
         self._model_input_size = model_input_size
         self._model_output_shapes = model_output_shapes
+        self._coverage_ratio = coverage_ratio
         self._augment_color = augment_color
         self._no_flip = no_flip
         self._warp_to_landmarks = warp_to_landmarks
-        self._training_opts = training_opts
-        self._landmarks = self._training_opts.get("landmarks", None)
-        self._masks = self._training_opts.get("masks", None)
+        self._landmarks = alignments.get("landmarks", None)
+        self._masks = alignments.get("masks", None)
         self._nearest_landmarks = {}
 
         # Batchsize and processing class are set when this class is called by a batcher
@@ -154,7 +145,7 @@ class TrainingDataGenerator():
                                              is_preview or is_timelapse,
                                              self._model_input_size,
                                              self._model_output_shapes,
-                                             self._training_opts.get("coverage_ratio", 0.625),
+                                             self._coverage_ratio,
                                              self._config)
         args = (images, side, do_shuffle, batchsize)
         batcher = BackgroundGenerator(self._minibatch, thread_count=2, args=args)
@@ -725,10 +716,10 @@ class ImageAugmentation():
 
         grid_z = np.array([griddata(dst, src, (grids[0], grids[1]), method="linear")
                            for src, dst in zip(batch_src, batch_dst)])
-        maps = grid_z.reshape(self._batchsize,
-                              self._training_size,
-                              self._training_size,
-                              2).astype("float32")
+        maps = grid_z.reshape((self._batchsize,
+                               self._training_size,
+                               self._training_size,
+                               2)).astype("float32")
         warped_batch = np.array([cv2.remap(image,
                                            map_[..., 1],
                                            map_[..., 0],
