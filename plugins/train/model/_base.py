@@ -49,25 +49,16 @@ class ModelBase():
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the train or convert process as generated from
         Faceswap's command line arguments
+    training_image_size: int, optional
+        The size of the training images in the training folder. Default: 256
+    predict: bool, optional
+        ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
+        for training. Default: ``False``
     """
-    def __init__(self,
-                 model_dir,
-                 arguments,
-                 snapshot_interval=0,
-                 warp_to_landmarks=False,
-                 augment_color=True,
-                 no_flip=False,
-                 training_image_size=256,
-                 alignments_paths=None,
-                 preview_scale=100,
-                 predict=False):
+    def __init__(self, model_dir, arguments, training_image_size=256, predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', arguments: %s, "
-                     "snapshot_interval: %s, warp_to_landmarks: %s, "
-                     "augment_color: %s, no_flip: %s, training_image_size, %s, alignments_paths: "
-                     "%s, preview_scale: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, arguments, snapshot_interval,
-                     warp_to_landmarks, augment_color, no_flip, training_image_size,
-                     alignments_paths, preview_scale, predict)
+                     "training_image_size: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, arguments, training_image_size, predict)
 
         self.input_shape = None  # Must be set within the plugin after initializing
         self.output_shape = None  # Must be set within the plugin after initializing
@@ -97,14 +88,7 @@ class ModelBase():
 
         # Training information specific to the model should be placed in this
         # dict for reference by the trainer.
-        self.training_opts = {"alignments": alignments_paths,
-                              "preview_scaling": preview_scale / 100,
-                              "warp_to_landmarks": warp_to_landmarks,
-                              "augment_color": augment_color,
-                              "no_flip": no_flip,
-                              "snapshot_interval": snapshot_interval,
-                              "training_size": self.state.training_size,
-                              "no_logs": self.state.current_session["no_logs"],
+        self.training_opts = {"training_size": self.state.training_size,
                               "coverage_ratio": self._calculate_coverage_ratio(),
                               "mask_type": self.config["mask_type"],
                               "mask_blur_kernel": self.config["mask_blur_kernel"],
@@ -124,6 +108,12 @@ class ModelBase():
     def model(self):
         """:class:`Keras.models.Model: The compiled model for this plugin. """
         return self._model
+
+    @property
+    def command_line_arguments(self):
+        """ :class:`argparse.Namespace`: The command line arguments passed to the model plugin from
+        either the train or convert script """
+        return self._args
 
     @property
     def model_dir(self):

@@ -8,13 +8,6 @@ inherits from this class.
 This class heavily references the :attr:`plugins.train.model._base.ModelBase.training_opts`
 ``dict``. The following keys are expected from this ``dict``:
 
-    * **alignments** (`dict`, `optional`) - If training with a mask or the warp to landmarks \
-    command line option is selected then this is required, otherwise it can be ``None``. The \
-    dictionary should contain 2 keys ("a" and "b") with the values being the path to the \
-    alignments file for the corresponding side.
-
-    * **preview_scaling** (`int`) - How much to scale displayed preview image by.
-
     * **training_size** ('int') - Size of the training images in pixels.
 
     * **coverage_ratio** ('float') - Ratio of face to be cropped out of the training image.
@@ -28,16 +21,6 @@ This class heavily references the :attr:`plugins.train.model._base.ModelBase.tra
     * **learn_mask** ('bool') - Whether the mask should be trained in the model.
 
     * **penalized_mask_loss** ('bool') - Whether the mask should be penalized from loss.
-
-    * **no_logs** ('bool') - Whether Tensorboard logging should be disabled.
-
-    * **snapshot_interval** ('int') - How many iterations between model snapshot saves.
-
-    * **warp_to_landmarks** ('bool') - Whether to use random_warp_landmarks instead of random_warp.
-
-    * **augment_color** ('bool') - Whether to use color augmentation.
-
-    * **no_flip** ('bool') - Whether to turn off random horizontal flipping.
 """
 
 import logging
@@ -125,7 +108,7 @@ class TrainerBase():
                                 self._use_mask,
                                 self._model.training_opts["learn_mask"],
                                 self._model.training_opts["coverage_ratio"],
-                                self._model.training_opts["preview_scaling"])
+                                self._model.command_line_arguments.preview_scale)
         self._timelapse = Timelapse(self._model,
                                     self._use_mask,
                                     self._model.training_opts["learn_mask"],
@@ -142,7 +125,7 @@ class TrainerBase():
     @property
     def _landmarks_required(self):
         """ bool: ``True`` if Landmarks are required otherwise ``False ``"""
-        retval = self._model.training_opts["warp_to_landmarks"]
+        retval = self._model.command_line_arguments.warp_to_landmarks
         logger.debug(retval)
         return retval
 
@@ -157,11 +140,14 @@ class TrainerBase():
     def _process_training_opts(self):
         """ Extrapolate alignments and masks from the alignments file into
         :attr:`_model.training_opts`."""
+
         logger.debug(self._model.training_opts)
         if not self._landmarks_required and not self._use_mask:
             return
 
-        alignments = TrainingAlignments(self._model.training_opts, self._images)
+        alignments = TrainingAlignments(self._model.command_line_arguments,
+                                        self._model.training_opts,
+                                        self._images)
         if self._landmarks_required:
             logger.debug("Adding landmarks to training opts dict")
             self._model.training_opts["landmarks"] = alignments.landmarks
@@ -181,7 +167,7 @@ class TrainerBase():
             2 Dictionary keys of "a" and "b" the values of which are the
         :class:`tf.keras.callbacks.TensorBoard` objects for the respective sides.
         """
-        if self._model.training_opts["no_logs"]:
+        if self._model.state.current_session["no_logs"]:
             logger.verbose("TensorBoard logging disabled")
             return None
         logger.debug("Enabling TensorBoard Logging")
@@ -191,16 +177,15 @@ class TrainerBase():
         log_dir = os.path.join(str(self._model.model_dir),
                                "{}_logs".format(self._model.name),
                                "session_{}".format(self._model.state.session_id))
-        write_graph = False if get_backend() == "amd" else True
         tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
                                                      histogram_freq=0,  # Must be 0 or hangs
-                                                     write_graph=write_graph,
+                                                     write_graph=not get_backend() == "amd",
                                                      write_images=False,
                                                      update_freq="batch",
                                                      profile_batch=0,
                                                      embeddings_freq=0,
                                                      embeddings_metadata=None)
-        tensorboard.set_model(self._model._model)
+        tensorboard.set_model(self._model.model)
         logger.info("Enabled TensorBoard Logging")
         return tensorboard
 
@@ -226,7 +211,7 @@ class TrainerBase():
         logger.trace("Training one step: (iteration: %s)", self._model.iterations)
         do_preview = viewer is not None
         do_timelapse = timelapse_kwargs is not None
-        snapshot_interval = self._model.training_opts.get("snapshot_interval", 0)
+        snapshot_interval = self._model.command_line_arguments.snapshot_interval
         do_snapshot = (snapshot_interval != 0 and
                        self._model.iterations - 1 >= snapshot_interval and
                        (self._model.iterations - 1) % snapshot_interval == 0)
@@ -234,7 +219,7 @@ class TrainerBase():
         model_inputs, model_targets = self._batcher.get_batch()
 
         try:
-            loss = self._model._model.train_on_batch(model_inputs, model_targets)
+            loss = self._model.model.train_on_batch(model_inputs, model_targets)
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -402,6 +387,9 @@ class Batcher():
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
                                           output_shapes,
+                                          not self._model.command_line_arguments.no_augment_color,
+                                          self._model.command_line_arguments.no_flip,
+                                          self._model.command_line_arguments.warp_to_landmarks,
                                           self._model.training_opts,
                                           self._config)
         return generator
@@ -699,8 +687,8 @@ class Samples():
         """
         logger.debug("Getting Predictions")
         preds = dict()
-        standard = self._model._model.predict([feed_a, feed_b])
-        swapped = self._model._model.predict([feed_b, feed_a])
+        standard = self._model.model.predict([feed_a, feed_b])
+        swapped = self._model.model.predict([feed_b, feed_a])
         preds["a_a"] = standard[0]
         preds["b_b"] = standard[1]
         preds["a_b"] = swapped[0]
@@ -999,6 +987,9 @@ class TrainingAlignments():
 
     Parameters
     ----------
+    arguments: :class:`argparse.Namespace`
+        The arguments that were passed to the train or convert process as generated from
+        Faceswap's command line arguments
     training_opts: dict
         The dictionary of model training options (see module doc-string for information about
         contents)
@@ -1006,12 +997,13 @@ class TrainingAlignments():
         The file paths for the images to be trained on for each side. The dictionary should contain
         2 keys ("a" and "b") with the values being a list of full paths corresponding to each side.
     """
-    def __init__(self, training_opts, image_list):
-        logger.debug("Initializing %s: (training_opts: '%s', image counts: %s)",
-                     self.__class__.__name__, training_opts,
+    def __init__(self, arguments, training_opts, image_list):
+        logger.debug("Initializing %s: (arguments: %s, training_opts: '%s', image counts: %s)",
+                     self.__class__.__name__, arguments, training_opts,
                      {k: len(v) for k, v in image_list.items()})
+        self._args = arguments
         self._training_opts = training_opts
-        self._check_alignments_exist()
+        self._alignments_paths = self._get_alignments_paths()
         self._hashes = self._get_image_hashes(image_list)
         self._detected_faces = self._load_alignments()
         self._check_all_faces()
@@ -1024,6 +1016,35 @@ class TrainingAlignments():
         retval = {side: self._transform_landmarks(side, detected_faces)
                   for side, detected_faces in self._detected_faces.items()}
         logger.trace(retval)
+        return retval
+
+    def _get_alignments_paths(self):
+        """ Obtain the alignments file paths from the command line arguments passed to the model.
+
+        If the argument does not exist or is empty, then scan the input folder for an alignments
+        file.
+
+        Returns
+        -------
+        dict
+            The alignments paths for each of the source and destination faces. Key is the
+            side, value is the path to the alignments file
+
+        Raises
+        ------
+        FaceswapError
+            If at least one alignments file does not exist
+        """
+        retval = dict()
+        for side in ("a", "b"):
+            alignments_path = getattr(self._args, "alignments_path_{}".format(side))
+            if not alignments_path:
+                image_path = getattr(self._args, "input_{}".format(side))
+                alignments_path = os.path.join(image_path, "alignments.fsa")
+            if not os.path.exists(alignments_path):
+                raise FaceswapError("Alignments file does not exist: `{}`".format(alignments_path))
+            retval[side] = alignments_path
+        logger.debug("Alignments paths: %s", retval)
         return retval
 
     def _transform_landmarks(self, side, detected_faces):
@@ -1085,19 +1106,6 @@ class TrainingAlignments():
                 masks[filename] = mask
         return masks
 
-    # Pre flight checks
-    def _check_alignments_exist(self):
-        """ Ensure the alignments files exist prior to running any longer running tasks.
-
-        Raises
-        ------
-        FaceswapError
-            If at least one alignments file does not exist
-        """
-        for fullpath in self._training_opts["alignments"].values():
-            if not os.path.exists(fullpath):
-                raise FaceswapError("Alignments file does not exist: `{}`".format(fullpath))
-
     # Hashes for image folders
     @staticmethod
     def _get_image_hashes(image_list):
@@ -1140,7 +1148,7 @@ class TrainingAlignments():
         """
         logger.debug("Loading alignments")
         retval = dict()
-        for side, fullpath in self._training_opts["alignments"].items():
+        for side, fullpath in self._alignments_paths.items():
             logger.debug("side: '%s', path: '%s'", side, fullpath)
             path, filename = os.path.split(fullpath)
             alignments = Alignments(path, filename=filename)

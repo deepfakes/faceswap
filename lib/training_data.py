@@ -31,6 +31,15 @@ class TrainingDataGenerator():
     model_output_shapes: list
         A list of tuples defining the output shapes from the model, in the order that the outputs
         are returned. The tuples should be in (`height`, `width`, `channels`) format.
+    augment_color: bool
+        ``True`` if color is to be augmented, otherwise ``False``
+    no_flip: bool:
+        ``True`` if the image shouldn't be randomly flipped as part of augmentation, otherwise
+        ``False``
+    warp_to_landmarks: bool
+        ``True`` if the random warp method should warp to similar landmarks from the other side,
+        ``False`` if the standard random warp method should be used. If ``True`` then
+        the key ``landmarks`` must be provided in the training_opts dictionary.
     training_opts: dict
         This is a dictionary of model training options as defined in
         :mod:`plugins.train.model._base`. These options will be defined by the user from the
@@ -40,15 +49,6 @@ class TrainingDataGenerator():
         * **coverage_ratio** (`float`) - The ratio of the training image to be trained on. \
         Dictates how much of the image will be cropped out. E.G: a coverage ratio of 0.625 \
         will result in cropping a 160px box from a 256px image (256 * 0.625 = 160).
-
-        * **augment_color** (`bool`) - ``True`` if color is to be augmented, otherwise ``False`` \
-
-        * **no_flip** (`bool`) - ``True`` if the image shouldn't be randomly flipped as part of \
-        augmentation, otherwise ``False``
-
-        * **warp_to_landmarks** (`bool`) - ``True`` if the random warp method should warp to \
-        similar landmarks from the other side, ``False`` if the standard random warp method \
-        should be used. If ``True`` then the additional key ``landmarks`` must be provided.
 
         * **landmarks** (`dict`, `optional`). Required if :attr:`warp_to_landmarks` is \
         ``True``. Returning dictionary has a key of **side** (`str`) the value of which is a \
@@ -62,10 +62,13 @@ class TrainingDataGenerator():
         The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
         plugin configuration options.
     """
-    def __init__(self, model_input_size, model_output_shapes, training_opts, config):
+    def __init__(self, model_input_size, model_output_shapes, augment_color, no_flip,
+                 warp_to_landmarks, training_opts, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
-                     "training_opts: %s, landmarks: %s, masks: %s, config: %s)",
-                     self.__class__.__name__, model_input_size, model_output_shapes,
+                     "augment_color: %s, no_flip: %s, warp_to_landmarks: %s, training_opts: %s, "
+                     "landmarks: %s, masks: %s, config: %s)",
+                     self.__class__.__name__, model_input_size, model_output_shapes, augment_color,
+                     no_flip, warp_to_landmarks,
                      {key: val
                       for key, val in training_opts.items() if key not in ("landmarks", "masks")},
                      {key: len(val)
@@ -75,6 +78,9 @@ class TrainingDataGenerator():
         self._config = config
         self._model_input_size = model_input_size
         self._model_output_shapes = model_output_shapes
+        self._augment_color = augment_color
+        self._no_flip = no_flip
+        self._warp_to_landmarks = warp_to_landmarks
         self._training_opts = training_opts
         self._landmarks = self._training_opts.get("landmarks", None)
         self._masks = self._training_opts.get("masks", None)
@@ -203,7 +209,7 @@ class TrainingDataGenerator():
             self._processing.initialize(batch.shape[1])
 
         # Get Landmarks prior to manipulating the image
-        if self._training_opts["warp_to_landmarks"]:
+        if self._warp_to_landmarks:
             batch_src_pts = self._get_landmarks(filenames, side)
             batch_dst_pts = self._get_closest_match(filenames, side, batch_src_pts)
             warp_kwargs = dict(batch_src_points=batch_src_pts,
@@ -212,12 +218,12 @@ class TrainingDataGenerator():
             warp_kwargs = dict()
 
         # Color Augmentation of the image only
-        if self._training_opts["augment_color"]:
+        if self._augment_color:
             batch[..., :3] = self._processing.color_adjust(batch[..., :3])
 
         # Random Transform and flip
         batch = self._processing.transform(batch)
-        if not self._training_opts["no_flip"]:
+        if not self._no_flip:
             batch = self._processing.random_flip(batch)
 
         # Add samples to output if this is for display
@@ -229,7 +235,7 @@ class TrainingDataGenerator():
 
         # Random Warp # TODO change masks to have a input mask and a warped target mask
         processed["feed"] = [self._processing.warp(batch[..., :3],
-                                                   self._training_opts["warp_to_landmarks"],
+                                                   self._warp_to_landmarks,
                                                    **warp_kwargs)]
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
@@ -276,7 +282,7 @@ class TrainingDataGenerator():
 
     def _get_landmarks(self, filenames, side):
         """ Obtains the 68 Point Landmarks for the images in this batch. This is only called if
-        config item ``warp_to_landmarks`` is ``True``. If the landmarks for an image cannot be
+        config :attr:`_warp_to_landmarks` is ``True``. If the landmarks for an image cannot be
         found, then an error is raised. """
         logger.trace("Retrieving landmarks: (filenames: %s, side: '%s')", filenames, side)
         src_points = [self._landmarks[side].get(filename, None) for filename in filenames]
@@ -298,7 +304,7 @@ class TrainingDataGenerator():
         return np.array(src_points)
 
     def _get_closest_match(self, filenames, side, batch_src_points):
-        """ Only called if the config item ``warp_to_landmarks`` is ``True``. Gets the closest
+        """ Only called if the :attr:`_warp_to_landmarks` is ``True``. Gets the closest
         matched 68 point landmarks from the opposite training set. """
         logger.trace("Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s'",
                      filenames, batch_src_points)

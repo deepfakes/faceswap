@@ -58,20 +58,6 @@ class Train():  # pylint:disable=too-few-public-methods
         logger.debug("Training image size: %s", size)
         return size
 
-    @property
-    def _alignments_paths(self):
-        """ dict: The alignments paths for each of the source and destination faces. Key is the
-            side, value is the path to the alignments file """
-        alignments_paths = dict()
-        for side in ("a", "b"):
-            alignments_path = getattr(self._args, "alignments_path_{}".format(side))
-            if not alignments_path:
-                image_path = getattr(self._args, "input_{}".format(side))
-                alignments_path = os.path.join(image_path, "alignments.fsa")
-            alignments_paths[side] = alignments_path
-        logger.debug("Alignments paths: %s", alignments_paths)
-        return alignments_paths
-
     def _set_timelapse(self):
         """ Set time-lapse paths if requested.
 
@@ -234,17 +220,10 @@ class Train():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Loading Model")
         model_dir = str(get_folder(self._args.model_dir))
-        augment_color = not self._args.no_augment_color
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
             self._args,
-            snapshot_interval=self._args.snapshot_interval,
-            warp_to_landmarks=self._args.warp_to_landmarks,
-            augment_color=augment_color,
-            no_flip=self._args.no_flip,
             training_image_size=self._image_size,
-            alignments_paths=self._alignments_paths,
-            preview_scale=self._args.preview_scale,
             predict=False)
         model.build()
         logger.debug("Loaded Model")
