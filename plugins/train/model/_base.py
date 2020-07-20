@@ -18,7 +18,7 @@ import tensorflow as tf
 from keras import losses
 from keras import backend as K
 from keras.layers import Input, Layer
-from keras.models import load_model
+from keras.models import load_model, Model as KerasModel
 from keras.optimizers import Adam
 from keras.utils import get_custom_objects
 
@@ -283,7 +283,7 @@ class ModelBase():
                 self._model = self.build_model(inputs)
             self._compile_model()
         if not self._is_predict:
-            self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
+            self._output_summary()
 
     def _get_inputs(self):
         """ Obtain the standardized inputs for the model.
@@ -331,6 +331,13 @@ class ModelBase():
             but with just a single channel.
         """
         raise NotImplementedError
+
+    def _output_summary(self):
+        """ Output the summary of the model and all sub-models to the verbose logger. """
+        self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
+        for layer in self._model.layers:
+            if isinstance(layer, KerasModel):
+                layer.summary(print_fn=lambda x: logger.verbose("%s", x))
 
     def save(self):
         """ Save the model to disk.
