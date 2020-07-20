@@ -65,25 +65,21 @@ class ModelBase():
         self.trainer = "original"  # Override for plugin specific trainer
 
         self._args = arguments
-        self._io = IO(self, model_dir, predict)
-
         self._is_predict = predict
-        self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
-
         self._model = None
+        self.history = [[], []]  # Loss histories per save iteration
+        self._mask_variables = dict(a=None, b=None)
 
-        self._load_config()  # Load config if plugin has not already referenced it
+        self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
+        self._load_config()
+
+        self._io = IO(self, model_dir, self._is_predict)
         self._strategy = Strategy(self._args.distribution)
-
         self.state = State(model_dir,
                            self.name,
                            self._config_changeable_items,
                            self._args.no_logs,
                            training_image_size)
-        # The variables holding masks if Penalized Loss is used
-        self._mask_variables = dict(a=None, b=None)
-        self.predictors = dict()  # Predictors for model
-        self.history = [[], []]  # Loss histories per save iteration
 
         if self._io.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
