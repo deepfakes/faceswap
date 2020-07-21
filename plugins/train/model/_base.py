@@ -34,6 +34,7 @@ _CONFIG = None
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
 # TODO Mask Input
 # TODO Load input shape from state file if variable input shapes for saved model, or (preferably)
+# TODO output_shapes vs output_shape (old/new - plaidml/tf) - dfl-sae + mask training
 # read this straight from the model file
 
 
