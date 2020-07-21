@@ -42,4 +42,4 @@ class Model(OriginalModel):
             var_y = UpscaleBlock(64)(var_y)
             var_y = Conv2D(1, 5, activation="sigmoid", name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
-        return KerasModel([input_], outputs=outputs)
+        return KerasModel([input_], outputs=outputs, name="decoder_{}".format(side))
