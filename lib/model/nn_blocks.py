@@ -57,8 +57,6 @@ def _get_name(name):
     logger.debug("Generating block name: %s", name)
     return name
 
-# TODO Output Name
-
 
 #  << CONVOLUTIONS >>
 class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods
@@ -513,11 +511,11 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
             var_x = ReflectionPadding2D(stride=1,
                                         kernel_size=self._kernel_size,
                                         name="{}_reflectionpadding2d_0".format(self._name))(var_x)
-        var_x = Conv2D(var_x, self._filters,
+        var_x = Conv2D(self._filters,
                        kernel_size=self._kernel_size,
                        padding=self._padding,
                        name="{}_conv2d_0".format(self._name),
-                       **self._kwargs)
+                       **self._kwargs)(var_x)
         var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_1".format(self._name))(var_x)
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
@@ -529,11 +527,11 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
             kwargs["kernel_initializer"] = VarianceScaling(scale=0.2,
                                                            mode="fan_in",
                                                            distribution="uniform")
-        var_x = Conv2D(var_x, self._filters,
+        var_x = Conv2D(self._filters,
                        kernel_size=self._kernel_size,
                        padding=self._padding,
                        name="{}_conv2d_1".format(self._name),
-                       **kwargs)
+                       **kwargs)(var_x)
 
         var_x = Add()([var_x, inputs])
         var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_3".format(self._name))(var_x)

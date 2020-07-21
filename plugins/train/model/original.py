@@ -39,7 +39,7 @@ class Model(ModelBase):
         super().__init__(*args, **kwargs)
         self.input_shape = (64, 64, 3)
         self.output_shape = (64, 64, 3)
-        self.low_mem = self.config["lowmem"]
+        self.low_mem = self.config.get("lowmem", False)
         self.learn_mask = self.config["learn_mask"]
         self.encoder_dim = 512 if self.low_mem else 1024
 
