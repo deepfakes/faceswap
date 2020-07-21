@@ -76,19 +76,12 @@ class TrainerBase():
         self._images = images
         self._sides = sorted(key for key in self._images.keys())
 
-        self._batcher = Batcher(images,
-                                self._model,
-                                self._use_mask,
-                                batch_size,
-                                self._config,
-                                self._get_alignments_data())
-#        self._batchers = {side: Batcher(side,
-#                                        images[side],
-#                                        self._model,
-#                                        self._use_mask,
-#                                        batch_size,
-#                                        self._config)
-#                          for side in self._sides}
+        self._feeder = Feeder(images,
+                              self._model,
+                              self._use_mask,
+                              batch_size,
+                              self._config,
+                              self._get_alignments_data())
 
         self._tensorboard = self._set_tensorboard()
         self._samples = Samples(self._model,
@@ -101,7 +94,7 @@ class TrainerBase():
                                     self._model.feed_mask,
                                     self._model.coverage_ratio,
                                     self._config.get("preview_images", 14),
-                                    self._batcher)
+                                    self._feeder)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -163,7 +156,6 @@ class TrainerBase():
             logger.verbose("TensorBoard logging disabled")
             return None
         logger.debug("Enabling TensorBoard Logging")
-        tensorboard = dict()
 
         logger.debug("Setting up TensorBoard Logging")
         log_dir = os.path.join(str(self._model.model_dir),
@@ -178,6 +170,7 @@ class TrainerBase():
                                                      embeddings_freq=0,
                                                      embeddings_metadata=None)
         tensorboard.set_model(self._model.model)
+        tensorboard.on_train_begin(0)
         logger.info("Enabled TensorBoard Logging")
         return tensorboard
 
@@ -208,7 +201,7 @@ class TrainerBase():
                        self._model.iterations - 1 >= snapshot_interval and
                        (self._model.iterations - 1) % snapshot_interval == 0)
 
-        model_inputs, model_targets = self._batcher.get_batch()
+        model_inputs, model_targets = self._feeder.get_batch()
 
         try:
             loss = self._model.model.train_on_batch(model_inputs, model_targets)
@@ -225,6 +218,7 @@ class TrainerBase():
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
 
+        self._log_tensorboard(loss)
         loss = self._collate_and_store_loss(loss[1:])
         self._print_loss(loss)
 
@@ -232,8 +226,8 @@ class TrainerBase():
             self._model.snapshot()
 
         if do_preview:
-            self._batcher.generate_preview(do_preview)
-            self._samples.images = self._batcher.compile_sample(None)
+            self._feeder.generate_preview(do_preview)
+            self._samples.images = self._feeder.compile_sample(None)
             samples = self._samples.show_sample()
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
@@ -273,8 +267,26 @@ class TrainerBase():
 #        except Exception as err:
 #            raise err
 
+    def _log_tensorboard(self, loss):
+        """ Log current loss to Tensorboard log files
+
+        Parameters
+        ----------
+        loss: list
+            The list of loss ``floats`` output from the model
+        """
+        if not self._tensorboard:
+            return
+        logger.trace("Updating TensorBoard log")
+        logs = {log[0]: log[1]
+                for log in zip(self._model.state.loss_names, loss)}
+        self._tensorboard.on_train_batch_end(self._model.state.iterations, logs=logs)
+
     def _collate_and_store_loss(self, loss):
-        """ Collate the loss into totals for each side and store in :attr:`model.history`.
+        """ Collate the loss into totals for each side.
+
+        The losses are then into a total for each side. Loss totals are added to
+        :attr:`model.history` to track the loss drop per save iteration for backup purposes.
 
         Parameters
         ----------
@@ -307,24 +319,6 @@ class TrainerBase():
         output = "[{}] [#{:05d}] {}".format(self._timestamp, self._model.iterations, output)
         print("\r{}".format(output), end="")
 
-    def _log_tensorboard(self, side, loss):
-        """ Log current loss to Tensorboard log files
-
-        Parameters
-        ----------
-        side: {"a", "b"}
-            The side to store the loss for
-        loss: list
-            The list of loss ``floats`` for this side
-        """
-        if not self._tensorboard:
-            return
-        logger.trace("Updating TensorBoard log: '%s'", side)
-        logs = {log[0]: log[1]
-                for log in zip(self._model.state.loss_names[side], loss)}
-        self._tensorboard[side].on_batch_end(self._model.state.iterations, logs)
-        logger.trace("Updated TensorBoard log: '%s'", side)
-
     def clear_tensorboard(self):
         """ Stop Tensorboard logging.
 
@@ -333,28 +327,28 @@ class TrainerBase():
          """
         if not self._tensorboard:
             return
-        for side, tensorboard in self._tensorboard.items():
-            logger.debug("Ending Tensorboard. Side: '%s'", side)
-            tensorboard.on_train_end(None)
+        logger.debug("Ending Tensorboard Session: %s", self._tensorboard)
+        self._tensorboard.on_train_end(None)
 
 
-class Batcher():
-    """ Handles the processing of a Batch for a single side.
+class Feeder():
+    """ Handles the processing of a Batch for training the model.
 
     Parameters
     ----------
-    images: list
-        The list of full paths to the training images for this :class:`Batcher`
+    images: dict
+        The list of full paths to the training images for this :class:`Feeder` for each side
     model: plugin from :mod:`plugins.train.model`
         The selected model that will be running this trainer
     use_mask: bool
         ``True`` if a mask is required for training otherwise ``False``
     batch_size: int
-        The size of the batch to be processed at each iteration
+        The size of the batch to be processed for each side at each iteration
     config: :class:`lib.config.FaceswapConfig`
         The configuration for this trainer
     alignments: dict
-        A dictionary containing landmarks and masks if these are required for training
+        A dictionary containing landmarks and masks if these are required for training for each
+        side
     """
     def __init__(self, images, model, use_mask, batch_size, config, alignments):
         logger.debug("Initializing %s: num_images: %s, use_mask: %s, batch_size: %s, config: %s)",
@@ -368,11 +362,11 @@ class Batcher():
         self._samples = dict()
         self._masks = dict()
 
-        self._feed = {side: self._load_generator().minibatch_ab(images[side], batch_size, side)
-                      for side in ("a", "b")}
+        self._feeds = {side: self._load_generator().minibatch_ab(images[side], batch_size, side)
+                       for side in ("a", "b")}
 
-        self._preview_feed = self._set_preview_feed()
-        self._timelapse_feed = None
+        self._preview_feeds = self._set_preview_feed()
+        self._timelapse_feeds = None
 
     def _load_generator(self):
         """ Load the :class:`lib.training_data.TrainingDataGenerator` for this batcher """
@@ -442,7 +436,7 @@ class Batcher():
             A list of :class:`numpy.ndarray` for comparing the output of the model
         """
         logger.trace("Generating targets")
-        batch = next(self._feed[side])
+        batch = next(self._feeds[side])
         targets_use_mask = self._model.feed_mask
         model_inputs = batch["feed"] + batch["masks"] if self._use_mask else batch["feed"]
         model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
@@ -464,7 +458,7 @@ class Batcher():
             return
         logger.debug("Generating preview")
         for side in ("a", "b"):
-            batch = next(self._preview_feed[side])
+            batch = next(self._preview_feeds[side])
             self._samples[side] = batch["samples"]
             self._target[side] = batch["targets"][self._model.largest_face_index]
             self._masks[side] = batch["masks"][0]
@@ -517,7 +511,7 @@ class Batcher():
             The list of samples, targets and masks as :class:`numpy.ndarrays` for creating a
             time-lapse frame
         """
-        batch = next(self._timelapse_feed)
+        batch = next(self._timelapse_feeds)
         batchsize = len(batch["samples"])
         images = batch["targets"][self._model.largest_face_index]
         masks = batch["masks"][0]
@@ -537,16 +531,16 @@ class Batcher():
         ----------
         images: list
             The list of full paths to the images for creating the time-lapse for this
-            :class:`Batcher`
+            :class:`Feeder`
         batch_size: int
             The number of images to be used to create the time-lapse preview.
         """
         logger.debug("Setting time-lapse feed: (side: '%s', input_images: '%s', batch_size: %s)",
                      self._side, images, batch_size)
-        self._timelapse_feed = self._load_generator().minibatch_ab(images[:batch_size],
-                                                                   batch_size, self._side,
-                                                                   do_shuffle=False,
-                                                                   is_timelapse=True)
+        self._timelapse_feeds = self._load_generator().minibatch_ab(images[:batch_size],
+                                                                    batch_size, self._side,
+                                                                    do_shuffle=False,
+                                                                    is_timelapse=True)
         logger.debug("Set time-lapse feed")
 
 
@@ -905,19 +899,19 @@ class Timelapse():
         The amount to scale the final preview image by. Default: `1.0`
     image_count: int
         The number of preview images to be displayed in the time-lapse
-    batchers: dict
+    feeder: dict
         The dictionary should contain 2 keys ("a" and "b") with the values being the
-        :class:`Batcher` for each side.
+        :class:`Feeder` for each side.
     """
-    def __init__(self, model, display_mask, feed_mask, coverage_ratio, image_count, batchers):
+    def __init__(self, model, display_mask, feed_mask, coverage_ratio, image_count, feeder):
         logger.debug("Initializing %s: model: %s, display_mask: %s, feed_mask: %s, "
-                     "coverage_ratio: %s, image_count: %s, batchers: '%s')",
+                     "coverage_ratio: %s, image_count: %s, feeder: '%s')",
                      self.__class__.__name__, model, display_mask, feed_mask, coverage_ratio,
-                     image_count, batchers)
+                     image_count, feeder)
         self._num_images = image_count
         self._samples = Samples(model, display_mask, feed_mask, coverage_ratio)
         self._model = model
-        self._batchers = batchers
+        self._feeder = feeder
         self._output_file = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -935,7 +929,7 @@ class Timelapse():
         logger.debug("Getting time-lapse samples: '%s'", side)
         if not self._output_file:
             self._setup(**timelapse_kwargs)
-        self._samples.images[side] = self._batchers[side].compile_timelapse_sample()
+        self._samples.images[side] = self._feeder[side].compile_timelapse_sample()
         logger.debug("Got time-lapse samples: '%s' - %s", side, len(self._samples.images[side]))
 
     def _setup(self, input_a=None, input_b=None, output=None):
@@ -963,7 +957,7 @@ class Timelapse():
                         len(images["b"]),
                         self._num_images)
         for side, image_files in images.items():
-            self._batchers[side].set_timelapse_feed(image_files, batchsize)
+            self._feeder[side].set_timelapse_feed(image_files, batchsize)
         logger.debug("Set up time-lapse")
 
     def output_timelapse(self):

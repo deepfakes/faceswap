@@ -4,7 +4,6 @@
     When inheriting model_data should be a list of NNMeta objects.
     See the class for details.
 """
-import inspect
 import logging
 import os
 import platform
@@ -17,10 +16,9 @@ import tensorflow as tf
 
 from keras import losses
 from keras import backend as K
-from keras.layers import Input, Layer
+from keras.layers import Input
 from keras.models import load_model, Model as KerasModel
 from keras.optimizers import Adam
-from keras.utils import get_custom_objects
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
@@ -356,7 +354,9 @@ class ModelBase():
         logger.debug("Compiling Model")
         optimizer = self._get_optimizer()
         loss = Loss(self._model.inputs, self._model.outputs, None)
-        self._model.compile(optimizer=optimizer, loss=loss.funcs)
+        self._model.compile(optimizer=optimizer, loss=loss.functions)
+        if not self._is_predict:
+            self.state.add_session_loss_names(loss.names)
         logger.debug("Compiled Model: %s", self._model)
 
     def _get_optimizer(self):
@@ -472,20 +472,9 @@ class IO():
             logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
-        self._add_custom_objects()
         model = load_model(self._filename)
         logger.info("Loaded model from disk: '%s'", self._filename)
         return model
-
-    def _add_custom_objects(self):
-        """ Add the plugin's layers to Keras custom objects """
-        custom_objects = {name: obj
-                          for name, obj in inspect.getmembers(sys.modules[self._plugin.__module__])
-                          if (inspect.isclass(obj)
-                              and obj.__module__ == self._plugin.__module__
-                              and Layer in obj.__bases__)}
-        logger.debug("Adding custom objects: %s", custom_objects)
-        get_custom_objects().update(custom_objects)
 
     def _save(self):
         """ Backup and save the model and state file.
@@ -656,77 +645,128 @@ class Strategy():
 
 
 class Loss():
-    """ Holds loss names and functions for an Autoencoder """
+    """ Holds loss names and functions for an Autoencoder.
+
+    Parameters
+    ----------
+    inputs: list
+        A list of input tensors to the model in the order ("a", "b")
+    outputs: list
+        A list of output tensors to the model in the order ("a", "b")
+    mask_variables:
+        A list of :class:`keras.backend.variable` or ``None`` in the order ("a", "b")
+    """
     def __init__(self, inputs, outputs, mask_variable):
         logger.debug("Initializing %s: (inputs: %s, outputs: %s, mask_variable: %s)",
                      self.__class__.__name__, inputs, outputs, mask_variable)
-        self.inputs = inputs
+        self._loss_dict = dict(mae=losses.mean_absolute_error,
+                               mse=losses.mean_squared_error,
+                               logcosh=losses.logcosh,
+                               smooth_loss=generalized_loss,
+                               l_inf_norm=l_inf_norm,
+                               ssim=DSSIMObjective(),
+                               gmsd=gmsd_loss,
+                               pixel_gradient_diff=gradient_loss)
+        self._inputs = inputs
         self._mask_variable = mask_variable
-        self.funcs = self._get_loss_functions(outputs)
+        self._names = self._get_loss_names(outputs)
+        self._funcs = self._get_loss_functions(outputs)
+        self._names.insert(0, "total")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def loss_dict(self):
-        """ Return the loss dict """
-        loss_dict = dict(mae=losses.mean_absolute_error,
-                         mse=losses.mean_squared_error,
-                         logcosh=losses.logcosh,
-                         smooth_loss=generalized_loss,
-                         l_inf_norm=l_inf_norm,
-                         ssim=DSSIMObjective(),
-                         gmsd=gmsd_loss,
-                         pixel_gradient_diff=gradient_loss)
-        return loss_dict
+    def names(self):
+        """ list: The list of loss names for the model. """
+        return self._names
 
     @property
-    def config(self):
-        """ Return the global _CONFIG variable """
+    def functions(self):
+        """ list: The list of loss functions for the model. """
+        return self._funcs
+
+    @property
+    def _config(self):
+        """ :dict: The configuration options for this plugin """
         return _CONFIG
 
     @property
-    def mask_preprocessing_func(self):
-        """ The selected pre-processing function for the mask """
+    def _mask_preprocessing_func(self):
+        """ Python function: The selected pre-processing function for the mask. If no
+        pre-processing function has been requested, ``None`` is returned. """
         retval = None
-        if self.config.get("mask_blur", False):
-            retval = gaussian_blur(max(1, self.mask_shape[1] // 32))
+        if self._config.get("mask_blur", False):
+            retval = gaussian_blur(max(1, self._mask_shape[1] // 32))
         logger.debug(retval)
         return retval
 
     @property
-    def selected_loss(self):
-        """ Return the selected loss function """
-        retval = self.loss_dict[self.config.get("loss_function", "mae")]
-        logger.debug(retval)
-        return retval
-
-    @property
-    def selected_mask_loss(self):
-        """ Return the selected mask loss function. Currently returns mse
-            If a processing function has been requested wrap the loss function
-            in loss wrapper """
-        loss_func = self.loss_dict["mse"]
-        func = self.mask_preprocessing_func
+    def _selected_mask_loss(self):
+        """ :func:`keras.losses.Loss`: The selected mask loss function. Currently returns mean
+        standard error as the default function. If a processing function has been requested the
+        wrapped loss function is returned in a loss wrapper. """
+        loss_func = self._loss_dict["mse"]
+        func = self._mask_preprocessing_func
         logger.debug("loss_func: %s, func: %s", loss_func, func)
         retval = mask_loss_wrapper(loss_func, preprocessing_func=func)
         return retval
 
     @property
-    def mask_input(self):
-        """ Return the mask input or None """
-        mask_inputs = [inp for inp in self.inputs if inp.name.startswith("mask")]
+    def _mask_input(self):
+        """ list: The list of input tensors to the model that contain the mask. Returns ``None``
+        if there is no mask input to the model. """
+        mask_inputs = [inp for inp in self._inputs if inp.name.startswith("mask")]
         if not mask_inputs:
             return None
         return mask_inputs[0]
 
     @property
-    def mask_shape(self):
-        """ Return the mask shape """
-        if self.mask_input is None and self._mask_variable is None:
+    def _mask_shape(self):
+        """ tuple: The shape of the mask input tensors for the model. Returns ``None`` if there is
+        no mask input. """
+        if self._mask_input is None and self._mask_variable is None:
             return None
-        if self.mask_input:
-            retval = K.int_shape(self.mask_input)[1:]
+        if self._mask_input:
+            retval = K.int_shape(self._mask_input)[1:]
         else:
             retval = K.int_shape(self._mask_variable)
+        return retval
+
+    @classmethod
+    def _get_loss_names(cls, outputs):
+        """ Name the losses based on model output
+
+        Notes
+        -----
+        TODO Currently there is an issue in Tensorflow that wraps all outputs in an Identity layer
+        when running in Eager Execution mode, which means we cannot use the name of the output
+        layers to name the losses (https://github.com/tensorflow/tensorflow/issues/32180).
+        With this in mind, losses are named based on their shapes
+
+        Parameters
+        ----------
+        outputs: list
+            A list of output tensors from the model plugin
+
+        Returns
+        -------
+        list
+            A list of names for the losses to be applied to the model
+        """
+        # TODO naming for masks and multi-scale
+        # TODO Use output names when these are fixed upstream
+        split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
+        retval = []
+        for side, side_output in zip(("a", "b"), split_outputs):
+            output_names = [output.name for output in side_output]
+            output_shapes = [K.int_shape(output)[1:] for output in side_output]
+            output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
+            logger.debug("side: %s, output names: %s, output_shapes: %s, output_types: %s",
+                         side, output_names, output_shapes, output_types)
+            retval.extend(["{}_{}{}".format(name, side,
+                                            "" if output_types.count(name) == 1
+                                            else "_{}".format(idx))
+                           for idx, name in enumerate(output_types)])
+        logger.debug(retval)
         return retval
 
     def _get_loss_functions(self, outputs):
@@ -740,25 +780,24 @@ class Loss():
         list
             A list of loss functions to apply to the model
         """
-        # TODO naming for masks and multi-scale
+        selected_loss = self._loss_dict[self._config.get("loss_function", "mae")]
         loss_funcs = []
         output_shapes = [K.int_shape(output)[1:] for output in outputs]
-        output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
-        for idx, loss_type in enumerate(output_types):
-            if loss_type == "mask":
-                loss_funcs.append(self.selected_mask_loss)
-            elif self.config["penalized_mask_loss"] and self.config["mask_type"] is not None:
+        for idx, name in enumerate(self._names):
+            if name.startswith("mask"):
+                loss_funcs.append(self._selected_mask_loss)
+            elif self._config["penalized_mask_loss"] and self._config["mask_type"] is not None:
                 face_size = output_shapes[idx][1]
-                mask_size = self.mask_shape[1]
+                mask_size = self._mask_shape[1]
                 scaling = face_size / mask_size
                 logger.debug("face_size: %s mask_size: %s, mask_scaling: %s",
                              face_size, mask_size, scaling)
-                loss_funcs.append(PenalizedLoss(self._mask_variable, self.selected_loss,
+                loss_funcs.append(PenalizedLoss(self._mask_variable, selected_loss,
                                                 mask_scaling=scaling,
-                                                preprocessing_func=self.mask_preprocessing_func))
+                                                preprocessing_func=self._mask_preprocessing_func))
             else:
-                loss_funcs.append(self.selected_loss)
-            logger.debug("%s: %s", loss_type, loss_funcs[-1])
+                loss_funcs.append(selected_loss)
+            logger.debug("%s: %s", name, loss_funcs[-1])
         logger.debug(loss_funcs)
         return loss_funcs
 
@@ -798,6 +837,11 @@ class State():
         return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
 
     @property
+    def loss_names(self):
+        """ list: The loss names for the current session """
+        return self.sessions[self.session_id]["loss_names"]
+
+    @property
     def current_session(self):
         """ Return the current session dict """
         return self.sessions[self.session_id]
@@ -821,9 +865,23 @@ class State():
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
+                                          "loss_names": [],
                                           "batchsize": 0,
                                           "iterations": 0,
                                           "config": config_changeable_items}
+
+    def add_session_loss_names(self, loss_names):
+        """ Add the session loss names to the sessions dictionary.
+
+        The loss names are used for Tensorboard logging
+
+        Parameters
+        ----------
+        loss_names: list
+            The list of loss names for this session.
+        """
+        logger.debug("Adding session loss_names: %s", loss_names)
+        self.sessions[self.session_id]["loss_names"] = loss_names
 
     def add_session_batchsize(self, batchsize):
         """ Add the session batchsize to the sessions dictionary """

@@ -42,7 +42,7 @@ class FaceswapFormatter(logging.Formatter):
 
     def format(self, record):
         record.message = record.getMessage()
-        record = self.rewrite_tf_deprecation(record)
+        record = self._rewrite_warnings(record)
         # strip newlines
         if "\n" in record.message or "\r" in record.message:
             record.message = record.message.replace("\n", "\\n").replace("\r", "\\r")
@@ -65,11 +65,20 @@ class FaceswapFormatter(logging.Formatter):
             msg = msg + self.formatStack(record.stack_info)
         return msg
 
-    @staticmethod
-    def rewrite_tf_deprecation(record):
-        """ Change TF deprecation messages from WARNING to DEBUG """
-        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
-                                     record.module in("deprecation", "deprecation_wrapper")):
+    @classmethod
+    def _rewrite_warnings(cls, record):
+        """ Change certain warning messages from WARNING to DEBUG to avoid passing non-important
+        information to output.
+
+        Parameters
+        ----------
+        record: :class:`logging.LogRecord`
+            The log record to check for rewriting
+        """
+        if record.levelno == 30 and (
+                record.funcName == "_tfmw_add_deprecation_warning" or
+                record.module in("deprecation", "deprecation_wrapper") or
+                record.message.startswith("No training configuration found in the save file,")):
             record.levelno = 10
             record.levelname = "DEBUG"
         return record
@@ -120,7 +129,7 @@ def file_handler(loglevel, logfile, log_format, command):
         filename = logfile
     else:
         filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")
-        # Windows has issues sharing the log file with subprocesses, so log GUI separately
+        # Windows has issues sharing the log file with sub-processes, so log GUI separately
         filename += "_gui.log" if command == "gui" else ".log"
 
     should_rotate = os.path.isfile(filename)
