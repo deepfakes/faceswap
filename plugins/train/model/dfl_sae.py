@@ -10,7 +10,7 @@ from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import Conv2D, Conv2DBlock, ResidualBlock, UpscaleBlock
 
-from ._base import ModelBase, logger
+from ._base import ModelBase
 
 
 class Model(ModelBase):
@@ -35,8 +35,6 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the DFL-SAE Model """
-        logger.debug("Initializing model")
-
         input_a = inputs[0]
         input_b = inputs[1]
 
