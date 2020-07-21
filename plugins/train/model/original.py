@@ -4,7 +4,7 @@
 from keras.layers import Dense, Flatten, Reshape, Input
 
 from lib.model.nn_blocks import Conv2D, Conv2DBlock, UpscaleBlock
-from ._base import KerasModel, ModelBase, logger
+from ._base import KerasModel, ModelBase
 
 
 class Model(ModelBase):
@@ -76,8 +76,6 @@ class Model(ModelBase):
             correct structure. You should include the keyword argument ``name`` assigned to the
             attribute :attr:`name` to automatically name the model based on the filename.
         """
-        logger.debug("Initializing model")
-
         input_a = inputs[0]
         input_b = inputs[1]
 
