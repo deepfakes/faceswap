@@ -6,6 +6,7 @@ At present there is only the :class:`~plugins.train.trainer.original` plugin, so
 inherits from this class.
 """
 
+# pylint:disable=too-many-lines
 import logging
 import os
 import time
@@ -88,7 +89,7 @@ class TrainerBase():
                                 self._use_mask,
                                 self._model.feed_mask,
                                 self._model.coverage_ratio,
-                                self._model.command_line_arguments.preview_scale)
+                                self._model.command_line_arguments.preview_scale / 100)
         self._timelapse = Timelapse(self._model,
                                     self._use_mask,
                                     self._model.feed_mask,
@@ -232,40 +233,10 @@ class TrainerBase():
             if samples is not None:
                 viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
 
-        self._model.state.increment_iterations()
+        if do_timelapse:
+            self._timelapse.output_timelapse(timelapse_kwargs)
 
-        # TODO
-#        try:
-#            for side, batcher in self._batchers.items():
-#                loss[side] = batcher.train_one_batch()
-#                if not do_preview and not do_timelapse:
-#                    continue
-#                if do_preview:
-#                    batcher.generate_preview(do_preview)
-#                    self._samples.images[side] = batcher.compile_sample(None)
-#                if do_timelapse:
-#                    self._timelapse.get_sample(side, timelapse_kwargs)
-#
-#            self._model.state.increment_iterations()
-#
-#            for side, side_loss in loss.items():
-#                self._store_history(side, side_loss)
-#                self._log_tensorboard(side, side_loss)
-#
-#            self.__print_loss(loss)
-#
-#            if do_preview:
-#                samples = self._samples.show_sample()
-#                if samples is not None:
-#                    viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
-#
-#            if do_timelapse:
-#                self._timelapse.output_timelapse()
-#
-#            if do_snapshot:
-#                self._model.do_snapshot()
-#        except Exception as err:
-#            raise err
+        self._model.state.increment_iterations()
 
     def _log_tensorboard(self, loss):
         """ Log current loss to Tensorboard log files
@@ -365,8 +336,7 @@ class Feeder():
         self._feeds = {side: self._load_generator().minibatch_ab(images[side], batch_size, side)
                        for side in ("a", "b")}
 
-        self._preview_feeds = self._set_preview_feed()
-        self._timelapse_feeds = None
+        self._display_feeds = dict(preview=self._set_preview_feed(), timelapse=dict())
 
     def _load_generator(self):
         """ Load the :class:`lib.training_data.TrainingDataGenerator` for this batcher """
@@ -458,7 +428,7 @@ class Feeder():
             return
         logger.debug("Generating preview")
         for side in ("a", "b"):
-            batch = next(self._preview_feeds[side])
+            batch = next(self._display_feeds["preview"][side])
             self._samples[side] = batch["samples"]
             self._target[side] = batch["targets"][self._model.largest_face_index]
             self._masks[side] = batch["masks"][0]
@@ -470,18 +440,18 @@ class Feeder():
         ----------
         batch_size: int
             The requested batch size for each training iterations
-        samples: :class:`numpy.ndarray`, optional
-            The sample images that should be used for creating the preview. If ``None`` then the
-            samples will be generated from the internal random image generator.
-            Default: ``None``
-        images:  :class:`numpy.ndarray`, optional
-            The target images that should be used for creating the preview. If ``None`` then the
-            targets will be generated from the internal random image generator.
-            Default: ``None``
-        masks:  :class:`numpy.ndarray`, optional
-            The masks that should be used for creating the preview. If ``None`` then the
-            masks will be generated from the internal random image generator.
-            Default: ``None``
+        samples: dict, optional
+            Dictionary for side "a", "b" of :class:`numpy.ndarray`. The sample images that should
+            be used for creating the preview. If ``None`` then the samples will be generated from
+            the internal random image generator. Default: ``None``
+        images: dict, optional
+            Dictionary for side "a", "b" of :class:`numpy.ndarray`. The target images that should
+            be used for creating the preview. If ``None`` then the targets will be generated from
+            the internal random image generator. Default: ``None``
+        masks: dict, optional
+            Dictionary for side "a", "b" of :class:`numpy.ndarray`. The masks that should be used
+            for creating the preview. If ``None`` then the masks will be generated from the
+            internal random image generator. Default: ``None``
 
         Returns
         -------
@@ -494,9 +464,9 @@ class Feeder():
         retval = dict()
         for side in ("a", "b"):
             logger.debug("Compiling samples: (side: '%s', samples: %s)", side, num_images)
-            side_images = images if images is not None else self._target[side]
-            side_masks = masks if masks is not None else self._masks[side]
-            side_samples = samples if samples is not None else self._samples[side]
+            side_images = images[side] if images is not None else self._target[side]
+            side_masks = masks[side] if masks is not None else self._masks[side]
+            side_samples = samples[side] if samples is not None else self._samples[side]
             retval[side] = [side_samples[0:num_images],
                             side_images[0:num_images],
                             side_masks[0:num_images]]
@@ -507,18 +477,22 @@ class Feeder():
 
         Returns
         -------
-        list
-            The list of samples, targets and masks as :class:`numpy.ndarrays` for creating a
-            time-lapse frame
+        dict
+            For sides "a" and "b"; The list of samples, targets and masks as
+            :class:`numpy.ndarrays` for creating a time-lapse frame
         """
-        batch = next(self._timelapse_feeds)
-        batchsize = len(batch["samples"])
-        images = batch["targets"][self._model.largest_face_index]
-        masks = batch["masks"][0]
-        sample = self.compile_sample(batchsize,
-                                     samples=batch["samples"],
-                                     images=images,
-                                     masks=masks)
+        batchsizes = []
+        samples = dict()
+        images = dict()
+        masks = dict()
+        for side in ("a", "b"):
+            batch = next(self._display_feeds["timelapse"][side])
+            batchsizes.append(len(batch["samples"]))
+            samples[side] = batch["samples"]
+            images[side] = batch["targets"][self._model.largest_face_index]
+            masks[side] = batch["masks"][0]
+        batchsize = min(batchsizes)
+        sample = self.compile_sample(batchsize, samples=samples, images=images, masks=masks)
         return sample
 
     def set_timelapse_feed(self, images, batch_size):
@@ -535,16 +509,19 @@ class Feeder():
         batch_size: int
             The number of images to be used to create the time-lapse preview.
         """
-        logger.debug("Setting time-lapse feed: (side: '%s', input_images: '%s', batch_size: %s)",
-                     self._side, images, batch_size)
-        self._timelapse_feeds = self._load_generator().minibatch_ab(images[:batch_size],
-                                                                    batch_size, self._side,
-                                                                    do_shuffle=False,
-                                                                    is_timelapse=True)
-        logger.debug("Set time-lapse feed")
+        logger.debug("Setting time-lapse feed: (input_images: '%s', batch_size: %s)",
+                     images, batch_size)
+        for side in ("a", "b"):
+            self._display_feeds["timelapse"][side] = self._load_generator().minibatch_ab(
+                images[side][:batch_size],
+                batch_size,
+                side,
+                do_shuffle=False,
+                is_timelapse=True)
+        logger.debug("Set time-lapse feed: %s", self._display_feeds["timelapse"])
 
 
-class Samples():
+class Samples():  # pylint:disable=too-few-public-methods
     """ Compile samples for display for preview and time-lapse
 
     Parameters
@@ -587,9 +564,6 @@ class Samples():
         :class:`numpy.ndarry`
             A compiled preview image ready for display or saving
         """
-        if len(self.images) != 2:
-            logger.debug("Ping Pong training - Only one side trained. Aborting preview")
-            return None
         logger.debug("Showing sample")
         feeds = dict()
         figures = dict()
@@ -882,7 +856,7 @@ class Samples():
         return headers
 
 
-class Timelapse():
+class Timelapse():  # pylint:disable=too-few-public-methods
     """ Create a time-lapse preview image.
 
     Parameters
@@ -900,8 +874,7 @@ class Timelapse():
     image_count: int
         The number of preview images to be displayed in the time-lapse
     feeder: dict
-        The dictionary should contain 2 keys ("a" and "b") with the values being the
-        :class:`Feeder` for each side.
+        The :class:`Feeder` for generating the time-lapse images.
     """
     def __init__(self, model, display_mask, feed_mask, coverage_ratio, image_count, feeder):
         logger.debug("Initializing %s: model: %s, display_mask: %s, feed_mask: %s, "
@@ -914,23 +887,6 @@ class Timelapse():
         self._feeder = feeder
         self._output_file = None
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    def get_sample(self, side, timelapse_kwargs):
-        """ Compile the time-lapse preview
-
-        Parameters
-        ----------
-        side: {"a" or "b"}
-            The side that the time-lapse is being generated for
-        timelapse_kwargs: dict
-            The keyword arguments for setting up the time-lapse. All values should be full paths
-            the keys being `input_a`, `input_b`, `output`
-        """
-        logger.debug("Getting time-lapse samples: '%s'", side)
-        if not self._output_file:
-            self._setup(**timelapse_kwargs)
-        self._samples.images[side] = self._feeder[side].compile_timelapse_sample()
-        logger.debug("Got time-lapse samples: '%s' - %s", side, len(self._samples.images[side]))
 
     def _setup(self, input_a=None, input_b=None, output=None):
         """ Setup the time-lapse folder locations and the time-lapse feed.
@@ -956,13 +912,26 @@ class Timelapse():
         batchsize = min(len(images["a"]),
                         len(images["b"]),
                         self._num_images)
-        for side, image_files in images.items():
-            self._feeder[side].set_timelapse_feed(image_files, batchsize)
+        self._feeder.set_timelapse_feed(images, batchsize)
         logger.debug("Set up time-lapse")
 
-    def output_timelapse(self):
-        """ Write the created time-lapse to the specified output folder. """
+    def output_timelapse(self, timelapse_kwargs):
+        """ Generate the time-lapse samples and output the created time-lapse to the specified
+        output folder.
+
+        timelapse_kwargs: dict:
+            The keyword arguments for setting up the time-lapse. All values should be full paths
+            the keys being `input_a`, `input_b`, `output`
+        """
         logger.debug("Ouputting time-lapse")
+        if not self._output_file:
+            self._setup(**timelapse_kwargs)
+
+        logger.debug("Getting time-lapse samples")
+        self._samples.images = self._feeder.compile_timelapse_sample()
+        logger.debug("Got time-lapse samples: %s",
+                     {side: len(images) for side, images in self._samples.images.items()})
+
         image = self._samples.show_sample()
         if image is None:
             return
