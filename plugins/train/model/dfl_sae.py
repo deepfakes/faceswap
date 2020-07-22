@@ -34,8 +34,8 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the DFL-SAE Model """
-        input_a = inputs[0]
-        input_b = inputs[1]
+        input_a = inputs[0][0]
+        input_b = inputs[1][0]
 
         encoder = getattr(self, "encoder_{}".format(self.architecture))()
         enc_output_shape = encoder.output_shape[1:]

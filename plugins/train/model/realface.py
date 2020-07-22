@@ -67,8 +67,8 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the RealFace model. """
-        input_a = inputs[0]
-        input_b = inputs[1]
+        input_a = inputs[0][0]
+        input_b = inputs[1][0]
 
         encoder = self.encoder()
         encoder_a = encoder(input_a)

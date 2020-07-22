@@ -17,8 +17,8 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the IAE Model """
-        input_a = inputs[0]
-        input_b = inputs[1]
+        input_a = inputs[0][0]
+        input_b = inputs[1][0]
 
         encoder = self.encoder()
         decoder = self.decoder()

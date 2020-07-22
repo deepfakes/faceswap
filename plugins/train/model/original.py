@@ -72,12 +72,12 @@ class Model(ModelBase):
             correct structure. You should include the keyword argument ``name`` assigned to the
             attribute :attr:`name` to automatically name the model based on the filename.
         """
-        input_a = inputs[0]
-        input_b = inputs[1]
+        input_a = inputs[0][0]
+        input_b = inputs[1][0]
 
         encoder = self.encoder()
-        encoder_a = encoder(input_a)
-        encoder_b = encoder(input_b)
+        encoder_a = [encoder(input_a)]
+        encoder_b = [encoder(input_b)]
 
         outputs = [self.decoder("a")(encoder_a), self.decoder("b")(encoder_b)]
 
