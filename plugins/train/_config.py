@@ -144,6 +144,14 @@ class Config(FaceswapConfig):
                  "border of the image."
                  "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
+            section=section, title="allow_growth", datatype=bool, default=False, group="network",
+            fixed=False,
+            info="[Nvidia Only]. Enable the Tensorflow GPU `allow_growth` configuration option. "
+                 "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
+                 "but can lead to higher VRAM fragmentation and slower performance. Should only "
+                 "be enabled if you are receiving errors regarding `cuDNN fails to initialize` "
+                 "when commencing training.")
+        self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool,
             default=True, group="loss",
             info="Image loss function is weighted by mask presence. For areas of "

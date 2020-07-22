@@ -936,14 +936,16 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append(dict(
             opts=("-bs", "--batch-size"),
             action=Slider,
-            min_max=(2, 256),
-            rounding=2,
+            min_max=(1, 256),
+            rounding=1,
             type=int,
             dest="batch_size",
-            default=64,
+            default=16,
             group="training",
-            help="Batch size. This is the number of images processed through the model for "
-                 "each iteration. Larger batches require more GPU RAM."))
+            help="Batch size. This is the number of images processed through the model for each "
+                 "side per iteration. NB: As the model is fed 2 sides at a time, the actual "
+                 "number of images within the model at any one time is double the number that you "
+                 "set here. Larger batches require more GPU RAM."))
         argument_list.append(dict(
             opts=("-it", "--iterations"),
             action=Slider,
@@ -1053,15 +1055,6 @@ class TrainArgs(FaceSwapArgs):
             group="preview",
             help="Writes the training result to a file. The image will be stored in the root "
                  "of your FaceSwap folder."))
-        argument_list.append(dict(
-            opts=("-ag", "--allow-growth"),
-            action="store_true",
-            dest="allow_growth",
-            default=False,
-            backend="nvidia",
-            group="model",
-            help="Sets allow_growth option of Tensorflow to spare memory on some "
-                 "configurations."))
         argument_list.append(dict(
             opts=("-nl", "--no-logs"),
             action="store_true",

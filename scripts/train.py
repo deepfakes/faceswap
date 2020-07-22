@@ -9,7 +9,6 @@ from threading import Lock
 from time import sleep
 
 import cv2
-import tensorflow as tf
 
 from lib.image import read_image
 from lib.keypress import KBHit
@@ -193,9 +192,6 @@ class Train():  # pylint:disable=too-few-public-methods
             sleep(1)  # Let preview instructions flush out to logger
             logger.debug("Commencing Training")
             logger.info("Loading data, this may take a while...")
-
-            if self._args.allow_growth:
-                self._set_tf_allow_growth()
             model = self._load_model()
             trainer = self._load_trainer(model)
             self._run_training_cycle(model, trainer)
@@ -356,18 +352,6 @@ class Train():  # pylint:disable=too-few-public-methods
         keypress.set_normal_term()
         logger.debug("Closed Monitor")
         return err
-
-    @staticmethod
-    def _set_tf_allow_growth():
-        """ Allow TensorFlow to manage VRAM growth.
-
-        Enables the Tensorflow allow_growth option if requested in the command line arguments
-        """
-        logger.debug("Setting Tensorflow 'allow_growth' option")
-        for gpu in tf.config.experimental.list_physical_devices('GPU'):
-            logger.info("Setting allow growth for GPU: %s", gpu)
-            tf.config.experimental.set_memory_growth(gpu, True)
-        logger.debug("Set Tensorflow 'allow_growth' option")
 
     def _show(self, image, name=""):
         """ Generate the preview and write preview file output.

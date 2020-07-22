@@ -248,12 +248,17 @@ class ModelBase():
     def build(self):
         """ Build the model.
 
+        Performs any initial tensorflow set up options (e.g. enabling allow_growth).
+
         Within the defined strategy scope, either builds the model from scratch or loads an
         existing model if one exists. The model is then compiled with the optimizer and chosen
         loss function(s), Finally, a model summary is outputted to the logger at verbose level.
 
         The compiled model is allocated to :attr:`_model`.
         """
+        if get_backend() == "nvidia" and self.config["allow_growth"]:
+            self._set_tf_allow_growth()
+
         with self._strategy.scope():
             if self._io.model_exists:
                 self._model = self._io._load()  # pylint:disable=protected-access
@@ -263,6 +268,18 @@ class ModelBase():
             self._compile_model()
         if not self._is_predict:
             self._output_summary()
+
+    @classmethod
+    def _set_tf_allow_growth(cls):
+        """ Allow TensorFlow to manage VRAM growth.
+
+        Enables the Tensorflow allow_growth option if requested in the command line arguments
+        """
+        logger.debug("Setting Tensorflow 'allow_growth' option")
+        for gpu in tf.config.experimental.list_physical_devices('GPU'):
+            logger.info("Setting allow growth for GPU: %s", gpu)
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logger.debug("Set Tensorflow 'allow_growth' option")
 
     def _get_inputs(self):
         """ Obtain the standardized inputs for the model.
