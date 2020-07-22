@@ -23,7 +23,6 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
-        self.output_shape = (self.config["output_size"], self.config["output_size"], 3)
         self.check_input_output()
         self.dense_width, self.upscalers_no = self.get_dense_width_upscalers_numbers()
         self.kernel_initializer = RandomNormal(0, 0.02)

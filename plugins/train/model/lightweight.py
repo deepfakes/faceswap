@@ -15,8 +15,6 @@ class Model(OriginalModel):
     """ Lightweight Model for ~2GB Graphics Cards """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.input_shape = (64, 64, 3)
-        self.output_shape = (64, 64, 3)
         self.encoder_dim = 512
 
     def encoder(self):

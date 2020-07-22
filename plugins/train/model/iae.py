@@ -13,7 +13,6 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (64, 64, 3)
-        self.output_shape = (64, 64, 3)
         self.encoder_dim = 1024
 
     def build_model(self, inputs):

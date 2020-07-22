@@ -24,7 +24,6 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (128, 128, 3)
-        self.output_shape = (self.config["output_size"], self.config["output_size"], 3)
 
         self.features = dict(lowmem=0, fair=1, best=2)[self.config["features"]]
         self.encoder_filters = 64 if self.features > 0 else 48
@@ -42,8 +41,8 @@ class Model(ModelBase):
             logger.error("Config error: output_size must be one of: 128, 256, or 384.")
             raise FaceswapError("Config error: output_size must be one of: 128, 256, or 384.")
 
-        logger.debug("output_shape: %s, features: %s, encoder_filters: %s, encoder_dim: %s, "
-                     " details: %s, upscale_ratio: %s", self.output_shape, self.features,
+        logger.debug("output_size: %s, features: %s, encoder_filters: %s, encoder_dim: %s, "
+                     " details: %s, upscale_ratio: %s", self.config["output_size"], self.features,
                      self.encoder_filters, self.encoder_dim, self.details, self.upscale_ratio)
 
     def build_model(self, inputs):

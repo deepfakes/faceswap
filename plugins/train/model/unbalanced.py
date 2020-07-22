@@ -16,7 +16,6 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
-        self.output_shape = (self.config["input_size"], self.config["input_size"], 3)
         self.low_mem = self.config.get("lowmem", False)
         self.encoder_dim = 512 if self.low_mem else self.config["nodes"]
         self.kernel_initializer = RandomNormal(0, 0.02)

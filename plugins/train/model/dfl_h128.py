@@ -14,7 +14,6 @@ class Model(OriginalModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (128, 128, 3)
-        self.output_shape = (128, 128, 3)
         self.encoder_dim = 256 if self.config["lowmem"] else 512
 
     def encoder(self):

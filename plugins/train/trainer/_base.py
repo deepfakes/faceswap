@@ -333,16 +333,20 @@ class Feeder():
         self._samples = dict()
         self._masks = dict()
 
-        self._feeds = {side: self._load_generator().minibatch_ab(images[side], batch_size, side)
-                       for side in ("a", "b")}
+        self._feeds = {side: self._load_generator(idx).minibatch_ab(images[side], batch_size, side)
+                       for idx, side in enumerate(("a", "b"))}
 
         self._display_feeds = dict(preview=self._set_preview_feed(), timelapse=dict())
 
-    def _load_generator(self):
-        """ Load the :class:`lib.training_data.TrainingDataGenerator` for this batcher """
+    def _load_generator(self, output_index):
+        """ Load the :class:`lib.training_data.TrainingDataGenerator` for this batcher.
+
+        output_index: int
+            The output index from the model to get output shapes for
+        """
         logger.debug("Loading generator")
         input_size = self._model.input_shape[0]
-        output_shapes = self._model.output_shapes
+        output_shapes = self._model.output_shapes[output_index]
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
                                           output_shapes,
@@ -361,16 +365,16 @@ class Feeder():
         for previews for the batcher.
         """
         retval = dict()
-        for side in ("a", "b"):
+        for idx, side in enumerate(("a", "b")):
             logger.debug("Setting preview feed: (side: '%s')", side)
             preview_images = self._config.get("preview_images", 14)
             preview_images = min(max(preview_images, 2), 16)
             batchsize = min(len(self._images[side]), preview_images)
-            retval[side] = self._load_generator().minibatch_ab(self._images[side],
-                                                               batchsize,
-                                                               side,
-                                                               do_shuffle=True,
-                                                               is_preview=True)
+            retval[side] = self._load_generator(idx).minibatch_ab(self._images[side],
+                                                                  batchsize,
+                                                                  side,
+                                                                  do_shuffle=True,
+                                                                  is_preview=True)
         logger.debug("Set preview feed. Batchsize: %s", batchsize)
         return retval
 
@@ -430,7 +434,7 @@ class Feeder():
         for side in ("a", "b"):
             batch = next(self._display_feeds["preview"][side])
             self._samples[side] = batch["samples"]
-            self._target[side] = batch["targets"][self._model.largest_face_index]
+            self._target[side] = batch["targets"][-1]
             self._masks[side] = batch["masks"][0]
 
     def compile_sample(self, batch_size, samples=None, images=None, masks=None):
@@ -489,7 +493,7 @@ class Feeder():
             batch = next(self._display_feeds["timelapse"][side])
             batchsizes.append(len(batch["samples"]))
             samples[side] = batch["samples"]
-            images[side] = batch["targets"][self._model.largest_face_index]
+            images[side] = batch["targets"][-1]
             masks[side] = batch["masks"][0]
         batchsize = min(batchsizes)
         sample = self.compile_sample(batchsize, samples=samples, images=images, masks=masks)
@@ -511,8 +515,8 @@ class Feeder():
         """
         logger.debug("Setting time-lapse feed: (input_images: '%s', batch_size: %s)",
                      images, batch_size)
-        for side in ("a", "b"):
-            self._display_feeds["timelapse"][side] = self._load_generator().minibatch_ab(
+        for idx, side in enumerate(("a", "b")):
+            self._display_feeds["timelapse"][side] = self._load_generator(idx).minibatch_ab(
                 images[side][:batch_size],
                 batch_size,
                 side,
@@ -660,7 +664,7 @@ class Samples():  # pylint:disable=too-few-public-methods
         # Get the returned largest image from predictors that emit multiple items
         if not isinstance(preds["a_a"], np.ndarray):
             for key, val in preds.items():
-                preds[key] = val[self._model.largest_face_index]
+                preds[key] = val[-1]
         logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
@@ -957,7 +961,7 @@ class TrainingAlignments():
                      self.__class__.__name__, model, {k: len(v) for k, v in image_list.items()})
         self._args = model.command_line_arguments
         self._config = model.config
-        self._training_size = model.state.training_image_size
+        self._training_size = model.state.training_size
         self._alignments_paths = self._get_alignments_paths()
         self._hashes = self._get_image_hashes(image_list)
         self._detected_faces = self._load_alignments()

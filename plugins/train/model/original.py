@@ -20,9 +20,6 @@ class Model(ModelBase):
         * :attr:`input_shape` (`tuple`): a tuple of ints defining the shape of the faces that the
         model takes as input
 
-        * :attr:`output_shape` (`tuple`) a tuple of ints defining the shape of the output from the
-        model
-
     Any additional attributes used exclusively by this model should be defined here, but make sure
     that you are not accidentally overriding any existing :class:`plugins.train.model._base.Model`
     attributes.
@@ -38,7 +35,6 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (64, 64, 3)
-        self.output_shape = (64, 64, 3)
         self.low_mem = self.config.get("lowmem", False)
         self.learn_mask = self.config["learn_mask"]
         self.encoder_dim = 512 if self.low_mem else 1024

@@ -33,9 +33,8 @@ _CONFIG = None
 
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
 # TODO Mask Input
-# TODO Load input shape from state file if variable input shapes for saved model, or (preferably)
-# TODO output_shapes vs output_shape (old/new - plaidml/tf) - dfl-sae + mask training
-# read this straight from the model file
+# TODO Penalized Mask Loss
+# TODO Converter
 
 
 class ModelBase():
@@ -60,7 +59,6 @@ class ModelBase():
                      self.__class__.__name__, model_dir, arguments, training_image_size, predict)
 
         self.input_shape = None  # Must be set within the plugin after initializing
-        self.output_shape = None  # Must be set within the plugin after initializing
         self.trainer = "original"  # Override for plugin specific trainer
 
         self._args = arguments
@@ -130,49 +128,11 @@ class ModelBase():
 
     @property
     def output_shapes(self):
-        """ list: A list of shape tuples for the output of the model """
-        # TODO Currently we're pulling all of the outputs and I'm just extracting from the first
-        # side. This is not right, Need to fix this to properly output, especially when masks are
-        # involved
-        retval = [tuple(K.int_shape(output)[-3:]) for output in self._model.outputs]
-        retval = [retval[0]]
-        return retval
-
-    # TODO
-#    @property
-#    def output_shape(self):
-#        """ The output shape of the model (shape of largest face output) """
-#        return self.output_shapes[self.largest_face_index]
-
-    @property
-    def largest_face_index(self):
-        """ Return the index from model.outputs of the largest face
-            Required for multi-output model prediction. The largest face
-            is assumed to be the final output
-        """
-        sizes = [shape[1] for shape in self.output_shapes if shape[2] == 3]
-        if not sizes:
-            return None
-        max_face = max(sizes)
-        retval = [idx for idx, shape in enumerate(self.output_shapes)
-                  if shape[1] == max_face and shape[2] == 3][0]
-        logger.debug(retval)
-        return retval
-
-    @property
-    def largest_mask_index(self):
-        """ Return the index from model.outputs of the largest mask
-            Required for multi-output model prediction. The largest face
-            is assumed to be the final output
-        """
-        sizes = [shape[1] for shape in self.output_shapes if shape[2] == 1]
-        if not sizes:
-            return None
-        max_mask = max(sizes)
-        retval = [idx for idx, shape in enumerate(self.output_shapes)
-                  if shape[1] == max_mask and shape[2] == 1][0]
-        logger.debug(retval)
-        return retval
+        """ list: A list of list of shape tuples for the outputs of the model with the batch
+        dimension removed. The outer list contains 2 sub-lists (one for each side "a" and "b").
+        The inner sub-lists contain the output shapes for that side. """
+        shapes = [tuple(K.int_shape(output)[-3:]) for output in self._model.outputs]
+        return [shapes[:len(shapes) // 2], shapes[len(shapes) // 2:]]
 
     @property
     def feed_mask(self):
@@ -300,7 +260,7 @@ class ModelBase():
         logger.debug("Getting inputs")
         if self.feed_mask:
             mask_shape = self.input_shape[:2] + (1, )
-            logger.info("mask_shape: %s", mask_shape)
+            logger.debug("mask_shape: %s", mask_shape)
         inputs = []
         for side in ("a", "b"):
             face_in = Input(shape=self.input_shape, name="face_in_{}".format(side))
@@ -346,26 +306,6 @@ class ModelBase():
     def snapshot(self):
         """ Create a snapshot of the model folder. """
         self._io._snapshot()  # pylint:disable=protected-access
-
-    # TODO (store inputs)
-    def add_predictor(self, side, model):
-        """ Add a predictor to the predictors dictionary """
-        logger.debug("Adding predictor: (side: '%s', model: %s)", side, model)
-        self.predictors[side] = model
-        if not self.state.inputs:
-            self.store_input_shapes(model)
-
-    def store_input_shapes(self, model):
-        """ Store the input and output shapes to state """
-        logger.debug("Adding input shapes to state for model")
-        inputs = {tensor.name: K.int_shape(tensor)[-3:] for tensor in model.inputs}
-        if not any(inp for inp in inputs.keys() if inp.startswith("face")):
-            raise ValueError("No input named 'face' was found. Check your input naming. "
-                             "Current input names: {}".format(inputs))
-        # Make sure they are all ints so that it can be json serialized
-        inputs = {key: tuple(int(i) for i in val) for key, val in inputs.items()}
-        self.state.inputs = inputs
-        logger.debug("Added input shapes: %s", self.state.inputs)
 
     def _compile_model(self):
         """ Compile the model to include the Optimizer and Loss Function(s). """
@@ -837,22 +777,11 @@ class State():
         self.training_size = training_image_size
         self.sessions = dict()
         self.lowest_avg_loss = dict()
-        self.inputs = dict()
         self.config = dict()
         self.load(config_changeable_items)
         self.session_id = self.new_session_id()
         self.create_new_session(no_logs, config_changeable_items)
         logger.debug("Initialized %s:", self.__class__.__name__)
-
-    @property
-    def face_shapes(self):
-        """ Return a list of stored face shape inputs """
-        return [tuple(val) for key, val in self.inputs.items() if key.startswith("face")]
-
-    @property
-    def mask_shapes(self):
-        """ Return a list of stored mask shape inputs """
-        return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
 
     @property
     def loss_names(self):
@@ -923,7 +852,6 @@ class State():
         self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
         self.iterations = state.get("iterations", 0)
         self.training_size = state.get("training_size", 256)
-        self.inputs = state.get("inputs", dict())
         self.config = state.get("config", dict())
         logger.debug("Loaded state: %s", state)
         self.replace_config(config_changeable_items)
@@ -935,7 +863,6 @@ class State():
                  "sessions": self.sessions,
                  "lowest_avg_loss": self.lowest_avg_loss,
                  "iterations": self.iterations,
-                 "inputs": self.inputs,
                  "training_size": self.training_size,
                  "config": _CONFIG}
         self.serializer.save(self.filename, state)

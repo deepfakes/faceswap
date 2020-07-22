@@ -18,7 +18,6 @@ class Model(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
-        self.output_shape = (self.config["input_size"], self.config["input_size"], 3)
         self.architecture = self.config["architecture"].lower()
         self.use_mask = self.config.get("learn_mask", False)
         self.multiscale_count = 3 if self.config["multiscale_decoder"] else 1
