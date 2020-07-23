@@ -203,9 +203,8 @@ class TrainerBase():
                        (self._model.iterations - 1) % snapshot_interval == 0)
 
         model_inputs, model_targets = self._feeder.get_batch()
-
         try:
-            loss = self._model.model.train_on_batch(model_inputs, model_targets)
+            loss = self._model.model.train_on_batch(model_inputs, y=model_targets)
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to train the selected model at "
                    "the selected settings. You can try a number of things:"
@@ -394,8 +393,8 @@ class Feeder():
                 if not self._model.feed_mask:
                     # Remove masks from the model input if not learning a mask
                     side_inputs = side_inputs[0]
-            model_inputs.extend(side_inputs)
-            model_targets.extend(side_targets)
+            model_inputs.append(side_inputs)
+            model_targets.append(side_targets)
         return model_inputs, model_targets
 
     def _get_next(self, side):
@@ -590,7 +589,12 @@ class Samples():  # pylint:disable=too-few-public-methods
             other_side = "a" if side == "b" else "b"
             predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
-            display = self._to_full_frame(side, samples, predictions)
+            if self._feed_mask:
+                predicted_masks = [preds["masks_{0}_{0}".format(side)],
+                                   preds["masks_{}_{}".format(other_side, side)]]
+            else:
+                predicted_masks = []
+            display = self._to_full_frame(side, samples, predictions, predicted_masks)
             headers[side] = self._get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
@@ -657,18 +661,31 @@ class Samples():  # pylint:disable=too-few-public-methods
         preds = dict()
         standard = self._model.model.predict([feed_a, feed_b])
         swapped = self._model.model.predict([feed_b, feed_a])
+        if self._feed_mask:
+            # Split the masks from the output
+            standard_masks = [pred for side in standard for pred in side if pred.shape[-1] == 1]
+            standard = [pred for side in standard for pred in side if pred.shape[-1] == 3]
+            swapped_masks = [pred for side in swapped for pred in side if pred.shape[-1] == 1]
+            swapped = [pred for side in swapped for pred in side if pred.shape[-1] == 3]
         preds["a_a"] = standard[0]
         preds["b_b"] = standard[1]
         preds["a_b"] = swapped[0]
         preds["b_a"] = swapped[1]
-        # Get the returned largest image from predictors that emit multiple items
-        if not isinstance(preds["a_a"], np.ndarray):
-            for key, val in preds.items():
-                preds[key] = val[-1]
-        logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
+        if self._feed_mask:
+            preds["masks_a_a"] = standard_masks[0]
+            preds["masks_b_b"] = standard_masks[1]
+            preds["masks_a_b"] = swapped_masks[0]
+            preds["masks_b_a"] = swapped_masks[1]
+
+        # TODO Multi Out
+        # # Get the returned largest image from predictors that emit multiple items
+        # if not isinstance(preds["a_a"], np.ndarray):
+        #     for key, val in preds.items():
+        #         preds[key] = val[-1]
+        logger.trace("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
-    def _to_full_frame(self, side, samples, predictions):
+    def _to_full_frame(self, side, samples, predictions, predicted_masks):
         """ Patch targets and prediction images into images of training image size.
 
         Parameters
@@ -679,6 +696,8 @@ class Samples():  # pylint:disable=too-few-public-methods
             List of :class:`numpy.ndarray` of target images and feed images
         predictions: list
             List of :class: `numpy.ndarray` of predictions from the model
+        predicted_masks: list
+            List of :class: `numpy.ndarray` of predicted masks from the model
         """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
@@ -690,7 +709,7 @@ class Samples():  # pylint:disable=too-few-public-methods
             frame = self._frame_overlay(full, target_size, (0, 0, 255))
 
         if self._display_mask:
-            images = self._compile_masked(images, samples[-1])
+            images = self._compile_masked(images, samples[-1], predicted_masks)
         images = [self._resize_sample(side, image, target_size) for image in images]
         if target_size != full_size:
             images = [self._overlay_foreground(frame, image) for image in images]
@@ -737,7 +756,7 @@ class Samples():  # pylint:disable=too-few-public-methods
         return retval
 
     @staticmethod
-    def _compile_masked(faces, masks):
+    def _compile_masked(faces, masks, predicted_masks):
         """ Add the mask to the faces for masked preview.
 
         Places an opaque red layer over areas of the face that are masked out.
@@ -748,6 +767,8 @@ class Samples():  # pylint:disable=too-few-public-methods
             The sample faces that are to have the mask applied
         masks: :class:`numpy.ndarray`
             The masks that are to be applied to the faces
+        predicted_masks: list
+            The predicted masks from the model if learn mask has been enabled
 
         Returns
         -------
@@ -755,12 +776,21 @@ class Samples():  # pylint:disable=too-few-public-methods
             List of :class:`numpy.ndarray` faces with the opaque mask layer applied
         """
         retval = list()
-        masks3 = np.tile(1 - np.rint(masks), 3)
-        for mask in masks3:
+        orig_masks = np.tile(1 - np.rint(masks), 3)
+        for mask in orig_masks:
             mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
-        for previews in faces:
-            images = np.array([cv2.addWeighted(img, 1.0, masks3[idx], 0.3, 0)
-                               for idx, img in enumerate(previews)])
+        if predicted_masks:
+            pred_masks = [np.tile(1 - np.rint(masks), 3) for masks in predicted_masks]
+            for side_masks in pred_masks:
+                for mask in side_masks:
+                    mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
+            masks3 = [orig_masks, *pred_masks]
+        else:
+            masks3 = np.repeat(orig_masks, 3, axis=0)
+
+        for previews, compiled_masks in zip(faces, masks3):
+            images = np.array([cv2.addWeighted(img, 1.0, mask, 0.3, 0)
+                               for img, mask in zip(previews, compiled_masks)])
             retval.append(images)
         logger.debug("masked shapes: %s", [faces.shape for faces in retval])
         return retval

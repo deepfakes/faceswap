@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
-# TODO Mask Input
 # TODO Penalized Mask Loss
 # TODO Converter
 
@@ -258,17 +257,13 @@ class ModelBase():
             but with just a single channel.
         """
         logger.debug("Getting inputs")
-        if self.feed_mask:
-            mask_shape = self.input_shape[:2] + (1, )
-            logger.debug("mask_shape: %s", mask_shape)
         inputs = []
         for side in ("a", "b"):
-            face_in = Input(shape=self.input_shape, name="face_in_{}".format(side))
+            side_inputs = [Input(shape=self.input_shape, name="face_in_{}".format(side))]
             if self.feed_mask:
-                mask_in = Input(shape=mask_shape, name="mask_in_{}".format(side))
-                inputs.append([face_in, mask_in])
-            else:
-                inputs.append(face_in)
+                side_inputs.append(Input(shape=self.input_shape[:2] + (1, ),
+                                         name="mask_in_{}".format(side)))
+            inputs.append(side_inputs)
         logger.debug("inputs: %s", inputs)
         return inputs
 
