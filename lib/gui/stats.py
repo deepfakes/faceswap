@@ -450,9 +450,6 @@ class Calculations():
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
             iterations = range(len(timestamps) - 1)
-            print("===========\n")
-            print(timestamps[:100])
-            print([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations][:100])
             rate.extend([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations])
         logger.debug("Calculated totals rate: Item_count: %s", len(rate))
         return rate
