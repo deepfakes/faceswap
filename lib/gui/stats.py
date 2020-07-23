@@ -11,6 +11,7 @@ from math import ceil, sqrt
 import numpy as np
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.core.util import event_pb2
 from lib.serializer import get_serializer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -30,10 +31,16 @@ class TensorBoardLogs():
     """ Parse and return data from TensorBoard logs """
     def __init__(self, logs_folder):
         self.folder_base = logs_folder
-        self.log_filenames = self.set_log_filenames()
+        self.log_filenames = self._get_log_filenames()
 
-    def set_log_filenames(self):
-        """ Set the TensorBoard log filenames for all existing sessions """
+    def _get_log_filenames(self):
+        """ Get the TensorBoard log filenames for all existing sessions.
+
+        Returns
+        -------
+        dict
+            The full path of each log file for each training session that has been run
+        """
         logger.debug("Loading log filenames. base_dir: '%s'", self.folder_base)
         log_filenames = dict()
         for dirpath, _, filenames in os.walk(self.folder_base):
@@ -43,62 +50,83 @@ class TensorBoardLogs():
                         if filename.startswith("events.out.tfevents")]
             # Take the last log file, in case of previous crash
             logfile = os.path.join(dirpath, sorted(logfiles)[-1])
-            side, session = os.path.split(dirpath)
-            side = os.path.split(side)[1]
+            session = os.path.split(os.path.split(dirpath)[0])[1]
             session = int(session[session.rfind("_") + 1:])
-            log_filenames.setdefault(session, dict())[side] = logfile
+            log_filenames[session] = logfile
         logger.debug("logfiles: %s", log_filenames)
         return log_filenames
 
-    def get_loss(self, side=None, session=None):
-        """ Read the loss from the TensorBoard logs
-            Specify a side or a session or leave at None for all
+    def get_loss(self, session=None):
+        """ Read the loss from the TensorBoard event logs
+
+        Parameters
+        ----------
+        session: int, optional
+            The Session ID to return the loss for. Set to ``None`` to return all session
+            losses. Default ``None``
+
+        Returns
+        -------
+        dict
+            A list of loss values for each step for the requested session
         """
-        logger.debug("Getting loss: (side: %s, session: %s)", side, session)
+        logger.debug("Getting loss: (session: %s)", session)
         all_loss = dict()
-        for sess, sides in self.log_filenames.items():
+        for sess, logfile in self.log_filenames.items():
             if session is not None and sess != session:
                 logger.debug("Skipping session: %s", sess)
                 continue
             loss = dict()
-            for sde, logfile in sides.items():
-                if side is not None and sde != side:
-                    logger.debug("Skipping side: %s", sde)
+            events = [event_pb2.Event.FromString(record.numpy())
+                      for record in tf.data.TFRecordDataset(logfile)]
+            for event in events:
+                if not event.summary.value or not event.summary.value[0].tag.startswith("batch_"):
                     continue
-                for event in tf.train.summary_iterator(logfile):
-                    for summary in event.summary.value:
-                        if "loss" not in summary.tag:
-                            continue
-                        tag = summary.tag.replace("batch_", "")
-                        loss.setdefault(tag,
-                                        dict()).setdefault(sde,
-                                                           list()).append(summary.simple_value)
+                summary = event.summary.value[0]
+                tag = summary.tag.replace("batch_", "")
+                loss.setdefault(tag, []).append(summary.simple_value)
             all_loss[sess] = loss
+        logger.debug(all_loss)
         return all_loss
 
     def get_timestamps(self, session=None):
-        """ Read the timestamps from the TensorBoard logs
-            Specify a session or leave at None for all
-            NB: For all intents and purposes timestamps are the same for
-                both sides, so just read from one side """
+        """ Read the timestamps from the TensorBoard logs.
+
+        As loss timestamps are slightly different for each loss, we collect the timestamp from the
+        `batch_total` key.
+
+        Parameters
+        ----------
+        session: int, optional
+            The Session ID to return the timestamps for. Set to ``None`` to return all session
+            timestamps. Default ``None``
+
+        Returns
+        -------
+        dict
+            The timestamps for each event for the requested session
+        """
+
         logger.debug("Getting timestamps")
         all_timestamps = dict()
-        for sess, sides in self.log_filenames.items():
+        for sess, logfile in self.log_filenames.items():
             if session is not None and sess != session:
                 logger.debug("Skipping sessions: %s", sess)
                 continue
             try:
-                for logfile in sides.values():
-                    timestamps = [event.wall_time
-                                  for event in tf.train.summary_iterator(logfile)
-                                  if event.summary.value]
-                    logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
-                    all_timestamps[sess] = timestamps
-                    break  # break after first file read
+                events = [event_pb2.Event.FromString(record.numpy())
+                          for record in tf.data.TFRecordDataset(logfile)]
+                timestamps = [event.wall_time
+                              for event in events
+                              if event.summary.value
+                              and event.summary.value[0].tag == "batch_total"]
+                logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
+                all_timestamps[sess] = timestamps
             except tf_errors.DataLossError as err:
                 logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
                                "The totals do not include this session. Original error message: "
                                "'%s'", sess, str(err))
+        logger.debug(all_timestamps)
         return all_timestamps
 
 
@@ -148,19 +176,18 @@ class Session():
 
     @property
     def loss(self):
-        """ Return loss from logs for current session """
+        """ dict: The loss for the current session id for each loss key """
         loss_dict = self.tb_logs.get_loss(session=self.session_id)[self.session_id]
         return loss_dict
 
     @property
     def loss_keys(self):
-        """ Return list of unique session loss keys """
+        """ list: The loss keys for the current session, or loss keys for all sessions. """
         if self.session_id is None:
-            loss_keys = self.total_loss_keys
+            retval = self._total_loss_keys
         else:
-            loss_keys = set(loss_key for side_keys in self.session["loss_names"].values()
-                            for loss_key in side_keys)
-        return list(loss_keys)
+            retval = self.session["loss_names"]
+        return retval
 
     @property
     def lowest_loss(self):
@@ -196,22 +223,20 @@ class Session():
 
     @property
     def total_loss(self):
-        """ Return collated loss for all session """
+        """ dict: The collated loss for all sessions for each loss key """
         loss_dict = dict()
         all_loss = self.tb_logs.get_loss()
-        for key in sorted(int(idx) for idx in all_loss):
-            for loss_key, side_loss in all_loss[key].items():
-                for side, loss in side_loss.items():
-                    loss_dict.setdefault(loss_key, dict()).setdefault(side, list()).extend(loss)
+        for key in sorted(all_loss):
+            for loss_key, loss in all_loss[key].items():
+                loss_dict.setdefault(loss_key, []).extend(loss)
         return loss_dict
 
     @property
-    def total_loss_keys(self):
-        """ Return list of unique session loss keys across all sessions """
+    def _total_loss_keys(self):
+        """ list: The loss keys for all sessions. """
         loss_keys = set(loss_key
                         for session in self.state["sessions"].values()
-                        for loss_keys in session["loss_names"].values()
-                        for loss_key in loss_keys)
+                        for loss_key in session["loss_names"])
         return list(loss_keys)
 
     @property
@@ -376,28 +401,32 @@ class Calculations():
             logger.warning("Session data is not initialized. Not refreshing")
             return None
         self.iterations = 0
-        self.stats = self.get_raw()
+        self.stats = self._get_raw()
         self.get_calculations()
         self.remove_raw()
         logger.debug("Refreshed")
         return self
 
-    def get_raw(self):
-        """ Add raw data to stats dict """
-        logger.debug("Getting Raw Data")
+    def _get_raw(self):
+        """ Obtain the raw loss values.
 
+        Returns
+        -------
+        dict
+            The loss name as key with list of loss values as value
+        """
+        logger.debug("Getting Raw Data")
         raw = dict()
         iterations = set()
         if self.display.lower() == "loss":
             loss_dict = self.session.total_loss if self.is_totals else self.session.loss
-            for loss_name, side_loss in loss_dict.items():
+            for loss_name, loss in loss_dict.items():
                 if loss_name not in self.loss_keys:
                     continue
-                for side, loss in side_loss.items():
-                    if self.args["flatten_outliers"]:
-                        loss = self.flatten_outliers(loss)
-                    iterations.add(len(loss))
-                    raw["raw_{}_{}".format(loss_name, side)] = loss
+                if self.args["flatten_outliers"]:
+                    loss = self.flatten_outliers(loss)
+                iterations.add(len(loss))
+                raw["raw_{}".format(loss_name)] = loss
 
             self.iterations = 0 if not iterations else min(iterations)
             if len(iterations) > 1:
@@ -450,9 +479,6 @@ class Calculations():
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
             iterations = range(len(timestamps) - 1)
-            print("===========\n")
-            print(timestamps[:100])
-            print([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations][:100])
             rate.extend([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations])
         logger.debug("Calculated totals rate: Item_count: %s", len(rate))
         return rate
