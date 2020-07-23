@@ -10,7 +10,6 @@ import platform
 import sys
 import time
 
-from concurrent import futures
 from contextlib import nullcontext
 
 import tensorflow as tf
@@ -18,205 +17,121 @@ import tensorflow as tf
 from keras import losses
 from keras import backend as K
 from keras.layers import Input
-from keras.models import load_model, Model
+from keras.models import load_model, Model as KerasModel
 from keras.optimizers import Adam
-from keras.utils import get_custom_objects
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
 from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask_loss_wrapper,
                               generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
-from lib.model.nn_blocks import NNBlocks
+from lib.model.nn_blocks import set_config as set_nnblock_config
 from lib.utils import deprecation_warning, get_backend, FaceswapError
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
+# TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
+# TODO Penalized Mask Loss
+# TODO Converter
+
 
 class ModelBase():
-    """ Base class that all models should inherit from """
-    def __init__(self,
-                 model_dir,
-                 configfile=None,
-                 snapshot_interval=0,
-                 batch_size=64,
-                 no_logs=False,
-                 warp_to_landmarks=False,
-                 augment_color=True,
-                 no_flip=False,
-                 training_image_size=256,
-                 alignments_paths=None,
-                 preview_scale=100,
-                 input_shape=None,
-                 encoder_dim=None,
-                 trainer="original",
-                 strategy="default",
-                 pingpong=False,
-                 predict=False):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', configfile: %s, "
-                     "snapshot_interval: %s, batch_size: %s, no_logs: %s, warp_to_landmarks: %s, "
-                     "augment_color: %s, no_flip: %s, training_image_size, %s, alignments_paths: "
-                     "%s, preview_scale: %s, input_shape: %s, encoder_dim: %s, trainer: %s, "
-                     "strategy: %s, pingpong: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, configfile, snapshot_interval, batch_size,
-                     no_logs, warp_to_landmarks, augment_color, no_flip, training_image_size,
-                     alignments_paths, preview_scale, input_shape, encoder_dim, trainer, strategy,
-                     pingpong, predict)
+    """ Base class that all models should inherit from.
 
-        self.predict = predict
-        self.model_dir = model_dir
-        self._batch_size = batch_size
-        self.vram_savings = VRAMSavings(pingpong)
-        self.backup = Backup(self.model_dir, self.name)
+    Parameters
+    ----------
+    model_dir: str
+        The full path to the model save location
+    arguments: :class:`argparse.Namespace`
+        The arguments that were passed to the train or convert process as generated from
+        Faceswap's command line arguments
+    training_image_size: int, optional
+        The size of the training images in the training folder. Default: 256
+    predict: bool, optional
+        ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
+        for training. Default: ``False``
+    """
+    def __init__(self, model_dir, arguments, training_image_size=256, predict=False):
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', arguments: %s, "
+                     "training_image_size: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, arguments, training_image_size, predict)
 
-        self.configfile = configfile
-        self.input_shape = input_shape
-        self.encoder_dim = encoder_dim
-        self.trainer = trainer
+        self.input_shape = None  # Must be set within the plugin after initializing
+        self.trainer = "original"  # Override for plugin specific trainer
 
-        self.load_config()  # Load config if plugin has not already referenced it
-        self._strategy = Strategy(strategy)
+        self._args = arguments
+        self._is_predict = predict
+        self._model = None
+        self.history = [[], []]  # Loss histories per save iteration
+        self._mask_variables = dict(a=None, b=None)
 
-        self.state = State(self.model_dir,
+        self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
+        self._load_config()
+
+        self._io = IO(self, model_dir, self._is_predict)
+        self._strategy = Strategy(self._args.distribution)
+        self.state = State(model_dir,
                            self.name,
-                           self.config_changeable_items,
-                           no_logs,
-                           self.vram_savings.pingpong,
+                           self._config_changeable_items,
+                           self._args.no_logs,
                            training_image_size)
 
-        self.blocks = NNBlocks(use_icnr_init=self.config["icnr_init"],
-                               use_convaware_init=self.config["conv_aware_init"],
-                               use_reflect_padding=self.config["reflect_padding"],
-                               first_run=self.state.first_run)
-
-        self.is_legacy = False
-        self.rename_legacy()
-        self.load_state_info()
-
-        # The variables holding masks if Penalized Loss is used
-        self._mask_variables = dict(a=None, b=None)
-        self.networks = dict()  # Networks for the model
-        self.predictors = dict()  # Predictors for model
-        self.history = dict()  # Loss history per save iteration)
-
-        # Training information specific to the model should be placed in this
-        # dict for reference by the trainer.
-        self.training_opts = {"alignments": alignments_paths,
-                              "preview_scaling": preview_scale / 100,
-                              "warp_to_landmarks": warp_to_landmarks,
-                              "augment_color": augment_color,
-                              "no_flip": no_flip,
-                              "pingpong": self.vram_savings.pingpong,
-                              "snapshot_interval": snapshot_interval,
-                              "training_size": self.state.training_size,
-                              "no_logs": self.state.current_session["no_logs"],
-                              "coverage_ratio": self.calculate_coverage_ratio(),
-                              "mask_type": self.config["mask_type"],
-                              "mask_blur_kernel": self.config["mask_blur_kernel"],
-                              "mask_threshold": self.config["mask_threshold"],
-                              "learn_mask": (self.config["learn_mask"] and
-                                             self.config["mask_type"] is not None),
-                              "penalized_mask_loss": self.config["penalized_mask_loss"]}
-        logger.debug("training_opts: %s", self.training_opts)
-
-        if self.multiple_models_in_folder:
+        if self._io.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
                                 additional_info="Please split each model into separate folders to "
                                                 "avoid issues in future.")
-
-        self.build()
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
-    def config_section(self):
-        """ The section name for loading config """
-        retval = ".".join(self.__module__.split(".")[-2:])
-        logger.debug(retval)
+    def model(self):
+        """:class:`Keras.models.Model: The compiled model for this plugin. """
+        return self._model
+
+    @property
+    def command_line_arguments(self):
+        """ :class:`argparse.Namespace`: The command line arguments passed to the model plugin from
+        either the train or convert script """
+        return self._args
+
+    @property
+    def coverage_ratio(self):
+        """ float: The ratio of the training image to crop out and train on. """
+        coverage_ratio = self.config.get("coverage", 62.5) / 100
+        logger.debug("Requested coverage_ratio: %s", coverage_ratio)
+        cropped_size = (self.state.training_size * coverage_ratio) // 2 * 2
+        retval = cropped_size / self.state.training_size
+        logger.debug("Final coverage_ratio: %s", retval)
         return retval
+
+    @property
+    def model_dir(self):
+        """str: The full path to the model folder location. """
+        return self._io._model_dir  # pylint:disable=protected-access
 
     @property
     def config(self):
-        """ Return config dict for current plugin """
+        """ dict: The configuration dictionary for current plugin. """
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
-            model_name = self.config_section
+            model_name = self._config_section
             logger.debug("Loading config for: %s", model_name)
-            _CONFIG = Config(model_name, configfile=self.configfile).config_dict
+            _CONFIG = Config(model_name, configfile=self._configfile).config_dict
         return _CONFIG
 
     @property
-    def config_changeable_items(self):
-        """ Return the dict of config items that can be updated after the model
-            has been created """
-        return Config(self.config_section, configfile=self.configfile).changeable_items
-
-    @property
     def name(self):
-        """ Set the model name based on the subclass """
+        """ str: The name of this model based on the plugin name. """
         basename = os.path.basename(sys.modules[self.__module__].__file__)
-        retval = os.path.splitext(basename)[0].lower()
-        logger.debug("model name: '%s'", retval)
-        return retval
-
-    @property
-    def models_exist(self):
-        """ Return if all files exist and clear session """
-        retval = all([os.path.isfile(model.filename) for model in self.networks.values()])
-        logger.debug("Pre-existing models exist: %s", retval)
-        return retval
-
-    @property
-    def multiple_models_in_folder(self):
-        """ Return true if there are multiple model types in the same folder, else false """
-        model_files = [fname for fname in os.listdir(str(self.model_dir)) if fname.endswith(".h5")]
-        retval = False if not model_files else os.path.commonprefix(model_files) == ""
-        logger.debug("model_files: %s, retval: %s", model_files, retval)
-        return retval
+        return os.path.splitext(basename)[0].lower()
 
     @property
     def output_shapes(self):
-        """ Return the output shapes from the main AutoEncoder """
-        out = list()
-        for predictor in self.predictors.values():
-            out.extend([K.int_shape(output)[-3:] for output in predictor.outputs])
-            break  # Only get output from one autoencoder. Shapes are the same
-        return [tuple(shape) for shape in out]
-
-    @property
-    def output_shape(self):
-        """ The output shape of the model (shape of largest face output) """
-        return self.output_shapes[self.largest_face_index]
-
-    @property
-    def largest_face_index(self):
-        """ Return the index from model.outputs of the largest face
-            Required for multi-output model prediction. The largest face
-            is assumed to be the final output
-        """
-        sizes = [shape[1] for shape in self.output_shapes if shape[2] == 3]
-        if not sizes:
-            return None
-        max_face = max(sizes)
-        retval = [idx for idx, shape in enumerate(self.output_shapes)
-                  if shape[1] == max_face and shape[2] == 3][0]
-        logger.debug(retval)
-        return retval
-
-    @property
-    def largest_mask_index(self):
-        """ Return the index from model.outputs of the largest mask
-            Required for multi-output model prediction. The largest face
-            is assumed to be the final output
-        """
-        sizes = [shape[1] for shape in self.output_shapes if shape[2] == 1]
-        if not sizes:
-            return None
-        max_mask = max(sizes)
-        retval = [idx for idx, shape in enumerate(self.output_shapes)
-                  if shape[1] == max_mask and shape[2] == 1][0]
-        logger.debug(retval)
-        return retval
+        """ list: A list of list of shape tuples for the outputs of the model with the batch
+        dimension removed. The outer list contains 2 sub-lists (one for each side "a" and "b").
+        The inner sub-lists contain the output shapes for that side. """
+        shapes = [tuple(K.int_shape(output)[-3:]) for output in self._model.outputs]
+        return [shapes[:len(shapes) // 2], shapes[len(shapes) // 2:]]
 
     @property
     def feed_mask(self):
@@ -247,7 +162,7 @@ class ModelBase():
         output_network = [network for network in self.networks.values() if network.is_output][0]
         mask_shape = output_network.output_shapes[-1][:-1] + (1, )
         for side in ("a", "b"):
-            var = K.variable(K.ones((self._batch_size, ) + mask_shape[1:], dtype="float32"),
+            var = K.variable(K.ones((self._args.batch_size, ) + mask_shape[1:], dtype="float32"),
                              dtype="float32",
                              name="penalized_mask_variable_{}".format(side))
             if get_backend() != "amd":
@@ -258,149 +173,144 @@ class ModelBase():
         logger.debug("Created mask variables: %s", self._mask_variables)
         return self._mask_variables
 
-    def load_config(self):
-        """ Load the global config for reference in self.config """
+    @property
+    def iterations(self):
+        """ int: The total number of iterations that the model has trained. """
+        return self.state.iterations
+
+    # Private properties
+    @property
+    def _config_section(self):
+        """ str: The section name for the current plugin for loading configuration options from the
+        config file. """
+        return ".".join(self.__module__.split(".")[-2:])
+
+    @property
+    def _config_changeable_items(self):
+        """ dict: The configuration options that can be updated after the model has already been
+            created. """
+        return Config(self._config_section, configfile=self._configfile).changeable_items
+
+    def _load_config(self):
+        """ Load the global config for reference in :attr:`config` and set the faceswap blocks
+        configuration options in `lib.model.nn_blocks` """
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
-            model_name = self.config_section
+            model_name = self._config_section
             logger.debug("Loading config for: %s", model_name)
-            _CONFIG = Config(model_name, configfile=self.configfile).config_dict
+            _CONFIG = Config(model_name, configfile=self._configfile).config_dict
 
-    def calculate_coverage_ratio(self):
-        """ Coverage must be a ratio, leading to a cropped shape divisible by 2 """
-        coverage_ratio = self.config.get("coverage", 62.5) / 100
-        logger.debug("Requested coverage_ratio: %s", coverage_ratio)
-        cropped_size = (self.state.training_size * coverage_ratio) // 2 * 2
-        coverage_ratio = cropped_size / self.state.training_size
-        logger.debug("Final coverage_ratio: %s", coverage_ratio)
-        return coverage_ratio
+        nn_block_keys = ['icnr_init', 'conv_aware_init', 'reflect_padding']
+        set_nnblock_config({key: _CONFIG.pop(key)
+                            for key in nn_block_keys})
 
     def build(self):
-        """ Build the model. Override for custom build methods """
-        with self._strategy.scope():
-            self.add_networks()
-            self.load_models(swapped=False)
-            inputs = self.get_inputs()
-            try:
-                self.build_autoencoders(inputs)
-            except ValueError as err:
-                if "must be from the same graph" in str(err).lower():
-                    msg = ("There was an error loading saved weights. This is most likely due to "
-                           "model corruption during a previous save."
-                           "\nYou should restore weights from a snapshot or from backup files. "
-                           "You can use the 'Restore' Tool to restore from backup.")
-                    raise FaceswapError(msg) from err
-                raise err
-            self.log_summary()
-            self.compile_predictors(initialize=True)
+        """ Build the model.
 
-    def get_inputs(self):
-        """ Return the inputs for the model """
+        Performs any initial tensorflow set up options (e.g. enabling allow_growth).
+
+        Within the defined strategy scope, either builds the model from scratch or loads an
+        existing model if one exists. The model is then compiled with the optimizer and chosen
+        loss function(s), Finally, a model summary is outputted to the logger at verbose level.
+
+        The compiled model is allocated to :attr:`_model`.
+        """
+        if get_backend() == "nvidia" and self.config["allow_growth"]:
+            self._set_tf_allow_growth()
+
+        with self._strategy.scope():
+            if self._io.model_exists:
+                self._model = self._io._load()  # pylint:disable=protected-access
+            else:
+                inputs = self._get_inputs()
+                self._model = self.build_model(inputs)
+            self._compile_model()
+        if not self._is_predict:
+            self._output_summary()
+
+    @classmethod
+    def _set_tf_allow_growth(cls):
+        """ Allow TensorFlow to manage VRAM growth.
+
+        Enables the Tensorflow allow_growth option if requested in the command line arguments
+        """
+        logger.debug("Setting Tensorflow 'allow_growth' option")
+        for gpu in tf.config.experimental.list_physical_devices('GPU'):
+            logger.info("Setting allow growth for GPU: %s", gpu)
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logger.debug("Set Tensorflow 'allow_growth' option")
+
+    def _get_inputs(self):
+        """ Obtain the standardized inputs for the model.
+
+        The inputs will be returned for the "A" and "B" sides in the shape as defined by
+        :attr:`input_shape`.
+
+        Returns
+        -------
+        list
+            A list of :class:`keras.layers.Input` tensors. If just a face is being fed in then this
+            will be a list of 2 tensors (one for each side) each of shape :attr:`input_shape`. If a
+            mask is to be passed into the model, then the list will contain 2 sub-lists (one for
+            each side), with each sub-list containing the input tenor for the face of
+            :attr:`input_shape` and the input tensor for the mask, with the same shape as the face,
+            but with just a single channel.
+        """
         logger.debug("Getting inputs")
-        inputs = [Input(shape=self.input_shape, name="face_in")]
-        output_network = [network for network in self.networks.values() if network.is_output][0]
-        if self.feed_mask:
-            # TODO Mask should always be last output... this needs to be a rule
-            mask_shape = output_network.output_shapes[-1]
-            inputs.append(Input(shape=(mask_shape[1:-1] + (1,)), name="mask_in"))
-        logger.debug("Got inputs: %s", inputs)
+        inputs = []
+        for side in ("a", "b"):
+            side_inputs = [Input(shape=self.input_shape, name="face_in_{}".format(side))]
+            if self.feed_mask:
+                side_inputs.append(Input(shape=self.input_shape[:2] + (1, ),
+                                         name="mask_in_{}".format(side)))
+            inputs.append(side_inputs)
+        logger.debug("inputs: %s", inputs)
         return inputs
 
-    def build_autoencoders(self, inputs):
-        """ Override for Model Specific autoencoder builds
+    def build_model(self, inputs):
+        """ Override for Model Specific autoencoder builds.
 
-            Inputs is defined in self.get_inputs() and is standardized for all models
-                if will generally be in the order:
-                [face (the input for image),
-                 mask (the input for mask if it is used)]
+        Parameters
+        ----------
+        inputs: list
+            The inputs to the model as returned from the :func:`_get_inputs`. This will be a list
+            of :class:`keras.layers.Input` tensors. If just a face is being fed in then this will
+            be a list of 2 tensors (one for each side) each of shape :attr:`input_shape`. If a mask
+            is to be passed into the model, then the list will contain 2 sub-lists (one for each
+            side), with each sub-list containing the input tenor for the face of
+            :attr:`input_shape` and the input tensor for the mask, with the same shape as the face,
+            but with just a single channel.
         """
         raise NotImplementedError
 
-    def add_networks(self):
-        """ Override to add neural networks """
-        raise NotImplementedError
+    def _output_summary(self):
+        """ Output the summary of the model and all sub-models to the verbose logger. """
+        self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
+        for layer in self._model.layers:
+            if isinstance(layer, KerasModel):
+                layer.summary(print_fn=lambda x: logger.verbose("%s", x))
 
-    def load_state_info(self):
-        """ Load the input shape from state file if it exists """
-        logger.debug("Loading Input Shape from State file")
-        if not self.state.inputs:
-            logger.debug("No input shapes saved. Using model config")
-            return
-        if not self.state.face_shapes:
-            logger.warning("Input shapes stored in State file, but no matches for 'face'."
-                           "Using model config")
-            return
-        input_shape = self.state.face_shapes[0]
-        logger.debug("Setting input shape from state file: %s", input_shape)
-        self.input_shape = input_shape
+    def save(self):
+        """ Save the model to disk.
 
-    def add_network(self, network_type, side, network, is_output=False):
-        """ Add a NNMeta object """
-        logger.debug("network_type: '%s', side: '%s', network: '%s', is_output: %s",
-                     network_type, side, network, is_output)
-        filename = "{}_{}".format(self.name, network_type.lower())
-        name = network_type.lower()
-        if side:
-            side = side.lower()
-            filename += "_{}".format(side.upper())
-            name += "_{}".format(side)
-        filename += ".h5"
-        logger.debug("name: '%s', filename: '%s'", name, filename)
-        self.networks[name] = NNMeta(str(self.model_dir / filename),
-                                     network_type,
-                                     side,
-                                     network,
-                                     is_output)
+        Saves the serialized model, with weights, to the folder location specified when
+        initializing the plugin.
+        """
+        self._io._save()  # pylint:disable=protected-access
 
-    def add_predictor(self, side, model):
-        """ Add a predictor to the predictors dictionary """
-        logger.debug("Adding predictor: (side: '%s', model: %s)", side, model)
-        self.predictors[side] = model
-        if not self.state.inputs:
-            self.store_input_shapes(model)
+    def snapshot(self):
+        """ Create a snapshot of the model folder. """
+        self._io._snapshot()  # pylint:disable=protected-access
 
-    def store_input_shapes(self, model):
-        """ Store the input and output shapes to state """
-        logger.debug("Adding input shapes to state for model")
-        inputs = {tensor.name: K.int_shape(tensor)[-3:] for tensor in model.inputs}
-        if not any(inp for inp in inputs.keys() if inp.startswith("face")):
-            raise ValueError("No input named 'face' was found. Check your input naming. "
-                             "Current input names: {}".format(inputs))
-        # Make sure they are all ints so that it can be json serialized
-        inputs = {key: tuple(int(i) for i in val) for key, val in inputs.items()}
-        self.state.inputs = inputs
-        logger.debug("Added input shapes: %s", self.state.inputs)
-
-    def reset_pingpong(self):
-        """ Reset the models for pingpong training """
-        logger.debug("Resetting models")
-
-        # Clear models and graph
-        self.predictors = dict()
-        K.clear_session()
-
-        # Load Models for current training run
-        for model in self.networks.values():
-            model.network = Model.from_config(model.config)
-            model.network.set_weights(model.weights)
-
-        inputs = self.get_inputs()
-        self.build_autoencoders(inputs)
-        self.compile_predictors(initialize=False)
-        logger.debug("Reset models")
-
-    def compile_predictors(self, initialize=True):
-        """ Compile the predictors """
-        logger.debug("Compiling Predictors")
+    def _compile_model(self):
+        """ Compile the model to include the Optimizer and Loss Function(s). """
+        logger.debug("Compiling Model")
         optimizer = self._get_optimizer()
-
-        for side, model in self.predictors.items():
-            loss = Loss(model.inputs, model.outputs, self.mask_variables[side])
-            model.compile(optimizer=optimizer, loss=loss.funcs)
-            if initialize:
-                self.state.add_session_loss_names(side, loss.names)
-                self.history[side] = list()
-        logger.debug("Compiled Predictors. Losses: %s", loss.names)
+        loss = Loss(self._model.inputs, self._model.outputs, None)
+        self._model.compile(optimizer=optimizer, loss=loss.functions)
+        if not self._is_predict:
+            self.state.add_session_loss_names(loss.names)
+        logger.debug("Compiled Model: %s", self._model)
 
     def _get_optimizer(self):
         """ Return a Keras Adam Optimizer with user selected parameters.
@@ -438,215 +348,174 @@ class ModelBase():
         logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
         return retval
 
+    # TODO
     def converter(self, swap):
         """ Converter for autoencoder models """
         logger.debug("Getting Converter: (swap: %s)", swap)
         side = "a" if swap else "b"
         model = self.predictors[side]
-        if self.predict:
+        if self._is_predict:
             # Must compile the model to be thread safe
             model._make_predict_function()  # pylint: disable=protected-access
         retval = model.predict
         logger.debug("Got Converter: %s", retval)
         return retval
 
+
+class IO():
+    """ Model saving and loading functions.
+
+    Handles the loading and saving of the plugin model from disk as well as the model backup and
+    snapshot functions.
+
+    Parameters
+    ----------
+    plugin: :class:`Model`
+        The parent plugin class that owns the IO functions.
+    model_dir: str
+        The full path to the model save location
+    is_predict: bool
+        ``True`` if the model is being loaded for inference. ``False`` if the model is being loaded
+        for training.
+    """
+    def __init__(self, plugin, model_dir, is_predict):
+        self._plugin = plugin
+        self._is_predict = is_predict
+        self._model_dir = model_dir
+        self._backup = Backup(self._model_dir, self._plugin.name)
+
     @property
-    def iterations(self):
-        "Get current training iteration number"
-        return self.state.iterations
+    def _filename(self):
+        """str: The filename for this model."""
+        return os.path.join(self._model_dir, "{}.h5".format(self._plugin.name))
 
-    def map_models(self, swapped):
-        """ Map the models for A/B side for swapping """
-        logger.debug("Map models: (swapped: %s)", swapped)
-        models_map = {"a": dict(), "b": dict()}
-        sides = ("a", "b") if not swapped else ("b", "a")
-        for network in self.networks.values():
-            if network.side == sides[0]:
-                models_map["a"][network.type] = network.filename
-            if network.side == sides[1]:
-                models_map["b"][network.type] = network.filename
-        logger.debug("Mapped models: (models_map: %s)", models_map)
-        return models_map
+    @property
+    def model_exists(self):
+        """ bool: ``True`` if a model of the type being loaded exists within the model folder
+        location otherwise ``False``.
+        """
+        return os.path.isfile(self._filename)
 
-    def log_summary(self):
-        """ Verbose log the model summaries """
-        if self.predict:
-            return
-        for side in sorted(list(self.predictors.keys())):
-            logger.verbose("[%s %s Summary]:", self.name.title(), side.upper())
-            self.predictors[side].summary(print_fn=lambda x: logger.verbose("%s", x))
-            for name, nnmeta in self.networks.items():
-                if nnmeta.side is not None and nnmeta.side != side:
-                    continue
-                logger.verbose("%s:", name.title())
-                nnmeta.network.summary(print_fn=lambda x: logger.verbose("%s", x))
+    # TODO
+    @property
+    def multiple_models_in_folder(self):
+        """ :bool: ``True`` if there are multiple model types in the same folder otherwise
+        ``false``. """
+        model_files = [fname for fname in os.listdir(self._model_dir) if fname.endswith(".h5")]
+        retval = False if not model_files else os.path.commonprefix(model_files) == ""
+        logger.debug("model_files: %s, retval: %s", model_files, retval)
+        return retval
 
-    def do_snapshot(self):
-        """ Perform a model snapshot """
-        logger.debug("Performing snapshot")
-        self.backup.snapshot_models(self.iterations)
-        logger.debug("Performed snapshot")
+    def _load(self):
+        """ Loads the model from disk
 
-    def load_models(self, swapped):
-        """ Load models from file """
-        logger.debug("Load model: (swapped: %s)", swapped)
+        If the predict function is to be called and the model cannot be found in the model folder
+        then an error is logged and the process exits.
 
-        if not self.models_exist and not self.predict:
-            logger.info("Creating new '%s' model in folder: '%s'", self.name, self.model_dir)
-            return None
-        if not self.models_exist and self.predict:
-            logger.error("Model could not be found in folder '%s'. Exiting", self.model_dir)
+        When loading the model, the plugin model folder is scanned for custom layers which are
+        added to Keras' custom objects.
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The saved model loaded from disk
+        """
+        logger.debug("Loading model: %s", self._filename)
+        if self._is_predict and not self.model_exists:
+            logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
-        if not self.is_legacy or not self.predict:
-            K.clear_session()
-        model_mapping = self.map_models(swapped)
-        for network in self.networks.values():
-            if not network.side:
-                is_loaded = network.load()
-            else:
-                is_loaded = network.load(fullpath=model_mapping[network.side][network.type])
-            if not is_loaded:
-                break
-        if is_loaded:
-            logger.info("Loaded model from disk: '%s'", self.model_dir)
-        return is_loaded
+        model = load_model(self._filename)
+        logger.info("Loaded model from disk: '%s'", self._filename)
+        return model
 
-    def save_models(self):
-        """ Backup and save the models """
+    def _save(self):
+        """ Backup and save the model and state file.
+
+        Notes
+        -----
+        The backup function actually backups the model from the previous save iteration rather than
+        the current save iteration. This is not a bug, but protection against long save times, as
+        models can get quite large, so renaming the current model file rather than copying it can
+        save substantial amount of time.
+        """
         logger.debug("Backing up and saving models")
-        # Insert a new line to avoid spamming the same row as loss output
-        print("")
-        save_averages = self.get_save_averages()
-        backup_func = self.backup.backup_model if self.should_backup(save_averages) else None
-        if backup_func:
-            logger.info("Backing up models...")
-        executor = futures.ThreadPoolExecutor()
-        save_threads = [executor.submit(network.save, backup_func=backup_func)
-                        for network in self.networks.values()]
-        save_threads.append(executor.submit(self.state.save, backup_func=backup_func))
-        futures.wait(save_threads)
-        # call result() to capture errors
-        _ = [thread.result() for thread in save_threads]
+        print("")  # Insert a new line to avoid spamming the same row as loss output
+        save_averages = self._get_save_averages()
+        if save_averages and self._should_backup(save_averages):
+            self._backup.backup_model(self._filename)
+            self._backup.backup_model(self._plugin.state.filename)
+
+        self._plugin.model.save(self._filename, include_optimizer=False)
+        self._plugin.state.save()
+
         msg = "[Saved models]"
         if save_averages:
-            lossmsg = ["{}_{}: {:.5f}".format(self.state.loss_names[side][0],
-                                              side.capitalize(),
-                                              save_averages[side])
-                       for side in sorted(list(save_averages.keys()))]
-            msg += " - Average since last save: {}".format(", ".join(lossmsg))
+            lossmsg = ["face_{}: {:.5f}".format(side, avg)
+                       for side, avg in zip(("a", "b"), save_averages)]
+            msg += " - Average loss since last save: {}".format(", ".join(lossmsg))
         logger.info(msg)
 
-    def get_save_averages(self):
+    def _get_save_averages(self):
         """ Return the average loss since the last save iteration and reset historical loss """
         logger.debug("Getting save averages")
-        avgs = dict()
-        for side, loss in self.history.items():
-            if not loss:
-                logger.debug("No loss in self.history: %s", side)
-                break
-            avgs[side] = sum(loss) / len(loss)
-            self.history[side] = list()  # Reset historical loss
-        logger.debug("Average losses since last save: %s", avgs)
-        return avgs
+        if not all(loss for loss in self._plugin.history):
+            logger.debug("No loss in history")
+            retval = []
+        else:
+            retval = [sum(loss) / len(loss) for loss in self._plugin.history]
+            self._plugin.history = [[], []]  # Reset historical loss
+        logger.debug("Average losses since last save: %s", retval)
+        return retval
 
-    def should_backup(self, save_averages):
-        """ Check whether the loss averages for all losses is the lowest that has been seen.
+    def _should_backup(self, save_averages):
+        """ Check whether the loss averages for this save iteration is the lowest that has been
+        seen.
 
-            This protects against model corruption by only backing up the model
-            if any of the loss values have fallen.
-            TODO This is not a perfect system. If the model corrupts on save_iteration - 1
-            then model may still backup
+        This protects against model corruption by only backing up the model if both sides have
+        seen a total fall in loss.
+
+        Notes
+        -----
+        This is by no means a perfect system. If the model corrupts at an iteration close
+        to a save iteration, then the averages may still be pushed lower than a previous
+        save average, resulting in backing up a corrupted model.
+
+        Parameters
+        ----------
+        save_averages: list
+            The average loss for each side for this save iteration
         """
         backup = True
-
-        if not save_averages:
-            logger.debug("No save averages. Not backing up")
-            return False
-
-        for side, loss in save_averages.items():
-            if not self.state.lowest_avg_loss.get(side, None):
-                logger.debug("Setting initial save iteration loss average for '%s': %s",
-                             side, loss)
-                self.state.lowest_avg_loss[side] = loss
+        for side, loss in zip(("a", "b"), save_averages):
+            if not self._plugin.state.lowest_avg_loss.get(side, None):
+                logger.debug("Set initial save iteration loss average for '%s': %s", side, loss)
+                self._plugin.state.lowest_avg_loss[side] = loss
                 continue
-            if backup:
-                # Only run this if backup is true. All losses must have dropped for a valid backup
-                backup = self.check_loss_drop(side, loss)
+            backup = loss < self._plugin.state.lowest_avg_loss[side] if backup else backup
 
-        logger.debug("Lowest historical save iteration loss average: %s",
-                     self.state.lowest_avg_loss)
+        if backup:  # Update lowest loss values to the state file
+            # pylint:disable=unnecessary-comprehension
+            old_avgs = {key: val for key, val in self._plugin.state.lowest_avg_loss.items()}
+            self._plugin.state.lowest_avg_loss["a"] = save_averages[0]
+            self._plugin.state.lowest_avg_loss["b"] = save_averages[1]
+            logger.debug("Updated lowest historical save iteration averages from: %s to: %s",
+                         old_avgs, self._plugin.state.lowest_avg_loss)
 
-        if backup:  # Update lowest loss values to the state
-            for side, avg_loss in save_averages.items():
-                logger.debug("Updating lowest save iteration average for '%s': %s", side, avg_loss)
-                self.state.lowest_avg_loss[side] = avg_loss
-
-        logger.debug("Backing up: %s", backup)
+        logger.debug("Should backup: %s", backup)
         return backup
 
-    def check_loss_drop(self, side, avg):
-        """ Check whether total loss has dropped since lowest loss """
-        if avg < self.state.lowest_avg_loss[side]:
-            logger.debug("Loss for '%s' has dropped", side)
-            return True
-        logger.debug("Loss for '%s' has not dropped", side)
-        return False
+    def _snapshot(self):
+        """ Perform a model snapshot.
 
-    def rename_legacy(self):
-        """ Legacy Original, LowMem and IAE models had inconsistent naming conventions
-            Rename them if they are found and update """
-        legacy_mapping = {"iae": [("IAE_decoder.h5", "iae_decoder.h5"),
-                                  ("IAE_encoder.h5", "iae_encoder.h5"),
-                                  ("IAE_inter_A.h5", "iae_intermediate_A.h5"),
-                                  ("IAE_inter_B.h5", "iae_intermediate_B.h5"),
-                                  ("IAE_inter_both.h5", "iae_inter.h5")],
-                          "original": [("encoder.h5", "original_encoder.h5"),
-                                       ("decoder_A.h5", "original_decoder_A.h5"),
-                                       ("decoder_B.h5", "original_decoder_B.h5"),
-                                       ("lowmem_encoder.h5", "original_encoder.h5"),
-                                       ("lowmem_decoder_A.h5", "original_decoder_A.h5"),
-                                       ("lowmem_decoder_B.h5", "original_decoder_B.h5")]}
-        if self.name not in legacy_mapping.keys():
-            return
-        logger.debug("Renaming legacy files")
-
-        set_lowmem = False
-        updated = False
-        for old_name, new_name in legacy_mapping[self.name]:
-            old_path = os.path.join(str(self.model_dir), old_name)
-            new_path = os.path.join(str(self.model_dir), new_name)
-            if os.path.exists(old_path) and not os.path.exists(new_path):
-                logger.info("Updating legacy model name from: '%s' to '%s'", old_name, new_name)
-                os.rename(old_path, new_path)
-                if old_name.startswith("lowmem"):
-                    set_lowmem = True
-                updated = True
-
-        if not updated:
-            logger.debug("No legacy files to rename")
-            return
-
-        self.is_legacy = True
-        logger.debug("Creating state file for legacy model")
-        self.state.inputs = {"face:0": [64, 64, 3]}
-        self.state.training_size = 256
-        self.state.config["coverage"] = 62.5
-        self.state.config["reflect_padding"] = False
-        self.state.config["mask_type"] = None
-        self.state.config["mask_blur_kernel"] = 3
-        self.state.config["mask_threshold"] = 4
-        self.state.config["learn_mask"] = False
-        self.state.config["lowmem"] = False
-        self.encoder_dim = 1024
-
-        if set_lowmem:
-            logger.debug("Setting encoder_dim and lowmem flag for legacy lowmem model")
-            self.encoder_dim = 512
-            self.state.config["lowmem"] = True
-
-        self.state.replace_config(self.config_changeable_items)
-        self.state.save()
+        Notes
+        -----
+        Snapshot function is called 1 iteration after the model was saved, so that it is built from
+        the latest save, hence iteration being reduced by 1.
+        """
+        logger.debug("Performing snapshot. Iterations: %s", self._plugin.iterations)
+        self._backup.snapshot_models(self._plugin.iterations - 1)
+        logger.debug("Performed snapshot")
 
 
 class Strategy():
@@ -728,303 +597,190 @@ class Strategy():
         return retval
 
 
-class VRAMSavings():
-    """ VRAM Saving training methods """
-    def __init__(self, pingpong):
-        logger.debug("Initializing %s: (pingpong: %s)", self.__class__.__name__,
-                     pingpong)
-        self.is_plaidml = get_backend() == "amd"
-        self.pingpong = self.set_pingpong(pingpong)
-        logger.debug("Initialized: %s", self.__class__.__name__)
-
-    def set_pingpong(self, pingpong):
-        """ Disable pingpong for plaidML users """
-        if pingpong and self.is_plaidml:
-            logger.warning("Pingpong training not supported on plaidML. Disabling")
-            pingpong = False
-        logger.debug("pingpong: %s", pingpong)
-        if pingpong:
-            logger.info("Using Pingpong Training")
-        return pingpong
-
-
 class Loss():
-    """ Holds loss names and functions for an Autoencoder """
+    """ Holds loss names and functions for an Autoencoder.
+
+    Parameters
+    ----------
+    inputs: list
+        A list of input tensors to the model in the order ("a", "b")
+    outputs: list
+        A list of output tensors to the model in the order ("a", "b")
+    mask_variables:
+        A list of :class:`keras.backend.variable` or ``None`` in the order ("a", "b")
+    """
     def __init__(self, inputs, outputs, mask_variable):
         logger.debug("Initializing %s: (inputs: %s, outputs: %s, mask_variable: %s)",
                      self.__class__.__name__, inputs, outputs, mask_variable)
-        self.inputs = inputs
-        self.outputs = outputs
+        self._loss_dict = dict(mae=losses.mean_absolute_error,
+                               mse=losses.mean_squared_error,
+                               logcosh=losses.logcosh,
+                               smooth_loss=generalized_loss,
+                               l_inf_norm=l_inf_norm,
+                               ssim=DSSIMObjective(),
+                               gmsd=gmsd_loss,
+                               pixel_gradient_diff=gradient_loss)
+        self._inputs = inputs
         self._mask_variable = mask_variable
-        self.names = self.get_loss_names()
-        self.funcs = self.get_loss_functions()
-        if len(self.names) > 1:
-            self.names.insert(0, "total_loss")
+        self._names = self._get_loss_names(outputs)
+        self._funcs = self._get_loss_functions(outputs)
+        self._names.insert(0, "total")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def loss_dict(self):
-        """ Return the loss dict """
-        loss_dict = dict(mae=losses.mean_absolute_error,
-                         mse=losses.mean_squared_error,
-                         logcosh=losses.logcosh,
-                         smooth_loss=generalized_loss,
-                         l_inf_norm=l_inf_norm,
-                         ssim=DSSIMObjective(),
-                         gmsd=gmsd_loss,
-                         pixel_gradient_diff=gradient_loss)
-        return loss_dict
+    def names(self):
+        """ list: The list of loss names for the model. """
+        return self._names
 
     @property
-    def config(self):
-        """ Return the global _CONFIG variable """
+    def functions(self):
+        """ list: The list of loss functions for the model. """
+        return self._funcs
+
+    @property
+    def _config(self):
+        """ :dict: The configuration options for this plugin """
         return _CONFIG
 
     @property
-    def mask_preprocessing_func(self):
-        """ The selected pre-processing function for the mask """
+    def _mask_preprocessing_func(self):
+        """ Python function: The selected pre-processing function for the mask. If no
+        pre-processing function has been requested, ``None`` is returned. """
         retval = None
-        if self.config.get("mask_blur", False):
-            retval = gaussian_blur(max(1, self.mask_shape[1] // 32))
+        if self._config.get("mask_blur", False):
+            retval = gaussian_blur(max(1, self._mask_shape[1] // 32))
         logger.debug(retval)
         return retval
 
     @property
-    def selected_loss(self):
-        """ Return the selected loss function """
-        retval = self.loss_dict[self.config.get("loss_function", "mae")]
-        logger.debug(retval)
-        return retval
-
-    @property
-    def selected_mask_loss(self):
-        """ Return the selected mask loss function. Currently returns mse
-            If a processing function has been requested wrap the loss function
-            in loss wrapper """
-        loss_func = self.loss_dict["mse"]
-        func = self.mask_preprocessing_func
+    def _selected_mask_loss(self):
+        """ :func:`keras.losses.Loss`: The selected mask loss function. Currently returns mean
+        standard error as the default function. If a processing function has been requested the
+        wrapped loss function is returned in a loss wrapper. """
+        loss_func = self._loss_dict["mse"]
+        func = self._mask_preprocessing_func
         logger.debug("loss_func: %s, func: %s", loss_func, func)
         retval = mask_loss_wrapper(loss_func, preprocessing_func=func)
         return retval
 
     @property
-    def output_shapes(self):
-        """ The shapes of the output nodes """
-        return [K.int_shape(output)[1:] for output in self.outputs]
-
-    @property
-    def mask_input(self):
-        """ Return the mask input or None """
-        mask_inputs = [inp for inp in self.inputs if inp.name.startswith("mask")]
+    def _mask_input(self):
+        """ list: The list of input tensors to the model that contain the mask. Returns ``None``
+        if there is no mask input to the model. """
+        mask_inputs = [inp for inp in self._inputs if inp.name.startswith("mask")]
         if not mask_inputs:
             return None
         return mask_inputs[0]
 
     @property
-    def mask_shape(self):
-        """ Return the mask shape """
-        if self.mask_input is None and self._mask_variable is None:
+    def _mask_shape(self):
+        """ tuple: The shape of the mask input tensors for the model. Returns ``None`` if there is
+        no mask input. """
+        if self._mask_input is None and self._mask_variable is None:
             return None
-        if self.mask_input:
-            retval = K.int_shape(self.mask_input)[1:]
+        if self._mask_input:
+            retval = K.int_shape(self._mask_input)[1:]
         else:
             retval = K.int_shape(self._mask_variable)
         return retval
 
-    def get_loss_names(self):
-        """ Return the loss names based on model output """
-        output_names = [output.name for output in self.outputs]
-        logger.debug("Model output names: %s", output_names)
-        loss_names = [name[name.find("/") + 1:name.rfind("/")].replace("_out", "")
-                      for name in output_names]
-        if not all(name.startswith("face") or name.startswith("mask") for name in loss_names):
-            # Handle incorrectly named/legacy outputs
-            logger.debug("Renaming loss names from: %s", loss_names)
-            loss_names = self.update_loss_names()
-        loss_names = ["{}_loss".format(name) for name in loss_names]
-        logger.debug(loss_names)
-        return loss_names
+    @classmethod
+    def _get_loss_names(cls, outputs):
+        """ Name the losses based on model output
 
-    def update_loss_names(self):
-        """ Update loss names if named incorrectly or legacy model """
-        output_types = ["mask" if shape[-1] == 1 else "face" for shape in self.output_shapes]
-        loss_names = ["{}{}".format(name,
-                                    "" if output_types.count(name) == 1 else "_{}".format(idx))
-                      for idx, name in enumerate(output_types)]
-        logger.debug("Renamed loss names to: %s", loss_names)
-        return loss_names
+        Notes
+        -----
+        TODO Currently there is an issue in Tensorflow that wraps all outputs in an Identity layer
+        when running in Eager Execution mode, which means we cannot use the name of the output
+        layers to name the losses (https://github.com/tensorflow/tensorflow/issues/32180).
+        With this in mind, losses are named based on their shapes
 
-    def get_loss_functions(self):
-        """ Set the loss function """
+        Parameters
+        ----------
+        outputs: list
+            A list of output tensors from the model plugin
+
+        Returns
+        -------
+        list
+            A list of names for the losses to be applied to the model
+        """
+        # TODO naming for masks and multi-scale
+        # TODO Use output names when these are fixed upstream
+        split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
+        retval = []
+        for side, side_output in zip(("a", "b"), split_outputs):
+            output_names = [output.name for output in side_output]
+            output_shapes = [K.int_shape(output)[1:] for output in side_output]
+            output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
+            logger.debug("side: %s, output names: %s, output_shapes: %s, output_types: %s",
+                         side, output_names, output_shapes, output_types)
+            retval.extend(["{}_{}{}".format(name, side,
+                                            "" if output_types.count(name) == 1
+                                            else "_{}".format(idx))
+                           for idx, name in enumerate(output_types)])
+        logger.debug(retval)
+        return retval
+
+    def _get_loss_functions(self, outputs):
+        """ Set the loss functions.
+
+        Parameters
+        ----------
+        outputs: list
+            A list of output tensors from the model plugin
+
+        list
+            A list of loss functions to apply to the model
+        """
+        selected_loss = self._loss_dict[self._config.get("loss_function", "mae")]
         loss_funcs = []
-        for idx, loss_name in enumerate(self.names):
-            if loss_name.startswith("mask"):
-                loss_funcs.append(self.selected_mask_loss)
-            elif self.config["penalized_mask_loss"] and self.config["mask_type"] is not None:
-                face_size = self.output_shapes[idx][1]
-                mask_size = self.mask_shape[1]
+        output_shapes = [K.int_shape(output)[1:] for output in outputs]
+        for idx, name in enumerate(self._names):
+            if name.startswith("mask"):
+                loss_funcs.append(self._selected_mask_loss)
+            elif self._config["penalized_mask_loss"] and self._config["mask_type"] is not None:
+                face_size = output_shapes[idx][1]
+                mask_size = self._mask_shape[1]
                 scaling = face_size / mask_size
                 logger.debug("face_size: %s mask_size: %s, mask_scaling: %s",
                              face_size, mask_size, scaling)
-                loss_funcs.append(PenalizedLoss(self._mask_variable, self.selected_loss,
+                loss_funcs.append(PenalizedLoss(self._mask_variable, selected_loss,
                                                 mask_scaling=scaling,
-                                                preprocessing_func=self.mask_preprocessing_func))
+                                                preprocessing_func=self._mask_preprocessing_func))
             else:
-                loss_funcs.append(self.selected_loss)
-            logger.debug("%s: %s", loss_name, loss_funcs[-1])
+                loss_funcs.append(selected_loss)
+            logger.debug("%s: %s", name, loss_funcs[-1])
         logger.debug(loss_funcs)
         return loss_funcs
-
-
-class NNMeta():
-    """ Class to hold a neural network and it's meta data
-
-    filename:   The full path and filename of the model file for this network.
-    type:       The type of network. For networks that can be swapped
-                The type should be identical for the corresponding
-                A and B networks, and should be unique for every A/B pair.
-                Otherwise the type should be completely unique.
-    side:       A, B or None. Used to identify which networks can
-                be swapped.
-    network:    Define network to this.
-    is_output:  Set to True to indicate that this network is an output to the Autoencoder
-    """
-
-    def __init__(self, filename, network_type, side, network, is_output):
-        logger.debug("Initializing %s: (filename: '%s', network_type: '%s', side: '%s', "
-                     "network: %s, is_output: %s", self.__class__.__name__, filename,
-                     network_type, side, network, is_output)
-        self.filename = filename
-        self.type = network_type.lower()
-        self.side = side
-        self.name = self.set_name()
-        self.network = network
-        self.is_output = is_output
-        if get_backend() == "amd":
-            self.network.name = self.name
-        else:
-            # No setter in tensorflow.keras
-            self.network._name = self.name
-        self.config = network.get_config()  # For pingpong restore
-        self.weights = network.get_weights()  # For pingpong restore
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def output_shapes(self):
-        """ Return the output shapes from the stored network """
-        return [K.int_shape(output) for output in self.network.outputs]
-
-    def set_name(self):
-        """ Set the network name """
-        name = self.type
-        if self.side:
-            name += "_{}".format(self.side)
-        return name
-
-    @property
-    def output_names(self):
-        """ Return output node names """
-        output_names = [output.name for output in self.network.outputs]
-        if self.is_output and not any(name.startswith("face_out") for name in output_names):
-            # Saved models break if their layer names are changed, so dummy
-            # in correct output names for legacy models
-            output_names = self.get_output_names()
-        return output_names
-
-    def get_output_names(self):
-        """ Return the output names based on number of channels and instances """
-        output_types = ["mask_out" if K.int_shape(output)[-1] == 1 else "face_out"
-                        for output in self.network.outputs]
-        output_names = ["{}{}".format(name,
-                                      "" if output_types.count(name) == 1 else "_{}".format(idx))
-                        for idx, name in enumerate(output_types)]
-        logger.debug("Overridden output_names: %s", output_names)
-        return output_names
-
-    def load(self, fullpath=None):
-        """ Load model """
-        fullpath = fullpath if fullpath else self.filename
-        logger.debug("Loading model: '%s'", fullpath)
-        try:
-            network = load_model(self.filename, custom_objects=get_custom_objects())
-        except ValueError as err:
-            if str(err).lower().startswith("cannot create group in read only mode"):
-                self.convert_legacy_weights()
-                return True
-            logger.warning("Failed loading existing training data. Generating new models")
-            logger.debug("Exception: %s", str(err))
-            return False
-        except OSError as err:  # pylint: disable=broad-except
-            logger.warning("Failed loading existing training data. Generating new models")
-            logger.debug("Exception: %s", str(err))
-            return False
-        self.config = network.get_config()
-        self.network = network  # Update network with saved model
-        if get_backend() == "amd":
-            self.network.name = self.name
-        else:
-            # No setter in tensorflow.keras
-            self.network._name = self.name  # pylint:disable=protected-access
-        return True
-
-    def save(self, fullpath=None, backup_func=None):
-        """ Save model """
-        fullpath = fullpath if fullpath else self.filename
-        if backup_func:
-            backup_func(fullpath)
-        logger.debug("Saving model: '%s'", fullpath)
-        self.weights = self.network.get_weights()
-        self.network.save(fullpath)
-
-    def convert_legacy_weights(self):
-        """ Convert legacy weights files to hold the model topology """
-        logger.info("Adding model topology to legacy weights file: '%s'", self.filename)
-        self.network.load_weights(self.filename)
-        self.save(backup_func=None)
-        if get_backend() == "amd":
-            self.network.name = self.type
-        else:
-            # No setter in tensorflow.keras
-            self.network._name = self.type  # pylint:disable=protected-access
 
 
 class State():
     """ Class to hold the model's current state and autoencoder structure """
     def __init__(self, model_dir, model_name, config_changeable_items,
-                 no_logs, pingpong, training_image_size):
+                 no_logs, training_image_size):
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
-                     "config_changeable_items: '%s', no_logs: %s, pingpong: %s, "
+                     "config_changeable_items: '%s', no_logs: %s, "
                      "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
-                     config_changeable_items, no_logs, pingpong, training_image_size)
+                     config_changeable_items, no_logs, training_image_size)
         self.serializer = get_serializer("json")
         filename = "{}_state.{}".format(model_name, self.serializer.file_extension)
-        self.filename = str(model_dir / filename)
+        self.filename = os.path.join(model_dir, filename)
         self.name = model_name
         self.iterations = 0
         self.session_iterations = 0
         self.training_size = training_image_size
         self.sessions = dict()
         self.lowest_avg_loss = dict()
-        self.inputs = dict()
         self.config = dict()
         self.load(config_changeable_items)
         self.session_id = self.new_session_id()
-        self.create_new_session(no_logs, pingpong, config_changeable_items)
+        self.create_new_session(no_logs, config_changeable_items)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
-    def face_shapes(self):
-        """ Return a list of stored face shape inputs """
-        return [tuple(val) for key, val in self.inputs.items() if key.startswith("face")]
-
-    @property
-    def mask_shapes(self):
-        """ Return a list of stored mask shape inputs """
-        return [tuple(val) for key, val in self.inputs.items() if key.startswith("mask")]
-
-    @property
     def loss_names(self):
-        """ Return the loss names for this session """
+        """ list: The loss names for the current session """
         return self.sessions[self.session_id]["loss_names"]
 
     @property
@@ -1046,21 +802,28 @@ class State():
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs, pingpong, config_changeable_items):
+    def create_new_session(self, no_logs, config_changeable_items):
         """ Create a new session """
         logger.debug("Creating new session. id: %s", self.session_id)
         self.sessions[self.session_id] = {"timestamp": time.time(),
                                           "no_logs": no_logs,
-                                          "pingpong": pingpong,
-                                          "loss_names": dict(),
+                                          "loss_names": [],
                                           "batchsize": 0,
                                           "iterations": 0,
                                           "config": config_changeable_items}
 
-    def add_session_loss_names(self, side, loss_names):
-        """ Add the session loss names to the sessions dictionary """
-        logger.debug("Adding session loss_names. (side: '%s', loss_names: %s", side, loss_names)
-        self.sessions[self.session_id]["loss_names"][side] = loss_names
+    def add_session_loss_names(self, loss_names):
+        """ Add the session loss names to the sessions dictionary.
+
+        The loss names are used for Tensorboard logging
+
+        Parameters
+        ----------
+        loss_names: list
+            The list of loss names for this session.
+        """
+        logger.debug("Adding session loss_names: %s", loss_names)
+        self.sessions[self.session_id]["loss_names"] = loss_names
 
     def add_session_batchsize(self, batchsize):
         """ Add the session batchsize to the sessions dictionary """
@@ -1084,21 +847,17 @@ class State():
         self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
         self.iterations = state.get("iterations", 0)
         self.training_size = state.get("training_size", 256)
-        self.inputs = state.get("inputs", dict())
         self.config = state.get("config", dict())
         logger.debug("Loaded state: %s", state)
         self.replace_config(config_changeable_items)
 
-    def save(self, backup_func=None):
+    def save(self):
         """ Save iteration number to state file """
         logger.debug("Saving State")
-        if backup_func:
-            backup_func(self.filename)
         state = {"name": self.name,
                  "sessions": self.sessions,
                  "lowest_avg_loss": self.lowest_avg_loss,
                  "iterations": self.iterations,
-                 "inputs": self.inputs,
                  "training_size": self.training_size,
                  "config": _CONFIG}
         self.serializer.save(self.filename, state)

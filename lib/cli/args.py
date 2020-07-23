@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """ The Command Line Argument options for faceswap.py """
+
+# pylint:disable=too-many-lines
 import argparse
 import logging
 import re
@@ -934,14 +936,16 @@ class TrainArgs(FaceSwapArgs):
         argument_list.append(dict(
             opts=("-bs", "--batch-size"),
             action=Slider,
-            min_max=(2, 256),
-            rounding=2,
+            min_max=(1, 256),
+            rounding=1,
             type=int,
             dest="batch_size",
-            default=64,
+            default=16,
             group="training",
-            help="Batch size. This is the number of images processed through the model for "
-                 "each iteration. Larger batches require more GPU RAM."))
+            help="Batch size. This is the number of images processed through the model for each "
+                 "side per iteration. NB: As the model is fed 2 sides at a time, the actual "
+                 "number of images within the model at any one time is double the number that you "
+                 "set here. Larger batches require more GPU RAM."))
         argument_list.append(dict(
             opts=("-it", "--iterations"),
             action=Slider,
@@ -973,17 +977,6 @@ class TrainArgs(FaceSwapArgs):
                  "\nL|central: Creates the variables on the CPU and performs the updates there. "
                  "This will lead to VRAM savings and can be used for both single and multi GPU "
                  "systems."))
-        argument_list.append(dict(
-            opts=("-pp", "--ping-pong"),
-            action="store_true",
-            dest="pingpong",
-            default=False,
-            backend="nvidia",
-            group="VRAM Savings",
-            help="Enable ping pong training. Trains one side at a time, switching sides at "
-                 "each save iteration. Training will take 2 to 4 times longer, with about a "
-                 "30%%-50%% reduction in VRAM useage. NB: Preview won't show until both sides "
-                 "have been trained once."))
         argument_list.append(dict(
             opts=("-s", "--save-interval"),
             action=Slider,
@@ -1062,15 +1055,6 @@ class TrainArgs(FaceSwapArgs):
             group="preview",
             help="Writes the training result to a file. The image will be stored in the root "
                  "of your FaceSwap folder."))
-        argument_list.append(dict(
-            opts=("-ag", "--allow-growth"),
-            action="store_true",
-            dest="allow_growth",
-            default=False,
-            backend="nvidia",
-            group="model",
-            help="Sets allow_growth option of Tensorflow to spare memory on some "
-                 "configurations."))
         argument_list.append(dict(
             opts=("-nl", "--no-logs"),
             action="store_true",

@@ -9,7 +9,6 @@ from threading import Lock
 from time import sleep
 
 import cv2
-import tensorflow as tf
 
 from lib.image import read_image
 from lib.keypress import KBHit
@@ -21,7 +20,7 @@ from plugins.plugin_loader import PluginLoader
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Train():
+class Train():  # pylint:disable=too-few-public-methods
     """ The Faceswap Training Process.
 
     The training process is responsible for training a model on a set of source faces and a set of
@@ -57,20 +56,6 @@ class Train():
         size = image.shape[0]
         logger.debug("Training image size: %s", size)
         return size
-
-    @property
-    def _alignments_paths(self):
-        """ dict: The alignments paths for each of the source and destination faces. Key is the
-            side, value is the path to the alignments file """
-        alignments_paths = dict()
-        for side in ("a", "b"):
-            alignments_path = getattr(self._args, "alignments_path_{}".format(side))
-            if not alignments_path:
-                image_path = getattr(self._args, "input_{}".format(side))
-                alignments_path = os.path.join(image_path, "alignments.fsa")
-            alignments_paths[side] = alignments_path
-        logger.debug("Alignments paths: %s", alignments_paths)
-        return alignments_paths
 
     def _set_timelapse(self):
         """ Set time-lapse paths if requested.
@@ -207,16 +192,13 @@ class Train():
             sleep(1)  # Let preview instructions flush out to logger
             logger.debug("Commencing Training")
             logger.info("Loading data, this may take a while...")
-
-            if self._args.allow_growth:
-                self._set_tf_allow_growth()
             model = self._load_model()
             trainer = self._load_trainer(model)
             self._run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.save_models()
+                model.save()
                 trainer.clear_tensorboard()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
@@ -233,24 +215,13 @@ class Train():
             The requested model plugin
         """
         logger.debug("Loading Model")
-        model_dir = get_folder(self._args.model_dir)
-        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
-        augment_color = not self._args.no_augment_color
+        model_dir = str(get_folder(self._args.model_dir))
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
-            configfile=configfile,
-            snapshot_interval=self._args.snapshot_interval,
-            batch_size=self._args.batch_size,
-            no_logs=self._args.no_logs,
-            warp_to_landmarks=self._args.warp_to_landmarks,
-            augment_color=augment_color,
-            no_flip=self._args.no_flip,
+            self._args,
             training_image_size=self._image_size,
-            alignments_paths=self._alignments_paths,
-            preview_scale=self._args.preview_scale,
-            strategy=self._args.distribution,
-            pingpong=self._args.pingpong,
             predict=False)
+        model.build()
         logger.debug("Loaded Model")
         return model
 
@@ -306,17 +277,13 @@ class Train():
                 break
             if save_iteration:
                 logger.trace("Save Iteration: (iteration: %s", iteration)
-                if self._args.pingpong:
-                    model.save_models()
-                    trainer.pingpong.switch()
-                else:
-                    model.save_models()
+                model.save()
             elif self._save_now:
                 logger.trace("Save Requested: (iteration: %s", iteration)
-                model.save_models()
+                model.save()
                 self._save_now = False
         logger.debug("Training cycle complete")
-        model.save_models()
+        model.save()
         trainer.clear_tensorboard()
         self._stop = True
 
@@ -385,18 +352,6 @@ class Train():
         keypress.set_normal_term()
         logger.debug("Closed Monitor")
         return err
-
-    @staticmethod
-    def _set_tf_allow_growth():
-        """ Allow TensorFlow to manage VRAM growth.
-
-        Enables the Tensorflow allow_growth option if requested in the command line arguments
-        """
-        logger.debug("Setting Tensorflow 'allow_growth' option")
-        for gpu in tf.config.experimental.list_physical_devices('GPU'):
-            logger.info("Setting allow growth for GPU: %s", gpu)
-            tf.config.experimental.set_memory_growth(gpu, True)
-        logger.debug("Set Tensorflow 'allow_growth' option")
 
     def _show(self, image, name=""):
         """ Generate the preview and write preview file output.

@@ -659,6 +659,7 @@ class Predict():
             self._set_tf_allow_growth()
 
         self._model = self._load_model()
+        self._coverage_ratio = self._model.coverage_ratio
         self._output_indices = {"face": self._model.largest_face_index,
                                 "mask": self._model.largest_mask_index}
         self._predictor = self._model.converter(self._args.swap_model)
@@ -694,7 +695,7 @@ class Predict():
     @property
     def coverage_ratio(self):
         """ float: The coverage ratio that the model was trained at. """
-        return self._model.training_opts["coverage_ratio"]
+        return self._coverage_ratio
 
     @property
     def has_predicted_mask(self):
@@ -902,14 +903,14 @@ class Predict():
         for detected_face in item["detected_faces"]:
             detected_face.load_feed_face(item["image"],
                                          size=self._input_size,
-                                         coverage_ratio=self.coverage_ratio,
+                                         coverage_ratio=self._coverage_ratio,
                                          dtype="float32")
             if self._input_size == self.output_size:
                 detected_face.reference = detected_face.feed
             else:
                 detected_face.load_reference_face(item["image"],
                                                   size=self.output_size,
-                                                  coverage_ratio=self.coverage_ratio,
+                                                  coverage_ratio=self._coverage_ratio,
                                                   dtype="float32")
         logger.trace("Loaded aligned faces: '%s'", item["filename"])
 

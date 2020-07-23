@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-""" Functions for backing up, restoring and snapshotting models """
+""" Functions for backing up, restoring and creating model snapshots. """
 
 import logging
 import os
@@ -32,7 +32,7 @@ class Backup():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _check_valid(self, filename, for_restore=False):
-        """ Check if the passed in filename is valid for a backup or restor operation.
+        """ Check if the passed in filename is valid for a backup or restore operation.
 
         Parameters
         ----------
@@ -67,7 +67,7 @@ class Backup():
         return retval
 
     @staticmethod
-    def backup_model(fullpath):
+    def backup_model(full_path):
         """ Backup a model file.
 
         The backed up file is saved with the original filename in the original location with `.bk`
@@ -75,15 +75,15 @@ class Backup():
 
         Parameters
         ----------
-        fullpath: str
+        full_path: str
             The full path to a `.h5` model file or a `.json` state file
         """
-        backupfile = fullpath + ".bk"
-        logger.verbose("Backing up: '%s' to '%s'", fullpath, backupfile)
+        backupfile = full_path + ".bk"
         if os.path.exists(backupfile):
             os.remove(backupfile)
-        if os.path.exists(fullpath):
-            os.rename(fullpath, backupfile)
+        if os.path.exists(full_path):
+            logger.verbose("Backing up: '%s' to '%s'", full_path, backupfile)
+            os.rename(full_path, backupfile)
 
     def snapshot_models(self, iterations):
         """ Take a snapshot of the model at the current state and back it up.
@@ -97,7 +97,8 @@ class Backup():
         iterations: int
             The number of iterations that the model has trained when performing the snapshot.
         """
-        logger.info("Saving snapshot")
+        print("")  # New line so log message doesn't append to last loss output
+        logger.verbose("Saving snapshot")
         snapshot_dir = "{}_snapshot_{}_iters".format(self.model_dir, iterations)
 
         if os.path.isdir(snapshot_dir):
@@ -114,7 +115,7 @@ class Backup():
             copyfunc = copytree if os.path.isdir(srcfile) else copyfile
             logger.debug("Saving snapshot: '%s' > '%s'", srcfile, dstfile)
             copyfunc(srcfile, dstfile)
-        logger.info("Saved snapshot")
+        logger.info("Saved snapshot (%s iterations)", iterations)
 
     def restore(self):
         """ Restores a model from backup.

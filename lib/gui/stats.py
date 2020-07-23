@@ -41,7 +41,7 @@ class TensorBoardLogs():
                 continue
             logfiles = [filename for filename in filenames
                         if filename.startswith("events.out.tfevents")]
-            # Take the last logfile, in case of previous crash
+            # Take the last log file, in case of previous crash
             logfile = os.path.join(dirpath, sorted(logfiles)[-1])
             side, session = os.path.split(dirpath)
             side = os.path.split(side)[1]
@@ -133,7 +133,7 @@ class Session():
 
     @property
     def full_summary(self):
-        """ Retun all sessions summary data"""
+        """ Return all sessions summary data"""
         return self.summary.compile_stats()
 
     @property
@@ -144,7 +144,7 @@ class Session():
     @property
     def logging_disabled(self):
         """ Return whether logging is disabled for this session """
-        return self.session["no_logs"] or self.session["pingpong"]
+        return self.session["no_logs"]
 
     @property
     def loss(self):
@@ -216,7 +216,7 @@ class Session():
 
     @property
     def total_timestamps(self):
-        """ Return timestamps from logs seperated per session for all sessions """
+        """ Return timestamps from logs separated per session for all sessions """
         return self.tb_logs.get_timestamps()
 
     def initialize_session(self, is_training=False, session_id=None):
@@ -407,7 +407,7 @@ class Calculations():
                 else:
                     raw = {lossname: loss[:self.iterations] for lossname, loss in raw.items()}
 
-        else:  # Rate calulation
+        else:  # Rate calculation
             data = self.calc_rate_total() if self.is_totals else self.calc_rate()
             if self.args["flatten_outliers"]:
                 data = self.flatten_outliers(data)
@@ -511,7 +511,7 @@ class Calculations():
 
     def calc_smoothed(self, data):
         """ Smooth the data """
-        last = data[0]  # First value in the plot (first timestep)
+        last = data[0]  # First value in the plot (first time step)
         weight = self.args["smooth_amount"]
         smoothed = list()
         for point in data:
