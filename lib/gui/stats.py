@@ -148,7 +148,7 @@ class Session():
     @property
     def batchsize(self):
         """ Return the session batchsize """
-        return self.session["batchsize"] * 2
+        return self.session["batchsize"]
 
     @property
     def config(self):
@@ -213,7 +213,7 @@ class Session():
     @property
     def total_batchsize(self):
         """ Return all session batch sizes """
-        return {int(sess_id): sess["batchsize"] * 2
+        return {int(sess_id): sess["batchsize"]
                 for sess_id, sess in self.state["sessions"].items()}
 
     @property
@@ -305,13 +305,14 @@ class SessionsSummary():
             iterations = self.session.get_iterations_for_session(sess_idx)
             elapsed = ts_data["end_time"] - ts_data["start_time"]
             batchsize = self.session.total_batchsize.get(sess_idx, 0)
-            compiled.append({"session": sess_idx,
-                             "start": ts_data["start_time"],
-                             "end": ts_data["end_time"],
-                             "elapsed": elapsed,
-                             "rate": (batchsize * iterations) / elapsed if elapsed != 0 else 0,
-                             "batch": batchsize,
-                             "iterations": iterations})
+            compiled.append(
+                {"session": sess_idx,
+                 "start": ts_data["start_time"],
+                 "end": ts_data["end_time"],
+                 "elapsed": elapsed,
+                 "rate": ((batchsize * 2) * iterations) / elapsed if elapsed != 0 else 0,
+                 "batch": batchsize,
+                 "iterations": iterations})
         compiled = sorted(compiled, key=lambda k: k["session"])
         return compiled
 
@@ -462,7 +463,7 @@ class Calculations():
         batchsize = self.session.batchsize
         timestamps = self.session.timestamps
         iterations = range(len(timestamps) - 1)
-        rate = [batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations]
+        rate = [(batchsize * 2) / (timestamps[i + 1] - timestamps[i]) for i in iterations]
         logger.debug("Calculated rate: Item_count: %s", len(rate))
         return rate
 
@@ -479,7 +480,8 @@ class Calculations():
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
             iterations = range(len(timestamps) - 1)
-            rate.extend([batchsize / (timestamps[i + 1] - timestamps[i]) for i in iterations])
+            rate.extend([(batchsize * 2) / (timestamps[i + 1] - timestamps[i])
+                         for i in iterations])
         logger.debug("Calculated totals rate: Item_count: %s", len(rate))
         return rate
 
