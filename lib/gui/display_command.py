@@ -252,18 +252,17 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Add a single graph to the graph window """
         logger.trace("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
-        display_tabs = sorted(self.display_item.loss_keys)
-        if any(key.startswith("total") for key in display_tabs):
-            total_idx = [idx for idx, key in enumerate(display_tabs) if key.startswith("total")][0]
-            display_tabs.insert(0, display_tabs.pop(total_idx))
+        loss_keys = [key for key in self.display_item.loss_keys if key != "total"]
+        display_tabs = sorted(set(key[:-1].rstrip("_") for key in loss_keys))
         for loss_key in display_tabs:
             tabname = loss_key.replace("_", " ").title()
             if tabname in existing:
                 continue
 
+            display_keys = [key for key in loss_keys if key.startswith(loss_key)]
             data = Calculations(session=get_config().session,
                                 display="loss",
-                                loss_keys=[loss_key],
+                                loss_keys=display_keys,
                                 selections=["raw", "smoothed"],
                                 smooth_amount=get_config().tk_vars["smoothgraph"].get())
             self.add_child(tabname, data)

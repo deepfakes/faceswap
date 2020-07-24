@@ -148,7 +148,7 @@ class Session():
     @property
     def batchsize(self):
         """ Return the session batchsize """
-        return self.session["batchsize"]
+        return self.session["batchsize"] * 2
 
     @property
     def config(self):
@@ -213,7 +213,7 @@ class Session():
     @property
     def total_batchsize(self):
         """ Return all session batch sizes """
-        return {int(sess_id): sess["batchsize"]
+        return {int(sess_id): sess["batchsize"] * 2
                 for sess_id, sess in self.state["sessions"].items()}
 
     @property
