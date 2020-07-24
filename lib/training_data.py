@@ -77,7 +77,7 @@ class TrainingDataGenerator():
         self._masks = alignments.get("masks", None)
         self._nearest_landmarks = {}
 
-        # Batchsize and processing class are set when this class is called by a batcher
+        # Batchsize and processing class are set when this class is called by a feeder
         # from lib.training_data
         self._batchsize = 0
         self._processing = None

@@ -336,6 +336,7 @@ class Feeder():
                        for idx, side in enumerate(("a", "b"))}
 
         self._display_feeds = dict(preview=self._set_preview_feed(), timelapse=dict())
+        logger.debug("Initialized %s:", self.__class__.__name__)
 
     def _load_generator(self, output_index):
         """ Load the :class:`lib.training_data.TrainingDataGenerator` for this batcher.
@@ -381,15 +382,15 @@ class Feeder():
         """ Get the feed data and the targets for each training side. """
         model_inputs = []
         model_targets = []
-        for side in ("a", "b"):
+        for idx, side in enumerate(("a", "b")):
             side_inputs, side_targets = self._get_next(side)
-            if all(val is not None for val in self._model.mask_variables.values()):
+            if self._model.mask_variables is not None:
                 # Split masks and assign to the mask variable for penalized mask loss
                 masks = side_inputs[-1]
                 if get_backend() == "amd":
-                    K.set_value(self._model.mask_variables[side], masks)
+                    K.set_value(self._model.mask_variables[idx], masks)
                 else:
-                    self._model.mask_variables[side].assign(masks)
+                    self._model.mask_variables[idx].assign(masks)
                 if not self._model.feed_mask:
                     # Remove masks from the model input if not learning a mask
                     side_inputs = side_inputs[0]
@@ -786,7 +787,7 @@ class Samples():  # pylint:disable=too-few-public-methods
                     mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
             masks3 = [orig_masks, *pred_masks]
         else:
-            masks3 = np.repeat(orig_masks, 3, axis=0)
+            masks3 = np.repeat(np.expand_dims(orig_masks, axis=0), 3, axis=0)
 
         for previews, compiled_masks in zip(faces, masks3):
             images = np.array([cv2.addWeighted(img, 1.0, mask, 0.3, 0)

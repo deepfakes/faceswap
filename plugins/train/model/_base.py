@@ -22,8 +22,8 @@ from keras.optimizers import Adam
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
-from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, mask_loss_wrapper,
-                              generalized_loss, l_inf_norm, gmsd_loss, gaussian_blur)
+from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, generalized_loss,
+                              l_inf_norm, gmsd_loss)
 from lib.model.nn_blocks import set_config as set_nnblock_config
 from lib.utils import deprecation_warning, get_backend, FaceswapError
 from plugins.train._config import Config
@@ -32,8 +32,14 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
-# TODO Penalized Mask Loss
+# TODO Mixed Precision
+# TODO Conv Aware initializes even when resuming model
 # TODO Converter
+# TODO Only create a new state session when training has actually commenced
+# TODO Only update analysis tab if it is visible + when displayed
+# TODO Session iterations displays wrong
+# TODO Fix reflect padding
+# TODO Define input sizes per side
 
 
 class ModelBase():
@@ -64,7 +70,7 @@ class ModelBase():
         self._is_predict = predict
         self._model = None
         self.history = [[], []]  # Loss histories per save iteration
-        self._mask_variables = dict(a=None, b=None)
+        self._mask_variables = None  # Set if penalized loss is used
 
         self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._load_config()
@@ -140,7 +146,8 @@ class ModelBase():
 
     @property
     def mask_variables(self):
-        """ dict: for each side a :class:`keras.backend.variable` or ``None``.
+        """ list: A :class:`keras.backend.variable` for each side of the model or ``None``.
+
         If Penalized Mask Loss is used then each side will return a Variable of
         (`batch size`, `h`, `w`, 1) corresponding to the size of the model input.
         If Penalized Mask Loss is not used then each side will return ``None``
@@ -150,27 +157,28 @@ class ModelBase():
         FaceswapError:
             If Penalized Mask Loss has been selected, but a mask type has not been specified
         """
-        if not self.config["penalized_mask_loss"] or all(val is not None
-                                                         for val in self._mask_variables.values()):
+        if self._mask_variables is not None or not self.config["penalized_mask_loss"]:
             return self._mask_variables
 
         if self.config["penalized_mask_loss"] and self.config["mask_type"] is None:
             raise FaceswapError("Penalized Mask Loss has been selected but you have not chosen a "
                                 "Mask to use. Please select a mask or disable Penalized Mask "
                                 "Loss.")
-
-        output_network = [network for network in self.networks.values() if network.is_output][0]
-        mask_shape = output_network.output_shapes[-1][:-1] + (1, )
-        for side in ("a", "b"):
-            var = K.variable(K.ones((self._args.batch_size, ) + mask_shape[1:], dtype="float32"),
+        retval = []
+        for side, side_shapes in zip(("a", "b"), self.output_shapes):
+            dim = max(shape[0] for shape in side_shapes)
+            mask_shape = (self._args.batch_size, dim, dim, 1)
+            var = K.variable(K.ones(mask_shape, dtype="float32"),
                              dtype="float32",
                              name="penalized_mask_variable_{}".format(side))
             if get_backend() != "amd":
                 # trainable and shape don't have a setter, so we need to go to private property
                 var._trainable = False  # pylint:disable=protected-access
                 var._shape = tf.TensorShape(mask_shape)  # pylint:disable=protected-access
-            self._mask_variables[side] = var
-        logger.debug("Created mask variables: %s", self._mask_variables)
+            retval.append(var)
+        self._mask_variables = retval
+        logger.debug("Created mask variables: %s",
+                     ([(var.name, var.shape) for var in self._mask_variables]))
         return self._mask_variables
 
     @property
@@ -289,7 +297,7 @@ class ModelBase():
         """ Compile the model to include the Optimizer and Loss Function(s). """
         logger.debug("Compiling Model")
         optimizer = self._get_optimizer()
-        loss = Loss(self._model.inputs, self._model.outputs, None)
+        loss = Loss(self._model.inputs, self._model.outputs, self.mask_variables)
         self._model.compile(optimizer=optimizer, loss=loss.functions)
         if not self._is_predict:
             self.state.add_session_loss_names(loss.names)
@@ -608,11 +616,11 @@ class Loss():
     outputs: list
         A list of output tensors to the model in the order ("a", "b")
     mask_variables:
-        A list of :class:`keras.backend.variable` or ``None`` in the order ("a", "b")
+        A list of :class:`keras.backend.variable` in the order ("a", "b") or ``None``
     """
-    def __init__(self, inputs, outputs, mask_variable):
-        logger.debug("Initializing %s: (inputs: %s, outputs: %s, mask_variable: %s)",
-                     self.__class__.__name__, inputs, outputs, mask_variable)
+    def __init__(self, inputs, outputs, mask_variables):
+        logger.debug("Initializing %s: (inputs: %s, outputs: %s, mask_variables: %s)",
+                     self.__class__.__name__, inputs, outputs, mask_variables)
         self._loss_dict = dict(mae=losses.mean_absolute_error,
                                mse=losses.mean_squared_error,
                                logcosh=losses.logcosh,
@@ -622,7 +630,7 @@ class Loss():
                                gmsd=gmsd_loss,
                                pixel_gradient_diff=gradient_loss)
         self._inputs = inputs
-        self._mask_variable = mask_variable
+        self._mask_variables = mask_variables
         self._names = self._get_loss_names(outputs)
         self._funcs = self._get_loss_functions(outputs)
         self._names.insert(0, "total")
@@ -644,46 +652,28 @@ class Loss():
         return _CONFIG
 
     @property
-    def _mask_preprocessing_func(self):
-        """ Python function: The selected pre-processing function for the mask. If no
-        pre-processing function has been requested, ``None`` is returned. """
-        retval = None
-        if self._config.get("mask_blur", False):
-            retval = gaussian_blur(max(1, self._mask_shape[1] // 32))
-        logger.debug(retval)
-        return retval
-
-    @property
     def _selected_mask_loss(self):
         """ :func:`keras.losses.Loss`: The selected mask loss function. Currently returns mean
-        standard error as the default function. If a processing function has been requested the
-        wrapped loss function is returned in a loss wrapper. """
+        standard error as the default function. """
         loss_func = self._loss_dict["mse"]
-        func = self._mask_preprocessing_func
-        logger.debug("loss_func: %s, func: %s", loss_func, func)
-        retval = mask_loss_wrapper(loss_func, preprocessing_func=func)
-        return retval
+        logger.debug("loss_func: %s", loss_func)
+        return loss_func
 
     @property
-    def _mask_input(self):
+    def _mask_inputs(self):
         """ list: The list of input tensors to the model that contain the mask. Returns ``None``
         if there is no mask input to the model. """
         mask_inputs = [inp for inp in self._inputs if inp.name.startswith("mask")]
-        if not mask_inputs:
-            return None
-        return mask_inputs[0]
+        return None if not mask_inputs else mask_inputs
 
     @property
-    def _mask_shape(self):
-        """ tuple: The shape of the mask input tensors for the model. Returns ``None`` if there is
-        no mask input. """
-        if self._mask_input is None and self._mask_variable is None:
+    def _mask_shapes(self):
+        """ list: The list of shape tuples for the mask input tensors for the model. Returns
+        ``None`` if there is no mask input. """
+        if self._mask_inputs is None and self._mask_variables is None:
             return None
-        if self._mask_input:
-            retval = K.int_shape(self._mask_input)[1:]
-        else:
-            retval = K.int_shape(self._mask_variable)
-        return retval
+        masks = self._mask_inputs if self._mask_inputs is not None else self._mask_variables
+        return [K.int_shape(mask_input) for mask_input in masks]
 
     @classmethod
     def _get_loss_names(cls, outputs):
@@ -742,13 +732,12 @@ class Loss():
                 loss_funcs.append(self._selected_mask_loss)
             elif self._config["penalized_mask_loss"] and self._config["mask_type"] is not None:
                 face_size = output_shapes[idx][1]
-                mask_size = self._mask_shape[1]
+                mask_size = self._mask_shapes[idx][1]
                 scaling = face_size / mask_size
                 logger.debug("face_size: %s mask_size: %s, mask_scaling: %s",
                              face_size, mask_size, scaling)
-                loss_funcs.append(PenalizedLoss(self._mask_variable, selected_loss,
-                                                mask_scaling=scaling,
-                                                preprocessing_func=self._mask_preprocessing_func))
+                loss_funcs.append(PenalizedLoss(self._mask_variables[idx], selected_loss,
+                                                mask_scaling=scaling))
             else:
                 loss_funcs.append(selected_loss)
             logger.debug("%s: %s", name, loss_funcs[-1])

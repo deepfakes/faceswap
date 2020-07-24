@@ -65,7 +65,6 @@ model.losses module
    ~lib.model.losses.gmsd_loss
    ~lib.model.losses.gradient_loss
    ~lib.model.losses.l_inf_norm
-   ~lib.model.losses.mask_loss_wrapper
    ~lib.model.losses.scharr_edges
 
 .. automodule:: lib.model.losses

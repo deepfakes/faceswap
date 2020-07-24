@@ -23,26 +23,6 @@ else:
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-def mask_loss_wrapper(loss_func, preprocessing_func=None):
-    """ A wrapper for mask loss that can perform pre-processing on the input prior to calling the
-    loss function.
-
-    Parameters
-    ----------
-    loss_func: class or function
-        The actual loss function to use
-    preprocessing_func: function
-        The pre-processing function to use. Should take a Keras Input as it's only argument
-    """
-    def func(y_true, y_pred):
-        """ Process input if a processing function has been passed, otherwise just return loss """
-        if preprocessing_func is not None:
-            y_true = K.reshape(y_true, [-1] + list(K.int_shape(y_pred)[1:]))
-            y_true = preprocessing_func(y_true)
-        return loss_func(y_true, y_pred)
-    return func
-
-
 class DSSIMObjective():
     """ DSSIM Loss Function
 
@@ -228,7 +208,7 @@ class DSSIMObjective():
 
 
 # PENALIZED LOSS
-class _PenalizedLossShared():
+class _PenalizedLossShared():  # pylint:disable=too-few-public-methods
     """ Shared methods for Keras and Tensorflow.Keras Penalized Loss
 
     Applies the given loss function just to the masked area of the image.
@@ -244,22 +224,12 @@ class _PenalizedLossShared():
     mask_scaling: float, optional
         For multi-decoder output the target mask will likely be at full size scaling, so this is
         the scaling factor to reduce the mask by. Default: `1.0`
-    preprocessing_func: function, optional
-        If preprocessing is required on the input mask, then this should be the function to use.
-        The function should take a Keras Input as it's only argument. Set to ``None`` if no
-        preprocessing is to be performed. Default: ``None``
     """
-    def __init__(self,
-                 mask,
-                 loss_func,
-                 mask_prop=1.0,
-                 mask_scaling=1.0,
-                 preprocessing_func=None):
+    def __init__(self, mask, loss_func, mask_prop=1.0, mask_scaling=1.0):
         self._mask = mask
         self._loss_func = loss_func
         self._mask_prop = mask_prop
         self._mask_scaling = mask_scaling
-        self._preprocessing_func = preprocessing_func
 
     def _prepare_mask(self):
         """ Prepare the masks for calculating loss
@@ -270,8 +240,6 @@ class _PenalizedLossShared():
             The prepared mask for applying to loss
         """
         mask = self._scale_mask(self._mask)
-        if self._preprocessing_func is not None:
-            mask = self._preprocessing_func(mask)
         mask_as_k_inv_prop = 1 - self._mask_prop
         mask = (mask * self._mask_prop) + mask_as_k_inv_prop
         return mask
@@ -317,18 +285,9 @@ class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
     mask_scaling: float, optional
         For multi-decoder output the target mask will likely be at full size scaling, so this is
         the scaling factor to reduce the mask by. Default: `1.0`
-    preprocessing_func: function, optional
-        If preprocessing is required on the input mask, then this should be the function to use.
-        The function should take a Keras Input as it's only argument. Set to ``None`` if no
-        preprocessing is to be performed. Default: ``None``
     """
-    def __init__(self,
-                 mask,
-                 loss_func,
-                 mask_prop=1.0,
-                 mask_scaling=1.0,
-                 preprocessing_func=None):
-        super().__init__(mask, loss_func, mask_prop, mask_scaling, preprocessing_func)
+    def __init__(self, mask, loss_func, mask_prop=1.0, mask_scaling=1.0):
+        super().__init__(mask, loss_func, mask_prop, mask_scaling)
         super(_PenalizedLossShared, self).__init__(name="penalized_loss")
 
     def call(self, y_true, y_pred):
@@ -357,7 +316,7 @@ class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
         return self._loss_func(n_true, n_pred)
 
 
-class PenalizedLossPlaid(_PenalizedLossShared):
+class PenalizedLossPlaid(_PenalizedLossShared):  # pylint:disable=too-few-public-methods
     """ PlaidML Penalized Loss function.
 
     Applies the given loss function just to the masked area of the image.
@@ -373,10 +332,6 @@ class PenalizedLossPlaid(_PenalizedLossShared):
     mask_scaling: float, optional
         For multi-decoder output the target mask will likely be at full size scaling, so this is
         the scaling factor to reduce the mask by. Default: `1.0`
-    preprocessing_func: function, optional
-        If preprocessing is required on the input mask, then this should be the function to use.
-        The function should take a Keras Input as it's only argument. Set to ``None`` if no
-        preprocessing is to be performed. Default: ``None``
     """
 
     def __call__(self, y_true, y_pred):
@@ -675,61 +630,3 @@ def gmsd_loss(y_true, y_pred):
     gmsd = K.std(gms, axis=(1, 2, 3), keepdims=True)
     gmsd = K.squeeze(gmsd, axis=-1)
     return gmsd
-
-
-# Gaussian Blur is here as it is only used for losses.
-# It was previously kept in lib/model/masks but the import of keras backend
-# breaks plaidml
-def gaussian_blur(radius=2.0):
-    """ Apply gaussian blur to an input.
-
-    Used for blurring mask in training.
-
-    Parameters
-    ----------
-    radius: float, optional
-        The kernel radius for applying gaussian blur. Default: `2.0`
-
-    Returns
-    -------
-    tensor
-        The input tensor with gaussian blurring applied
-
-    References
-    ----------
-    https://github.com/iperov/DeepFaceLab
-    """
-    def _gaussian(var_x, radius, sigma):
-        """ Obtain the gaussian kernel. """
-        return np.exp(-(float(var_x) - float(radius)) ** 2 / (2 * sigma ** 2))
-
-    def _make_kernel(sigma):
-        """ Make the gaussian kernel. """
-        kernel_size = max(3, int(2 * 2 * sigma + 1))
-        mean = np.floor(0.5 * kernel_size)
-        kernel_1d = np.array([_gaussian(x, mean, sigma) for x in range(kernel_size)])
-        np_kernel = np.outer(kernel_1d, kernel_1d).astype(dtype=K.floatx())
-        kernel = np_kernel / np.sum(np_kernel)
-        return kernel
-
-    gauss_kernel = _make_kernel(radius)
-    gauss_kernel = gauss_kernel[:, :, np.newaxis, np.newaxis]
-
-    def func(input_tensor):
-        """ Apply gaussian blurring to the input tensor
-
-        Parameters
-        ----------
-        input_tensor: tensor
-            The input to have gaussian blurring applied.
-
-        Returns
-        -------
-        tensor
-            The input with gaussian blurring applied
-        """
-        inputs = [input_tensor[:, :, :, i:i + 1] for i in range(K.int_shape(input_tensor)[-1])]
-        outputs = [K.conv2d(inp, K.constant(gauss_kernel), strides=(1, 1), padding="same")
-                   for inp in inputs]
-        return K.concatenate(outputs, axis=-1)
-    return func
