@@ -7,7 +7,7 @@
 from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
-from lib.model.nn_blocks import Conv2D, Conv2DBlock, UpscaleBlock
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 from .original import Model as OriginalModel
 
 
@@ -37,11 +37,7 @@ class Model(OriginalModel):
         var_x = UpscaleBlock(512)(var_x)
         var_x = UpscaleBlock(256)(var_x)
         var_x = UpscaleBlock(128)(var_x)
-        var_x = Conv2D(3,
-                       kernel_size=5,
-                       padding="same",
-                       activation="sigmoid",
-                       name="face_out_{}".format(side))(var_x)
+        var_x = Conv2DOutput(3, 5, activation="sigmoid", name="face_out_{}".format(side))(var_x)
         outputs = [var_x]
 
         if self.config.get("learn_mask", False):
@@ -49,10 +45,8 @@ class Model(OriginalModel):
             var_y = UpscaleBlock(512)(var_y)
             var_y = UpscaleBlock(256)(var_y)
             var_y = UpscaleBlock(128)(var_y)
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out")(var_y)
+            var_y = Conv2DOutput(1, 5,
+                                 activation="sigmoid",
+                                 name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))

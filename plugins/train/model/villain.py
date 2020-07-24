@@ -7,7 +7,7 @@ from keras.initializers import RandomNormal
 from keras.layers import add, Dense, Flatten, Input, Reshape
 
 from lib.model.layers import PixelShuffler
-from lib.model.nn_blocks import (Conv2D, Conv2DBlock, ResidualBlock, SeparableConv2DBlock,
+from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, SeparableConv2DBlock,
                                  UpscaleBlock)
 from .original import Model as OriginalModel, KerasModel
 
@@ -66,11 +66,7 @@ class Model(OriginalModel):
         var_x = ResidualBlock(256, **kwargs)(var_x)
         var_x = UpscaleBlock(self.input_shape[0], res_block_follows=True, **kwargs)(var_x)
         var_x = ResidualBlock(self.input_shape[0], **kwargs)(var_x)
-        var_x = Conv2D(3,
-                       kernel_size=5,
-                       padding="same",
-                       activation="sigmoid",
-                       name="face_out_{}".format(side))(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_{}".format(side))(var_x)
         outputs = [var_x]
 
         if self.config.get("learn_mask", False):
@@ -78,10 +74,6 @@ class Model(OriginalModel):
             var_y = UpscaleBlock(512)(var_y)
             var_y = UpscaleBlock(256)(var_y)
             var_y = UpscaleBlock(self.input_shape[0])(var_y)
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out_{}".format(side))(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))

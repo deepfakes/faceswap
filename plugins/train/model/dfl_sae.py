@@ -8,7 +8,7 @@ import numpy as np
 from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
-from lib.model.nn_blocks import Conv2D, Conv2DBlock, ResidualBlock, UpscaleBlock
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 
 from ._base import ModelBase
 
@@ -109,41 +109,25 @@ class Model(ModelBase):
         var_x1 = ResidualBlock(dims * 8)(var_x1)
         var_x1 = ResidualBlock(dims * 8)(var_x1)
         if self.multiscale_count >= 3:
-            outputs.append(Conv2D(3,
-                                  kernel_size=5,
-                                  padding="same",
-                                  activation="sigmoid",
-                                  name="face_out_32_{}".format(side))(var_x1))
+            outputs.append(Conv2DOutput(3, 5, name="face_out_32_{}".format(side))(var_x1))
 
         var_x2 = UpscaleBlock(dims * 4, res_block_follows=True)(var_x1)
         var_x2 = ResidualBlock(dims * 4)(var_x2)
         var_x2 = ResidualBlock(dims * 4)(var_x2)
         if self.multiscale_count >= 2:
-            outputs.append(Conv2D(3,
-                                  kernel_size=5,
-                                  padding="same",
-                                  activation="sigmoid",
-                                  name="face_out_64_{}".format(side))(var_x2))
+            outputs.append(Conv2DOutput(3, 5, name="face_out_64_{}".format(side))(var_x2))
 
         var_x3 = UpscaleBlock(dims * 2, res_block_follows=True)(var_x2)
         var_x3 = ResidualBlock(dims * 2)(var_x3)
         var_x3 = ResidualBlock(dims * 2)(var_x3)
 
-        outputs.append(Conv2D(3,
-                              kernel_size=5,
-                              padding="same",
-                              activation="sigmoid",
-                              name="face_out_128_{}".format(side))(var_x3))
+        outputs.append(Conv2DOutput(3, 5, name="face_out_128_{}".format(side))(var_x3))
 
         if self.use_mask:
             var_y = input_
             var_y = UpscaleBlock(self.decoder_dim * 8)(var_y)
             var_y = UpscaleBlock(self.decoder_dim * 4)(var_y)
             var_y = UpscaleBlock(self.decoder_dim * 2)(var_y)
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out_{}".format(side))(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))

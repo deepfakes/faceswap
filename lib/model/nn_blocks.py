@@ -80,7 +80,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods
     """
     def __init__(self, *args, padding="same", check_icnr_init=False, **kwargs):
         if kwargs.get("name", None) is None:
-            kwargs["name"] = self._get_name("conv2d_{}".format(args[0]))
+            kwargs["name"] = _get_name("conv2d_{}".format(args[0]))
         initializer = self._get_default_initializer(kwargs.pop("kernel_initializer", None))
         if check_icnr_init and _CONFIG["icnr_init"]:
             initializer = ICNR(initializer=initializer)
@@ -112,6 +112,65 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods
             retval = initializer
             logger.debug("Using model supplied initializer: %s", retval)
         return retval
+
+
+class Conv2DOutput():  # pylint:disable=too-few-public-methods
+    """ A Convolution 2D layer that separates out the activation layer to explicitly set the data
+    type on the activation to float 32 to fully support mixed precision training.
+
+    The Convolution 2D layer uses default parameters to be more appropriate for Faceswap
+    architecture.
+
+    Parameters are the same, with the same defaults, as a standard :class:``keras.layers.Conv2D``
+    except where listed below. The default initializer is updated to he_uniform or convolutional
+    aware based on user config settings.
+
+    Parameters
+    ----------
+    filters: int
+        The dimensionality of the output space (i.e. the number of output filters in the
+        convolution)
+    kernel_size: int or tuple/list of 2 ints
+        The height and width of the 2D convolution window. Can be a single integer to specify the
+        same value for all spatial dimensions.
+    activation: str, optional
+        The activation function to apply to the output. Default: `"sigmoid"`
+    padding: str, optional
+        One of `"valid"` or `"same"` (case-insensitive). Default: `"same"`. Note that `"same"` is
+        slightly inconsistent across backends with `strides` != 1, as described
+        [here](https://github.com/keras-team/keras/pull/9473#issuecomment-372166860)
+    kwargs: dict
+        Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
+    """
+    def __init__(self, filters, kernel_size, activation="sigmoid", padding="same", **kwargs):
+        self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
+            "conv_output_{}".format(filters))
+        self._filters = filters
+        self._kernel_size = kernel_size
+        self._activation = activation
+        self._padding = padding
+        self._kwargs = kwargs
+
+    def __call__(self, inputs):
+        """ Call the Faceswap Convolutional Output Layer.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The input to the layer
+
+        Returns
+        -------
+        Tensor
+            The output tensor from the Convolution 2D Layer
+        """
+        var_x = Conv2D(self._filters,
+                       self._kernel_size,
+                       padding=self._padding,
+                       name="{}_conv2d".format(self._name),
+                       **self._kwargs)(inputs)
+        var_x = Activation(self._activation, dtype="float32", name=self._name)(var_x)
+        return var_x
 
 
 class Conv2DBlock():  # pylint:disable=too-few-public-methods

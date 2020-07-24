@@ -3,7 +3,7 @@
     Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions. """
 from keras.layers import Dense, Flatten, Reshape, Input
 
-from lib.model.nn_blocks import Conv2D, Conv2DBlock, UpscaleBlock
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
 from ._base import KerasModel, ModelBase
 
 
@@ -53,6 +53,10 @@ class Model(ModelBase):
 
         2 Decoders are then defined (one for each side) with the encoder instances passed in as
         input to the corresponding decoders.
+
+        The final output of the model should always call :class:`lib.model.nn_blocks.Conv2DOutput`
+        so that the correct data type is set for the final activation, to support Mixed Precision
+        Training.
 
         Parameters
         ----------
@@ -123,7 +127,7 @@ class Model(ModelBase):
         var_x = UpscaleBlock(256)(var_x)
         var_x = UpscaleBlock(128)(var_x)
         var_x = UpscaleBlock(64)(var_x)
-        var_x = Conv2D(3, 5, activation="sigmoid", name="face_out_{}".format(side))(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_{}".format(side))(var_x)
         outputs = [var_x]
 
         if self.learn_mask:
@@ -131,6 +135,6 @@ class Model(ModelBase):
             var_x = UpscaleBlock(256)(var_y)
             var_x = UpscaleBlock(128)(var_y)
             var_x = UpscaleBlock(64)(var_y)
-            var_y = Conv2D(1, 5, activation="sigmoid", name="mask_out_{}".format(side))(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))

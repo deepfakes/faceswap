@@ -13,6 +13,7 @@ import time
 from contextlib import nullcontext
 
 import tensorflow as tf
+from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 from keras import losses
 from keras import backend as K
@@ -76,7 +77,9 @@ class ModelBase():
         self._load_config()
 
         self._io = IO(self, model_dir, self._is_predict)
-        self._strategy = Strategy(self._args.distribution, self.config["allow_growth"])
+        self._strategy = Strategy(self._args.distribution,
+                                  self.config["allow_growth"],
+                                  self.config["mixed_precision"])
         self.state = State(model_dir,
                            self.name,
                            self._config_changeable_items,
@@ -336,6 +339,8 @@ class ModelBase():
                       clipnorm=clipnorm)
         kwargs[learning_rate] = self.config.get("learning_rate", 5e-5)
         retval = Adam(**kwargs)
+        if self._strategy.use_mixed_precision:
+            retval = mixed_precision.LossScaleOptimizer(retval, loss_scale="dynamic")
         logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
         return retval
 
@@ -526,13 +531,16 @@ class Strategy():
         CPU.
     allow_growth: bool
         ``True`` if the Tensorflow allow_growth parameter should be set otherwise ``False``
+    use_mixed_precision: bool
+        ``True`` if experimental mixed precision support should be enabled for Nvidia GPUs
+        otherwise ``False``.
     """
-    def __init__(self, strategy, allow_growth):
-        logger.debug("Initializing %s: (strategy: %s, allow_growth: %s)",
-                     self.__class__.__name__, strategy, allow_growth)
+    def __init__(self, strategy, allow_growth, use_mixed_precision):
+        logger.debug("Initializing %s: (strategy: %s, allow_growth: %s, use_mixed_precision: %s)",
+                     self.__class__.__name__, strategy, allow_growth, use_mixed_precision)
 
-        if get_backend() == "nvidia" and allow_growth:
-            self._set_tf_allow_growth()
+        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
+        self._set_tf_allow_growth(allow_growth)
         self._strategy = self._get_strategy(strategy)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -541,20 +549,53 @@ class Strategy():
         """ bool: ``True`` if a distribution strategy is to be used otherwise ``False``. """
         return self._strategy is not None
 
+    @property
+    def use_mixed_precision(self):
+        """ bool: ``True`` if mixed precision training has been enabled, otherwise ``False``. """
+        return self._use_mixed_precision
+
     @classmethod
-    def _set_tf_allow_growth(cls):
+    def _set_keras_mixed_precision(cls, use_mixed_precision):
+        """ Enable the Keras experimental Mixed Precision API.
+
+        Enables the Keras experimental Mixed Precision API if requested in the user configuration
+        file.
+
+        Parameters
+        ----------
+        use_mixed_precision: bool
+            ``True`` if experimental mixed precision support should be enabled for Nvidia GPUs
+            otherwise ``False``.
+        """
+        if get_backend() != "nvidia" or not use_mixed_precision:
+            logger.debug("Not enabling 'mixed_precision' (backend: %s, use_mixed_precision: %s)",
+                         get_backend(), use_mixed_precision)
+            return False
+        logger.info("Enabling Mixed Precision Training")
+        policy = mixed_precision.Policy('mixed_float16')
+        mixed_precision.set_policy(policy)
+        logger.debug("Enabled mixed precision. (Compute dtype: %s, variable_dtype: %s)",
+                     policy.compute_dtype, policy.variable_dtype)
+        return True
+
+    @classmethod
+    def _set_tf_allow_growth(cls, allow_growth):
         """ Allow TensorFlow to manage VRAM growth.
 
         Enables the Tensorflow allow_growth option if requested in the command line arguments
         """
+        if get_backend() != "nvidia" or not allow_growth:
+            logger.debug("Not setting 'allow_growth' (backend: %s, allow_growth: %s)",
+                         get_backend(), allow_growth)
+            return
         logger.debug("Setting Tensorflow 'allow_growth' option")
         for gpu in tf.config.experimental.list_physical_devices('GPU'):
             logger.info("Setting allow growth for GPU: %s", gpu)
             tf.config.experimental.set_memory_growth(gpu, True)
         logger.debug("Set Tensorflow 'allow_growth' option")
 
-    @staticmethod
-    def _get_strategy(strategy):
+    @classmethod
+    def _get_strategy(cls, strategy):
         """ If we are running on Nvidia backend and the strategy is not `"default"` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.
 

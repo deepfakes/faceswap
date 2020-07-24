@@ -7,7 +7,7 @@ from keras.initializers import RandomNormal
 from keras.layers import Dense, Flatten, Input, Reshape, SpatialDropout2D
 from keras.models import Model as KerasModel
 
-from lib.model.nn_blocks import Conv2D, Conv2DBlock, ResidualBlock, UpscaleBlock
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 from ._base import ModelBase
 
 
@@ -74,11 +74,7 @@ class Model(ModelBase):
             var_x = SpatialDropout2D(0.25)(var_x)
         var_x = UpscaleBlock(decoder_complexity // 2, **kwargs)(var_x)
         var_x = UpscaleBlock(decoder_complexity // 4, **kwargs)(var_x)
-        var_x = Conv2D(3,
-                       kernel_size=5,
-                       padding="same",
-                       activation="sigmoid",
-                       name="face_out_a")(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_a")(var_x)
         outputs = [var_x]
 
         if self.config.get("learn_mask", False):
@@ -87,11 +83,7 @@ class Model(ModelBase):
             var_y = UpscaleBlock(decoder_complexity)(var_y)
             var_y = UpscaleBlock(decoder_complexity // 2)(var_y)
             var_y = UpscaleBlock(decoder_complexity // 4)(var_y)
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out_a")(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_a")(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_a")
 
@@ -120,11 +112,7 @@ class Model(ModelBase):
             var_x = ResidualBlock(decoder_complexity // 2,
                                   kernel_initializer=self.kernel_initializer)(var_x)
             var_x = UpscaleBlock(decoder_complexity // 4, **kwargs)(var_x)
-        var_x = Conv2D(3,
-                       kernel_size=5,
-                       padding="same",
-                       activation="sigmoid",
-                       name="face_out_b")(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_b")(var_x)
         outputs = [var_x]
 
         if self.config.get("learn_mask", False):
@@ -136,10 +124,6 @@ class Model(ModelBase):
             var_y = UpscaleBlock(decoder_complexity // 4)(var_y)
             if self.low_mem:
                 var_y = UpscaleBlock(decoder_complexity // 8)(var_y)
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out_b")(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_b")(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_b")

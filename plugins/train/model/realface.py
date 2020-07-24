@@ -14,7 +14,7 @@ from keras.layers import Dense, Flatten, Input, Reshape
 from keras.models import Model as KerasModel
 
 
-from lib.model.nn_blocks import Conv2D, Conv2DBlock, ResidualBlock, UpscaleBlock
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 from ._base import ModelBase, logger
 
 
@@ -118,11 +118,7 @@ class Model(ModelBase):
             var_x = ResidualBlock(decoder_b_complexity // 2**idx, use_bias=True)(var_x)
         var_x = UpscaleBlock(decoder_b_complexity // 2**(idx + 1))(var_x)
 
-        var_x = Conv2D(3,
-                       kernel_size=5,
-                       padding="same",
-                       activation="sigmoid",
-                       name="face_out_b")(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_b")(var_x)
 
         outputs = [var_x]
 
@@ -133,11 +129,7 @@ class Model(ModelBase):
                 var_y = UpscaleBlock(mask_b_complexity // 2**idx)(var_y)
             var_y = UpscaleBlock(mask_b_complexity // 2**(idx + 1))(var_y)
 
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out_b")(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_b")(var_y)
 
             outputs += [var_y]
 
@@ -168,11 +160,7 @@ class Model(ModelBase):
             var_x = UpscaleBlock(decoder_a_complexity // 2**idx)(var_x)
         var_x = UpscaleBlock(decoder_a_complexity // 2**(idx + 1))(var_x)
 
-        var_x = Conv2D(3,
-                       kernel_size=5,
-                       padding="same",
-                       activation="sigmoid",
-                       name="face_out_a")(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_a")(var_x)
 
         outputs = [var_x]
 
@@ -183,11 +171,7 @@ class Model(ModelBase):
                 var_y = UpscaleBlock(mask_a_complexity // 2**idx)(var_y)
             var_y = UpscaleBlock(mask_a_complexity // 2**(idx + 1))(var_y)
 
-            var_y = Conv2D(1,
-                           kernel_size=5,
-                           padding="same",
-                           activation="sigmoid",
-                           name="mask_out_a")(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_a")(var_y)
 
             outputs += [var_y]
 

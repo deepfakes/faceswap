@@ -146,11 +146,23 @@ class Config(FaceswapConfig):
         self.add_item(
             section=section, title="allow_growth", datatype=bool, default=False, group="network",
             fixed=False,
-            info="[Nvidia Only]. Enable the Tensorflow GPU `allow_growth` configuration option. "
+            info="[Nvidia Only]. Enable the Tensorflow GPU 'allow_growth' configuration option. "
                  "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
                  "but can lead to higher VRAM fragmentation and slower performance. Should only "
-                 "be enabled if you are receiving errors regarding `cuDNN fails to initialize` "
+                 "be enabled if you are receiving errors regarding 'cuDNN fails to initialize' "
                  "when commencing training.")
+        self.add_item(
+            section=section, title="mixed_precision", datatype=bool, default=False,
+            group="network",
+            info="[Nvidia Only]. NVIDIA GPUs can run operations in float16 faster than in "
+                 "float32. Mixed precision allows you to use a mix of float16 with float32, to "
+                 "get the performance benefits from float16 and the numeric stability benefits "
+                 "from float32.\n\nWhile mixed precision will run on most Nvidia models, it will "
+                 "only speed up training on more recent GPUs. Those with compute capability 7.0 "
+                 "or higher will see the greatest performance benefit from mixed precision "
+                 "because they have Tensor Cores. Older GPUs offer no math performance benefit "
+                 "for using mixed precision, however memory and bandwidth savings can enable some "
+                 "speedups. Generally RTX GPUs and later will offer the most benefit.")
         self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool,
             default=True, group="loss",
