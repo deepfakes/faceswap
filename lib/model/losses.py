@@ -215,8 +215,6 @@ class _PenalizedLossShared():  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    mask: Keras Variable
-        Variable holding masks for the current batch
     loss_func: function
         The actual loss function to use
     mask_prop: float, optional
@@ -225,13 +223,12 @@ class _PenalizedLossShared():  # pylint:disable=too-few-public-methods
         For multi-decoder output the target mask will likely be at full size scaling, so this is
         the scaling factor to reduce the mask by. Default: `1.0`
     """
-    def __init__(self, mask, loss_func, mask_prop=1.0, mask_scaling=1.0):
-        self._mask = mask
+    def __init__(self, loss_func, mask_prop=1.0, mask_scaling=1.0):
         self._loss_func = loss_func
         self._mask_prop = mask_prop
         self._mask_scaling = mask_scaling
 
-    def _prepare_mask(self):
+    def _prepare_mask(self, mask):
         """ Prepare the masks for calculating loss
 
         Returns
@@ -239,7 +236,7 @@ class _PenalizedLossShared():  # pylint:disable=too-few-public-methods
         tensor
             The prepared mask for applying to loss
         """
-        mask = self._scale_mask(self._mask)
+        mask = self._scale_mask(mask)
         mask_as_k_inv_prop = 1 - self._mask_prop
         mask = (mask * self._mask_prop) + mask_as_k_inv_prop
         return mask
@@ -276,8 +273,6 @@ class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
 
     Parameters
     ----------
-    mask: Keras Variable
-        Variable holding masks for the current batch
     loss_func: function
         The actual loss function to use
     mask_prop: float, optional
@@ -286,8 +281,8 @@ class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
         For multi-decoder output the target mask will likely be at full size scaling, so this is
         the scaling factor to reduce the mask by. Default: `1.0`
     """
-    def __init__(self, mask, loss_func, mask_prop=1.0, mask_scaling=1.0):
-        super().__init__(mask, loss_func, mask_prop, mask_scaling)
+    def __init__(self, loss_func, mask_prop=1.0, mask_scaling=1.0):
+        super().__init__(loss_func, mask_prop, mask_scaling)
         super(_PenalizedLossShared, self).__init__(name="penalized_loss")
 
     def call(self, y_true, y_pred):
@@ -296,7 +291,8 @@ class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
         Parameters
         ----------
         y_true: tensor or variable
-            The ground truth value
+            The ground truth value. This should contain the mask in the 4th channel that will be
+            split off for penalizing.
         y_pred: tensor or variable
             The predicted value
 
@@ -310,7 +306,8 @@ class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
         Branching because TensorFlow's broadcasting is wonky and plaidML's concatenate is
         implemented inefficiently.
         """
-        mask = self._prepare_mask()
+        mask = self._prepare_mask(K.expand_dims(y_true[..., -1], axis=-1))
+        y_true = y_true[..., :-1]
         n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
         n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
         return self._loss_func(n_true, n_pred)
@@ -323,8 +320,6 @@ class PenalizedLossPlaid(_PenalizedLossShared):  # pylint:disable=too-few-public
 
     Parameters
     ----------
-    mask: Keras Variable
-        Variable holding masks for the current batch
     loss_func: function
         The actual loss function to use
     mask_prop: float, optional
@@ -340,7 +335,8 @@ class PenalizedLossPlaid(_PenalizedLossShared):  # pylint:disable=too-few-public
         Parameters
         ----------
         y_true: tensor or variable
-            The ground truth value
+            The ground truth value. This should contain the mask in the 4th channel that will be
+            split off for penalizing.
         y_pred: tensor or variable
             The predicted value
 
@@ -349,7 +345,8 @@ class PenalizedLossPlaid(_PenalizedLossShared):  # pylint:disable=too-few-public
         tensor
             The Loss value
         """
-        mask = self._prepare_mask()
+        mask = self._prepare_mask(K.expand_dims(y_true[..., -1], axis=-1))
+        y_true = y_true[..., :-1]
         n_true = y_true * mask
         n_pred = y_pred * mask
         return self._loss_func(n_true, n_pred)

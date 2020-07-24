@@ -17,7 +17,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 from tqdm import tqdm
-from keras import backend as K
 
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
@@ -79,20 +78,15 @@ class TrainerBase():
 
         self._feeder = Feeder(images,
                               self._model,
-                              self._use_mask,
                               batch_size,
                               self._config,
                               self._get_alignments_data())
 
         self._tensorboard = self._set_tensorboard()
         self._samples = Samples(self._model,
-                                self._use_mask,
-                                self._model.feed_mask,
                                 self._model.coverage_ratio,
                                 self._model.command_line_arguments.preview_scale / 100)
         self._timelapse = Timelapse(self._model,
-                                    self._use_mask,
-                                    self._model.feed_mask,
                                     self._model.coverage_ratio,
                                     self._config.get("preview_images", 14),
                                     self._feeder)
@@ -110,13 +104,6 @@ class TrainerBase():
         logger.debug(retval)
         return retval
 
-    @property
-    def _use_mask(self):
-        """ bool: ``True`` if a mask is required otherwise ``False`` """
-        retval = (self._model.feed_mask or self._model.config["penalized_mask_loss"])
-        logger.debug(retval)
-        return retval
-
     def _get_alignments_data(self):
         """ Extrapolate alignments and masks from the alignments file into a `dict` for the
         training data generator.
@@ -127,7 +114,9 @@ class TrainerBase():
             Includes the key `landmarks` if landmarks are required for training and the key `masks`
             if the masks are required for training. """
         retval = dict()
-        if not self._landmarks_required and not self._use_mask:
+
+        get_masks = self._model.feed_mask or self._model.config["penalized_mask_loss"]
+        if not self._landmarks_required and not get_masks:
             return retval
 
         alignments = TrainingAlignments(self._model, self._images)
@@ -136,7 +125,7 @@ class TrainerBase():
             logger.debug("Adding landmarks to training opts dict")
             retval["landmarks"] = alignments.landmarks
 
-        if self._use_mask:
+        if get_masks:
             logger.debug("Adding masks to training opts dict")
             retval["masks"] = alignments.masks
         logger.debug(retval)
@@ -310,8 +299,6 @@ class Feeder():
         The list of full paths to the training images for this :class:`Feeder` for each side
     model: plugin from :mod:`plugins.train.model`
         The selected model that will be running this trainer
-    use_mask: bool
-        ``True`` if a mask is required for training otherwise ``False``
     batch_size: int
         The size of the batch to be processed for each side at each iteration
     config: :class:`lib.config.FaceswapConfig`
@@ -320,11 +307,10 @@ class Feeder():
         A dictionary containing landmarks and masks if these are required for training for each
         side
     """
-    def __init__(self, images, model, use_mask, batch_size, config, alignments):
-        logger.debug("Initializing %s: num_images: %s, use_mask: %s, batch_size: %s, config: %s)",
-                     self.__class__.__name__, len(images), use_mask, batch_size, config)
+    def __init__(self, images, model, batch_size, config, alignments):
+        logger.debug("Initializing %s: num_images: %s, batch_size: %s, config: %s)",
+                     self.__class__.__name__, len(images), batch_size, config)
         self._model = model
-        self._use_mask = use_mask
         self._images = images
         self._config = config
         self._alignments = alignments
@@ -382,18 +368,15 @@ class Feeder():
         """ Get the feed data and the targets for each training side. """
         model_inputs = []
         model_targets = []
-        for idx, side in enumerate(("a", "b")):
+        for side in ("a", "b"):
             side_inputs, side_targets = self._get_next(side)
-            if self._model.mask_variables is not None:
-                # Split masks and assign to the mask variable for penalized mask loss
-                masks = side_inputs[-1]
-                if get_backend() == "amd":
-                    K.set_value(self._model.mask_variables[idx], masks)
-                else:
-                    self._model.mask_variables[idx].assign(masks)
+            if self._model.config["penalized_mask_loss"]:
+                # Add the mask to the 4th channel for penalized mask loss
+                collated = np.concatenate(side_targets, axis=-1)
+                side_targets[0] = collated
                 if not self._model.feed_mask:
-                    # Remove masks from the model input if not learning a mask
-                    side_inputs = side_inputs[0]
+                    # Remove masks from the model targets if not learning a mask
+                    side_targets = side_targets[0]
             model_inputs.append(side_inputs)
             model_targets.append(side_targets)
         return model_inputs, model_targets
@@ -411,8 +394,8 @@ class Feeder():
         """
         logger.trace("Generating targets")
         batch = next(self._feeds[side])
-        targets_use_mask = self._model.feed_mask
-        model_inputs = batch["feed"] + batch["masks"] if self._use_mask else batch["feed"]
+        targets_use_mask = self._model.feed_mask or self._model.config["penalized_mask_loss"]
+        model_inputs = batch["feed"] + batch["masks"] if self._model.feed_mask else batch["feed"]
         model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
         return model_inputs, model_targets
 
@@ -532,10 +515,6 @@ class Samples():  # pylint:disable=too-few-public-methods
     ----------
     model: plugin from :mod:`plugins.train.model`
         The selected model that will be running this trainer
-    display_mask: bool
-        ``True`` if a mask should be displayed otherwise ``False``
-    feed_mask: bool
-        ``True`` if a mask should be fed to the model otherwise ``False``
     coverage_ratio: float
         Ratio of face to be cropped out of the training image.
     scaling: float, optional
@@ -548,13 +527,12 @@ class Samples():  # pylint:disable=too-few-public-methods
         dictionary should contain 2 keys ("a" and "b") with the values being the training images
         for generating samples corresponding to each side.
     """
-    def __init__(self, model, display_mask, feed_mask, coverage_ratio, scaling=1.0):
-        logger.debug("Initializing %s: model: '%s', display_mask: %s, use_mask: %s, "
-                     "coverage_ratio: %s)", self.__class__.__name__, model, display_mask,
-                     feed_mask, coverage_ratio)
+    def __init__(self, model, coverage_ratio, scaling=1.0):
+        logger.debug("Initializing %s: model: '%s', coverage_ratio: %s)",
+                     self.__class__.__name__, model, coverage_ratio)
         self._model = model
-        self._display_mask = display_mask
-        self._feed_mask = feed_mask
+        self._display_mask = model.feed_mask or model.config["penalized_mask_loss"]
+        self._feed_mask = model.feed_mask
         self.images = dict()
         self._coverage_ratio = coverage_ratio
         self._scaling = scaling
@@ -898,10 +876,6 @@ class Timelapse():  # pylint:disable=too-few-public-methods
     ----------
     model: plugin from :mod:`plugins.train.model`
         The selected model that will be running this trainer
-    display_mask: bool
-        ``True`` if a mask should be displayed otherwise ``False``
-    feed_mask: bool
-        ``True`` if a mask should be fed to the model otherwise ``False``
     coverage_ratio: float
         Ratio of face to be cropped out of the training image.
     scaling: float, optional
@@ -911,13 +885,12 @@ class Timelapse():  # pylint:disable=too-few-public-methods
     feeder: dict
         The :class:`Feeder` for generating the time-lapse images.
     """
-    def __init__(self, model, display_mask, feed_mask, coverage_ratio, image_count, feeder):
-        logger.debug("Initializing %s: model: %s, display_mask: %s, feed_mask: %s, "
-                     "coverage_ratio: %s, image_count: %s, feeder: '%s')",
-                     self.__class__.__name__, model, display_mask, feed_mask, coverage_ratio,
+    def __init__(self, model, coverage_ratio, image_count, feeder):
+        logger.debug("Initializing %s: model: %s, coverage_ratio: %s, image_count: %s, "
+                     "feeder: '%s')", self.__class__.__name__, model, coverage_ratio,
                      image_count, feeder)
         self._num_images = image_count
-        self._samples = Samples(model, display_mask, feed_mask, coverage_ratio)
+        self._samples = Samples(model, coverage_ratio)
         self._model = model
         self._feeder = feeder
         self._output_file = None

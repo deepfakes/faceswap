@@ -71,10 +71,14 @@ class ModelBase():
         self._is_predict = predict
         self._model = None
         self.history = [[], []]  # Loss histories per save iteration
-        self._mask_variables = None  # Set if penalized loss is used
 
         self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._load_config()
+
+        if self.config["penalized_mask_loss"] and self.config["mask_type"] is None:
+            raise FaceswapError("Penalized Mask Loss has been selected but you have not chosen a "
+                                "Mask to use. Please select a mask or disable Penalized Mask "
+                                "Loss.")
 
         self._io = IO(self, model_dir, self._is_predict)
         self._strategy = Strategy(self._args.distribution,
@@ -146,43 +150,6 @@ class ModelBase():
     def feed_mask(self):
         """ bool: ``True`` if the model expects a mask to be fed into input otherwise ``False`` """
         return self.config["mask_type"] is not None and self.config["learn_mask"]
-
-    @property
-    def mask_variables(self):
-        """ list: A :class:`keras.backend.variable` for each side of the model or ``None``.
-
-        If Penalized Mask Loss is used then each side will return a Variable of
-        (`batch size`, `h`, `w`, 1) corresponding to the size of the model input.
-        If Penalized Mask Loss is not used then each side will return ``None``
-
-        Raises
-        ------
-        FaceswapError:
-            If Penalized Mask Loss has been selected, but a mask type has not been specified
-        """
-        if self._mask_variables is not None or not self.config["penalized_mask_loss"]:
-            return self._mask_variables
-
-        if self.config["penalized_mask_loss"] and self.config["mask_type"] is None:
-            raise FaceswapError("Penalized Mask Loss has been selected but you have not chosen a "
-                                "Mask to use. Please select a mask or disable Penalized Mask "
-                                "Loss.")
-        retval = []
-        for side, side_shapes in zip(("a", "b"), self.output_shapes):
-            dim = max(shape[0] for shape in side_shapes)
-            mask_shape = (self._args.batch_size, dim, dim, 1)
-            var = K.variable(K.ones(mask_shape, dtype="float32"),
-                             dtype="float32",
-                             name="penalized_mask_variable_{}".format(side))
-            if get_backend() != "amd":
-                # trainable and shape don't have a setter, so we need to go to private property
-                var._trainable = False  # pylint:disable=protected-access
-                var._shape = tf.TensorShape(mask_shape)  # pylint:disable=protected-access
-            retval.append(var)
-        self._mask_variables = retval
-        logger.debug("Created mask variables: %s",
-                     ([(var.name, var.shape) for var in self._mask_variables]))
-        return self._mask_variables
 
     @property
     def iterations(self):
@@ -300,7 +267,7 @@ class ModelBase():
         """ Compile the model to include the Optimizer and Loss Function(s). """
         logger.debug("Compiling Model")
         optimizer = self._get_optimizer()
-        loss = Loss(self._model.inputs, self._model.outputs, self.mask_variables)
+        loss = Loss(self._model.inputs, self._model.outputs)
         self._model.compile(optimizer=optimizer, loss=loss.functions)
         if not self._is_predict:
             self.state.add_session_loss_names(loss.names)
@@ -656,12 +623,10 @@ class Loss():
         A list of input tensors to the model in the order ("a", "b")
     outputs: list
         A list of output tensors to the model in the order ("a", "b")
-    mask_variables:
-        A list of :class:`keras.backend.variable` in the order ("a", "b") or ``None``
     """
-    def __init__(self, inputs, outputs, mask_variables):
-        logger.debug("Initializing %s: (inputs: %s, outputs: %s, mask_variables: %s)",
-                     self.__class__.__name__, inputs, outputs, mask_variables)
+    def __init__(self, inputs, outputs):
+        logger.debug("Initializing %s: (inputs: %s, outputs: %s)",
+                     self.__class__.__name__, inputs, outputs)
         self._loss_dict = dict(mae=losses.mean_absolute_error,
                                mse=losses.mean_squared_error,
                                logcosh=losses.logcosh,
@@ -671,7 +636,6 @@ class Loss():
                                gmsd=gmsd_loss,
                                pixel_gradient_diff=gradient_loss)
         self._inputs = inputs
-        self._mask_variables = mask_variables
         self._names = self._get_loss_names(outputs)
         self._funcs = self._get_loss_functions(outputs)
         self._names.insert(0, "total")
@@ -711,10 +675,9 @@ class Loss():
     def _mask_shapes(self):
         """ list: The list of shape tuples for the mask input tensors for the model. Returns
         ``None`` if there is no mask input. """
-        if self._mask_inputs is None and self._mask_variables is None:
+        if self._mask_inputs is None:
             return None
-        masks = self._mask_inputs if self._mask_inputs is not None else self._mask_variables
-        return [K.int_shape(mask_input) for mask_input in masks]
+        return [K.int_shape(mask_input) for mask_input in self._mask_inputs]
 
     @classmethod
     def _get_loss_names(cls, outputs):
@@ -754,6 +717,7 @@ class Loss():
         logger.debug(retval)
         return retval
 
+    # TODO Mask scaling for multi-scale output
     def _get_loss_functions(self, outputs):
         """ Set the loss functions.
 
@@ -767,18 +731,14 @@ class Loss():
         """
         selected_loss = self._loss_dict[self._config.get("loss_function", "mae")]
         loss_funcs = []
-        output_shapes = [K.int_shape(output)[1:] for output in outputs]
-        for idx, name in enumerate(self._names):
+        output_shapes = [K.int_shape(output)[1:] for output in outputs]  # TODO
+        for name in self._names:
             if name.startswith("mask"):
                 loss_funcs.append(self._selected_mask_loss)
-            elif self._config["penalized_mask_loss"] and self._config["mask_type"] is not None:
-                face_size = output_shapes[idx][1]
-                mask_size = self._mask_shapes[idx][1]
-                scaling = face_size / mask_size
-                logger.debug("face_size: %s mask_size: %s, mask_scaling: %s",
-                             face_size, mask_size, scaling)
-                loss_funcs.append(PenalizedLoss(self._mask_variables[idx], selected_loss,
-                                                mask_scaling=scaling))
+            elif self._config["penalized_mask_loss"]:
+                scaling = 1.0  # TODO
+                logger.debug("mask_scaling: %s", scaling)
+                loss_funcs.append(PenalizedLoss(selected_loss, mask_scaling=scaling))
             else:
                 loss_funcs.append(selected_loss)
             logger.debug("%s: %s", name, loss_funcs[-1])
