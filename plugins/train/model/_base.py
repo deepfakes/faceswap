@@ -37,7 +37,6 @@ _CONFIG = None
 # TODO Only create a new state session when training has actually commenced
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO Session iterations displays wrong
-# TODO Define input sizes per side
 # TODO AMD Losses
 # TODO Test mixed precision is switchable
 
@@ -194,11 +193,22 @@ class ModelBase():
             if self._io.model_exists:
                 self._model = self._io._load()  # pylint:disable=protected-access
             else:
+                self._validate_input_shape()
                 inputs = self._get_inputs()
                 self._model = self.build_model(inputs)
             self._compile_model()
         if not self._is_predict:
             self._output_summary()
+
+    def _validate_input_shape(self):
+        """ Validate that the input shape is either a single shape tuple of 3 dimensions or
+        a list of 2 shape tuples of 3 dimensions. """
+        assert len(self.input_shape) in (2, 3), "Input shape should either be a single 3 " \
+            "dimensional shape tuple for use in both sides of the model, or a list of 2 3 " \
+            "dimensional shape tuples for use in the 'A' and 'B' sides of the model"
+        if len(self.input_shape) == 2:
+            assert [len(shape) == 3 for shape in self.input_shape], "All input shapes should " \
+                "have 3 dimensions"
 
     def _get_inputs(self):
         """ Obtain the standardized inputs for the model.
@@ -217,12 +227,15 @@ class ModelBase():
             but with just a single channel.
         """
         logger.debug("Getting inputs")
+        if len(self.input_shape) == 3:
+            input_shapes = [self.input_shape, self.input_shape]
+        else:
+            input_shapes = self.input_shape
         inputs = []
-        for side in ("a", "b"):
-            side_inputs = [Input(shape=self.input_shape, name="face_in_{}".format(side))]
+        for side, shape in zip(("a", "b"), input_shapes):
+            side_inputs = [Input(shape=shape, name="face_in_{}".format(side))]
             if self.feed_mask:
-                side_inputs.append(Input(shape=self.input_shape[:2] + (1, ),
-                                         name="mask_in_{}".format(side)))
+                side_inputs.append(Input(shape=shape[:2] + (1, ), name="mask_in_{}".format(side)))
             inputs.append(side_inputs)
         logger.debug("inputs: %s", inputs)
         return inputs

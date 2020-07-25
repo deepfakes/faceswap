@@ -331,7 +331,7 @@ class Feeder():
             The output index from the model to get output shapes for
         """
         logger.debug("Loading generator")
-        input_size = self._model.input_shape[0]
+        input_size = self._model.model.input_shape[output_index][0][1]
         output_shapes = self._model.output_shapes[output_index]
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
@@ -550,12 +550,13 @@ class Samples():  # pylint:disable=too-few-public-methods
         feeds = dict()
         figures = dict()
         headers = dict()
-        for side in ("a", "b"):
+        for idx, side in enumerate(("a", "b")):
             samples = self.images[side]
             faces = samples[1]
-            if self._model.input_shape[0] / faces.shape[1] != 1.0:
-                feeds[side] = self._resize_sample(side, faces, self._model.input_shape[0])
-                feeds[side] = feeds[side].reshape((-1, ) + self._model.input_shape)
+            input_shape = self._model.model.input_shape[idx][0][1:]
+            if input_shape[0] / faces.shape[1] != 1.0:
+                feeds[side] = self._resize_sample(side, faces, input_shape[0])
+                feeds[side] = feeds[side].reshape((-1, ) + input_shape)
             else:
                 feeds[side] = faces
             if self._feed_mask:

@@ -710,6 +710,7 @@ class Predict():
     @property
     def _input_size(self):
         """ int: The size in pixels of the Faceswap model input. """
+        # TODO Reference Model instead of input shape
         return self._model.input_shape[0]
 
     @property

@@ -17,8 +17,10 @@ class Model(ModelBase):
 
     All plugins must define the attribute overrides:
 
-        * :attr:`input_shape` (`tuple`): a tuple of ints defining the shape of the faces that the
-        model takes as input
+        * :attr:`input_shape` (`tuple` or `list`): a tuple of ints defining the shape of the faces
+        that the model takes as input. If the input size is the same for both sides, this can be
+        a single 3 dimensional tuple. If the inputs have different sizes for "A" and "B" this
+        should be a list of 2 3 dimensional shape tuples, 1 for each side.
 
     Any additional attributes used exclusively by this model should be defined here, but make sure
     that you are not accidentally overriding any existing :class:`plugins.train.model._base.Model`
