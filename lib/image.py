@@ -427,6 +427,32 @@ def encode_image_with_hash(image, extension):
     return image_hash, encoded_image
 
 
+def generate_thumbnail(image, size=80, quality=60):
+    """ Generate a jpg thumbnail for the given image.
+
+    Parameters
+    ----------
+    image: :class:`numpy.ndarray`
+        Three channel BGR image to convert to a jpg thumbnail
+    size: int
+        The width and height, in pixels, that the thumbnail should be generated at
+    quality: int
+        The jpg quality setting to use
+
+    Returns
+    :class:`numpy.ndarray`
+        The given image encoded to a jpg at the given size and quality settings
+    """
+    logger.trace("Input shape: %s, size: %s, quality: %s", image.shape, size, quality)
+    orig_size = image.shape[0]
+    if orig_size != size:
+        interp = cv2.INTER_AREA if orig_size > size else cv2.INTER_CUBIC
+        image = cv2.resize(image, (size, size), interpolation=interp)
+    retval = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])[1]
+    logger.trace("Output shape: %s", retval.shape)
+    return retval
+
+
 def batch_convert_color(batch, colorspace):
     """ Convert a batch of images from one color space to another.
 
