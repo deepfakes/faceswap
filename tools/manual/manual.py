@@ -501,8 +501,8 @@ class TkGlobals():
 
     @property
     def tk_update(self):
-        """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that a full
-        update needs to occur. """
+        """ :class:`tkinter.BooleanVar`: The variable holding the trigger that indicates that a
+        full update needs to occur. """
         return self._tk_vars["update"]
 
     @staticmethod

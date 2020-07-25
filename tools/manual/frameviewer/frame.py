@@ -12,7 +12,7 @@ from lib.gui.custom_widgets import Tooltip
 from lib.gui.utils import get_images
 
 from .control import Navigation, BackgroundImage
-from .editor import (BoundingBox, ExtractBox, Landmarks, Mask, # noqa pylint:disable=unused-import
+from .editor import (BoundingBox, ExtractBox, Landmarks, Mask,  # noqa pylint:disable=unused-import
                      Mesh, View)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -399,12 +399,13 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         for action in ("copy_prev", "copy_next", "reload"):
             if action == "reload":
                 icon = "reload3"
-                cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())
+                cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())  # noqa
                 helptext = "Revert to saved Alignments ({})".format(lookup[action][1])
             else:
                 icon = action
                 direction = action.replace("copy_", "")
-                cmd = lambda f=tk_frame_index, d=direction: self._det_faces.update.copy(f.get(), d)
+                cmd = lambda f=tk_frame_index, d=direction: self._det_faces.update.copy(  # noqa
+                    f.get(), d)
                 helptext = "Copy {} Alignments ({})".format(*lookup[action])
             state = ["!disabled"] if action == "copy_next" else ["disabled"]
             button = ttk.Button(frame,
