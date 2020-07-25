@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ The faces display frame (bottom section of GUI). This frame holds the viewport and the
-    associated frames.
+    """ The faces display frame (bottom section of GUI). This frame holds the faces viewport and
+    the tkinter objects.
 
     Parameters
     ----------
@@ -128,12 +128,12 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 
 class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
-    """ The left hand action frame holding the Optional Annotation buttons.
+    """ The left hand action frame holding the optional annotation buttons.
 
     Parameters
     ----------
     parent: :class:`FacesFrame`
-        The Faces frame that the Actions frame reside in
+        The Faces frame that this actions frame reside in
     """
     def __init__(self, parent):
         logger.debug("Initializing %s: (parent: %s)",
@@ -204,7 +204,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         ----------
         display: str
             The display name for the button that has called this event as exists in
-            attr:`_buttons`
+            :attr:`_buttons`
         """
         is_pressed = not self._tk_vars[display].get()
         style = "display_selected.TButton" if is_pressed else "display_deselected.TButton"
@@ -216,7 +216,7 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
 
 class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
-    """ The :class:`tkinter.Canvas` that holds the faces viewer part of the Manual Tool.
+    """ The :class:`tkinter.Canvas` that holds the faces viewer section of the Manual Tool.
 
     Parameters
     ----------
@@ -265,7 +265,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
     @property
     def viewport(self):
-        """ :class:`~lib.tools.manual.faceviewer.viewport.Viewport`: The viewport area of the
+        """ :class:`~tools.manual.faceviewer.viewport.Viewport`: The viewport area of the
         faces viewer. """
         return self._view
 
@@ -286,7 +286,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
     @property
     def control_colors(self):
-        """ :dict: Editor key with the current user selected hex code as value. """
+        """ :dict: The frame Editor name as key with the current user selected hex code as
+        value. """
         return ({key: val.get() for key, val in self._display_frame.tk_control_colors.items()})
 
     # << CALLBACK FUNCTIONS >> #
@@ -316,7 +317,18 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
     def refresh_grid(self, trigger_var, retain_position=False):
         """ Recalculate the full grid and redraw. Used when the active filter pull down is used, a
-        face has been added or removed, or the face thumbnail size has changed. """
+        face has been added or removed, or the face thumbnail size has changed.
+
+        Parameters
+        ----------
+        trigger_var: :class:`tkinter.BooleanVar`
+            The tkinter variable that has triggered the grid update. Will either be the variable
+            indicating that the face size have been changed, or the variable indicating that the
+            selected filter mode has been changed.
+        retain_position: bool, optional
+            ``True`` if the grid should be set back to the position it was at after the update has
+            been processed, otherwise ``False``. Default: ``False``.
+        """
         if not trigger_var.get():
             return
         size_change = isinstance(trigger_var, tk.StringVar)
@@ -444,7 +456,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
 
 
 class Grid():
-    """ Holds information on current filtered grid layout.
+    """ Holds information on the current filtered grid layout.
 
     The grid keeps information on frame indices, face indices, x and y positions and detected face
     objects laid out in a numpy array to reflect the current full layout of faces within the face
@@ -662,7 +674,7 @@ class Grid():
                      self._display_faces.shape, self._display_faces.dtype)
 
     def transport_index_from_frame(self, frame_index):
-        """ Return the main frame's transport index for given frame index based on the current
+        """ Return the main frame's transport index for the given frame index based on the current
         filter criteria.
 
         Parameters
@@ -681,13 +693,14 @@ class Grid():
 
 
 class ContextMenu():  # pylint:disable=too-few-public-methods
-    """  Enables a right click context menu for the :class:`FacesViewer`.
+    """  Enables a right click context menu for the
+    :class:`~tools.manual.faceviewer.frame.FacesViewer`.
 
     Parameters
     ----------
     canvas: :class:`tkinter.Canvas`
-        The :class:`~tools.manual.FacesViewer` canvas
-    detected_faces: :class:`~lib.tools.manual.detected_faces`
+        The :class:`FacesViewer` canvas
+    detected_faces: :class:`~tools.manual.detected_faces`
         The manual tool's detected faces class
     """
     def __init__(self, canvas, detected_faces):

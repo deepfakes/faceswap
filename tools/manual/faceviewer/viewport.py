@@ -595,8 +595,8 @@ class HoverBox():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        event: :class:`tkinter.Event` or `None`
-            The tkinter mouse event. Provides the current location of the mouse cursor. If `None`
+        event: :class:`tkinter.Event` or ``None``
+            The tkinter mouse event. Provides the current location of the mouse cursor. If ``None``
             is passed as the event (for example when this function is being called outside of a
             mouse event) then the location of the cursor will be calculated
         """
