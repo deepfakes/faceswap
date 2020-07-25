@@ -440,6 +440,7 @@ def generate_thumbnail(image, size=80, quality=60):
         The jpg quality setting to use
 
     Returns
+    -------
     :class:`numpy.ndarray`
         The given image encoded to a jpg at the given size and quality settings
     """
