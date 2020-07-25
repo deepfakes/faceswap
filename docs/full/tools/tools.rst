@@ -15,6 +15,13 @@ Subpackages
 
    manual
 
+alignments module
+=================
+.. automodule:: tools.alignments.alignments
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mask module
 ===========
 
@@ -24,10 +31,9 @@ mask module
    :show-inheritance:
 
 preview module
-==============
+===============
 
 .. rubric:: Module Summary
-
 
 .. autosummary::
    :nosignatures:
