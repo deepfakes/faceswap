@@ -15,7 +15,7 @@ from contextlib import nullcontext
 import tensorflow as tf
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
-from keras import losses
+from keras import losses as k_losses
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model as KerasModel
@@ -23,8 +23,7 @@ from keras.optimizers import Adam
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
-from lib.model.losses import (DSSIMObjective, PenalizedLoss, gradient_loss, generalized_loss,
-                              l_inf_norm, gmsd_loss)
+from lib.model import losses
 from lib.model.nn_blocks import set_config as set_nnblock_config
 from lib.utils import deprecation_warning, get_backend, FaceswapError
 from plugins.train._config import Config
@@ -33,7 +32,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
-# TODO Mixed Precision
 # TODO Conv Aware initializes even when resuming model
 # TODO Converter
 # TODO Only create a new state session when training has actually commenced
@@ -41,6 +39,8 @@ _CONFIG = None
 # TODO Session iterations displays wrong
 # TODO Fix reflect padding
 # TODO Define input sizes per side
+# TODO AMD Losses
+# TODO Test mixed precision is switchable
 
 
 class ModelBase():
@@ -627,14 +627,14 @@ class Loss():
     def __init__(self, inputs, outputs):
         logger.debug("Initializing %s: (inputs: %s, outputs: %s)",
                      self.__class__.__name__, inputs, outputs)
-        self._loss_dict = dict(mae=losses.mean_absolute_error,
-                               mse=losses.mean_squared_error,
-                               logcosh=losses.logcosh,
-                               smooth_loss=generalized_loss,
-                               l_inf_norm=l_inf_norm,
-                               ssim=DSSIMObjective(),
-                               gmsd=gmsd_loss,
-                               pixel_gradient_diff=gradient_loss)
+        self._loss_dict = dict(mae=k_losses.mean_absolute_error,
+                               mse=k_losses.mean_squared_error,
+                               logcosh=k_losses.logcosh,
+                               smooth_loss=losses.GeneralizedLoss(),
+                               l_inf_norm=losses.LInfNorm(),
+                               ssim=losses.DSSIMObjective(),
+                               gmsd=losses.GMSDLoss(),
+                               pixel_gradient_diff=losses.GradientLoss())
         self._inputs = inputs
         self._names = self._get_loss_names(outputs)
         self._funcs = self._get_loss_functions(outputs)
@@ -738,7 +738,7 @@ class Loss():
             elif self._config["penalized_mask_loss"]:
                 scaling = 1.0  # TODO
                 logger.debug("mask_scaling: %s", scaling)
-                loss_funcs.append(PenalizedLoss(selected_loss, mask_scaling=scaling))
+                loss_funcs.append(losses.PenalizedLoss(selected_loss, mask_scaling=scaling))
             else:
                 loss_funcs.append(selected_loss)
             logger.debug("%s: %s", name, loss_funcs[-1])

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Custom Loss Functions for faceswap.py """
 
+# TODO This is currently the old losses.py. Need to standardise for classes + AMD
 from __future__ import absolute_import
 
 import logging
