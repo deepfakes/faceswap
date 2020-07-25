@@ -37,7 +37,6 @@ _CONFIG = None
 # TODO Only create a new state session when training has actually commenced
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO Session iterations displays wrong
-# TODO Fix reflect padding
 # TODO Define input sizes per side
 # TODO AMD Losses
 # TODO Test mixed precision is switchable

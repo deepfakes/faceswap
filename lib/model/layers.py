@@ -11,7 +11,6 @@ import keras.backend as K
 
 from keras.layers import InputSpec, Layer
 from keras.utils import get_custom_objects
-from keras import initializers
 
 from lib.utils import get_backend
 
@@ -70,7 +69,7 @@ class PixelShuffler(Layer):
             self.data_format = conv_utils.normalize_data_format(data_format)
         self.size = conv_utils.normalize_tuple(size, 2, 'size')
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
         """This is where the layer's logic lives.
 
         Parameters
@@ -78,7 +77,7 @@ class PixelShuffler(Layer):
         inputs: tensor
             Input tensor, or list/tuple of input tensors
         kwargs: dict
-            Additional keyword arguments
+            Additional keyword arguments. Unused
 
         Returns
         -------
@@ -257,17 +256,17 @@ class SubPixelUpscaling(Layer):
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
-    def call(self, input_tensor, mask=None):  # pylint:disable=unused-argument,arguments-differ
+    def call(self, input_tensor, **kwargs):  # pylint:disable=unused-argument
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        inputs: tensor
+        input_tensor: tensor
             Input tensor, or list/tuple of input tensors
         kwargs: dict
-            Additional keyword arguments
+            Additional keyword arguments. Unused
 
         Returns
         -------
@@ -401,8 +400,12 @@ class ReflectionPadding2D(Layer):
         The standard Keras Layer keyword arguments (if any)
     """
     def __init__(self, stride=2, kernel_size=5, **kwargs):
+        if isinstance(stride, (tuple, list)):
+            assert len(stride) == 2 and stride[0] == stride[1]
+            stride = stride[0]
         self.stride = stride
         self.kernel_size = kernel_size
+        self.input_spec = None
         super().__init__(**kwargs)
 
     def build(self, input_shape):
@@ -453,7 +456,7 @@ class ReflectionPadding2D(Layer):
                 input_shape[2] + padding_width,
                 input_shape[3])
 
-    def call(self, x, mask=None):  # pylint:disable=unused-argument,arguments-differ
+    def call(self, var_x, mask=None):  # pylint:disable=unused-argument,arguments-differ
         """This is where the layer's logic lives.
 
         Parameters
@@ -486,7 +489,7 @@ class ReflectionPadding2D(Layer):
         padding_left = padding_width // 2
         padding_right = padding_width - padding_left
 
-        return pad(x,
+        return pad(var_x,
                    [[0, 0],
                     [padding_top, padding_bot],
                     [padding_left, padding_right],
@@ -528,15 +531,29 @@ class _GlobalPooling2D(Layer):
         self.input_spec = InputSpec(ndim=4)
 
     def compute_output_shape(self, input_shape):
+        """ Compute the output shape based on the input shape.
+
+        Parameters
+        ----------
+        input_shape: tuple
+            The input shape to the layer
+        """
         if self.data_format == 'channels_last':
             return (input_shape[0], input_shape[3])
-        else:
-            return (input_shape[0], input_shape[1])
+        return (input_shape[0], input_shape[1])
 
     def call(self, inputs):
+        """ Override to call the layer.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The input to the layer
+        """
         raise NotImplementedError
 
     def get_config(self):
+        """ Set the Keras config """
         config = {'data_format': self.data_format}
         base_config = super(_GlobalPooling2D, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -592,7 +609,7 @@ class GlobalStdDevPooling2D(_GlobalPooling2D):
         return pooled
 
 
-class L2_normalize(Layer):  # Pylint:disable=invalid-name
+class L2_normalize(Layer):  # pylint:disable=invalid-name
     """ Normalizes a tensor w.r.t. the L2 norm alongside the specified axis.
 
     Parameters
