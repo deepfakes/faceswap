@@ -76,7 +76,7 @@ class ModelBase():
                                 "Loss.")
 
         self._io = IO(self, model_dir, self._is_predict)
-        self._strategy = Strategy(self._args.distribution,
+        self._settings = Settings(self._args.distributed,
                                   self.config["allow_growth"],
                                   self._args.mixed_precision)
         self.state = State(model_dir,
@@ -186,7 +186,7 @@ class ModelBase():
 
         The compiled model is allocated to :attr:`_model`.
         """
-        with self._strategy.scope():
+        with self._settings.strategy_scope():
             if self._io.model_exists:
                 self._model = self._io._load()  # pylint:disable=protected-access
             else:
@@ -301,11 +301,11 @@ class ModelBase():
         """
         # TODO add clipnorm in for plaidML when it is fixed in the main repository
         clipnorm = get_backend() != "amd" and self.config.get("clipnorm", False)
-        if self._strategy.use_strategy and clipnorm:
+        if self._settings.use_strategy and clipnorm:
             logger.warning("Clipnorm has been selected, but is unsupported when using "
                            "distribution strategies, so has been disabled. If you wish to enable "
                            "clipnorm, then you must use the `default` distribution strategy.")
-        if self._strategy.use_strategy:
+        if self._settings.use_strategy:
             # Tensorflow checks whether clipnorm is None rather than False when using distribution
             # strategy so we need to explicitly set it to None.
             clipnorm = None
@@ -315,9 +315,8 @@ class ModelBase():
                       clipnorm=clipnorm)
         kwargs[learning_rate] = self.config.get("learning_rate", 5e-5)
         retval = Adam(**kwargs)
-        if self._strategy.use_mixed_precision:
-            retval = tf.keras.mixed_precision.experimental.LossScaleOptimizer(retval,
-                                                                              loss_scale="dynamic")
+        if self._settings.use_mixed_precision:
+            retval = self._settings.LossScaleOptimizer(retval, loss_scale="dynamic")
         logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
         return retval
 
@@ -491,8 +490,10 @@ class IO():
         logger.debug("Performed snapshot")
 
 
-class Strategy():
-    """ Distribution Strategies for Tensorflow.
+class Settings():
+    """ Tensorflow core training settings.
+
+    Sets backend tensorflow settings prior to launching the model.
 
     Tensorflow 2 uses distribution strategies for multi-GPU/system training. These are context
     managers. To enable the code to be more readable, we handle strategies the same way for Nvidia
@@ -501,24 +502,29 @@ class Strategy():
 
     Parameters
     ----------
-    strategy: ["default", "mirror", "central"]
-        The required strategy. `"default"` effectively means 'do not explicitly provide a strategy'
-        and let's Tensorflow handle things for itself. `"mirror" is Tensorflow Mirrored Strategy.
-        "`central`" is Tensorflow Central Storage Strategy with variables explicitly placed on the
-        CPU.
+    distributed: bool
+        ``True`` if Tensorflow mirrored strategy should be used for multiple GPU training.
+        ``False`` if the default strategy should be used.
     allow_growth: bool
         ``True`` if the Tensorflow allow_growth parameter should be set otherwise ``False``
     use_mixed_precision: bool
         ``True`` if experimental mixed precision support should be enabled for Nvidia GPUs
         otherwise ``False``.
     """
-    def __init__(self, strategy, allow_growth, use_mixed_precision):
-        logger.debug("Initializing %s: (strategy: %s, allow_growth: %s, use_mixed_precision: %s)",
-                     self.__class__.__name__, strategy, allow_growth, use_mixed_precision)
+    def __init__(self, distributed, allow_growth, use_mixed_precision):
+        logger.debug("Initializing %s: (distributed: %s, allow_growth: %s, "
+                     "use_mixed_precision: %s)", self.__class__.__name__, distributed,
+                     allow_growth, use_mixed_precision)
 
         self._set_tf_allow_growth(allow_growth)
+
+        if use_mixed_precision:
+            self._mixed_precision = tf.keras.mixed_precision.experimental
+        else:
+            self._mixed_precision = None
+
         self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
-        self._strategy = self._get_strategy(strategy)
+        self._strategy = self._get_strategy(distributed)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -530,6 +536,12 @@ class Strategy():
     def use_mixed_precision(self):
         """ bool: ``True`` if mixed precision training has been enabled, otherwise ``False``. """
         return self._use_mixed_precision
+
+    @property
+    def LossScaleOptimizer(self):  # pylint:disable=invalid-name
+        """ :class:`tf.keras.mixed_precision.experimental.LossScaleOptimizer`: Shortcut to the loss
+        scale optimizer for mixed precision training. """
+        return self._mixed_precision.LossScaleOptimizer
 
     @classmethod
     def _set_tf_allow_growth(cls, allow_growth):
@@ -547,8 +559,7 @@ class Strategy():
             tf.config.experimental.set_memory_growth(gpu, True)
         logger.debug("Set Tensorflow 'allow_growth' option")
 
-    @classmethod
-    def _set_keras_mixed_precision(cls, use_mixed_precision):
+    def _set_keras_mixed_precision(self, use_mixed_precision):
         """ Enable the Keras experimental Mixed Precision API.
 
         Enables the Keras experimental Mixed Precision API if requested in the user configuration
@@ -565,15 +576,14 @@ class Strategy():
                          get_backend(), use_mixed_precision)
             return False
         logger.info("Enabling Mixed Precision Training")
-        mixed_precision = tf.keras.mixed_precision.experimental
-        policy = mixed_precision.Policy('mixed_float16')
-        mixed_precision.set_policy(policy)
+        policy = self._mixed_precision.Policy('mixed_float16')
+        self._mixed_precision.set_policy(policy)
         logger.debug("Enabled mixed precision. (Compute dtype: %s, variable_dtype: %s)",
                      policy.compute_dtype, policy.variable_dtype)
         return True
 
     @classmethod
-    def _get_strategy(cls, strategy):
+    def _get_strategy(cls, distributed):
         """ If we are running on Nvidia backend and the strategy is not `"default"` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.
 
@@ -585,8 +595,9 @@ class Strategy():
 
         Parameters
         ----------
-        strategy: str
-            The request training strategy to use
+        distributed: bool
+            ``True`` if Tensorflow mirrored strategy should be used for multiple GPU training.
+            ``False`` if the default strategy should be used.
 
         Returns
         -------
@@ -596,21 +607,19 @@ class Strategy():
         """
         if get_backend() != "nvidia":
             retval = None
-        elif strategy == "mirror":
+        elif distributed:
             if platform.system().lower() == "linux":
                 cross_device_ops = tf.distribute.NcclAllReduce()
             else:
                 cross_device_ops = tf.distribute.HierarchicalCopyAllReduce()
             logger.debug("cross_device_ops: %s", cross_device_ops)
             retval = tf.distribute.MirroredStrategy(cross_device_ops=cross_device_ops)
-        elif strategy == "central":
-            retval = tf.distribute.experimental.CentralStorageStrategy(parameter_device="/CPU:0")
         else:
             retval = tf.distribute.get_strategy()
         logger.debug("Using strategy: %s", retval)
         return retval
 
-    def scope(self):
+    def strategy_scope(self):
         """ Return the strategy scope if we have set a strategy, otherwise return a null
         context.
 
