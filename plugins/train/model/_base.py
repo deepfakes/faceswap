@@ -13,7 +13,6 @@ import time
 from contextlib import nullcontext
 
 import tensorflow as tf
-from tensorflow.keras.mixed_precision import experimental as mixed_precision
 
 from keras import losses as k_losses
 from keras import backend as K
@@ -318,7 +317,8 @@ class ModelBase():
         kwargs[learning_rate] = self.config.get("learning_rate", 5e-5)
         retval = Adam(**kwargs)
         if self._strategy.use_mixed_precision:
-            retval = mixed_precision.LossScaleOptimizer(retval, loss_scale="dynamic")
+            retval = tf.keras.mixed_precision.experimental.LossScaleOptimizer(retval,
+                                                                              loss_scale="dynamic")
         logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
         return retval
 
@@ -517,8 +517,8 @@ class Strategy():
         logger.debug("Initializing %s: (strategy: %s, allow_growth: %s, use_mixed_precision: %s)",
                      self.__class__.__name__, strategy, allow_growth, use_mixed_precision)
 
-        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
         self._set_tf_allow_growth(allow_growth)
+        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
         self._strategy = self._get_strategy(strategy)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -531,6 +531,22 @@ class Strategy():
     def use_mixed_precision(self):
         """ bool: ``True`` if mixed precision training has been enabled, otherwise ``False``. """
         return self._use_mixed_precision
+
+    @classmethod
+    def _set_tf_allow_growth(cls, allow_growth):
+        """ Allow TensorFlow to manage VRAM growth.
+
+        Enables the Tensorflow allow_growth option if requested in the command line arguments
+        """
+        if get_backend() != "nvidia" or not allow_growth:
+            logger.debug("Not setting 'allow_growth' (backend: %s, allow_growth: %s)",
+                         get_backend(), allow_growth)
+            return
+        logger.debug("Setting Tensorflow 'allow_growth' option")
+        for gpu in tf.config.experimental.list_physical_devices('GPU'):
+            logger.info("Setting allow growth for GPU: %s", gpu)
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logger.debug("Set Tensorflow 'allow_growth' option")
 
     @classmethod
     def _set_keras_mixed_precision(cls, use_mixed_precision):
@@ -550,27 +566,12 @@ class Strategy():
                          get_backend(), use_mixed_precision)
             return False
         logger.info("Enabling Mixed Precision Training")
+        mixed_precision = tf.keras.mixed_precision.experimental
         policy = mixed_precision.Policy('mixed_float16')
         mixed_precision.set_policy(policy)
         logger.debug("Enabled mixed precision. (Compute dtype: %s, variable_dtype: %s)",
                      policy.compute_dtype, policy.variable_dtype)
         return True
-
-    @classmethod
-    def _set_tf_allow_growth(cls, allow_growth):
-        """ Allow TensorFlow to manage VRAM growth.
-
-        Enables the Tensorflow allow_growth option if requested in the command line arguments
-        """
-        if get_backend() != "nvidia" or not allow_growth:
-            logger.debug("Not setting 'allow_growth' (backend: %s, allow_growth: %s)",
-                         get_backend(), allow_growth)
-            return
-        logger.debug("Setting Tensorflow 'allow_growth' option")
-        for gpu in tf.config.experimental.list_physical_devices('GPU'):
-            logger.info("Setting allow growth for GPU: %s", gpu)
-            tf.config.experimental.set_memory_growth(gpu, True)
-        logger.debug("Set Tensorflow 'allow_growth' option")
 
     @classmethod
     def _get_strategy(cls, strategy):
