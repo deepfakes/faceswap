@@ -36,7 +36,6 @@ _CONFIG = None
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO Session iterations displays wrong
 # TODO AMD Losses
-# TODO Test mixed precision is switchable
 
 
 class ModelBase():
@@ -79,7 +78,7 @@ class ModelBase():
         self._io = IO(self, model_dir, self._is_predict)
         self._strategy = Strategy(self._args.distribution,
                                   self.config["allow_growth"],
-                                  self.config["mixed_precision"])
+                                  self._args.mixed_precision)
         self.state = State(model_dir,
                            self.name,
                            self._config_changeable_items,

@@ -978,6 +978,22 @@ class TrainArgs(FaceSwapArgs):
                  "This will lead to VRAM savings and can be used for both single and multi GPU "
                  "systems."))
         argument_list.append(dict(
+            opts=("-mp", "--mixed-precision"),
+            action="store_true",
+            dest="mixed_precision",
+            default=False,
+            backend="nvidia",
+            group="training",
+            help="R|NVIDIA GPUs can run operations in float16 faster than in float32. Mixed "
+                 "precision allows you to use a mix of float16 with float32, to get the "
+                 "performance benefits from float16 and the numeric stability benefits from "
+                 "float32.\nWhile mixed precision will run on most Nvidia models, it will only "
+                 "speed up training on more recent GPUs. Those with compute capability 7.0 or "
+                 "higher will see the greatest performance benefit from mixed precision because "
+                 "they have Tensor Cores. Older GPUs offer no math performance benefit for using "
+                 "mixed precision, however memory and bandwidth savings can enable some speedups. "
+                 "Generally RTX GPUs and later will offer the most benefit."))
+        argument_list.append(dict(
             opts=("-s", "--save-interval"),
             action=Slider,
             min_max=(10, 1000),
@@ -1068,7 +1084,7 @@ class TrainArgs(FaceSwapArgs):
             action="store_true",
             dest="warp_to_landmarks",
             default=False,
-            group="training",
+            group="augmentation",
             help="Warps training faces to closely matched Landmarks from the opposite face-set "
                  "rather than randomly warping the face. This is the 'dfaker' way of doing "
                  "warping. Alignments files for both sets of faces must be provided if using "
@@ -1078,7 +1094,7 @@ class TrainArgs(FaceSwapArgs):
             action="store_true",
             dest="no_flip",
             default=False,
-            group="training",
+            group="augmentation",
             help="To effectively learn, a random set of images are flipped horizontally. "
                  "Sometimes it is desirable for this not to occur. Generally this should be "
                  "left off except for during 'fit training'."))
@@ -1087,7 +1103,7 @@ class TrainArgs(FaceSwapArgs):
             action="store_true",
             dest="no_augment_color",
             default=False,
-            group="training",
+            group="augmentation",
             help="Color augmentation helps make the model less susceptible to color "
                  "differences between the A and B sets, at an increased training time cost. "
                  "Enable this option to disable color augmentation."))
