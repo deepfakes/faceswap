@@ -185,6 +185,10 @@ class ConvolutionAware(initializers.Initializer):
         Fourier transform.
     seed: int, optional
         Used to seed the random generator. Default: ``None``
+    initialized: bool, optional
+        This should always be set to ``False``. To avoid Keras re-calculating the values every time
+        the mode is loaded, this parameter is internally set on first time initialization.
+        Default:``False``
 
     Returns
     -------
@@ -196,11 +200,12 @@ class ConvolutionAware(initializers.Initializer):
     Armen Aghajanyan, https://arxiv.org/abs/1702.06295
     """
 
-    def __init__(self, eps_std=0.05, seed=None):
+    def __init__(self, eps_std=0.05, seed=None, initialized=False):
         self.eps_std = eps_std
         self.seed = seed
         self.orthogonal = initializers.Orthogonal()
         self.he_uniform = initializers.he_uniform()
+        self.initialized = initialized
 
     def __call__(self, shape, dtype=None):
         """ Call function for the ICNR initializer.
@@ -220,6 +225,8 @@ class ConvolutionAware(initializers.Initializer):
         # TODO Tensorflow appears to pass in a `tensorflow.python.framework.dtypes.DType` object
         # which causes this to error, so currently just reverts to default dtype if a string is not
         # passed in.
+        if self.initialized:   # Avoid re-calculating initializer when loading a saved model
+            return self.he_uniform(shape, dtype=dtype)
         dtype = K.floatx() if not isinstance(dtype, str) else dtype
         logger.info("Calculating Convolution Aware Initializer for shape: %s", shape)
         rank = len(shape)
@@ -254,6 +261,7 @@ class ConvolutionAware(initializers.Initializer):
             correct_ifft = np.fft.irfftn
 
         else:
+            self.initialized = True
             return K.variable(self.orthogonal(shape), dtype=dtype)
 
         kernel_fourier_shape = correct_fft(np.zeros(kernel_shape)).shape
@@ -263,6 +271,7 @@ class ConvolutionAware(initializers.Initializer):
         randoms = np.random.normal(0, self.eps_std, basis.shape[:-2] + kernel_shape)
         init = correct_ifft(basis, kernel_shape) + randoms
         init = self._scale_filters(init, variance)
+        self.initialized = True
         return K.variable(init.transpose(transpose_dimensions), dtype=dtype, name="conv_aware")
 
     def _create_basis(self, filters_size, filters, size, dtype):
@@ -302,7 +311,8 @@ class ConvolutionAware(initializers.Initializer):
             The configuration for ICNR Initialization
         """
         return dict(eps_std=self.eps_std,
-                    seed=self.seed)
+                    seed=self.seed,
+                    initialized=self.initialized)
 
 
 # Update initializers into Keras custom objects

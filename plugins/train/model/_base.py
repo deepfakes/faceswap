@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
-# TODO Conv Aware initializes even when resuming model
 # TODO Converter
 # TODO Only create a new state session when training has actually commenced
 # TODO Only update analysis tab if it is visible + when displayed
@@ -400,7 +399,7 @@ class IO():
             logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
-        model = load_model(self._filename)
+        model = load_model(self._filename, compile=False)
         logger.info("Loaded model from disk: '%s'", self._filename)
         return model
 

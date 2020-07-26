@@ -75,10 +75,8 @@ class FaceswapFormatter(logging.Formatter):
         record: :class:`logging.LogRecord`
             The log record to check for rewriting
         """
-        if record.levelno == 30 and (
-                record.funcName == "_tfmw_add_deprecation_warning" or
-                record.module in("deprecation", "deprecation_wrapper") or
-                record.message.startswith("No training configuration found in the save file,")):
+        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
+                                     record.module in ("deprecation", "deprecation_wrapper")):
             record.levelno = 10
             record.levelname = "DEBUG"
         return record
