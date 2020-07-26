@@ -7,6 +7,7 @@ import logging
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.keras.engine import compile_utils
 
 from keras import backend as K
 
@@ -214,7 +215,7 @@ class PenalizedLoss(tf.keras.losses.Loss):
     """
     def __init__(self, loss_func, mask_prop=1.0, mask_scaling=1.0):
         super().__init__(name="penalized_loss")
-        self._loss_func = loss_func
+        self._loss_func = compile_utils.LossesContainer(loss_func)
         self._mask_prop = mask_prop
         self._mask_scaling = mask_scaling
 
