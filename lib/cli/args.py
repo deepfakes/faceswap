@@ -989,7 +989,7 @@ class TrainArgs(FaceSwapArgs):
             rounding=10,
             type=int,
             dest="save_interval",
-            default=100,
+            default=250,
             group="Saving",
             help="Sets the number of iterations between each model save."))
         argument_list.append(dict(

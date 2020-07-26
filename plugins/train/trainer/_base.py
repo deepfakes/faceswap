@@ -183,6 +183,7 @@ class TrainerBase():
             not required then this should be ``None``. Otherwise all values should be full paths
             the keys being `input_a`, `input_b`, `output`.
         """
+        self._model.state.increment_iterations()
         logger.trace("Training one step: (iteration: %s)", self._model.iterations)
         do_preview = viewer is not None
         do_timelapse = timelapse_kwargs is not None
@@ -223,8 +224,6 @@ class TrainerBase():
 
         if do_timelapse:
             self._timelapse.output_timelapse(timelapse_kwargs)
-
-        self._model.state.increment_iterations()
 
     def _log_tensorboard(self, loss):
         """ Log current loss to Tensorboard log files

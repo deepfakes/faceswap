@@ -127,21 +127,9 @@ class Train():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self._args.model_dir)
-
-        # TODO Move these args to config and remove these deprecation warnings
-        if hasattr(self._args, "warp_to_landmarks") and self._args.warp_to_landmarks:
-            deprecation_warning("`-wl`, ``--warp-to-landmarks``",
-                                additional_info="This option will be available within training "
-                                                "config settings (/config/train.ini).")
-        if hasattr(self._args, "no_augment_color") and self._args.no_augment_color:
-            deprecation_warning("`-nac`, ``--no-augment-color``",
-                                additional_info="This option will be available within training "
-                                                "config settings (/config/train.ini).")
         thread = self._start_thread()
         # from lib.queue_manager import queue_manager; queue_manager.debug_monitor(1)
-
         err = self._monitor(thread)
-
         self._end_thread(thread, err)
         logger.debug("Completed Training Process")
 
@@ -266,20 +254,20 @@ class Train():  # pylint:disable=too-few-public-methods
         else:
             display_func = None
 
-        for iteration in range(0, self._args.iterations):
+        for iteration in range(1, self._args.iterations + 1):
             logger.trace("Training iteration: %s", iteration)
             save_iteration = iteration % self._args.save_interval == 0
-            viewer = display_func if save_iteration or self._save_now else None
+            viewer = display_func if iteration == 1 or save_iteration or self._save_now else None
             timelapse = self._timelapse if save_iteration else None
             trainer.train_one_step(viewer, timelapse)
             if self._stop:
                 logger.debug("Stop received. Terminating")
                 break
             if save_iteration:
-                logger.trace("Save Iteration: (iteration: %s", iteration)
+                logger.debug("Save Iteration: (iteration: %s", iteration)
                 model.save()
             elif self._save_now:
-                logger.trace("Save Requested: (iteration: %s", iteration)
+                logger.debug("Save Requested: (iteration: %s", iteration)
                 model.save()
                 self._save_now = False
         logger.debug("Training cycle complete")
@@ -366,28 +354,28 @@ class Train():  # pylint:disable=too-few-public-methods
             The name of the image for saving or display purposes. If an empty string is passed
             then it will automatically be names. Default: ""
         """
-        logger.trace("Updating preview: (name: %s)", name)
+        logger.debug("Updating preview: (name: %s)", name)
         try:
             scriptpath = os.path.realpath(os.path.dirname(sys.argv[0]))
             if self._args.write_image:
-                logger.trace("Saving preview to disk")
+                logger.debug("Saving preview to disk")
                 img = "training_preview.jpg"
                 imgfile = os.path.join(scriptpath, img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
-                logger.trace("Saved preview to: '%s'", img)
+                logger.debug("Saved preview to: '%s'", img)
             if self._args.redirect_gui:
-                logger.trace("Generating preview for GUI")
+                logger.debug("Generating preview for GUI")
                 img = ".gui_training_preview.jpg"
                 imgfile = os.path.join(scriptpath, "lib", "gui",
                                        ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
-                logger.trace("Generated preview for GUI: '%s'", img)
+                logger.debug("Generated preview for GUI: '%s'", img)
             if self._args.preview:
-                logger.trace("Generating preview for display: '%s'", name)
+                logger.debug("Generating preview for display: '%s'", name)
                 with self._lock:
                     self._preview_buffer[name] = image
-                logger.trace("Generated preview for display: '%s'", name)
+                logger.debug("Generated preview for display: '%s'", name)
         except Exception as err:
             logging.error("could not preview sample")
             raise err
-        logger.trace("Updated preview: (name: %s)", name)
+        logger.debug("Updated preview: (name: %s)", name)
