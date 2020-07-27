@@ -13,7 +13,7 @@ from .display_page import DisplayOptionalPage
 from .custom_widgets import Tooltip
 from .stats import Calculations
 from .control_helper import set_slider_rounding
-from .utils import FileHandler, get_config, get_images
+from .utils import FileHandler, get_config, get_images, preview_trigger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -72,6 +72,23 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def __init__(self, *args, **kwargs):
         self.update_preview = get_config().tk_vars["updatepreview"]
         super().__init__(*args, **kwargs)
+
+    def add_options(self):
+        """ Add the additional options """
+        self.add_option_refresh()
+        super().add_options()
+
+    def add_option_refresh(self):
+        """ Add refresh button to refresh preview immediately """
+        logger.debug("Adding refresh option")
+        btnrefresh = ttk.Button(self.optsframe,
+                                image=get_images().icons["reload"],
+                                command=preview_trigger().set)
+        btnrefresh.pack(padx=2, side=tk.RIGHT)
+        Tooltip(btnrefresh,
+                text="Preview updates at every model save. Click to refresh now.",
+                wraplength=200)
+        logger.debug("Added refresh option")
 
     def display_item_set(self):
         """ Load the latest preview if available """

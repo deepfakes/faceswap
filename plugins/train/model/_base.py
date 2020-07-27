@@ -35,7 +35,6 @@ _CONFIG = None
 # TODO Only create a new state session when training has actually commenced
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO AMD Losses
-# TODO Hotkey to regen previews
 
 
 class ModelBase():

@@ -39,6 +39,8 @@ class Train():  # pylint:disable=too-few-public-methods
         self._args = arguments
         self._timelapse = self._set_timelapse()
         self._images = self._get_images()
+        self._gui_preview_trigger = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])),
+                                                 "lib", "gui", ".cache", ".preview_trigger")
         self._stop = False
         self._save_now = False
         self._refresh_preview = False
@@ -267,8 +269,15 @@ class Train():  # pylint:disable=too-few-public-methods
             if self._stop:
                 logger.debug("Stop received. Terminating")
                 break
+
             if self._refresh_preview and viewer is not None:
+                if self._args.redirect_gui:
+                    print("\n")
+                    logger.info("[Preview Updated]")
+                    logger.debug("Removing gui trigger file: %s", self._gui_preview_trigger)
+                    os.remove(self._gui_preview_trigger)
                 self._refresh_preview = False
+
             if save_iteration:
                 logger.debug("Save Iteration: (iteration: %s", iteration)
                 model.save()
@@ -290,6 +299,7 @@ class Train():  # pylint:disable=too-few-public-methods
             ``True`` if there has been an error in the background thread otherwise ``False``
         """
         is_preview = self._args.preview
+        preview_trigger_set = False
         logger.debug("Launching Monitor")
         logger.info("===================================================")
         logger.info("  Starting")
@@ -343,8 +353,18 @@ class Train():  # pylint:disable=too-few-public-methods
                     if console_key in ("s", "S"):
                         logger.info("Save requested")
                         self._save_now = True
-                    if self._args.redirect_gui and console_key == ("r"):
+
+                # GUI Preview trigger update monitor
+                if self._args.redirect_gui:
+                    if not preview_trigger_set and os.path.isfile(self._gui_preview_trigger):
+                        print("\n")
+                        logger.info("Refresh preview requested")
                         self._refresh_preview = True
+                        preview_trigger_set = True
+
+                    if preview_trigger_set and not self._refresh_preview:
+                        logger.debug("Resetting GUI preview trigger")
+                        preview_trigger_set = False
 
                 sleep(1)
             except KeyboardInterrupt:
