@@ -7,6 +7,21 @@ The Tools Package provides various tools for working with Faceswap outside of th
 .. contents:: Contents
    :local:
 
+Subpackages
+===========
+
+.. toctree::
+   :maxdepth: 1
+
+   manual
+
+alignments module
+=================
+.. automodule:: tools.alignments.alignments
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 mask module
 ===========
 
@@ -16,10 +31,9 @@ mask module
    :show-inheritance:
 
 preview module
-==============
+===============
 
 .. rubric:: Module Summary
-
 
 .. autosummary::
    :nosignatures:

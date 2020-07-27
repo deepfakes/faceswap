@@ -7,4 +7,4 @@ faceswap
    lib/lib
    plugins/plugins
    scripts
-   tools
+   tools/tools
