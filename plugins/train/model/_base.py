@@ -75,9 +75,7 @@ class ModelBase():
                                 "Loss.")
 
         self._io = IO(self, model_dir, self._is_predict)
-        self._settings = Settings(self._args.distributed,
-                                  self.config["allow_growth"],
-                                  False if self._is_predict else self._args.mixed_precision)
+        self._settings = Settings(self._args, self.config["allow_growth"], self._is_predict)
         self.state = State(model_dir,
                            self.name,
                            self._config_changeable_items,
@@ -527,28 +525,29 @@ class Settings():
 
     Parameters
     ----------
-    distributed: bool
-        ``True`` if Tensorflow mirrored strategy should be used for multiple GPU training.
-        ``False`` if the default strategy should be used.
+    arguments: :class:`argparse.Namespace`
+        The arguments that were passed to the train or convert process as generated from
+        Faceswap's command line arguments
     allow_growth: bool
         ``True`` if the Tensorflow allow_growth parameter should be set otherwise ``False``
-    use_mixed_precision: bool
-        ``True`` if experimental mixed precision support should be enabled for Nvidia GPUs
-        otherwise ``False``.
+    is_predict: bool, optional
+        ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
+        for training. Default: ``False``
     """
-    def __init__(self, distributed, allow_growth, use_mixed_precision):
-        logger.debug("Initializing %s: (distributed: %s, allow_growth: %s, "
-                     "use_mixed_precision: %s)", self.__class__.__name__, distributed,
-                     allow_growth, use_mixed_precision)
-
+    def __init__(self, arguments, allow_growth, is_predict):
+        logger.debug("Initializing %s: (arguments: %s, allow_growth: %s, is_predict: %s)",
+                     self.__class__.__name__, arguments, allow_growth, is_predict)
         self._set_tf_allow_growth(allow_growth)
 
+        use_mixed_precision = not is_predict and arguments.mixed_precision
         if use_mixed_precision:
             self._mixed_precision = tf.keras.mixed_precision.experimental
         else:
             self._mixed_precision = None
 
         self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
+
+        distributed = False if not hasattr(arguments, "distributed") else arguments.distributed
         self._strategy = self._get_strategy(distributed)
         logger.debug("Initialized %s", self.__class__.__name__)
 
