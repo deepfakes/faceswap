@@ -770,15 +770,12 @@ class ConvertArgs(ExtractConvertArgs):
                  "this to, it will never attempt to use more processes than are available on "
                  "your system. If singleprocess is enabled this setting will be ignored."))
         argument_list.append(dict(
-            opts=("-g", "--gpus"),
-            action=Slider,
-            min_max=(1, 10),
-            rounding=1,
-            type=int,
-            default=1,
+            opts=("-d", "--distributed"),
+            action="store_true",
+            default=False,
             backend="nvidia",
             group="settings",
-            help="Number of GPUs to use for conversion"))
+            help="Use the Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."))
         argument_list.append(dict(
             opts=("-t", "--trainer"),
             type=str.lower,
@@ -786,15 +783,6 @@ class ConvertArgs(ExtractConvertArgs):
             group="settings",
             help="[LEGACY] This only needs to be selected if a legacy model is being loaded or "
                  "if there are multiple models in the model folder"))
-        argument_list.append(dict(
-            opts=("-ag", "--allow-growth"),
-            action="store_true",
-            dest="allow_growth",
-            default=False,
-            backend="nvidia",
-            group="settings",
-            help="Sets allow_growth option of Tensorflow to spare memory on some "
-                 "configurations."))
         argument_list.append(dict(
             opts=("-otf", "--on-the-fly"),
             action="store_true",

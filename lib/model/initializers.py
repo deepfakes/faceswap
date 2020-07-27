@@ -123,7 +123,7 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
                                 interpolation="nearest")
         var_x = self._space_to_depth(var_x)
         var_x = K.permute_dimensions(var_x, [1, 2, 0, 3])
-        logger.debug("Output: %s", var_x)
+        logger.debug("Output shape: %s", var_x.shape)
         return var_x
 
     def _space_to_depth(self, input_tensor):
@@ -152,7 +152,7 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
                                (batch, new_height, new_width, -1))
         else:
             retval = tf.nn.space_to_depth(input_tensor, block_size=self.scale, data_format="NHWC")
-        logger.debug("Input Tensor: %s, Output Tensor: %s", input_tensor, retval)
+        logger.debug("Input shape: %s, Output shape: %s", input_tensor.shape, retval.shape)
         return retval
 
     def get_config(self):

@@ -31,10 +31,10 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
 # TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
-# TODO Converter
 # TODO Only create a new state session when training has actually commenced
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO AMD Losses
+# TODO Multi-Scale
 
 
 class ModelBase():
@@ -77,11 +77,11 @@ class ModelBase():
         self._io = IO(self, model_dir, self._is_predict)
         self._settings = Settings(self._args.distributed,
                                   self.config["allow_growth"],
-                                  self._args.mixed_precision)
+                                  False if self._is_predict else self._args.mixed_precision)
         self.state = State(model_dir,
                            self.name,
                            self._config_changeable_items,
-                           self._args.no_logs,
+                           False if self._is_predict else self._args.no_logs,
                            training_image_size)
 
         if self._io.multiple_models_in_folder:
@@ -187,13 +187,14 @@ class ModelBase():
         """
         with self._settings.strategy_scope():
             if self._io.model_exists:
-                self._model = self._io._load()  # pylint:disable=protected-access
+                model = self._io._load()  # pylint:disable=protected-access
+                self._model = self._make_inference_model(model) if self._is_predict else model
             else:
                 self._validate_input_shape()
                 inputs = self._get_inputs()
                 self._model = self.build_model(inputs)
-            self._compile_model()
-        if not self._is_predict:
+            if not self._is_predict:
+                self._compile_model()
             self._output_summary()
 
     def _validate_input_shape(self):
@@ -320,17 +321,42 @@ class ModelBase():
         return retval
 
     # TODO
-    def converter(self, swap):
-        """ Converter for autoencoder models """
-        logger.debug("Getting Converter: (swap: %s)", swap)
-        side = "a" if swap else "b"
-        model = self.predictors[side]
-        if self._is_predict:
-            # Must compile the model to be thread safe
-            model._make_predict_function()  # pylint: disable=protected-access
-        retval = model.predict
-        logger.debug("Got Converter: %s", retval)
-        return retval
+    def _make_inference_model(self, saved_model):
+        """ Extract the sub-models from the saved model that are required for inference.
+
+        Parameters
+        ----------
+        saved_model: :class:`keras.models.Model`
+            The saved trained Faceswap model
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The model compiled for inference
+        """
+        model = None
+        output_side = "a" if self._args.swap_model else "b"
+        inputs = saved_model.inputs
+        split_inputs = [inputs[:len(inputs) // 2], inputs[len(inputs) // 2:]]
+        inputs = split_inputs[1] if self._args.swap_model else split_inputs[0]
+        logger.debug("swap_model: %s, inputs: %s, output_side: %s",
+                     self._args.swap_model, inputs, output_side)
+        for layer in saved_model.layers:
+            if not isinstance(layer, KerasModel):
+                logger.debug("skipping non-model layer for inference: %s", layer.name)
+                continue
+            name = layer.name.lower()
+            if name.endswith(("_a", "_b")) and name[-1] != output_side:
+                logger.debug("skipping incorrect side layer for inference: %s", layer.name)
+                continue
+            inp = inputs if model is None else model
+            input_name = [i.name for i in inp] if isinstance(inp, list) else inp.name
+            logger.debug("Adding inference sub-model: (name: %s, input: %s)",
+                         layer.name, input_name)
+            model = layer(inp)
+        inference_model = KerasModel(inputs, model, name="{}_inference".format(self.name))
+        logger.debug(inference_model)
+        return inference_model
 
 
 class IO():
