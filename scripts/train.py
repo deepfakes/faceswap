@@ -13,8 +13,7 @@ import cv2
 from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.utils import (get_folder, get_image_paths, deprecation_warning, FaceswapError,
-                       _image_extensions)
+from lib.utils import (get_folder, get_image_paths, FaceswapError, _image_extensions)
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -42,6 +41,7 @@ class Train():  # pylint:disable=too-few-public-methods
         self._images = self._get_images()
         self._stop = False
         self._save_now = False
+        self._refresh_preview = False
         self._preview_buffer = dict()
         self._lock = Lock()
 
@@ -257,12 +257,18 @@ class Train():  # pylint:disable=too-few-public-methods
         for iteration in range(1, self._args.iterations + 1):
             logger.trace("Training iteration: %s", iteration)
             save_iteration = iteration % self._args.save_interval == 0
-            viewer = display_func if iteration == 1 or save_iteration or self._save_now else None
+
+            if iteration == 1 or save_iteration or self._save_now or self._refresh_preview:
+                viewer = display_func
+            else:
+                viewer = None
             timelapse = self._timelapse if save_iteration else None
             trainer.train_one_step(viewer, timelapse)
             if self._stop:
                 logger.debug("Stop received. Terminating")
                 break
+            if self._refresh_preview and viewer is not None:
+                self._refresh_preview = False
             if save_iteration:
                 logger.debug("Save Iteration: (iteration: %s", iteration)
                 model.save()
@@ -320,8 +326,13 @@ class Train():  # pylint:disable=too-few-public-methods
                     logger.debug("Exit requested")
                     break
                 if is_preview and cv_key == ord("s"):
+                    print("\n")
                     logger.info("Save requested")
                     self._save_now = True
+                if is_preview and cv_key == ord("r"):
+                    print("\n")
+                    logger.info("Refresh preview requested")
+                    self._refresh_preview = True
 
                 # Console Monitor
                 if keypress.kbhit():
@@ -332,6 +343,8 @@ class Train():  # pylint:disable=too-few-public-methods
                     if console_key in ("s", "S"):
                         logger.info("Save requested")
                         self._save_now = True
+                    if self._args.redirect_gui and console_key == ("r"):
+                        self._refresh_preview = True
 
                 sleep(1)
             except KeyboardInterrupt:

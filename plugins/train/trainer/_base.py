@@ -220,7 +220,8 @@ class TrainerBase():
             self._samples.images = self._feeder.compile_sample(None)
             samples = self._samples.show_sample()
             if samples is not None:
-                viewer(samples, "Training - 'S': Save Now. 'ENTER': Save and Quit")
+                viewer(samples,
+                       "Training - 'S': Save Now. 'R': Refresh Preview. 'ENTER': Save and Quit")
 
         if do_timelapse:
             self._timelapse.output_timelapse(timelapse_kwargs)
