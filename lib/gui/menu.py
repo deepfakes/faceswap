@@ -101,13 +101,13 @@ class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             self.add_command(
                 label=label,
                 underline=10,
-                command=lambda conf=(name, config), root=self.root: popup_config(conf, root))
+                command=lambda n=name, c=config: popup_config(n, c))
         self.add_separator()
         conf = get_config().user_config
         self.add_command(
             label="GUI Settings...",
             underline=10,
-            command=lambda conf=("GUI", conf), root=self.root: popup_config(conf, root))
+            command=lambda n="GUI", c=conf: popup_config(n, c))
         logger.debug("Built settings menu")
 
 
@@ -546,7 +546,6 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         # pylint: disable=cell-var-from-loop
         frame = ttk.Frame(self._btn_frame)
         frame.pack(side=tk.LEFT, anchor=tk.W, expand=False, padx=2)
-        root = get_config().root
         for name in _CONFIG_FILES:
             config = _CONFIGS[name]
             btntype = "settings_{}".format(name)
@@ -555,7 +554,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
             btn = ttk.Button(
                 frame,
                 image=get_images().icons[btntype],
-                command=lambda conf=(name, config), root=root: popup_config(conf, root))
+                command=lambda n=name, c=config: popup_config(n, c))
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = "Configure {} settings...".format(name.title())
             Tooltip(btn, text=hlp, wraplength=200)
