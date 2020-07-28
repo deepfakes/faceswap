@@ -134,9 +134,9 @@ class Model(ModelBase):
 
         if self.learn_mask:
             var_y = input_
-            var_x = UpscaleBlock(256)(var_y)
-            var_x = UpscaleBlock(128)(var_y)
-            var_x = UpscaleBlock(64)(var_y)
+            var_y = UpscaleBlock(256)(var_y)
+            var_y = UpscaleBlock(128)(var_y)
+            var_y = UpscaleBlock(64)(var_y)
             var_y = Conv2DOutput(1, 5, name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))

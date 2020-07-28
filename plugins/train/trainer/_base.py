@@ -371,12 +371,9 @@ class Feeder():
         for side in ("a", "b"):
             side_inputs, side_targets = self._get_next(side)
             if self._model.config["penalized_mask_loss"]:
-                # Add the mask to the 4th channel for penalized mask loss
-                collated = np.concatenate(side_targets, axis=-1)
-                side_targets[0] = collated
-                if not self._model.feed_mask:
-                    # Remove masks from the model targets if not learning a mask
-                    side_targets = side_targets[0]
+                side_targets = self._compile_masks(side_targets)
+                if not self._model.feed_mask:  # Remove masks from the model targets
+                    side_targets = side_targets[:-1]
             model_inputs.append(side_inputs)
             model_targets.append(side_targets)
         return model_inputs, model_targets
@@ -398,6 +395,35 @@ class Feeder():
         model_inputs = batch["feed"] + batch["masks"] if self._model.feed_mask else batch["feed"]
         model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
         return model_inputs, model_targets
+
+    @classmethod
+    def _compile_masks(cls, targets):
+        """ Compile the masks into the targets for penalized loss.
+
+        Penalized loss expects the target mask to be included for all outputs in the 4th channel
+        of the targets. The final output and final mask are always the last 2 outputs
+
+        Parameters
+        ----------
+        targets: list
+            The targets for the model, with the mask as the final entry in the list
+
+        Returns
+        -------
+        list
+            The targets for the model with the mask compiled into the 4th channel. The original
+            mask is still output as the final item in the list
+        """
+        masks = targets[-1]
+        for idx, tgt in enumerate(targets[:-1]):
+            tgt_dim = tgt.shape[1]
+            if tgt_dim == masks.shape[1]:
+                add_masks = masks
+            else:
+                add_masks = np.array([cv2.resize(mask, (tgt_dim, tgt_dim))
+                                      for mask in masks])[..., None]
+            targets[idx] = np.concatenate((tgt, add_masks), axis=-1)
+        return targets
 
     def generate_preview(self, do_preview):
         """ Generate the preview images.
@@ -569,12 +595,7 @@ class Samples():  # pylint:disable=too-few-public-methods
             other_side = "a" if side == "b" else "b"
             predictions = [preds["{0}_{0}".format(side)],
                            preds["{}_{}".format(other_side, side)]]
-            if self._feed_mask:
-                predicted_masks = [preds["masks_{0}_{0}".format(side)],
-                                   preds["masks_{}_{}".format(other_side, side)]]
-            else:
-                predicted_masks = []
-            display = self._to_full_frame(side, samples, predictions, predicted_masks)
+            display = self._to_full_frame(side, samples, predictions)
             headers[side] = self._get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
             if self.images[side][0].shape[0] % 2 == 1:
@@ -641,31 +662,23 @@ class Samples():  # pylint:disable=too-few-public-methods
         preds = dict()
         standard = self._model.model.predict([feed_a, feed_b])
         swapped = self._model.model.predict([feed_b, feed_a])
-        if self._feed_mask:
-            # Split the masks from the output
-            standard_masks = [pred for side in standard for pred in side if pred.shape[-1] == 1]
-            standard = [pred for side in standard for pred in side if pred.shape[-1] == 3]
-            swapped_masks = [pred for side in swapped for pred in side if pred.shape[-1] == 1]
-            swapped = [pred for side in swapped for pred in side if pred.shape[-1] == 3]
+
+        if self._feed_mask:  # Add mask to 4th channel of final output
+            standard = [np.concatenate(side[-2:], axis=-1) for side in standard]
+            swapped = [np.concatenate(side[-2:], axis=-1) for side in swapped]
+        else:  # Retrieve final output
+            standard = [side[-1] if isinstance(side, list) else side for side in standard]
+            swapped = [side[-1] if isinstance(side, list) else side for side in swapped]
+
         preds["a_a"] = standard[0]
         preds["b_b"] = standard[1]
         preds["a_b"] = swapped[0]
         preds["b_a"] = swapped[1]
-        if self._feed_mask:
-            preds["masks_a_a"] = standard_masks[0]
-            preds["masks_b_b"] = standard_masks[1]
-            preds["masks_a_b"] = swapped_masks[0]
-            preds["masks_b_a"] = swapped_masks[1]
 
-        # TODO Multi Out
-        # # Get the returned largest image from predictors that emit multiple items
-        # if not isinstance(preds["a_a"], np.ndarray):
-        #     for key, val in preds.items():
-        #         preds[key] = val[-1]
-        logger.trace("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
+        logger.debug("Returning predictions: %s", {key: val.shape for key, val in preds.items()})
         return preds
 
-    def _to_full_frame(self, side, samples, predictions, predicted_masks):
+    def _to_full_frame(self, side, samples, predictions):
         """ Patch targets and prediction images into images of training image size.
 
         Parameters
@@ -673,11 +686,9 @@ class Samples():  # pylint:disable=too-few-public-methods
         side: {"a" or "b"}
             The side that these samples are for
         samples: list
-            List of :class:`numpy.ndarray` of target images and feed images
+            List of :class:`numpy.ndarray` of feed images and target images
         predictions: list
             List of :class: `numpy.ndarray` of predictions from the model
-        predicted_masks: list
-            List of :class: `numpy.ndarray` of predicted masks from the model
         """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
@@ -689,7 +700,7 @@ class Samples():  # pylint:disable=too-few-public-methods
             frame = self._frame_overlay(full, target_size, (0, 0, 255))
 
         if self._display_mask:
-            images = self._compile_masked(images, samples[-1], predicted_masks)
+            images = self._compile_masked(images, samples[-1])
         images = [self._resize_sample(side, image, target_size) for image in images]
         if target_size != full_size:
             images = [self._overlay_foreground(frame, image) for image in images]
@@ -736,42 +747,39 @@ class Samples():  # pylint:disable=too-few-public-methods
         return retval
 
     @staticmethod
-    def _compile_masked(faces, masks, predicted_masks):
+    def _compile_masked(faces, masks):
         """ Add the mask to the faces for masked preview.
 
         Places an opaque red layer over areas of the face that are masked out.
 
         Parameters
         ----------
-        faces: :class:`numpy.ndarray`
-            The sample faces that are to have the mask applied
+        faces: list
+            The :class:`numpy.ndarray` sample faces and predictions that are to have the mask
+            applied
         masks: :class:`numpy.ndarray`
             The masks that are to be applied to the faces
-        predicted_masks: list
-            The predicted masks from the model if learn mask has been enabled
 
         Returns
         -------
         list
             List of :class:`numpy.ndarray` faces with the opaque mask layer applied
         """
-        retval = list()
         orig_masks = np.tile(1 - np.rint(masks), 3)
-        for mask in orig_masks:
-            mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
-        if predicted_masks:
-            pred_masks = [np.tile(1 - np.rint(masks), 3) for masks in predicted_masks]
-            for side_masks in pred_masks:
-                for mask in side_masks:
-                    mask[np.where((mask == [1., 1., 1.]).all(axis=2))] = [0., 0., 1.]
+        orig_masks[np.where((orig_masks == [1., 1., 1.]).all(axis=3))] = [0., 0., 1.]
+
+        if faces[-1].shape[-1] == 4:  # Mask contained in alpha channel of predictions
+            pred_masks = [np.tile(1 - np.rint(face[..., -1])[..., None], 3) for face in faces[-2:]]
+            for swap_masks in pred_masks:
+                swap_masks[np.where((swap_masks == [1., 1., 1.]).all(axis=3))] = [0., 0., 1.]
+            faces[-2:] = [face[..., :-1] for face in faces[-2:]]
             masks3 = [orig_masks, *pred_masks]
         else:
             masks3 = np.repeat(np.expand_dims(orig_masks, axis=0), 3, axis=0)
 
-        for previews, compiled_masks in zip(faces, masks3):
-            images = np.array([cv2.addWeighted(img, 1.0, mask, 0.3, 0)
-                               for img, mask in zip(previews, compiled_masks)])
-            retval.append(images)
+        retval = [np.array([cv2.addWeighted(img, 1.0, mask, 0.3, 0)
+                            for img, mask in zip(previews, compiled_masks)])
+                  for previews, compiled_masks in zip(faces, masks3)]
         logger.debug("masked shapes: %s", [faces.shape for faces in retval])
         return retval
 

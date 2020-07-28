@@ -30,10 +30,11 @@ from plugins.train._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
-# TODO Only create a new state session when training has actually commenced
+# TODO Session info is saved when creating TB logs. Causes issue when model fails
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO AMD Losses
-# TODO Multi-Scale
+# TODO Multi-Scale in convert
+# TODO Inference model for IAE styles
 
 
 class ModelBase():
