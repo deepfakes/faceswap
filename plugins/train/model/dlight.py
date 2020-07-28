@@ -211,3 +211,10 @@ class Model(ModelBase):
             outputs.append(var_y)
 
         return KerasModel([input_], outputs=outputs, name="decoder_b")
+
+    def _legacy_mapping(self):
+        """ The mapping of legacy separate model names to single model names """
+        decoder_b = "decoder_b" if self.details > 0 else "decoder_b_fast"
+        return {"{}_encoder.h5".format(self.name): "encoder",
+                "{}_decoder_A.h5".format(self.name): "decoder_a",
+                "{}_decoder_B.h5".format(self.name): decoder_b}

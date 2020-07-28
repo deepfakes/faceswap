@@ -51,7 +51,11 @@ class TensorBoardLogs():
             # Take the last log file, in case of previous crash
             logfile = os.path.join(dirpath, sorted(logfiles)[-1])
             session = os.path.split(os.path.split(dirpath)[0])[1]
-            session = int(session[session.rfind("_") + 1:])
+            session = session[session.rfind("_") + 1:]
+            if not session.isdigit():
+                logger.warning("Unable to load session data for model")
+                return log_filenames
+            session = int(session)
             log_filenames[session] = logfile
         logger.debug("logfiles: %s", log_filenames)
         return log_filenames
@@ -320,7 +324,7 @@ class SessionsSummary():
         """ Compile sessions stats with totals, format and return """
         logger.debug("Compiling sessions summary data")
         compiled_stats = self.sessions_stats
-        if compiled_stats is None:
+        if not compiled_stats:
             return compiled_stats
         logger.debug("sessions_stats: %s", compiled_stats)
         total_stats = self.total_stats(compiled_stats)

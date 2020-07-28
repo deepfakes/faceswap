@@ -74,3 +74,11 @@ class Model(ModelBase):
             var_y = Conv2DOutput(1, 5, name="mask_out")(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder")
+
+    def _legacy_mapping(self):
+        """ The mapping of legacy separate model names to single model names """
+        return {"{}_encoder.h5".format(self.name): "encoder",
+                "{}_intermediate_A.h5".format(self.name): "inter_a",
+                "{}_intermediate_B.h5".format(self.name): "inter_b",
+                "{}_inter.h5".format(self.name): "inter_both",
+                "{}_decoder.h5".format(self.name): "decoder"}

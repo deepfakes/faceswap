@@ -30,7 +30,6 @@ from plugins.train._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
-# TODO Legacy is removed. Still check for legacy and give instructions for updating by using TF1.15
 # TODO Only create a new state session when training has actually commenced
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO AMD Losses
@@ -183,6 +182,7 @@ class ModelBase():
 
         The compiled model is allocated to :attr:`_model`.
         """
+        self._update_legacy_models()
         with self._settings.strategy_scope():
             if self._io.model_exists:
                 model = self._io._load()  # pylint:disable=protected-access
@@ -194,6 +194,41 @@ class ModelBase():
             if not self._is_predict:
                 self._compile_model()
             self._output_summary()
+
+    def _update_legacy_models(self):
+        """ Load weights from legacy split models into new unified model. """
+        if self._legacy_mapping is None:
+            return
+        if self.name == "dfl_sae" and not any(os.path.isfile(os.path.join(self.model_dir, fname))
+                                              for fname in self._legacy_mapping()):
+            return
+        if self.name != "dfl_sae" and not all(os.path.isfile(os.path.join(self.model_dir, fname))
+                                              for fname in self._legacy_mapping()):
+            return
+        archive_dir = "{}_TF1_Archived".format(self.model_dir)
+        if os.path.exists(archive_dir):
+            raise FaceswapError("We need to update your model files for use with Tensorflow 2.x, "
+                                "but the archive folder already exists. Please remove the "
+                                "following folder to continue: '{}'".format(archive_dir))
+
+        logger.info("Updating legacy models for Tensorflow 2.x")
+        logger.info("Your Tensorflow 1.x models will be archived in the following location: '%s'",
+                    archive_dir)
+        os.rename(self.model_dir, archive_dir)
+        os.mkdir(self.model_dir)
+        new_model = self.build_model(self._get_inputs())
+        for model_name, layer_name in self._legacy_mapping().items():
+            logger.info("Updating legacy weights from '%s'...", model_name)
+            old_model = load_model(os.path.join(archive_dir, model_name), compile=False)
+            layer = [layer for layer in new_model.layers if layer.name == layer_name]
+            if not layer:
+                continue
+            layer = layer[0]
+            layer.set_weights(old_model.get_weights())
+        filename = self._io._filename  # pylint:disable=protected-access
+        logger.info("Saving Tensorflow 2.x model to '%s'", filename)
+        new_model.save(filename)
+        self.state.save()
 
     def _validate_input_shape(self):
         """ Validate that the input shape is either a single shape tuple of 3 dimensions or
@@ -355,6 +390,18 @@ class ModelBase():
         inference_model = KerasModel(inputs, model, name="{}_inference".format(self.name))
         logger.debug(inference_model)
         return inference_model
+
+    def _legacy_mapping(self):  # pylint:disable=no-self-use
+        """ The mapping of separate model files to single model layers for transferring of legacy
+        weights.
+
+        Returns
+        -------
+        dict or ``None``
+            Dictionary of original H5 filenames for legacy models mapped to new layer names or
+            ``None`` if the model did not exist in Faceswap prior to Tensorflow 2
+        """
+        return None
 
 
 class IO():

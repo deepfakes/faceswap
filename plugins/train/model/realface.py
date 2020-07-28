@@ -176,3 +176,9 @@ class Model(ModelBase):
             outputs += [var_y]
 
         return KerasModel(input_, outputs=outputs, name="decoder_a")
+
+    def _legacy_mapping(self):
+        """ The mapping of legacy separate model names to single model names """
+        return {"{}_encoder.h5".format(self.name): "encoder",
+                "{}_decoder_A.h5".format(self.name): "decoder_a",
+                "{}_decoder_B.h5".format(self.name): "decoder_b"}
