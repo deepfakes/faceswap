@@ -714,7 +714,7 @@ class Predict():
         input_shape = [input_shape] if not isinstance(input_shape, list) else input_shape
         output_shape = self._model.model.output_shape
         output_shape = [output_shape] if not isinstance(output_shape, list) else output_shape
-        retval = dict(input=input_shape[0][1], output=output_shape[0][1])
+        retval = dict(input=input_shape[0][1], output=output_shape[-1][1])
         logger.debug(retval)
         return retval
 
@@ -946,40 +946,13 @@ class Predict():
         predicted = predicted if isinstance(predicted, list) else [predicted]
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
 
-        # TODO
-        # predicted = self._filter_multi_out(predicted)
-
-        # TODO Compile masks into alpha channel or keep raw faces
-        predicted = np.concatenate(predicted, axis=-1) if len(predicted) == 2 else predicted[0]
-        predicted = predicted.astype("float32")
+        # Only take last output(s)
+        if self._model.feed_mask:
+            predicted = np.concatenate(predicted[-2:], axis=-1).astype("float32")
+        else:
+            predicted = predicted[-1].astype("float32")
 
         logger.trace("Final shape: %s", predicted.shape)
-        return predicted
-
-    # TODO
-    def _filter_multi_out(self, predicted):
-        """ Filter the model output to just the required image.
-
-        Some models have multi-scale outputs, so just make sure we take the largest
-        output.
-
-        Parameters
-        ----------
-        predicted: :class:`numpy.ndarray`
-            The predictions retrieved from the Faceswap model.
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The predictions with any superfluous outputs removed.
-        """
-        if not predicted:
-            return predicted
-        face = predicted
-        mask_idx = self._output_indices["mask"]
-        mask = predicted[mask_idx] if mask_idx is not None else None
-        predicted = [face, mask] if mask is not None else [face]
-        logger.trace("Filtered output shape(s): %s", [predict.shape for predict in predicted])
         return predicted
 
     def _queue_out_frames(self, batch, swapped_faces):
