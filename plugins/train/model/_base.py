@@ -10,6 +10,7 @@ import platform
 import sys
 import time
 
+from collections import OrderedDict
 from contextlib import nullcontext
 
 import numpy as np
@@ -36,6 +37,7 @@ _CONFIG = None
 # TODO AMD Losses
 # TODO Multi-Scale in convert
 # TODO Inference model for IAE styles
+# TODO Clipnorm auto disables
 
 
 class ModelBase():
@@ -188,7 +190,11 @@ class ModelBase():
         with self._settings.strategy_scope():
             if self._io.model_exists:
                 model = self._io._load()  # pylint:disable=protected-access
-                self._model = self._make_inference_model(model) if self._is_predict else model
+                if self._is_predict:
+                    inference = Inference(model, self._args.swap_model)
+                    self._model = inference.model
+                else:
+                    self._model = model
             else:
                 self._validate_input_shape()
                 inputs = self._get_inputs()
@@ -354,63 +360,6 @@ class ModelBase():
             retval = self._settings.LossScaleOptimizer(retval, loss_scale="dynamic")
         logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
         return retval
-
-    def _make_inference_model(self, saved_model):
-        """ Extract the sub-models from the saved model that are required for inference.
-
-        Parameters
-        ----------
-        saved_model: :class:`keras.models.Model`
-            The saved trained Faceswap model
-
-        Returns
-        -------
-        :class:`keras.models.Model`
-            The model compiled for inference
-        """
-        logger.debug("Compiling inference model. saved_model: %s", saved_model)
-
-        # Get full model structure
-        struct = [[layer["name"], np.array(layer["inbound_nodes"])[..., 0].squeeze().tolist()]
-                  for layer in saved_model.get_config()["layers"]
-                  if layer["inbound_nodes"]]
-        logger.debug("Full saved_model structure: %s", struct)
-
-        struct[0][1] = ""  # Remove input inbound
-        struct[-1][1] = struct[-1][1][0 if self._args.swap_model else 1]  # filter correct output
-
-        # Get unique list of required layers for inference side
-        required_inbounds = [inbound if isinstance(inbound, list) else [inbound]
-                             for _, inbound in reversed(struct)
-                             if inbound] + [[struct[-1][0]]]
-        required_layers = {layer for inbound in required_inbounds for layer in inbound}
-        logger.debug("Required layers for inference: %s", required_layers)
-
-        # Compile the inference model
-        layer_dict = {layer.name: layer for layer in saved_model.layers}
-        compiled_layers = dict()
-        inputs = saved_model.inputs[1] if self._args.swap_model else saved_model.inputs[0]
-        logger.debug("Compiling. (inputs: %s, layer_dict: %s", inputs, layer_dict)
-
-        for name, inbound in struct:
-            if name not in required_layers:
-                logger.debug("Skipping unrequired layer: '%s'", name)
-                continue
-            layer = layer_dict[name]
-            inbound = [inbound] if not isinstance(inbound, list) else inbound
-            logger.debug("Processing layer '%s', inbound_nodes: %s", name, inbound)
-            if not any(inbound):  # Handle the input to the model
-                model = layer(inputs)
-                compiled_layers[name] = model
-                logger.debug("Compiled input layer '%s', inputs: %s)", name, inputs)
-                continue
-            layer_inputs = [compiled_layers[inp] for inp in inbound]
-            logger.debug("Compiling layer: '%s', layer inputs: %s", name, layer_inputs)
-            model = layer_dict[name](layer_inputs)
-            compiled_layers[name] = model
-        inference_model = KerasModel(inputs, model, name="{}_inference".format(self.name))
-        logger.info("Compiled inference model '%s': %s", inference_model.name, inference_model)
-        return inference_model
 
     def _legacy_mapping(self):  # pylint:disable=no-self-use
         """ The mapping of separate model files to single model layers for transferring of legacy
@@ -812,7 +761,6 @@ class Loss():
         list
             A list of names for the losses to be applied to the model
         """
-        # TODO naming for masks and multi-scale
         # TODO Use output names when these are fixed upstream
         split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
         retval = []
@@ -1051,3 +999,175 @@ class State():
                 continue
             self.config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
+
+
+class Inference():  # pylint:disable=too-few-public-methods
+    """ Calculates required layers and compiles a saved model for inference.
+
+    Parameters
+    ----------
+    saved_model: :class:`keras.models.Model`
+        The saved trained Faceswap model
+    switch_sides: bool
+        ``True`` if the swap should be performed "B" > "A" ``False`` if the swap should be
+        "A" > "B"
+    """
+    def __init__(self, saved_model, switch_sides):
+        logger.debug("Initializing: %s (saved_model: %s, switch_sides: %s)",
+                     self.__class__.__name__, saved_model, switch_sides)
+        self._config = saved_model.get_config()
+        input_idx = 1 if switch_sides else 0
+        output_idx = 0 if switch_sides else 1
+        self._input_names = set(self._filter_node(self._config["input_layers"][input_idx]))
+        self._inputs = saved_model.inputs[input_idx]
+        self._outputs = set(self._filter_node(self._config["output_layers"])[output_idx])
+        self._outputs_dropout = self._get_outputs_dropout()
+        self._model = self._make_inference_model(saved_model)
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    @property
+    def model(self):
+        """ :class:`keras.models.Model`: The Faceswap model, compiled for inference. """
+        return self._model
+
+    @classmethod
+    def _filter_node(cls, node):
+        """ Given in input list of nodes from a :attr:`keras.models.Model.get_config` dictionary,
+        filters the information out and unravels the dictionary into a more usable format
+
+        Parameters
+        ----------
+        node: list
+            A node entry from the :attr:`keras.models.Model.get_config` dictionary
+
+        Returns
+        -------
+        list
+            A squeezed list with only the layer name entries remaining
+        """
+        retval = np.array(node)[..., 0].squeeze().tolist()
+        return retval if isinstance(retval, list) else [retval]
+
+    def _get_outputs_dropout(self):
+        """ Obtain the output layer names from the full model that will not be used for inference.
+
+        Returns
+        -------
+        set
+            The output layer names from the saved Faceswap model that are not used for inference
+            for the requested swap direction
+        """
+        outputs_all = {layer
+                       for side in self._filter_node(self._config["output_layers"])
+                       for layer in side}
+        retval = outputs_all.difference(self._outputs)
+        logger.debug("outputs dropout: %s", retval)
+        return retval
+
+    def _make_inference_model(self, saved_model):
+        """ Extract the sub-models from the saved model that are required for inference.
+
+        Parameters
+        ----------
+        saved_model: :class:`keras.models.Model`
+            The saved trained Faceswap model
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The model compiled for inference
+        """
+        logger.debug("Compiling inference model. saved_model: %s", saved_model)
+        struct = self._get_filtered_structure()
+        required_layers = self._get_required_layers(struct)
+        logger.debug("Compiling model")
+        layer_dict = {layer.name: layer for layer in saved_model.layers}
+        compiled_layers = dict()
+        for name, inbound in struct.items():
+            if name not in required_layers:
+                logger.debug("Skipping unused layer: '%s'", name)
+                continue
+            layer = layer_dict[name]
+            logger.debug("Processing layer '%s': (layer: %s, inbound_nodes: %s)",
+                         name, layer, inbound)
+            if not inbound:
+                logger.debug("Adding model inputs %s: %s", self._input_names, self._inputs)
+                model = layer(self._inputs)
+            else:
+                layer_inputs = [compiled_layers[inp] for inp in inbound]
+                logger.debug("Compiling layer '%s': layer inputs: %s", name, layer_inputs)
+                model = layer(layer_inputs)
+            compiled_layers[name] = model
+        retval = KerasModel(self._inputs, model, name="{}_inference".format(saved_model.name))
+        logger.debug("Compiled inference model '%s': %s", retval.name, retval)
+        return retval
+
+    def _get_filtered_structure(self):
+        """ Obtain the structure of the full model, filtering out inbound nodes and
+        layers that are not required for the requested swap destination.
+
+        Input layers to the full model are not returned in the structure.
+
+        Returns
+        -------
+        :class:`collections.OrderedDict`
+            The layer name as key with the inbound node layer names for each layer as value.
+        """
+        retval = OrderedDict()
+        for layer in self._config["layers"]:
+            name = layer["name"]
+            if not layer["inbound_nodes"]:
+                logger.debug("Skipping input layer: '%s'", name)
+                continue
+            inbound = self._filter_node(layer["inbound_nodes"])
+
+            if self._input_names.intersection(inbound):
+                # Strip the input inbound nodes for applying the correct input layer at compile
+                # time
+                logger.debug("Stripping inbound nodes for input '%s': %s", name, inbound)
+                inbound = ""
+
+            # TODO No guarantee that this will always work. It is based on IAE which has an
+            # inter_both layer that takes the encoder from each side. As the inbound name for each
+            # side is the same, and the layer requires 2 inputs to compile properly, we ensure that
+            # the two inputs to a layer have unique names to include it as a layer with split
+            # inputs.
+            split_layer = np.array(layer["inbound_nodes"]).shape[0] == 2 and len(set(inbound)) == 2
+            if split_layer:
+                logger.debug("Filtering layer with split inbound nodes: '%s': %s", name, inbound)
+                inbound = inbound[1] if isinstance(inbound[1], list) else [inbound[1]]
+                logger.debug("Filtered inbound nodes for layer '%s': %s", name, inbound)
+            if name in self._outputs_dropout:
+                logger.debug("Dropping output layer '%s'", name)
+                continue
+            retval[name] = inbound
+        logger.debug("Model structure: %s", retval)
+        return retval
+
+    @classmethod
+    def _get_required_layers(cls, filtered_structure):
+        """ Parse through the filtered model structure in reverse order to get the required layers
+        from the faceswap model for creating an inference model.
+
+        Parameters
+        ----------
+        filtered_structure: :class:`OrderedDict`
+            The full model structure with unused inbound nodes and layers removed
+
+        Returns
+        -------
+        set
+            The layers from the saved model that are required to build the inference model
+        """
+        retval = set()
+        for idx, (name, inbound) in enumerate(reversed(filtered_structure.items())):
+            if idx == 0:
+                logger.debug("Adding output layer: '%s'", name)
+                retval.add(name)
+            if idx != 0 and name not in retval:
+                logger.debug("Skipping unused layer: '%s'", name)
+                continue
+            logger.debug("Adding inbound layers: %s", inbound)
+            retval.update(inbound)
+        logger.debug("Required layers: %s", retval)
+        return retval
