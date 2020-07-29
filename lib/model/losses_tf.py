@@ -209,15 +209,11 @@ class PenalizedLoss(tf.keras.losses.Loss):
         The actual loss function to use
     mask_prop: float, optional
         The amount of mask propagation. Default: `1.0`
-    mask_scaling: float, optional
-        For multi-decoder output the target mask will likely be at full size scaling, so this is
-        the scaling factor to reduce the mask by. Default: `1.0`
     """
-    def __init__(self, loss_func, mask_prop=1.0, mask_scaling=1.0):
+    def __init__(self, loss_func, mask_prop=1.0):
         super().__init__(name="penalized_loss")
         self._loss_func = compile_utils.LossesContainer(loss_func)
         self._mask_prop = mask_prop
-        self._mask_scaling = mask_scaling
 
     def call(self, y_true, y_pred):
         """ Apply the loss function to the masked area of the image.
@@ -254,33 +250,8 @@ class PenalizedLoss(tf.keras.losses.Loss):
         tensor
             The prepared mask for applying to loss
         """
-        mask = self._scale_mask(mask)
         mask_as_k_inv_prop = 1 - self._mask_prop
         mask = (mask * self._mask_prop) + mask_as_k_inv_prop
-        return mask
-
-    def _scale_mask(self, mask):
-        """ Scale the input mask to be the same size as the input face
-
-        Parameters
-        ----------
-        mask: input tensor
-            The mask for the current image
-
-        Returns
-        -------
-        tensor
-            The resized input mask
-        """
-        if self._mask_scaling != 1.0:
-            size = round(1 / self._mask_scaling)
-            mask = K.pool2d(mask,
-                            pool_size=(size, size),
-                            strides=(size, size),
-                            padding="valid",
-                            data_format=K.image_data_format(),
-                            pool_mode="avg")
-        logger.debug("resized tensor: %s", mask)
         return mask
 
 

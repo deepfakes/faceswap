@@ -12,6 +12,7 @@ import time
 
 from contextlib import nullcontext
 
+import numpy as np
 import tensorflow as tf
 
 from keras import losses as k_losses
@@ -354,7 +355,6 @@ class ModelBase():
         logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
         return retval
 
-    # TODO
     def _make_inference_model(self, saved_model):
         """ Extract the sub-models from the saved model that are required for inference.
 
@@ -368,28 +368,48 @@ class ModelBase():
         :class:`keras.models.Model`
             The model compiled for inference
         """
-        model = None
-        output_side = "a" if self._args.swap_model else "b"
-        inputs = saved_model.inputs
-        split_inputs = [inputs[:len(inputs) // 2], inputs[len(inputs) // 2:]]
-        inputs = split_inputs[1] if self._args.swap_model else split_inputs[0]
-        logger.debug("swap_model: %s, inputs: %s, output_side: %s",
-                     self._args.swap_model, inputs, output_side)
-        for layer in saved_model.layers:
-            if not isinstance(layer, KerasModel):
-                logger.debug("skipping non-model layer for inference: %s", layer.name)
+        logger.debug("Compiling inference model. saved_model: %s", saved_model)
+
+        # Get full model structure
+        struct = [[layer["name"], np.array(layer["inbound_nodes"])[..., 0].squeeze().tolist()]
+                  for layer in saved_model.get_config()["layers"]
+                  if layer["inbound_nodes"]]
+        logger.debug("Full saved_model structure: %s", struct)
+
+        struct[0][1] = ""  # Remove input inbound
+        struct[-1][1] = struct[-1][1][0 if self._args.swap_model else 1]  # filter correct output
+
+        # Get unique list of required layers for inference side
+        required_inbounds = [inbound if isinstance(inbound, list) else [inbound]
+                             for _, inbound in reversed(struct)
+                             if inbound] + [[struct[-1][0]]]
+        required_layers = {layer for inbound in required_inbounds for layer in inbound}
+        logger.debug("Required layers for inference: %s", required_layers)
+
+        # Compile the inference model
+        layer_dict = {layer.name: layer for layer in saved_model.layers}
+        compiled_layers = dict()
+        inputs = saved_model.inputs[1] if self._args.swap_model else saved_model.inputs[0]
+        logger.debug("Compiling. (inputs: %s, layer_dict: %s", inputs, layer_dict)
+
+        for name, inbound in struct:
+            if name not in required_layers:
+                logger.debug("Skipping unrequired layer: '%s'", name)
                 continue
-            name = layer.name.lower()
-            if name.endswith(("_a", "_b")) and name[-1] != output_side:
-                logger.debug("skipping incorrect side layer for inference: %s", layer.name)
+            layer = layer_dict[name]
+            inbound = [inbound] if not isinstance(inbound, list) else inbound
+            logger.debug("Processing layer '%s', inbound_nodes: %s", name, inbound)
+            if not any(inbound):  # Handle the input to the model
+                model = layer(inputs)
+                compiled_layers[name] = model
+                logger.debug("Compiled input layer '%s', inputs: %s)", name, inputs)
                 continue
-            inp = inputs if model is None else model
-            input_name = [i.name for i in inp] if isinstance(inp, list) else inp.name
-            logger.debug("Adding inference sub-model: (name: %s, input: %s)",
-                         layer.name, input_name)
-            model = layer(inp)
+            layer_inputs = [compiled_layers[inp] for inp in inbound]
+            logger.debug("Compiling layer: '%s', layer inputs: %s", name, layer_inputs)
+            model = layer_dict[name](layer_inputs)
+            compiled_layers[name] = model
         inference_model = KerasModel(inputs, model, name="{}_inference".format(self.name))
-        logger.debug(inference_model)
+        logger.info("Compiled inference model '%s': %s", inference_model.name, inference_model)
         return inference_model
 
     def _legacy_mapping(self):  # pylint:disable=no-self-use
@@ -729,7 +749,7 @@ class Loss():
                                pixel_gradient_diff=losses.GradientLoss())
         self._inputs = inputs
         self._names = self._get_loss_names(outputs)
-        self._funcs = self._get_loss_functions(outputs)
+        self._funcs = self._get_loss_functions()
         self._names.insert(0, "total")
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -809,8 +829,7 @@ class Loss():
         logger.debug(retval)
         return retval
 
-    # TODO Mask scaling for multi-scale output
-    def _get_loss_functions(self, outputs):
+    def _get_loss_functions(self):
         """ Set the loss functions.
 
         Parameters
@@ -823,14 +842,11 @@ class Loss():
         """
         selected_loss = self._loss_dict[self._config.get("loss_function", "mae")]
         loss_funcs = []
-        output_shapes = [K.int_shape(output)[1:] for output in outputs]  # TODO
         for name in self._names:
             if name.startswith("mask"):
                 loss_funcs.append(self._selected_mask_loss)
             elif self._config["penalized_mask_loss"]:
-                scaling = 1.0  # TODO
-                logger.debug("mask_scaling: %s", scaling)
-                loss_funcs.append(losses.PenalizedLoss(selected_loss, mask_scaling=scaling))
+                loss_funcs.append(losses.PenalizedLoss(selected_loss))
             else:
                 loss_funcs.append(selected_loss)
             logger.debug("%s: %s", name, loss_funcs[-1])
