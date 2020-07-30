@@ -13,6 +13,7 @@ import tensorflow as tf
 from plaidml.op import extract_image_patches
 
 from lib.plaidml_utils import pad
+from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -201,7 +202,7 @@ class DSSIMObjective():
         return patches
 
 
-class _PenalizedLoss():  # pylint:disable=too-few-public-methods
+class PenalizedLoss():  # pylint:disable=too-few-public-methods
     """ Penalized Loss function.
 
     Applies the given loss function just to the masked area of the image.
@@ -464,7 +465,6 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
     def __call__(self, y_true, y_pred):
         """ Return the Gradient Magnitude Similarity Deviation Loss.
 
-
         Parameters
         ----------
         y_true: tensor or variable
@@ -477,6 +477,9 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
         tensor
             The loss value
         """
+        raise FaceswapError("GMSD Loss is not currently compatible with PlaidML. Please select a "
+                            "different Loss method.")
+
         true_edge = self._scharr_edges(y_true, True)
         pred_edge = self._scharr_edges(y_pred, True)
         ephsilon = 0.0025
@@ -508,6 +511,7 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
         """
 
         # Define vertical and horizontal Scharr filters.
+        # TODO PlaidML: AttributeError: 'Value' object has no attribute 'get_shape'
         static_image_shape = image.get_shape()
         image_shape = K.shape(image)
 
