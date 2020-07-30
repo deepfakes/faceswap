@@ -4,6 +4,6 @@
 from lib.utils import get_backend
 
 if get_backend() == "amd":
-    from . import losses_amd as losses
+    from . import losses_plaid as losses
 else:
     from . import losses_tf as losses
