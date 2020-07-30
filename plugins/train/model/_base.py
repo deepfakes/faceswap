@@ -380,13 +380,13 @@ class ModelBase():
         """
         # TODO add clipnorm in for plaidML when it is fixed in the main repository
         clipnorm = get_backend() != "amd" and self.config.get("clipnorm", False)
-        if self._args.distributed and clipnorm:
-            logger.warning("Clipnorm has been selected, but is unsupported when using "
-                           "distributed training, so has been disabled. If you wish to enable "
-                           "clipnorm, then you must disable distributed training.")
-        if self._args.distributed:
+        if (self._args.distributed or self._args.mixed_precision) and clipnorm:
+            logger.warning("Clipnorm has been selected, but is unsupported when using distributed "
+                           "or mixed_precision training, so has been disabled. If you wish to "
+                           "enable clipnorm, then you must disable these options.")
+        if self._args.distributed or self._args.mixed_precision:
             # Tensorflow checks whether clipnorm is None rather than False when using distribution
-            # strategy so we need to explicitly set it to None.
+            # strategy or mixed precision, so we need to explicitly set it to None.
             clipnorm = None
         learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
         kwargs = dict(beta_1=0.5,
