@@ -19,7 +19,7 @@ import tensorflow as tf
 from keras import losses as k_losses
 from keras import backend as K
 from keras.layers import Input
-from keras.models import load_model, Model as KerasModel
+from keras.models import load_model, Model as KModel
 from keras.optimizers import Adam
 
 from lib.serializer import get_serializer
@@ -34,8 +34,36 @@ _CONFIG = None
 
 # TODO Session info is saved when creating TB logs. Causes issue when model fails
 # TODO Only update analysis tab if it is visible + when displayed
-# TODO PlaidML fix-ups
+# TODO PlaidML fix penalized mask loss. Reinvestigate gmsd, convert
 # TODO Explicit GPU Selection
+
+
+def KerasModel(inputs, outputs, name=None):  # pylint:disable=invalid-name
+    """ wrapper for :class:`keras.models.Model`.
+
+    There are some minor foibles between keras 2.2 and tensorflow.keras, so this catches potential
+    issues and fixes prior to returning the requested model.
+
+    Parameters
+    ----------
+    inputs: a keras.Input object or list of keras.Input objects.
+        The input(s) of the model
+    outputs: keras objects
+        The output(s) of the model.
+    name: str
+        The name of the model.
+
+    Returns
+    -------
+    :class:`keras.models.Model`
+        A Keras Model
+    """
+    if get_backend() == "amd":
+        logger.debug("Flattening inputs (%s) and outputs (%s) for AMD", inputs, outputs)
+        inputs = np.array(inputs).flatten().tolist()
+        outputs = np.array(outputs).flatten().tolist()
+        logger.debug("Flattened inputs (%s) and outputs (%s)", inputs, outputs)
+    return KModel(inputs, outputs, name=name)
 
 
 class ModelBase():
@@ -130,6 +158,18 @@ class ModelBase():
         """ str: The name of this model based on the plugin name. """
         basename = os.path.basename(sys.modules[self.__module__].__file__)
         return os.path.splitext(basename)[0].lower()
+
+    @property
+    def input_shapes(self):
+        """ list: A list of list of shape tuples for the inputs of the model. The outer list
+        contains 2 sub-lists (one for each side "a" and "b"). The inner sub-lists contain the
+        input shapes for that side. """
+        if get_backend() == "amd":
+            input_shapes = self._model.input_shape
+            retval = [input_shapes[:len(input_shapes) // 2], input_shapes[len(input_shapes) // 2:]]
+        else:
+            retval = self._model.input_shape
+        return retval
 
     @property
     def output_shapes(self):
@@ -296,7 +336,7 @@ class ModelBase():
         """ Output the summary of the model and all sub-models to the verbose logger. """
         self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
         for layer in self._model.layers:
-            if isinstance(layer, KerasModel):
+            if isinstance(layer, KModel):
                 layer.summary(print_fn=lambda x: logger.verbose("%s", x))
 
     def save(self):

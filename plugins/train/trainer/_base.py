@@ -330,7 +330,7 @@ class Feeder():
             The output index from the model to get output shapes for
         """
         logger.debug("Loading generator")
-        input_size = self._model.model.input_shape[output_index][0][1]
+        input_size = self._model.input_shapes[output_index][0][1]
         output_shapes = self._model.output_shapes[output_index]
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
@@ -373,8 +373,14 @@ class Feeder():
                 side_targets = self._compile_masks(side_targets)
                 if not self._model.feed_mask:  # Remove masks from the model targets
                     side_targets = side_targets[:-1]
-            model_inputs.append(side_inputs)
-            model_targets.append(side_targets)
+            logger.trace("side: %s, input_shapes: %s, target_shapes: %s",
+                         side, [i.shape for i in side_inputs], [i.shape for i in side_targets])
+            if get_backend() == "amd":
+                model_inputs.extend(side_inputs)
+                model_targets.extend(side_targets)
+            else:
+                model_inputs.append(side_inputs)
+                model_targets.append(side_targets)
         return model_inputs, model_targets
 
     def _get_next(self, side):
@@ -578,7 +584,7 @@ class Samples():  # pylint:disable=too-few-public-methods
         for idx, side in enumerate(("a", "b")):
             samples = self.images[side]
             faces = samples[1]
-            input_shape = self._model.model.input_shape[idx][0][1:]
+            input_shape = self._model.input_shapes[idx][0][1:]
             if input_shape[0] / faces.shape[1] != 1.0:
                 feeds[side] = self._resize_sample(side, faces, input_shape[0])
                 feeds[side] = feeds[side].reshape((-1, ) + input_shape)
@@ -659,8 +665,20 @@ class Samples():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Getting Predictions")
         preds = dict()
-        standard = self._model.model.predict([feed_a, feed_b])
-        swapped = self._model.model.predict([feed_b, feed_a])
+        feed_ab = [feed_a, feed_b]
+        feed_ba = [feed_b, feed_a]
+        if self._feed_mask and get_backend() == "amd":
+            # Unravel for plaidML
+            feed_ab = [item for feed in feed_ab for item in feed]
+            feed_ba = [item for feed in feed_ba for item in feed]
+        standard = self._model.model.predict(feed_ab)
+        swapped = self._model.model.predict(feed_ba)
+
+        if self._feed_mask and get_backend() == "amd":
+            # Ravel results for plaidml
+            split = len(standard) // 2
+            standard = [standard[:split], standard[split:]]
+            swapped = [swapped[:split], swapped[split:]]
 
         if self._feed_mask:  # Add mask to 4th channel of final output
             standard = [np.concatenate(side[-2:], axis=-1) for side in standard]

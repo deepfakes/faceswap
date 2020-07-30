@@ -5,10 +5,9 @@
     code sample + contributions """
 
 from keras.layers import Dense, Flatten, Input, Reshape
-from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
-from .original import Model as OriginalModel
+from .original import Model as OriginalModel, KerasModel
 
 
 class Model(OriginalModel):

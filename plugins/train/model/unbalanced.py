@@ -5,10 +5,9 @@
 
 from keras.initializers import RandomNormal
 from keras.layers import Dense, Flatten, Input, Reshape, SpatialDropout2D
-from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
-from ._base import ModelBase
+from ._base import ModelBase, KerasModel
 
 
 class Model(ModelBase):

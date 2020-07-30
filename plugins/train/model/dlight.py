@@ -10,13 +10,12 @@
 
 from keras.layers import (AveragePooling2D, BatchNormalization, Concatenate, Dense, Dropout,
                           Flatten, Input, Reshape, LeakyReLU, UpSampling2D)
-from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock,
                                  Upscale2xBlock)
 from lib.utils import FaceswapError
 
-from ._base import ModelBase, logger
+from ._base import ModelBase, KerasModel, logger
 
 
 class Model(ModelBase):

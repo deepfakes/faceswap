@@ -6,11 +6,10 @@
 import numpy as np
 
 from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
-from keras.models import Model as KerasModel
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 
-from ._base import ModelBase
+from ._base import ModelBase, KerasModel
 
 
 class Model(ModelBase):

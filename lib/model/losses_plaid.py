@@ -198,6 +198,7 @@ class DSSIMObjective():
         padding = self._preprocess_padding(padding)
         if data_format == 'channels_first':
             input_tensor = K.permute_dimensions(input_tensor, (0, 2, 3, 1))
+        print(input_tensor, kernel, strides, padding)
         patches = extract_image_patches(input_tensor, kernel, strides, [1, 1, 1, 1], padding)
         return patches
 
