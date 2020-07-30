@@ -34,7 +34,7 @@ _CONFIG = None
 
 # TODO Session info is saved when creating TB logs. Causes issue when model fails
 # TODO Only update analysis tab if it is visible + when displayed
-# TODO AMD Losses + PlaidML fix-ups
+# TODO PlaidML fix-ups
 # TODO Explicit GPU Selection
 
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Custom Loss Functions for faceswap.py """
 
-# TODO This is currently the old losses.py. Need to standardise for classes + AMD
 from __future__ import absolute_import
 
 import logging
@@ -11,15 +10,9 @@ from keras import backend as K
 import numpy as np
 import tensorflow as tf
 
-from lib.utils import get_backend
+from plaidml.op import extract_image_patches
 
-# pylint: disable=ungrouped-imports
-if get_backend() == "amd":
-    from plaidml.op import extract_image_patches
-    from lib.plaidml_utils import pad
-else:
-    extract_image_patches = tf.image.extract_patches  # pylint:disable=invalid-name
-    from tensorflow import pad
+from lib.plaidml_utils import pad
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -208,9 +201,8 @@ class DSSIMObjective():
         return patches
 
 
-# PENALIZED LOSS
-class _PenalizedLossShared():  # pylint:disable=too-few-public-methods
-    """ Shared methods for Keras and Tensorflow.Keras Penalized Loss
+class _PenalizedLoss():  # pylint:disable=too-few-public-methods
+    """ Penalized Loss function.
 
     Applies the given loss function just to the masked area of the image.
 
@@ -220,115 +212,10 @@ class _PenalizedLossShared():  # pylint:disable=too-few-public-methods
         The actual loss function to use
     mask_prop: float, optional
         The amount of mask propagation. Default: `1.0`
-    mask_scaling: float, optional
-        For multi-decoder output the target mask will likely be at full size scaling, so this is
-        the scaling factor to reduce the mask by. Default: `1.0`
     """
-    def __init__(self, loss_func, mask_prop=1.0, mask_scaling=1.0):
+    def __init__(self, loss_func, mask_prop=1.0):
         self._loss_func = loss_func
         self._mask_prop = mask_prop
-        self._mask_scaling = mask_scaling
-
-    def _prepare_mask(self, mask):
-        """ Prepare the masks for calculating loss
-
-        Returns
-        -------
-        tensor
-            The prepared mask for applying to loss
-        """
-        mask = self._scale_mask(mask)
-        mask_as_k_inv_prop = 1 - self._mask_prop
-        mask = (mask * self._mask_prop) + mask_as_k_inv_prop
-        return mask
-
-    def _scale_mask(self, mask):
-        """ Scale the input mask to be the same size as the input face
-
-        Parameters
-        ----------
-        mask: input tensor
-            The mask for the current image
-
-        Returns
-        -------
-        tensor
-            The resized input mask
-        """
-        if self._mask_scaling != 1.0:
-            size = round(1 / self._mask_scaling)
-            mask = K.pool2d(mask,
-                            pool_size=(size, size),
-                            strides=(size, size),
-                            padding="valid",
-                            data_format=K.image_data_format(),
-                            pool_mode="avg")
-        logger.debug("resized tensor: %s", mask)
-        return mask
-
-
-class PenalizedLossTF(_PenalizedLossShared, tf.keras.losses.Loss):
-    """ Tensorflow Penalized Loss function.
-
-    Applies the given loss function just to the masked area of the image.
-
-    Parameters
-    ----------
-    loss_func: function
-        The actual loss function to use
-    mask_prop: float, optional
-        The amount of mask propagation. Default: `1.0`
-    mask_scaling: float, optional
-        For multi-decoder output the target mask will likely be at full size scaling, so this is
-        the scaling factor to reduce the mask by. Default: `1.0`
-    """
-    def __init__(self, loss_func, mask_prop=1.0, mask_scaling=1.0):
-        super().__init__(loss_func, mask_prop, mask_scaling)
-        super(_PenalizedLossShared, self).__init__(name="penalized_loss")
-
-    def call(self, y_true, y_pred):
-        """ Apply the loss function to the masked area of the image.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value. This should contain the mask in the 4th channel that will be
-            split off for penalizing.
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The Loss value
-
-        Notes
-        -----
-        Branching because TensorFlow's broadcasting is wonky and plaidML's concatenate is
-        implemented inefficiently.
-        """
-        mask = self._prepare_mask(K.expand_dims(y_true[..., -1], axis=-1))
-        y_true = y_true[..., :-1]
-        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        return self._loss_func(n_true, n_pred)
-
-
-class PenalizedLossPlaid(_PenalizedLossShared):  # pylint:disable=too-few-public-methods
-    """ PlaidML Penalized Loss function.
-
-    Applies the given loss function just to the masked area of the image.
-
-    Parameters
-    ----------
-    loss_func: function
-        The actual loss function to use
-    mask_prop: float, optional
-        The amount of mask propagation. Default: `1.0`
-    mask_scaling: float, optional
-        For multi-decoder output the target mask will likely be at full size scaling, so this is
-        the scaling factor to reduce the mask by. Default: `1.0`
-    """
 
     def __call__(self, y_true, y_pred):
         """ Apply the loss function to the masked area of the image.
@@ -352,34 +239,28 @@ class PenalizedLossPlaid(_PenalizedLossShared):  # pylint:disable=too-few-public
         n_pred = y_pred * mask
         return self._loss_func(n_true, n_pred)
 
+    def _prepare_mask(self, mask):
+        """ Prepare the masks for calculating loss
 
-if get_backend() == "amd":
-    PenalizedLoss = PenalizedLossPlaid  # pylint:disable=invalid-name
-else:
-    PenalizedLoss = PenalizedLossTF  # pylint:disable=invalid-name
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The masks for the current batch
+
+        Returns
+        -------
+        tensor
+            The prepared mask for applying to loss
+        """
+        mask_as_k_inv_prop = 1 - self._mask_prop
+        mask = (mask * self._mask_prop) + mask_as_k_inv_prop
+        return mask
 
 
-def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):
-    """ Generalized function used to return a large variety of mathematical loss functions.
+class GeneralizedLoss():  # pylint:disable=too-few-public-methods
+    """  Generalized function used to return a large variety of mathematical loss functions.
 
     The primary benefit is a smooth, differentiable version of L1 loss.
-
-    Parameters
-    ----------
-    y_true: tensor or variable
-        The ground truth value
-    y_pred: tensor or variable
-        The predicted value
-    alpha: float, optional
-        Penalty factor. Larger number give larger weight to large deviations. Default: `1.0`
-    beta: float, optional
-        Scale factor used to adjust to the input scale (i.e. inputs of mean `1e-4` or `256`).
-        Default: `1.0/255.0`
-
-    Returns
-    -------
-    tensor
-        The loss value from the results of function(y_pred - y_true)
 
     References
     ----------
@@ -389,36 +270,67 @@ def generalized_loss(y_true, y_pred, alpha=1.0, beta=1.0/255.0):
     -------
     >>> a=1.0, x>>c , c=1.0/255.0  # will give a smoothly differentiable version of L1 / MAE loss
     >>> a=1.999999 (limit as a->2), beta=1.0/255.0 # will give L2 / RMSE loss
-    """
-    diff = y_pred - y_true
-    second = (K.pow(K.pow(diff/beta, 2.) / K.abs(2.-alpha) + 1., (alpha/2.)) - 1.)
-    loss = (K.abs(2.-alpha)/alpha) * second
-    loss = K.mean(loss, axis=-1) * beta
-    return loss
-
-
-def l_inf_norm(y_true, y_pred):
-    """ Calculate the L-inf norm as a loss function.
 
     Parameters
     ----------
-    y_true: tensor or variable
-        The ground truth value
-    y_pred: tensor or variable
-        The predicted value
-
-    Returns
-    -------
-    tensor
-        The loss value
+    alpha: float, optional
+        Penalty factor. Larger number give larger weight to large deviations. Default: `1.0`
+    beta: float, optional
+        Scale factor used to adjust to the input scale (i.e. inputs of mean `1e-4` or `256`).
+        Default: `1.0/255.0`
     """
-    diff = K.abs(y_true - y_pred)
-    max_loss = K.max(diff, axis=(1, 2), keepdims=True)
-    loss = K.mean(max_loss, axis=-1)
-    return loss
+    def __init__(self, alpha=1.0, beta=1.0/255.0):
+        self.alpha = alpha
+        self.beta = beta
+
+    def __call__(self, y_true, y_pred):
+        """ Call the Generalized Loss Function
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The loss value from the results of function(y_pred - y_true)
+        """
+        diff = y_pred - y_true
+        second = (K.pow(K.pow(diff/self.beta, 2.) / K.abs(2. - self.alpha) + 1.,
+                        (self.alpha / 2.)) - 1.)
+        loss = (K.abs(2. - self.alpha)/self.alpha) * second
+        loss = K.mean(loss, axis=-1) * self.beta
+        return loss
 
 
-def gradient_loss(y_true, y_pred):
+class LInfNorm():  # pylint:disable=too-few-public-methods
+    """ Calculate the L-inf norm as a loss function. """
+
+    def __call__(self, y_true, y_pred):
+        """ Call the L-inf norm loss function.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The loss value
+        """
+        diff = K.abs(y_true - y_pred)
+        max_loss = K.max(diff, axis=(1, 2), keepdims=True)
+        loss = K.mean(max_loss, axis=-1)
+        return loss
+
+
+class GradientLoss():  # pylint:disable=too-few-public-methods
     """ Gradient Loss Function.
 
     Calculates the first and second order gradient difference between pixels of an image in the x
@@ -426,25 +338,44 @@ def gradient_loss(y_true, y_pred):
     image and the difference is taken. When used as a loss, its minimization will result in
     predicted images approaching the same level of sharpness / blurriness as the ground truth.
 
-    Parameters
-    ----------
-    y_true: tensor or variable
-        The ground truth value
-    y_pred: tensor or variable
-        The predicted value
-
-    Returns
-    -------
-    tensor
-        The loss value
-
     References
     ----------
     TV+TV2 Regularization with Non-Convex Sparseness-Inducing Penalty for Image Restoration,
     Chengwu Lu & Hua Huang, 2014 - http://downloads.hindawi.com/journals/mpe/2014/790547.pdf
     """
+    def __init__(self):
+        self.generalized_loss = GeneralizedLoss(alpha=1.9999)
 
-    def _diff_x(img):
+    def __call__(self, y_true, y_pred):
+        """ Call the gradient loss function.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The loss value
+        """
+        tv_weight = 1.0
+        tv2_weight = 1.0
+        loss = 0.0
+        loss += tv_weight * (self.generalized_loss(self._diff_x(y_true), self._diff_x(y_pred)) +
+                             self.generalized_loss(self._diff_y(y_true), self._diff_y(y_pred)))
+        loss += tv2_weight * (self.generalized_loss(self._diff_xx(y_true), self._diff_xx(y_pred)) +
+                              self.generalized_loss(self._diff_yy(y_true), self._diff_yy(y_pred)) +
+                              self.generalized_loss(self._diff_xy(y_true), self._diff_xy(y_pred))
+                              * 2.)
+        loss = loss / (tv_weight + tv2_weight)
+        # TODO simplify to use MSE instead
+        return loss
+
+    @classmethod
+    def _diff_x(cls, img):
         """ X Difference """
         x_left = img[:, :, 1:2, :] - img[:, :, 0:1, :]
         x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
@@ -452,7 +383,8 @@ def gradient_loss(y_true, y_pred):
         x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
         return x_out * 0.5
 
-    def _diff_y(img):
+    @classmethod
+    def _diff_y(cls, img):
         """ Y Difference """
         y_top = img[:, 1:2, :, :] - img[:, 0:1, :, :]
         y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
@@ -460,7 +392,8 @@ def gradient_loss(y_true, y_pred):
         y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
         return y_out * 0.5
 
-    def _diff_xx(img):
+    @classmethod
+    def _diff_xx(cls, img):
         """ X-X Difference """
         x_left = img[:, :, 1:2, :] + img[:, :, 0:1, :]
         x_inner = img[:, :, 2:, :] + img[:, :, :-2, :]
@@ -468,7 +401,8 @@ def gradient_loss(y_true, y_pred):
         x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
         return x_out - 2.0 * img
 
-    def _diff_yy(img):
+    @classmethod
+    def _diff_yy(cls, img):
         """ Y-Y Difference """
         y_top = img[:, 1:2, :, :] + img[:, 0:1, :, :]
         y_inner = img[:, 2:, :, :] + img[:, :-2, :, :]
@@ -476,7 +410,8 @@ def gradient_loss(y_true, y_pred):
         y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
         return y_out - 2.0 * img
 
-    def _diff_xy(img):
+    @classmethod
+    def _diff_xy(cls, img):
         """ X-Y Difference """
         # xout1
         top_left = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
@@ -514,117 +449,109 @@ def gradient_loss(y_true, y_pred):
         xy_out2 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
         return (xy_out1 - xy_out2) * 0.25
 
-    tv_weight = 1.0
-    tv2_weight = 1.0
-    loss = 0.0
-    loss += tv_weight * (generalized_loss(_diff_x(y_true), _diff_x(y_pred), alpha=1.9999) +
-                         generalized_loss(_diff_y(y_true), _diff_y(y_pred), alpha=1.9999))
-    loss += tv2_weight * (generalized_loss(_diff_xx(y_true), _diff_xx(y_pred), alpha=1.9999) +
-                          generalized_loss(_diff_yy(y_true), _diff_yy(y_pred), alpha=1.9999) +
-                          generalized_loss(_diff_xy(y_true), _diff_xy(y_pred), alpha=1.9999) * 2.)
-    loss = loss / (tv_weight + tv2_weight)
-    # TODO simplify to use MSE instead
-    return loss
 
-
-def scharr_edges(image, magnitude):
-    """ Returns a tensor holding modified Scharr edge maps.
-
-    Parameters
-    ----------
-    image: tensor
-        Image tensor with shape [batch_size, h, w, d] and type float32. The image(s) must be 2x2
-        or larger.
-    magnitude: bool
-        Boolean to determine if the edge magnitude or edge direction is returned
-
-    Returns
-    -------
-    tensor
-        Tensor holding edge maps for each channel. Returns a tensor with shape `[batch_size, h, w,
-        d, 2]` where the last two dimensions hold `[[dy[0], dx[0]], [dy[1], dx[1]], ..., [dy[d-1],
-        dx[d-1]]]` calculated using the Scharr filter.
-    """
-
-    # Define vertical and horizontal Scharr filters.
-    static_image_shape = image.shape.dims if get_backend() == "amd" else image.get_shape()
-    image_shape = K.shape(image)
-
-    # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
-    matrix = np.array([[[[0.00070, 0.00070]],
-                        [[0.00520, 0.00370]],
-                        [[0.03700, 0.00000]],
-                        [[0.00520, -0.0037]],
-                        [[0.00070, -0.0007]]],
-                       [[[0.00370, 0.00520]],
-                        [[0.11870, 0.11870]],
-                        [[0.25890, 0.00000]],
-                        [[0.11870, -0.1187]],
-                        [[0.00370, -0.0052]]],
-                       [[[0.00000, 0.03700]],
-                        [[0.00000, 0.25890]],
-                        [[0.00000, 0.00000]],
-                        [[0.00000, -0.2589]],
-                        [[0.00000, -0.0370]]],
-                       [[[-0.0037, 0.00520]],
-                        [[-0.1187, 0.11870]],
-                        [[-0.2589, 0.00000]],
-                        [[-0.1187, -0.1187]],
-                        [[-0.0037, -0.0052]]],
-                       [[[-0.0007, 0.00070]],
-                        [[-0.0052, 0.00370]],
-                        [[-0.0370, 0.00000]],
-                        [[-0.0052, -0.0037]],
-                        [[-0.0007, -0.0007]]]])
-    num_kernels = [2]
-    kernels = K.constant(matrix, dtype='float32')
-    kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
-
-    # Use depth-wise convolution to calculate edge maps per channel.
-    # Output tensor has shape [batch_size, h, w, d * num_kernels].
-    pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
-    padded = pad(image, pad_sizes, mode='REFLECT')
-    output = K.depthwise_conv2d(padded, kernels)
-
-    if not magnitude:  # direction of edges
-        # Reshape to [batch_size, h, w, d, num_kernels].
-        shape = K.concatenate([image_shape, num_kernels], axis=0)
-        output = K.reshape(output, shape=shape)
-        output.set_shape(static_image_shape.concatenate(num_kernels))
-        output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1], axis=None))
-    # magnitude of edges -- unified x & y edges don't work well with Neural Networks
-    return output
-
-
-def gmsd_loss(y_true, y_pred):
+class GMSDLoss():  # pylint:disable=too-few-public-methods
     """ Gradient Magnitude Similarity Deviation Loss.
 
     Improved image quality metric over MS-SSIM with easier calculations
-
-    Parameters
-    ----------
-    y_true: tensor or variable
-        The ground truth value
-    y_pred: tensor or variable
-        The predicted value
-
-    Returns
-    -------
-    tensor
-        The loss value
 
     References
     ----------
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
-
     """
-    true_edge = scharr_edges(y_true, True)
-    pred_edge = scharr_edges(y_pred, True)
-    ephsilon = 0.0025
-    upper = 2.0 * true_edge * pred_edge
-    lower = K.square(true_edge) + K.square(pred_edge)
-    gms = (upper + ephsilon) / (lower + ephsilon)
-    gmsd = K.std(gms, axis=(1, 2, 3), keepdims=True)
-    gmsd = K.squeeze(gmsd, axis=-1)
-    return gmsd
+
+    def __call__(self, y_true, y_pred):
+        """ Return the Gradient Magnitude Similarity Deviation Loss.
+
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The loss value
+        """
+        true_edge = self._scharr_edges(y_true, True)
+        pred_edge = self._scharr_edges(y_pred, True)
+        ephsilon = 0.0025
+        upper = 2.0 * true_edge * pred_edge
+        lower = K.square(true_edge) + K.square(pred_edge)
+        gms = (upper + ephsilon) / (lower + ephsilon)
+        gmsd = K.std(gms, axis=(1, 2, 3), keepdims=True)
+        gmsd = K.squeeze(gmsd, axis=-1)
+        return gmsd
+
+    @classmethod
+    def _scharr_edges(cls, image, magnitude):
+        """ Returns a tensor holding modified Scharr edge maps.
+
+        Parameters
+        ----------
+        image: tensor
+            Image tensor with shape [batch_size, h, w, d] and type float32. The image(s) must be
+            2x2 or larger.
+        magnitude: bool
+            Boolean to determine if the edge magnitude or edge direction is returned
+
+        Returns
+        -------
+        tensor
+            Tensor holding edge maps for each channel. Returns a tensor with shape `[batch_size, h,
+            w, d, 2]` where the last two dimensions hold `[[dy[0], dx[0]], [dy[1], dx[1]], ...,
+            [dy[d-1], dx[d-1]]]` calculated using the Scharr filter.
+        """
+
+        # Define vertical and horizontal Scharr filters.
+        static_image_shape = image.get_shape()
+        image_shape = K.shape(image)
+
+        # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
+        matrix = np.array([[[[0.00070, 0.00070]],
+                            [[0.00520, 0.00370]],
+                            [[0.03700, 0.00000]],
+                            [[0.00520, -0.0037]],
+                            [[0.00070, -0.0007]]],
+                           [[[0.00370, 0.00520]],
+                            [[0.11870, 0.11870]],
+                            [[0.25890, 0.00000]],
+                            [[0.11870, -0.1187]],
+                            [[0.00370, -0.0052]]],
+                           [[[0.00000, 0.03700]],
+                            [[0.00000, 0.25890]],
+                            [[0.00000, 0.00000]],
+                            [[0.00000, -0.2589]],
+                            [[0.00000, -0.0370]]],
+                           [[[-0.0037, 0.00520]],
+                            [[-0.1187, 0.11870]],
+                            [[-0.2589, 0.00000]],
+                            [[-0.1187, -0.1187]],
+                            [[-0.0037, -0.0052]]],
+                           [[[-0.0007, 0.00070]],
+                            [[-0.0052, 0.00370]],
+                            [[-0.0370, 0.00000]],
+                            [[-0.0052, -0.0037]],
+                            [[-0.0007, -0.0007]]]])
+        num_kernels = [2]
+        kernels = K.constant(matrix, dtype='float32')
+        kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
+
+        # Use depth-wise convolution to calculate edge maps per channel.
+        # Output tensor has shape [batch_size, h, w, d * num_kernels].
+        pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
+        padded = pad(image, pad_sizes, mode='REFLECT')
+        output = K.depthwise_conv2d(padded, kernels)
+
+        if not magnitude:  # direction of edges
+            # Reshape to [batch_size, h, w, d, num_kernels].
+            shape = K.concatenate([image_shape, num_kernels], axis=0)
+            output = K.reshape(output, shape=shape)
+            output.set_shape(static_image_shape.concatenate(num_kernels))
+            output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1], axis=None))
+        # magnitude of edges -- unified x & y edges don't work well with Neural Networks
+        return output

@@ -230,11 +230,6 @@ class PenalizedLoss(tf.keras.losses.Loss):
         -------
         tensor
             The Loss value
-
-        Notes
-        -----
-        Branching because TensorFlow's broadcasting is wonky and plaidML's concatenate is
-        implemented inefficiently.
         """
         mask = self._prepare_mask(K.expand_dims(y_true[..., -1], axis=-1))
         y_true = y_true[..., :-1]
@@ -244,6 +239,11 @@ class PenalizedLoss(tf.keras.losses.Loss):
 
     def _prepare_mask(self, mask):
         """ Prepare the masks for calculating loss
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The masks for the current batch
 
         Returns
         -------
