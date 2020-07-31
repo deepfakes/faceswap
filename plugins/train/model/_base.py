@@ -1055,10 +1055,11 @@ class Inference():  # pylint:disable=too-few-public-methods
                      self.__class__.__name__, saved_model, switch_sides)
         self._config = saved_model.get_config()
         input_idx = 1 if switch_sides else 0
-        output_idx = 0 if switch_sides else 1
+        self._output_idx = 0 if switch_sides else 1
         self._input_names = set(self._filter_node(self._config["input_layers"][input_idx]))
-        self._inputs = saved_model.inputs[input_idx]
-        self._outputs = set(self._filter_node(self._config["output_layers"])[output_idx])
+
+        self._inputs = self._get_inputs(saved_model.inputs, input_idx)
+        self._outputs = set(self._filter_node(self._config["output_layers"])[self._output_idx])
         self._outputs_dropout = self._get_outputs_dropout()
         self._model = self._make_inference_model(saved_model)
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -1085,6 +1086,29 @@ class Inference():  # pylint:disable=too-few-public-methods
         """
         retval = np.array(node)[..., 0].squeeze().tolist()
         return retval if isinstance(retval, list) else [retval]
+
+    @classmethod
+    def _get_inputs(cls, inputs, input_index):
+        """ Obtain the inputs for the requested swap direction.
+
+        Parameters
+        ----------
+        inputs: list
+            The full list of input tensors to the saved faceswap training model
+        input_index: int
+            The input index for the requested swap direction
+
+        Returns
+        -------
+        list
+            List of input tensors to feed the model for the requested swap direction
+        """
+        input_split = len(inputs) // 2
+        start_idx = input_split * input_index
+        retval = inputs[start_idx: start_idx + input_split]
+        logger.debug("model inputs: %s, input_split: %s, start_idx: %s, inference_inputs: %s",
+                     inputs, input_split, start_idx, retval)
+        return retval
 
     def _get_outputs_dropout(self):
         """ Obtain the output layer names from the full model that will not be used for inference.
@@ -1165,15 +1189,11 @@ class Inference():  # pylint:disable=too-few-public-methods
                 logger.debug("Stripping inbound nodes for input '%s': %s", name, inbound)
                 inbound = ""
 
-            # TODO No guarantee that this will always work. It is based on IAE which has an
-            # inter_both layer that takes the encoder from each side. As the inbound name for each
-            # side is the same, and the layer requires 2 inputs to compile properly, we ensure that
-            # the two inputs to a layer have unique names to include it as a layer with split
-            # inputs.
-            split_layer = np.array(layer["inbound_nodes"]).shape[0] == 2 and len(set(inbound)) == 2
-            if split_layer:
+            if inbound and np.array(layer["inbound_nodes"]).shape[0] == 2:
+                # if inbound is not populated, then layer is already split at input
                 logger.debug("Filtering layer with split inbound nodes: '%s': %s", name, inbound)
-                inbound = inbound[1] if isinstance(inbound[1], list) else [inbound[1]]
+                inbound = inbound[self._output_idx]
+                inbound = inbound if isinstance(inbound, list) else [inbound]
                 logger.debug("Filtered inbound nodes for layer '%s': %s", name, inbound)
             if name in self._outputs_dropout:
                 logger.debug("Dropping output layer '%s'", name)
