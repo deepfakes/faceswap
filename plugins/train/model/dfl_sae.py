@@ -33,13 +33,10 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the DFL-SAE Model """
-        input_a = inputs[0][0]
-        input_b = inputs[1][0]
-
         encoder = getattr(self, "encoder_{}".format(self.architecture))()
         enc_output_shape = encoder.output_shape[1:]
-        encoder_a = encoder(input_a)
-        encoder_b = encoder(input_b)
+        encoder_a = encoder(inputs[0])
+        encoder_b = encoder(inputs[1])
 
         if self.architecture == "liae":
             inter_both = self.inter_liae("both", enc_output_shape)

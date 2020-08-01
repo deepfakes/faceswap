@@ -47,12 +47,9 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the Dlight Model. """
-        input_a = inputs[0][0]
-        input_b = inputs[1][0]
-
         encoder = self.encoder()
-        encoder_a = encoder(input_a)
-        encoder_b = encoder(input_b)
+        encoder_a = encoder(inputs[0])
+        encoder_b = encoder(inputs[1])
 
         decoder_b = self.decoder_b if self.details > 0 else self.decoder_b_fast
 

@@ -21,12 +21,9 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ build the Unbalanced Model. """
-        input_a = inputs[0][0]
-        input_b = inputs[1][0]
-
         encoder = self.encoder()
-        encoder_a = encoder(input_a)
-        encoder_b = encoder(input_b)
+        encoder_a = encoder(inputs[0])
+        encoder_b = encoder(inputs[1])
 
         outputs = [self.decoder_a()(encoder_a), self.decoder_b()(encoder_b)]
 

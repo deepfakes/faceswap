@@ -63,13 +63,8 @@ class Model(ModelBase):
         Parameters
         ----------
         inputs: list
-            A list of input tensors for the model. At a minimum this will be a list of 2 tensors of
-            shape :attr:`input_shape`, the first for side "a", the second for side "b". If the
-            configuration option "learn_mask" has been enabled  then this will be a list of 2
-            sub-lists, the fist for side "a", the second for side "b". Each sub-lists will contain
-            2 input tensors, the first being of shape :attr:`input_shape` for the face input, and
-            the second being of the same height and width dimensions of :attr:`input_shape` but
-            with a single channel for the 3rd dimension for the mask.
+            A list of input tensors for the model. This will be a list of 2 tensors of
+            shape :attr:`input_shape`, the first for side "a", the second for side "b".
 
         Returns
         -------
@@ -78,8 +73,8 @@ class Model(ModelBase):
             correct structure. You should include the keyword argument ``name`` assigned to the
             attribute :attr:`name` to automatically name the model based on the filename.
         """
-        input_a = inputs[0][0]
-        input_b = inputs[1][0]
+        input_a = inputs[0]
+        input_b = inputs[1]
 
         encoder = self.encoder()
         encoder_a = [encoder(input_a)]

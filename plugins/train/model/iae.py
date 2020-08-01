@@ -16,17 +16,14 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the IAE Model """
-        input_a = inputs[0][0]
-        input_b = inputs[1][0]
-
         encoder = self.encoder()
         decoder = self.decoder()
         inter_a = self.intermediate("a")
         inter_b = self.intermediate("b")
         inter_both = self.intermediate("both")
 
-        encoder_a = encoder(input_a)
-        encoder_b = encoder(input_b)
+        encoder_a = encoder(inputs[0])
+        encoder_b = encoder(inputs[1])
 
         outputs = [decoder(Concatenate()([inter_a(encoder_a), inter_both(encoder_a)])),
                    decoder(Concatenate()([inter_b(encoder_b), inter_both(encoder_b)]))]

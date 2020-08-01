@@ -115,7 +115,7 @@ class TrainerBase():
             if the masks are required for training. """
         retval = dict()
 
-        get_masks = self._model.feed_mask or self._model.config["penalized_mask_loss"]
+        get_masks = self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]
         if not self._landmarks_required and not get_masks:
             return retval
 
@@ -330,7 +330,7 @@ class Feeder():
             The output index from the model to get output shapes for
         """
         logger.debug("Loading generator")
-        input_size = self._model.input_shapes[output_index][0][1]
+        input_size = self._model.model.input_shape[output_index][1]
         output_shapes = self._model.output_shapes[output_index]
         logger.debug("input_size: %s, output_shapes: %s", input_size, output_shapes)
         generator = TrainingDataGenerator(input_size,
@@ -371,7 +371,7 @@ class Feeder():
             side_inputs, side_targets = self._get_next(side)
             if self._model.config["penalized_mask_loss"]:
                 side_targets = self._compile_masks(side_targets)
-                if not self._model.feed_mask:  # Remove masks from the model targets
+                if not self._model.config["learn_mask"]:  # Remove masks from the model targets
                     side_targets = side_targets[:-1]
             logger.trace("side: %s, input_shapes: %s, target_shapes: %s",
                          side, [i.shape for i in side_inputs], [i.shape for i in side_targets])
@@ -396,10 +396,10 @@ class Feeder():
         """
         logger.trace("Generating targets")
         batch = next(self._feeds[side])
-        targets_use_mask = self._model.feed_mask or self._model.config["penalized_mask_loss"]
-        model_inputs = batch["feed"] + batch["masks"] if self._model.feed_mask else batch["feed"]
+        targets_use_mask = (self._model.config["learn_mask"]
+                            or self._model.config["penalized_mask_loss"])
         model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
-        return model_inputs, model_targets
+        return batch["feed"], model_targets
 
     @classmethod
     def _compile_masks(cls, targets):
@@ -562,8 +562,7 @@ class Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: model: '%s', coverage_ratio: %s)",
                      self.__class__.__name__, model, coverage_ratio)
         self._model = model
-        self._display_mask = model.feed_mask or model.config["penalized_mask_loss"]
-        self._feed_mask = model.feed_mask
+        self._display_mask = model.config["learn_mask"] or model.config["penalized_mask_loss"]
         self.images = dict()
         self._coverage_ratio = coverage_ratio
         self._scaling = scaling
@@ -584,15 +583,12 @@ class Samples():  # pylint:disable=too-few-public-methods
         for idx, side in enumerate(("a", "b")):
             samples = self.images[side]
             faces = samples[1]
-            input_shape = self._model.input_shapes[idx][0][1:]
+            input_shape = self._model.model.input_shape[idx][1:]
             if input_shape[0] / faces.shape[1] != 1.0:
                 feeds[side] = self._resize_sample(side, faces, input_shape[0])
                 feeds[side] = feeds[side].reshape((-1, ) + input_shape)
             else:
                 feeds[side] = faces
-            if self._feed_mask:
-                mask = samples[-1]
-                feeds[side] = [feeds[side], mask]
 
         preds = self._get_predictions(feeds["a"], feeds["b"])
 
@@ -665,22 +661,16 @@ class Samples():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Getting Predictions")
         preds = dict()
-        feed_ab = [feed_a, feed_b]
-        feed_ba = [feed_b, feed_a]
-        if self._feed_mask and get_backend() == "amd":
-            # Unravel for plaidML
-            feed_ab = [item for feed in feed_ab for item in feed]
-            feed_ba = [item for feed in feed_ba for item in feed]
-        standard = self._model.model.predict(feed_ab)
-        swapped = self._model.model.predict(feed_ba)
+        standard = self._model.model.predict([feed_a, feed_b])
+        swapped = self._model.model.predict([feed_b, feed_a])
 
-        if self._feed_mask and get_backend() == "amd":
+        if self._model.config["learn_mask"] and get_backend() == "amd":
             # Ravel results for plaidml
             split = len(standard) // 2
             standard = [standard[:split], standard[split:]]
             swapped = [swapped[:split], swapped[split:]]
 
-        if self._feed_mask:  # Add mask to 4th channel of final output
+        if self._model.config["learn_mask"]:  # Add mask to 4th channel of final output
             standard = [np.concatenate(side[-2:], axis=-1) for side in standard]
             swapped = [np.concatenate(side[-2:], axis=-1) for side in swapped]
         else:  # Retrieve final output

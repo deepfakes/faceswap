@@ -160,29 +160,12 @@ class ModelBase():
         return os.path.splitext(basename)[0].lower()
 
     @property
-    def input_shapes(self):
-        """ list: A list of list of shape tuples for the inputs of the model. The outer list
-        contains 2 sub-lists (one for each side "a" and "b"). The inner sub-lists contain the
-        input shapes for that side. """
-        if get_backend() == "amd":
-            input_shapes = self._model.input_shape
-            retval = [input_shapes[:len(input_shapes) // 2], input_shapes[len(input_shapes) // 2:]]
-        else:
-            retval = self._model.input_shape
-        return retval
-
-    @property
     def output_shapes(self):
         """ list: A list of list of shape tuples for the outputs of the model with the batch
         dimension removed. The outer list contains 2 sub-lists (one for each side "a" and "b").
         The inner sub-lists contain the output shapes for that side. """
         shapes = [tuple(K.int_shape(output)[-3:]) for output in self._model.outputs]
         return [shapes[:len(shapes) // 2], shapes[len(shapes) // 2:]]
-
-    @property
-    def feed_mask(self):
-        """ bool: ``True`` if the model expects a mask to be fed into input otherwise ``False`` """
-        return self.config["mask_type"] is not None and self.config["learn_mask"]
 
     @property
     def iterations(self):
@@ -307,12 +290,8 @@ class ModelBase():
             input_shapes = [self.input_shape, self.input_shape]
         else:
             input_shapes = self.input_shape
-        inputs = []
-        for side, shape in zip(("a", "b"), input_shapes):
-            side_inputs = [Input(shape=shape, name="face_in_{}".format(side))]
-            if self.feed_mask:
-                side_inputs.append(Input(shape=shape[:2] + (1, ), name="mask_in_{}".format(side)))
-            inputs.append(side_inputs)
+        inputs = [Input(shape=shape, name="face_in_{}".format(side))
+                  for side, shape in zip(("a", "b"), input_shapes)]
         logger.debug("inputs: %s", inputs)
         return inputs
 
@@ -378,18 +357,26 @@ class ModelBase():
         https://github.com/plaidml/plaidml/issues/228. We workaround by simply not adding this
         parameter for AMD backend users.
         """
-        # TODO add clipnorm in for plaidML when it is fixed in the main repository
-        clipnorm = get_backend() != "amd" and self.config.get("clipnorm", False)
-        if (self._args.distributed or self._args.mixed_precision) and clipnorm:
+        kwargs = dict(beta_1=0.5, beta_2=0.99)
+
+        learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
+        kwargs[learning_rate] = self.config.get("learning_rate", 5e-5)
+
+        clipnorm = self.config.get("clipnorm", False)
+        if clipnorm and (self._args.distributed or self._args.mixed_precision):
             logger.warning("Clipnorm has been selected, but is unsupported when using distributed "
                            "or mixed_precision training, so has been disabled. If you wish to "
                            "enable clipnorm, then you must disable these options.")
             clipnorm = False
-        learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
-        kwargs = dict(beta_1=0.5,
-                      beta_2=0.99,
-                      clipnorm=1.0 if clipnorm else None)
-        kwargs[learning_rate] = self.config.get("learning_rate", 5e-5)
+        if clipnorm and get_backend() != "amd":
+            # TODO add clipnorm in for plaidML when it is fixed upstream. Still not fixed in
+            # release 0.7.0.
+            logger.warning("Due to a bug in plaidML, clipnorm cannot be used on AMD backends so "
+                           "has been disabled")
+            clipnorm = False
+        if clipnorm:
+            kwargs["clipnorm"] = 1.0
+
         retval = Adam(**kwargs)
         if self._settings.use_mixed_precision:
             retval = self._settings.LossScaleOptimizer(retval, loss_scale="dynamic")

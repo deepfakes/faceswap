@@ -28,7 +28,7 @@ class Model(ModelBase):
 
     @property
     def downscalers_no(self):
-        """ Number of downscalers. Don't change! """
+        """ Number of downscale blocks. Don't change! """
         return 4
 
     @property
@@ -54,7 +54,7 @@ class Model(ModelBase):
         logger.debug("Input and output sizes are valid")
 
     def get_dense_width_upscalers_numbers(self):
-        """ Return the dense width and number of upscalers """
+        """ Return the dense width and number of upscale blocks """
         output_size = self.config["output_size"]
         sides = [(output_size // 2**n, n) for n in [4, 5] if (output_size // 2**n) < 10]
         closest = min([x * self._downscale_ratio for x, _ in sides],
@@ -66,12 +66,9 @@ class Model(ModelBase):
 
     def build_model(self, inputs):
         """ Build the RealFace model. """
-        input_a = inputs[0][0]
-        input_b = inputs[1][0]
-
         encoder = self.encoder()
-        encoder_a = encoder(input_a)
-        encoder_b = encoder(input_b)
+        encoder_a = encoder(inputs[0])
+        encoder_b = encoder(inputs[1])
 
         outputs = [self.decoder_a()(encoder_a), self.decoder_b()(encoder_b)]
 
