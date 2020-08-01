@@ -14,15 +14,15 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Parent frame holder for each tab.
         Defines uniform structure for each tab to inherit from """
-    def __init__(self, parent, tabname, helptext):
-        logger.debug("Initializing %s: (tabname: '%s', helptext: %s)",
-                     self.__class__.__name__, tabname, helptext)
+    def __init__(self, parent, tab_name, helptext):
+        logger.debug("Initializing %s: (tab_name: '%s', helptext: %s)",
+                     self.__class__.__name__, tab_name, helptext)
         ttk.Frame.__init__(self, parent)
         self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
 
         self.runningtask = parent.runningtask
         self.helptext = helptext
-        self.tabname = tabname
+        self.tabname = tab_name
 
         self.vars = {"info": tk.StringVar()}
         self.add_optional_vars(self.set_vars())
@@ -150,10 +150,10 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
 class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
-    def __init__(self, parent, tabname, helptext, waittime, command=None):
+    def __init__(self, parent, tab_name, helptext, waittime, command=None):
         logger.debug("%s: OptionalPage args: (waittime: %s, command: %s)",
                      self.__class__.__name__, waittime, command)
-        DisplayPage.__init__(self, parent, tabname, helptext)
+        DisplayPage.__init__(self, parent, tab_name, helptext)
 
         self.command = command
         self.display_item = None

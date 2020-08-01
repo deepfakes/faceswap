@@ -36,6 +36,7 @@ _CONFIG = None
 # TODO Only update analysis tab if it is visible + when displayed
 # TODO PlaidML fix penalized mask loss. Reinvestigate gmsd, convert
 # TODO Explicit GPU Selection
+# TODO Disallow multiple models in folder
 
 
 def KerasModel(inputs, outputs, name=None):  # pylint:disable=invalid-name

@@ -190,9 +190,9 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
-    def __init__(self, parent, tabname, helptext, waittime, command=None):
+    def __init__(self, parent, tab_name, helptext, waittime, command=None):
         self.trace_var = None
-        super().__init__(parent, tabname, helptext, waittime, command)
+        super().__init__(parent, tab_name, helptext, waittime, command)
 
     def add_options(self):
         """ Add the additional options """
