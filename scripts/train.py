@@ -258,9 +258,9 @@ class Train():  # pylint:disable=too-few-public-methods
 
         for iteration in range(1, self._args.iterations + 1):
             logger.trace("Training iteration: %s", iteration)
-            save_iteration = iteration % self._args.save_interval == 0
+            save_iteration = iteration % self._args.save_interval == 0 or iteration == 1
 
-            if iteration == 1 or save_iteration or self._save_now or self._refresh_preview:
+            if save_iteration or self._save_now or self._refresh_preview:
                 viewer = display_func
             else:
                 viewer = None

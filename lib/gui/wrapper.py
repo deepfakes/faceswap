@@ -175,7 +175,6 @@ class FaceswapControl():
         """ Read stdout from the subprocess. If training, pass the loss
         values to Queue """
         logger.debug("Opening stdout reader")
-        first_loss_captured = False
         while True:
             try:
                 output = self.process.stdout.readline()
@@ -186,12 +185,6 @@ class FaceswapControl():
             if output == "" and self.process.poll() is not None:
                 break
             if output:
-                if (self.command == "train"
-                        and not first_loss_captured
-                        and self.capture_loss(output)):
-                    self.wrapper.tk_vars["updatepreview"].set(True)
-                    first_loss_captured = True
-                    continue
                 if ((self.command == "train" and self.capture_loss(output)) or
                         (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
                         (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):

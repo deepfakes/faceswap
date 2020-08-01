@@ -32,8 +32,6 @@ from plugins.train._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
-# TODO Session info is saved when creating TB logs. Causes issue when model fails
-# TODO Only update analysis tab if it is visible + when displayed
 # TODO PlaidML fix penalized mask loss. Reinvestigate gmsd, convert
 # TODO Explicit GPU Selection
 # TODO Disallow multiple models in folder
