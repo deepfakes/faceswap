@@ -267,7 +267,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
-        logger.trace("Adding graph")
+        logger.debug("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
         loss_keys = [key for key in self.display_item.loss_keys if key != "total"]
         display_tabs = sorted(set(key[:-1].rstrip("_") for key in loss_keys))

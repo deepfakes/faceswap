@@ -35,7 +35,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Initializing: %s: (parent, %s, tab_name: '%s', helptext: '%s')",
                      self.__class__.__name__, parent, tab_name, helptext)
         super().__init__(parent, tab_name, helptext)
-
         self._summary = None
         self._session = None
 
@@ -59,6 +58,17 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
                     refresh_graph=get_config().tk_vars["refreshgraph"],
                     is_training=get_config().tk_vars["istraining"],
                     analysis_folder=get_config().tk_vars["analysis_folder"])
+
+    def on_tab_select(self):
+        """ Callback for when the analysis tab is selected.
+
+        If Faceswap is currently training a model, then update the statistics with the latest
+        values
+        """
+        if not self.vars["is_training"].get():
+            return
+        logger.debug("Analysis update callback received")
+        self.reset_session()
 
     def _get_main_frame(self):
         """ Get the main frame to the sub-notebook to hold stats and session data.
@@ -91,6 +101,9 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def _update_current_session(self, *args):  # pylint:disable=unused-argument
         """ Update the currently training session data on a graph update callback. """
         if not self.vars["refresh_graph"].get():
+            return
+        if not self._tab_is_active:
+            logger.debug("Analyis tab not selected. Not updating stats")
             return
         logger.debug("Analysis update callback received")
         self.reset_session()

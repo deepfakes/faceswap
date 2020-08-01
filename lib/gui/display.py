@@ -29,6 +29,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         self.set_wrapper_var_trace()
         self.add_static_tabs()
         self.static_tabs = [child for child in self.tabs()]
+        self.bind("<<NotebookTabChanged>>", self._on_tab_change)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_wrapper_var_trace(self):
@@ -109,3 +110,23 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         if not command or command not in ("extract", "train", "convert"):
             return
         self.command_display(command)
+
+    def _on_tab_change(self, event):  # pylint:disable=unused-argument
+        """ Event trigger for tab change events.
+
+        Calls the selected tabs :func:`on_tab_select` method, if it exists, otherwise returns.
+
+        Parameters
+        ----------
+        event: tkinter callback event
+            Required, but unused
+        """
+        selected = self.select().split(".")[-1]
+        logger.debug("Selected tab: %s", selected)
+        selected_object = self.children[selected]
+        if hasattr(selected_object, "on_tab_select"):
+            logger.debug("Calling on_tab_select for '%s'", selected_object)
+            selected_object.on_tab_select()
+        else:
+            logger.debug("Object does not have on_tab_select method. Returning: '%s'",
+                         selected_object)
