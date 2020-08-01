@@ -656,8 +656,7 @@ class Predict():
         self._model = self._load_model()
         self._sizes = self._get_io_sizes()
         self._coverage_ratio = self._model.coverage_ratio
-        self._input_mask = np.zeros((1, self._sizes["input"], self._sizes["input"], 1),
-                                    dtype="float32")
+
         self._thread = self._launch_predictor()
         logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self._out_queue)
 
@@ -938,8 +937,6 @@ class Predict():
         """
         logger.trace("Predicting: Batchsize: %s", len(feed_faces))
         feed = [feed_faces]
-        if self._model.feed_mask:
-            feed.append(np.repeat(self._input_mask, feed_faces.shape[0], axis=0))
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
 
         predicted = self._model.model.predict(feed, batch_size=batch_size)
@@ -947,7 +944,7 @@ class Predict():
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
 
         # Only take last output(s)
-        if self._model.feed_mask:
+        if predicted[-1].shape[-1] == 1:  # Merge mask to alpha channel
             predicted = np.concatenate(predicted[-2:], axis=-1).astype("float32")
         else:
             predicted = predicted[-1].astype("float32")
