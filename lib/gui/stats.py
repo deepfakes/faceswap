@@ -348,7 +348,7 @@ class SessionsSummary():
             if idx == total_summaries - 1:
                 endtime = summary["end"]
             elapsed += summary["elapsed"]
-            examples += (summary["batch"] * summary["iterations"])
+            examples += ((summary["batch"] * 2) * summary["iterations"])
             batchset.add(summary["batch"])
             iterations += summary["iterations"]
         batch = ",".join(str(bs) for bs in batchset)
