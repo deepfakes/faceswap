@@ -73,7 +73,6 @@ class DSSIMObjective():
         self.c_1 = (self.k_1 * self.max_value) ** 2
         self.c_2 = (self.k_2 * self.max_value) ** 2
         self.dim_ordering = K.image_data_format()
-        self.backend = K.backend()
 
     @staticmethod
     def __int_shape(input_tensor):
@@ -238,6 +237,10 @@ class PenalizedLoss():  # pylint:disable=too-few-public-methods
         y_true = y_true[..., :-1]
         n_true = y_true * mask
         n_pred = y_pred * mask
+        if isinstance(self._loss_func, DSSIMObjective):
+            # Extract Image Patches in SSIM requires that y_pred be of a known shape, so
+            # specifically reshape the tensor.
+            n_pred = K.reshape(n_pred, K.int_shape(y_pred))
         return self._loss_func(n_true, n_pred)
 
     def _prepare_mask(self, mask):

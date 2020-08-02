@@ -32,7 +32,7 @@ from plugins.train._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
-# TODO PlaidML fix penalized mask loss. Reinvestigate gmsd, convert
+# TODO PlaidML fix penalized mask loss (logcosh). Reinvestigate gmsd, convert
 # TODO Explicit GPU Selection
 # TODO Disallow multiple models in folder
 

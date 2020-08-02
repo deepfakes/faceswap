@@ -69,7 +69,6 @@ class DSSIMObjective(tf.keras.losses.Loss):
         self.c_1 = (self.k_1 * self.max_value) ** 2
         self.c_2 = (self.k_2 * self.max_value) ** 2
         self.dim_ordering = K.image_data_format()
-        self.backend = K.backend()
 
     @staticmethod
     def __int_shape(input_tensor):
