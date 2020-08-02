@@ -544,55 +544,6 @@ class Extract():  # pylint:disable=too-few-public-methods
         return valid_faces
 
 
-class Fix():
-    """ Fix alignments that were impacted by the 'out by one' bug when extracting from video
-
-    TODO This is a temporary job that should be deleted after a period of time.
-    Implemented 2019/12/07
-    """
-    def __init__(self, alignments, arguments):
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def process(self):
-        """ Run the fix process """
-        if not self._check_file_needs_fixing():
-            sys.exit(0)
-        logger.info("[FIXING FRAMES]")
-        self._fix()
-        self.alignments.save()
-
-    def _check_file_needs_fixing(self):
-        """ Check that these alignments are in video format and that the first frame in the "
-        "alignments file does not already start with 1 """
-        retval = True
-        min_frame = min(key for key in self.alignments.data.keys())
-        logger.debug("First frame: '%s'", min_frame)
-        fname = os.path.splitext(min_frame)[0]
-        frame_id = fname.split("_")[-1]
-        if ("_") not in fname or not frame_id.isdigit():
-            logger.info("Alignments file not generated from a video. Nothing to do.")
-            retval = False
-        elif int(frame_id) == 1:
-            logger.info("Alignments file does not require fixing. First frame: '%s'", fname)
-            retval = False
-        logger.debug(retval)
-        return retval
-
-    def _fix(self):
-        """ Renumber frame names, reducing each one by 1 """
-        frame_names = sorted(key for key in self.alignments.data.keys())
-        for old_name in tqdm(frame_names, desc="Fixing Alignments file"):
-            fname, ext = os.path.splitext(old_name)
-            vid_name, new_frame_id = ("_".join(fname.split("_")[:-1]),
-                                      int(fname.split("_")[-1]) - 1)
-            new_name = "{}_{:06d}{}".format(vid_name, new_frame_id, ext)
-            logger.debug("Re-assigning: '%s' > '%s'", old_name, new_name)
-            self.alignments.data[new_name] = self.alignments.data[old_name]
-            del self.alignments.data[old_name]
-
-
 class Merge():
     """ Merge two alignments files into one """
     def __init__(self, alignments, arguments):

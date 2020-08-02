@@ -4,9 +4,8 @@ import sys
 import logging
 
 from .media import AlignmentData
-from .jobs import (Check, Dfl, Draw, Extract, Fix, Merge,  # noqa pylint: disable=unused-import
+from .jobs import (Check, Dfl, Draw, Extract, Merge,  # noqa pylint: disable=unused-import
                    Rename, RemoveAlignments, Sort, Spatial, UpdateHashes)
-from .jobs_manual import Manual  # noqa pylint: disable=unused-import
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -58,9 +57,6 @@ class Alignments():  # pylint:disable=too-few-public-methods
 
         Launches the selected alignments job.
         """
-        if self.args.job == "manual":
-            logger.warning("The 'manual' job is deprecated and will be removed from a future "
-                           "update. Please use the new 'manual' tool.")
         if self.args.job == "update-hashes":
             job = UpdateHashes
         elif self.args.job.startswith("remove-"):
