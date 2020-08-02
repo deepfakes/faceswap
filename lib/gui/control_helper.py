@@ -217,7 +217,6 @@ class ControlPanelOption():
             helptext = helptext[2:].replace("\nL|", "\n - ").replace("\n", "\n\n")
         else:
             helptext = helptext.replace("\n\t", "\n - ").replace("%%", "%")
-        helptext = ". ".join(i.capitalize() for i in helptext.split(". "))
         helptext = self.title + " - " + helptext
         logger.debug("Formatted control help: (name: '%s', help: '%s'", self.name, helptext)
         return helptext
@@ -859,10 +858,8 @@ class ControlBuilder():
                       variable=self.option.tk_var)
             if choice.lower() in help_items:
                 self.helpset = True
-                helptext = help_items[choice.lower()].capitalize()
-                helptext = "{}\n\n - {}".format(
-                    '. '.join(item.capitalize() for item in helptext.split('. ')),
-                    help_intro)
+                helptext = help_items[choice.lower()]
+                helptext = "{}\n\n - {}".format(helptext, help_intro)
                 _get_tooltip(ctl, text=helptext, wraplength=600)
             ctl.pack(anchor=tk.W)
             logger.debug("Added %s option %s", option_type, choice)
