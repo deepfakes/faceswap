@@ -10,6 +10,7 @@ depending on the OS' particular OpenCL implementation.
 import logging
 import os
 import platform
+import sys
 
 from lib.utils import get_backend
 
@@ -25,6 +26,26 @@ try:
     from lib.plaidml_tools import PlaidMLStats as plaidlib  # pylint:disable=ungrouped-imports
 except ImportError:
     plaidlib = None
+
+
+_EXCLUDE_DEVICES = []
+
+
+def set_exclude_devices(devices):
+    """ Add any explicitly selected GPU devices to the global list of devices to be excluded
+    from use by Faceswap.
+
+    Parameters
+    ----------
+    devices: list
+        list of indices corresponding to the GPU devices connected to the computer
+    """
+    logger = logging.getLogger(__name__)
+    logger.debug("Excluding GPU indicies: %s", devices)
+    if not all(idx.isdigit() for idx in devices):
+        logger.error("GPUs passed to the ['-X', '--exclude-gpus'] argument must all be integers.")
+        sys.exit(1)
+    _EXCLUDE_DEVICES.extend(int(idx) for idx in devices)
 
 
 class GPUStats():
@@ -70,6 +91,16 @@ class GPUStats():
     def device_count(self):
         """int: The number of GPU devices discovered on the system. """
         return self._device_count
+
+    @property
+    def cli_devices(self):
+        """ list: List of available devices for use in faceswap's command line arguments """
+        return ["{}: {}".format(idx, device) for idx, device in enumerate(self._devices)]
+
+    @property
+    def exclude_all_devices(self):
+        """ bool: ``True`` if all GPU devices have been explicitly disabled otherwise ``False`` """
+        return all(idx in _EXCLUDE_DEVICES for idx in range(len(self._devices)))
 
     @property
     def _is_plaidml(self):

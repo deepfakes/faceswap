@@ -9,6 +9,8 @@ import sys
 import textwrap
 
 from lib.utils import get_backend
+from lib.gpu_stats import GPUStats
+
 from plugins.plugin_loader import PluginLoader
 
 from .actions import (DirFullPaths, DirOrFileFullPaths, FileFullPaths, FilesFullPaths, MultiOption,
@@ -16,6 +18,7 @@ from .actions import (DirFullPaths, DirOrFileFullPaths, FileFullPaths, FilesFull
 from .launcher import ScriptExecutor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_GPUS = GPUStats().cli_devices
 
 
 class FullHelpArgumentParser(argparse.ArgumentParser):
@@ -158,6 +161,19 @@ class FaceSwapArgs():
             The list of global command line options for all Faceswap commands.
         """
         global_args = list()
+        if _GPUS:
+            global_args.append(dict(
+                opts=("-X", "--exclude-gpus"),
+                dest="exclude_gpus",
+                action=MultiOption,
+                type=str.lower,
+                nargs="+",
+                choices=[str(idx) for idx in range(len(_GPUS))],
+                group="Global Options",
+                help="R|Exclude GPUs from use by Faceswap. Select the number(s) which correspond "
+                     "to any GPU(s) that you do not wish to be made available to Faceswap. "
+                     "Selecting all GPUs here will force Faceswap into CPU mode."
+                     "\nL|{}".format(" \nL|".join(_GPUS))))
         global_args.append(dict(
             opts=("-C", "--configfile"),
             action=FileFullPaths,

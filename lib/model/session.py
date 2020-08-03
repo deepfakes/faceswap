@@ -44,9 +44,10 @@ class KSession():
     """
     def __init__(self, name, model_path, model_kwargs=None, allow_growth=False):
         logger.trace("Initializing: %s (name: %s, model_path: %s, model_kwargs: %s, "
-                     "allow_growth: %s)",
-                     self.__class__.__name__, name, model_path, model_kwargs, allow_growth)
+                     "allow_growth: %s)", self.__class__.__name__, name, model_path, model_kwargs,
+                     allow_growth)
         self._name = name
+        self._backend = get_backend()
         self._session = self._set_session(allow_growth)
         self._model_path = model_path
         self._model_kwargs = model_kwargs
@@ -108,17 +109,23 @@ class KSession():
     def _set_session(self, allow_growth):
         """ Sets the session and graph.
 
-        If the backend is AMD then this does nothing and the global ``Keras`` ``Session``
-        is used
+        Parameters
+        ----------
+        allow_growth: bool, optional
+            Enable the Tensorflow GPU allow_growth configuration option. This option prevents "
+            Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation "
+            "and slower performance. Default: False
         """
-        if get_backend() == "amd":
+        if self._backend == "amd":
             return None
-
-        self.graph = tf.Graph()
-        if allow_growth and get_backend() == "nvidia":
-            for gpu in tf.config.experimental.list_physical_devices('GPU'):
+        if self._backend == "cpu":
+            logger.info("Hiding GPUs from Tensorflow")
+            tf.config.set_visible_devices([], "GPU")
+        elif allow_growth:
+            for gpu in tf.config.experimental.list_physical_devices("GPU"):
                 logger.info("Setting allow growth for GPU: %s", gpu)
                 tf.config.experimental.set_memory_growth(gpu, True)
+        self.graph = tf.Graph()
         try:
             session = tf.compat.v1.Session(graph=tf.Graph())
         except tf_error.InternalError as err:

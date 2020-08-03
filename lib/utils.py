@@ -97,6 +97,18 @@ def get_backend():
     return _FS_BACKEND
 
 
+def set_backend(backend):
+    """ Overide the configured backend with the given backend.
+
+    Parameters
+    ----------
+    backend: ["amd", "cpu", "nvidia"]
+        The backend to set faceswap to
+    """
+    global _FS_BACKEND  # pylint:disable=global-statement
+    _FS_BACKEND = backend.lower()
+
+
 def get_folder(path, make_folder=True):
     """ Return a path to a folder, creating it if it doesn't exist """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
