@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
 # TODO PlaidML fix penalized mask loss (logcosh). Reinvestigate gmsd, convert
-# TODO Explicit GPU Selection
 # TODO Disallow multiple models in folder
 
 
@@ -575,7 +574,7 @@ class Settings():
     def __init__(self, arguments, allow_growth, is_predict):
         logger.debug("Initializing %s: (arguments: %s, allow_growth: %s, is_predict: %s)",
                      self.__class__.__name__, arguments, allow_growth, is_predict)
-        self._set_tf_allow_growth(allow_growth)
+        self._set_tf_settings(allow_growth, arguments.exclude_gpus)
 
         use_mixed_precision = not is_predict and arguments.mixed_precision
         if use_mixed_precision:
@@ -606,20 +605,33 @@ class Settings():
         return self._mixed_precision.LossScaleOptimizer
 
     @classmethod
-    def _set_tf_allow_growth(cls, allow_growth):
-        """ Allow TensorFlow to manage VRAM growth.
+    def _set_tf_settings(cls, allow_growth, devices):
+        """ Specify Devices to place operations on and Allow TensorFlow to manage VRAM growth.
 
         Enables the Tensorflow allow_growth option if requested in the command line arguments
         """
-        if get_backend() != "nvidia" or not allow_growth:
-            logger.debug("Not setting 'allow_growth' (backend: %s, allow_growth: %s)",
-                         get_backend(), allow_growth)
+        if get_backend() == "amd":
+            return  # No settings for AMD
+        if get_backend() == "cpu":
+            logger.verbose("Hiding GPUs from Tensorflow")
+            tf.config.set_visible_devices([], "GPU")
             return
-        logger.debug("Setting Tensorflow 'allow_growth' option")
-        for gpu in tf.config.experimental.list_physical_devices('GPU'):
-            logger.info("Setting allow growth for GPU: %s", gpu)
-            tf.config.experimental.set_memory_growth(gpu, True)
-        logger.debug("Set Tensorflow 'allow_growth' option")
+        if not devices and not allow_growth:
+            logger.debug("Not setting any specific Tensorflow settings")
+            return
+
+        gpus = tf.config.list_physical_devices('GPU')
+        if devices:
+            gpus = [gpus[int(idx)] for idx in devices]
+            logger.debug("Filtering devices to: %s", gpus)
+            tf.config.set_visible_devices(gpus, "GPU")
+
+        if allow_growth:
+            logger.debug("Setting Tensorflow 'allow_growth' option")
+            for gpu in gpus:
+                logger.info("Setting allow growth for GPU: %s", gpu)
+                tf.config.experimental.set_memory_growth(gpu, True)
+            logger.debug("Set Tensorflow 'allow_growth' option")
 
     def _set_keras_mixed_precision(self, use_mixed_precision):
         """ Enable the Keras experimental Mixed Precision API.
