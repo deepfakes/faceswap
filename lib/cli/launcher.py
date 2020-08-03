@@ -60,6 +60,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         max_ver = 2.2
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
+            os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
             os.environ["KMP_AFFINITY"] = "disabled"
             import tensorflow as tf  # pylint:disable=import-outside-toplevel
         except ImportError as err:
