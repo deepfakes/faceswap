@@ -175,6 +175,7 @@ class TorchBatchNorm2D(keras.layers.Layer):
         self.beta = None
         self.moving_mean = None
         self.moving_variance = None
+        self._ones = None
 
     def build(self, input_shape):
         """Creates the layer weights.
@@ -211,6 +212,9 @@ class TorchBatchNorm2D(keras.layers.Layer):
                                                name='moving_variance',
                                                initializer='ones',
                                                trainable=False)
+        broadcast_shape = [1] * len(input_shape)
+        broadcast_shape[self.axis] = input_shape[self.axis]
+        self._ones = K.constant(value=1., shape=broadcast_shape, dtype='float32')
         self.built = True
 
     def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
@@ -233,14 +237,11 @@ class TorchBatchNorm2D(keras.layers.Layer):
         broadcast_shape[self.axis] = input_shape[self.axis]
 
         broadcast_moving_mean = K.reshape(self.moving_mean, broadcast_shape)
-        broadcast_moving_variance = K.reshape(self.moving_variance,
-                                              broadcast_shape)
+        broadcast_moving_variance = K.reshape(self.moving_variance, broadcast_shape)
         broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
         broadcast_beta = K.reshape(self.beta, broadcast_shape)
-        invstd = (
-            K.ones(shape=broadcast_shape, dtype='float32')
-            / K.sqrt(broadcast_moving_variance + self._epsilon_const)
-        )
+
+        invstd = (self._ones / K.sqrt(broadcast_moving_variance + self._epsilon_const))
 
         return((inputs - broadcast_moving_mean)
                * invstd

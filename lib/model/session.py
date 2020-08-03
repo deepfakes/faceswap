@@ -6,11 +6,10 @@ import logging
 import numpy as np
 import tensorflow as tf
 # pylint:disable=no-name-in-module,import-error
-from tensorflow.python import errors_impl as tf_error
 from keras.layers import Activation
 from keras.models import load_model as k_load_model, Model
 
-from lib.utils import get_backend, FaceswapError
+from lib.utils import get_backend
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -48,7 +47,7 @@ class KSession():
                      allow_growth)
         self._name = name
         self._backend = get_backend()
-        self._session = self._set_session(allow_growth)
+        self._set_session(allow_growth)
         self._model_path = model_path
         self._model_kwargs = model_kwargs
         self._model = None
@@ -65,14 +64,9 @@ class KSession():
             The feed to be provided to the model as input. This should be a ``numpy.ndarray``
             for single inputs or a ``list`` of ``numpy.ndarray`` objects for multiple inputs.
         """
-        if self._session is None:
-            if batch_size is None:
-                return self._model.predict(feed)
+        if self._backend == "amd" and batch_size is not None:
             return self._amd_predict_with_optimized_batchsizes(feed, batch_size)
-
-        with self._session.as_default():  # pylint: disable=not-context-manager
-            with self._session.graph.as_default():
-                return self._model.predict(feed, batch_size=batch_size)
+        return self._model.predict(feed, batch_size=batch_size)
 
     def _amd_predict_with_optimized_batchsizes(self, feed, batch_size):
         """ Minimizes the amount of kernels to be compiled when using
@@ -117,26 +111,14 @@ class KSession():
             "and slower performance. Default: False
         """
         if self._backend == "amd":
-            return None
+            return
         if self._backend == "cpu":
             logger.verbose("Hiding GPUs from Tensorflow")
             tf.config.set_visible_devices([], "GPU")
         elif allow_growth:
-            for gpu in tf.config.experimental.list_physical_devices("GPU"):
+            for gpu in tf.config.list_physical_devices("GPU"):
                 logger.info("Setting allow growth for GPU: %s", gpu)
                 tf.config.experimental.set_memory_growth(gpu, True)
-        self.graph = tf.Graph()
-        try:
-            session = tf.compat.v1.Session(graph=tf.Graph())
-        except tf_error.InternalError as err:
-            if "driver version is insufficient" in str(err):
-                msg = ("Your Nvidia Graphics Driver is insufficient for running Faceswap. "
-                       "Please upgrade to the latest version.")
-                raise FaceswapError(msg) from err
-            raise err
-        logger.debug("Created tf.session: (graph: %s, session: %s)",
-                     session.graph, session)
-        return session
 
     def load_model(self):
         """ Loads a model within the correct session.
@@ -147,12 +129,8 @@ class KSession():
         class.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
-        if self._session is None:
-            self._model = k_load_model(self._model_path, **self._model_kwargs)
-        else:
-            with self._session.as_default():  # pylint: disable=not-context-manager
-                with self._session.graph.as_default():
-                    self._model = k_load_model(self._model_path, **self._model_kwargs)
+        self._model = k_load_model(self._model_path, **self._model_kwargs)
+        self._model.make_predict_function()
 
     def define_model(self, function):
         """ Defines a given model in the correct session.
@@ -167,12 +145,7 @@ class KSession():
             ``outputs``. The function that generates these results should be passed in, NOT the
             results themselves, as the function needs to be executed within the correct context.
         """
-        if self._session is None:
-            self._model = Model(*function())
-        else:
-            with self._session.as_default():  # pylint: disable=not-context-manager
-                with self._session.graph.as_default():
-                    self._model = Model(*function())
+        self._model = Model(*function())
 
     def load_model_weights(self):
         """ Load model weights for a defined model inside the correct session.
@@ -182,12 +155,7 @@ class KSession():
         graph from the :attr:`model_path` defined during initialization of this class.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
-        if self._session is None:
-            self._model.load_weights(self._model_path)
-        else:
-            with self._session.as_default():  # pylint: disable=not-context-manager
-                with self._session.graph.as_default():
-                    self._model.load_weights(self._model_path)
+        self._model.load_weights(self._model_path)
 
     def append_softmax_activation(self, layer_index=-1):
         """ Append a softmax activation layer to a model
