@@ -119,7 +119,7 @@ class KSession():
         if self._backend == "amd":
             return None
         if self._backend == "cpu":
-            logger.info("Hiding GPUs from Tensorflow")
+            logger.verbose("Hiding GPUs from Tensorflow")
             tf.config.set_visible_devices([], "GPU")
         elif allow_growth:
             for gpu in tf.config.experimental.list_physical_devices("GPU"):

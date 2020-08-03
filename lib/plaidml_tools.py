@@ -8,11 +8,13 @@
 import json
 import logging
 import os
+import sys
 
 import plaidml
 
 _INIT = False
 _LOGGER = None
+_EXCLUDE_DEVICES = []
 
 
 class PlaidMLStats():
@@ -38,7 +40,8 @@ class PlaidMLStats():
     @property
     def active_devices(self):
         """ Return the active device IDs """
-        return [idx for idx, d_id in enumerate(self.ids) if d_id in plaidml.settings.device_ids]
+        return [idx for idx, d_id in enumerate(self.ids)
+                if d_id in plaidml.settings.device_ids and idx not in _EXCLUDE_DEVICES]
 
     @property
     def device_count(self):
@@ -187,7 +190,7 @@ class PlaidMLStats():
         if not indices:
             _LOGGER.error("Failed to automatically detect your GPU.")
             _LOGGER.error("Please run `plaidml-setup` to set up your GPU.")
-            exit()
+            sys.exit(1)
         max_vram = max([self.vram[idx] for idx in indices])
         if _LOGGER:
             _LOGGER.debug("Max VRAM: %s", max_vram)
@@ -205,13 +208,16 @@ class PlaidMLStats():
         plaidml.settings.device_ids = [selected_gpu]
 
 
-def setup_plaidml(loglevel):
+def setup_plaidml(loglevel, exclude_devices):
     """ Setup plaidml for AMD Cards """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.info("Setting up for PlaidML")
     logger.verbose("Setting Keras Backend to PlaidML")
+    # Add explicitly excluded devices to list. The contents have already been checked in GPUStats
+    if exclude_devices:
+        _EXCLUDE_DEVICES.extend(int(idx) for idx in exclude_devices)
     os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
     plaid = PlaidMLStats(loglevel)
     plaid.load_active_devices()
-    logger.info("Using GPU: %s", [plaid.ids[i] for i in plaid.active_devices])
+    logger.info("Using GPU(s): %s", [plaid.names[i] for i in plaid.active_devices])
     logger.info("Successfully set up for PlaidML")

@@ -42,6 +42,8 @@ def set_exclude_devices(devices):
     """
     logger = logging.getLogger(__name__)
     logger.debug("Excluding GPU indicies: %s", devices)
+    if not devices:
+        return
     if not all(idx.isdigit() for idx in devices):
         logger.error("GPUs passed to the ['-X', '--exclude-gpus'] argument must all be integers.")
         sys.exit(1)
@@ -230,18 +232,21 @@ class GPUStats():
 
     def _get_active_devices(self):
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
-        CUDA_VISIBLE_DEVICES or plaidML) and allocate to :attr:`_active_devices`. """
+        CUDA_VISIBLE_DEVICES, plaidML or command line argumens) and allocate to
+        :attr:`_active_devices`. """
         if self._is_plaidml:
             self._active_devices = self._plaid.active_devices
         else:
-            devices = os.environ.get("CUDA_VISIBLE_DEVICES", None)
             if self._device_count == 0:
-                self._active_devices = list()
-            elif devices is not None:
-                self._active_devices = [int(i) for i in devices.split(",") if devices]
+                self._active_devices = []
             else:
-                self._active_devices = list(range(self._device_count))
-            self._log("debug", "Active GPU Devices: {}".format(self._active_devices))
+                devices = [idx for idx in range(self._device_count) if idx not in _EXCLUDE_DEVICES]
+                env_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+                if env_devices:
+                    env_devices = [int(i) for i in env_devices.split(",")]
+                    devices = [idx for idx in devices if idx in env_devices]
+                self._active_devices = devices
+        self._log("debug", "Active GPU Devices: {}".format(self._active_devices))
 
     def _get_handles(self):
         """ Obtain the internal handle identifiers for the system GPUs and allocate to
@@ -371,7 +376,7 @@ class GPUStats():
             If a GPU is not detected then the **card_id** is returned as ``-1`` and the amount
             of free and total RAM available is fixed to 2048 Megabytes.
         """
-        if self._device_count == 0:
+        if len(self._active_devices) == 0:
             return {"card_id": -1,
                     "device": "No GPU devices found",
                     "free": 2048,
