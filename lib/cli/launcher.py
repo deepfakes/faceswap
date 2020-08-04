@@ -191,6 +191,9 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             set_exclude_devices(arguments.exclude_gpus)
 
         if GPUStats().exclude_all_devices:
+            if self._command == "extract":
+                logger.error("Forcing Extract to CPU mode is not currently supported")
+                exit(0)
             msg = "Switching backend to CPU"
             set_backend("cpu")
             if get_backend() == "amd":
