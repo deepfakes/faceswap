@@ -582,7 +582,8 @@ class Settings():
         else:
             self._mixed_precision = None
 
-        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
+        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision,
+                                                                    bool(arguments.exclude_gpus))
 
         distributed = False if not hasattr(arguments, "distributed") else arguments.distributed
         self._strategy = self._get_strategy(distributed)
@@ -616,6 +617,7 @@ class Settings():
             logger.verbose("Hiding GPUs from Tensorflow")
             tf.config.set_visible_devices([], "GPU")
             return
+
         if not devices and not allow_growth:
             logger.debug("Not setting any specific Tensorflow settings")
             return
@@ -633,7 +635,7 @@ class Settings():
                 tf.config.experimental.set_memory_growth(gpu, True)
             logger.debug("Set Tensorflow 'allow_growth' option")
 
-    def _set_keras_mixed_precision(self, use_mixed_precision):
+    def _set_keras_mixed_precision(self, use_mixed_precision, skip_check):
         """ Enable the Keras experimental Mixed Precision API.
 
         Enables the Keras experimental Mixed Precision API if requested in the user configuration
@@ -644,12 +646,40 @@ class Settings():
         use_mixed_precision: bool
             ``True`` if experimental mixed precision support should be enabled for Nvidia GPUs
             otherwise ``False``.
+        skip_check: bool
+            ``True`` if the mixed precision compatibility check should be skipped, otherwise
+            ``False``.
+
+            There is a bug in Tensorflow that will cause a failure if
+            "set_visible_devices" has been set and mixed_precision is enabled. Specifically in
+            :file:`tensorflow.python.keras.mixed_precision.experimental.device_compatibility_check`
+
+            From docstring: "if list_local_devices() and tf.config.set_visible_devices() are both
+            called, TensorFlow will crash. However, GPU names and compute capabilities cannot be
+            checked without list_local_devices().
+
+            To get around this, we hack in to set a global parameter to indicate the test has
+            already been performed. This is likely to cause some issues, but not as many as
+            guaranteed failure when limiting GPU devices
         """
+        logger.debug("use_mixed_precision: %s, skip_check: %s", use_mixed_precision, skip_check)
         if get_backend() != "nvidia" or not use_mixed_precision:
             logger.debug("Not enabling 'mixed_precision' (backend: %s, use_mixed_precision: %s)",
                          get_backend(), use_mixed_precision)
             return False
-        logger.info("Enabling Mixed Precision Training")
+        logger.info("Enabling Mixed Precision Training.")
+
+        if skip_check:
+            # TODO remove this hacky fix to disable mixed precision compatibility testing if/when
+            # fixed upstream.
+            # pylint:disable=import-outside-toplevel,protected-access
+            from tensorflow.python.keras.mixed_precision.experimental import \
+                device_compatibility_check
+            logger.debug("Overriding tensorflow _logged_compatibility_check parameter. Initial "
+                         "value: %s", device_compatibility_check._logged_compatibility_check)
+            device_compatibility_check._logged_compatibility_check = True
+            logger.debug("New value: %s", device_compatibility_check._logged_compatibility_check)
+
         policy = self._mixed_precision.Policy('mixed_float16')
         self._mixed_precision.set_policy(policy)
         logger.debug("Enabled mixed precision. (Compute dtype: %s, variable_dtype: %s)",

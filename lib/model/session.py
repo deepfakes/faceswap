@@ -130,7 +130,8 @@ class KSession():
         """
         logger.verbose("Initializing plugin model: %s", self._name)
         self._model = k_load_model(self._model_path, **self._model_kwargs)
-        self._model.make_predict_function()
+        if self._backend != "amd":
+            self._model.make_predict_function()
 
     def define_model(self, function):
         """ Defines a given model in the correct session.
