@@ -32,7 +32,6 @@ from plugins.train._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 
-# TODO PlaidML Reinvestigate gmsd
 # TODO Disallow multiple models in folder
 
 
