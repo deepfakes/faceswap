@@ -232,7 +232,7 @@ class GPUStats():
 
     def _get_active_devices(self):
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
-        CUDA_VISIBLE_DEVICES, plaidML or command line argumens) and allocate to
+        CUDA_VISIBLE_DEVICES, plaidML or command line arguments) and allocate to
         :attr:`_active_devices`. """
         if self._is_plaidml:
             self._active_devices = self._plaid.active_devices
