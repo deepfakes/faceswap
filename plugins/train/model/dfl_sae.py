@@ -98,7 +98,7 @@ class Model(ModelBase):
         input_ = Input(shape=input_shape)
         outputs = []
 
-        dims = self.input_shape[-1] * self.encoder_dim
+        dims = self.input_shape[-1] * self.decoder_dim
         var_x = input_
 
         var_x1 = UpscaleBlock(dims * 8, res_block_follows=True)(var_x)
@@ -130,10 +130,10 @@ class Model(ModelBase):
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """
-        return {"{}_encoder_df.h5".format(self.name): "encoder_df",
-                "{}_encoder_liae.h5".format(self.name): "encoder_liae",
-                "{}_intermediate_B.h5".format(self.name): "intermediate_both",
-                "{}_intermediate.h5".format(self.name): "intermediate_b",
-                "{}_decoder.h5".format(self.name): "decoder_both",
-                "{}_decoder_A.h5".format(self.name): "decoder_a",
-                "{}_decoder_B.h5".format(self.name): "decoder_b"}
+        return {"df": {"{}_encoder.h5".format(self.name): "encoder_df",
+                       "{}_decoder_A.h5".format(self.name): "decoder_a",
+                       "{}_decoder_B.h5".format(self.name): "decoder_b"},
+                "liae": {"{}_encoder.h5".format(self.name): "encoder_liae",
+                         "{}_intermediate_B.h5".format(self.name): "intermediate_both",
+                         "{}_intermediate.h5".format(self.name): "intermediate_b",
+                         "{}_decoder.h5".format(self.name): "decoder_both"}}

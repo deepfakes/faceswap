@@ -223,13 +223,11 @@ class ModelBase():
 
     def _update_legacy_models(self):
         """ Load weights from legacy split models into new unified model. """
-        if self._legacy_mapping is None:
+        mapping = self._legacy_mapping()  # pylint:disable=assignment-from-none
+        if mapping is None:
             return
-        if self.name == "dfl_sae" and not any(os.path.isfile(os.path.join(self.model_dir, fname))
-                                              for fname in self._legacy_mapping()):
-            return
-        if self.name != "dfl_sae" and not all(os.path.isfile(os.path.join(self.model_dir, fname))
-                                              for fname in self._legacy_mapping()):
+        mapping = mapping[self.config["architecture"]] if self.name == "dfl_sae" else mapping
+        if not all(os.path.isfile(os.path.join(self.model_dir, fname)) for fname in mapping):
             return
         archive_dir = "{}_TF1_Archived".format(self.model_dir)
         if os.path.exists(archive_dir):
@@ -243,7 +241,7 @@ class ModelBase():
         os.rename(self.model_dir, archive_dir)
         os.mkdir(self.model_dir)
         new_model = self.build_model(self._get_inputs())
-        for model_name, layer_name in self._legacy_mapping().items():
+        for model_name, layer_name in mapping.items():
             logger.info("Updating legacy weights from '%s'...", model_name)
             old_model = load_model(os.path.join(archive_dir, model_name), compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
@@ -653,7 +651,7 @@ class Settings():
             "set_visible_devices" has been set and mixed_precision is enabled. Specifically in
             :file:`tensorflow.python.keras.mixed_precision.experimental.device_compatibility_check`
 
-            From docstring: "if list_local_devices() and tf.config.set_visible_devices() are both
+            From doc-string: "if list_local_devices() and tf.config.set_visible_devices() are both
             called, TensorFlow will crash. However, GPU names and compute capabilities cannot be
             checked without list_local_devices().
 
