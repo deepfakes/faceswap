@@ -24,6 +24,7 @@ model.initializers module
    
    ~lib.model.initializers.ConvolutionAware
    ~lib.model.initializers.ICNR
+   ~lib.model.initializers.compute_fans
 
 .. automodule:: lib.model.initializers
    :members:

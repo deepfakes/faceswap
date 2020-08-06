@@ -45,8 +45,8 @@ def compute_fans(shape, data_format='channels_last'):
         fan_out = shape[1]
     elif len(shape) in {3, 4, 5}:
         # Assuming convolution kernels (1D, 2D or 3D).
-        # TH kernel shape: (depth, input_depth, ...)
-        # TF kernel shape: (..., input_depth, depth)
+        # Theano kernel shape: (depth, input_depth, ...)
+        # Tensorflow kernel shape: (..., input_depth, depth)
         if data_format == 'channels_first':
             receptive_field_size = np.prod(shape[2:])
             fan_in = shape[1] * receptive_field_size
@@ -71,8 +71,9 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
     ----------
     initializer: :class:`keras.initializers.Initializer`
         The initializer used for sub kernels (orthogonal, glorot uniform, etc.)
-    scale: int
-        scaling factor of sub pixel convolution (up sampling from 8x8 to 16x16 is scale 2)
+    scale: int, optional
+        scaling factor of sub pixel convolution (up sampling from 8x8 to 16x16 is scale 2).
+        Default: `2`
 
     Returns
     -------
@@ -180,14 +181,14 @@ class ConvolutionAware(initializers.Initializer):
 
     Parameters
     ----------
-    eps_std: float
+    eps_std: float, optional
         The Standard deviation for the random normal noise used to break symmetry in the inverse
-        Fourier transform.
+        Fourier transform. Default: 0.05
     seed: int, optional
         Used to seed the random generator. Default: ``None``
     initialized: bool, optional
         This should always be set to ``False``. To avoid Keras re-calculating the values every time
-        the mode is loaded, this parameter is internally set on first time initialization.
+        the model is loaded, this parameter is internally set on first time initialization.
         Default:``False``
 
     Returns
@@ -222,9 +223,9 @@ class ConvolutionAware(initializers.Initializer):
         tensor
             The modified kernel weights
         """
-        # TODO Tensorflow appears to pass in a `tensorflow.python.framework.dtypes.DType` object
-        # which causes this to error, so currently just reverts to default dtype if a string is not
-        # passed in.
+        # TODO Tensorflow appears to pass in a :class:`tensorflow.python.framework.dtypes.DType`
+        # object which causes this to error, so currently just reverts to default dtype if a string
+        # is not passed in.
         if self.initialized:   # Avoid re-calculating initializer when loading a saved model
             return self.he_uniform(shape, dtype=dtype)
         dtype = K.floatx() if not isinstance(dtype, str) else dtype
