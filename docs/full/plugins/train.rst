@@ -12,8 +12,6 @@ trainer._base module
 .. autosummary::
    :nosignatures:
    
-   ~plugins.train.trainer._base.Batcher
-   ~plugins.train.trainer._base.PingPong
    ~plugins.train.trainer._base.Samples
    ~plugins.train.trainer._base.Timelapse
    ~plugins.train.trainer._base.TrainerBase
