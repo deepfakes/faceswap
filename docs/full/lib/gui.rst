@@ -30,6 +30,13 @@ custom\_widgets module
    :undoc-members:
    :show-inheritance:
 
+display module
+==============
+.. automodule:: lib.gui.display
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 project module
 ==============
 

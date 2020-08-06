@@ -62,3 +62,11 @@ mask._base module
    :members:
    :undoc-members:
    :show-inheritance:
+
+vgg\_face2\_keras module
+------------------------
+
+.. automodule:: plugins.extract.recognition.vgg_face2_keras
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -60,12 +60,10 @@ model.losses module
 
    ~lib.model.losses.DSSIMObjective
    ~lib.model.losses.PenalizedLoss
-   ~lib.model.losses.gaussian_blur
-   ~lib.model.losses.generalized_loss
-   ~lib.model.losses.gmsd_loss
-   ~lib.model.losses.gradient_loss
-   ~lib.model.losses.l_inf_norm
-   ~lib.model.losses.scharr_edges
+   ~lib.model.losses.GeneralizedLoss
+   ~lib.model.losses.GMSDLoss
+   ~lib.model.losses.GradientLoss
+   ~lib.model.losses.LInfNorm
 
 .. automodule:: lib.model.losses
    :members:
@@ -91,14 +89,6 @@ model.normalization module
    ~lib.model.normalization.InstanceNormalization
    
 .. automodule:: lib.model.normalization
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-model.optimizers module
------------------------
-
-.. automodule:: lib.model.optimizers
    :members:
    :undoc-members:
    :show-inheritance:
