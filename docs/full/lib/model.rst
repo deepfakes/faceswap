@@ -54,19 +54,23 @@ model.layers module
 model.losses module
 -------------------
 
+The losses listed here are generated from the docstrings in :mod:`lib.model.losses_tf`, however
+the functions are excactly the same for :mod:`lib.model.losses_plaid`. The correct loss module will
+be imported as :mod:`lib.model.losses` depending on the backend in use.
+
 .. rubric:: Module Summary
 
 .. autosummary::
    :nosignatures:
 
-   ~lib.model.losses.DSSIMObjective
-   ~lib.model.losses.PenalizedLoss
-   ~lib.model.losses.GeneralizedLoss
-   ~lib.model.losses.GMSDLoss
-   ~lib.model.losses.GradientLoss
-   ~lib.model.losses.LInfNorm
+   ~lib.model.losses_tf.DSSIMObjective
+   ~lib.model.losses_tf.PenalizedLoss
+   ~lib.model.losses_tf.GeneralizedLoss
+   ~lib.model.losses_tf.GMSDLoss
+   ~lib.model.losses_tf.GradientLoss
+   ~lib.model.losses_tf.LInfNorm
 
-.. automodule:: lib.model.losses
+.. automodule:: lib.model.losses_tf
    :members:
    :undoc-members:
    :show-inheritance:
