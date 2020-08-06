@@ -1,5 +1,5 @@
 #!/usr/bin python3
-""" The pop-up window of the Faceswap GUI for configuration settings """
+""" The pop-up window of the Faceswap GUI for the setting of configuration options. """
 
 from collections import OrderedDict
 from configparser import ConfigParser

@@ -45,6 +45,13 @@ display\_analysis module
    :undoc-members:
    :show-inheritance:
 
+popup_configure module
+======================
+.. automodule:: lib.gui.popup_configure
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 project module
 ==============
 
