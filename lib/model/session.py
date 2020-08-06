@@ -65,7 +65,7 @@ class KSession():
         Parameters
         ----------
         feed: numpy.ndarray or list
-            The feed to be provided to the model as input. This should be a :classa:`numpy.ndarray`
+            The feed to be provided to the model as input. This should be a :class:`numpy.ndarray`
             for single inputs or a `list` of :class:`numpy.ndarray` objects for multiple inputs.
         """
         if self._backend == "amd" and batch_size is not None:

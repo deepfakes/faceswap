@@ -165,7 +165,7 @@ class GPUStats():
             if get_backend() == "amd":
                 self._log("debug", "AMD Detected. Using plaidMLStats")
                 loglevel = "INFO" if self._logger is None else self._logger.getEffectiveLevel()
-                self._plaid = plaidlib(loglevel=loglevel, log=log)
+                self._plaid = plaidlib(log_level=loglevel, log=log)
             elif IS_MACOS:
                 self._log("debug", "macOS Detected. Using pynvx")
                 try:
