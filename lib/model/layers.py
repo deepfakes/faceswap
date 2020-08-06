@@ -16,7 +16,7 @@ from lib.utils import get_backend
 
 if get_backend() == "amd":
     from lib.plaidml_utils import pad
-    from keras.utils import conv_utils
+    from keras.utils import conv_utils  # pylint:disable=ungrouped-imports
 else:
     from tensorflow import pad
     from tensorflow.python.keras.utils import conv_utils
@@ -258,12 +258,12 @@ class SubPixelUpscaling(Layer):
         """
         pass  # pylint: disable=unnecessary-pass
 
-    def call(self, input_tensor, **kwargs):  # pylint:disable=unused-argument
+    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
         """This is where the layer's logic lives.
 
         Parameters
         ----------
-        input_tensor: tensor
+        inputs: tensor
             Input tensor, or list/tuple of input tensors
         kwargs: dict
             Additional keyword arguments. Unused
@@ -273,7 +273,7 @@ class SubPixelUpscaling(Layer):
         tensor
             A tensor or list/tuple of tensors
         """
-        retval = self._depth_to_space(input_tensor, self.scale_factor, self.data_format)
+        retval = self._depth_to_space(inputs, self.scale_factor, self.data_format)
         return retval
 
     def compute_output_shape(self, input_shape):
@@ -316,12 +316,12 @@ class SubPixelUpscaling(Layer):
         return out
 
     @staticmethod
-    def _postprocess_conv2d_output(input_tensor, data_format):
+    def _postprocess_conv2d_output(inputs, data_format):
         """Transpose and cast the output from conv2d if needed.
 
         Parameters
         ----------
-        input_tensor: tensor
+        inputs: tensor
             The input that requires transposing and casting
         data_format: str
             `"channels_last"` or `"channels_first"`
@@ -333,19 +333,19 @@ class SubPixelUpscaling(Layer):
         """
 
         if data_format == "channels_first":
-            input_tensor = tf.transpose(input_tensor, (0, 3, 1, 2))
+            inputs = tf.transpose(inputs, (0, 3, 1, 2))
 
         if K.floatx() == "float64":
-            input_tensor = tf.cast(input_tensor, "float64")
-        return input_tensor
+            inputs = tf.cast(inputs, "float64")
+        return inputs
 
     @staticmethod
-    def _preprocess_conv2d_input(input_tensor, data_format):
+    def _preprocess_conv2d_input(inputs, data_format):
         """Transpose and cast the input before the conv2d.
 
         Parameters
         ----------
-        input_tensor: tensor
+        inputs: tensor
             The input that requires transposing and casting
         data_format: str
             `"channels_last"` or `"channels_first"`
@@ -355,14 +355,14 @@ class SubPixelUpscaling(Layer):
         tensor
             The transposed and cast input tensor
         """
-        if K.dtype(input_tensor) == "float64":
-            input_tensor = tf.cast(input_tensor, "float32")
+        if K.dtype(inputs) == "float64":
+            inputs = tf.cast(inputs, "float32")
         if data_format == "channels_first":
             # Tensorflow uses the last dimension as channel dimension, instead of the 2nd one.
             # Theano input shape: (samples, input_depth, rows, cols)
             # Tensorflow input shape: (samples, rows, cols, input_depth)
-            input_tensor = tf.transpose(input_tensor, (0, 2, 3, 1))
-        return input_tensor
+            inputs = tf.transpose(inputs, (0, 2, 3, 1))
+        return inputs
 
     def get_config(self):
         """Returns the config of the layer.
@@ -542,13 +542,15 @@ class _GlobalPooling2D(Layer):
             return (input_shape[0], input_shape[3])
         return (input_shape[0], input_shape[1])
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
         """ Override to call the layer.
 
         Parameters
         ----------
         inputs: Tensor
             The input to the layer
+        kwargs: dict
+            Additional keyword arguments
         """
         raise NotImplementedError
 
@@ -562,7 +564,7 @@ class _GlobalPooling2D(Layer):
 class GlobalMinPooling2D(_GlobalPooling2D):
     """Global minimum pooling operation for spatial data. """
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
         """This is where the layer's logic lives.
 
         Parameters
@@ -587,7 +589,7 @@ class GlobalMinPooling2D(_GlobalPooling2D):
 class GlobalStdDevPooling2D(_GlobalPooling2D):
     """Global standard deviation pooling operation for spatial data. """
 
-    def call(self, inputs):
+    def call(self, inputs, **kwargs):
         """This is where the layer's logic lives.
 
         Parameters
