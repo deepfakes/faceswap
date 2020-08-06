@@ -50,9 +50,8 @@ class InstanceNormalization(Layer):
     ----------
         - Layer Normalization - https://arxiv.org/abs/1607.06450
 
-        - Instance Normalization: The Missing Ingredient for Fast Stylization -
-    https://arxiv.org/abs/1607.08022
-
+        - Instance Normalization: The Missing Ingredient for Fast Stylization - \
+        https://arxiv.org/abs/1607.08022
     """
     def __init__(self,
                  axis=None,
@@ -162,6 +161,20 @@ class InstanceNormalization(Layer):
         return normed
 
     def get_config(self):
+        """Returns the config of the layer.
+
+        A layer config is a Python dictionary (serializable) containing the configuration of a
+        layer. The same layer can be reinstated later (without its trained weights) from this
+        configuration.
+
+        The configuration of a layer does not include connectivity information, nor the layer
+        class name. These are handled by `Network` (one layer of abstraction above).
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
         config = {
             "axis": self.axis,
             "epsilon": self.epsilon,
