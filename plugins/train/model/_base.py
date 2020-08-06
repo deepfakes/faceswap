@@ -363,7 +363,7 @@ class ModelBase():
                            "or mixed_precision training, so has been disabled. If you wish to "
                            "enable clipnorm, then you must disable these options.")
             clipnorm = False
-        if clipnorm and get_backend() != "amd":
+        if clipnorm and get_backend() == "amd":
             # TODO add clipnorm in for plaidML when it is fixed upstream. Still not fixed in
             # release 0.7.0.
             logger.warning("Due to a bug in plaidML, clipnorm cannot be used on AMD backends so "
