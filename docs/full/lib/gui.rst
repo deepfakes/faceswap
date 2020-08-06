@@ -37,6 +37,14 @@ display module
    :undoc-members:
    :show-inheritance:
 
+
+display\_analysis module
+========================
+.. autoclass:: lib.gui.display_analysis.Analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 project module
 ==============
 

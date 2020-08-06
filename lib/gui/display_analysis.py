@@ -47,7 +47,12 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def set_vars(self):
-        """ Set the analysis specific variables to :attr:`vars`.
+        """ Set the analysis specific tkinter variables to :attr:`vars`.
+
+        The tracked variables are the global variables that:
+            * Trigger when a graph refresh has been requested.
+            * Trigger training is commenced or halted
+            * The variable holding the location of the current Tensorboard log folder.
 
         Returns
         -------
@@ -63,12 +68,12 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         """ Callback for when the analysis tab is selected.
 
         If Faceswap is currently training a model, then update the statistics with the latest
-        values
+        values.
         """
         if not self.vars["is_training"].get():
             return
         logger.debug("Analysis update callback received")
-        self.reset_session()
+        self._reset_session()
 
     def _get_main_frame(self):
         """ Get the main frame to the sub-notebook to hold stats and session data.
@@ -106,14 +111,14 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             logger.debug("Analyis tab not selected. Not updating stats")
             return
         logger.debug("Analysis update callback received")
-        self.reset_session()
+        self._reset_session()
 
     def _remove_current_session(self, *args):  # pylint:disable=unused-argument
         """ Remove the current session data on a is_training=False callback """
         if self.vars["is_training"].get():
             return
         logger.debug("Remove current training Analysis callback received")
-        self.clear_session()
+        self._clear_session()
 
     def _reset_session_info(self):
         """ Reset the session info status to default """
@@ -128,7 +133,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         folder = self.vars["analysis_folder"].get()
         if not folder or not os.path.isdir(folder):
             logger.debug("Not a valid folder")
-            self.clear_session()
+            self._clear_session()
             return
 
         state_files = [fname
@@ -136,7 +141,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
                        if fname.endswith("_state.json")]
         if not state_files:
             logger.debug("No state files found in folder: '%s'", folder)
-            self.clear_session()
+            self._clear_session()
             return
 
         state_file = state_files[0]
@@ -144,7 +149,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             logger.debug("Multiple models found. Selecting: '%s'", state_file)
 
         if self._thread is None:
-            self.load_session(full_path=os.path.join(folder, state_file))
+            self._load_session(full_path=os.path.join(folder, state_file))
 
     @classmethod
     def _get_model_name(cls, model_dir, state_file):
@@ -189,7 +194,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             result = self._thread.get_result()
             if result is None:
                 logger.debug("No result from session summary. Clearing analysis view")
-                self.clear_session()
+                self._clear_session()
                 return
             self._summary = result
             self._thread = None
@@ -202,8 +207,8 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         """ Summarize data in a LongRunningThread as it can take a while """
         return session.full_summary
 
-    def clear_session(self):
-        """ Clear sessions stats """
+    def _clear_session(self):
+        """ Clear the currently displayed analysis data from the Tree-View. """
         logger.debug("Clearing session")
         if self._session is None:
             logger.trace("No session loaded. Returning")
@@ -214,7 +219,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         self._reset_session_info()
         self._session = None
 
-    def load_session(self, full_path=None):
+    def _load_session(self, full_path=None):
         """ Load the session statistics from a model's state file into the Analysis tab of the GUI
         display window.
 
@@ -231,7 +236,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             full_path = FileHandler("filename", "state").retfile
             if not full_path:
                 return
-        self.clear_session()
+        self._clear_session()
         logger.debug("state_file: '%s'", full_path)
         model_dir, state_file = os.path.split(full_path)
         logger.debug("model_dir: '%s'", model_dir)
@@ -245,10 +250,11 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             msg = "...{}".format(msg[-70:])
         self._set_session_summary(msg)
 
-    def reset_session(self):
-        """ Reset currently training sessions """
+    def _reset_session(self):
+        """ Reset currently training sessions. Clears the current session and loads in the latest
+        data. """
         logger.debug("Reset current training session")
-        self.clear_session()
+        self._clear_session()
         session = get_config().session
         if not session.initialized:
             logger.debug("Training not running")
@@ -262,8 +268,8 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         self._session.load_state_file()
         self._set_session_summary(msg)
 
-    def save_session(self):
-        """ Save sessions stats to csv """
+    def _save_session(self):
+        """ Launch a file dialog pop-up to save the current analysis data to a CSV file. """
         logger.debug("Saving session")
         if not self._summary:
             logger.debug("No summary data loaded. Nothing to save")
@@ -301,7 +307,7 @@ class _Options():  # pylint:disable=too-few-public-methods
         """ Add the option buttons """
         for btntype in ("clear", "save", "load"):
             logger.debug("Adding button: '%s'", btntype)
-            cmd = getattr(self._parent, "{}_session".format(btntype))
+            cmd = getattr(self._parent, "_{}_session".format(btntype))
             btn = ttk.Button(self._parent.optsframe,
                              image=get_images().icons[btntype],
                              command=cmd)
