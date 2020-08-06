@@ -61,18 +61,18 @@ def _get_name(name):
 #  << CONVOLUTIONS >>
 class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods
     """ A standard Keras Convolution 2D layer with parameters updated to be more appropriate for
-     Faceswap architecture.
+    Faceswap architecture.
 
-    Parameters are the same, with the same defaults, as a standard :class:``keras.layers.Conv2D``
-    except where listed below. The default initializer is updated to he_uniform or convolutional
-    aware based on user config settings.
+    Parameters are the same, with the same defaults, as a standard :class:`keras.layers.Conv2D`
+    except where listed below. The default initializer is updated to `he_uniform` or `convolutional
+    aware` based on user configuration settings.
 
     Parameters
     ----------
     padding: str, optional
         One of `"valid"` or `"same"` (case-insensitive). Default: `"same"`. Note that `"same"` is
         slightly inconsistent across backends with `strides` != 1, as described
-        [here](https://github.com/keras-team/keras/pull/9473#issuecomment-372166860)
+        `here <https://github.com/keras-team/keras/pull/9473#issuecomment-372166860/>`_.
     check_icnr_init: `bool`, optional
         ``True`` if the user configuration options should be checked to apply ICNR initialization
         to the layer. This should only be passed in from :class:`UpscaleBlock` layers.
@@ -121,7 +121,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
     The Convolution 2D layer uses default parameters to be more appropriate for Faceswap
     architecture.
 
-    Parameters are the same, with the same defaults, as a standard :class:``keras.layers.Conv2D``
+    Parameters are the same, with the same defaults, as a standard :class:`keras.layers.Conv2D`
     except where listed below. The default initializer is updated to he_uniform or convolutional
     aware based on user config settings.
 
@@ -138,7 +138,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
     padding: str, optional
         One of `"valid"` or `"same"` (case-insensitive). Default: `"same"`. Note that `"same"` is
         slightly inconsistent across backends with `strides` != 1, as described
-        [here](https://github.com/keras-team/keras/pull/9473#issuecomment-372166860)
+        `here <https://github.com/keras-team/keras/pull/9473#issuecomment-372166860/>`_.
     kwargs: dict
         Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
     """
@@ -202,7 +202,7 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         ``True`` if instance normalization should be applied after the convolutional layer.
         Default: ``False``
     res_block_follows: bool, optional
-        If a residual block will follow this layer, then this should be set to `True` to add a
+        If a residual block will follow this layer, then this should be set to ``True`` to add a
         leaky ReLu after the convolutional layer. Default: ``False``
     kwargs: dict
         Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
@@ -369,7 +369,7 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
         ``True`` if instance normalization should be applied after the convolutional layer.
         Default: ``False``
     res_block_follows: bool, optional
-        If a residual block will follow this layer, then this should be set to `True` to add
+        If a residual block will follow this layer, then this should be set to ``True`` to add
         a leaky ReLu after the convolutional layer. Default: ``False``
     kwargs: dict
         Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
@@ -449,7 +449,7 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     interpolation: ["nearest", "bilinear"], optional
         Interpolation to use for up-sampling. Default: `"bilinear"`
     res_block_follows: bool, optional
-        If a residual block will follow this layer, then this should be set to `True` to add
+        If a residual block will follow this layer, then this should be set to ``True`` to add
         a leaky ReLu after the convolutional layer. Default: ``False``
     scale_factor: int, optional
         The amount to upscale the image. Default: `2`

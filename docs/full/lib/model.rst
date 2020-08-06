@@ -78,6 +78,20 @@ be imported as :mod:`lib.model.losses` depending on the backend in use.
 model.nn_blocks module
 ----------------------
 
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~lib.model.nn_blocks.Conv2D
+   ~lib.model.nn_blocks.Conv2DBlock
+   ~lib.model.nn_blocks.Conv2DOutput
+   ~lib.model.nn_blocks.ResidualBlock
+   ~lib.model.nn_blocks.SeparableConv2DBlock
+   ~lib.model.nn_blocks.Upscale2xBlock
+   ~lib.model.nn_blocks.UpscaleBlock
+   ~lib.model.nn_blocks.set_config
+
 .. automodule:: lib.model.nn_blocks
    :members:
    :undoc-members:
