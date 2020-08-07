@@ -238,13 +238,13 @@ class TrainerBase():
         logger.trace("Updating TensorBoard log")
         logs = {log[0]: log[1]
                 for log in zip(self._model.state.loss_names, loss)}
-        self._tensorboard.on_train_batch_end(self._model.state.iterations, logs=logs)
+        self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
 
     def _collate_and_store_loss(self, loss):
         """ Collate the loss into totals for each side.
 
         The losses are then into a total for each side. Loss totals are added to
-        :attr:`model.history` to track the loss drop per save iteration for backup purposes.
+        :attr:`model.state._history` to track the loss drop per save iteration for backup purposes.
 
         Parameters
         ----------
@@ -258,8 +258,7 @@ class TrainerBase():
         """
         split = len(loss) // 2
         combined_loss = [sum(loss[:split]), sum(loss[split:])]
-        self._model.history[0].append(combined_loss[0])
-        self._model.history[1].append(combined_loss[1])
+        self._model.add_history(combined_loss)
         logger.trace("original loss: %s, comibed_loss: %s", loss, combined_loss)
         return combined_loss
 

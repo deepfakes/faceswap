@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-""" Base class for Models. ALL Models should at least inherit from this class
+"""
+Base class for Models. ALL Models should at least inherit from this class.
 
-    When inheriting model_data should be a list of NNMeta objects.
-    See the class for details.
+See :mod:`~plugins.train.model.original` for an annotated example for how to create model plugins.
 """
 import logging
 import os
@@ -35,11 +35,14 @@ _CONFIG = None
 # TODO Disallow multiple models in folder
 
 
-def KerasModel(inputs, outputs, name=None):  # pylint:disable=invalid-name
+def KerasModel(inputs, outputs, name):  # pylint:disable=invalid-name
     """ wrapper for :class:`keras.models.Model`.
 
-    There are some minor foibles between keras 2.2 and tensorflow.keras, so this catches potential
-    issues and fixes prior to returning the requested model.
+    There are some minor foibles between Keras 2.2 and the Tensorflow version of Keras, so this
+    catches potential issues and fixes prior to returning the requested model.
+
+    All models created within plugins should use this method, and should not call keras directly
+    for a model.
 
     Parameters
     ----------
@@ -64,7 +67,7 @@ def KerasModel(inputs, outputs, name=None):  # pylint:disable=invalid-name
 
 
 class ModelBase():
-    """ Base class that all models should inherit from.
+    """ Base class that all model plugins should inherit from.
 
     Parameters
     ----------
@@ -74,10 +77,24 @@ class ModelBase():
         The arguments that were passed to the train or convert process as generated from
         Faceswap's command line arguments
     training_image_size: int, optional
-        The size of the training images in the training folder. Default: 256
+        The size of the training images in the training folder. Default: `256`
     predict: bool, optional
         ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
         for training. Default: ``False``
+
+    Attributes
+    ----------
+    input_shape: tuple or list
+        A `tuple` of `ints` defining the shape of the faces that the model takes as input. This
+        should be overridden by model plugins in their :func:`__init__` function. If the input size
+        is the same for both sides of the model, then this can be a single 3 dimensional `tuple`.
+        If the inputs have different sizes for `"A"` and `"B"` this should be a `list` of 2 3
+        dimensional shape `tuples`, 1 for each side respectively.
+    trainer: str
+        Currently there is only one trainer available (`"original"`), so at present this attribute
+        can be ignored. If/when more trainers are added, then this attribute should be overridden
+        with the trainer name that a model requires in the model plugin's
+        :func:`__init__` function.
     """
     def __init__(self, model_dir, arguments, training_image_size=256, predict=False):
         logger.debug("Initializing ModelBase (%s): (model_dir: '%s', arguments: %s, "
@@ -90,7 +107,6 @@ class ModelBase():
         self._args = arguments
         self._is_predict = predict
         self._model = None
-        self.history = [[], []]  # Loss histories per save iteration
 
         self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._load_config()
@@ -100,13 +116,13 @@ class ModelBase():
                                 "Mask to use. Please select a mask or disable Penalized Mask "
                                 "Loss.")
 
-        self._io = IO(self, model_dir, self._is_predict)
-        self._settings = Settings(self._args, self.config["allow_growth"], self._is_predict)
-        self.state = State(model_dir,
-                           self.name,
-                           self._config_changeable_items,
-                           False if self._is_predict else self._args.no_logs,
-                           training_image_size)
+        self._io = _IO(self, model_dir, self._is_predict)
+        self._settings = _Settings(self._args, self.config["allow_growth"], self._is_predict)
+        self._state = State(model_dir,
+                            self.name,
+                            self._config_changeable_items,
+                            False if self._is_predict else self._args.no_logs,
+                            training_image_size)
 
         if self._io.multiple_models_in_folder:
             deprecation_warning("Support for multiple model types within the same folder",
@@ -116,7 +132,7 @@ class ModelBase():
 
     @property
     def model(self):
-        """:class:`Keras.models.Model: The compiled model for this plugin. """
+        """:class:`Keras.models.Model`: The compiled model for this plugin. """
         return self._model
 
     @property
@@ -130,8 +146,8 @@ class ModelBase():
         """ float: The ratio of the training image to crop out and train on. """
         coverage_ratio = self.config.get("coverage", 62.5) / 100
         logger.debug("Requested coverage_ratio: %s", coverage_ratio)
-        cropped_size = (self.state.training_size * coverage_ratio) // 2 * 2
-        retval = cropped_size / self.state.training_size
+        cropped_size = (self._state.training_size * coverage_ratio) // 2 * 2
+        retval = cropped_size / self._state.training_size
         logger.debug("Final coverage_ratio: %s", retval)
         return retval
 
@@ -142,7 +158,8 @@ class ModelBase():
 
     @property
     def config(self):
-        """ dict: The configuration dictionary for current plugin. """
+        """ dict: The configuration dictionary for current plugin, as set by the user's
+        configuration settings. """
         global _CONFIG  # pylint: disable=global-statement
         if not _CONFIG:
             model_name = self._config_section
@@ -167,7 +184,7 @@ class ModelBase():
     @property
     def iterations(self):
         """ int: The total number of iterations that the model has trained. """
-        return self.state.iterations
+        return self._state.iterations
 
     # Private properties
     @property
@@ -181,6 +198,11 @@ class ModelBase():
         """ dict: The configuration options that can be updated after the model has already been
             created. """
         return Config(self._config_section, configfile=self._configfile).changeable_items
+
+    @property
+    def state(self):
+        """:class:`State`: The state settings for the current plugin. """
+        return self._state
 
     def _load_config(self):
         """ Load the global config for reference in :attr:`config` and set the faceswap blocks
@@ -196,20 +218,23 @@ class ModelBase():
                             for key in nn_block_keys})
 
     def build(self):
-        """ Build the model.
+        """ Build the model and assign to :attr:`model`.
 
         Within the defined strategy scope, either builds the model from scratch or loads an
-        existing model if one exists. The model is then compiled with the optimizer and chosen
-        loss function(s), Finally, a model summary is outputted to the logger at verbose level.
+        existing model if one exists.
 
-        The compiled model is allocated to :attr:`_model`.
+        If running inference, then the model is built only for the required side to perform the
+        swap function, otherwise  the model is then compiled with the optimizer and chosen
+        loss function(s).
+
+        Finally, a model summary is outputted to the logger at verbose level.
         """
         self._update_legacy_models()
         with self._settings.strategy_scope():
             if self._io.model_exists:
                 model = self._io._load()  # pylint:disable=protected-access
                 if self._is_predict:
-                    inference = Inference(model, self._args.swap_model)
+                    inference = _Inference(model, self._args.swap_model)
                     self._model = inference.model
                 else:
                     self._model = model
@@ -222,12 +247,12 @@ class ModelBase():
             self._output_summary()
 
     def _update_legacy_models(self):
-        """ Load weights from legacy split models into new unified model. """
-        mapping = self._legacy_mapping()  # pylint:disable=assignment-from-none
-        if mapping is None:
+        """ Load weights from legacy split models into new unified model, archiving old model files
+        to a new folder. """
+        if self._legacy_mapping() is None:
             return
-        mapping = mapping[self.config["architecture"]] if self.name == "dfl_sae" else mapping
-        if not all(os.path.isfile(os.path.join(self.model_dir, fname)) for fname in mapping):
+        if not all(os.path.isfile(os.path.join(self.model_dir, fname))
+                   for fname in self._legacy_mapping()):
             return
         archive_dir = "{}_TF1_Archived".format(self.model_dir)
         if os.path.exists(archive_dir):
@@ -241,7 +266,7 @@ class ModelBase():
         os.rename(self.model_dir, archive_dir)
         os.mkdir(self.model_dir)
         new_model = self.build_model(self._get_inputs())
-        for model_name, layer_name in mapping.items():
+        for model_name, layer_name in self._legacy_mapping().items():
             logger.info("Updating legacy weights from '%s'...", model_name)
             old_model = load_model(os.path.join(archive_dir, model_name), compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
@@ -252,7 +277,7 @@ class ModelBase():
         filename = self._io._filename  # pylint:disable=protected-access
         logger.info("Saving Tensorflow 2.x model to '%s'", filename)
         new_model.save(filename)
-        self.state.save()
+        self._state.save()
 
     def _validate_input_shape(self):
         """ Validate that the input shape is either a single shape tuple of 3 dimensions or
@@ -273,12 +298,8 @@ class ModelBase():
         Returns
         -------
         list
-            A list of :class:`keras.layers.Input` tensors. If just a face is being fed in then this
-            will be a list of 2 tensors (one for each side) each of shape :attr:`input_shape`. If a
-            mask is to be passed into the model, then the list will contain 2 sub-lists (one for
-            each side), with each sub-list containing the input tenor for the face of
-            :attr:`input_shape` and the input tensor for the mask, with the same shape as the face,
-            but with just a single channel.
+            A list of :class:`keras.layers.Input` tensors. This will be a list of 2 tensors (one
+            for each side) each of shapes :attr:`input_shape`.
         """
         logger.debug("Getting inputs")
         if len(self.input_shape) == 3:
@@ -296,13 +317,8 @@ class ModelBase():
         Parameters
         ----------
         inputs: list
-            The inputs to the model as returned from the :func:`_get_inputs`. This will be a list
-            of :class:`keras.layers.Input` tensors. If just a face is being fed in then this will
-            be a list of 2 tensors (one for each side) each of shape :attr:`input_shape`. If a mask
-            is to be passed into the model, then the list will contain 2 sub-lists (one for each
-            side), with each sub-list containing the input tenor for the face of
-            :attr:`input_shape` and the input tensor for the mask, with the same shape as the face,
-            but with just a single channel.
+            A list of :class:`keras.layers.Input` tensors. This will be a list of 2 tensors (one
+            for each side) each of shapes :attr:`input_shape`.
         """
         raise NotImplementedError
 
@@ -317,22 +333,24 @@ class ModelBase():
         """ Save the model to disk.
 
         Saves the serialized model, with weights, to the folder location specified when
-        initializing the plugin.
+        initializing the plugin. If loss has dropped on both sides of the model, then
+        a backup is taken.
         """
         self._io._save()  # pylint:disable=protected-access
 
     def snapshot(self):
-        """ Create a snapshot of the model folder. """
+        """ Creates a snapshot of the model folder to the models parent folder, with the number
+        of iterations completed appended to the end of the model name. """
         self._io._snapshot()  # pylint:disable=protected-access
 
     def _compile_model(self):
         """ Compile the model to include the Optimizer and Loss Function(s). """
         logger.debug("Compiling Model")
         optimizer = self._get_optimizer()
-        loss = Loss(self._model.inputs, self._model.outputs)
+        loss = _Loss(self._model.inputs, self._model.outputs)
         self._model.compile(optimizer=optimizer, loss=loss.functions)
         if not self._is_predict:
-            self.state.add_session_loss_names(loss.names)
+            self._state.add_session_loss_names(loss.names)
         logger.debug("Compiled Model: %s", self._model)
 
     def _get_optimizer(self):
@@ -390,8 +408,23 @@ class ModelBase():
         """
         return None
 
+    def add_history(self, loss):
+        """ Add the current iteration's loss history to :attr:`_io.history`.
 
-class IO():
+        Called from the trainer after each iteration, for tracking loss drop over time between
+        save iterations.
+
+        Parameters
+        ----------
+        loss: list
+            The loss values for the A and B side for the current iteration. This should be the
+            collated loss values for each side.
+        """
+        self._io.history[0].append(loss[0])
+        self._io.history[1].append(loss[1])
+
+
+class _IO():
     """ Model saving and loading functions.
 
     Handles the loading and saving of the plugin model from disk as well as the model backup and
@@ -411,6 +444,7 @@ class IO():
         self._plugin = plugin
         self._is_predict = is_predict
         self._model_dir = model_dir
+        self._history = [[], []]  # Loss histories per save iteration
         self._backup = Backup(self._model_dir, self._plugin.name)
 
     @property
@@ -424,6 +458,11 @@ class IO():
         location otherwise ``False``.
         """
         return os.path.isfile(self._filename)
+
+    @property
+    def history(self):
+        """ list: list of loss histories per side for the current save iteration. """
+        return self._history
 
     # TODO
     @property
@@ -473,7 +512,8 @@ class IO():
         save_averages = self._get_save_averages()
         if save_averages and self._should_backup(save_averages):
             self._backup.backup_model(self._filename)
-            self._backup.backup_model(self._plugin.state.filename)
+            # pylint:disable=protected-access
+            self._backup.backup_model(self._plugin.state._filename)
 
         self._plugin.model.save(self._filename, include_optimizer=False)
         self._plugin.state.save()
@@ -488,12 +528,12 @@ class IO():
     def _get_save_averages(self):
         """ Return the average loss since the last save iteration and reset historical loss """
         logger.debug("Getting save averages")
-        if not all(loss for loss in self._plugin.history):
+        if not all(loss for loss in self._history):
             logger.debug("No loss in history")
             retval = []
         else:
-            retval = [sum(loss) / len(loss) for loss in self._plugin.history]
-            self._plugin.history = [[], []]  # Reset historical loss
+            retval = [sum(loss) / len(loss) for loss in self._history]
+            self._history = [[], []]  # Reset historical loss
         logger.debug("Average losses since last save: %s", retval)
         return retval
 
@@ -547,7 +587,7 @@ class IO():
         logger.debug("Performed snapshot")
 
 
-class Settings():
+class _Settings():
     """ Tensorflow core training settings.
 
     Sets backend tensorflow settings prior to launching the model.
@@ -735,7 +775,7 @@ class Settings():
         return retval
 
 
-class Loss():
+class _Loss():
     """ Holds loss names and functions for an Autoencoder.
 
     Parameters
@@ -821,7 +861,7 @@ class Loss():
         list
             A list of names for the losses to be applied to the model
         """
-        # TODO Use output names when these are fixed upstream
+        # TODO Use output names if/when these are fixed upstream
         split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
         retval = []
         for side, side_output in zip(("a", "b"), split_outputs):
@@ -840,11 +880,8 @@ class Loss():
     def _get_loss_functions(self):
         """ Set the loss functions.
 
-        Parameters
-        ----------
-        outputs: list
-            A list of output tensors from the model plugin
-
+        Returns
+        -------
         list
             A list of loss functions to apply to the model
         """
@@ -863,61 +900,110 @@ class Loss():
 
 
 class State():
-    """ Class to hold the model's current state and autoencoder structure """
-    def __init__(self, model_dir, model_name, config_changeable_items,
-                 no_logs, training_image_size):
+    """ Holds state information relating to the plugin's saved model.
+
+    Parameters
+    ----------
+    model_dir: str
+        The full path to the model save location
+    model_name: str
+        The name of the model plugin
+    config_changeable_items: dict
+        Configuration options that can be altered when resuming a model, and their current values
+    no_logs: bool
+        ``True`` if Tensorboard logs should not be generated, otherwise ``False``
+    training_image_size: int
+        The size of the training images in the training folder
+    """
+    def __init__(self,
+                 model_dir,
+                 model_name,
+                 config_changeable_items,
+                 no_logs,
+                 training_image_size):
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
-                     "config_changeable_items: '%s', no_logs: %s, "
-                     "training_image_size: '%s'", self.__class__.__name__, model_dir, model_name,
-                     config_changeable_items, no_logs, training_image_size)
-        self.serializer = get_serializer("json")
-        filename = "{}_state.{}".format(model_name, self.serializer.file_extension)
-        self.filename = os.path.join(model_dir, filename)
-        self.name = model_name
-        self.iterations = 0
-        self.session_iterations = 0
-        self.training_size = training_image_size
-        self.sessions = dict()
-        self.lowest_avg_loss = dict()
-        self.config = dict()
-        self.load(config_changeable_items)
-        self.session_id = self.new_session_id()
-        self.create_new_session(no_logs, config_changeable_items)
+                     "config_changeable_items: '%s', no_logs: %s, training_image_size: '%s'",
+                     self.__class__.__name__, model_dir, model_name, config_changeable_items,
+                     no_logs, training_image_size)
+        self._serializer = get_serializer("json")
+        filename = "{}_state.{}".format(model_name, self._serializer.file_extension)
+        self._filename = os.path.join(model_dir, filename)
+        self._name = model_name
+        self._iterations = 0
+        self._training_size = training_image_size
+        self._sessions = dict()
+        self._lowest_avg_loss = dict()
+        self._config = dict()
+        self._load(config_changeable_items)
+        self._session_id = self._new_session_id()
+        self._create_new_session(no_logs, config_changeable_items)
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     @property
     def loss_names(self):
         """ list: The loss names for the current session """
-        return self.sessions[self.session_id]["loss_names"]
+        return self._sessions[self._session_id]["loss_names"]
 
     @property
     def current_session(self):
-        """ Return the current session dict """
-        return self.sessions[self.session_id]
+        """ dict: The state dictionary for the current :attr:`session_id`. """
+        return self._sessions[self._session_id]
 
     @property
-    def first_run(self):
-        """ Return True if this is the first run else False """
-        return self.session_id == 1
+    def iterations(self):
+        """ int: The total number of iterations that the model has trained. """
+        return self._iterations
 
-    def new_session_id(self):
-        """ Return new session_id """
-        if not self.sessions:
+    @property
+    def training_size(self):
+        """ int: The size of the training images in the training folder. """
+        return self._training_size
+
+    @property
+    def lowest_avg_loss(self):
+        """dict: The lowest average save interval loss seen for each side. """
+        return self._lowest_avg_loss
+
+    @property
+    def session_id(self):
+        """ int: The current training session id. """
+        return self._session_id
+
+    def _new_session_id(self):
+        """ Generate a new session id. Returns 1 if this is a new model, or the last session id + 1
+        if it is a pre-existing model.
+
+        Returns
+        -------
+        int
+            The newly generated session id
+        """
+        if not self._sessions:
             session_id = 1
         else:
-            session_id = max(int(key) for key in self.sessions.keys()) + 1
+            session_id = max(int(key) for key in self._sessions.keys()) + 1
         logger.debug(session_id)
         return session_id
 
-    def create_new_session(self, no_logs, config_changeable_items):
-        """ Create a new session """
-        logger.debug("Creating new session. id: %s", self.session_id)
-        self.sessions[self.session_id] = {"timestamp": time.time(),
-                                          "no_logs": no_logs,
-                                          "loss_names": [],
-                                          "batchsize": 0,
-                                          "iterations": 0,
-                                          "config": config_changeable_items}
+    def _create_new_session(self, no_logs, config_changeable_items):
+        """ Initialize a new session, creating the dictionary entry for the session in
+        :attr:`_sessions`.
+
+        Parameters
+        ----------
+        no_logs: bool
+            ``True`` if Tensorboard logs should not be generated, otherwise ``False``
+        config_changeable_items: dict
+            Configuration options that can be altered when resuming a model, and their current
+            values
+        """
+        logger.debug("Creating new session. id: %s", self._session_id)
+        self._sessions[self._session_id] = dict(timestamp=time.time(),
+                                                no_logs=no_logs,
+                                                loss_names=[],
+                                                batchsize=0,
+                                                iterations=0,
+                                                config=config_changeable_items)
 
     def add_session_loss_names(self, loss_names):
         """ Add the session loss names to the sessions dictionary.
@@ -930,60 +1016,84 @@ class State():
             The list of loss names for this session.
         """
         logger.debug("Adding session loss_names: %s", loss_names)
-        self.sessions[self.session_id]["loss_names"] = loss_names
+        self._sessions[self._session_id]["loss_names"] = loss_names
 
-    def add_session_batchsize(self, batchsize):
-        """ Add the session batchsize to the sessions dictionary """
-        logger.debug("Adding session batchsize: %s", batchsize)
-        self.sessions[self.session_id]["batchsize"] = batchsize
+    def add_session_batchsize(self, batch_size):
+        """ Add the session batch size to the sessions dictionary.
+
+        Parameters
+        ----------
+        batch_size: int
+            The batch size for the current training session
+        """
+        logger.debug("Adding session batch size: %s", batch_size)
+        self._sessions[self._session_id]["batchsize"] = batch_size
 
     def increment_iterations(self):
-        """ Increment total and session iterations """
-        self.iterations += 1
-        self.sessions[self.session_id]["iterations"] += 1
+        """ Increment :attr:`iterations` and session iterations by 1. """
+        self._iterations += 1
+        self._sessions[self._session_id]["iterations"] += 1
 
-    def load(self, config_changeable_items):
-        """ Load state file """
+    def _load(self, config_changeable_items):
+        """ Load a state file and set the serialized values to the class instance.
+
+        Updates the model's config with the values stored in the state file.
+
+        Parameters
+        ----------
+        config_changeable_items: dict
+            Configuration options that can be altered when resuming a model, and their current
+            values
+        """
         logger.debug("Loading State")
-        if not os.path.exists(self.filename):
+        if not os.path.exists(self._filename):
             logger.info("No existing state file found. Generating.")
             return
-        state = self.serializer.load(self.filename)
-        self.name = state.get("name", self.name)
-        self.sessions = state.get("sessions", dict())
-        self.lowest_avg_loss = state.get("lowest_avg_loss", dict())
-        self.iterations = state.get("iterations", 0)
-        self.training_size = state.get("training_size", 256)
-        self.config = state.get("config", dict())
+        state = self._serializer.load(self._filename)
+        self._name = state.get("name", self._name)
+        self._sessions = state.get("sessions", dict())
+        self._lowest_avg_loss = state.get("lowest_avg_loss", dict())
+        self._iterations = state.get("iterations", 0)
+        self._training_size = state.get("training_size", 256)
+        self._config = state.get("config", dict())
         logger.debug("Loaded state: %s", state)
-        self.replace_config(config_changeable_items)
+        self._replace_config(config_changeable_items)
 
     def save(self):
-        """ Save iteration number to state file """
+        """ Save the state values to the serialized state file. """
         logger.debug("Saving State")
-        state = {"name": self.name,
-                 "sessions": self.sessions,
-                 "lowest_avg_loss": self.lowest_avg_loss,
-                 "iterations": self.iterations,
-                 "training_size": self.training_size,
+        state = {"name": self._name,
+                 "sessions": self._sessions,
+                 "lowest_avg_loss": self._lowest_avg_loss,
+                 "iterations": self._iterations,
+                 "training_size": self._training_size,
                  "config": _CONFIG}
-        self.serializer.save(self.filename, state)
+        self._serializer.save(self._filename, state)
         logger.debug("Saved State")
 
-    def replace_config(self, config_changeable_items):
-        """ Replace the loaded config with the one contained within the state file
-            Check for any fixed=False parameters changes and log info changes
+    def _replace_config(self, config_changeable_items):
+        """ Replace the loaded config with the one contained within the state file.
+
+        Check for any `fixed`=``False`` parameter changes and log info changes.
+
+        Update any legacy config items to their current versions.
+
+        Parameters
+        ----------
+        config_changeable_items: dict
+            Configuration options that can be altered when resuming a model, and their current
+            values
         """
         global _CONFIG  # pylint: disable=global-statement
         legacy_update = self._update_legacy_config()
         # Add any new items to state config for legacy purposes
         for key, val in _CONFIG.items():
-            if key not in self.config.keys():
+            if key not in self._config.keys():
                 logger.info("Adding new config item to state file: '%s': '%s'", key, val)
-                self.config[key] = val
-        self.update_changed_config_items(config_changeable_items)
+                self._config[key] = val
+        self._update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
-        _CONFIG = self.config
+        _CONFIG = self._config
         if legacy_update:
             self.save()
         logger.debug("Replaced config. New config: %s", _CONFIG)
@@ -1015,53 +1125,60 @@ class State():
         new_items = ["loss_function", "learn_mask", "mask_type"]
         updated = False
         for old, new in zip(priors, new_items):
-            if old not in self.config:
+            if old not in self._config:
                 logger.debug("Legacy item '%s' not in config. Skipping update", old)
                 continue
 
             # dssim_loss > loss_function
             if old == "dssim_loss":
-                self.config[new] = "ssim" if self.config[old] else "mae"
-                del self.config[old]
+                self._config[new] = "ssim" if self._config[old] else "mae"
+                del self._config[old]
                 updated = True
                 logger.info("Updated config from legacy dssim format. New config loss "
-                            "function: '%s'", self.config[new])
+                            "function: '%s'", self._config[new])
                 continue
 
             # Add learn mask option and set to True if model has "penalized_mask_loss" specified
-            if old == "mask_type" and new == "learn_mask" and new not in self.config:
-                self.config[new] = self.config["mask_type"] is not None
+            if old == "mask_type" and new == "learn_mask" and new not in self._config:
+                self._config[new] = self._config["mask_type"] is not None
                 updated = True
                 logger.info("Added new 'learn_mask' config item for this model. Value set to: %s",
-                            self.config[new])
+                            self._config[new])
                 continue
 
             # Replace removed masks with most similar equivalent
-            if old == "mask_type" and new == "mask_type" and self.config[old] in ("facehull",
-                                                                                  "dfl_full"):
-                old_mask = self.config[old]
-                self.config[new] = "components"
+            if old == "mask_type" and new == "mask_type" and self._config[old] in ("facehull",
+                                                                                   "dfl_full"):
+                old_mask = self._config[old]
+                self._config[new] = "components"
                 updated = True
                 logger.info("Updated 'mask_type' from '%s' to '%s' for this model",
-                            old_mask, self.config[new])
+                            old_mask, self._config[new])
 
         logger.debug("State file updated for legacy config: %s", updated)
         return updated
 
-    def update_changed_config_items(self, config_changeable_items):
-        """ Update any parameters which are not fixed and have been changed """
+    def _update_changed_config_items(self, config_changeable_items):
+        """ Update any parameters which are not fixed and have been changed.
+
+        Parameters
+        ----------
+        config_changeable_items: dict
+            Configuration options that can be altered when resuming a model, and their current
+            values
+        """
         if not config_changeable_items:
             logger.debug("No changeable parameters have been updated")
             return
         for key, val in config_changeable_items.items():
-            old_val = self.config[key]
+            old_val = self._config[key]
             if old_val == val:
                 continue
-            self.config[key] = val
+            self._config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
 
 
-class Inference():  # pylint:disable=too-few-public-methods
+class _Inference():  # pylint:disable=too-few-public-methods
     """ Calculates required layers and compiles a saved model for inference.
 
     Parameters

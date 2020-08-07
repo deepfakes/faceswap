@@ -130,10 +130,11 @@ class Model(ModelBase):
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """
-        return {"df": {"{}_encoder.h5".format(self.name): "encoder_df",
-                       "{}_decoder_A.h5".format(self.name): "decoder_a",
-                       "{}_decoder_B.h5".format(self.name): "decoder_b"},
-                "liae": {"{}_encoder.h5".format(self.name): "encoder_liae",
-                         "{}_intermediate_B.h5".format(self.name): "intermediate_both",
-                         "{}_intermediate.h5".format(self.name): "intermediate_b",
-                         "{}_decoder.h5".format(self.name): "decoder_both"}}
+        mappings = dict(df={"{}_encoder.h5".format(self.name): "encoder_df",
+                            "{}_decoder_A.h5".format(self.name): "decoder_a",
+                            "{}_decoder_B.h5".format(self.name): "decoder_b"},
+                        liae={"{}_encoder.h5".format(self.name): "encoder_liae",
+                              "{}_intermediate_B.h5".format(self.name): "intermediate_both",
+                              "{}_intermediate.h5".format(self.name): "intermediate_b",
+                              "{}_decoder.h5".format(self.name): "decoder_both"})
+        return mappings[self.config["architecture"]]

@@ -694,7 +694,7 @@ class Predict():
     @property
     def has_predicted_mask(self):
         """ bool: ``True`` if the model was trained to learn a mask, otherwise ``False``. """
-        return bool(self._model.state.config.get("learn_mask", False))
+        return bool(self._model.config.get("learn_mask", False))
 
     @property
     def output_size(self):
