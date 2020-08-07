@@ -30,6 +30,7 @@ def convert_time(timestamp):
 class TensorBoardLogs():
     """ Parse and return data from TensorBoard logs """
     def __init__(self, logs_folder):
+        tf.config.set_visible_devices([], "GPU")  # Don't use the GPU for stats
         self.folder_base = logs_folder
         self.log_filenames = self._get_log_filenames()
 
