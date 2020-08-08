@@ -3,7 +3,8 @@
 this class.
 
 At present there is only the :class:`~plugins.train.trainer.original` plugin, so that entirely
-inherits from this class.
+inherits from this class. If further plugins are developed, then common code should be kept here,
+with "original" unique code split out to the original plugin.
 """
 
 # pylint:disable=too-many-lines
@@ -48,7 +49,8 @@ def _get_config(plugin_name, configfile=None):
 
 
 class TrainerBase():
-    """ Trainer plugin base Object.
+    """ Handles the feeding of training images to Faceswap models, the generation of Tensorboard
+    logs and the creation of sample/time-lapse preview images.
 
     All Trainer plugins must inherit from this class.
 
@@ -76,33 +78,21 @@ class TrainerBase():
         self._images = images
         self._sides = sorted(key for key in self._images.keys())
 
-        self._feeder = Feeder(images,
-                              self._model,
-                              batch_size,
-                              self._config,
-                              self._get_alignments_data())
+        self._feeder = _Feeder(images,
+                               self._model,
+                               batch_size,
+                               self._config,
+                               self._get_alignments_data())
 
         self._tensorboard = self._set_tensorboard()
-        self._samples = Samples(self._model,
-                                self._model.coverage_ratio,
-                                self._model.command_line_arguments.preview_scale / 100)
-        self._timelapse = Timelapse(self._model,
-                                    self._model.coverage_ratio,
-                                    self._config.get("preview_images", 14),
-                                    self._feeder)
+        self._samples = _Samples(self._model,
+                                 self._model.coverage_ratio,
+                                 self._model.command_line_arguments.preview_scale / 100)
+        self._timelapse = _Timelapse(self._model,
+                                     self._model.coverage_ratio,
+                                     self._config.get("preview_images", 14),
+                                     self._feeder)
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def _timestamp(self):
-        """ str: Current time formatted as HOURS:MINUTES:SECONDS """
-        return time.strftime("%H:%M:%S")
-
-    @property
-    def _landmarks_required(self):
-        """ bool: ``True`` if Landmarks are required otherwise ``False ``"""
-        retval = self._model.command_line_arguments.warp_to_landmarks
-        logger.debug(retval)
-        return retval
 
     def _get_alignments_data(self):
         """ Extrapolate alignments and masks from the alignments file into a `dict` for the
@@ -116,12 +106,12 @@ class TrainerBase():
         retval = dict()
 
         get_masks = self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]
-        if not self._landmarks_required and not get_masks:
+        if not self._model.command_line_arguments.warp_to_landmarks and not get_masks:
             return retval
 
-        alignments = TrainingAlignments(self._model, self._images)
+        alignments = _TrainingAlignments(self._model, self._images)
 
-        if self._landmarks_required:
+        if self._model.command_line_arguments.warp_to_landmarks:
             logger.debug("Adding landmarks to training opts dict")
             retval["landmarks"] = alignments.landmarks
 
@@ -138,9 +128,8 @@ class TrainerBase():
 
         Returns
         -------
-        dict:
-            2 Dictionary keys of "a" and "b" the values of which are the
-        :class:`tf.keras.callbacks.TensorBoard` objects for the respective sides.
+        :class:`tf.keras.callbacks.TensorBoard`
+            Tensorboard object for the the current training session.
         """
         if self._model.state.current_session["no_logs"]:
             logger.verbose("TensorBoard logging disabled")
@@ -168,6 +157,18 @@ class TrainerBase():
         """ Running training on a batch of images for each side.
 
         Triggered from the training cycle in :class:`scripts.train.Train`.
+
+        * Runs a training batch through the model.
+
+        * Outputs the iteration's loss values to the console
+
+        * Logs loss to Tensorboard, if logging is requested.
+
+        * If a preview or time-lapse has been requested, then pushes sample images through the \
+        model to generate the previews
+
+        * Creates a snapshot if the total iterations trained so far meet the requested snapshot \
+        criteria
 
         Notes
         -----
@@ -273,7 +274,8 @@ class TrainerBase():
          """
         output = ", ".join(["Loss {}: {:.5f}".format(side, side_loss)
                             for side, side_loss in zip(("A", "B"), loss)])
-        output = "[{}] [#{:05d}] {}".format(self._timestamp, self._model.iterations, output)
+        timestamp = time.strftime("%H:%M:%S")
+        output = "[{}] [#{:05d}] {}".format(timestamp, self._model.iterations, output)
         print("\r{}".format(output), end="")
 
     def clear_tensorboard(self):
@@ -288,13 +290,13 @@ class TrainerBase():
         self._tensorboard.on_train_end(None)
 
 
-class Feeder():
-    """ Handles the processing of a Batch for training the model.
+class _Feeder():
+    """ Handles the processing of a Batch for training the model and generating samples.
 
     Parameters
     ----------
     images: dict
-        The list of full paths to the training images for this :class:`Feeder` for each side
+        The list of full paths to the training images for this :class:`_Feeder` for each side
     model: plugin from :mod:`plugins.train.model`
         The selected model that will be running this trainer
     batch_size: int
@@ -323,10 +325,17 @@ class Feeder():
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     def _load_generator(self, output_index):
-        """ Load the :class:`lib.training_data.TrainingDataGenerator` for this batcher.
+        """ Load the :class:`~lib.training_data.TrainingDataGenerator` for this feeder.
 
+        Parameters
+        ----------
         output_index: int
             The output index from the model to get output shapes for
+
+        Returns
+        -------
+        :class:`~lib.training_data.TrainingDataGenerator`
+            The training data generator
         """
         logger.debug("Loading generator")
         input_size = self._model.model.input_shape[output_index][1]
@@ -343,10 +352,16 @@ class Feeder():
         return generator
 
     def _set_preview_feed(self):
-        """ Set the preview feed for this batcher.
+        """ Set the preview feed for this feeder.
 
         Creates a generator from :class:`lib.training_data.TrainingDataGenerator` specifically
-        for previews for the batcher.
+        for previews for the feeder.
+
+        Returns
+        -------
+        dict
+            The side ("a" or "b") as key, :class:`~lib.training_data.TrainingDataGenerator` as
+            value.
         """
         retval = dict()
         for idx, side in enumerate(("a", "b")):
@@ -363,7 +378,16 @@ class Feeder():
         return retval
 
     def get_batch(self):
-        """ Get the feed data and the targets for each training side. """
+        """ Get the feed data and the targets for each training side for feeding into the model's
+        train function.
+
+        Returns
+        -------
+        model_inputs: list
+            The inputs to the model for each side A and B
+        model_targets: list
+            The targets for the model for each side A and B
+        """
         model_inputs = []
         model_targets = []
         for side in ("a", "b"):
@@ -384,7 +408,7 @@ class Feeder():
 
     def _get_next(self, side):
         """ Return the next batch from the :class:`lib.training_data.TrainingDataGenerator` for
-        this batcher ready for feeding into the model.
+        this feeder ready for feeding into the model.
 
         Returns
         -------
@@ -513,16 +537,16 @@ class Feeder():
         return sample
 
     def set_timelapse_feed(self, images, batch_size):
-        """ Set the time-lapse feed for this batcher.
+        """ Set the time-lapse feed for this feeder.
 
         Creates a generator from :class:`lib.training_data.TrainingDataGenerator` specifically
-        for generating time-lapse previews for the batcher.
+        for generating time-lapse previews for the feeder.
 
         Parameters
         ----------
         images: list
             The list of full paths to the images for creating the time-lapse for this
-            :class:`Feeder`
+            :class:`_Feeder`
         batch_size: int
             The number of images to be used to create the time-lapse preview.
         """
@@ -538,7 +562,7 @@ class Feeder():
         logger.debug("Set time-lapse feed: %s", self._display_feeds["timelapse"])
 
 
-class Samples():  # pylint:disable=too-few-public-methods
+class _Samples():  # pylint:disable=too-few-public-methods
     """ Compile samples for display for preview and time-lapse
 
     Parameters
@@ -617,12 +641,14 @@ class Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Compiled sample")
         return np.clip(figure * 255, 0, 255).astype('uint8')
 
-    @staticmethod
-    def _resize_sample(side, sample, target_size):
+    @classmethod
+    def _resize_sample(cls, side, sample, target_size):
         """ Resize a given image to the target size.
 
         Parameters
         ----------
+        side: str
+            The side ("a" or "b") that the samples are being generated for
         sample: :class:`numpy.ndarray`
             The sample to be resized
         target_size: int
@@ -655,6 +681,7 @@ class Samples():  # pylint:disable=too-few-public-methods
             List of :class:`numpy.ndarray` of feed images for the "b" side
 
         Returns
+        -------
         list:
             List of :class:`numpy.ndarray` of predictions received from the model
         """
@@ -695,6 +722,11 @@ class Samples():  # pylint:disable=too-few-public-methods
             List of :class:`numpy.ndarray` of feed images and target images
         predictions: list
             List of :class: `numpy.ndarray` of predictions from the model
+
+        Returns
+        -------
+        list
+            The images resized and collated for display in the preview frame
         """
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
@@ -715,8 +747,8 @@ class Samples():  # pylint:disable=too-few-public-methods
             images = [self._resize_sample(side, image, new_size) for image in images]
         return images
 
-    @staticmethod
-    def _frame_overlay(images, target_size, color):
+    @classmethod
+    def _frame_overlay(cls, images, target_size, color):
         """ Add a frame overlay to preview images indicating the region of interest.
 
         This is the red border that appears in the preview images.
@@ -752,8 +784,8 @@ class Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Overlayed background. Shape: %s", retval.shape)
         return retval
 
-    @staticmethod
-    def _compile_masked(faces, masks):
+    @classmethod
+    def _compile_masked(cls, faces, masks):
         """ Add the mask to the faces for masked preview.
 
         Places an opaque red layer over areas of the face that are masked out.
@@ -789,8 +821,8 @@ class Samples():  # pylint:disable=too-few-public-methods
         logger.debug("masked shapes: %s", [faces.shape for faces in retval])
         return retval
 
-    @staticmethod
-    def _overlay_foreground(backgrounds, foregrounds):
+    @classmethod
+    def _overlay_foreground(cls, backgrounds, foregrounds):
         """ Overlay the preview images into the center of the background images
 
         Parameters
@@ -861,8 +893,8 @@ class Samples():  # pylint:disable=too-few-public-methods
         logger.debug("header_box.shape: %s", header_box.shape)
         return header_box
 
-    @staticmethod
-    def _duplicate_headers(headers, columns):
+    @classmethod
+    def _duplicate_headers(cls, headers, columns):
         """ Duplicate headers for the number of columns displayed for each side.
 
         Parameters
@@ -884,7 +916,7 @@ class Samples():  # pylint:disable=too-few-public-methods
         return headers
 
 
-class Timelapse():  # pylint:disable=too-few-public-methods
+class _Timelapse():  # pylint:disable=too-few-public-methods
     """ Create a time-lapse preview image.
 
     Parameters
@@ -898,14 +930,14 @@ class Timelapse():  # pylint:disable=too-few-public-methods
     image_count: int
         The number of preview images to be displayed in the time-lapse
     feeder: dict
-        The :class:`Feeder` for generating the time-lapse images.
+        The :class:`_Feeder` for generating the time-lapse images.
     """
     def __init__(self, model, coverage_ratio, image_count, feeder):
         logger.debug("Initializing %s: model: %s, coverage_ratio: %s, image_count: %s, "
                      "feeder: '%s')", self.__class__.__name__, model, coverage_ratio,
                      image_count, feeder)
         self._num_images = image_count
-        self._samples = Samples(model, coverage_ratio)
+        self._samples = _Samples(model, coverage_ratio)
         self._model = model
         self._feeder = feeder
         self._output_file = None
@@ -942,6 +974,8 @@ class Timelapse():  # pylint:disable=too-few-public-methods
         """ Generate the time-lapse samples and output the created time-lapse to the specified
         output folder.
 
+        Parameters
+        ----------
         timelapse_kwargs: dict:
             The keyword arguments for setting up the time-lapse. All values should be full paths
             the keys being `input_a`, `input_b`, `output`
@@ -964,7 +998,7 @@ class Timelapse():  # pylint:disable=too-few-public-methods
         logger.debug("Created time-lapse: '%s'", filename)
 
 
-class TrainingAlignments():
+class _TrainingAlignments():
     """ Obtain Landmarks and required mask from alignments file.
 
     Parameters
@@ -1085,8 +1119,8 @@ class TrainingAlignments():
         return masks
 
     # Hashes for image folders
-    @staticmethod
-    def _get_image_hashes(image_list):
+    @classmethod
+    def _get_image_hashes(cls, image_list):
         """ Return the hashes for all images used for training.
 
         Parameters

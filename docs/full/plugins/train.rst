@@ -38,18 +38,6 @@ model.original module
 trainer._base module
 ====================
 
-.. rubric:: Module Summary
-
-.. autosummary::
-   :nosignatures:
-
-   ~plugins.train.trainer._base.Samples
-   ~plugins.train.trainer._base.Timelapse
-   ~plugins.train.trainer._base.TrainerBase
-   ~plugins.train.trainer._base.TrainingAlignments
-
-.. rubric:: Module
-
 .. automodule:: plugins.train.trainer._base
    :members:
    :undoc-members:
