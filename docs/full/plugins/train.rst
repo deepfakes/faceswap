@@ -4,6 +4,10 @@ train package
 
 The Train Package handles the Model and Trainer plugins for training models in Faceswap.
 
+
+.. contents:: Contents
+   :local:
+
 model._base module
 ==================
 
@@ -11,7 +15,7 @@ model._base module
 
 .. autosummary::
    :nosignatures:
-   
+
    ~plugins.train.model._base.KerasModel
    ~plugins.train.model._base.ModelBase
    ~plugins.train.model._base.State
@@ -23,6 +27,13 @@ model._base module
    :undoc-members:
    :show-inheritance:
 
+model.original module
+=====================
+
+.. automodule:: plugins.train.model.original
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 trainer._base module
 ====================
@@ -31,7 +42,7 @@ trainer._base module
 
 .. autosummary::
    :nosignatures:
-   
+
    ~plugins.train.trainer._base.Samples
    ~plugins.train.trainer._base.Timelapse
    ~plugins.train.trainer._base.TrainerBase

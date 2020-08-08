@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """ Original Model
-    Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions. """
+Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions.
+
+This model is heavily documented as it acts as a template that other model plugins can be developed
+from.
+"""
 from keras.layers import Dense, Flatten, Reshape, Input
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
@@ -12,27 +16,26 @@ class Model(ModelBase):
 
     This is the original faceswap model and acts as a template for plugin development.
 
-    The model must call the :func:`__init__` method of it's parent class prior to defining any
-    attribute overrides.
+    All plugins must define the following attribute override after calling the parent's
+    :func:`__init__` method:
 
-    All plugins must define the attribute overrides:
-
-        * :attr:`input_shape` (`tuple` or `list`): a tuple of ints defining the shape of the faces
-        that the model takes as input. If the input size is the same for both sides, this can be
-        a single 3 dimensional tuple. If the inputs have different sizes for "A" and "B" this
-        should be a list of 2 3 dimensional shape tuples, 1 for each side.
+        * :attr:`input_shape` (`tuple` or `list`): a tuple of ints defining the shape of the \
+        faces that the model takes as input. If the input size is the same for both sides, this \
+        can be a single 3 dimensional tuple. If the inputs have different sizes for "A" and "B" \
+        this should be a list of 2 3 dimensional shape tuples, 1 for each side.
 
     Any additional attributes used exclusively by this model should be defined here, but make sure
-    that you are not accidentally overriding any existing :class:`plugins.train.model._base.Model`
-    attributes.
+    that you are not accidentally overriding any existing
+    :class:`~plugins.train.model._base.ModelBase` attributes.
 
     Parameters
     ----------
     args: varies
-        The default command line arguments passed in from :class:`scripts.train.Train`
+        The default command line arguments passed in from :class:`~scripts.train.Train` or
+        :class:`~scripts.train.Convert`
     kwargs: varies
-        The default command line keyword arguments passed in from :class:`scripts.train.Train`
-
+        The default keyword arguments passed in from :class:`~scripts.train.Train` or
+        :class:`~scripts.train.Convert`
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -42,12 +45,13 @@ class Model(ModelBase):
         self.encoder_dim = 512 if self.low_mem else 1024
 
     def build_model(self, inputs):
-        """ Initialize the model.
+        """ Create the model's structure.
 
-        This function is called immediately after :func:`__init__` has been called if a new model
-        is being created. It is ignored if an existing model is being loaded from disk.
+        This function is automatically called immediately after :func:`__init__` has been called if
+        a new model is being created. It is ignored if an existing model is being loaded from disk
+        as the model structure will be defined in the saved model file.
 
-        This is where the model structure is defined.
+        The model's final structure is defined here.
 
         For the original model, An encoder instance is defined, then the same instance is
         referenced twice, one for each input "A" and "B" so that the same model is used for
@@ -56,9 +60,15 @@ class Model(ModelBase):
         2 Decoders are then defined (one for each side) with the encoder instances passed in as
         input to the corresponding decoders.
 
+        It is important to note that any models and sub-models should not call
+        :class:`keras.models.Model` directly, but rather call
+        :class:`plugins.train.model._base.KerasModel`. This acts as a wrapper for Keras' Model
+        class, but handles some minor differences which need to be handled between Nvidia and AMD
+        backends.
+
         The final output of the model should always call :class:`lib.model.nn_blocks.Conv2DOutput`
         so that the correct data type is set for the final activation, to support Mixed Precision
-        Training.
+        Training. Failure to do so is likely to lead to issues when Mixed Precision is enabled.
 
         Parameters
         ----------
@@ -69,9 +79,11 @@ class Model(ModelBase):
         Returns
         -------
         :class:`keras.models.Model`
-            The output of this function must be a keras model. See Keras documentation for the
-            correct structure. You should include the keyword argument ``name`` assigned to the
-            attribute :attr:`name` to automatically name the model based on the filename.
+            The output of this function must be a keras model generated from
+            :class:`plugins.train.model._base.KerasModel`. See Keras documentation for the correct
+            structure, but note that parameter :attr:`name` is a required rather than an optional
+            argument in Faceswap. You should assign this to the attribute ``self.name`` that is
+            automatically generated from the plugin's filename.
         """
         input_a = inputs[0]
         input_b = inputs[1]
@@ -87,6 +99,11 @@ class Model(ModelBase):
 
     def encoder(self):
         """ The original Faceswap Encoder Network.
+
+        The encoder for the original model has it's weights shared between both the "A" and "B"
+        side of the model, so only one instance is created :func:`build_model`. However this same
+        instance is then used twice (once for A and once for B) meaning that the weights get
+        shared.
 
         Returns
         -------
@@ -108,6 +125,9 @@ class Model(ModelBase):
 
     def decoder(self, side):
         """ The original Faceswap Decoder Network.
+
+        The decoders for the original model have separate weights for each side "A" and "B", so two
+        instances are created in :func:`build_model`, one for each side.
 
         Parameters
         ----------
