@@ -57,5 +57,5 @@ def test_convolution_aware(tensor_shape):
     """
     fan_in, _ = initializers.compute_fans(tensor_shape)
     std = np.sqrt(2. / fan_in)
-    _runner(initializers.ConvolutionAware(seed=123, init=True), tensor_shape,
+    _runner(initializers.ConvolutionAware(seed=123), tensor_shape,
             target_mean=0, target_std=std)
