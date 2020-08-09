@@ -14,8 +14,8 @@ matplotlib.use("TkAgg")
 
 from matplotlib import style  # noqa
 from matplotlib.figure import Figure  # noqa
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,
-                                               NavigationToolbar2Tk)  # noqa
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg,  # noqa
+                                               NavigationToolbar2Tk)
 
 from .custom_widgets import Tooltip  # noqa
 from .utils import get_config, get_images, LongRunningTask  # noqa

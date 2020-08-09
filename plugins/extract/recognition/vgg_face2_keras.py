@@ -13,10 +13,10 @@ from lib.model.session import KSession
 from lib.utils import FaceswapError
 from plugins.extract._base import Extractor
 
-logger = logging.getLogger(__name__)  #pylint: disable=invalid-name
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class VGGFace2(Extractor):  #pylint:disable=abstract-method
+class VGGFace2(Extractor):  # pylint:disable=abstract-method
     """ VGG Face feature extraction.
 
     Extracts feature vectors from faces in order to compare similarity.
