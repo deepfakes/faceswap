@@ -69,7 +69,7 @@ class Config(FaceswapConfig):
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
         self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
+            section=section, title="mask_type", datatype=str, default="extended",
             choices=PluginLoader.get_available_extractors("mask", add_none=True), group="mask",
             gui_radio=True,
             info="The mask to be used for training. If you have selected 'Learn Mask' or "
