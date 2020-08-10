@@ -368,7 +368,7 @@ clone_faceswap() {
     # Clone the faceswap repo
     delete_faceswap
     info "Downloading Faceswap..."
-    yellow ; git clone --depth 1 --no-single-branch "$DL_FACESWAP" "$DIR_FACESWAP"
+    yellow ; git clone --depth 1 --single-branch --branch r1.0 "$DL_FACESWAP" "$DIR_FACESWAP"
 }
 
 setup_faceswap() {

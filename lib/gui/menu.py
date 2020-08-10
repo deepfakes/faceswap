@@ -248,8 +248,6 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.add_command(label="Update Faceswap...",
                          underline=0,
                          command=lambda action="update": self.in_thread(action))
-        if self._build_branches_menu():
-            self.add_cascade(label="Switch Branch", underline=7, menu=self._branches_menu)
         self.add_separator()
         self._build_recources_menu()
         self.add_cascade(label="Resources", underline=0, menu=self.recources_menu)
@@ -258,105 +256,6 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
                          underline=0,
                          command=lambda action="output_sysinfo": self.in_thread(action))
         logger.debug("Built help menu")
-
-    def _build_branches_menu(self):
-        """ Build branch selection menu.
-
-        Queries git for available branches and builds a menu based on output.
-
-        Returns
-        -------
-        bool
-            ``True`` if menu was successfully built otherwise ``False``
-        """
-        stdout = self._get_branches()
-        if stdout is None:
-            return False
-
-        branches = self._filter_branches(stdout)
-        if not branches:
-            return False
-
-        for branch in branches:
-            self._branches_menu.add_command(
-                label=branch,
-                command=lambda b=branch: self._switch_branch(b))
-        return True
-
-    @staticmethod
-    def _get_branches():
-        """ Get the available github branches
-
-        Returns
-        -------
-        str
-            The list of branches available. If no branches were found or there was an
-            error then `None` is returned
-        """
-        gitcmd = "git branch -a"
-        cmd = Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR)
-        stdout, _ = cmd.communicate()
-        retcode = cmd.poll()
-        if retcode != 0:
-            logger.debug("Unable to list git branches. return code: %s, message: %s",
-                         retcode, stdout.decode().strip().replace("\n", " - "))
-            return None
-        return stdout.decode(locale.getpreferredencoding())
-
-    @staticmethod
-    def _filter_branches(stdout):
-        """ Filter the branches, remove duplicates and the current branch and return a sorted
-        list.
-
-        Parameters
-        ----------
-        stdout: str
-            The output from the git branch query converted to a string
-
-        Returns
-        -------
-        list
-            Unique list of available branches sorted in alphabetical order
-        """
-        current = None
-        branches = set()
-        for line in stdout.splitlines():
-            branch = line[line.rfind("/") + 1:] if "/" in line else line.strip()
-            if branch.startswith("*"):
-                branch = branch.replace("*", "").strip()
-                current = branch
-                continue
-            branches.add(branch)
-        logger.debug("Found branches: %s", branches)
-        if current in branches:
-            logger.debug("Removing current branch from output: %s", current)
-            branches.remove(current)
-
-        branches = sorted(list(branches), key=str.casefold)
-        logger.debug("Final branches: %s", branches)
-        return branches
-
-    @staticmethod
-    def _switch_branch(branch):
-        """ Change the currently checked out branch, and return a notification.
-
-        Parameters
-        ----------
-        str
-            The branch to switch to
-        """
-        logger.info("Switching branch to '%s'...", branch)
-        gitcmd = "git checkout {}".format(branch)
-        cmd = Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR)
-        stdout, _ = cmd.communicate()
-        retcode = cmd.poll()
-        if retcode != 0:
-            logger.error("Unable to switch branch. return code: %s, message: %s",
-                         retcode, stdout.decode().strip().replace("\n", " - "))
-            return
-        logger.info("Succesfully switched to '%s'. You may want to check for updates to make sure "
-                    "that you have the latest code.", branch)
-        logger.info("Please restart Faceswap to complete the switch.")
 
     def _build_recources_menu(self):
         """ Build resources menu """
@@ -402,6 +301,9 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         encoding = locale.getpreferredencoding()
         logger.debug("Encoding: %s", encoding)
         self.check_for_updates(encoding, check=True)
+        logger.info("NB: You are on release 1.0 of Faceswap, which is unlikely to receive further "
+                    "updates. You can upgrade to the latest Faceswap by visiting "
+                    "https://faceswap.dev")
         self.root.config(cursor="")
 
     def update(self):
@@ -416,6 +318,9 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         update_deps.main(logger=logger)
         if success:
             logger.info("Please restart Faceswap to complete the update.")
+        logger.info("NB: You are on release 1.0 of Faceswap, which is unlikely to receive further "
+                    "updates. You can upgrade to the latest Faceswap by visiting "
+                    "https://faceswap.dev")
         self.root.config(cursor="")
 
     @staticmethod
