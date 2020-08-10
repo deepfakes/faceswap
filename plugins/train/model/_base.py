@@ -26,13 +26,11 @@ from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
 from lib.model import losses
 from lib.model.nn_blocks import set_config as set_nnblock_config
-from lib.utils import deprecation_warning, get_backend, FaceswapError
+from lib.utils import get_backend, FaceswapError
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
-
-# TODO Disallow multiple models in folder
 
 
 def KerasModel(inputs, outputs, name):  # pylint:disable=invalid-name
@@ -117,6 +115,8 @@ class ModelBase():
                                 "Loss.")
 
         self._io = _IO(self, model_dir, self._is_predict)
+        self._check_multiple_models()
+
         self._settings = _Settings(self._args, self.config["allow_growth"], self._is_predict)
         self._state = State(model_dir,
                             self.name,
@@ -124,10 +124,6 @@ class ModelBase():
                             False if self._is_predict else self._args.no_logs,
                             training_image_size)
 
-        if self._io.multiple_models_in_folder:
-            deprecation_warning("Support for multiple model types within the same folder",
-                                additional_info="Please split each model into separate folders to "
-                                                "avoid issues in future.")
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
@@ -216,6 +212,31 @@ class ModelBase():
         nn_block_keys = ['icnr_init', 'conv_aware_init', 'reflect_padding']
         set_nnblock_config({key: _CONFIG.pop(key)
                             for key in nn_block_keys})
+
+    def _check_multiple_models(self):
+        """ Check whether multiple models exist in the model folder, and that no models exist that
+        were trained with a different plugin than the requested plugin.
+
+        Raises
+        ------
+        FaceswapError
+            If multiple model files, or models for a different plugin from that requested exists
+            within the model folder
+        """
+        multiple_models = self._io.multiple_models_in_folder
+        if multiple_models is None:
+            logger.debug("Contents of model folder are valid")
+            return
+
+        if len(multiple_models) == 1:
+            msg = ("You have requested to train with the '{}' plugin, but a model file for the "
+                   "'{}' plugin already exists in the folder '{}'.\nPlease select a different "
+                   "model folder.".format(self.name, multiple_models[0], self.model_dir))
+        else:
+            msg = ("There are multiple plugin types ('{}') stored in the model folder '{}'. This "
+                   "is not supported.\nPlease split the model files into their own folders before "
+                   "proceeding".format("', '".join(multiple_models), self.model_dir))
+        raise FaceswapError(msg)
 
     def build(self):
         """ Build the model and assign to :attr:`model`.
@@ -464,14 +485,19 @@ class _IO():
         """ list: list of loss histories per side for the current save iteration. """
         return self._history
 
-    # TODO
     @property
     def multiple_models_in_folder(self):
-        """ :bool: ``True`` if there are multiple model types in the same folder otherwise
-        ``false``. """
-        model_files = [fname for fname in os.listdir(self._model_dir) if fname.endswith(".h5")]
-        retval = False if not model_files else os.path.commonprefix(model_files) == ""
-        logger.debug("model_files: %s, retval: %s", model_files, retval)
+        """ :list: or ``None`` If there are multiple model types in the requested folder, or model
+        types that don't correspond to the requested plugin type, then returns the list of plugin
+        names that exist in the folder, otherwise returns ``None`` """
+        plugins = [fname.replace(".h5", "")
+                   for fname in os.listdir(self._model_dir)
+                   if fname.endswith(".h5")]
+        test_names = plugins + [self._plugin.name]
+        test = False if not test_names else os.path.commonprefix(test_names) == ""
+        retval = None if not test else plugins
+        logger.debug("plugin name: %s, plugins: %s, test result: %s, retval: %s",
+                     self._plugin.name, plugins, test, retval)
         return retval
 
     def _load(self):
