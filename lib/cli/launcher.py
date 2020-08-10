@@ -189,7 +189,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         """
         if not hasattr(arguments, "exclude_gpus"):
             # Cpu backends will not have this attribute
-            logger.info("Adding missing exclude gpus argument to namespace")
+            logger.debug("Adding missing exclude gpus argument to namespace")
             setattr(arguments, "exclude_gpus", None)
 
         if arguments.exclude_gpus:
@@ -199,15 +199,15 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                 sys.exit(1)
             arguments.exclude_gpus = [int(idx) for idx in arguments.exclude_gpus]
             set_exclude_devices(arguments.exclude_gpus)
-        if GPUStats().exclude_all_devices:
+        if GPUStats().exclude_all_devices and get_backend() != "cpu":
             if self._command == "extract":
                 logger.error("Forcing Extract to CPU mode is not currently supported")
                 sys.exit(0)
             msg = "Switching backend to CPU"
-            set_backend("cpu")
             if get_backend() == "amd":
                 msg += (". Using Tensorflow for CPU operations.")
                 os.environ["KERAS_BACKEND"] = "tensorflow"
+            set_backend("cpu")
             logger.info(msg)
 
         # Add Keras finder to the meta_path list as the first item
