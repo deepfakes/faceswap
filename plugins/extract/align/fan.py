@@ -34,7 +34,8 @@ class Align(Aligner):
         self.model = KSession(self.name,
                               self.model_path,
                               model_kwargs=model_kwargs,
-                              allow_growth=self.config["allow_growth"])
+                              allow_growth=self.config["allow_growth"],
+                              exclude_gpus=self._exclude_gpus)
         self.model.load_model()
         # Feed a placeholder so Aligner is primed for Manual tool
         placeholder_shape = (self.batchsize, 3, self.input_size, self.input_size)

@@ -52,6 +52,9 @@ class Extractor():
     multiprocess: bool, optional
         Whether to attempt processing the plugins in parallel. This may get overridden
         internally depending on the plugin combination. Default: ``False``
+    exclude_gpus: list, optional
+        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+        ``None`` to not exclude any GPUs. Default: ``None``
     rotate_images: str, optional
         Used to set the :attr:`plugins.extract.detect.rotation` attribute. Pass in a single number
         to use increments of that size up to 360, or pass in a ``list`` of ``ints`` to enumerate
@@ -74,17 +77,18 @@ class Extractor():
         The current phase that the pipeline is running. Used in conjunction with :attr:`passes` and
         :attr:`final_pass` to indicate to the caller which phase is being processed
     """
-    def __init__(self, detector, aligner, masker, configfile=None,
-                 multiprocess=False, rotate_images=None, min_size=20,
-                 normalize_method=None, image_is_aligned=False):
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, "
-                     "configfile: %s, multiprocess: %s, rotate_images: %s, min_size: %s, "
+    def __init__(self, detector, aligner, masker, configfile=None, multiprocess=False,
+                 exclude_gpus=None, rotate_images=None, min_size=20, normalize_method=None,
+                 image_is_aligned=False):
+        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, configfile: %s, "
+                     "multiprocess: %s, exclude_gpus: %s, rotate_images: %s, min_size: %s, "
                      "normalize_method: %s, image_is_aligned: %s)",
-                     self.__class__.__name__, detector, aligner, masker, configfile,
-                     multiprocess, rotate_images, min_size, normalize_method, image_is_aligned)
+                     self.__class__.__name__, detector, aligner, masker, configfile, multiprocess,
+                     exclude_gpus, rotate_images, min_size, normalize_method, image_is_aligned)
         self._instance = _get_instance()
         masker = [masker] if not isinstance(masker, list) else masker
         self._flow = self._set_flow(detector, aligner, masker)
+        self._exclude_gpus = exclude_gpus
         # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
         # for queue) at each point. Adding more just stacks RAM with no speed benefit.
         self._queue_size = 1
@@ -505,7 +509,8 @@ class Extractor():
             return None
         aligner_name = aligner.replace("-", "_").lower()
         logger.debug("Loading Aligner: '%s'", aligner_name)
-        aligner = PluginLoader.get_aligner(aligner_name)(configfile=configfile,
+        aligner = PluginLoader.get_aligner(aligner_name)(exclude_gpus=self._exclude_gpus,
+                                                         configfile=configfile,
                                                          normalize_method=normalize_method,
                                                          instance=self._instance)
         return aligner
@@ -517,7 +522,8 @@ class Extractor():
             return None
         detector_name = detector.replace("-", "_").lower()
         logger.debug("Loading Detector: '%s'", detector_name)
-        detector = PluginLoader.get_detector(detector_name)(rotation=rotation,
+        detector = PluginLoader.get_detector(detector_name)(exclude_gpus=self._exclude_gpus,
+                                                            rotation=rotation,
                                                             min_size=min_size,
                                                             configfile=configfile,
                                                             instance=self._instance)
@@ -530,7 +536,8 @@ class Extractor():
             return None
         masker_name = masker.replace("-", "_").lower()
         logger.debug("Loading Masker: '%s'", masker_name)
-        masker = PluginLoader.get_masker(masker_name)(image_is_aligned=image_is_aligned,
+        masker = PluginLoader.get_masker(masker_name)(exclude_gpus=self._exclude_gpus,
+                                                      image_is_aligned=image_is_aligned,
                                                       configfile=configfile,
                                                       instance=self._instance)
         return masker

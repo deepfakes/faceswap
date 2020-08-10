@@ -38,7 +38,11 @@ class Detect(Detector):
                                                 O2K_Pow=PowO2K,
                                                 O2K_ConstantLayer=ConstantLayerO2K,
                                                 O2K_Div=DivO2K))
-        self.model = S3fd(self.model_path, model_kwargs, self.config["allow_growth"], confidence)
+        self.model = S3fd(self.model_path,
+                          model_kwargs,
+                          self.config["allow_growth"],
+                          self._exclude_gpus,
+                          confidence)
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
@@ -448,10 +452,15 @@ class DivO2K(ElementwiseLayerO2K):
 
 class S3fd(KSession):
     """ Keras Network """
-    def __init__(self, model_path, model_kwargs, allow_growth, confidence):
-        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s)",
-                     self.__class__.__name__, model_path, allow_growth)
-        super().__init__("S3FD", model_path, model_kwargs=model_kwargs, allow_growth=allow_growth)
+    def __init__(self, model_path, model_kwargs, allow_growth, exclude_gpus, confidence):
+        logger.debug("Initializing: %s: (model_path: '%s', model_kwargs: %s, allow_growth: %s, "
+                     "exclude_gpus: %s, confidence: %s)", self.__class__.__name__, model_path,
+                     model_kwargs, allow_growth, exclude_gpus, confidence)
+        super().__init__("S3FD",
+                         model_path,
+                         model_kwargs=model_kwargs,
+                         allow_growth=allow_growth,
+                         exclude_gpus=exclude_gpus)
         self.load_model()
         self.confidence = confidence
         self.average_img = np.array([104.0, 117.0, 123.0])

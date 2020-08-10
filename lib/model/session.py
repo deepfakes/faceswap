@@ -41,14 +41,18 @@ class KSession():
         Enable the Tensorflow GPU allow_growth configuration option. This option prevents
         Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation and
         slower performance. Default: ``False``
+    exclude_gpus: list, optional
+        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+        ``None`` to not exclude any GPUs. Default: ``None``
+
     """
-    def __init__(self, name, model_path, model_kwargs=None, allow_growth=False):
+    def __init__(self, name, model_path, model_kwargs=None, allow_growth=False, exclude_gpus=None):
         logger.trace("Initializing: %s (name: %s, model_path: %s, model_kwargs: %s, "
-                     "allow_growth: %s)", self.__class__.__name__, name, model_path, model_kwargs,
-                     allow_growth)
+                     "allow_growth: %s, exclude_gpus)", self.__class__.__name__, name, model_path,
+                     model_kwargs, allow_growth, exclude_gpus)
         self._name = name
         self._backend = get_backend()
-        self._set_session(allow_growth)
+        self._set_session(allow_growth, exclude_gpus)
         self._model_path = model_path
         self._model_kwargs = model_kwargs
         self._model = None
@@ -103,12 +107,15 @@ class KSession():
             return np.concatenate(results)
         return [np.concatenate(x) for x in zip(*results)]
 
-    def _set_session(self, allow_growth):
+    def _set_session(self, allow_growth, exclude_gpus):
         """ Sets the backend session options.
 
         For AMD backend this does nothing.
 
         For CPU backends, this hides any GPUs from Tensorflow.
+
+        For Nvidia backends, this hides any GPUs that Tensorflow should not use and applies
+        any allow growth settings
 
         Parameters
         ----------
@@ -116,14 +123,25 @@ class KSession():
             Enable the Tensorflow GPU allow_growth configuration option. This option prevents
             Tensorflow from allocating all of the GPU VRAM, but can lead to higher fragmentation
             and slower performance. Default: False
+        exclude_gpus: list, optional
+            A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+            ``None`` to not exclude any GPUs. Default: ``None``
         """
         if self._backend == "amd":
             return
         if self._backend == "cpu":
             logger.verbose("Hiding GPUs from Tensorflow")
             tf.config.set_visible_devices([], "GPU")
-        elif allow_growth:
-            for gpu in tf.config.list_physical_devices("GPU"):
+            return
+
+        gpus = tf.config.list_physical_devices('GPU')
+        if exclude_gpus:
+            gpus = [gpu for idx, gpu in enumerate(gpus) if idx not in exclude_gpus]
+            logger.debug("Filtering devices to: %s", gpus)
+            tf.config.set_visible_devices(gpus, "GPU")
+
+        if allow_growth:
+            for gpu in gpus:
                 logger.info("Setting allow growth for GPU: %s", gpu)
                 tf.config.experimental.set_memory_growth(gpu, True)
 
@@ -139,7 +157,7 @@ class KSession():
         it thread safe.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
-        self._model = k_load_model(self._model_path, **self._model_kwargs)
+        self._model = k_load_model(self._model_path, **self._model_kwargs, compile=False)
         if self._backend != "amd":
             self._model.make_predict_function()
 

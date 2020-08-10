@@ -60,9 +60,9 @@ class Extractor():
         https://github.com/deepfakes-models/faceswap-models for more information
     model_filename: str
         The name of the model file to be loaded
-
-    Other Parameters
-    ----------------
+    exclude_gpus: list, optional
+        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+        ``None`` to not exclude any GPUs. Default: ``None``
     configfile: str, optional
         Path to a custom configuration ``ini`` file. Default: Use system configfile
     instance: int, optional
@@ -101,12 +101,14 @@ class Extractor():
     plugins.extract.pipeline : The extract pipeline that configures and calls all plugins
 
     """
-    def __init__(self, git_model_id=None, model_filename=None, configfile=None, instance=0):
-        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, instance: %s, "
-                     "configfile: %s, )", self.__class__.__name__, git_model_id, model_filename,
-                     instance, configfile)
+    def __init__(self, git_model_id=None, model_filename=None, exclude_gpus=None, configfile=None,
+                 instance=0):
+        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, exclude_gpus: %s, "
+                     "configfile: %s, instance: %s, )", self.__class__.__name__, git_model_id,
+                     model_filename, exclude_gpus, configfile, instance)
 
         self._instance = instance
+        self._exclude_gpus = exclude_gpus
         self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
 
