@@ -56,7 +56,7 @@ class Sort():
 
         # Load VGG Face if sorting by face
         if self.args.sort_method.lower() == "face":
-            self.vgg_face = VGGFace()
+            self.vgg_face = VGGFace(exclude_gpus=self.args.exclude_gpus)
             self.vgg_face.init_model()
 
         # If logging is enabled, prepare container
@@ -84,10 +84,10 @@ class Sort():
 
         self.sort_process()
 
-    @staticmethod
-    def launch_aligner():
+    def launch_aligner(self):
         """ Load the aligner plugin to retrieve landmarks """
-        extractor = Extractor(None, "fan", None, normalize_method="hist")
+        extractor = Extractor(None, "fan", None,
+                              normalize_method="hist", exclude_gpus=self.args.exclude_gpus)
         extractor.set_batchsize("align", 1)
         extractor.launch()
         return extractor

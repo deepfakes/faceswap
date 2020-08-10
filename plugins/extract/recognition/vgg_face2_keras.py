@@ -33,11 +33,11 @@ class VGGFace2(Extractor):  # pylint:disable=abstract-method
     https://creativecommons.org/licenses/by-nc/4.0/
     """
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):  # pylint:disable=unused-argument
         logger.debug("Initializing %s", self.__class__.__name__)
         git_model_id = 10
         model_filename = ["vggface2_resnet50_v2.h5"]
-        super().__init__(git_model_id=git_model_id, model_filename=model_filename)
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self._plugin_type = "recognition"
         self.name = "VGG_Face2"
         self.input_size = 224
@@ -52,7 +52,8 @@ class VGGFace2(Extractor):  # pylint:disable=abstract-method
         self.model = KSession(self.name,
                               self.model_path,
                               model_kwargs=model_kwargs,
-                              allow_growth=self.config["allow_growth"])
+                              allow_growth=self.config["allow_growth"],
+                              exclude_gpus=self._exclude_gpus)
         self.model.load_model()
 
     def predict(self, batch):

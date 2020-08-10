@@ -51,7 +51,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         self._alignments = Alignments(os.path.dirname(arguments.alignments),
                                       filename=os.path.basename(arguments.alignments))
 
-        self._extractor = self._get_extractor()
+        self._extractor = self._get_extractor(arguments.exclude_gpus)
         self._extractor_input_thread = self._feed_extractor()
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -99,8 +99,14 @@ class Mask():  # pylint:disable=too-few-public-methods
         logger.debug(saver)
         return saver
 
-    def _get_extractor(self):
+    def _get_extractor(self, exclude_gpus):
         """ Obtain a Mask extractor plugin and launch it
+
+        Parameters
+        ----------
+        exclude_gpus: list or ``None``
+            A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+            ``None`` to not exclude any GPUs.
 
         Returns
         -------
@@ -112,6 +118,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             return None
         logger.debug("masker: %s", self._mask_type)
         extractor = Extractor(None, None, self._mask_type,
+                              exclude_gpus=exclude_gpus,
                               image_is_aligned=self._input_is_faces)
         extractor.launch()
         logger.debug(extractor)
