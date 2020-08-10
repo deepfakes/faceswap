@@ -643,10 +643,18 @@ class _Settings():
         return self._mixed_precision.LossScaleOptimizer
 
     @classmethod
-    def _set_tf_settings(cls, allow_growth, devices):
+    def _set_tf_settings(cls, allow_growth, exclude_devices):
         """ Specify Devices to place operations on and Allow TensorFlow to manage VRAM growth.
 
         Enables the Tensorflow allow_growth option if requested in the command line arguments
+
+        Parameters
+        ----------
+        allow_growth: bool
+            ``True`` if the Tensorflow allow_growth parameter should be set otherwise ``False``
+        exclude_devices: list or ``None``
+            List of GPU device indices that should not be made available to Tensorflow. Pass
+            ``None`` if all devices should be made available
         """
         if get_backend() == "amd":
             return  # No settings for AMD
@@ -655,13 +663,13 @@ class _Settings():
             tf.config.set_visible_devices([], "GPU")
             return
 
-        if not devices and not allow_growth:
+        if not exclude_devices and not allow_growth:
             logger.debug("Not setting any specific Tensorflow settings")
             return
 
         gpus = tf.config.list_physical_devices('GPU')
-        if devices:
-            gpus = [gpus[int(idx)] for idx in devices]
+        if exclude_devices:
+            gpus = [gpu for idx, gpu in enumerate(gpus) if idx not in exclude_devices]
             logger.debug("Filtering devices to: %s", gpus)
             tf.config.set_visible_devices(gpus, "GPU")
 

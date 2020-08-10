@@ -178,7 +178,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
 
         Exclude any GPUs for use by Faceswap when requested.
 
-        Set Faceswap backend to CPU if all GPUs have been de-selected.
+        Set Faceswap backend to CPU if all GPUs have been deselected.
 
         Add the Keras import interception code.
 
@@ -188,12 +188,16 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             The command line arguments passed to Faceswap.
         """
         if arguments.exclude_gpus:
+            if not all(idx.isdigit() for idx in arguments.exclude_gpus):
+                logger.error("GPUs passed to the ['-X', '--exclude-gpus'] argument must all be "
+                             "integers.")
+                sys.exit(1)
+            arguments.exclude_gpus = [int(idx) for idx in arguments.exclude_gpus]
             set_exclude_devices(arguments.exclude_gpus)
-
         if GPUStats().exclude_all_devices:
             if self._command == "extract":
                 logger.error("Forcing Extract to CPU mode is not currently supported")
-                exit(0)
+                sys.exit(0)
             msg = "Switching backend to CPU"
             set_backend("cpu")
             if get_backend() == "amd":

@@ -10,7 +10,6 @@ depending on the OS' particular OpenCL implementation.
 import logging
 import os
 import platform
-import sys
 
 from lib.utils import get_backend
 
@@ -44,10 +43,7 @@ def set_exclude_devices(devices):
     logger.debug("Excluding GPU indicies: %s", devices)
     if not devices:
         return
-    if not all(idx.isdigit() for idx in devices):
-        logger.error("GPUs passed to the ['-X', '--exclude-gpus'] argument must all be integers.")
-        sys.exit(1)
-    _EXCLUDE_DEVICES.extend(int(idx) for idx in devices)
+    _EXCLUDE_DEVICES.extend(devices)
 
 
 class GPUStats():
