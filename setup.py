@@ -166,10 +166,10 @@ class Environment():
         self.output.info("Installed Python: {0} {1}".format(self.py_version[0],
                                                             self.py_version[1]))
         if not (self.py_version[0].split(".")[0] == "3"
-                and self.py_version[0].split(".")[1] in ("3", "4", "5", "6", "7")
+                and self.py_version[0].split(".")[1] in ("6", "7", "8")
                 and self.py_version[1] == "64bit") and not self.updater:
-            self.output.error("Please run this script with Python version 3.3, 3.4, 3.5, 3.6 or "
-                              "3.7 64bit and try again.")
+            self.output.error("Please run this script with Python version 3.6, 3.7 or 3.8 "
+                              "64bit and try again.")
             sys.exit(1)
 
     def output_runtime_info(self):

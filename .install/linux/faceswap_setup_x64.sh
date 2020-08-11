@@ -336,10 +336,10 @@ delete_env() {
 }
 
 create_env() {
-    # Create Python 3.7 env for faceswap
+    # Create Python 3.8 env for faceswap
     delete_env
     info "Creating Conda Virtual Environment..."
-    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -q python=3.7 -y
+    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -q python=3.8 -y
 }
 
 

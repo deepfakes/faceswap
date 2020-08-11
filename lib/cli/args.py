@@ -362,11 +362,10 @@ class ExtractArgs(ExtractConvertArgs):
                  "'/config/extract.ini' or 'Settings > Configure Extract 'Plugins':"
                  "\nL|cv2-dnn: A CPU only extractor which is the least reliable and least "
                  "resource intensive. Use this if not using a GPU and time is important."
-                 "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources "
-                 "than other GPU detectors but can often return more false positives."
-                 "\nL|s3fd: Best detector. Fast on GPU, slow on CPU. Can detect more faces and "
-                 "fewer false positives than other GPU detectors, but is a lot more resource "
-                 "intensive."))
+                 "\nL|mtcnn: Good detector. GPU only. Uses fewer resources than other GPU "
+                 "detectors but can often return more false positives."
+                 "\nL|s3fd: Best detector. GPU only. Can detect more faces and fewer false "
+                 "positives than other GPU detectors, but is a lot more resource intensive."))
         argument_list.append(dict(
             opts=("-A", "--aligner"),
             action=Radio,
@@ -377,7 +376,7 @@ class ExtractArgs(ExtractConvertArgs):
             help="R|Aligner to use."
                  "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
                  "but less accurate. Only use this if not using a GPU and time is important."
-                 "\nL|fan: Best aligner. Fast on GPU, slow on CPU."))
+                 "\nL|fan: Best aligner. GPU only."))
         argument_list.append(dict(
             opts=("-M", "--masker"),
             action=MultiOption,
