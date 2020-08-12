@@ -201,7 +201,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             set_exclude_devices(arguments.exclude_gpus)
 
         if ((get_backend() == "cpu" or GPUStats().exclude_all_devices) and
-                (self._command == "extract" and arguments.detector in ("mtcnn", "s3fd"))):
+                (self._command == "extract" and arguments.detector == "s3fd")):
             logger.error("Extracting on CPU is not currently for detector: '%s'",
                          arguments.detector.upper())
             sys.exit(0)

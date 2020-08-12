@@ -362,8 +362,8 @@ class ExtractArgs(ExtractConvertArgs):
                  "'/config/extract.ini' or 'Settings > Configure Extract 'Plugins':"
                  "\nL|cv2-dnn: A CPU only extractor which is the least reliable and least "
                  "resource intensive. Use this if not using a GPU and time is important."
-                 "\nL|mtcnn: Good detector. GPU only. Uses fewer resources than other GPU "
-                 "detectors but can often return more false positives."
+                 "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources "
+                 "than other GPU detectors but can often return more false positives."
                  "\nL|s3fd: Best detector. GPU only. Can detect more faces and fewer false "
                  "positives than other GPU detectors, but is a lot more resource intensive."))
         argument_list.append(dict(
