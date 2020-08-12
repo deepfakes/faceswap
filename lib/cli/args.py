@@ -376,7 +376,7 @@ class ExtractArgs(ExtractConvertArgs):
             help="R|Aligner to use."
                  "\nL|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
                  "but less accurate. Only use this if not using a GPU and time is important."
-                 "\nL|fan: Best aligner. GPU only."))
+                 "\nL|fan: Best aligner. Fast on GPU, slow on CPU."))
         argument_list.append(dict(
             opts=("-M", "--masker"),
             action=MultiOption,

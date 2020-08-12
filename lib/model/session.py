@@ -54,7 +54,7 @@ class KSession():
         self._backend = get_backend()
         self._set_session(allow_growth, exclude_gpus)
         self._model_path = model_path
-        self._model_kwargs = model_kwargs
+        self._model_kwargs = dict() if not model_kwargs else model_kwargs
         self._model = None
         logger.trace("Initialized: %s", self.__class__.__name__,)
 
@@ -157,7 +157,7 @@ class KSession():
         it thread safe.
         """
         logger.verbose("Initializing plugin model: %s", self._name)
-        self._model = k_load_model(self._model_path, **self._model_kwargs, compile=False)
+        self._model = k_load_model(self._model_path, compile=False, **self._model_kwargs)
         if self._backend != "amd":
             self._model.make_predict_function()
 

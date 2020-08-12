@@ -199,10 +199,14 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                 sys.exit(1)
             arguments.exclude_gpus = [int(idx) for idx in arguments.exclude_gpus]
             set_exclude_devices(arguments.exclude_gpus)
+
+        if ((get_backend() == "cpu" or GPUStats().exclude_all_devices) and
+                (self._command == "extract" and arguments.detector in ("mtcnn", "s3fd"))):
+            logger.error("Extracting on CPU is not currently for detector: '%s'",
+                         arguments.detector.upper())
+            sys.exit(0)
+
         if GPUStats().exclude_all_devices and get_backend() != "cpu":
-            if self._command == "extract":
-                logger.error("Forcing Extract to CPU mode is not currently supported")
-                sys.exit(0)
             msg = "Switching backend to CPU"
             if get_backend() == "amd":
                 msg += (". Using Tensorflow for CPU operations.")
