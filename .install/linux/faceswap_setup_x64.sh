@@ -70,6 +70,15 @@ check_for_sudo() {
     fi
 }
 
+check_for_curl() {
+    # Ensure that curl is available on the system
+    if ! curl - V ; then
+        error "curl is required for running the Faceswap installer, but could not be found. \
+        Please install curl using the package manager for your distribution before proceeding."
+        exit 1
+    fi
+}
+
 create_tmp_dir() {
     TMP_DIR="$(mktemp -d)"
     if [ -z "$TMP_DIR" -o ! -d "$TMP_DIR" ]; then
@@ -406,6 +415,7 @@ create_desktop_shortcut () {
 }
 
 check_for_sudo
+check_for_curl
 banner
 user_input
 review

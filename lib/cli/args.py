@@ -933,9 +933,9 @@ class TrainArgs(FaceSwapArgs):
                  "won't work so well. By andenixa et al. Very configurable."
                  "\nL|unbalanced: 128px in/out model from andenixa. The autoencoders are "
                  "unbalanced so B>A swaps won't work so well. Very configurable."
-                 "\nL|villain: 128px in/out model from villainguy. Very resource hungry (11GB "
-                 "for batchsize 16). Good for details, but more susceptible to color "
-                 "differences."))
+                 "\nL|villain: 128px in/out model from villainguy. Very resource hungry (You "
+                 "will require a GPU with a fair amount of VRAM). Good for details, but more "
+                 "susceptible to color differences."))
         argument_list.append(dict(
             opts=("-bs", "--batch-size"),
             action=Slider,
