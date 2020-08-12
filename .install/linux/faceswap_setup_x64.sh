@@ -72,9 +72,9 @@ check_for_sudo() {
 
 check_for_curl() {
     # Ensure that curl is available on the system
-    if ! curl - V ; then
-        error "curl is required for running the Faceswap installer, but could not be found. \
-        Please install curl using the package manager for your distribution before proceeding."
+    if ! command -V curl &> /dev/null ; then
+        error "'curl' is required for running the Faceswap installer, but could not be found. \
+        Please install 'curl' using the package manager for your distribution before proceeding."
         exit 1
     fi
 }
