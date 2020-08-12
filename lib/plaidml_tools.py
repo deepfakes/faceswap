@@ -100,7 +100,7 @@ class PlaidMLStats():
         return [device.id.decode() for device in self._devices]
 
     @property
-    def experimental_indices(self):
+    def _experimental_indices(self):
         """ list: The indices corresponding to :attr:`_ids` of GPU devices marked as
         "experimental". """
         retval = [idx for idx, device in enumerate(self.devices)
