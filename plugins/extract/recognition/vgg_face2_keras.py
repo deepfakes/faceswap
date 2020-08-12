@@ -2,29 +2,24 @@
 """ VGG_Face2 inference and sorting """
 
 import logging
-import sys
-import os
 import psutil
 
 import cv2
 import numpy as np
 from fastcluster import linkage, linkage_vector
-from lib.utils import GetModel, FaceswapError
+
+from lib.model.layers import L2_normalize
+from lib.model.session import KSession
+from lib.utils import FaceswapError
+from plugins.extract._base import Extractor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class VGGFace2():
+class VGGFace2(Extractor):  # pylint:disable=abstract-method
     """ VGG Face feature extraction.
 
     Extracts feature vectors from faces in order to compare similarity.
-
-    Parameters
-    ----------
-    backend: ['GPU', 'CPU']
-        Whether to run inference on a GPU or on the CPU
-    loglevel: ['INFO', 'VERBODE', 'DEBUG', 'TRACE']
-        The system log level
 
     Notes
     -----
@@ -38,79 +33,35 @@ class VGGFace2():
     https://creativecommons.org/licenses/by-nc/4.0/
     """
 
-    def __init__(self, backend="GPU", allow_growth=False, loglevel="INFO"):
-        logger.debug("Initializing %s: (backend: %s, allow_growth: %s, loglevel: %s)",
-                     self.__class__.__name__, backend, allow_growth, loglevel)
-        backend = backend.upper()
+    def __init__(self, *args, **kwargs):  # pylint:disable=unused-argument
+        logger.debug("Initializing %s", self.__class__.__name__)
         git_model_id = 10
         model_filename = ["vggface2_resnet50_v2.h5"]
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+        self._plugin_type = "recognition"
+        self.name = "VGG_Face2"
         self.input_size = 224
         # Average image provided in https://github.com/ox-vgg/vgg_face2
-        self.average_img = np.array([91.4953, 103.8827, 131.0912])
-
-        self.model = self._get_model(git_model_id, model_filename, backend, allow_growth)
+        self._average_img = np.array([91.4953, 103.8827, 131.0912])
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<< GET MODEL >>> #
-    @staticmethod
-    def _get_model(git_model_id, model_filename, backend, allow_growth):
-        """ Check if model is available, if not, download and unzip it
+    def init_model(self):
+        """ Initialize VGG Face 2 Model. """
+        model_kwargs = dict(custom_objects={'L2_normalize': L2_normalize})
+        self.model = KSession(self.name,
+                              self.model_path,
+                              model_kwargs=model_kwargs,
+                              allow_growth=self.config["allow_growth"],
+                              exclude_gpus=self._exclude_gpus)
+        self.model.load_model()
 
-        Parameters
-        ----------
-        git_model_id: int
-            The second digit in the github tag that identifies this model. See
-            https://github.com/deepfakes-models/faceswap-models for more information
-        model_filename: str
-            The name of the model to be loaded (see :class:`lib.utils.GetModel` for more
-            information)
-        backend: ['GPU', 'CPU']
-            Whether to run inference on a GPU or on the CPU
-        allow_growth: bool
-            ``True`` if Tensorflow's allow_growth option should be set, otherwise ``False``
-
-        See Also
-        --------
-        lib.utils.GetModel: The model downloading and allocation class.
-        """
-        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        cache_path = os.path.join(root_path, "plugins", "extract", "recognition", ".cache")
-        model = GetModel(model_filename, cache_path, git_model_id).model_path
-        if backend == "CPU":
-            if os.environ.get("KERAS_BACKEND", "") == "plaidml.keras.backend":
-                logger.info("Switching to tensorflow backend.")
-                os.environ["KERAS_BACKEND"] = "tensorflow"
-
-        if allow_growth:
-            # TODO This needs to be centralized. Just a hacky fix to read the allow growth config
-            # option from the Extraction config file
-            logger.info("Enabling Tensorflow 'allow_growth' option")
-            import tensorflow as tf
-            from keras.backend.tensorflow_backend import set_session
-            config = tf.ConfigProto()
-            config.gpu_options.allow_growth = True
-            config.gpu_options.visible_device_list = "0"
-            set_session(tf.Session(config=config))
-            logger.debug("Set Tensorflow 'allow_growth' option")
-
-        import keras
-        from lib.model.layers import L2_normalize
-        if backend == "CPU":
-            with keras.backend.tf.device("/cpu:0"):
-                return keras.models.load_model(model, {
-                    "L2_normalize":  L2_normalize
-                })
-        else:
-            return keras.models.load_model(model, {
-                "L2_normalize":  L2_normalize
-            })
-
-    def predict(self, face):
+    def predict(self, batch):
         """ Return encodings for given image from vgg_face2.
 
         Parameters
         ----------
-        face: numpy.ndarray
+        batch: numpy.ndarray
             The face to be fed through the predictor. Should be in BGR channel order
 
         Returns
@@ -118,9 +69,10 @@ class VGGFace2():
         numpy.ndarray
             The encodings for the face
         """
+        face = batch
         if face.shape[0] != self.input_size:
             face = self._resize_face(face)
-        face = face[None, :, :, :3] - self.average_img
+        face = face[None, :, :, :3] - self._average_img
         preds = self.model.predict(face)
         return preds[0, :]
 

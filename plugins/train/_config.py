@@ -69,7 +69,7 @@ class Config(FaceswapConfig):
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
         self.add_item(
-            section=section, title="mask_type", datatype=str, default="none",
+            section=section, title="mask_type", datatype=str, default="extended",
             choices=PluginLoader.get_available_extractors("mask", add_none=True), group="mask",
             gui_radio=True,
             info="The mask to be used for training. If you have selected 'Learn Mask' or "
@@ -144,6 +144,14 @@ class Config(FaceswapConfig):
                  "border of the image."
                  "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
         self.add_item(
+            section=section, title="allow_growth", datatype=bool, default=False, group="network",
+            fixed=False,
+            info="[Nvidia Only]. Enable the Tensorflow GPU 'allow_growth' configuration option. "
+                 "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
+                 "but can lead to higher VRAM fragmentation and slower performance. Should only "
+                 "be enabled if you are receiving errors regarding 'cuDNN fails to initialize' "
+                 "when commencing training.")
+        self.add_item(
             section=section, title="penalized_mask_loss", datatype=bool,
             default=True, group="loss",
             info="Image loss function is weighted by mask presence. For areas of "
@@ -155,7 +163,8 @@ class Config(FaceswapConfig):
             default="mae",
             choices=["mae", "mse", "logcosh", "smooth_loss", "l_inf_norm", "ssim", "gmsd",
                      "pixel_gradient_diff"],
-            info="\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
+            info="The loss function to use."
+                 "\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
                  "towards its median value in the training dataset. Robust to outliers but as "
                  "a median, it can potentially ignore some infrequent image types in the dataset."
                  "\n\t MSE - Mean squared error will guide reconstructions of each pixel "
@@ -163,7 +172,8 @@ class Config(FaceswapConfig):
                  "suspectible to outliers and typically produces slightly blurrier results."
                  "\n\t LogCosh - log(cosh(x)) acts similiar to MSE for small errors and to "
                  "MAE for large errors. Like MSE, it is very stable and prevents overshoots "
-                 "when errors are near zero. Like MAE, it is robust to outliers."
+                 "when errors are near zero. Like MAE, it is robust to outliers. NB: Due to a bug "
+                 "in PlaidML, this loss does not work on AMD cards."
                  "\n\t Smooth_L1 --- Modification of the MAE loss to correct two of its "
                  "disadvantages. This loss has improved stability and guidance for small errors."
                  "\n\t L_inf_norm --- The L_inf norm will reduce the largest individual pixel "
@@ -174,7 +184,8 @@ class Config(FaceswapConfig):
                  "statistics of an image. Potentially delivers more realistic looking images."
                  "\n\t GMSD - Gradient Magnitude Similarity Deviation seeks to match "
                  "the global standard deviation of the pixel to pixel differences between two "
-                 "images. Similiar in approach to SSIM."
+                 "images. Similiar in approach to SSIM. NB: This loss does not currently work on "
+                 "AMD cards."
                  "\n\t Pixel_Gradient_Difference - Instead of minimizing the difference between "
                  "the absolute value of each pixel in two reference images, compute the pixel to "
                  "pixel spatial difference in each image and then minimize that difference "

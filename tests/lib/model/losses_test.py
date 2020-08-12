@@ -9,6 +9,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 from keras import backend as K
+from keras import losses as k_losses
 from keras.layers import Conv2D
 from keras.models import Sequential
 from keras.optimizers import Adam
@@ -17,27 +18,60 @@ from lib.model import losses
 from lib.utils import get_backend
 
 
-_PARAMS = [(losses.gradient_loss, (1, 5, 6, 7), (1, 5, 6)),
-           (losses.generalized_loss, (5, 6, 7), (5, 6)),
+_PARAMS = [(losses.GeneralizedLoss(), (2, 16, 16)),
+           (losses.GradientLoss(), (2, 16, 16)),
            # TODO Make sure these output dimensions are correct
-           (losses.l_inf_norm, (1, 5, 6, 7), (1, 1, 1)),
+           (losses.GMSDLoss(), (2, 1, 1)),
            # TODO Make sure these output dimensions are correct
-           (losses.gmsd_loss, (1, 5, 6, 7), (1, 1, 1))]
-_IDS = ["gradient_loss", "generalized_loss", "l_inf_norm", "gmsd_loss"]
+           (losses.LInfNorm(), (2, 1, 1))]
+_IDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm"]
 _IDS = ["{}[{}]".format(loss, get_backend().upper()) for loss in _IDS]
 
 
-@pytest.mark.parametrize(["loss_func", "input_shape", "output_shape"], _PARAMS, ids=_IDS)
-def test_objective_shapes(loss_func, input_shape, output_shape):
+@pytest.mark.parametrize(["loss_func", "output_shape"], _PARAMS, ids=_IDS)
+def test_loss_output(loss_func, output_shape):
     """ Basic shape tests for loss functions. """
-    y_a = K.variable(np.random.random(input_shape))
-    y_b = K.variable(np.random.random(input_shape))
+    if get_backend() == "amd" and isinstance(loss_func, losses.GMSDLoss):
+        pytest.skip("GMSD Loss is not currently compatible with PlaidML")
+    y_a = K.variable(np.random.random((2, 16, 16, 3)))
+    y_b = K.variable(np.random.random((2, 16, 16, 3)))
     objective_output = loss_func(y_a, y_b)
-    assert K.eval(objective_output).shape == output_shape
+    if get_backend() == "amd":
+        assert K.eval(objective_output).shape == output_shape
+    else:
+        output = objective_output.numpy()
+        assert output.dtype == "float32" and not np.isnan(output)
+
+
+_PLPARAMS = _PARAMS + [(k_losses.mean_absolute_error, (2, 16, 16)),
+                       (k_losses.mean_squared_error, (2, 16, 16)),
+                       (k_losses.logcosh, (2, 16, 16)),
+                       (losses.DSSIMObjective(), ())]
+_PLIDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm", "mae", "mse", "logcosh",
+          "DSSIMObjective"]
+_PLIDS = ["{}[{}]".format(loss, get_backend().upper()) for loss in _PLIDS]
+
+
+@pytest.mark.parametrize(["loss_func", "output_shape"], _PLPARAMS, ids=_PLIDS)
+def test_penalized_loss(loss_func, output_shape):
+    """ Test penalized loss wrapper works as expected """
+    if get_backend() == "amd":
+        if isinstance(loss_func, losses.GMSDLoss):
+            pytest.skip("GMSD Loss is not currently compatible with PlaidML")
+        if hasattr(loss_func, "__name__") and loss_func.__name__ == "logcosh":
+            pytest.skip("LogCosh Loss is not currently compatible with PlaidML")
+    y_a = K.variable(np.random.random((2, 16, 16, 4)))
+    y_b = K.variable(np.random.random((2, 16, 16, 3)))
+    p_loss = losses.PenalizedLoss(loss_func)
+    output = p_loss(y_a, y_b)
+    if get_backend() == "amd":
+        assert K.eval(output).shape == output_shape
+    else:
+        output = output.numpy()
+        assert output.dtype == "float32" and not np.isnan(output)
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
-@pytest.mark.xfail(get_backend() == "amd", reason="plaidML generates NaNs")
 def test_dssim_channels_last(dummy):  # pylint:disable=unused-argument
     """ Basic test for DSSIM Loss """
     prev_data = K.image_data_format()

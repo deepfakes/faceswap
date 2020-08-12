@@ -13,7 +13,7 @@ from .display_page import DisplayOptionalPage
 from .custom_widgets import Tooltip
 from .stats import Calculations
 from .control_helper import set_slider_rounding
-from .utils import FileHandler, get_config, get_images
+from .utils import FileHandler, get_config, get_images, preview_trigger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -72,6 +72,23 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def __init__(self, *args, **kwargs):
         self.update_preview = get_config().tk_vars["updatepreview"]
         super().__init__(*args, **kwargs)
+
+    def add_options(self):
+        """ Add the additional options """
+        self.add_option_refresh()
+        super().add_options()
+
+    def add_option_refresh(self):
+        """ Add refresh button to refresh preview immediately """
+        logger.debug("Adding refresh option")
+        btnrefresh = ttk.Button(self.optsframe,
+                                image=get_images().icons["reload"],
+                                command=preview_trigger().set)
+        btnrefresh.pack(padx=2, side=tk.RIGHT)
+        Tooltip(btnrefresh,
+                text="Preview updates at every model save. Click to refresh now.",
+                wraplength=200)
+        logger.debug("Added refresh option")
 
     def display_item_set(self):
         """ Load the latest preview if available """
@@ -173,9 +190,9 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
-    def __init__(self, parent, tabname, helptext, waittime, command=None):
+    def __init__(self, parent, tab_name, helptext, waittime, command=None):
         self.trace_var = None
-        super().__init__(parent, tabname, helptext, waittime, command)
+        super().__init__(parent, tab_name, helptext, waittime, command)
 
     def add_options(self):
         """ Add the additional options """
@@ -232,7 +249,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         smooth_amount_var = get_config().tk_vars["smoothgraph"]
         if session.initialized and session.logging_disabled:
             logger.trace("Logs disabled. Hiding graph")
-            self.set_info("Graph is disabled as 'no-logs' or 'pingpong' has been selected")
+            self.set_info("Graph is disabled as 'no-logs' has been selected")
             self.display_item = None
             if self.trace_var is not None:
                 smooth_amount_var.trace_vdelete("w", self.trace_var)
@@ -250,20 +267,19 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
-        logger.trace("Adding graph")
+        logger.debug("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
-        display_tabs = sorted(self.display_item.loss_keys)
-        if any(key.startswith("total") for key in display_tabs):
-            total_idx = [idx for idx, key in enumerate(display_tabs) if key.startswith("total")][0]
-            display_tabs.insert(0, display_tabs.pop(total_idx))
+        loss_keys = [key for key in self.display_item.loss_keys if key != "total"]
+        display_tabs = sorted(set(key[:-1].rstrip("_") for key in loss_keys))
         for loss_key in display_tabs:
             tabname = loss_key.replace("_", " ").title()
             if tabname in existing:
                 continue
 
+            display_keys = [key for key in loss_keys if key.startswith(loss_key)]
             data = Calculations(session=get_config().session,
                                 display="loss",
-                                loss_keys=[loss_key],
+                                loss_keys=display_keys,
                                 selections=["raw", "smoothed"],
                                 smooth_amount=get_config().tk_vars["smoothgraph"].get())
             self.add_child(tabname, data)

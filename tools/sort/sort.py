@@ -17,10 +17,8 @@ from tqdm import tqdm
 from lib.serializer import get_serializer_from_filename
 from lib.faces_detect import DetectedFace
 from lib.image import ImagesLoader, read_image
-from lib.utils import get_backend
-from lib.vgg_face2_keras import VGGFace2 as VGGFace
+from plugins.extract.recognition.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.extract.pipeline import Extractor, ExtractMedia
-from plugins.extract._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -58,13 +56,8 @@ class Sort():
 
         # Load VGG Face if sorting by face
         if self.args.sort_method.lower() == "face":
-            conf = Config("global", configfile=self.args.configfile)
-            allow_growth = (conf.config_dict["allow_growth"] and
-                            self.args.backend.lower() == "gpu" and
-                            get_backend() == "nvidia")
-            self.vgg_face = VGGFace(backend=self.args.backend,
-                                    allow_growth=allow_growth,
-                                    loglevel=self.args.loglevel)
+            self.vgg_face = VGGFace(exclude_gpus=self.args.exclude_gpus)
+            self.vgg_face.init_model()
 
         # If logging is enabled, prepare container
         if self.args.log_changes:
@@ -91,10 +84,10 @@ class Sort():
 
         self.sort_process()
 
-    @staticmethod
-    def launch_aligner():
+    def launch_aligner(self):
         """ Load the aligner plugin to retrieve landmarks """
-        extractor = Extractor(None, "fan", None, normalize_method="hist")
+        extractor = Extractor(None, "fan", None,
+                              normalize_method="hist", exclude_gpus=self.args.exclude_gpus)
         extractor.set_batchsize("align", 1)
         extractor.launch()
         return extractor

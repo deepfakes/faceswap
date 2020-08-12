@@ -32,8 +32,11 @@ class Mask(Masker):
         self.batchsize = self.config["batch-size"]
 
     def init_model(self):
-        self.model = KSession(self.name, self.model_path,
-                              model_kwargs=dict(), allow_growth=self.config["allow_growth"])
+        self.model = KSession(self.name,
+                              self.model_path,
+                              model_kwargs=dict(),
+                              allow_growth=self.config["allow_growth"],
+                              exclude_gpus=self._exclude_gpus)
         self.model.load_model()
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")

@@ -4,14 +4,13 @@
 Adapted from Keras tests.
 """
 
-from keras import initializers as k_initializers
 from keras import backend as K
+from keras import initializers as k_initializers
 import pytest
 import numpy as np
 
 from lib.model import initializers
 from lib.utils import get_backend
-
 
 CONV_SHAPE = (3, 3, 256, 2048)
 CONV_ID = get_backend().upper()
@@ -41,7 +40,7 @@ def test_icnr(tensor_shape):
     tensor_shape: tuple
         The shape of the tensor to feed to the initializer
     """
-    fan_in, _ = k_initializers._compute_fans(tensor_shape)  # pylint:disable=protected-access
+    fan_in, _ = initializers.compute_fans(tensor_shape)
     std = np.sqrt(2. / fan_in)
     _runner(initializers.ICNR(initializer=k_initializers.he_uniform(), scale=2), tensor_shape,
             target_mean=0, target_std=std)
@@ -56,7 +55,7 @@ def test_convolution_aware(tensor_shape):
     tensor_shape: tuple
         The shape of the tensor to feed to the initializer
     """
-    fan_in, _ = k_initializers._compute_fans(tensor_shape)  # pylint:disable=protected-access
+    fan_in, _ = initializers.compute_fans(tensor_shape)
     std = np.sqrt(2. / fan_in)
-    _runner(initializers.ConvolutionAware(seed=123, init=True), tensor_shape,
+    _runner(initializers.ConvolutionAware(seed=123), tensor_shape,
             target_mean=0, target_std=std)

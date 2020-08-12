@@ -4,10 +4,9 @@
 from __future__ import absolute_import, division, print_function
 
 import cv2
-from keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU
-
 import numpy as np
-
+# pylint:disable=import-error
+from keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU
 from lib.model.session import KSession
 from ._base import Detector, logger
 
@@ -54,7 +53,10 @@ class Detect(Detector):
 
     def init_model(self):
         """ Initialize S3FD Model"""
-        self.model = MTCNN(self.model_path, self.config["allow_growth"], **self.kwargs)
+        self.model = MTCNN(self.model_path,
+                           self.config["allow_growth"],
+                           self._exclude_gpus,
+                           **self.kwargs)
 
     def process_input(self, batch):
         """ Compile the detection image(s) for prediction """
@@ -105,15 +107,18 @@ class Detect(Detector):
 
 
 class PNet(KSession):
-    """ Keras PNet model for MTCNN """
-    def __init__(self, model_path, allow_growth):
-        super().__init__("MTCNN-PNet", model_path, allow_growth=allow_growth)
+    """ Keras P-Net model for MTCNN """
+    def __init__(self, model_path, allow_growth, exclude_gpus):
+        super().__init__("MTCNN-PNet",
+                         model_path,
+                         allow_growth=allow_growth,
+                         exclude_gpus=exclude_gpus)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
     @staticmethod
     def model_definition():
-        """ Keras PNetwork for MTCNN """
+        """ Keras P-Network for MTCNN """
         input_ = Input(shape=(None, None, 3))
         var_x = Conv2D(10, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='PReLU1')(var_x)
@@ -128,15 +133,18 @@ class PNet(KSession):
 
 
 class RNet(KSession):
-    """ Keras RNet model for MTCNN """
-    def __init__(self, model_path, allow_growth):
-        super().__init__("MTCNN-RNet", model_path, allow_growth=allow_growth)
+    """ Keras R-Net model for MTCNN """
+    def __init__(self, model_path, allow_growth, exclude_gpus):
+        super().__init__("MTCNN-RNet",
+                         model_path,
+                         allow_growth=allow_growth,
+                         exclude_gpus=exclude_gpus)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
     @staticmethod
     def model_definition():
-        """ Keras RNetwork for MTCNN """
+        """ Keras R-Network for MTCNN """
         input_ = Input(shape=(24, 24, 3))
         var_x = Conv2D(28, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
@@ -158,15 +166,18 @@ class RNet(KSession):
 
 
 class ONet(KSession):
-    """ Keras ONet model for MTCNN """
-    def __init__(self, model_path, allow_growth):
-        super().__init__("MTCNN-ONet", model_path, allow_growth=allow_growth)
+    """ Keras O-Net model for MTCNN """
+    def __init__(self, model_path, allow_growth, exclude_gpus):
+        super().__init__("MTCNN-ONet",
+                         model_path,
+                         allow_growth=allow_growth,
+                         exclude_gpus=exclude_gpus)
         self.define_model(self.model_definition)
         self.load_model_weights()
 
     @staticmethod
     def model_definition():
-        """ Keras ONetwork for MTCNN """
+        """ Keras O-Network for MTCNN """
         input_ = Input(shape=(48, 48, 3))
         var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv1')(input_)
         var_x = PReLU(shared_axes=[1, 2], name='prelu1')(var_x)
@@ -192,26 +203,26 @@ class ONet(KSession):
 
 class MTCNN():
     """ MTCNN Detector for face alignment """
-    # TODO Batching for rnet and onet
+    # TODO Batching for r-net and o-net
 
-    def __init__(self, model_path, allow_growth, minsize, threshold, factor):
+    def __init__(self, model_path, allow_growth, exclude_gpus, minsize, threshold, factor):
         """
         minsize: minimum faces' size
         threshold: threshold=[th1, th2, th3], th1-3 are three steps threshold
         factor: the factor used to create a scaling pyramid of face sizes to
                 detect in the image.
-        pnet, rnet, onet: caffemodel
+        p-net, r-net, o-net: caffemodel
         """
-        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s, minsize: %s, "
-                     "threshold: %s, factor: %s)", self.__class__.__name__, model_path,
-                     allow_growth, minsize, threshold, factor)
+        logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s, exclude_gpus: %s, "
+                     "minsize: %s, threshold: %s, factor: %s)", self.__class__.__name__,
+                     model_path, allow_growth, exclude_gpus, minsize, threshold, factor)
         self.minsize = minsize
         self.threshold = threshold
         self.factor = factor
 
-        self.pnet = PNet(model_path[0], allow_growth)
-        self.rnet = RNet(model_path[1], allow_growth)
-        self.onet = ONet(model_path[2], allow_growth)
+        self.pnet = PNet(model_path[0], allow_growth, exclude_gpus)
+        self.rnet = RNet(model_path[1], allow_growth, exclude_gpus)
+        self.onet = ONet(model_path[2], allow_growth, exclude_gpus)
         self._pnet_scales = None
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -238,7 +249,7 @@ class MTCNN():
 
     def detect_pnet(self, images, height, width):
         # pylint: disable=too-many-locals
-        """ first stage - fast proposal network (pnet) to obtain face candidates """
+        """ first stage - fast proposal network (p-net) to obtain face candidates """
         if self._pnet_scales is None:
             self._pnet_scales = calculate_scales(height, width, self.minsize, self.factor)
         rectangles = [[] for _ in range(images.shape[0])]
@@ -256,7 +267,7 @@ class MTCNN():
             cls_prob = np.swapaxes(cls_prob, 1, 2)
             roi = np.swapaxes(roi, 1, 3)
             for idx in range(batch_items):
-                # first index 0 = class score, 1 = one hot repr
+                # first index 0 = class score, 1 = one hot representation
                 rectangle = detect_face_12net(cls_prob[idx, ...],
                                               roi[idx, ...],
                                               out_side,
@@ -268,7 +279,7 @@ class MTCNN():
         return [nms(x, 0.7, 'iou') for x in rectangles]
 
     def detect_rnet(self, images, rectangle_batch, height, width):
-        """ second stage - refinement of face candidates with rnet """
+        """ second stage - refinement of face candidates with r-net """
         ret = []
         # TODO: batching
         for idx, rectangles in enumerate(rectangle_batch):
@@ -295,7 +306,7 @@ class MTCNN():
         return ret
 
     def detect_onet(self, images, rectangle_batch, height, width):
-        """ third stage - further refinement and facial landmarks positions with onet """
+        """ third stage - further refinement and facial landmarks positions with o-net """
         ret = list()
         # TODO: batching
         for idx, rectangles in enumerate(rectangle_batch):
@@ -474,7 +485,7 @@ def filter_face_48net(cls_prob, roi, pts, rectangles, width, height, threshold):
 
 def nms(rectangles, threshold, method):
     # pylint:disable=too-many-locals
-    """ apply NMS(non-maximum suppression) on ROIs in same scale(matrix version)
+    """ apply non-maximum suppression on ROIs in same scale(matrix version)
     Input:
         rectangles: rectangles[i][0:3] is the position, rectangles[i][4] is score
     Output:

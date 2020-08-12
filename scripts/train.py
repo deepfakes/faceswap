@@ -9,20 +9,17 @@ from threading import Lock
 from time import sleep
 
 import cv2
-import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
 
 from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.utils import (get_folder, get_image_paths, deprecation_warning, FaceswapError,
-                       _image_extensions)
+from lib.utils import (get_folder, get_image_paths, FaceswapError, _image_extensions)
 from plugins.plugin_loader import PluginLoader
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Train():
+class Train():  # pylint:disable=too-few-public-methods
     """ The Faceswap Training Process.
 
     The training process is responsible for training a model on a set of source faces and a set of
@@ -42,8 +39,11 @@ class Train():
         self._args = arguments
         self._timelapse = self._set_timelapse()
         self._images = self._get_images()
+        self._gui_preview_trigger = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])),
+                                                 "lib", "gui", ".cache", ".preview_trigger")
         self._stop = False
         self._save_now = False
+        self._refresh_preview = False
         self._preview_buffer = dict()
         self._lock = Lock()
 
@@ -58,20 +58,6 @@ class Train():
         size = image.shape[0]
         logger.debug("Training image size: %s", size)
         return size
-
-    @property
-    def _alignments_paths(self):
-        """ dict: The alignments paths for each of the source and destination faces. Key is the
-            side, value is the path to the alignments file """
-        alignments_paths = dict()
-        for side in ("a", "b"):
-            alignments_path = getattr(self._args, "alignments_path_{}".format(side))
-            if not alignments_path:
-                image_path = getattr(self._args, "input_{}".format(side))
-                alignments_path = os.path.join(image_path, "alignments.fsa")
-            alignments_paths[side] = alignments_path
-        logger.debug("Alignments paths: %s", alignments_paths)
-        return alignments_paths
 
     def _set_timelapse(self):
         """ Set time-lapse paths if requested.
@@ -143,21 +129,9 @@ class Train():
         """
         logger.debug("Starting Training Process")
         logger.info("Training data directory: %s", self._args.model_dir)
-
-        # TODO Move these args to config and remove these deprecation warnings
-        if hasattr(self._args, "warp_to_landmarks") and self._args.warp_to_landmarks:
-            deprecation_warning("`-wl`, ``--warp-to-landmarks``",
-                                additional_info="This option will be available within training "
-                                                "config settings (/config/train.ini).")
-        if hasattr(self._args, "no_augment_color") and self._args.no_augment_color:
-            deprecation_warning("`-nac`, ``--no-augment-color``",
-                                additional_info="This option will be available within training "
-                                                "config settings (/config/train.ini).")
         thread = self._start_thread()
         # from lib.queue_manager import queue_manager; queue_manager.debug_monitor(1)
-
         err = self._monitor(thread)
-
         self._end_thread(thread, err)
         logger.debug("Completed Training Process")
 
@@ -208,16 +182,13 @@ class Train():
             sleep(1)  # Let preview instructions flush out to logger
             logger.debug("Commencing Training")
             logger.info("Loading data, this may take a while...")
-
-            if self._args.allow_growth:
-                self._set_tf_allow_growth()
             model = self._load_model()
             trainer = self._load_trainer(model)
             self._run_training_cycle(model, trainer)
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.save_models()
+                model.save()
                 trainer.clear_tensorboard()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
@@ -234,25 +205,13 @@ class Train():
             The requested model plugin
         """
         logger.debug("Loading Model")
-        model_dir = get_folder(self._args.model_dir)
-        configfile = self._args.configfile if hasattr(self._args, "configfile") else None
-        augment_color = not self._args.no_augment_color
+        model_dir = str(get_folder(self._args.model_dir))
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
-            gpus=self._args.gpus,
-            configfile=configfile,
-            snapshot_interval=self._args.snapshot_interval,
-            no_logs=self._args.no_logs,
-            warp_to_landmarks=self._args.warp_to_landmarks,
-            augment_color=augment_color,
-            no_flip=self._args.no_flip,
+            self._args,
             training_image_size=self._image_size,
-            alignments_paths=self._alignments_paths,
-            preview_scale=self._args.preview_scale,
-            pingpong=self._args.pingpong,
-            memory_saving_gradients=self._args.memory_saving_gradients,
-            optimizer_savings=self._args.optimizer_savings,
             predict=False)
+        model.build()
         logger.debug("Loaded Model")
         return model
 
@@ -297,28 +256,37 @@ class Train():
         else:
             display_func = None
 
-        for iteration in range(0, self._args.iterations):
+        for iteration in range(1, self._args.iterations + 1):
             logger.trace("Training iteration: %s", iteration)
-            save_iteration = iteration % self._args.save_interval == 0
-            viewer = display_func if save_iteration or self._save_now else None
+            save_iteration = iteration % self._args.save_interval == 0 or iteration == 1
+
+            if save_iteration or self._save_now or self._refresh_preview:
+                viewer = display_func
+            else:
+                viewer = None
             timelapse = self._timelapse if save_iteration else None
             trainer.train_one_step(viewer, timelapse)
             if self._stop:
                 logger.debug("Stop received. Terminating")
                 break
+
+            if self._refresh_preview and viewer is not None:
+                if self._args.redirect_gui:
+                    print("\n")
+                    logger.info("[Preview Updated]")
+                    logger.debug("Removing gui trigger file: %s", self._gui_preview_trigger)
+                    os.remove(self._gui_preview_trigger)
+                self._refresh_preview = False
+
             if save_iteration:
-                logger.trace("Save Iteration: (iteration: %s", iteration)
-                if self._args.pingpong:
-                    model.save_models()
-                    trainer.pingpong.switch()
-                else:
-                    model.save_models()
+                logger.debug("Save Iteration: (iteration: %s", iteration)
+                model.save()
             elif self._save_now:
-                logger.trace("Save Requested: (iteration: %s", iteration)
-                model.save_models()
+                logger.debug("Save Requested: (iteration: %s", iteration)
+                model.save()
                 self._save_now = False
         logger.debug("Training cycle complete")
-        model.save_models()
+        model.save()
         trainer.clear_tensorboard()
         self._stop = True
 
@@ -331,6 +299,7 @@ class Train():
             ``True`` if there has been an error in the background thread otherwise ``False``
         """
         is_preview = self._args.preview
+        preview_trigger_set = False
         logger.debug("Launching Monitor")
         logger.info("===================================================")
         logger.info("  Starting")
@@ -367,8 +336,13 @@ class Train():
                     logger.debug("Exit requested")
                     break
                 if is_preview and cv_key == ord("s"):
+                    print("\n")
                     logger.info("Save requested")
                     self._save_now = True
+                if is_preview and cv_key == ord("r"):
+                    print("\n")
+                    logger.info("Refresh preview requested")
+                    self._refresh_preview = True
 
                 # Console Monitor
                 if keypress.kbhit():
@@ -380,6 +354,18 @@ class Train():
                         logger.info("Save requested")
                         self._save_now = True
 
+                # GUI Preview trigger update monitor
+                if self._args.redirect_gui:
+                    if not preview_trigger_set and os.path.isfile(self._gui_preview_trigger):
+                        print("\n")
+                        logger.info("Refresh preview requested")
+                        self._refresh_preview = True
+                        preview_trigger_set = True
+
+                    if preview_trigger_set and not self._refresh_preview:
+                        logger.debug("Resetting GUI preview trigger")
+                        preview_trigger_set = False
+
                 sleep(1)
             except KeyboardInterrupt:
                 logger.debug("Keyboard Interrupt received")
@@ -387,20 +373,6 @@ class Train():
         keypress.set_normal_term()
         logger.debug("Closed Monitor")
         return err
-
-    @staticmethod
-    def _set_tf_allow_growth():
-        """ Allow TensorFlow to manage VRAM growth.
-
-        Enables the Tensorflow allow_growth option if requested in the command line arguments
-        """
-        # pylint: disable=no-member
-        logger.debug("Setting Tensorflow 'allow_growth' option")
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        config.gpu_options.visible_device_list = "0"
-        set_session(tf.Session(config=config))
-        logger.debug("Set Tensorflow 'allow_growth' option")
 
     def _show(self, image, name=""):
         """ Generate the preview and write preview file output.
@@ -415,28 +387,28 @@ class Train():
             The name of the image for saving or display purposes. If an empty string is passed
             then it will automatically be names. Default: ""
         """
-        logger.trace("Updating preview: (name: %s)", name)
+        logger.debug("Updating preview: (name: %s)", name)
         try:
             scriptpath = os.path.realpath(os.path.dirname(sys.argv[0]))
             if self._args.write_image:
-                logger.trace("Saving preview to disk")
+                logger.debug("Saving preview to disk")
                 img = "training_preview.jpg"
                 imgfile = os.path.join(scriptpath, img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
-                logger.trace("Saved preview to: '%s'", img)
+                logger.debug("Saved preview to: '%s'", img)
             if self._args.redirect_gui:
-                logger.trace("Generating preview for GUI")
+                logger.debug("Generating preview for GUI")
                 img = ".gui_training_preview.jpg"
                 imgfile = os.path.join(scriptpath, "lib", "gui",
                                        ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
-                logger.trace("Generated preview for GUI: '%s'", img)
+                logger.debug("Generated preview for GUI: '%s'", img)
             if self._args.preview:
-                logger.trace("Generating preview for display: '%s'", name)
+                logger.debug("Generating preview for display: '%s'", name)
                 with self._lock:
                     self._preview_buffer[name] = image
-                logger.trace("Generated preview for display: '%s'", name)
+                logger.debug("Generated preview for display: '%s'", name)
         except Exception as err:
             logging.error("could not preview sample")
             raise err
-        logger.trace("Updated preview: (name: %s)", name)
+        logger.debug("Updated preview: (name: %s)", name)

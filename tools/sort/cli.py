@@ -159,15 +159,6 @@ class SortArgs(FaceSwapArgs):
                                       "the last bin."
                                       "Default value: 5"})
 
-        argument_list.append({"opts": ("-be", "--backend"),
-                              "action": Radio,
-                              "type": str.upper,
-                              "choices": ("CPU", "GPU"),
-                              "default": "GPU",
-                              "group": "settings",
-                              "help": "Backend to use for VGG Face inference."
-                                      "Only used for sort by 'face'."})
-
         argument_list.append({"opts": ('-l', '--log-changes'),
                               "action": 'store_true',
                               "group": "settings",

@@ -1,8 +1,9 @@
 #!/usr/bin python3
 """ Display Frame of the Faceswap GUI
 
-    What is displayed in the Display Frame varies
-    depending on what tasked is being run """
+This is the large right hand area of the GUI. At default, the Analysis tab is always displayed
+here. Further optional tabs will also be displayed depending on the currently executing Faceswap
+task. """
 
 import logging
 import tkinter as tk
@@ -16,29 +17,46 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
-    """ The display tabs """
+    """ The tkinter Notebook that holds the display items.
+
+    Parameters
+    ----------
+    parent: :class:`tk.PanedWindow`
+        The paned window that holds the Display Notebook
+    """
 
     def __init__(self, parent):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent)
         parent.add(self)
         tk_vars = get_config().tk_vars
-        self.wrapper_var = tk_vars["display"]
-        self.runningtask = tk_vars["runningtask"]
+        self._wrapper_var = tk_vars["display"]
+        self._runningtask = tk_vars["runningtask"]
 
-        self.set_wrapper_var_trace()
-        self.add_static_tabs()
-        self.static_tabs = [child for child in self.tabs()]
+        self._set_wrapper_var_trace()
+        self._add_static_tabs()
+        # pylint:disable=unnecessary-comprehension
+        self._static_tabs = [child for child in self.tabs()]
+        self.bind("<<NotebookTabChanged>>", self._on_tab_change)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_wrapper_var_trace(self):
-        """ Set the trigger actions for the display vars
-            when they have been triggered in the Process Wrapper """
-        logger.debug("Setting wrapper var trace")
-        self.wrapper_var.trace("w", self.update_displaybook)
+    @property
+    def runningtask(self):
+        """ :class:`tkinter.BooleanVar`: The global tkinter variable that indicates whether a
+        Faceswap task is currently running or not. """
+        return self._runningtask
 
-    def add_static_tabs(self):
-        """ Add tabs that are permanently available """
+    def _set_wrapper_var_trace(self):
+        """ Sets the trigger to update the displayed notebook's pages when the global tkinter
+        variable `display` is updated in the :class:`~lib.gui.wrapper.ProcessWrapper`. """
+        logger.debug("Setting wrapper var trace")
+        self._wrapper_var.trace("w", self._update_displaybook)
+
+    def _add_static_tabs(self):
+        """ Add the tabs to the Display Notebook that are permanently displayed.
+
+        Currently this is just the `Analysis` tab.
+        """
         logger.debug("Adding static tabs")
         for tab in ("job queue", "analysis"):
             if tab == "job queue":
@@ -48,32 +66,52 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
                             "Summary statistics for each training session"}
                 frame = Analysis(self, tab, helptext)
             else:
-                frame = self.add_frame()
+                frame = self._add_frame()
                 self.add(frame, text=tab.title())
 
-    def add_frame(self):
-        """ Add a single frame for holding tab's contents """
+    def _add_frame(self):
+        """ Add a single frame for holding a static tab's contents.
+
+        Returns
+        -------
+        ttk.Frame
+            The frame, packed into position
+        """
         logger.debug("Adding frame")
         frame = ttk.Frame(self)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
         return frame
 
-    def command_display(self, command):
-        """ Select what to display based on incoming
-            command """
-        build_tabs = getattr(self, "{}_tabs".format(command))
+    def _command_display(self, command):
+        """ Build the relevant command specific tabs based on the incoming Faceswap command.
+
+        Parameters
+        ----------
+        command: str
+            The Faceswap command that is being executed
+        """
+        build_tabs = getattr(self, "_{}_tabs".format(command))
         build_tabs()
 
-    def extract_tabs(self, command="extract"):
-        """ Build the extract tabs """
+    def _extract_tabs(self, command="extract"):
+        """ Build the display tabs that are used for Faceswap extract and convert tasks.
+
+        Notes
+        -----
+        The same display tabs are used for both convert and extract tasks.
+
+        command: [`"extract"`, `"convert"`], optional
+            The command that the display tabs are being built for. Default: `"extract"`
+
+        """
         logger.debug("Build extract tabs")
         helptext = ("Updates preview from output every 5 "
                     "seconds to limit disk contention")
         PreviewExtract(self, "preview", helptext, 5000, command)
         logger.debug("Built extract tabs")
 
-    def train_tabs(self):
-        """ Build the train tabs """
+    def _train_tabs(self):
+        """ Build the display tabs that are used for the Faceswap train task."""
         logger.debug("Build train tabs")
         for tab in ("graph", "preview"):
             if tab == "graph":
@@ -84,17 +122,21 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
                 PreviewTrain(self, "preview", helptext, 1000)
         logger.debug("Built train tabs")
 
-    def convert_tabs(self):
-        """ Build the convert tabs
-            Currently identical to Extract, so just call that """
+    def _convert_tabs(self):
+        """ Build the display tabs that are used for the Faceswap convert task.
+
+        Notes
+        -----
+        The tabs displayed are the same as used for extract, so :func:`_extract_tabs` is called.
+        """
         logger.debug("Build convert tabs")
-        self.extract_tabs(command="convert")
+        self._extract_tabs(command="convert")
         logger.debug("Built convert tabs")
 
-    def remove_tabs(self):
-        """ Remove all command specific tabs """
+    def _remove_tabs(self):
+        """ Remove all optional displayed command specific tabs from the notebook. """
         for child in self.tabs():
-            if child in self.static_tabs:
+            if child in self._static_tabs:
                 continue
             logger.debug("removing child: %s", child)
             child_name = child.split(".")[-1]
@@ -102,10 +144,40 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
             child_object.close()  # Call the OptionalDisplayPage close() method
             self.forget(child)
 
-    def update_displaybook(self, *args):  # pylint: disable=unused-argument
-        """ Set the display tabs based on executing task """
-        command = self.wrapper_var.get()
-        self.remove_tabs()
+    def _update_displaybook(self, *args):  # pylint: disable=unused-argument
+        """ Callback to be executed when the global tkinter variable `display`
+        (:attr:`wrapper_var`) is updated when a Faceswap task is executed.
+
+        Currently only updates when a core faceswap task (extract, train or convert) is executed.
+
+        Parameters
+        ----------
+        args: tuple
+            Required for tkinter callback events, but unused.
+
+        """
+        command = self._wrapper_var.get()
+        self._remove_tabs()
         if not command or command not in ("extract", "train", "convert"):
             return
-        self.command_display(command)
+        self._command_display(command)
+
+    def _on_tab_change(self, event):  # pylint:disable=unused-argument
+        """ Event trigger for tab change events.
+
+        Calls the selected tabs :func:`on_tab_select` method, if it exists, otherwise returns.
+
+        Parameters
+        ----------
+        event: tkinter callback event
+            Required, but unused
+        """
+        selected = self.select().split(".")[-1]
+        logger.debug("Selected tab: %s", selected)
+        selected_object = self.children[selected]
+        if hasattr(selected_object, "on_tab_select"):
+            logger.debug("Calling on_tab_select for '%s'", selected_object)
+            selected_object.on_tab_select()
+        else:
+            logger.debug("Object does not have on_tab_select method. Returning: '%s'",
+                         selected_object)

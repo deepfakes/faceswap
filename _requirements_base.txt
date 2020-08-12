@@ -3,10 +3,8 @@ psutil>=5.7.0
 pathlib==1.0.1
 numpy>=1.18.0
 opencv-python>=4.1.2.0
-scikit-image>=0.16.2
 pillow>=7.0.0
 scikit-learn>=0.22.0
-toposort==1.5
 fastcluster==1.1.26
 matplotlib>=3.0.3
 imageio>=2.8.0
@@ -15,16 +13,5 @@ ffmpy==0.2.3
 # Revert back to nvidia-ml-py3 when windows/system32 patch is implemented
 git+https://github.com/deepfakes/nvidia-ml-py3.git
 #nvidia-ml-py3
-h5py>=2.10.0
-Keras==2.2.4
 pywin32>=227 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
-
-# tensorflow is included within the docker image.
-# If you are looking for dependencies for a manual install,
-
-# NB: Tensorflow version 1.12 is the minimum supported version of Tensorflow.
-#    If your graphics card support is below Cuda 9.0 you will need to either
-#    compile tensorflow yourself or download a custom version.
-#    Install 1.12.0<=tensorflow-gpu<=1.13.0 for CUDA 9.0
-#    or 1.13.1<=tensorflow-gpu<1.15 for CUDA 10.0

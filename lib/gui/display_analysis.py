@@ -18,77 +18,122 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
-    """ Session analysis tab """
-    def __init__(self, parent, tabname, helptext):
-        logger.debug("Initializing: %s: (parent, %s, tabname: '%s', helptext: '%s')",
-                     self.__class__.__name__, parent, tabname, helptext)
-        super().__init__(parent, tabname, helptext)
+    """ Session Analysis Tab.
 
-        self.summary = None
-        self.session = None
-        self.add_options()
-        self.add_main_frame()
-        self.thread = None  # Thread for compiling stats data in background
-        self.set_callbacks()
+    The area of the GUI that holds the session summary stats for model training sessions.
+
+    Parameters
+    ----------
+    parent: :class:`lib.gui.display.DisplayNotebook`
+        The :class:`ttk.Notebook` that holds this session summary statistics page
+    tab_name: str
+        The name of the tab to be displayed in the notebook
+    helptext: str
+        The help text to display for the summary statistics page
+    """
+    def __init__(self, parent, tab_name, helptext):
+        logger.debug("Initializing: %s: (parent, %s, tab_name: '%s', helptext: '%s')",
+                     self.__class__.__name__, parent, tab_name, helptext)
+        super().__init__(parent, tab_name, helptext)
+        self._summary = None
+        self._session = None
+
+        self._reset_session_info()
+        _Options(self)
+        self._stats = self._get_main_frame()
+
+        self._thread = None  # Thread for compiling stats data in background
+        self._set_callbacks()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def set_callbacks(self):
-        """ Add a callback to update analysis when the training graph is updated """
-        tkv = get_config().tk_vars
-        tkv["refreshgraph"].trace("w", self.update_current_session)
-        tkv["istraining"].trace("w", self.remove_current_session)
-        tkv["analysis_folder"].trace("w", self.populate_from_folder)
+    def set_vars(self):
+        """ Set the analysis specific tkinter variables to :attr:`vars`.
 
-    def update_current_session(self, *args):  # pylint:disable=unused-argument
-        """ Update the current session data on a graph update callback """
-        if not get_config().tk_vars["refreshgraph"].get():
+        The tracked variables are the global variables that:
+            * Trigger when a graph refresh has been requested.
+            * Trigger training is commenced or halted
+            * The variable holding the location of the current Tensorboard log folder.
+
+        Returns
+        -------
+        dict
+            The dictionary of variable names to tkinter variables
+        """
+        return dict(selected_id=tk.StringVar(),
+                    refresh_graph=get_config().tk_vars["refreshgraph"],
+                    is_training=get_config().tk_vars["istraining"],
+                    analysis_folder=get_config().tk_vars["analysis_folder"])
+
+    def on_tab_select(self):
+        """ Callback for when the analysis tab is selected.
+
+        If Faceswap is currently training a model, then update the statistics with the latest
+        values.
+        """
+        if not self.vars["is_training"].get():
             return
         logger.debug("Analysis update callback received")
-        self.reset_session()
+        self._reset_session()
 
-    def remove_current_session(self, *args):  # pylint:disable=unused-argument
-        """ Remove the current session data on a istraining=False callback """
-        if get_config().tk_vars["istraining"].get():
+    def _get_main_frame(self):
+        """ Get the main frame to the sub-notebook to hold stats and session data.
+
+        Returns
+        -------
+        :class:`StatsData`
+            The frame that holds the analysis statistics for the Analysis notebook page
+        """
+        logger.debug("Getting main stats frame")
+        mainframe = self.subnotebook_add_page("stats")
+        retval = StatsData(mainframe, self.vars["selected_id"], self.helptext["stats"])
+        logger.debug("got main frame: %s", retval)
+        return retval
+
+    def _set_callbacks(self):
+        """ Adds callbacks to update the analysis summary statistics and add them to :attr:`vars`
+
+        Training graph refresh - Updates the stats for the current training session when the graph
+        has been updated.
+
+        When training is commenced - Removes the currently displayed session.
+
+        When the analysis folder has been populated - Updates the stats from that folder.
+        """
+        self.vars["refresh_graph"].trace("w", self._update_current_session)
+        self.vars["is_training"].trace("w", self._remove_current_session)
+        self.vars["analysis_folder"].trace("w", self._populate_from_folder)
+
+    def _update_current_session(self, *args):  # pylint:disable=unused-argument
+        """ Update the currently training session data on a graph update callback. """
+        if not self.vars["refresh_graph"].get():
+            return
+        if not self._tab_is_active:
+            logger.debug("Analyis tab not selected. Not updating stats")
+            return
+        logger.debug("Analysis update callback received")
+        self._reset_session()
+
+    def _remove_current_session(self, *args):  # pylint:disable=unused-argument
+        """ Remove the current session data on a is_training=False callback """
+        if self.vars["is_training"].get():
             return
         logger.debug("Remove current training Analysis callback received")
-        self.clear_session()
+        self._clear_session()
 
-    def set_vars(self):
-        """ Analysis specific vars """
-        selected_id = tk.StringVar()
-        return {"selected_id": selected_id}
-
-    def add_main_frame(self):
-        """ Add the main frame to the sub-notebook
-            to hold stats and session data """
-        logger.debug("Adding main frame")
-        mainframe = self.subnotebook_add_page("stats")
-        self.stats = StatsData(mainframe,
-                               self.vars["selected_id"],
-                               self.helptext["stats"])
-        logger.debug("Added main frame")
-
-    def add_options(self):
-        """ Add the options bar """
-        logger.debug("Adding options")
-        self.reset_session_info()
-        options = Options(self)
-        options.add_options()
-        logger.debug("Added options")
-
-    def reset_session_info(self):
+    def _reset_session_info(self):
         """ Reset the session info status to default """
         logger.debug("Resetting session info")
         self.set_info("No session data loaded")
 
-    def populate_from_folder(self, *args):  # pylint:disable=unused-argument
-        """ Populate the Analysis tab from just a model folder. Triggered
-        when tkinter variable ``analysis_folder`` is set.
+    def _populate_from_folder(self, *args):  # pylint:disable=unused-argument
+        """ Populate the Analysis tab from a model folder.
+
+        Triggered when :attr:`vars` ``analysis_folder`` variable is is set.
         """
-        folder = get_config().tk_vars["analysis_folder"].get()
+        folder = self.vars["analysis_folder"].get()
         if not folder or not os.path.isdir(folder):
             logger.debug("Not a valid folder")
-            self.clear_session()
+            self._clear_session()
             return
 
         state_files = [fname
@@ -96,40 +141,33 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
                        if fname.endswith("_state.json")]
         if not state_files:
             logger.debug("No state files found in folder: '%s'", folder)
-            self.clear_session()
+            self._clear_session()
             return
 
         state_file = state_files[0]
         if len(state_files) > 1:
             logger.debug("Multiple models found. Selecting: '%s'", state_file)
 
-        if self.thread is None:
-            self.load_session(fullpath=os.path.join(folder, state_file))
+        if self._thread is None:
+            self._load_session(full_path=os.path.join(folder, state_file))
 
-    def load_session(self, fullpath=None):
-        """ Load previously saved sessions """
-        logger.debug("Loading session")
-        if fullpath is None:
-            fullpath = FileHandler("filename", "state").retfile
-            if not fullpath:
-                return
-        self.clear_session()
-        logger.debug("state_file: '%s'", fullpath)
-        model_dir, state_file = os.path.split(fullpath)
-        logger.debug("model_dir: '%s'", model_dir)
-        model_name = self.get_model_name(model_dir, state_file)
-        if not model_name:
-            return
-        self.session = Session(model_dir=model_dir, model_name=model_name)
-        self.session.initialize_session(is_training=False)
-        msg = fullpath
-        if len(msg) > 70:
-            msg = "...{}".format(msg[-70:])
-        self.set_session_summary(msg)
+    @classmethod
+    def _get_model_name(cls, model_dir, state_file):
+        """ Obtain the model name from a state file's file name.
 
-    @staticmethod
-    def get_model_name(model_dir, state_file):
-        """ Get the state file from the model directory """
+        Parameters
+        ----------
+        model_dir: str
+            The folder that the model's state file resides in
+        state_file: str
+            The filename of the model's state file
+
+        Returns
+        -------
+        str or ``None``
+            The name of the model extracted from the state file's file name or ``None`` if no
+            log folders were found in the model folder
+        """
         logger.debug("Getting model name")
         model_name = state_file.replace("_state.json", "")
         logger.debug("model_name: %s", model_name)
@@ -139,10 +177,84 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             return None
         return model_name
 
-    def reset_session(self):
-        """ Reset currently training sessions """
+    def _set_session_summary(self, message):
+        """ Set the summary data and info message """
+        if self._thread is None:
+            logger.debug("Setting session summary. (message: '%s')", message)
+            self._thread = LongRunningTask(target=self._summarise_data,
+                                           args=(self._session, ),
+                                           widget=self)
+            self._thread.start()
+            self.after(1000, lambda msg=message: self._set_session_summary(msg))
+        elif not self._thread.complete.is_set():
+            logger.debug("Data not yet available")
+            self.after(1000, lambda msg=message: self._set_session_summary(msg))
+        else:
+            logger.debug("Retrieving data from thread")
+            result = self._thread.get_result()
+            if result is None:
+                logger.debug("No result from session summary. Clearing analysis view")
+                self._clear_session()
+                return
+            self._summary = result
+            self._thread = None
+            self.set_info("Session: {}".format(message))
+            self._stats.session = self._session
+            self._stats.tree_insert_data(self._summary)
+
+    @classmethod
+    def _summarise_data(cls, session):
+        """ Summarize data in a LongRunningThread as it can take a while """
+        return session.full_summary
+
+    def _clear_session(self):
+        """ Clear the currently displayed analysis data from the Tree-View. """
+        logger.debug("Clearing session")
+        if self._session is None:
+            logger.trace("No session loaded. Returning")
+            return
+        self._summary = None
+        self._stats.session = None
+        self._stats.tree_clear()
+        self._reset_session_info()
+        self._session = None
+
+    def _load_session(self, full_path=None):
+        """ Load the session statistics from a model's state file into the Analysis tab of the GUI
+        display window.
+
+        If a model's log files cannot be found within the model folder then the session is cleared.
+
+        Parameters
+        ----------
+        full_path: str, optional
+            The path to the state file to load session information from. If this is ``None`` then
+            a file dialog is popped to enable the user to choose a state file. Default: ``None``
+         """
+        logger.debug("Loading session")
+        if full_path is None:
+            full_path = FileHandler("filename", "state").retfile
+            if not full_path:
+                return
+        self._clear_session()
+        logger.debug("state_file: '%s'", full_path)
+        model_dir, state_file = os.path.split(full_path)
+        logger.debug("model_dir: '%s'", model_dir)
+        model_name = self._get_model_name(model_dir, state_file)
+        if not model_name:
+            return
+        self._session = Session(model_dir=model_dir, model_name=model_name)
+        self._session.initialize_session(is_training=False)
+        msg = full_path
+        if len(msg) > 70:
+            msg = "...{}".format(msg[-70:])
+        self._set_session_summary(msg)
+
+    def _reset_session(self):
+        """ Reset currently training sessions. Clears the current session and loads in the latest
+        data. """
         logger.debug("Reset current training session")
-        self.clear_session()
+        self._clear_session()
         session = get_config().session
         if not session.initialized:
             logger.debug("Training not running")
@@ -151,57 +263,15 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             logger.trace("Logging disabled. Not triggering analysis update")
             return
         msg = "Currently running training session"
-        self.session = session
+        self._session = session
         # Reload the state file to get approx currently training iterations
-        self.session.load_state_file()
-        self.set_session_summary(msg)
+        self._session.load_state_file()
+        self._set_session_summary(msg)
 
-    def set_session_summary(self, message):
-        """ Set the summary data and info message """
-        if self.thread is None:
-            logger.debug("Setting session summary. (message: '%s')", message)
-            self.thread = LongRunningTask(target=self.summarise_data,
-                                          args=(self.session, ),
-                                          widget=self)
-            self.thread.start()
-            self.after(1000, lambda msg=message: self.set_session_summary(msg))
-        elif not self.thread.complete.is_set():
-            logger.debug("Data not yet available")
-            self.after(1000, lambda msg=message: self.set_session_summary(msg))
-        else:
-            logger.debug("Retrieving data from thread")
-            result = self.thread.get_result()
-            if result is None:
-                logger.debug("No result from session summary. Clearing analysis view")
-                self.clear_session()
-                return
-            self.summary = result
-            self.thread = None
-            self.set_info("Session: {}".format(message))
-            self.stats.session = self.session
-            self.stats.tree_insert_data(self.summary)
-
-    @staticmethod
-    def summarise_data(session):
-        """ Summarize data in a LongRunningThread as it can take a while """
-        return session.full_summary
-
-    def clear_session(self):
-        """ Clear sessions stats """
-        logger.debug("Clearing session")
-        if self.session is None:
-            logger.trace("No session loaded. Returning")
-            return
-        self.summary = None
-        self.stats.session = None
-        self.stats.tree_clear()
-        self.reset_session_info()
-        self.session = None
-
-    def save_session(self):
-        """ Save sessions stats to csv """
+    def _save_session(self):
+        """ Launch a file dialog pop-up to save the current analysis data to a CSV file. """
         logger.debug("Saving session")
-        if not self.summary:
+        if not self._summary:
             logger.debug("No summary data loaded. Nothing to save")
             print("No summary data loaded. Nothing to save")
             return
@@ -211,40 +281,42 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             return
 
         logger.debug("Saving to: '%s'", savefile)
-        fieldnames = sorted(key for key in self.summary[0].keys())
+        fieldnames = sorted(key for key in self._summary[0].keys())
         with savefile as outfile:
             csvout = csv.DictWriter(outfile, fieldnames)
             csvout.writeheader()
-            for row in self.summary:
+            for row in self._summary:
                 csvout.writerow(row)
 
 
-class Options():
-    """ Options bar of Analysis tab """
+class _Options():  # pylint:disable=too-few-public-methods
+    """ Options buttons for the Analysis tab.
+
+    Parameters
+    ----------
+    parent: :class:`Analysis`
+        The Analysis Display Tab that holds the options buttons
+    """
     def __init__(self, parent):
-        logger.debug("Initializing: %s", self.__class__.__name__)
-        self.optsframe = parent.optsframe
-        self.parent = parent
+        logger.debug("Initializing: %s (parent: %s)", self.__class__.__name__, parent)
+        self._parent = parent
+        self._add_buttons()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def add_options(self):
-        """ Add the display tab options """
-        self.add_buttons()
-
-    def add_buttons(self):
+    def _add_buttons(self):
         """ Add the option buttons """
         for btntype in ("clear", "save", "load"):
             logger.debug("Adding button: '%s'", btntype)
-            cmd = getattr(self.parent, "{}_session".format(btntype))
-            btn = ttk.Button(self.optsframe,
+            cmd = getattr(self._parent, "_{}_session".format(btntype))
+            btn = ttk.Button(self._parent.optsframe,
                              image=get_images().icons[btntype],
                              command=cmd)
             btn.pack(padx=2, side=tk.RIGHT)
-            hlp = self.set_help(btntype)
+            hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wraplength=200)
 
-    @staticmethod
-    def set_help(btntype):
+    @classmethod
+    def _set_help(cls, btntype):
         """ Set the help text for option buttons """
         logger.debug("Setting help")
         hlp = ""

@@ -17,6 +17,7 @@ from .project import Project, Tasks
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
 _IMAGES = None
+_PREVIEW_TRIGGER = None
 PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
 
 
@@ -1155,3 +1156,44 @@ class LongRunningTask(Thread):
         logger.debug("Got result from thread")
         self._config.set_cursor_default(widget=self._widget)
         return retval
+
+
+class PreviewTrigger():
+    """ Trigger to indicate to underlying Faceswap process that the preview image should
+    be updated.
+
+    Writes a file to the cache folder that is picked up by the main process.
+    """
+    def __init__(self):
+        logger.debug("Initializing: %s", self.__class__.__name__)
+        self._trigger_file = os.path.join(PATHCACHE, ".preview_trigger")
+        logger.debug("Initialized: %s (trigger_file: %s)",
+                     self.__class__.__name__, self._trigger_file)
+
+    def set(self):
+        """ Place the trigger file into the cache folder """
+        if not os.path.isfile(self._trigger_file):
+            with open(self._trigger_file, "w"):
+                pass
+            logger.debug("Set preview update trigger: %s", self._trigger_file)
+
+    def clear(self):
+        """ Remove the trigger file from the cache folder """
+        if os.path.isfile(self._trigger_file):
+            os.remove(self._trigger_file)
+            logger.debug("Removed preview update trigger: %s", self._trigger_file)
+
+
+def preview_trigger():
+    """ Set the global preview trigger if it has not always been set and return.
+
+    Returns
+    -------
+    :class:`PreviewTrigger`
+        The trigger to indicate to the main faceswap process that it should perform a training
+        preview update
+    """
+    global _PREVIEW_TRIGGER  # pylint:disable=global-statement
+    if _PREVIEW_TRIGGER is None:
+        _PREVIEW_TRIGGER = PreviewTrigger()
+    return _PREVIEW_TRIGGER

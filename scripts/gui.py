@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 
 from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, Session, DisplayNotebook,
                      get_images, initialize_images, initialize_config, LastSession,
-                     MainMenuBar, ProcessWrapper, StatusBar)
+                     MainMenuBar, preview_trigger, ProcessWrapper, StatusBar)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -30,6 +30,7 @@ class FaceswapGui(tk.Tk):
         self.objects = dict()
 
         get_images().delete_preview()
+        preview_trigger().clear()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.build_gui()
         self._last_session = LastSession(self._config)
@@ -162,6 +163,7 @@ class FaceswapGui(tk.Tk):
 
         self._last_session.save()
         get_images().delete_preview()
+        preview_trigger().clear()
         self.quit()
         logger.debug("Closed GUI")
         sys.exit(0)

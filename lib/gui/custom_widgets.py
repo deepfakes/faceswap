@@ -701,7 +701,7 @@ class MultiOption(ttk.Checkbutton):  # pylint: disable=too-many-ancestors
     """
     def __init__(self, parent, value, variable, **kwargs):
         self._tk_var = tk.BooleanVar()
-        self._tk_var.set(False)
+        self._tk_var.set(value == variable.get())
         super().__init__(parent, variable=self._tk_var, **kwargs)
         self._value = value
         self._master_variable = variable

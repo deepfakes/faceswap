@@ -6,8 +6,11 @@ import platform
 import sys
 
 from importlib import import_module
+
+from lib.gpu_stats import set_exclude_devices, GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import FaceswapError, get_backend, safe_shutdown, set_system_verbosity
+from lib.utils import (FaceswapError, get_backend, KerasFinder, safe_shutdown, set_backend,
+                       set_system_verbosity)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -51,12 +54,13 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         Raises
         ------
         FaceswapError
-            If Tensorflow is not found, or is not between versions 1.12 and 1.15
+            If Tensorflow is not found, or is not between versions 2.2 and 2.2
         """
-        min_ver = 1.12
-        max_ver = 1.15
+        min_ver = 2.2
+        max_ver = 2.2
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
+            os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
             os.environ["KMP_AFFINITY"] = "disabled"
             import tensorflow as tf  # pylint:disable=import-outside-toplevel
         except ImportError as err:
@@ -142,13 +146,10 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         set_system_verbosity(arguments.loglevel)
         is_gui = hasattr(arguments, "redirect_gui") and arguments.redirect_gui
         log_setup(arguments.loglevel, arguments.logfile, self._command, is_gui)
-        logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
         success = False
-        if get_backend() == "amd":
-            plaidml_found = self._setup_amd(arguments.loglevel)
-            if not plaidml_found:
-                safe_shutdown(got_error=True)
-                return
+
+        if self._command != "gui":
+            self._configure_backend(arguments)
         try:
             script = self._import_script()
             process = script(arguments)
@@ -172,14 +173,66 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         finally:
             safe_shutdown(got_error=not success)
 
-    @staticmethod
-    def _setup_amd(log_level):
+    def _configure_backend(self, arguments):
+        """ Configure the backend.
+
+        Exclude any GPUs for use by Faceswap when requested.
+
+        Set Faceswap backend to CPU if all GPUs have been deselected.
+
+        Add the Keras import interception code.
+
+        Parameters
+        ----------
+        arguments: :class:`argparse.Namespace`
+            The command line arguments passed to Faceswap.
+        """
+        if not hasattr(arguments, "exclude_gpus"):
+            # Cpu backends will not have this attribute
+            logger.debug("Adding missing exclude gpus argument to namespace")
+            setattr(arguments, "exclude_gpus", None)
+
+        if arguments.exclude_gpus:
+            if not all(idx.isdigit() for idx in arguments.exclude_gpus):
+                logger.error("GPUs passed to the ['-X', '--exclude-gpus'] argument must all be "
+                             "integers.")
+                sys.exit(1)
+            arguments.exclude_gpus = [int(idx) for idx in arguments.exclude_gpus]
+            set_exclude_devices(arguments.exclude_gpus)
+
+        if ((get_backend() == "cpu" or GPUStats().exclude_all_devices) and
+                (self._command == "extract" and arguments.detector in ("mtcnn", "s3fd"))):
+            logger.error("Extracting on CPU is not currently for detector: '%s'",
+                         arguments.detector.upper())
+            sys.exit(0)
+
+        if GPUStats().exclude_all_devices and get_backend() != "cpu":
+            msg = "Switching backend to CPU"
+            if get_backend() == "amd":
+                msg += (". Using Tensorflow for CPU operations.")
+                os.environ["KERAS_BACKEND"] = "tensorflow"
+            set_backend("cpu")
+            logger.info(msg)
+
+        # Add Keras finder to the meta_path list as the first item
+        sys.meta_path.insert(0, KerasFinder())
+
+        logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
+
+        if get_backend() == "amd":
+            plaidml_found = self._setup_amd(arguments)
+            if not plaidml_found:
+                safe_shutdown(got_error=True)
+                sys.exit(1)
+
+    @classmethod
+    def _setup_amd(cls, arguments):
         """ Test for plaidml and perform setup for AMD.
 
         Parameters
         ----------
-        log_level: str
-            The requested log level to run at
+        arguments: :class:`argparse.Namespace`
+            The command line arguments passed to Faceswap.
         """
         logger.debug("Setting up for AMD")
         try:
@@ -188,6 +241,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             logger.error("PlaidML not found. Run `pip install plaidml-keras` for AMD support")
             return False
         from lib.plaidml_tools import setup_plaidml  # pylint:disable=import-outside-toplevel
-        setup_plaidml(log_level)
+        setup_plaidml(arguments.loglevel, arguments.exclude_gpus)
         logger.debug("setup up for PlaidML")
         return True

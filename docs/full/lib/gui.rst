@@ -30,6 +30,28 @@ custom\_widgets module
    :undoc-members:
    :show-inheritance:
 
+display module
+==============
+.. automodule:: lib.gui.display
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+display\_analysis module
+========================
+.. autoclass:: lib.gui.display_analysis.Analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+popup_configure module
+======================
+.. automodule:: lib.gui.popup_configure
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 project module
 ==============
 

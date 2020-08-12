@@ -31,56 +31,53 @@ class TrainingDataGenerator():
     model_output_shapes: list
         A list of tuples defining the output shapes from the model, in the order that the outputs
         are returned. The tuples should be in (`height`, `width`, `channels`) format.
-    training_opts: dict
-        This is a dictionary of model training options as defined in
-        :mod:`plugins.train.model._base`. These options will be defined by the user from the
-        provided cli options or from the model ``config.ini``. At a minimum this ``dict`` should
-        contain the following keys:
-
-        * **coverage_ratio** (`float`) - The ratio of the training image to be trained on. \
-        Dictates how much of the image will be cropped out. E.G: a coverage ratio of 0.625 \
-        will result in cropping a 160px box from a 256px image (256 * 0.625 = 160).
-
-        * **augment_color** (`bool`) - ``True`` if color is to be augmented, otherwise ``False`` \
-
-        * **no_flip** (`bool`) - ``True`` if the image shouldn't be randomly flipped as part of \
-        augmentation, otherwise ``False``
-
-        * **warp_to_landmarks** (`bool`) - ``True`` if the random warp method should warp to \
-        similar landmarks from the other side, ``False`` if the standard random warp method \
-        should be used. If ``True`` then the additional key ``landmarks`` must be provided.
+    coverage_ratio: float
+        The ratio of the training image to be trained on. Dictates how much of the image will be
+        cropped out. E.G: a coverage ratio of 0.625 will result in cropping a 160px box from a
+        256px image (:math:`256 * 0.625 = 160`).
+    augment_color: bool
+        ``True`` if color is to be augmented, otherwise ``False``
+    no_flip: bool
+        ``True`` if the image shouldn't be randomly flipped as part of augmentation, otherwise
+        ``False``
+    warp_to_landmarks: bool
+        ``True`` if the random warp method should warp to similar landmarks from the other side,
+        ``False`` if the standard random warp method should be used. If ``True`` then
+        the key `landmarks` must be provided in the alignments dictionary.
+    alignments: dict
+        A dictionary containing landmarks and masks if these are required for training:
 
         * **landmarks** (`dict`, `optional`). Required if :attr:`warp_to_landmarks` is \
         ``True``. Returning dictionary has a key of **side** (`str`) the value of which is a \
-        `dict` of {**filename** (`str`): **68 point landmarks** (`numpy.ndarray`)}.
+        `dict` of {**filename** (`str`): **68 point landmarks** (:class:`numpy.ndarray`)}.
 
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
         :attr:`learn_mask` is ``True``. Returning dictionary has a key of **side** (`str`) the \
         value of which is a `dict` of {**filename** (`str`): :class:`lib.faces_detect.Mask`}.
-
     config: dict
-        The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
+        The configuration `dict` generated from :file:`config.train.ini` containing the trainer \
         plugin configuration options.
     """
-    def __init__(self, model_input_size, model_output_shapes, training_opts, config):
+    def __init__(self, model_input_size, model_output_shapes, coverage_ratio, augment_color,
+                 no_flip, warp_to_landmarks, alignments, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
-                     "training_opts: %s, landmarks: %s, masks: %s, config: %s)",
+                     "coverage_ratio: %s, augment_color: %s, no_flip: %s, warp_to_landmarks: %s, "
+                     "alignments: %s, config: %s)",
                      self.__class__.__name__, model_input_size, model_output_shapes,
-                     {key: val
-                      for key, val in training_opts.items() if key not in ("landmarks", "masks")},
-                     {key: len(val)
-                      for key, val in training_opts.get("landmarks", dict()).items()},
-                     {key: len(val) for key, val in training_opts.get("masks", dict()).items()},
-                     config)
+                     coverage_ratio, augment_color, no_flip, warp_to_landmarks,
+                     list(alignments.keys()), config)
         self._config = config
         self._model_input_size = model_input_size
         self._model_output_shapes = model_output_shapes
-        self._training_opts = training_opts
-        self._landmarks = self._training_opts.get("landmarks", None)
-        self._masks = self._training_opts.get("masks", None)
+        self._coverage_ratio = coverage_ratio
+        self._augment_color = augment_color
+        self._no_flip = no_flip
+        self._warp_to_landmarks = warp_to_landmarks
+        self._landmarks = alignments.get("landmarks", None)
+        self._masks = alignments.get("masks", None)
         self._nearest_landmarks = {}
 
-        # Batchsize and processing class are set when this class is called by a batcher
+        # Batchsize and processing class are set when this class is called by a feeder
         # from lib.training_data
         self._batchsize = 0
         self._processing = None
@@ -99,8 +96,8 @@ class TrainingDataGenerator():
         images: list
             A list of image paths that will be used to compile the final augmented data from.
         batchsize: int
-            The batchsize for this iterator. Images will be returned in ``numpy.ndarray`` s of
-            this size from the iterator.
+            The batchsize for this iterator. Images will be returned in :class:`numpy.ndarray`
+            objects of this size from the iterator.
         side: {'a' or 'b'}
             The side of the model that this iterator is for.
         do_shuffle: bool, optional
@@ -117,27 +114,27 @@ class TrainingDataGenerator():
         Yields
         ------
         dict
-            The following items are contained in each ``dict`` yielded from this iterator:
+            The following items are contained in each `dict` yielded from this iterator:
 
-            * **feed** (`numpy.ndarray`) - The feed for the model. The array returned is in the \
-            format (`batchsize`, `height`, `width`, `channels`). This is the :attr:`x` parameter \
-            for :func:`keras.models.model.train_on_batch`.
+            * **feed** (:class:`numpy.ndarray`) - The feed for the model. The array returned is \
+            in the format (`batchsize`, `height`, `width`, `channels`). This is the :attr:`x` \
+            parameter for :func:`keras.models.model.train_on_batch`.
 
-            * **targets** (`list`) - A list of 4-dimensional ``numpy.ndarray`` s in the order \
-            and size of each output of the model as defined in :attr:`model_output_shapes`. the \
-            format of these arrays will be (`batchsize`, `height`, `width`, `3`). This is \
-            the :attr:`y` parameter for :func:`keras.models.model.train_on_batch` **NB:** \
-            masks are not included in the ``targets`` list. If required for feeding into the \
-            Keras model, they will need to be added to this list in \
-            :mod:`plugins.train.trainer._base` from the ``masks`` key.
+            * **targets** (`list`) - A list of 4-dimensional :class:`numpy.ndarray` objects in \
+            the order and size of each output of the model as defined in \
+            :attr:`model_output_shapes`. the format of these arrays will be (`batchsize`, \
+            `height`, `width`, `3`). This is the :attr:`y` parameter for \
+            :func:`keras.models.model.train_on_batch` **NB:** masks are not included in the \
+            `targets` list. If required for feeding into the Keras model, they will need to be \
+            added to this list in :mod:`plugins.train.trainer._base` from the `masks` key.
 
-            * **masks** (`numpy.ndarray`) - A 4-dimensional array containing the target masks in \
-            the format (`batchsize`, `height`, `width`, `1`).
+            * **masks** (:class:`numpy.ndarray`) - A 4-dimensional array containing the target \
+            masks in the format (`batchsize`, `height`, `width`, `1`).
 
-            * **samples** (`numpy.ndarray`) - A 4-dimensional array containing the samples for \
-            feeding to the model's predict function for generating preview and time-lapse \
+            * **samples** (:class:`numpy.ndarray`) - A 4-dimensional array containing the samples \
+            for feeding to the model's predict function for generating preview and time-lapse \
             samples. The array will be in the format (`batchsize`, `height`, `width`, \
-            `channels`). **NB:** This item will only exist in the ``dict`` if :attr:`is_preview` \
+            `channels`). **NB:** This item will only exist in the `dict` if :attr:`is_preview` \
             or :attr:`is_timelapse` is ``True``
         """
         logger.debug("Queue batches: (image_count: %s, batchsize: %s, side: '%s', do_shuffle: %s, "
@@ -148,7 +145,7 @@ class TrainingDataGenerator():
                                              is_preview or is_timelapse,
                                              self._model_input_size,
                                              self._model_output_shapes,
-                                             self._training_opts.get("coverage_ratio", 0.625),
+                                             self._coverage_ratio,
                                              self._config)
         args = (images, side, do_shuffle, batchsize)
         batcher = BackgroundGenerator(self._minibatch, thread_count=2, args=args)
@@ -203,7 +200,7 @@ class TrainingDataGenerator():
             self._processing.initialize(batch.shape[1])
 
         # Get Landmarks prior to manipulating the image
-        if self._training_opts["warp_to_landmarks"]:
+        if self._warp_to_landmarks:
             batch_src_pts = self._get_landmarks(filenames, side)
             batch_dst_pts = self._get_closest_match(filenames, side, batch_src_pts)
             warp_kwargs = dict(batch_src_points=batch_src_pts,
@@ -212,12 +209,12 @@ class TrainingDataGenerator():
             warp_kwargs = dict()
 
         # Color Augmentation of the image only
-        if self._training_opts["augment_color"]:
+        if self._augment_color:
             batch[..., :3] = self._processing.color_adjust(batch[..., :3])
 
         # Random Transform and flip
         batch = self._processing.transform(batch)
-        if not self._training_opts["no_flip"]:
+        if not self._no_flip:
             batch = self._processing.random_flip(batch)
 
         # Add samples to output if this is for display
@@ -229,7 +226,7 @@ class TrainingDataGenerator():
 
         # Random Warp # TODO change masks to have a input mask and a warped target mask
         processed["feed"] = [self._processing.warp(batch[..., :3],
-                                                   self._training_opts["warp_to_landmarks"],
+                                                   self._warp_to_landmarks,
                                                    **warp_kwargs)]
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
@@ -276,7 +273,7 @@ class TrainingDataGenerator():
 
     def _get_landmarks(self, filenames, side):
         """ Obtains the 68 Point Landmarks for the images in this batch. This is only called if
-        config item ``warp_to_landmarks`` is ``True``. If the landmarks for an image cannot be
+        config :attr:`_warp_to_landmarks` is ``True``. If the landmarks for an image cannot be
         found, then an error is raised. """
         logger.trace("Retrieving landmarks: (filenames: %s, side: '%s')", filenames, side)
         src_points = [self._landmarks[side].get(filename, None) for filename in filenames]
@@ -298,7 +295,7 @@ class TrainingDataGenerator():
         return np.array(src_points)
 
     def _get_closest_match(self, filenames, side, batch_src_points):
-        """ Only called if the config item ``warp_to_landmarks`` is ``True``. Gets the closest
+        """ Only called if the :attr:`_warp_to_landmarks` is ``True``. Gets the closest
         matched 68 point landmarks from the opposite training set. """
         logger.trace("Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s'",
                      filenames, batch_src_points)
@@ -346,10 +343,10 @@ class ImageAugmentation():
         are returned. The tuples should be in (`height`, `width`, `channels`) format.
     coverage_ratio: float
         The ratio of the training image to be trained on. Dictates how much of the image will be
-        cropped out. E.G: a coverage ratio of 0.625 will result in cropping a 160px box from a "
-        "256px image (256 * 0.625 = 160).
+        cropped out. E.G: a coverage ratio of 0.625 will result in cropping a 160px box from a
+        256px image (:math:`256 * 0.625 = 160`)
     config: dict
-        The configuration ``dict`` generated from :file:`config.train.ini` containing the trainer \
+        The configuration `dict` generated from :file:`config.train.ini` containing the trainer
         plugin configuration options.
 
     Attributes
@@ -359,7 +356,7 @@ class ImageAugmentation():
         image size in order to cache certain augmentation operations (see :func:`initialize`)
     is_display: bool
         Flag to indicate whether these augmentations are for time-lapses/preview images (``True``)
-        or standard training data (``False)``
+        or standard training data (``False``)
     """
     def __init__(self, batchsize, is_display, input_size, output_shapes, coverage_ratio, config):
         logger.debug("Initializing %s: (batchsize: %s, is_display: %s, input_size: %s, "
@@ -390,8 +387,8 @@ class ImageAugmentation():
         """ Initializes the caching of constants for use in various image augmentations.
 
         The training image size is not known prior to loading the images from disk and commencing
-        training, so it cannot be set in the ``__init__`` method. When the first training batch is
-        loaded this function should be called to initialize the class and perform various
+        training, so it cannot be set in the :func:`__init__` method. When the first training batch
+        is loaded this function should be called to initialize the class and perform various
         calculations based on this input size to cache certain constants for image augmentation
         calculations.
 
@@ -448,7 +445,7 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: numpy.ndarray
+        batch: :class:`numpy.ndarray`
             This should be a 4-dimensional array of training images in the format (`batchsize`,
             `height`, `width`, `channels`). Targets should be requested after performing image
             transformations but prior to performing warps.
@@ -458,16 +455,16 @@ class ImageAugmentation():
         dict
             The following keys will be within the returned dictionary:
 
-            * **targets** (`list`) - A list of 4-dimensional ``numpy.ndarray`` s in the order \
-            and size of each output of the model as defined in :attr:`output_shapes`. The \
+            * **targets** (`list`) - A list of 4-dimensional :class:`numpy.ndarray` s in the \
+            order and size of each output of the model as defined in :attr:`output_shapes`. The \
             format of these arrays will be (`batchsize`, `height`, `width`, `3`). **NB:** \
-            masks are not included in the ``targets`` list. If masks are to be included in the \
-            output they will be returned as their own item from the ``masks`` key.
+            masks are not included in the `targets` list. If masks are to be included in the \
+            output they will be returned as their own item from the `masks` key.
 
-            * **masks** (`numpy.ndarray`) - A 4-dimensional array containing the target masks in \
-            the format (`batchsize`, `height`, `width`, `1`).
+            * **masks** (:class:`numpy.ndarray`) - A 4-dimensional array containing the target \
+            masks in the format (`batchsize`, `height`, `width`, `1`).
         """
-        logger.trace("Compiling targets")
+        logger.trace("Compiling targets: batch shape: %s", batch.shape)
         slices = self._constants["tgt_slices"]
         target_batch = [np.array([cv2.resize(image[slices, slices, :],
                                              (size, size),
@@ -487,8 +484,8 @@ class ImageAugmentation():
     def _separate_target_mask(target_batch):
         """ Return the batch and the batch of final masks
 
-        Returns the targets as a list of 4-dimensional ``numpy.ndarray`` s of shape (`batchsize`,
-        `height`, `width`, 3).
+        Returns the targets as a list of 4-dimensional :class:`numpy.ndarray` s of shape
+        (`batchsize`, `height`, `width`, `3`).
 
         The target masks are returned as its own item and is the 4th channel of the final target
         output.
@@ -507,13 +504,13 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: numpy.ndarray
+        batch: :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `3`) and in `BGR` format.
 
         Returns
         ----------
-        numpy.ndarray
+        :class:`numpy.ndarray`
             A 4-dimensional array of the same shape as :attr:`batch` with color augmentation
             applied.
         """
@@ -575,13 +572,13 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: numpy.ndarray
+        batch: :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `channels`) and in `BGR` format.
 
         Returns
         ----------
-        numpy.ndarray
+        :class:`numpy.ndarray`
             A 4-dimensional array of the same shape as :attr:`batch` with transformation applied.
         """
         if self.is_display:
@@ -625,13 +622,13 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: numpy.ndarray
+        batch: :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `channels`) and in `BGR` format.
 
         Returns
         ----------
-        numpy.ndarray
+        :class:`numpy.ndarray`
             A 4-dimensional array of the same shape as :attr:`batch` with transformation applied.
         """
         if not self.is_display:
@@ -647,7 +644,7 @@ class ImageAugmentation():
 
         Parameters
         ----------
-        batch: numpy.ndarray
+        batch: :class:`numpy.ndarray`
             The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
             `3`) and in `BGR` format.
         to_landmarks: bool, optional
@@ -657,15 +654,15 @@ class ImageAugmentation():
         kwargs: dict
             If :attr:`to_landmarks` is ``True`` the following additional kwargs must be passed in:
 
-            * **batch_src_points** (`numpy.ndarray`) - A batch of 68 point landmarks for the \
-            source faces. This is a 3-dimensional array in the shape (`batchsize`, `68`, `2`).
+            * **batch_src_points** (:class:`numpy.ndarray`) - A batch of 68 point landmarks for \
+            the source faces. This is a 3-dimensional array in the shape (`batchsize`, `68`, `2`).
 
-            * **batch_dst_points** (`numpy.ndarray`) - A batch of randomly chosen closest match \
-            destination faces landmarks. This is a 3-dimensional array in the shape (`batchsize`, \
-             `68`, `2`).
+            * **batch_dst_points** (:class:`numpy.ndarray`) - A batch of randomly chosen closest \
+            match destination faces landmarks. This is a 3-dimensional array in the shape \
+            (`batchsize`, `68`, `2`).
         Returns
         ----------
-        numpy.ndarray
+        :class:`numpy.ndarray`
             A 4-dimensional array of the same shape as :attr:`batch` with warping applied.
         """
         if to_landmarks:
@@ -719,10 +716,10 @@ class ImageAugmentation():
 
         grid_z = np.array([griddata(dst, src, (grids[0], grids[1]), method="linear")
                            for src, dst in zip(batch_src, batch_dst)])
-        maps = grid_z.reshape(self._batchsize,
-                              self._training_size,
-                              self._training_size,
-                              2).astype("float32")
+        maps = grid_z.reshape((self._batchsize,
+                               self._training_size,
+                               self._training_size,
+                               2)).astype("float32")
         warped_batch = np.array([cv2.remap(image,
                                            map_[..., 1],
                                            map_[..., 0],

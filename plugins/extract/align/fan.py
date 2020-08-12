@@ -5,8 +5,6 @@
 """
 import cv2
 import numpy as np
-import keras
-from keras import backend as K
 
 from lib.model.session import KSession
 from ._base import Aligner, logger
@@ -15,8 +13,8 @@ from ._base import Aligner, logger
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
     def __init__(self, **kwargs):
-        git_model_id = 9
-        model_filename = "face-alignment-network_2d4_keras_v1.h5"
+        git_model_id = 13
+        model_filename = "face-alignment-network_2d4_keras_v2.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
         self.name = "FAN"
         self.input_size = 256
@@ -29,14 +27,13 @@ class Align(Aligner):
 
     def init_model(self):
         """ Initialize FAN model """
-        model_kwargs = dict(custom_objects={'TorchBatchNorm2D': TorchBatchNorm2D})
         self.model = KSession(self.name,
                               self.model_path,
-                              model_kwargs=model_kwargs,
-                              allow_growth=self.config["allow_growth"])
+                              allow_growth=self.config["allow_growth"],
+                              exclude_gpus=self._exclude_gpus)
         self.model.load_model()
         # Feed a placeholder so Aligner is primed for Manual tool
-        placeholder_shape = (self.batchsize, 3, self.input_size, self.input_size)
+        placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
         placeholder = np.zeros(placeholder_shape, dtype="float32")
         self.model.predict(placeholder)
 
@@ -47,7 +44,7 @@ class Align(Aligner):
         faces = self.crop(batch)
         logger.trace("Aligned image around center")
         faces = self._normalize_faces(faces)
-        batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2)) / 255.0
+        batch["feed"] = np.array(faces, dtype="float32")[..., :3] / 255.0
         return batch
 
     def get_center_scale(self, detected_faces):
@@ -122,8 +119,10 @@ class Align(Aligner):
     def predict(self, batch):
         """ Predict the 68 point landmarks """
         logger.debug("Predicting Landmarks")
-        batch["prediction"] = self.model.predict(batch["feed"])[-1]
-        logger.trace([pred.shape for pred in batch["prediction"]])
+        # TODO Remove lazy transpose and change points from predict to use the correct
+        # order
+        batch["prediction"] = self.model.predict(batch["feed"])[-1].transpose(0, 3, 1, 2)
+        logger.trace(batch["prediction"].shape)
         return batch
 
     def process_output(self, batch):
@@ -156,77 +155,3 @@ class Align(Aligner):
 
         batch["landmarks"] = self.transform(subpixel_landmarks, batch["center_scale"], resolution)
         logger.trace("Obtained points from prediction: %s", batch["landmarks"])
-
-
-class TorchBatchNorm2D(keras.engine.base_layer.Layer):
-    # pylint:disable=too-many-instance-attributes
-    """" Required for FAN_keras model """
-    def __init__(self, axis=-1, momentum=0.99, epsilon=1e-3, **kwargs):
-        super(TorchBatchNorm2D, self).__init__(**kwargs)
-        self.supports_masking = True
-        self.axis = axis
-        self.momentum = momentum
-        self.epsilon = epsilon
-        self._epsilon_const = K.constant(self.epsilon, dtype='float32')
-
-        self.built = False
-        self.gamma = None
-        self.beta = None
-        self.moving_mean = None
-        self.moving_variance = None
-
-    def build(self, input_shape):
-        dim = input_shape[self.axis]
-        if dim is None:
-            raise ValueError("Axis {} of input tensor should have a "
-                             "defined dimension but the layer received "
-                             "an input with  shape {}."
-                             .format(str(self.axis), str(input_shape)))
-        shape = (dim,)
-        self.gamma = self.add_weight(shape=shape,
-                                     name='gamma',
-                                     initializer='ones',
-                                     regularizer=None,
-                                     constraint=None)
-        self.beta = self.add_weight(shape=shape,
-                                    name='beta',
-                                    initializer='zeros',
-                                    regularizer=None,
-                                    constraint=None)
-        self.moving_mean = self.add_weight(shape=shape,
-                                           name='moving_mean',
-                                           initializer='zeros',
-                                           trainable=False)
-        self.moving_variance = self.add_weight(shape=shape,
-                                               name='moving_variance',
-                                               initializer='ones',
-                                               trainable=False)
-        self.built = True
-
-    def call(self, inputs, **kwargs):
-        input_shape = K.int_shape(inputs)
-
-        broadcast_shape = [1] * len(input_shape)
-        broadcast_shape[self.axis] = input_shape[self.axis]
-
-        broadcast_moving_mean = K.reshape(self.moving_mean, broadcast_shape)
-        broadcast_moving_variance = K.reshape(self.moving_variance,
-                                              broadcast_shape)
-        broadcast_gamma = K.reshape(self.gamma, broadcast_shape)
-        broadcast_beta = K.reshape(self.beta, broadcast_shape)
-        invstd = (
-            K.ones(shape=broadcast_shape, dtype='float32')
-            / K.sqrt(broadcast_moving_variance + self._epsilon_const)
-        )
-
-        return((inputs - broadcast_moving_mean)
-               * invstd
-               * broadcast_gamma
-               + broadcast_beta)
-
-    def get_config(self):
-        config = {'axis': self.axis,
-                  'momentum': self.momentum,
-                  'epsilon': self.epsilon}
-        base_config = super(TorchBatchNorm2D, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))

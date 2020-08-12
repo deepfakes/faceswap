@@ -70,6 +70,15 @@ check_for_sudo() {
     fi
 }
 
+check_for_curl() {
+    # Ensure that curl is available on the system
+    if ! command -V curl &> /dev/null ; then
+        error "'curl' is required for running the Faceswap installer, but could not be found. \
+        Please install 'curl' using the package manager for your distribution before proceeding."
+        exit 1
+    fi
+}
+
 create_tmp_dir() {
     TMP_DIR="$(mktemp -d)"
     if [ -z "$TMP_DIR" -o ! -d "$TMP_DIR" ]; then
@@ -336,10 +345,10 @@ delete_env() {
 }
 
 create_env() {
-    # Create Python 3.7 env for faceswap
+    # Create Python 3.8 env for faceswap
     delete_env
     info "Creating Conda Virtual Environment..."
-    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -q python=3.7 -y
+    yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -q python=3.8 -y
 }
 
 
@@ -406,6 +415,7 @@ create_desktop_shortcut () {
 }
 
 check_for_sudo
+check_for_curl
 banner
 user_input
 review

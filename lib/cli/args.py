@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """ The Command Line Argument options for faceswap.py """
+
+# pylint:disable=too-many-lines
 import argparse
 import logging
 import re
@@ -7,6 +9,8 @@ import sys
 import textwrap
 
 from lib.utils import get_backend
+from lib.gpu_stats import GPUStats
+
 from plugins.plugin_loader import PluginLoader
 
 from .actions import (DirFullPaths, DirOrFileFullPaths, FileFullPaths, FilesFullPaths, MultiOption,
@@ -14,6 +18,7 @@ from .actions import (DirFullPaths, DirOrFileFullPaths, FileFullPaths, FilesFull
 from .launcher import ScriptExecutor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_GPUS = GPUStats().cli_devices
 
 
 class FullHelpArgumentParser(argparse.ArgumentParser):
@@ -156,6 +161,19 @@ class FaceSwapArgs():
             The list of global command line options for all Faceswap commands.
         """
         global_args = list()
+        if _GPUS:
+            global_args.append(dict(
+                opts=("-X", "--exclude-gpus"),
+                dest="exclude_gpus",
+                action=MultiOption,
+                type=str.lower,
+                nargs="+",
+                choices=[str(idx) for idx in range(len(_GPUS))],
+                group="Global Options",
+                help="R|Exclude GPUs from use by Faceswap. Select the number(s) which correspond "
+                     "to any GPU(s) that you do not wish to be made available to Faceswap. "
+                     "Selecting all GPUs here will force Faceswap into CPU mode."
+                     "\nL|{}".format(" \nL|".join(_GPUS))))
         global_args.append(dict(
             opts=("-C", "--configfile"),
             action=FileFullPaths,
@@ -344,11 +362,10 @@ class ExtractArgs(ExtractConvertArgs):
                  "'/config/extract.ini' or 'Settings > Configure Extract 'Plugins':"
                  "\nL|cv2-dnn: A CPU only extractor which is the least reliable and least "
                  "resource intensive. Use this if not using a GPU and time is important."
-                 "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources "
-                 "than other GPU detectors but can often return more false positives."
-                 "\nL|s3fd: Best detector. Fast on GPU, slow on CPU. Can detect more faces and "
-                 "fewer false positives than other GPU detectors, but is a lot more resource "
-                 "intensive."))
+                 "\nL|mtcnn: Good detector. GPU only. Uses fewer resources than other GPU "
+                 "detectors but can often return more false positives."
+                 "\nL|s3fd: Best detector. GPU only. Can detect more faces and fewer false "
+                 "positives than other GPU detectors, but is a lot more resource intensive."))
         argument_list.append(dict(
             opts=("-A", "--aligner"),
             action=Radio,
@@ -768,15 +785,12 @@ class ConvertArgs(ExtractConvertArgs):
                  "this to, it will never attempt to use more processes than are available on "
                  "your system. If singleprocess is enabled this setting will be ignored."))
         argument_list.append(dict(
-            opts=("-g", "--gpus"),
-            action=Slider,
-            min_max=(1, 10),
-            rounding=1,
-            type=int,
-            default=1,
+            opts=("-d", "--distributed"),
+            action="store_true",
+            default=False,
             backend="nvidia",
             group="settings",
-            help="Number of GPUs to use for conversion"))
+            help="Use the Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."))
         argument_list.append(dict(
             opts=("-t", "--trainer"),
             type=str.lower,
@@ -784,15 +798,6 @@ class ConvertArgs(ExtractConvertArgs):
             group="settings",
             help="[LEGACY] This only needs to be selected if a legacy model is being loaded or "
                  "if there are multiple models in the model folder"))
-        argument_list.append(dict(
-            opts=("-ag", "--allow-growth"),
-            action="store_true",
-            dest="allow_growth",
-            default=False,
-            backend="nvidia",
-            group="settings",
-            help="Sets allow_growth option of Tensorflow to spare memory on some "
-                 "configurations."))
         argument_list.append(dict(
             opts=("-otf", "--on-the-fly"),
             action="store_true",
@@ -917,9 +922,9 @@ class TrainArgs(FaceSwapArgs):
                  "\nL|original: The original model created by /u/deepfakes."
                  "\nL|dfaker: 64px in/128px out model from dfaker. Enable 'warp-to-landmarks' "
                  "for full dfaker method."
-                 "\nL|dfl-h128. 128px in/out model from deepfacelab"
-                 "\nL|dfl-sae. Adaptable model from deepfacelab"
-                 "\nL|dlight. A lightweight, high resolution DFaker variant."
+                 "\nL|dfl-h128: 128px in/out model from deepfacelab"
+                 "\nL|dfl-sae: Adaptable model from deepfacelab"
+                 "\nL|dlight: A lightweight, high resolution DFaker variant."
                  "\nL|iae: A model that uses intermediate layers to try to get better details"
                  "\nL|lightweight: A lightweight model for low-end cards. Don't expect great "
                  "results. Can train as low as 1.6GB with batch size 8."
@@ -928,20 +933,22 @@ class TrainArgs(FaceSwapArgs):
                  "won't work so well. By andenixa et al. Very configurable."
                  "\nL|unbalanced: 128px in/out model from andenixa. The autoencoders are "
                  "unbalanced so B>A swaps won't work so well. Very configurable."
-                 "\nL|villain: 128px in/out model from villainguy. Very resource hungry (11GB "
-                 "for batchsize 16). Good for details, but more susceptible to color "
-                 "differences."))
+                 "\nL|villain: 128px in/out model from villainguy. Very resource hungry (You "
+                 "will require a GPU with a fair amount of VRAM). Good for details, but more "
+                 "susceptible to color differences."))
         argument_list.append(dict(
             opts=("-bs", "--batch-size"),
             action=Slider,
-            min_max=(2, 256),
-            rounding=2,
+            min_max=(1, 256),
+            rounding=1,
             type=int,
             dest="batch_size",
-            default=64,
+            default=16,
             group="training",
-            help="Batch size. This is the number of images processed through the model for "
-                 "each iteration. Larger batches require more GPU RAM."))
+            help="Batch size. This is the number of images processed through the model for each "
+                 "side per iteration. NB: As the model is fed 2 sides at a time, the actual "
+                 "number of images within the model at any one time is double the number that you "
+                 "set here. Larger batches require more GPU RAM."))
         argument_list.append(dict(
             opts=("-it", "--iterations"),
             action=Slider,
@@ -956,47 +963,28 @@ class TrainArgs(FaceSwapArgs):
                  "you want the model to stop automatically at a set number of iterations, you "
                  "can set that value here."))
         argument_list.append(dict(
-            opts=("-g", "--gpus"),
-            action=Slider,
-            min_max=(1, 10),
-            rounding=1,
-            type=int,
-            default=1,
+            opts=("-d", "--distributed"),
+            action="store_true",
+            default=False,
             backend="nvidia",
             group="training",
-            help="Number of GPUs to use for training"))
+            help="Use the Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."))
         argument_list.append(dict(
-            opts=("-msg", "--memory-saving-gradients"),
+            opts=("-mp", "--mixed-precision"),
             action="store_true",
-            dest="memory_saving_gradients",
+            dest="mixed_precision",
             default=False,
             backend="nvidia",
-            group="VRAM Savings",
-            help="Trades off VRAM usage against computation time. Can fit larger models into "
-                 "memory at a cost of slower training speed. 50%%-150%% batch size increase "
-                 "for 20%%-50%% longer training time. NB: Launch time will be significantly "
-                 "delayed. Switching sides using ping-pong training will take longer."))
-        argument_list.append(dict(
-            opts=("-o", "--optimizer-savings"),
-            action="store_true",
-            dest="optimizer_savings",
-            default=False,
-            backend="nvidia",
-            group="VRAM Savings",
-            help="To save VRAM some optimizer gradient calculations can be performed on the "
-                 "CPU rather than the GPU. This allows you to increase batchsize at a training "
-                 "speed/system RAM cost."))
-        argument_list.append(dict(
-            opts=("-pp", "--ping-pong"),
-            action="store_true",
-            dest="pingpong",
-            default=False,
-            backend="nvidia",
-            group="VRAM Savings",
-            help="Enable ping pong training. Trains one side at a time, switching sides at "
-                 "each save iteration. Training will take 2 to 4 times longer, with about a "
-                 "30%%-50%% reduction in VRAM useage. NB: Preview won't show until both sides "
-                 "have been trained once."))
+            group="training",
+            help="R|NVIDIA GPUs can run operations in float16 faster than in float32. Mixed "
+                 "precision allows you to use a mix of float16 with float32, to get the "
+                 "performance benefits from float16 and the numeric stability benefits from "
+                 "float32.\nWhile mixed precision will run on most Nvidia models, it will only "
+                 "speed up training on more recent GPUs. Those with compute capability 7.0 or "
+                 "higher will see the greatest performance benefit from mixed precision because "
+                 "they have Tensor Cores. Older GPUs offer no math performance benefit for using "
+                 "mixed precision, however memory and bandwidth savings can enable some speedups. "
+                 "Generally RTX GPUs and later will offer the most benefit."))
         argument_list.append(dict(
             opts=("-s", "--save-interval"),
             action=Slider,
@@ -1004,7 +992,7 @@ class TrainArgs(FaceSwapArgs):
             rounding=10,
             type=int,
             dest="save_interval",
-            default=100,
+            default=250,
             group="Saving",
             help="Sets the number of iterations between each model save."))
         argument_list.append(dict(
@@ -1076,15 +1064,6 @@ class TrainArgs(FaceSwapArgs):
             help="Writes the training result to a file. The image will be stored in the root "
                  "of your FaceSwap folder."))
         argument_list.append(dict(
-            opts=("-ag", "--allow-growth"),
-            action="store_true",
-            dest="allow_growth",
-            default=False,
-            backend="nvidia",
-            group="model",
-            help="Sets allow_growth option of Tensorflow to spare memory on some "
-                 "configurations."))
-        argument_list.append(dict(
             opts=("-nl", "--no-logs"),
             action="store_true",
             dest="no_logs",
@@ -1097,7 +1076,7 @@ class TrainArgs(FaceSwapArgs):
             action="store_true",
             dest="warp_to_landmarks",
             default=False,
-            group="training",
+            group="augmentation",
             help="Warps training faces to closely matched Landmarks from the opposite face-set "
                  "rather than randomly warping the face. This is the 'dfaker' way of doing "
                  "warping. Alignments files for both sets of faces must be provided if using "
@@ -1107,7 +1086,7 @@ class TrainArgs(FaceSwapArgs):
             action="store_true",
             dest="no_flip",
             default=False,
-            group="training",
+            group="augmentation",
             help="To effectively learn, a random set of images are flipped horizontally. "
                  "Sometimes it is desirable for this not to occur. Generally this should be "
                  "left off except for during 'fit training'."))
@@ -1116,7 +1095,7 @@ class TrainArgs(FaceSwapArgs):
             action="store_true",
             dest="no_augment_color",
             default=False,
-            group="training",
+            group="augmentation",
             help="Color augmentation helps make the model less susceptible to color "
                  "differences between the A and B sets, at an increased training time cost. "
                  "Enable this option to disable color augmentation."))

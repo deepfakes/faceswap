@@ -14,15 +14,15 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
     """ Parent frame holder for each tab.
         Defines uniform structure for each tab to inherit from """
-    def __init__(self, parent, tabname, helptext):
-        logger.debug("Initializing %s: (tabname: '%s', helptext: %s)",
-                     self.__class__.__name__, tabname, helptext)
+    def __init__(self, parent, tab_name, helptext):
+        logger.debug("Initializing %s: (tab_name: '%s', helptext: %s)",
+                     self.__class__.__name__, tab_name, helptext)
         ttk.Frame.__init__(self, parent)
-        self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
 
+        self._parent = parent
         self.runningtask = parent.runningtask
         self.helptext = helptext
-        self.tabname = tabname
+        self.tabname = tab_name
 
         self.vars = {"info": tk.StringVar()}
         self.add_optional_vars(self.set_vars())
@@ -33,8 +33,16 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self.add_frame_separator()
         self.set_mainframe_single_tab_style()
+
+        self.pack(fill=tk.BOTH, side=tk.TOP, anchor=tk.NW)
         parent.add(self, text=self.tabname.title())
+
         logger.debug("Initialized %s", self.__class__.__name__,)
+
+    @property
+    def _tab_is_active(self):
+        """ bool: ``True`` if the tab currently has focus otherwise ``False`` """
+        return self._parent.tab(self._parent.select(), "text").lower() == self.tabname.lower()
 
     def add_optional_vars(self, varsdict):
         """ Add page specific variables """
@@ -47,6 +55,11 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
     def set_vars():
         """ Override to return a dict of page specific variables """
         return dict()
+
+    def on_tab_select(self):  # pylint:disable=no-self-use
+        """ Override for specific actions when the current tab is selected """
+        logger.debug("Returning as 'on_tab_select' not implemented for %s",
+                     self.__class__.__name__)
 
     def add_subnotebook(self):
         """ Add the main frame notebook """
@@ -150,11 +163,12 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
 class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
-    def __init__(self, parent, tabname, helptext, waittime, command=None):
+    def __init__(self, parent, tab_name, helptext, waittime, command=None):
         logger.debug("%s: OptionalPage args: (waittime: %s, command: %s)",
                      self.__class__.__name__, waittime, command)
-        DisplayPage.__init__(self, parent, tabname, helptext)
+        DisplayPage.__init__(self, parent, tab_name, helptext)
 
+        self._waittime = waittime
         self.command = command
         self.display_item = None
 
@@ -163,7 +177,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         parent.select(self)
 
         self.update_idletasks()
-        self.update_page(waittime)
+        self._update_page()
 
     @staticmethod
     def set_vars():
@@ -182,6 +196,14 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
                    "modified": modified}
         logger.debug(tk_vars)
         return tk_vars
+
+    def on_tab_select(self):
+        """ Callback for when the optional tab is selected.
+
+        Run the tab's update code when the tab is selected.
+        """
+        logger.debug("Callback received for '%s' tab", self.tabname)
+        self._update_page()
 
     # INFO LABEL
     def set_info_text(self):
@@ -213,7 +235,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
                 wraplength=200)
 
     def add_option_enable(self):
-        """ Add checkbutton to enable/disable page """
+        """ Add check-button to enable/disable page """
         logger.debug("Adding enable option")
         chkenable = ttk.Checkbutton(self.optsframe,
                                     variable=self.vars["enabled"],
@@ -229,7 +251,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         raise NotImplementedError()
 
     def on_chkenable_change(self):
-        """ Update the display immediately on a checkbutton change """
+        """ Update the display immediately on a check-button change """
         logger.debug("Enabled checkbox changed")
         if self.vars["enabled"].get():
             self.subnotebook_show()
@@ -237,15 +259,15 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
             self.subnotebook_hide()
         self.set_info_text()
 
-    def update_page(self, waittime):
+    def _update_page(self):
         """ Update the latest preview item """
-        if not self.runningtask.get():
+        if not self.runningtask.get() or not self._tab_is_active:
             return
         if self.vars["enabled"].get():
             logger.trace("Updating page")
             self.display_item_set()
             self.load_display()
-        self.after(waittime, lambda t=waittime: self.update_page(t))
+        self.after(self._waittime, self._update_page)
 
     def display_item_set(self):
         """ Override for display specific loading """
@@ -253,9 +275,9 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
 
     def load_display(self):
         """ Load the display """
-        if not self.display_item:
+        if not self.display_item or not self._tab_is_active:
             return
-        logger.debug("Loading display")
+        logger.debug("Loading display for tab: %s", self.tabname)
         self.display_item_process()
         self.vars["ready"].set(True)
         self.set_info_text()

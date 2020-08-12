@@ -27,6 +27,25 @@ except ImportError:
     plaidlib = None
 
 
+_EXCLUDE_DEVICES = []
+
+
+def set_exclude_devices(devices):
+    """ Add any explicitly selected GPU devices to the global list of devices to be excluded
+    from use by Faceswap.
+
+    Parameters
+    ----------
+    devices: list
+        list of indices corresponding to the GPU devices connected to the computer
+    """
+    logger = logging.getLogger(__name__)
+    logger.debug("Excluding GPU indicies: %s", devices)
+    if not devices:
+        return
+    _EXCLUDE_DEVICES.extend(devices)
+
+
 class GPUStats():
     """ Holds information and statistics about the GPU(s) available on the currently
     running system.
@@ -70,6 +89,16 @@ class GPUStats():
     def device_count(self):
         """int: The number of GPU devices discovered on the system. """
         return self._device_count
+
+    @property
+    def cli_devices(self):
+        """ list: List of available devices for use in faceswap's command line arguments """
+        return ["{}: {}".format(idx, device) for idx, device in enumerate(self._devices)]
+
+    @property
+    def exclude_all_devices(self):
+        """ bool: ``True`` if all GPU devices have been explicitly disabled otherwise ``False`` """
+        return all(idx in _EXCLUDE_DEVICES for idx in range(len(self._devices)))
 
     @property
     def _is_plaidml(self):
@@ -132,7 +161,7 @@ class GPUStats():
             if get_backend() == "amd":
                 self._log("debug", "AMD Detected. Using plaidMLStats")
                 loglevel = "INFO" if self._logger is None else self._logger.getEffectiveLevel()
-                self._plaid = plaidlib(loglevel=loglevel, log=log)
+                self._plaid = plaidlib(log_level=loglevel, log=log)
             elif IS_MACOS:
                 self._log("debug", "macOS Detected. Using pynvx")
                 try:
@@ -199,18 +228,21 @@ class GPUStats():
 
     def _get_active_devices(self):
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
-        CUDA_VISIBLE_DEVICES or plaidML) and allocate to :attr:`_active_devices`. """
+        CUDA_VISIBLE_DEVICES, plaidML or command line arguments) and allocate to
+        :attr:`_active_devices`. """
         if self._is_plaidml:
             self._active_devices = self._plaid.active_devices
         else:
-            devices = os.environ.get("CUDA_VISIBLE_DEVICES", None)
             if self._device_count == 0:
-                self._active_devices = list()
-            elif devices is not None:
-                self._active_devices = [int(i) for i in devices.split(",") if devices]
+                self._active_devices = []
             else:
-                self._active_devices = list(range(self._device_count))
-            self._log("debug", "Active GPU Devices: {}".format(self._active_devices))
+                devices = [idx for idx in range(self._device_count) if idx not in _EXCLUDE_DEVICES]
+                env_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+                if env_devices:
+                    env_devices = [int(i) for i in env_devices.split(",")]
+                    devices = [idx for idx in devices if idx in env_devices]
+                self._active_devices = devices
+        self._log("debug", "Active GPU Devices: {}".format(self._active_devices))
 
     def _get_handles(self):
         """ Obtain the internal handle identifiers for the system GPUs and allocate to
@@ -340,7 +372,7 @@ class GPUStats():
             If a GPU is not detected then the **card_id** is returned as ``-1`` and the amount
             of free and total RAM available is fixed to 2048 Megabytes.
         """
-        if self._device_count == 0:
+        if len(self._active_devices) == 0:
             return {"card_id": -1,
                     "device": "No GPU devices found",
                     "free": 2048,

@@ -10,7 +10,7 @@ import pytest
 from lib.model import normalization
 from lib.utils import get_backend
 
-from .layers_test import layer_test
+from tests.lib.model.layers_test import layer_test
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
