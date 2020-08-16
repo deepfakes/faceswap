@@ -150,7 +150,7 @@ class TrainerBase():
                                                      embeddings_metadata=None)
         tensorboard.set_model(self._model.model)
         tensorboard.on_train_begin(0)
-        logger.info("Enabled TensorBoard Logging")
+        logger.verbose("Enabled TensorBoard Logging")
         return tensorboard
 
     def train_one_step(self, viewer, timelapse_kwargs):

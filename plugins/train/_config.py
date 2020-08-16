@@ -57,8 +57,14 @@ class Config(FaceswapConfig):
         self.add_section(title=section,
                          info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
-            section=section, title="coverage", datatype=float, default=68.75,
-            min_max=(62.5, 100.0), rounding=2, fixed=True, group="face",
+            section=section,
+            title="coverage",
+            datatype=float,
+            default=68.75,
+            min_max=(62.5, 100.0),
+            rounding=2,
+            fixed=True,
+            group="face",
             info="How much of the extracted image to train on. A lower coverage will limit the "
                  "model's scope to a zoomed-in central area while higher amounts can include the "
                  "entire face. A trade-off exists between lower amounts given more detail "
@@ -69,8 +75,12 @@ class Config(FaceswapConfig):
                  "\n\t87.5%% spans from ear to ear."
                  "\n\t100.0%% is a mugshot.")
         self.add_item(
-            section=section, title="mask_type", datatype=str, default="extended",
-            choices=PluginLoader.get_available_extractors("mask", add_none=True), group="mask",
+            section=section,
+            title="mask_type",
+            datatype=str,
+            default="extended",
+            choices=PluginLoader.get_available_extractors("mask", add_none=True),
+            group="mask",
             gui_radio=True,
             info="The mask to be used for training. If you have selected 'Learn Mask' or "
                  "'Penalized Mask Loss' you must select a value other than 'none'. The required "
@@ -96,70 +106,52 @@ class Config(FaceswapConfig):
                  "testing for further description. Profile faces may result in sub-par "
                  "performance.")
         self.add_item(
-            section=section, title="mask_blur_kernel", datatype=int, min_max=(0, 9),
-            rounding=1, default=3, group="mask",
+            section=section,
+            title="mask_blur_kernel",
+            datatype=int,
+            min_max=(0, 9),
+            rounding=1,
+            default=3,
+            group="mask",
             info="Apply gaussian blur to the mask input. This has the effect of smoothing the "
                  "edges of the mask, which can help with poorly calculated masks and give less "
                  "of a hard edge to the predicted mask. The size is in pixels (calculated from "
                  "a 128px mask). Set to 0 to not apply gaussian blur. This value should be odd, "
                  "if an even number is passed in then it will be rounded to the next odd number.")
         self.add_item(
-            section=section, title="mask_threshold", datatype=int, default=4,
-            min_max=(0, 50), rounding=1, group="mask",
+            section=section,
+            title="mask_threshold",
+            datatype=int,
+            default=4,
+            min_max=(0, 50),
+            rounding=1,
+            group="mask",
             info="Sets pixels that are near white to white and near black to black. Set to 0 for "
                  "off.")
         self.add_item(
-            section=section, title="learn_mask", datatype=bool, default=False, group="mask",
+            section=section,
+            title="learn_mask",
+            datatype=bool,
+            default=False,
+            group="mask",
             info="Dedicate a portion of the model to learning how to duplicate the input "
                  "mask. Increases VRAM usage in exchange for learning a quick ability to try "
                  "to replicate more complex mask models.")
         self.add_item(
-            section=section, title="icnr_init", datatype=bool,
-            default=False, group="initialization",
-            info="Use ICNR to tile the default initializer in a repeating pattern. "
-                 "This strategy is designed for pairing with sub-pixel / pixel shuffler "
-                 "to reduce the 'checkerboard effect' in image reconstruction. "
-                 "\n\t https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf")
-        self.add_item(
-            section=section, title="conv_aware_init", datatype=bool,
-            default=False, group="initialization",
-            info="Use Convolution Aware Initialization for convolutional layers. "
-                 "This can help eradicate the vanishing and exploding gradient problem "
-                 "as well as lead to higher accuracy, lower loss and faster convergence.\nNB:"
-                 "\n\t This can use more VRAM when creating a new model so you may want to "
-                 "lower the batch size for the first run. The batch size can be raised "
-                 "again when reloading the model. "
-                 "\n\t Multi-GPU is not supported for this option, so you should start the model "
-                 "on a single GPU. Once training has started, you can stop training, enable "
-                 "multi-GPU and resume."
-                 "\n\t Building the model will likely take several minutes as the calculations "
-                 "for this initialization technique are expensive. This will only impact starting "
-                 "a new model.")
-        self.add_item(
-            section=section, title="reflect_padding", datatype=bool,
-            default=False, group="network",
-            info="Use reflection padding rather than zero padding with convolutions. "
-                 "Each convolution must pad the image boundaries to maintain the proper "
-                 "sizing. More complex padding schemes can reduce artifacts at the "
-                 "border of the image."
-                 "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
-        self.add_item(
-            section=section, title="allow_growth", datatype=bool, default=False, group="network",
-            fixed=False,
-            info="[Nvidia Only]. Enable the Tensorflow GPU 'allow_growth' configuration option. "
-                 "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
-                 "but can lead to higher VRAM fragmentation and slower performance. Should only "
-                 "be enabled if you are receiving errors regarding 'cuDNN fails to initialize' "
-                 "when commencing training.")
-        self.add_item(
-            section=section, title="penalized_mask_loss", datatype=bool,
-            default=True, group="loss",
+            section=section,
+            title="penalized_mask_loss",
+            datatype=bool,
+            default=True,
+            group="loss",
             info="Image loss function is weighted by mask presence. For areas of "
                  "the image without the facial mask, reconstuction errors will be "
                  "ignored while the masked face area is prioritized. May increase "
                  "overall quality by focusing attention on the core face area.")
         self.add_item(
-            section=section, title="loss_function", datatype=str, group="loss",
+            section=section,
+            title="loss_function",
+            datatype=str,
+            group="loss",
             default="mae",
             choices=["mae", "mse", "logcosh", "smooth_loss", "l_inf_norm", "ssim", "gmsd",
                      "pixel_gradient_diff"],
@@ -192,14 +184,86 @@ class Config(FaceswapConfig):
                  "between two images. Allows for large color shifts,but maintains the structure "
                  "of the image.\n")
         self.add_item(
-            section=section, title="learning_rate", datatype=float, default=5e-5,
-            min_max=(1e-6, 1e-4), rounding=6, fixed=False, group="optimizer",
-            info="Learning rate - how fast your network will learn (how large are "
-                 "the modifications to the model weights after one batch of training). "
-                 "Values that are too large might result in model crashes and the "
-                 "inability of the model to find the best solution. "
-                 "Values that are too small might be unable to escape from dead-ends "
-                 "and find the best global minimum.")
+            section=section,
+            title="icnr_init",
+            datatype=bool,
+            default=False,
+            group="initialization",
+            info="Use ICNR to tile the default initializer in a repeating pattern. "
+                 "This strategy is designed for pairing with sub-pixel / pixel shuffler "
+                 "to reduce the 'checkerboard effect' in image reconstruction. "
+                 "\n\t https://arxiv.org/ftp/arxiv/papers/1707/1707.02937.pdf")
+        self.add_item(
+            section=section,
+            title="conv_aware_init",
+            datatype=bool,
+            default=False,
+            group="initialization",
+            info="Use Convolution Aware Initialization for convolutional layers. "
+                 "This can help eradicate the vanishing and exploding gradient problem "
+                 "as well as lead to higher accuracy, lower loss and faster convergence.\nNB:"
+                 "\n\t This can use more VRAM when creating a new model so you may want to "
+                 "lower the batch size for the first run. The batch size can be raised "
+                 "again when reloading the model. "
+                 "\n\t Multi-GPU is not supported for this option, so you should start the model "
+                 "on a single GPU. Once training has started, you can stop training, enable "
+                 "multi-GPU and resume."
+                 "\n\t Building the model will likely take several minutes as the calculations "
+                 "for this initialization technique are expensive. This will only impact starting "
+                 "a new model.")
+        self.add_item(
+            section=section,
+            title="optimizer",
+            datatype=str,
+            gui_radio=True,
+            group="optimizer",
+            default="adam",
+            choices=["adam", "nadam", "rms-prop"],
+            info="The optimizer to use."
+                 "\n\t adam - Adaptive Moment Optimization. A stochastic gradient descent method "
+                 "that is based on adaptive estimation of first-order and second-order moments."
+                 "\n\t nadam - Adaptive Moment Optimization with Nesterov Momentum. Much like "
+                 "Adam but uses a different formula for calculating momentum."
+                 "\n\t rms-prop - Root Mean Square Propogation. Maintains a moving (discounted) "
+                 "average of the square of the gradients. Divides the gradient by the root of "
+                 "this average.")
+        self.add_item(
+            section=section,
+            title="learning_rate",
+            datatype=float,
+            default=5e-5,
+            min_max=(1e-6, 1e-4),
+            rounding=6,
+            fixed=False,
+            group="optimizer",
+            info="Learning rate - how fast your network will learn (how large are the "
+                 "modifications to the model weights after one batch of training). Values that "
+                 "are too large might result in model crashes and the inability of the model to "
+                 "find the best solution. Values that are too small might be unable to escape "
+                 "from dead-ends and find the best global minimum.")
+        self.add_item(
+            section=section,
+            title="reflect_padding",
+            datatype=bool,
+            default=False,
+            group="network",
+            info="Use reflection padding rather than zero padding with convolutions. "
+                 "Each convolution must pad the image boundaries to maintain the proper "
+                 "sizing. More complex padding schemes can reduce artifacts at the "
+                 "border of the image."
+                 "\n\t http://www-cs.engr.ccny.cuny.edu/~wolberg/cs470/hw/hw2_pad.txt")
+        self.add_item(
+            section=section,
+            title="allow_growth",
+            datatype=bool,
+            default=False,
+            group="network",
+            fixed=False,
+            info="[Nvidia Only]. Enable the Tensorflow GPU 'allow_growth' configuration option. "
+                 "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
+                 "but can lead to higher VRAM fragmentation and slower performance. Should only "
+                 "be enabled if you are receiving errors regarding 'cuDNN fails to initialize' "
+                 "when commencing training.")
 
     def load_module(self, filename, module_path, plugin_type):
         """ Load the defaults module and add defaults """

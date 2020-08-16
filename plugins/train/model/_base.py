@@ -20,7 +20,7 @@ from keras import losses as k_losses
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model as KModel
-from keras.optimizers import Adam
+from keras.optimizers import Adam, Nadam, RMSprop
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
@@ -367,55 +367,19 @@ class ModelBase():
     def _compile_model(self):
         """ Compile the model to include the Optimizer and Loss Function(s). """
         logger.debug("Compiling Model")
-        optimizer = self._get_optimizer()
+
+        optimizer = _Optimizer(self.config["optimizer"],
+                               self.config["learning_rate"],
+                               self.config.get("clipnorm", False),
+                               self._args).optimizer
+        if self._settings.use_mixed_precision:
+            optimizer = self._settings.LossScaleOptimizer(optimizer, loss_scale="dynamic")
+
         loss = _Loss(self._model.inputs, self._model.outputs)
         self._model.compile(optimizer=optimizer, loss=loss.functions)
         if not self._is_predict:
             self._state.add_session_loss_names(loss.names)
         logger.debug("Compiled Model: %s", self._model)
-
-    def _get_optimizer(self):
-        """ Return a Keras Adam Optimizer with user selected parameters.
-
-        Returns
-        -------
-        :class:`keras.optimizers.Adam`
-            An Adam Optimizer with the given user settings
-
-        Notes
-        -----
-        Clip-norm is ballooning VRAM usage, which is not expected behavior and may be a bug in
-        Keras/Tensorflow.
-
-        PlaidML has a bug regarding the clip-norm parameter See:
-        https://github.com/plaidml/plaidml/issues/228. We workaround by simply not adding this
-        parameter for AMD backend users.
-        """
-        kwargs = dict(beta_1=0.5, beta_2=0.99)
-
-        learning_rate = "lr" if get_backend() == "amd" else "learning_rate"
-        kwargs[learning_rate] = self.config.get("learning_rate", 5e-5)
-
-        clipnorm = self.config.get("clipnorm", False)
-        if clipnorm and (self._args.distributed or self._args.mixed_precision):
-            logger.warning("Clipnorm has been selected, but is unsupported when using distributed "
-                           "or mixed_precision training, so has been disabled. If you wish to "
-                           "enable clipnorm, then you must disable these options.")
-            clipnorm = False
-        if clipnorm and get_backend() == "amd":
-            # TODO add clipnorm in for plaidML when it is fixed upstream. Still not fixed in
-            # release 0.7.0.
-            logger.warning("Due to a bug in plaidML, clipnorm cannot be used on AMD backends so "
-                           "has been disabled")
-            clipnorm = False
-        if clipnorm:
-            kwargs["clipnorm"] = 1.0
-
-        retval = Adam(**kwargs)
-        if self._settings.use_mixed_precision:
-            retval = self._settings.LossScaleOptimizer(retval, loss_scale="dynamic")
-        logger.debug("Optimizer: %s, kwargs: %s", retval, kwargs)
-        return retval
 
     def _legacy_mapping(self):  # pylint:disable=no-self-use
         """ The mapping of separate model files to single model layers for transferring of legacy
@@ -807,6 +771,84 @@ class _Settings():
         retval = nullcontext() if self._strategy is None else self._strategy.scope()
         logger.debug("Using strategy scope: %s", retval)
         return retval
+
+
+class _Optimizer():  # pylint:disable=too-few-public-methods
+    """ Obtain the selected optimizer with the appropriate keyword arguments.
+
+    Parameters
+    ----------
+    optimizer: str
+        The selected optimizer name for the plugin
+    learning_rate: float
+        The selected learning rate to use
+    clipnorm: bool
+        Whether to clip gradients to avoid exploding/vanishing gradients
+    arguments: :class:`argparse.Namespace`
+        The arguments that were passed to the train or convert process as generated from
+        Faceswap's command line arguments
+    """
+    def __init__(self, optimizer, learning_rate, clipnorm, arguments):
+        logger.debug("Initializing %s: (optimizer: %s, learning_rate: %s, clipnorm: %s, "
+                     "arguments: %s", self.__class__.__name__, optimizer, learning_rate, clipnorm,
+                     arguments)
+        optimizers = {"adam": Adam, "nadam": Nadam, "rms-prop": RMSprop}
+        self._optimizer = optimizers[optimizer]
+
+        base_kwargs = {"adam": dict(beta_1=0.5, beta_2=0.99),
+                       "nadam": dict(beta_1=0.5, beta_2=0.99),
+                       "rms-prop": dict()}
+        self._kwargs = base_kwargs[optimizer]
+
+        self._configure(learning_rate, clipnorm, arguments)
+        logger.verbose("Using %s optimizer", optimizer.title())
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    @property
+    def optimizer(self):
+        """ :class:`keras.optimizers.Optimizer`: The requested optimizer. """
+        return self._optimizer(**self._kwargs)
+
+    def _configure(self, learning_rate, clipnorm, arguments):
+        """ Configure the optimizer based on user settings.
+
+        Parameters
+        ----------
+        learning_rate: float
+            The selected learning rate to use
+        clipnorm: bool
+            Whether to clip gradients to avoid exploding/vanishing gradients
+        arguments: :class:`argparse.Namespace`
+            The arguments that were passed to the train or convert process as generated from
+            Faceswap's command line arguments
+
+        Notes
+        -----
+        Clip-norm is ballooning VRAM usage, which is not expected behavior and may be a bug in
+        Keras/Tensorflow.
+
+        PlaidML has a bug regarding the clip-norm parameter See:
+        https://github.com/plaidml/plaidml/issues/228. We workaround by simply not adding this
+        parameter for AMD backend users.
+        """
+        lr_key = "lr" if get_backend() == "amd" else "learning_rate"
+        self._kwargs[lr_key] = learning_rate
+
+        if clipnorm and (arguments.distributed or arguments.mixed_precision):
+            logger.warning("Clipnorm has been selected, but is unsupported when using distributed "
+                           "or mixed_precision training, so has been disabled. If you wish to "
+                           "enable clipnorm, then you must disable these options.")
+            clipnorm = False
+        if clipnorm and get_backend() == "amd":
+            # TODO add clipnorm in for plaidML when it is fixed upstream. Still not fixed in
+            # release 0.7.0.
+            logger.warning("Due to a bug in plaidML, clipnorm cannot be used on AMD backends so "
+                           "has been disabled")
+            clipnorm = False
+        if clipnorm:
+            self._kwargs["clipnorm"] = 1.0
+
+        logger.debug("optimizer kwargs: %s", self._kwargs)
 
 
 class _Loss():
