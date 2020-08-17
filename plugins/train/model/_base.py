@@ -117,12 +117,15 @@ class ModelBase():
         self._io = _IO(self, model_dir, self._is_predict)
         self._check_multiple_models()
 
-        self._settings = _Settings(self._args, self.config["allow_growth"], self._is_predict)
         self._state = State(model_dir,
                             self.name,
                             self._config_changeable_items,
                             False if self._is_predict else self._args.no_logs,
                             training_image_size)
+        self._settings = _Settings(self._args,
+                                   self.config["mixed_precision"],
+                                   self.config["allow_growth"],
+                                   self._is_predict)
 
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
@@ -592,18 +595,21 @@ class _Settings():
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the train or convert process as generated from
         Faceswap's command line arguments
+    mixed_precision: bool
+        ``True`` if Mixed Precision training should be used otherwise ``False``
     allow_growth: bool
         ``True`` if the Tensorflow allow_growth parameter should be set otherwise ``False``
     is_predict: bool, optional
         ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
         for training. Default: ``False``
     """
-    def __init__(self, arguments, allow_growth, is_predict):
-        logger.debug("Initializing %s: (arguments: %s, allow_growth: %s, is_predict: %s)",
-                     self.__class__.__name__, arguments, allow_growth, is_predict)
+    def __init__(self, arguments, mixed_precision, allow_growth, is_predict):
+        logger.debug("Initializing %s: (arguments: %s, mixed_precision: %s, allow_growth: %s, "
+                     "is_predict: %s)", self.__class__.__name__, arguments, mixed_precision,
+                     allow_growth, is_predict)
         self._set_tf_settings(allow_growth, arguments.exclude_gpus)
 
-        use_mixed_precision = not is_predict and arguments.mixed_precision
+        use_mixed_precision = not is_predict and mixed_precision and get_backend() == "nvidia"
         if use_mixed_precision:
             self._mixed_precision = tf.keras.mixed_precision.experimental
         else:
@@ -698,7 +704,7 @@ class _Settings():
             guaranteed failure when limiting GPU devices
         """
         logger.debug("use_mixed_precision: %s, skip_check: %s", use_mixed_precision, skip_check)
-        if get_backend() != "nvidia" or not use_mixed_precision:
+        if not use_mixed_precision:
             logger.debug("Not enabling 'mixed_precision' (backend: %s, use_mixed_precision: %s)",
                          get_backend(), use_mixed_precision)
             return False
