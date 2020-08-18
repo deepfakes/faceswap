@@ -840,7 +840,7 @@ class _Optimizer():  # pylint:disable=too-few-public-methods
         lr_key = "lr" if get_backend() == "amd" else "learning_rate"
         self._kwargs[lr_key] = learning_rate
 
-        if clipnorm and (arguments.distributed or arguments.mixed_precision):
+        if clipnorm and (arguments.distributed or _CONFIG["mixed_precision"]):
             logger.warning("Clipnorm has been selected, but is unsupported when using distributed "
                            "or mixed_precision training, so has been disabled. If you wish to "
                            "enable clipnorm, then you must disable these options.")
