@@ -120,7 +120,37 @@ class Train():  # pylint:disable=too-few-public-methods
         logger.info("Model B Directory: %s", self._args.input_b)
         logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
                                              for key, val in images.items()])
+        self._validate_image_counts(images)
         return images
+
+    @classmethod
+    def _validate_image_counts(cls, images):
+        """ Validate that there are sufficient images to commence training without raising an
+        error.
+
+        Confirms that there are at least 24 images in each folder. Whilst this is not enough images
+        to train a Neural Network to any successful degree, it should allow the process to train
+        without raising errors when generating previews.
+
+        A warning is raised if there are fewer than 250 images on any side.
+
+        Parameters
+        ----------
+        images: dict
+            The image paths for each side. The key is the side, the value is the list of paths
+            for that side.
+        """
+        counts = {side: len(paths) for side, paths in images.items()}
+        msg = ("You need to provide a significant number of images to successfully train a Neural "
+               "Network. Aim for between 500 - 5000 images per side.")
+        if any(count < 25 for count in counts.values()):
+            logger.error("At least one of your input folders contains fewer than 25 images.")
+            logger.error(msg)
+            sys.exit(1)
+        if any(count < 250 for count in counts.values()):
+            logger.warning("At least one of your input folders contains fewer than 250 images. "
+                           "Results are likely to be poor.")
+            logger.warning(msg)
 
     def process(self):
         """ The entry point for triggering the Training Process.
