@@ -207,7 +207,22 @@ class TrainerBase():
                    "\n4) Use a more lightweight model, or select the model's 'LowMem' option "
                    "(in config) if it has one.")
             raise FaceswapError(msg) from err
-
+        except Exception as err:
+            if get_backend() == "amd":
+                # pylint:disable=import-outside-toplevel
+                from lib.plaidml_utils import is_plaidml_error
+                if (is_plaidml_error(err) and
+                        "CL_MEM_OBJECT_ALLOCATION_FAILURE" in str(err).upper()):
+                    msg = ("You do not have enough GPU memory available to train the selected "
+                           "model at the selected settings. You can try a number of things:"
+                           "\n1) Close any other application that is using your GPU (web browsers "
+                           "are particularly bad for this)."
+                           "\n2) Lower the batchsize (the amount of images fed into the model "
+                           "each iteration)."
+                           "\n3) Use a more lightweight model, or select the model's 'LowMem' "
+                           "option (in config) if it has one.")
+                    raise FaceswapError(msg) from err
+            raise
         self._log_tensorboard(loss)
         loss = self._collate_and_store_loss(loss[1:])
         self._print_loss(loss)
