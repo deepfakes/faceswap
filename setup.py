@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Install packages for faceswap.py """
 
-# >>> ENV
+# >>> Environment
 import ctypes
 import json
 import locale
@@ -15,9 +15,9 @@ from subprocess import CalledProcessError, run, PIPE, Popen
 from pkg_resources import parse_requirements
 
 INSTALL_FAILED = False
-# Revisions of tensorflow-gpu and cuda/cudnn requirements
+# Revisions of tensorflow GPU and cuda/cudnn requirements
 TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.3.0": ["10.1", "7.6"]}
-# Mapping of Python packages to their conda names if different from pypi or in non-default channel
+# Mapping of Python packages to their conda names if different from pip or in non-default channel
 CONDA_MAPPING = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
     "fastcluster": ("fastcluster", "conda-forge"),
@@ -64,12 +64,12 @@ class Environment():
 
     @property
     def os_version(self):
-        """ Get OS Verion """
+        """ Get OS Version """
         return platform.system(), platform.release()
 
     @property
     def py_version(self):
-        """ Get Python Verion """
+        """ Get Python Version """
         return platform.python_version(), platform.architecture()[0]
 
     @property
@@ -104,8 +104,13 @@ class Environment():
         return retval
 
     def process_arguments(self):
-        """ Process any cli arguments """
-        for arg in sys.argv:
+        """ Process any cli arguments and dummy in cli arguments if calling from updater. """
+        args = [arg for arg in sys.argv]  # pylint:disable=unnecessary-comprehension
+        if self.updater:
+            from lib.utils import get_backend  # pylint:disable=import-outside-toplevel
+            args.append("--{}".format(get_backend()))
+
+        for arg in args:
             if arg == "--installer":
                 self.is_installer = True
             if arg == "--nvidia":
@@ -173,7 +178,7 @@ class Environment():
             sys.exit(1)
 
     def output_runtime_info(self):
-        """ Output runtime info """
+        """ Output run time info """
         if self.is_conda:
             self.output.info("Running in Conda")
         if self.is_virtualenv:
@@ -193,7 +198,7 @@ class Environment():
     def upgrade_pip(self):
         """ Upgrade pip to latest version """
         if not self.is_conda:
-            # Don't do this with Conda, as we must use conda's pip
+            # Don't do this with Conda, as we must use Conda version of pip
             self.output.info("Upgrading pip...")
             pipexe = [sys.executable, "-m", "pip"]
             pipexe.extend(["install", "--no-cache-dir", "-qq", "--upgrade"])
@@ -246,8 +251,8 @@ class Environment():
                 tf_ver = key
                 break
         if tf_ver:
-            # Remove the version of tensorflow in requirements.txt and add the correct version that
-            # corresponds to the installed Cuda/cuDNN versions
+            # Remove the version of tensorflow in requirements file and add the correct version
+            # that corresponds to the installed Cuda/cuDNN versions
             self.required_packages = [pkg for pkg in self.required_packages
                                       if not pkg.startswith("tensorflow-gpu")]
             tf_ver = "tensorflow-gpu{}".format(tf_ver)
@@ -382,7 +387,7 @@ class Checks():
     @property
     def cuda_keys_windows(self):
         """ Return the OS Environ CUDA Keys for Windows """
-        return [key for key in os.environ.keys() if key.lower().startswith("cuda_path_v")]
+        return [key for key in os.environ if key.lower().startswith("cuda_path_v")]
 
     def amd_ask_enable(self):
         """ Enable or disable Plaidml for AMD"""
@@ -407,7 +412,7 @@ class Checks():
             self.env.enable_docker = False
 
     def docker_confirm(self):
-        """ Warn if nvidia-docker on non-linux system """
+        """ Warn if nvidia-docker on non-Linux system """
         self.output.warning("Nvidia-Docker is only supported on Linux.\r\n"
                             "Only CPU is supported in Docker for your system")
         self.docker_ask_enable()
@@ -533,7 +538,7 @@ class Checks():
 
     @staticmethod
     def cudnn_checkfiles_linux():
-        """ Return the checkfile locations for linux """
+        """ Return the check-file locations for Linux """
         chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
         chk = chk.strip().replace("libcudnn.so.", "")
         if not chk:
@@ -546,7 +551,7 @@ class Checks():
         return cudnn_checkfiles
 
     def cudnn_checkfiles_windows(self):
-        """ Return the checkfile locations for windows """
+        """ Return the check-file locations for Windows """
         # TODO A more reliable way of getting the windows location
         if not self.env.cuda_path:
             return list()
