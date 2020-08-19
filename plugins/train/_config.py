@@ -279,6 +279,18 @@ class Config(FaceswapConfig):
                  "because they have Tensor Cores. Older GPUs offer no math performance benefit "
                  "for using mixed precision, however memory and bandwidth savings can enable some "
                  "speedups. Generally RTX GPUs and later will offer the most benefit.")
+        self.add_item(
+            section=section,
+            title="convert_batchsize",
+            datatype=int,
+            default=16,
+            min_max=(1, 32),
+            rounding=1,
+            group="convert",
+            info="[GPU Only]. The number of faces to feed through the model at once when running "
+                 "the Convert process.\n\nNB: Increasing this figure is unlikely to improve "
+                 "convert speed, however, if you are getting Out of Memory errors, then you may "
+                 "want to reduce the batch size.")
 
     def load_module(self, filename, module_path, plugin_type):
         """ Load the defaults module and add defaults """

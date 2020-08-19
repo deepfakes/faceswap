@@ -645,7 +645,6 @@ class Predict():
     def __init__(self, in_queue, queue_size, arguments):
         logger.debug("Initializing %s: (args: %s, queue_size: %s, in_queue: %s)",
                      self.__class__.__name__, arguments, queue_size, in_queue)
-        self._batchsize = self._get_batchsize(queue_size)
         self._args = arguments
         self._in_queue = in_queue
         self._out_queue = queue_manager.get_queue("patch")
@@ -654,6 +653,7 @@ class Predict():
         self._verify_output = False
 
         self._model = self._load_model()
+        self._batchsize = self._get_batchsize(queue_size)
         self._sizes = self._get_io_sizes()
         self._coverage_ratio = self._model.coverage_ratio
 
@@ -717,26 +717,6 @@ class Predict():
         logger.debug(retval)
         return retval
 
-    @staticmethod
-    def _get_batchsize(queue_size):
-        """ Get the batch size for feeding the model.
-
-        Sets the batch size to 1 if inference is being run on CPU, otherwise the minimum of the
-        :attr:`self._queue_size` and 16.
-
-        Returns
-        -------
-        int
-            The batch size that the model is to be fed at.
-        """
-        logger.debug("Getting batchsize")
-        is_cpu = GPUStats().device_count == 0
-        batchsize = 1 if is_cpu else 16
-        batchsize = min(queue_size, batchsize)
-        logger.debug("Batchsize: %s", batchsize)
-        logger.debug("Got batchsize: %s", batchsize)
-        return batchsize
-
     def _load_model(self):
         """ Load the Faceswap model.
 
@@ -754,6 +734,30 @@ class Predict():
         model.build()
         logger.debug("Loaded Model")
         return model
+
+    def _get_batchsize(self, queue_size):
+        """ Get the batch size for feeding the model.
+
+        Sets the batch size to 1 if inference is being run on CPU, otherwise the minimum of the
+        input queue size and the model's `convert_batchsize` configuration option.
+
+        Parameters
+        ----------
+        queue_size: int
+            The queue size that is feeding the predictor
+
+        Returns
+        -------
+        int
+            The batch size that the model is to be fed at.
+        """
+        logger.debug("Getting batchsize")
+        is_cpu = GPUStats().device_count == 0
+        batchsize = 1 if is_cpu else self._model.config["convert_batchsize"]
+        batchsize = min(queue_size, batchsize)
+        logger.debug("Batchsize: %s", batchsize)
+        logger.debug("Got batchsize: %s", batchsize)
+        return batchsize
 
     def _get_model_name(self, model_dir):
         """ Return the name of the Faceswap model used.
