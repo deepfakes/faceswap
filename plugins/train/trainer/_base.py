@@ -211,8 +211,9 @@ class TrainerBase():
             if get_backend() == "amd":
                 # pylint:disable=import-outside-toplevel
                 from lib.plaidml_utils import is_plaidml_error
-                if (is_plaidml_error(err) and
-                        "CL_MEM_OBJECT_ALLOCATION_FAILURE" in str(err).upper()):
+                if (is_plaidml_error(err) and (
+                        "CL_MEM_OBJECT_ALLOCATION_FAILURE" in str(err).upper() or
+                        "enough memory for the current schedule" in str(err).lower())):
                     msg = ("You do not have enough GPU memory available to train the selected "
                            "model at the selected settings. You can try a number of things:"
                            "\n1) Close any other application that is using your GPU (web browsers "
