@@ -102,12 +102,14 @@ class _ConfigurePlugins(tk.Toplevel):
                 if key == "helptext":
                     self._plugin_info[section] = val
                     continue
+                initial_value = self._config.config_dict[key]
+                initial_value = "none" if initial_value is None else initial_value
                 conf[category][section][key] = ControlPanelOption(
                     title=key,
                     dtype=val["type"],
                     group=val["group"],
                     default=val["default"],
-                    initial_value=self._config.config_dict.get(key, val["default"]),
+                    initial_value=initial_value,
                     choices=val["choices"],
                     is_radio=val["gui_radio"],
                     rounding=val["rounding"],

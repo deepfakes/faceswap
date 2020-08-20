@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-""" Default configurations for faceswap
-    Extends out configparser funcionality by checking for default config updates
-    and returning data in it's correct format """
+""" Default configurations for faceswap.
+    Extends out :class:`configparser.ConfigParser` functionality by checking for default
+    configuration updates and returning data in it's correct format """
 
 import logging
 import os
@@ -65,8 +65,8 @@ class FaceswapConfig():
 
     @property
     def config_dict(self):
-        """ Collate global options and requested section into a dictionary
-            with the correct datatypes """
+        """ Collate global options and requested section into a dictionary with the correct
+        data types """
         conf = dict()
         for sect in ("global", self.section):
             if sect not in self.config.sections():
@@ -134,10 +134,10 @@ class FaceswapConfig():
             is_radio is to indicate to the GUI that it should display Radio Buttons rather than
             combo boxes for multiple choice options.
 
-            The 'fixed' parameter is only for training configs. Training configurations
+            The 'fixed' parameter is only for training configurations. Training configurations
             are set when the model is created, and then reloaded from the state file.
             Marking an item as fixed=False indicates that this value can be changed for
-            existing models, and will overide the value saved in the state file with the
+            existing models, and will override the value saved in the state file with the
             updated value in config.
 
             The 'Group' parameter allows you to assign the config item to a group in the GUI
