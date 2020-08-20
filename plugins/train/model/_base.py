@@ -301,6 +301,12 @@ class ModelBase():
         filename = self._io._filename  # pylint:disable=protected-access
         logger.info("Saving Tensorflow 2.x model to '%s'", filename)
         new_model.save(filename)
+        # Penalized Loss and Learn Mask used to be disabled automatically if a mask wasn't
+        # selected, so disable it if enabled, but mask_type is None
+        if self.config["penalized_mask_loss"] and self.config["mask_type"] is None:
+            self.config["penalized_mask_loss"] = False
+        if self.config["learn_mask"] and self.config["mask_type"] is None:
+            self.config["learn_mask"] = False
         self._state.save()
 
     def _validate_input_shape(self):

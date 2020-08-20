@@ -286,6 +286,7 @@ class Config(FaceswapConfig):
             default=16,
             min_max=(1, 32),
             rounding=1,
+            fixed=False,
             group="convert",
             info="[GPU Only]. The number of faces to feed through the model at once when running "
                  "the Convert process.\n\nNB: Increasing this figure is unlikely to improve "
