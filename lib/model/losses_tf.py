@@ -136,7 +136,7 @@ class DSSIMObjective(tf.keras.losses.Loss):
         denom = (K.square(u_true) + K.square(u_pred) + self.c_1) * (
             var_pred + var_true + self.c_2)
         ssim /= denom  # no need for clipping, c_1 + c_2 make the denorm non-zero
-        return K.mean((1.0 - ssim) / 2.0)
+        return (1.0 - ssim) / 2.0
 
     @staticmethod
     def _preprocess_padding(padding):
