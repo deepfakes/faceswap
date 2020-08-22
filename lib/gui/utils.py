@@ -2,11 +2,14 @@
 """ Utility functions for the GUI """
 import logging
 import os
+import platform
 import sys
 import tkinter as tk
+
 from tkinter import filedialog
 from threading import Event, Thread
 from queue import Queue
+
 import numpy as np
 
 from PIL import Image, ImageDraw, ImageTk
@@ -767,10 +770,11 @@ class Config():
     def __init__(self, root, cli_opts, statusbar, session):
         logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s, session: %s)",
                      self.__class__.__name__, root, cli_opts, statusbar, session)
+        self._default_font = self._set_default_font()
         self._constants = dict(
             root=root,
             scaling_factor=self._get_scaling(root),
-            default_font=tk.font.nametofont("TkDefaultFont").configure()["family"])
+            default_font=self._default_font)
         self._gui_objects = dict(
             cli_opts=cli_opts,
             tk_vars=self._set_tk_vars(),
@@ -781,7 +785,6 @@ class Config():
             command_notebook=None)  # set in command.py
         self._user_config = UserConfig(None)
         self.session = session
-        self._default_font = tk.font.nametofont("TkDefaultFont").configure()["family"]
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # Constants
@@ -890,6 +893,25 @@ class Config():
         scaling = dpi / 72.0
         logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
         return scaling
+
+    @classmethod
+    def _set_default_font(cls):
+        """ Set the default font.
+
+        For macOS and Windows, this just pulls back the system default font.
+
+        For Linux, quite often the default is not ideal, so we try to pull a sane default from
+        installed fonts.
+        """
+        if platform.system() == "Linux":
+            for family in ("DejaVu Sans", "Noto Sans", "Nimbus Sans"):
+                if family in tk.font.families():
+                    logger.debug("Setting default font to: '%s'", family)
+                    tk.font.nametofont("TkDefaultFont").configure(family=family)
+                    tk.font.nametofont("TkHeadingFont").configure(family=family)
+                    tk.font.nametofont("TkMenuFont").configure(family=family)
+                    break
+        return tk.font.nametofont("TkDefaultFont").configure()["family"]
 
     def set_default_options(self):
         """ Set the default options for :mod:`lib.gui.projects`
