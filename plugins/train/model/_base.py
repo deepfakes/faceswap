@@ -1348,10 +1348,16 @@ class _Inference():  # pylint:disable=too-few-public-methods
         outputs = self._config["output_layers"]
         if get_backend() == "amd":
             outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
-        side_outputs = set(self._filter_node(outputs)[self._output_idx])
-        logger.debug("model outputs: %s, side_outputs: %s", outputs, side_outputs)
+
+        output_names = self._filter_node(outputs)
+        if not all(isinstance(name, list) for name in output_names):
+            output_names = [[name] for name in output_names]
+        side_outputs = set(output_names[self._output_idx])
+        logger.debug("model outputs: %s, output_names: %s, side_outputs: %s",
+                     outputs, output_names, side_outputs)
+
         outputs_all = {layer
-                       for side in self._filter_node(outputs)
+                       for side in output_names
                        for layer in side}
         retval = outputs_all.difference(side_outputs)
         logger.debug("outputs dropout: %s", retval)
