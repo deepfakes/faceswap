@@ -126,6 +126,7 @@ class ModelBase():
                                    self.config["mixed_precision"],
                                    self.config["allow_growth"],
                                    self._is_predict)
+        self._loss = _Loss()
 
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
@@ -384,10 +385,10 @@ class ModelBase():
         if self._settings.use_mixed_precision:
             optimizer = self._settings.LossScaleOptimizer(optimizer, loss_scale="dynamic")
 
-        loss = _Loss(self._model.inputs, self._model.outputs)
-        self._model.compile(optimizer=optimizer, loss=loss.functions)
+        self._loss.configure(self._model.inputs, self._model.outputs)
+        self._model.compile(optimizer=optimizer, loss=self._loss.functions)
         if not self._is_predict:
-            self._state.add_session_loss_names(loss.names)
+            self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self._model)
 
     def _legacy_mapping(self):  # pylint:disable=no-self-use
@@ -864,18 +865,9 @@ class _Optimizer():  # pylint:disable=too-few-public-methods
 
 
 class _Loss():
-    """ Holds loss names and functions for an Autoencoder.
-
-    Parameters
-    ----------
-    inputs: list
-        A list of input tensors to the model in the order ("a", "b")
-    outputs: list
-        A list of output tensors to the model in the order ("a", "b")
-    """
-    def __init__(self, inputs, outputs):
-        logger.debug("Initializing %s: (inputs: %s, outputs: %s)",
-                     self.__class__.__name__, inputs, outputs)
+    """ Holds loss names and functions for an Autoencoder. """
+    def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
         self._loss_dict = dict(mae=k_losses.mean_absolute_error,
                                mse=k_losses.mean_squared_error,
                                logcosh=k_losses.logcosh,
@@ -884,10 +876,9 @@ class _Loss():
                                ssim=losses.DSSIMObjective(),
                                gmsd=losses.GMSDLoss(),
                                pixel_gradient_diff=losses.GradientLoss())
-        self._inputs = inputs
-        self._names = self._get_loss_names(outputs)
-        self._funcs = self._get_loss_functions()
-        self._names.insert(0, "total")
+        self._inputs = None
+        self._names = None
+        self._funcs = None
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -906,14 +897,6 @@ class _Loss():
         return _CONFIG
 
     @property
-    def _selected_mask_loss(self):
-        """ :func:`keras.losses.Loss`: The selected mask loss function. Currently returns mean
-        standard error as the default function. """
-        loss_func = self._loss_dict["mse"]
-        logger.debug("loss_func: %s", loss_func)
-        return loss_func
-
-    @property
     def _mask_inputs(self):
         """ list: The list of input tensors to the model that contain the mask. Returns ``None``
         if there is no mask input to the model. """
@@ -927,6 +910,21 @@ class _Loss():
         if self._mask_inputs is None:
             return None
         return [K.int_shape(mask_input) for mask_input in self._mask_inputs]
+
+    def configure(self, inputs, outputs):
+        """ Configure the loss functions for the given inputs and outputs.
+
+        Parameters
+        ----------
+        inputs: list
+            A list of input tensors to the model in the order ("a", "b")
+        outputs: list
+            A list of output tensors to the model in the order ("a", "b")
+        """
+        self._inputs = inputs
+        self._names = self._get_loss_names(outputs)
+        self._funcs = self._get_loss_functions()
+        self._names.insert(0, "total")
 
     @classmethod
     def _get_loss_names(cls, outputs):
@@ -973,11 +971,12 @@ class _Loss():
         list
             A list of loss functions to apply to the model
         """
-        selected_loss = self._loss_dict[self._config.get("loss_function", "mae")]
+        selected_loss = self._loss_dict[self._config["loss_function"]]
+        mask_loss = self._loss_dict[self._config["mask_loss_function"]]
         loss_funcs = []
         for name in self._names:
             if name.startswith("mask"):
-                loss_funcs.append(self._selected_mask_loss)
+                loss_funcs.append(mask_loss)
             elif self._config["penalized_mask_loss"]:
                 loss_funcs.append(losses.PenalizedLoss(selected_loss))
             else:

@@ -68,7 +68,9 @@ class FaceswapConfig():
         """ Collate global options and requested section into a dictionary with the correct
         data types """
         conf = dict()
-        for sect in ("global", self.section):
+        sections = [sect for sect in self.config.sections() if sect.startswith("global")]
+        sections.append(self.section)
+        for sect in sections:
             if sect not in self.config.sections():
                 continue
             for key in self.config[sect]:
