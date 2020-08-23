@@ -304,8 +304,9 @@ class Train():  # pylint:disable=too-few-public-methods
                 if self._args.redirect_gui:
                     print("\n")
                     logger.info("[Preview Updated]")
-                    logger.debug("Removing gui trigger file: %s", self._gui_preview_trigger)
-                    os.remove(self._gui_preview_trigger)
+                    if os.path.isfile(self._gui_preview_trigger):
+                        logger.debug("Removing gui trigger file: %s", self._gui_preview_trigger)
+                        os.remove(self._gui_preview_trigger)
                 self._refresh_preview = False
 
             if save_iteration:
