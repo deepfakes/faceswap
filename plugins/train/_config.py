@@ -151,7 +151,7 @@ class Config(FaceswapConfig):
             info="R|[Nvidia Only], NVIDIA GPUs can run operations in float16 faster than in "
                  "float32. Mixed precision allows you to use a mix of float16 with float32, to "
                  "get the performance benefits from float16 and the numeric stability benefits "
-                 "from float32.\nWhile mixed precision will run on most Nvidia models, it will "
+                 "from float32.\n\nWhile mixed precision will run on most Nvidia models, it will "
                  "only speed up training on more recent GPUs. Those with compute capability 7.0 "
                  "or higher will see the greatest performance benefit from mixed precision "
                  "because they have Tensor Cores. Older GPUs offer no math performance benefit "
@@ -228,7 +228,7 @@ class Config(FaceswapConfig):
                  "the absolute value of each pixel in two reference images, compute the pixel to "
                  "pixel spatial difference in each image and then minimize that difference "
                  "between two images. Allows for large color shifts,but maintains the structure "
-                 "of the image.\n")
+                 "of the image.")
         self.add_item(
             section=section,
             title="mask_loss_function",
@@ -243,6 +243,27 @@ class Config(FaceswapConfig):
                  "\n\t MSE - Mean squared error will guide reconstructions of each pixel "
                  "towards its average value in the training dataset. As an avg, it will be "
                  "suspectible to outliers and typically produces slightly blurrier results.")
+        self.add_item(
+            section=section,
+            title="l2_reg_term",
+            datatype=int,
+            group="loss",
+            min_max=(0, 400),
+            rounding=1,
+            default=100,
+            info="The amount of L2 Regularization to apply as a penalty to Structural Similarity "
+                 "loss functions.\n\nNB: You should only adjust this if you know what you are "
+                 "doing!\n\n"
+                 "L2 regularization applies a penalty term to the given Loss function. This "
+                 "penalty will only be applied if SSIM or GMSD is selected for the main loss "
+                 "function, otherwise it is ignored.\n\nThe value given here is as a percentage "
+                 "weight of the main loss function. For example:"
+                 "\n\t 100 - Will give equal weigthing to the main loss and the penalty function. "
+                 "\n\t 25 - Will give the penalty function 1/4 of the weight of the main loss "
+                 "function. "
+                 "\n\t 400 - Will give the penalty function 4x as much importance as the main "
+                 "loss function."
+                 "\n\t 0 - Disables L2 Regularization altogether.")
         self.add_item(
             section=section,
             title="penalized_mask_loss",

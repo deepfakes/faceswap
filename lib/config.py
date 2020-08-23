@@ -180,6 +180,7 @@ class FaceswapConfig():
     @staticmethod
     def expand_helptext(helptext, choices, default, datatype, min_max, fixed):
         """ Add extra helptext info from parameters """
+        helptext += "\n"
         if not fixed:
             helptext += "\nThis option can be updated for existing models."
         if choices:

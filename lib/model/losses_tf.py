@@ -554,3 +554,72 @@ class GMSDLoss(tf.keras.losses.Loss):
             output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1], axis=None))
         # magnitude of edges -- unified x & y edges don't work well with Neural Networks
         return output
+
+
+class LossWrapper(tf.keras.losses.Loss):
+    """ A wrapper class for multiple keras losses to enable multiple weighted loss functions on a
+    single output.
+
+    Parameters
+    ----------
+    loss_functions: list
+        A list of either a tuple of (:class:`keras.losses.Loss`, scalar weight) or just a
+        :class:`keras.losses.Loss` function. If just the loss function is passed, then the weight
+        is assumed to be 1.0 """
+    def __init__(self, loss_functions):
+        logger.debug("Initializing: %s: (loss_functions: %s)",
+                     self.__class__.__name__, loss_functions)
+        super().__init__(name="LossWrapper")
+        self._loss_functions = []
+        self._loss_weights = []
+        self._compile_losses(loss_functions)
+        logger.debug("Initialized: %s", self.__class__.__name__)
+
+    def _compile_losses(self, loss_functions):
+        """ Splits the given loss_functions into the corresponding :attr:`_loss_functions' and
+        :attr:`_loss_weights' lists.
+
+        Loss functions are compiled into :class:`keras.compile_utils.LossesContainer` objects
+
+        Parameters
+        ----------
+        loss_functions: list
+            A list of either a tuple of (:class:`keras.losses.Loss`, scalar weight) or just a
+            :class:`keras.losses.Loss` function. If just the loss function is passed, then the
+            weight is assumed to be 1.0 """
+        for loss_func in loss_functions:
+            if isinstance(loss_func, tuple):
+                assert len(loss_func) == 2, "Tuple loss functions should contain 2 items"
+                assert isinstance(loss_func[1], float), "weight should be a float"
+                func, weight = loss_func
+            else:
+                func = loss_func
+                weight = 1.0
+            self._loss_functions.append(compile_utils.LossesContainer(func))
+            self._loss_weights.append(weight)
+        logger.debug("Compiled losses: (functions: %s, weights: %s",
+                     self._loss_functions, self._loss_weights)
+
+    def call(self, y_true, y_pred):
+        """ Call the sub loss functions for the loss wrapper.
+
+        Weights are returned as an average of the weighted sum rather than weighted sum to keep
+        totals more in a standardized range end users would expect to see.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The final loss value
+        """
+        loss = 0.0
+        for func, weight in zip(self._loss_functions, self._loss_weights):
+            loss += func(y_true, y_pred) * weight
+        weighted_average = loss / sum(self._loss_weights)
+        return weighted_average

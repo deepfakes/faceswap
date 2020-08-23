@@ -899,6 +899,7 @@ class _Loss():
                                ssim=losses.DSSIMObjective(),
                                gmsd=losses.GMSDLoss(),
                                pixel_gradient_diff=losses.GradientLoss())
+        self._uses_l2_reg = ["ssim", "gmsd"]
         self._inputs = None
         self._names = []
         self._funcs = dict()
@@ -943,11 +944,11 @@ class _Loss():
             The model that is to be trained
         """
         self._inputs = model.inputs
-        self._get_loss_names(model.outputs)
-        self._get_loss_functions(model.output_names)
+        self._set_loss_names(model.outputs)
+        self._set_loss_functions(model.output_names)
         self._names.insert(0, "total")
 
-    def _get_loss_names(self, outputs):
+    def _set_loss_names(self, outputs):
         """ Name the losses based on model output.
 
         This is used for correct naming in the state file, for display purposes only.
@@ -980,8 +981,8 @@ class _Loss():
                                 for idx, name in enumerate(output_types)])
         logger.debug(self._names)
 
-    def _get_loss_functions(self, output_names):
-        """ Set the loss functions.
+    def _set_loss_functions(self, output_names):
+        """ Set the loss functions and their associated weights.
 
         Adds the loss functions to the :attr:`functions` dictionary.
 
@@ -994,16 +995,23 @@ class _Loss():
         for name, output_name in zip(self._names, output_names):
             if name.startswith("mask"):
                 loss_func = self._loss_dict[self._config["mask_loss_function"]]
-            elif self._config["penalized_mask_loss"]:
-                loss_func = losses.PenalizedLoss(selected_loss)
             else:
-                loss_func = selected_loss
+                if (self._config["loss_function"] in self._uses_l2_reg
+                        and self._config["l2_reg_term"] != 0):
+                    loss_funcs = [selected_loss, self._loss_dict["mse"]]
+                    loss_weights = [1.0, self._config["l2_reg_term"] / 100.0]
+                else:
+                    loss_funcs = [selected_loss]
+                    loss_weights = [1.0]
+
+                if self._config["penalized_mask_loss"]:
+                    loss_funcs = [losses.PenalizedLoss(loss) for loss in loss_funcs]
+
+                loss_func = losses.LossWrapper(loss_functions=list(zip(loss_funcs, loss_weights)))
+
             logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
-            if get_backend() == "amd":
-                self._funcs[output_name] = loss_func
-            else:
-                self._funcs.setdefault(output_name, []).append(loss_func)
-        logger.debug(self._funcs)
+            self._funcs[output_name] = loss_func
+        logger.debug("functions: %s", self._funcs)
 
 
 class State():
