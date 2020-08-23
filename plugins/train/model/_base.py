@@ -384,12 +384,35 @@ class ModelBase():
                                self._args).optimizer
         if self._settings.use_mixed_precision:
             optimizer = self._settings.LossScaleOptimizer(optimizer, loss_scale="dynamic")
-
-        self._loss.configure(self._model.inputs, self._model.outputs)
+        if get_backend() == "amd":
+            self._rewrite_plaid_outputs()
+        self._loss.configure(self._model)
         self._model.compile(optimizer=optimizer, loss=self._loss.functions)
         if not self._is_predict:
             self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self._model)
+
+    def _rewrite_plaid_outputs(self):
+        """ Rewrite the output names for models using the PlaidML (Keras 2.2.4) backend
+
+        Keras 2.2.4 duplicates model output names if any of the models have multiple outputs
+        so we need to rename the outputs so we can successfully map the loss dictionaries.
+
+        This is a bit of a hack, but it does work.
+        """
+        # TODO Remove this rewrite code if PlaidML updates to a version of Keras where this is
+        # no longer necessary
+        if len(self._model.output_names) == len(set(self._model.output_names)):
+            logger.debug("Output names are unique, not rewriting: %s", self._model.output_names)
+            return
+        seen = {name: 0 for name in set(self._model.output_names)}
+        new_names = []
+        for name in self._model.output_names:
+            new_names.append("{}_{}".format(name, seen[name]))
+            seen[name] += 1
+        logger.debug("Output names rewritten: (old: %s, new: %s)",
+                     self._model.output_names, new_names)
+        self._model.output_names = new_names
 
     def _legacy_mapping(self):  # pylint:disable=no-self-use
         """ The mapping of separate model files to single model layers for transferring of legacy
@@ -877,8 +900,8 @@ class _Loss():
                                gmsd=losses.GMSDLoss(),
                                pixel_gradient_diff=losses.GradientLoss())
         self._inputs = None
-        self._names = None
-        self._funcs = None
+        self._names = []
+        self._funcs = dict()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -888,7 +911,7 @@ class _Loss():
 
     @property
     def functions(self):
-        """ list: The list of loss functions for the model. """
+        """ dict: The loss functions that apply to each model output. """
         return self._funcs
 
     @property
@@ -911,24 +934,25 @@ class _Loss():
             return None
         return [K.int_shape(mask_input) for mask_input in self._mask_inputs]
 
-    def configure(self, inputs, outputs):
+    def configure(self, model):
         """ Configure the loss functions for the given inputs and outputs.
 
         Parameters
         ----------
-        inputs: list
-            A list of input tensors to the model in the order ("a", "b")
-        outputs: list
-            A list of output tensors to the model in the order ("a", "b")
+        model: :class:`keras.models.Model`
+            The model that is to be trained
         """
-        self._inputs = inputs
-        self._names = self._get_loss_names(outputs)
-        self._funcs = self._get_loss_functions()
+        self._inputs = model.inputs
+        self._get_loss_names(model.outputs)
+        self._get_loss_functions(model.output_names)
         self._names.insert(0, "total")
 
-    @classmethod
-    def _get_loss_names(cls, outputs):
-        """ Name the losses based on model output
+    def _get_loss_names(self, outputs):
+        """ Name the losses based on model output.
+
+        This is used for correct naming in the state file, for display purposes only.
+
+        Adds the loss names to :attr:`names`
 
         Notes
         -----
@@ -941,49 +965,45 @@ class _Loss():
         ----------
         outputs: list
             A list of output tensors from the model plugin
-
-        Returns
-        -------
-        list
-            A list of names for the losses to be applied to the model
         """
         # TODO Use output names if/when these are fixed upstream
         split_outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
-        retval = []
         for side, side_output in zip(("a", "b"), split_outputs):
             output_names = [output.name for output in side_output]
             output_shapes = [K.int_shape(output)[1:] for output in side_output]
             output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
             logger.debug("side: %s, output names: %s, output_shapes: %s, output_types: %s",
                          side, output_names, output_shapes, output_types)
-            retval.extend(["{}_{}{}".format(name, side,
-                                            "" if output_types.count(name) == 1
-                                            else "_{}".format(idx))
-                           for idx, name in enumerate(output_types)])
-        logger.debug(retval)
-        return retval
+            self._names.extend(["{}_{}{}".format(name, side,
+                                                 "" if output_types.count(name) == 1
+                                                 else "_{}".format(idx))
+                                for idx, name in enumerate(output_types)])
+        logger.debug(self._names)
 
-    def _get_loss_functions(self):
+    def _get_loss_functions(self, output_names):
         """ Set the loss functions.
 
-        Returns
-        -------
-        list
-            A list of loss functions to apply to the model
+        Adds the loss functions to the :attr:`functions` dictionary.
+
+        Parameters
+        ----------
+        output_names: list
+            The output names from the model
         """
         selected_loss = self._loss_dict[self._config["loss_function"]]
-        mask_loss = self._loss_dict[self._config["mask_loss_function"]]
-        loss_funcs = []
-        for name in self._names:
+        for name, output_name in zip(self._names, output_names):
             if name.startswith("mask"):
-                loss_funcs.append(mask_loss)
+                loss_func = self._loss_dict[self._config["mask_loss_function"]]
             elif self._config["penalized_mask_loss"]:
-                loss_funcs.append(losses.PenalizedLoss(selected_loss))
+                loss_func = losses.PenalizedLoss(selected_loss)
             else:
-                loss_funcs.append(selected_loss)
-            logger.debug("%s: %s", name, loss_funcs[-1])
-        logger.debug(loss_funcs)
-        return loss_funcs
+                loss_func = selected_loss
+            logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
+            if get_backend() == "amd":
+                self._funcs[output_name] = loss_func
+            else:
+                self._funcs.setdefault(output_name, []).append(loss_func)
+        logger.debug(self._funcs)
 
 
 class State():
