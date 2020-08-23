@@ -258,7 +258,7 @@ class Config(FaceswapConfig):
                  "penalty will only be applied if SSIM or GMSD is selected for the main loss "
                  "function, otherwise it is ignored.\n\nThe value given here is as a percentage "
                  "weight of the main loss function. For example:"
-                 "\n\t 100 - Will give equal weigthing to the main loss and the penalty function. "
+                 "\n\t 100 - Will give equal weighting to the main loss and the penalty function. "
                  "\n\t 25 - Will give the penalty function 1/4 of the weight of the main loss "
                  "function. "
                  "\n\t 400 - Will give the penalty function 4x as much importance as the main "
