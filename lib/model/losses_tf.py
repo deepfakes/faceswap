@@ -641,5 +641,5 @@ class LossWrapper(tf.keras.losses.Loss):
             n_true = y_true[..., :3]
             if mask_channel != -1:
                 n_true = K.concatenate((n_true, y_true[..., mask_channel][..., None]))
-            loss += func(n_true, y_pred) * weight
+            loss += (func(n_true, y_pred) * weight)
         return loss
