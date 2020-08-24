@@ -559,20 +559,13 @@ class GMSDLoss(tf.keras.losses.Loss):
 class LossWrapper(tf.keras.losses.Loss):
     """ A wrapper class for multiple keras losses to enable multiple weighted loss functions on a
     single output.
-
-    Parameters
-    ----------
-    loss_functions: list
-        A list of either a tuple of (:class:`keras.losses.Loss`, scalar weight) or just a
-        :class:`keras.losses.Loss` function. If just the loss function is passed, then the weight
-        is assumed to be 1.0 """
-    def __init__(self, loss_functions):
-        logger.debug("Initializing: %s: (loss_functions: %s)",
-                     self.__class__.__name__, loss_functions)
+    """
+    def __init__(self):
+        logger.debug("Initializing: %s", self.__class__.__name__)
         super().__init__(name="LossWrapper")
         self._loss_functions = []
         self._loss_weights = []
-        self._compile_losses(loss_functions)
+        self._mask_channels = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _compile_losses(self, loss_functions):
@@ -600,11 +593,34 @@ class LossWrapper(tf.keras.losses.Loss):
         logger.debug("Compiled losses: (functions: %s, weights: %s",
                      self._loss_functions, self._loss_weights)
 
+    def add_loss(self, function, weight=1.0, mask_channel=-1):
+        """ Add the given loss function with the given weight to the loss function chain.
+
+        Parameters
+        ----------
+        function: :class:`keras.losses.Loss`
+            The loss function to add to the loss chain
+        weight: float, optional
+            The weighting to apply to the loss function. Default: `1.0`
+        mask_channel: int, optional
+            The channel in the `y_true` image that the mask exists in. Set to `-1` if there is no
+            mask for the given loss function. Default: `-1`
+        """
+        logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
+                     function, weight, mask_channel)
+        function = PenalizedLoss(function) if mask_channel != -1 else function
+        self._loss_functions.append(compile_utils.LossesContainer(function))
+        self._loss_weights.append(weight)
+        self._mask_channels.append(mask_channel)
+
     def call(self, y_true, y_pred):
         """ Call the sub loss functions for the loss wrapper.
 
         Weights are returned as an average of the weighted sum rather than weighted sum to keep
         totals more in a standardized range end users would expect to see.
+
+        If a mask is being applied to the loss, then the appropriate mask is extracted from y_true
+        and added as the 4th channel being passed to the penalized loss function.
 
         Parameters
         ----------
@@ -619,7 +635,12 @@ class LossWrapper(tf.keras.losses.Loss):
             The final loss value
         """
         loss = 0.0
-        for func, weight in zip(self._loss_functions, self._loss_weights):
-            loss += func(y_true, y_pred) * weight
+        for func, weight, mask_channel in zip(self._loss_functions,
+                                              self._loss_weights,
+                                              self._mask_channels):
+            n_true = y_true[..., :3]
+            if mask_channel != -1:
+                n_true = K.concatenate((n_true, y_true[..., mask_channel][..., None]))
+            loss += func(n_true, y_pred) * weight
         weighted_average = loss / sum(self._loss_weights)
         return weighted_average

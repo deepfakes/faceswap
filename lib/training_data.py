@@ -4,6 +4,7 @@
 import logging
 
 from random import shuffle, choice
+from zlib import decompress
 
 import numpy as np
 import cv2
@@ -16,7 +17,7 @@ from lib.utils import FaceswapError
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class TrainingDataGenerator():
+class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
     """ A Training Data Generator for compiling data for feeding to a model.
 
     This class is called from :mod:`plugins.train.trainer._base` and launches a background
@@ -54,6 +55,17 @@ class TrainingDataGenerator():
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
         :attr:`learn_mask` is ``True``. Returning dictionary has a key of **side** (`str`) the \
         value of which is a `dict` of {**filename** (`str`): :class:`lib.faces_detect.Mask`}.
+
+        * **masks_eye** (`dict`, `optional`). Required if config option "eye_multiplier" is \
+        a value greater than 1. Returning dictionary has a key of **side** (`str`) the \
+        value of which is a `dict` of {**filename** (`str`): :class:`bytes`} which is a zipped \
+        eye mask.
+
+        * **masks_mouth** (`dict`, `optional`). Required if config option "mouth_multiplier" is \
+        a value greater than 1. Returning dictionary has a key of **side** (`str`) the \
+        value of which is a `dict` of {**filename** (`str`): :class:`bytes`} which is a zipped \
+        mouth mask.
+
     config: dict
         The configuration `dict` generated from :file:`config.train.ini` containing the trainer \
         plugin configuration options.
@@ -74,7 +86,9 @@ class TrainingDataGenerator():
         self._no_flip = no_flip
         self._warp_to_landmarks = warp_to_landmarks
         self._landmarks = alignments.get("landmarks", None)
-        self._masks = alignments.get("masks", None)
+        self._masks = dict(masks=alignments.get("masks", None),
+                           eyes=alignments.get("masks_eye", None),
+                           mouths=alignments.get("masks_mouth", None))
         self._nearest_landmarks = {}
 
         # Batchsize and processing class are set when this class is called by a feeder
@@ -234,26 +248,70 @@ class TrainingDataGenerator():
                      side,
                      {k: v.shape if isinstance(v, np.ndarray) else[i.shape for i in v]
                       for k, v in processed.items()})
-
         return processed
 
     def _apply_mask(self, filenames, batch, side):
         """ Applies the mask to the 4th channel of the image. If masks are not being used
-        applies a dummy all ones mask """
-        logger.trace("Input batch shape: %s, side: %s", batch.shape, side)
-        if self._masks is None:
-            logger.trace("Creating dummy masks. side: %s", side)
-            masks = np.ones_like(batch[..., :1], dtype=batch.dtype)
-        else:
-            logger.trace("Obtaining masks for batch. side: %s", side)
-            masks = np.array([self._masks[side][filename].mask
-                              for filename, face in zip(filenames, batch)], dtype=batch.dtype)
-            masks = self._resize_masks(batch.shape[1], masks)
+        applies a dummy all ones mask.
 
-        logger.trace("masks shape: %s", masks.shape)
-        batch = np.concatenate((batch, masks), axis=-1)
+        If the configuration options `eye_multiplier` and/or `mouth_multiplier` are greater than 1
+        then these masks are applied to the final channels of the batch respectively.
+
+        Parameters
+        ----------
+        filenames: list
+            The list of filenames that correspond to this batch
+        batch: :class:`numpy.ndarray`
+            The batch of faces that have been loaded from disk
+        side: str
+            '"a"' or '"b"' the side that is being processed
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The batch with masks applied to the final channels
+        """
+        logger.trace("Input batch shape: %s, side: %s", batch.shape, side)
+        size = batch.shape[1]
+        for key in ("masks", "eyes", "mouths"):
+            item = self._masks[key]
+            if item is None and key != "masks":
+                continue
+            if item is None and key == "masks":
+                logger.trace("Creating dummy masks. side: %s", side)
+                masks = np.ones_like(batch[..., :1], dtype=batch.dtype)
+            else:
+                logger.trace("Obtaining masks for batch. (key: %s side: %s)", key, side)
+                masks = np.array([self._get_mask(item[side][filename], size)
+                                  for filename, face in zip(filenames, batch)], dtype=batch.dtype)
+                masks = self._resize_masks(size, masks)
+
+            logger.trace("masks: (key: %s, shape: %s)", key, masks.shape)
+            batch = np.concatenate((batch, masks), axis=-1)
         logger.trace("Output batch shape: %s, side: %s", batch.shape, side)
         return batch
+
+    @classmethod
+    def _get_mask(cls, item, size):
+        """ Decompress zipped eye and mouth masks, or return the stored mask
+
+        Parameters
+        ----------
+        item: :class:`lib.faces_detect.Mask` or `bytes`
+            Either a stored face mask object or a zipped eye or mouth mask
+        size: int
+            The size of the stored eye or mouth mask for reshaping
+
+        Returns
+        -------
+        class:`numpy.ndarray`
+            The decompressed mask
+        """
+        if isinstance(item, bytes):
+            retval = np.frombuffer(decompress(item), dtype="uint8").reshape(size, size, 1)
+        else:
+            retval = item.mask
+        return retval
 
     @staticmethod
     def _resize_masks(target_size, masks):
@@ -446,9 +504,12 @@ class ImageAugmentation():
         Parameters
         ----------
         batch: :class:`numpy.ndarray`
-            This should be a 4-dimensional array of training images in the format (`batchsize`,
+            This should be a 4+-dimensional array of training images in the format (`batchsize`,
             `height`, `width`, `channels`). Targets should be requested after performing image
             transformations but prior to performing warps.
+
+            The 4th channel should be the mask. Any channels above the 4th should be any additional
+            masks that are requested.
 
         Returns
         -------
@@ -472,7 +533,7 @@ class ImageAugmentation():
                                   for image in batch], dtype='float32') / 255.
                         for size in self._output_sizes]
         logger.trace("Target image shapes: %s",
-                     [tgt_images.shape[1:] for tgt_images in target_batch])
+                     [tgt_images.shape for tgt_images in target_batch])
 
         retval = self._separate_target_mask(target_batch)
         logger.trace("Final targets: %s",
@@ -484,16 +545,31 @@ class ImageAugmentation():
     def _separate_target_mask(target_batch):
         """ Return the batch and the batch of final masks
 
-        Returns the targets as a list of 4-dimensional :class:`numpy.ndarray` s of shape
-        (`batchsize`, `height`, `width`, `3`).
+        Parameters
+        ----------
+        target_batch: list
+            List of 4 dimension :class:`numpy.ndarray` objects resized the model outputs.
+            The 4th channel of the array contains the face mask, any additional channels after
+            this are additional masks (e.g. eye mask and mouth mask)
 
-        The target masks are returned as its own item and is the 4th channel of the final target
-        output.
+        Returns
+        -------
+        dict:
+            The targets and the masks separated into their own items. The targets are a list of
+            3 channel, 4 dimensional :class:`numpy.ndarray` objects sized for each output from the
+            model. The masks are a :class:`numpy.ndarray` of the final output size. Any additional
+            masks(e.g. eye and mouth masks) will be collated together into a :class:`numpy.ndarray`
+            of the final output size. The number of channels will be the number of additional
+            masks available
         """
         logger.trace("target_batch shapes: %s", [tgt.shape for tgt in target_batch])
         retval = dict(targets=[batch[..., :3] for batch in target_batch],
-                      masks=[target_batch[-1][..., 3:]])
-        logger.trace("returning: %s", {k: [tgt.shape for tgt in v] for k, v in retval.items()})
+                      masks=target_batch[-1][..., 3][..., None])
+        if target_batch[-1].shape[-1] > 4:
+            retval["additional_masks"] = target_batch[-1][..., 4:]
+        logger.trace("returning: %s", {k: v.shape if isinstance(v, np.ndarray) else [tgt.shape
+                                                                                     for tgt in v]
+                                       for k, v in retval.items()})
         return retval
 
     # <<< COLOR AUGMENTATION >>> #
