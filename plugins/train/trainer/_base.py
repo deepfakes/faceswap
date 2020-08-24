@@ -461,9 +461,9 @@ class _Feeder():
             logger.trace("No masks to compile. Returning targets")
             return targets
 
-        if not self._model.config["penalized_mask_loss"]:
+        if not self._model.config["penalized_mask_loss"] and additional_masks is not None:
             masks = additional_masks
-        else:
+        elif additional_masks is not None:
             masks = np.concatenate((masks, additional_masks), axis=-1)
 
         for idx, tgt in enumerate(targets):
