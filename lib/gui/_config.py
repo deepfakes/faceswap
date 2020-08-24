@@ -57,6 +57,10 @@ class Config(FaceswapConfig):
             min_max=(6, 12), rounding=1, group="font",
             info="Global font size.")
         self.add_item(
+            section=section, title="text_color", datatype=str,
+            choices=["black", "red", "green", "blue", "yellow"],
+            default="black", group="font", info="Help text color.")
+        self.add_item(
             section=section, title="autosave_last_session", datatype=str, default="prompt",
             choices=["never", "prompt", "always"], group="startup", gui_radio=True,
             info="Automatically save the current settings on close and reload on startup"

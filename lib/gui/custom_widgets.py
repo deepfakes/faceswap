@@ -7,6 +7,7 @@ import re
 import sys
 import tkinter as tk
 from tkinter import ttk, TclError
+from matplotlib import colors
 
 import numpy as np
 
@@ -571,6 +572,7 @@ class Tooltip:
         self._widget.bind("<ButtonPress>", self._on_leave)
         self._background = background
         self._pad = pad
+        self._textcolor = colors.cnames[get_config().user_config_dict["text_color"]]
         self._ident = None
         self._topwidget = None
 
@@ -662,6 +664,7 @@ class Tooltip:
                          text=self._text,
                          justify=tk.LEFT,
                          background=background,
+                         foreground=self._textcolor,
                          relief=tk.SOLID,
                          borderwidth=0,
                          wraplength=self._wraplength)
