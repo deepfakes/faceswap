@@ -138,7 +138,7 @@ class DSSIMObjective():
         denom = (K.square(u_true) + K.square(u_pred) + self.c_1) * (
             var_pred + var_true + self.c_2)
         ssim /= denom  # no need for clipping, c_1 + c_2 make the denorm non-zero
-        return K.mean((1.0 - ssim) / 2.0)
+        return (1.0 - ssim) / 2.0
 
     @staticmethod
     def _preprocess_padding(padding):
@@ -565,45 +565,33 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
 class LossWrapper():  # pylint:disable=too-few-public-methods
     """ A wrapper class for multiple keras losses to enable multiple weighted loss functions on a
     single output.
-
-    Parameters
-    ----------
-    loss_functions: list
-        A list of either a tuple of (:class:`keras.losses.Loss`, scalar weight) or just a
-        :class:`keras.losses.Loss` function. If just the loss function is passed, then the weight
-        is assumed to be 1.0 """
-    def __init__(self, loss_functions):
-        logger.debug("Initializing: %s: (loss_functions: %s)",
-                     self.__class__.__name__, loss_functions)
+    """
+    def __init__(self):
+        logger.debug("Initializing: %s", self.__class__.__name__)
         self._loss_functions = []
         self._loss_weights = []
-        self._compile_losses(loss_functions)
+        self._mask_channels = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _compile_losses(self, loss_functions):
-        """ Splits the given loss_functions into the corresponding :attr:`_loss_functions' and
-        :attr:`_loss_weights' lists.
-
-        Loss functions are compiled into :class:`keras.compile_utils.LossesContainer` objects
+    def add_loss(self, function, weight=1.0, mask_channel=-1):
+        """ Add the given loss function with the given weight to the loss function chain.
 
         Parameters
         ----------
-        loss_functions: list
-            A list of either a tuple of (:class:`keras.losses.Loss`, scalar weight) or just a
-            :class:`keras.losses.Loss` function. If just the loss function is passed, then the
-            weight is assumed to be 1.0 """
-        for loss_func in loss_functions:
-            if isinstance(loss_func, tuple):
-                assert len(loss_func) == 2, "Tuple loss functions should contain 2 items"
-                assert isinstance(loss_func[1], float), "weight should be a float"
-                func, weight = loss_func
-            else:
-                func = loss_func
-                weight = 1.0
-            self._loss_functions.append(func)
-            self._loss_weights.append(weight)
-        logger.debug("Compiled losses: (functions: %s, weights: %s",
-                     self._loss_functions, self._loss_weights)
+        function: :class:`keras.losses.Loss`
+            The loss function to add to the loss chain
+        weight: float, optional
+            The weighting to apply to the loss function. Default: `1.0`
+        mask_channel: int, optional
+            The channel in the `y_true` image that the mask exists in. Set to `-1` if there is no
+            mask for the given loss function. Default: `-1`
+        """
+        logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
+                     function, weight, mask_channel)
+        function = PenalizedLoss(function) if mask_channel != -1 else function
+        self._loss_functions.append(function)
+        self._loss_weights.append(weight)
+        self._mask_channels.append(mask_channel)
 
     def __call__(self, y_true, y_pred):
         """ Call the sub loss functions for the loss wrapper.
@@ -624,7 +612,13 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
             The final loss value
         """
         loss = 0.0
-        for func, weight in zip(self._loss_functions, self._loss_weights):
-            loss += K.mean(func(y_true, y_pred)) * weight
-        weighted_average = loss / sum(self._loss_weights)
-        return weighted_average
+        for func, weight, mask_channel in zip(self._loss_functions,
+                                              self._loss_weights,
+                                              self._mask_channels):
+            n_true = y_true[..., :3]
+            if mask_channel != -1:
+                n_true = K.concatenate((n_true, K.expand_dims(y_true[..., mask_channel], axis=-1)))
+            this_loss = func(y_true, y_pred)
+            loss_dims = K.ndim(this_loss)
+            loss += (K.mean(func(y_true, y_pred), axis=list(range(1, loss_dims))) * weight)
+        return loss
