@@ -535,8 +535,7 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
     def __call__(self, y_true, y_pred):
         """ Call the sub loss functions for the loss wrapper.
 
-        Weights are returned as an average of the weighted sum rather than weighted sum to keep
-        totals more in a standardized range end users would expect to see.
+        Weights are returned as the weighted sum of the chosen losses.
 
         Parameters
         ----------

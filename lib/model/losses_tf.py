@@ -533,8 +533,7 @@ class LossWrapper(tf.keras.losses.Loss):
     def call(self, y_true, y_pred):
         """ Call the sub loss functions for the loss wrapper.
 
-        Weights are returned as an average of the weighted sum rather than weighted sum to keep
-        totals more in a standardized range end users would expect to see.
+        Weights are returned as the weighted sum of the chosen losses.
 
         If a mask is being applied to the loss, then the appropriate mask is extracted from y_true
         and added as the 4th channel being passed to the penalized loss function.

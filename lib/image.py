@@ -268,17 +268,19 @@ def read_image(filename, raise_error=False, with_hash=False):
     try:
         image = cv2.imread(filename)
         if image is None:
-            raise ValueError
-    except TypeError:
+            raise ValueError("Image is None")
+    except TypeError as err:
         success = False
         msg = "Error while reading image (TypeError): '{}'".format(filename)
+        msg += ". Original error message: {}".format(str(err))
         logger.error(msg)
         if raise_error:
             raise Exception(msg)
-    except ValueError:
+    except ValueError as err:
         success = False
-        msg = ("Error while reading image. This is most likely caused by special characters in "
-               "the filename: '{}'".format(filename))
+        msg = ("Error while reading image. This can be caused by special characters in the "
+               "filename or a corrupt image file: '{}'".format(filename))
+        msg += ". Original error message: {}".format(str(err))
         logger.error(msg)
         if raise_error:
             raise Exception(msg)
