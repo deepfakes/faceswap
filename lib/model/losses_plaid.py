@@ -199,66 +199,6 @@ class DSSIMObjective():
         return patches
 
 
-class PenalizedLoss():  # pylint:disable=too-few-public-methods
-    """ Penalized Loss function.
-
-    Applies the given loss function just to the masked area of the image.
-
-    Parameters
-    ----------
-    loss_func: function
-        The actual loss function to use
-    mask_prop: float, optional
-        The amount of mask propagation. Default: `1.0`
-    """
-    def __init__(self, loss_func, mask_prop=1.0):
-        self._loss_func = loss_func
-        self._mask_prop = mask_prop
-
-    def __call__(self, y_true, y_pred):
-        """ Apply the loss function to the masked area of the image.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value. This should contain the mask in the 4th channel that will be
-            split off for penalizing.
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The Loss value
-        """
-        mask = self._prepare_mask(K.expand_dims(y_true[..., -1], axis=-1))
-        y_true = y_true[..., :-1]
-        n_true = y_true * mask
-        n_pred = y_pred * mask
-        if isinstance(self._loss_func, DSSIMObjective):
-            # Extract Image Patches in SSIM requires that y_pred be of a known shape, so
-            # specifically reshape the tensor.
-            n_pred = K.reshape(n_pred, K.int_shape(y_pred))
-        return self._loss_func(n_true, n_pred)
-
-    def _prepare_mask(self, mask):
-        """ Prepare the masks for calculating loss
-
-        Parameters
-        ----------
-        mask: :class:`numpy.ndarray`
-            The masks for the current batch
-
-        Returns
-        -------
-        tensor
-            The prepared mask for applying to loss
-        """
-        mask_as_k_inv_prop = 1 - self._mask_prop
-        mask = (mask * self._mask_prop) + mask_as_k_inv_prop
-        return mask
-
-
 class GeneralizedLoss():  # pylint:disable=too-few-public-methods
     """  Generalized function used to return a large variety of mathematical loss functions.
 
@@ -564,7 +504,7 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
 
 class LossWrapper():  # pylint:disable=too-few-public-methods
     """ A wrapper class for multiple keras losses to enable multiple weighted loss functions on a
-    single output.
+    single output and masking.
     """
     def __init__(self):
         logger.debug("Initializing: %s", self.__class__.__name__)
@@ -588,7 +528,6 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
                      function, weight, mask_channel)
-        function = PenalizedLoss(function) if mask_channel != -1 else function
         self._loss_functions.append(function)
         self._loss_weights.append(weight)
         self._mask_channels.append(mask_channel)
@@ -615,10 +554,48 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
         for func, weight, mask_channel in zip(self._loss_functions,
                                               self._loss_weights,
                                               self._mask_channels):
-            n_true = y_true[..., :3]
-            if mask_channel != -1:
-                n_true = K.concatenate((n_true, K.expand_dims(y_true[..., mask_channel], axis=-1)))
-            this_loss = func(y_true, y_pred)
+            logger.debug("Processing loss function: (func: %s, weight: %s, mask_channel: %s)",
+                         func, weight, mask_channel)
+            n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
+            if isinstance(func, DSSIMObjective):
+                # Extract Image Patches in SSIM requires that y_pred be of a known shape, so
+                # specifically reshape the tensor.
+                n_pred = K.reshape(n_pred, K.int_shape(y_pred))
+            this_loss = func(n_true, n_pred)
             loss_dims = K.ndim(this_loss)
-            loss += (K.mean(func(y_true, y_pred), axis=list(range(1, loss_dims))) * weight)
+            loss += (K.mean(this_loss, axis=list(range(1, loss_dims))) * weight)
         return loss
+
+    @classmethod
+    def _apply_mask(cls, y_true, y_pred, mask_channel, mask_prop=1.0):
+        """ Apply the mask to the input y_true and y_pred. If a mask is not required then
+        return the unmasked inputs.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+        mask_channel: int
+            The channel within y_true that the required mask resides in
+        mask_prop: float, optional
+            The amount of mask propagation. Default: `1.0`
+
+        Returns
+        -------
+        tuple
+            (n_true, n_pred): The ground truth and predicted value tensors with the mask applied
+        """
+        if mask_channel == -1:
+            logger.debug("No mask to apply")
+            return y_true[..., :3], y_pred[..., :3]
+
+        logger.debug("Applying mask from channel %s", mask_channel)
+        mask = K.expand_dims(y_true[..., mask_channel], axis=-1)
+        mask_as_k_inv_prop = 1 - mask_prop
+        mask = (mask * mask_prop) + mask_as_k_inv_prop
+
+        n_true = y_true[..., :3] * mask
+        n_pred = y_pred * mask
+        return n_true, n_pred
