@@ -101,12 +101,16 @@ class TrainerBase():
         Returns
         -------
         dict:
-            Includes the key `landmarks` if landmarks are required for training and the key `masks`
-            if the masks are required for training. """
+            Includes the key `landmarks` if landmarks are required for training, `masks` if masks
+            are required for training, `masks_eye` if eye masks are required and `masks_mouth` if
+            mouth masks are required. """
         retval = dict()
 
-        get_masks = self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]
-        if not self._model.command_line_arguments.warp_to_landmarks and not get_masks:
+        if not any([self._model.config["learn_mask"],
+                    self._model.config["penalized_mask_loss"],
+                    self._model.config["eye_multiplier"] > 1,
+                    self._model.config["mouth_multiplier"] > 1,
+                    self._model.command_line_arguments.warp_to_landmarks]):
             return retval
 
         alignments = _TrainingAlignments(self._model, self._images)
@@ -115,10 +119,17 @@ class TrainerBase():
             logger.debug("Adding landmarks to training opts dict")
             retval["landmarks"] = alignments.landmarks
 
-        if get_masks:
+        if self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]:
             logger.debug("Adding masks to training opts dict")
             retval["masks"] = alignments.masks
-        logger.debug(retval)
+
+        if self._model.config["eye_multiplier"] > 1:
+            retval["masks_eye"] = alignments.masks_eye
+
+        if self._model.config["mouth_multiplier"] > 1:
+            retval["masks_mouth"] = alignments.masks_mouth
+
+        logger.debug({key: {k: len(v) for k, v in val.items()} for key, val in retval.items()})
         return retval
 
     def _set_tensorboard(self):
@@ -407,11 +418,13 @@ class _Feeder():
         model_inputs = []
         model_targets = []
         for side in ("a", "b"):
-            side_inputs, side_targets = self._get_next(side)
-            if self._model.config["penalized_mask_loss"]:
-                side_targets = self._compile_masks(side_targets)
-                if not self._model.config["learn_mask"]:  # Remove masks from the model targets
-                    side_targets = side_targets[:-1]
+            batch = next(self._feeds[side])
+            side_inputs = batch["feed"]
+            side_targets = self._compile_mask_targets(batch["targets"],
+                                                      batch["masks"],
+                                                      batch.get("additional_masks", None))
+            if self._model.config["learn_mask"]:
+                side_targets = side_targets + [batch["masks"]]
             logger.trace("side: %s, input_shapes: %s, target_shapes: %s",
                          side, [i.shape for i in side_inputs], [i.shape for i in side_targets])
             if get_backend() == "amd":
@@ -422,35 +435,21 @@ class _Feeder():
                 model_targets.append(side_targets)
         return model_inputs, model_targets
 
-    def _get_next(self, side):
-        """ Return the next batch from the :class:`lib.training_data.TrainingDataGenerator` for
-        this feeder ready for feeding into the model.
-
-        Returns
-        -------
-        model_inputs: list
-            A list of :class:`numpy.ndarray` for feeding into the model
-        model_targets: list
-            A list of :class:`numpy.ndarray` for comparing the output of the model
-        """
-        logger.trace("Generating targets")
-        batch = next(self._feeds[side])
-        targets_use_mask = (self._model.config["learn_mask"]
-                            or self._model.config["penalized_mask_loss"])
-        model_targets = batch["targets"] + batch["masks"] if targets_use_mask else batch["targets"]
-        return batch["feed"], model_targets
-
-    @classmethod
-    def _compile_masks(cls, targets):
-        """ Compile the masks into the targets for penalized loss.
+    def _compile_mask_targets(self, targets, masks, additional_masks):
+        """ Compile the masks into the targets for penalized loss and for targeted learning.
 
         Penalized loss expects the target mask to be included for all outputs in the 4th channel
-        of the targets. The final output and final mask are always the last 2 outputs
+        of the targets. Any additional masks are placed into subsequent channels for extraction
+        by the relevant loss functions.
 
         Parameters
         ----------
         targets: list
             The targets for the model, with the mask as the final entry in the list
+        masks: list
+            The masks for the model
+        additional_masks: list or ``None``
+            Any additional masks for the model, or ``None`` if no additional masks are required
 
         Returns
         -------
@@ -458,15 +457,26 @@ class _Feeder():
             The targets for the model with the mask compiled into the 4th channel. The original
             mask is still output as the final item in the list
         """
-        masks = targets[-1]
-        for idx, tgt in enumerate(targets[:-1]):
+        if not self._model.config["penalized_mask_loss"] and additional_masks is None:
+            logger.trace("No masks to compile. Returning targets")
+            return targets
+
+        if not self._model.config["penalized_mask_loss"] and additional_masks is not None:
+            masks = additional_masks
+        elif additional_masks is not None:
+            masks = np.concatenate((masks, additional_masks), axis=-1)
+
+        for idx, tgt in enumerate(targets):
             tgt_dim = tgt.shape[1]
             if tgt_dim == masks.shape[1]:
                 add_masks = masks
             else:
                 add_masks = np.array([cv2.resize(mask, (tgt_dim, tgt_dim))
-                                      for mask in masks])[..., None]
+                                      for mask in masks])
+                if add_masks.ndim == 3:
+                    add_masks = add_masks[..., None]
             targets[idx] = np.concatenate((tgt, add_masks), axis=-1)
+        logger.trace("masks added to targets: %s", [tgt.shape for tgt in targets])
         return targets
 
     def generate_preview(self, do_preview):
@@ -488,7 +498,7 @@ class _Feeder():
             batch = next(self._display_feeds["preview"][side])
             self._samples[side] = batch["samples"]
             self._target[side] = batch["targets"][-1]
-            self._masks[side] = batch["masks"][0]
+            self._masks[side] = batch["masks"]
 
     def compile_sample(self, batch_size, samples=None, images=None, masks=None):
         """ Compile the preview samples for display.
@@ -547,7 +557,7 @@ class _Feeder():
             batchsizes.append(len(batch["samples"]))
             samples[side] = batch["samples"]
             images[side] = batch["targets"][-1]
-            masks[side] = batch["masks"][0]
+            masks[side] = batch["masks"]
         batchsize = min(batchsizes)
         sample = self.compile_sample(batchsize, samples=samples, images=images, masks=masks)
         return sample
@@ -1124,7 +1134,6 @@ class _TrainingAlignments():
         dict
             The face filenames as keys with the :class:`lib.faces_detect.Mask` as value.
         """
-
         masks = dict()
         for fhash, face in detected_faces.items():
             mask = face.mask[self._config["mask_type"]]
@@ -1132,6 +1141,53 @@ class _TrainingAlignments():
                                         threshold=self._config["mask_threshold"])
             for filename in self._hash_to_filenames(side, fhash):
                 masks[filename] = mask
+        return masks
+
+    @property
+    def masks_eye(self):
+        """ dict: filename mapping to zip compressed eye masks for keys "a" and "b" """
+        retval = {side: self._get_landmarks_masks(side, detected_faces, "eyes")
+                  for side, detected_faces in self._detected_faces.items()}
+        return retval
+
+    @property
+    def masks_mouth(self):
+        """ dict: filename mapping to zip compressed mouth masks for keys "a" and "b" """
+        retval = {side: self._get_landmarks_masks(side, detected_faces, "mouth")
+                  for side, detected_faces in self._detected_faces.items()}
+        return retval
+
+    def _get_landmarks_masks(self, side, detected_faces, area):
+        """ Obtain the area landmarks masks for the given area.
+
+        Parameters
+        ----------
+        side: {"a" or "b"}
+            The side currently being processed
+        detected_faces: dict
+            Key is the hash of the face, value is the corresponding
+            :class:`lib.faces_detect.DetectedFace` object
+        area: {"eyes" or "mouth"}
+            The area of the face to obtain the mask for
+
+        Returns
+        -------
+        dict
+            The face filenames as keys with the zip compressed mask as value.
+        """
+        logger.trace("side: %s, detected_faces: %s, area: %s", side, detected_faces, area)
+        masks = dict()
+        for fhash, face in detected_faces.items():
+            mask = face.get_landmark_mask(self._training_size,
+                                          area,
+                                          aligned=True,
+                                          dilation=self._training_size // 32,
+                                          blur_kernel=self._training_size // 16,
+                                          as_zip=True)
+            for filename in self._hash_to_filenames(side, fhash):
+                masks[filename] = mask
+        logger.trace("side: %s, area: %s, masks: %s",
+                     side, area, {key: type(val) for key, val in masks.items()})
         return masks
 
     # Hashes for image folders

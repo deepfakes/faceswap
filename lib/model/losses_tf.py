@@ -197,63 +197,6 @@ class DSSIMObjective(tf.keras.losses.Loss):
         return patches
 
 
-class PenalizedLoss(tf.keras.losses.Loss):
-    """ Penalized Loss function.
-
-    Applies the given loss function just to the masked area of the image.
-
-    Parameters
-    ----------
-    loss_func: function
-        The actual loss function to use
-    mask_prop: float, optional
-        The amount of mask propagation. Default: `1.0`
-    """
-    def __init__(self, loss_func, mask_prop=1.0):
-        super().__init__(name="penalized_loss")
-        self._loss_func = compile_utils.LossesContainer(loss_func)
-        self._mask_prop = mask_prop
-
-    def call(self, y_true, y_pred):
-        """ Apply the loss function to the masked area of the image.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value. This should contain the mask in the 4th channel that will be
-            split off for penalizing.
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The Loss value
-        """
-        mask = self._prepare_mask(K.expand_dims(y_true[..., -1], axis=-1))
-        y_true = y_true[..., :-1]
-        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        return self._loss_func(n_true, n_pred)
-
-    def _prepare_mask(self, mask):
-        """ Prepare the masks for calculating loss
-
-        Parameters
-        ----------
-        mask: :class:`numpy.ndarray`
-            The masks for the current batch
-
-        Returns
-        -------
-        tensor
-            The prepared mask for applying to loss
-        """
-        mask_as_k_inv_prop = 1 - self._mask_prop
-        mask = (mask * self._mask_prop) + mask_as_k_inv_prop
-        return mask
-
-
 class GeneralizedLoss(tf.keras.losses.Loss):
     """  Generalized function used to return a large variety of mathematical loss functions.
 
@@ -559,51 +502,41 @@ class GMSDLoss(tf.keras.losses.Loss):
 class LossWrapper(tf.keras.losses.Loss):
     """ A wrapper class for multiple keras losses to enable multiple weighted loss functions on a
     single output.
-
-    Parameters
-    ----------
-    loss_functions: list
-        A list of either a tuple of (:class:`keras.losses.Loss`, scalar weight) or just a
-        :class:`keras.losses.Loss` function. If just the loss function is passed, then the weight
-        is assumed to be 1.0 """
-    def __init__(self, loss_functions):
-        logger.debug("Initializing: %s: (loss_functions: %s)",
-                     self.__class__.__name__, loss_functions)
+    """
+    def __init__(self):
+        logger.debug("Initializing: %s", self.__class__.__name__)
         super().__init__(name="LossWrapper")
         self._loss_functions = []
         self._loss_weights = []
-        self._compile_losses(loss_functions)
+        self._mask_channels = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def _compile_losses(self, loss_functions):
-        """ Splits the given loss_functions into the corresponding :attr:`_loss_functions' and
-        :attr:`_loss_weights' lists.
-
-        Loss functions are compiled into :class:`keras.compile_utils.LossesContainer` objects
+    def add_loss(self, function, weight=1.0, mask_channel=-1):
+        """ Add the given loss function with the given weight to the loss function chain.
 
         Parameters
         ----------
-        loss_functions: list
-            A list of either a tuple of (:class:`keras.losses.Loss`, scalar weight) or just a
-            :class:`keras.losses.Loss` function. If just the loss function is passed, then the
-            weight is assumed to be 1.0 """
-        for loss_func in loss_functions:
-            if isinstance(loss_func, tuple):
-                assert len(loss_func) == 2, "Tuple loss functions should contain 2 items"
-                assert isinstance(loss_func[1], float), "weight should be a float"
-                func, weight = loss_func
-            else:
-                func = loss_func
-                weight = 1.0
-            self._loss_functions.append(compile_utils.LossesContainer(func))
-            self._loss_weights.append(weight)
-        logger.debug("Compiled losses: (functions: %s, weights: %s",
-                     self._loss_functions, self._loss_weights)
+        function: :class:`keras.losses.Loss`
+            The loss function to add to the loss chain
+        weight: float, optional
+            The weighting to apply to the loss function. Default: `1.0`
+        mask_channel: int, optional
+            The channel in the `y_true` image that the mask exists in. Set to `-1` if there is no
+            mask for the given loss function. Default: `-1`
+        """
+        logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
+                     function, weight, mask_channel)
+        self._loss_functions.append(compile_utils.LossesContainer(function))
+        self._loss_weights.append(weight)
+        self._mask_channels.append(mask_channel)
 
     def call(self, y_true, y_pred):
         """ Call the sub loss functions for the loss wrapper.
 
         Weights are returned as the weighted sum of the chosen losses.
+
+        If a mask is being applied to the loss, then the appropriate mask is extracted from y_true
+        and added as the 4th channel being passed to the penalized loss function.
 
         Parameters
         ----------
@@ -618,6 +551,45 @@ class LossWrapper(tf.keras.losses.Loss):
             The final loss value
         """
         loss = 0.0
-        for func, weight in zip(self._loss_functions, self._loss_weights):
-            loss += (func(y_true, y_pred) * weight)
+        for func, weight, mask_channel in zip(self._loss_functions,
+                                              self._loss_weights,
+                                              self._mask_channels):
+            logger.debug("Processing loss function: (func: %s, weight: %s, mask_channel: %s)",
+                         func, weight, mask_channel)
+            n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
+            loss += (func(n_true, n_pred) * weight)
         return loss
+
+    @classmethod
+    def _apply_mask(cls, y_true, y_pred, mask_channel, mask_prop=1.0):
+        """ Apply the mask to the input y_true and y_pred. If a mask is not required then
+        return the unmasked inputs.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+        mask_channel: int
+            The channel within y_true that the required mask resides in
+        mask_prop: float, optional
+            The amount of mask propagation. Default: `1.0`
+
+        Returns
+        -------
+        tuple
+            (n_true, n_pred): The ground truth and predicted value tensors with the mask applied
+        """
+        if mask_channel == -1:
+            logger.debug("No mask to apply")
+            return y_true[..., :3], y_pred[..., :3]
+
+        logger.debug("Applying mask from channel %s", mask_channel)
+        mask = K.expand_dims(y_true[..., mask_channel], axis=-1)
+        mask_as_k_inv_prop = 1 - mask_prop
+        mask = (mask * mask_prop) + mask_as_k_inv_prop
+
+        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        return n_true, n_pred

@@ -991,27 +991,68 @@ class _Loss():
         output_names: list
             The output names from the model
         """
-        selected_loss = self._loss_dict[self._config["loss_function"]]
+        mask_channels = self._get_mask_channels()
+        face_loss = self._loss_dict[self._config["loss_function"]]
+
         for name, output_name in zip(self._names, output_names):
             if name.startswith("mask"):
                 loss_func = self._loss_dict[self._config["mask_loss_function"]]
             else:
-                if (self._config["loss_function"] in self._uses_l2_reg
-                        and self._config["l2_reg_term"] != 0):
-                    loss_funcs = [selected_loss, self._loss_dict["mse"]]
-                    loss_weights = [1.0, self._config["l2_reg_term"] / 100.0]
-                else:
-                    loss_funcs = [selected_loss]
-                    loss_weights = [1.0]
+                loss_func = losses.LossWrapper()
+                loss_func.add_loss(face_loss, mask_channel=mask_channels[0])
+                self._add_l2_regularization_term(loss_func, mask_channels[0])
 
-                if self._config["penalized_mask_loss"]:
-                    loss_funcs = [losses.PenalizedLoss(loss) for loss in loss_funcs]
-
-                loss_func = losses.LossWrapper(loss_functions=list(zip(loss_funcs, loss_weights)))
+                mask_channel = 1
+                for multiplier in ("eye_multiplier", "mouth_multiplier"):
+                    if self._config[multiplier] > 1:
+                        loss_func.add_loss(face_loss,
+                                           weight=self._config[multiplier] * 1.0,
+                                           mask_channel=mask_channels[mask_channel])
+                        self._add_l2_regularization_term(loss_func, mask_channel)
+                    mask_channel += 1
 
             logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
             self._funcs[output_name] = loss_func
         logger.debug("functions: %s", self._funcs)
+
+    def _add_l2_regularization_term(self, loss_wrapper, mask_channel):
+        """ Check if an L2 Regularization term should be added and add to the loss function
+        wrapper.
+
+        Parameters
+        ----------
+        loss_wrapper: :class:`lib.model.losses.LossWrapper`
+            The wrapper loss function that holds the face losses
+        mask_channel: int
+            The channel that holds the mask in `y_true`, if a mask is used for the loss.
+            `-1` if the input is not masked
+        """
+        if self._config["loss_function"] in self._uses_l2_reg and self._config["l2_reg_term"] > 0:
+            logger.debug("Adding L2 Regularization for Structural Loss")
+            loss_wrapper.add_loss(self._loss_dict["mse"],
+                                  weight=self._config["l2_reg_term"] / 100.0,
+                                  mask_channel=mask_channel)
+
+    def _get_mask_channels(self):
+        """ Obtain the channels from the face targets that the masks reside in from the training
+        data generator.
+
+        Returns
+        -------
+        list:
+            A list of channel indices that contain the mask for the corresponding config item
+        """
+        uses_masks = (self._config["penalized_mask_loss"],
+                      self._config["eye_multiplier"] > 1,
+                      self._config["mouth_multiplier"] > 1)
+        mask_channels = [-1 for _ in range(len(uses_masks))]
+        current_channel = 3
+        for idx, mask_required in enumerate(uses_masks):
+            if mask_required:
+                mask_channels[idx] = current_channel
+                current_channel += 1
+        logger.debug("uses_masks: %s, mask_channels: %s", uses_masks, mask_channels)
+        return mask_channels
 
 
 class State():

@@ -147,6 +147,50 @@ class DetectedFace():
         fsmask.add(mask, affine_matrix, interpolator)
         self.mask[name] = fsmask
 
+    def get_landmark_mask(self, size, area, aligned=True, dilation=0, blur_kernel=0, as_zip=False):
+        """ Obtain a single channel mask based on the face's landmark points.
+
+        Parameters
+        ----------
+        size: int or tuple
+            The size of the aligned mask to retrieve. Should be an `int` if an aligned face is
+            being requested, or a ('height', 'width') shape tuple if a full frame is being
+            requested
+        area: ["mouth", "eyes"]
+            The type of mask to obtain. `face` is a full face mask the others are masks for those
+            specific areas
+        aligned: bool
+            ``True`` if the returned mask should be for an aligned face. ``False`` if a full frame
+            mask should be returned
+        dilation: int, optional
+            The amount of dilation to apply to the mask. `0` for none. Default: `0`
+        blur_kernel: int, optional
+            The kernel size for applying gaussian blur to apply to the mask. `0` for none.
+            Default: `0`
+        as_zip: bool, optional
+            ``True`` if the mask should be returned zipped otherwise ``False``
+
+        Returns
+        -------
+        :class:`numpy.ndarray` or zipped array
+            The mask as a single channel image of the given :attr:`size` dimension. If
+            :attr:`as_zip` is ``True`` then the :class:`numpy.ndarray` will be contained within a
+            zipped container
+        """
+        # TODO Face mask generation from landmarks
+        logger.trace("size: %s, area: %s, aligned: %s, dilation: %s, blur_kernel: %s, as_zip: %s",
+                     size, area, aligned, dilation, blur_kernel, as_zip)
+        areas = dict(mouth=[slice(48, 60)],
+                     eyes=[slice(36, 42), slice(42, 48)])
+        if aligned and self.aligned.get("size") != size:
+            self.load_aligned(None, size=size, force=True)
+        size = (size, size) if aligned else size
+        landmarks = self.aligned_landmarks if aligned else self.landmarks_xy
+        points = [landmarks[zone] for zone in areas[area]]
+        mask = _LandmarksMask(size, points, dilation=dilation, blur_kernel=blur_kernel)
+        retval = mask.get(as_zip=as_zip)
+        return retval
+
     def to_alignment(self):
         """  Return the detected face formatted for an alignments file
 
@@ -511,6 +555,77 @@ class DetectedFace():
         return get_matrix_scaling(self.reference_matrix)
 
 
+class _LandmarksMask():  # pylint:disable=too-few-public-methods
+    """ Create a single channel mask from aligned landmark points.
+
+    size: tuple
+        The (height, width) shape tuple that the mask should be returned as
+    points: list
+        A list of landmark points that correspond to the given shape tuple to create
+        the mask. Each item in the list should be a :class:`numpy.ndarray` that a filled
+        convex polygon will be created from
+    dilation: int, optional
+        The amount of dilation to apply to the mask. `0` for none. Default: `0`
+    blur_kernel: int, optional
+        The kernel size for applying gaussian blur to apply to the mask. `0` for none. Default: `0`
+    """
+    def __init__(self, size, points, dilation=0, blur_kernel=0):
+        logger.trace("Initializing: %s: (size: %s, points: %s, dilation: %s, blur_kernel: %s)",
+                     size, points, dilation, blur_kernel)
+        self._size = size
+        self._points = points
+        self._dilation = dilation
+        self._blur_kernel = blur_kernel
+        self._mask = None
+        logger.trace("Initialized: %s", self.__class__.__name__)
+
+    def get(self, as_zip=False):
+        """ Obtain the mask.
+
+        Parameters
+        ----------
+        as_zip: bool, optional
+            ``True`` if the mask should be returned zipped otherwise ``False``
+
+        Returns
+        -------
+        :class:`numpy.ndarray` or zipped array
+            The mask as a single channel image of the given :attr:`size` dimension. If
+            :attr:`as_zip` is ``True`` then the :class:`numpy.ndarray` will be contained within a
+            zipped container
+        """
+        if not np.any(self._mask):
+            self._generate_mask()
+        retval = compress(self._mask) if as_zip else self._mask
+        logger.trace("as_zip: %s, retval type: %s", as_zip, type(retval))
+        return retval
+
+    def _generate_mask(self):
+        """ Generate the mask.
+
+        Creates the mask applying any requested dilation and blurring and assigns to
+        :attr:`_mask`
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The mask as a single channel image of the given :attr:`size` dimension.
+        """
+        mask = np.zeros((self._size) + (1, ), dtype="float32")
+        for landmarks in self._points:
+            lms = np.rint(landmarks).astype("int")
+            cv2.fillConvexPoly(mask, cv2.convexHull(lms), 1.0, lineType=cv2.LINE_AA)
+        if self._dilation != 0:
+            mask = cv2.dilate(mask,
+                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
+                                                        (self._dilation, self._dilation)),
+                              iterations=1)
+        if self._blur_kernel != 0:
+            mask = BlurMask("gaussian", mask, self._blur_kernel).blurred
+        logger.trace("mask: (shape: %s, dtype: %s)", mask.shape, mask.dtype)
+        self._mask = (mask * 255.0).astype("uint8")
+
+
 class Mask():
     """ Face Mask information and convenience methods
 
@@ -741,7 +856,7 @@ class Mask():
         return retval
 
 
-class BlurMask():
+class BlurMask():  # pylint:disable=too-few-public-methods
     """ Factory class to return the correct blur object for requested blur type.
 
     Works for square images only. Currently supports Gaussian and Normalized Box Filters.
