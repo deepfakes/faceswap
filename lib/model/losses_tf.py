@@ -197,63 +197,6 @@ class DSSIMObjective(tf.keras.losses.Loss):
         return patches
 
 
-class PenalizedLoss(tf.keras.losses.Loss):
-    """ Penalized Loss function.
-
-    Applies the given loss function just to the masked area of the image.
-
-    Parameters
-    ----------
-    loss_func: function
-        The actual loss function to use
-    mask_prop: float, optional
-        The amount of mask propagation. Default: `1.0`
-    """
-    def __init__(self, loss_func, mask_prop=1.0):
-        super().__init__(name="penalized_loss")
-        self._loss_func = compile_utils.LossesContainer(loss_func)
-        self._mask_prop = mask_prop
-
-    def call(self, y_true, y_pred):
-        """ Apply the loss function to the masked area of the image.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value. This should contain the mask in the 4th channel that will be
-            split off for penalizing.
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The Loss value
-        """
-        mask = self._prepare_mask(K.expand_dims(y_true[..., -1], axis=-1))
-        y_true = y_true[..., :-1]
-        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        return self._loss_func(n_true, n_pred)
-
-    def _prepare_mask(self, mask):
-        """ Prepare the masks for calculating loss
-
-        Parameters
-        ----------
-        mask: :class:`numpy.ndarray`
-            The masks for the current batch
-
-        Returns
-        -------
-        tensor
-            The prepared mask for applying to loss
-        """
-        mask_as_k_inv_prop = 1 - self._mask_prop
-        mask = (mask * self._mask_prop) + mask_as_k_inv_prop
-        return mask
-
-
 class GeneralizedLoss(tf.keras.losses.Loss):
     """  Generalized function used to return a large variety of mathematical loss functions.
 
@@ -583,7 +526,6 @@ class LossWrapper(tf.keras.losses.Loss):
         """
         logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
                      function, weight, mask_channel)
-        function = PenalizedLoss(function) if mask_channel != -1 else function
         self._loss_functions.append(compile_utils.LossesContainer(function))
         self._loss_weights.append(weight)
         self._mask_channels.append(mask_channel)
@@ -613,8 +555,42 @@ class LossWrapper(tf.keras.losses.Loss):
         for func, weight, mask_channel in zip(self._loss_functions,
                                               self._loss_weights,
                                               self._mask_channels):
-            n_true = y_true[..., :3]
-            if mask_channel != -1:
-                n_true = K.concatenate((n_true, y_true[..., mask_channel][..., None]))
-            loss += (func(n_true, y_pred) * weight)
+            logger.debug("Processing loss function: (func: %s, weight: %s, mask_channel: %s)",
+                         func, weight, mask_channel)
+            n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
+            loss += (func(n_true, n_pred) * weight)
         return loss
+
+    @classmethod
+    def _apply_mask(cls, y_true, y_pred, mask_channel, mask_prop=1.0):
+        """ Apply the mask to the input y_true and y_pred. If a mask is not required then
+        return the unmasked inputs.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+        mask_channel: int
+            The channel within y_true that the required mask resides in
+        mask_prop: float, optional
+            The amount of mask propagation. Default: `1.0`
+
+        Returns
+        -------
+        tuple
+            (n_true, n_pred): The ground truth and predicted value tensors with the mask applied
+        """
+        if mask_channel == -1:
+            logger.debug("No mask to apply")
+            return y_true[..., :3], y_pred[..., :3]
+
+        logger.debug("Applying mask from channel %s", mask_channel)
+        mask = K.expand_dims(y_true[..., mask_channel], axis=-1)
+        mask_as_k_inv_prop = 1 - mask_prop
+        mask = (mask * mask_prop) + mask_as_k_inv_prop
+
+        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        return n_true, n_pred
