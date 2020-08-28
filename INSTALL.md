@@ -43,7 +43,7 @@ The type of computations that the process does are well suited for graphics card
     - Laptop CPUs can often run the software, but will not be fast enough to train at reasonable speeds
 - **A powerful GPU**
     - Currently, Nvidia GPUs are fully supported. and AMD graphics cards are partially supported through plaidML.
-    - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.0 or higher.
+    - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.5. (Release 1.0 will work on Compute Capability 3.0)
       To see which version your GPU supports, consult this list: https://developer.nvidia.com/cuda-gpus
       Desktop cards later than the 7xx series are most likely supported.
 - **A lot of patience**
@@ -155,7 +155,7 @@ Obtain git for your distribution from the [git website](https://git-scm.com/down
 The recommended install method is to use a Conda3 Environment as this will handle the installation of Nvidia's CUDA and cuDNN straight into your Conda Environment. This is by far the easiest and most reliable way to setup the project.
   - MiniConda3 is recommended: [MiniConda3](https://docs.conda.io/en/latest/miniconda.html)
   
-Alternatively you can install Python (>= 3.7-3.8 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install no higher than version 10.0 of CUDA and 7.5.x of CUDNN.
+Alternatively you can install Python (>= 3.7-3.8 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Tensorflow (Current release: Tensorflow 2.2. Release v1.0: Tensorflow 1.15).
   - Python distributions:
     - apt/yum install python3 (Linux)
     - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)
