@@ -43,17 +43,16 @@ def test_loss_output(loss_func, output_shape):
         assert output.dtype == "float32" and not np.isnan(output)
 
 
-_PLPARAMS = _PARAMS + [(k_losses.mean_absolute_error, (2, 16, 16)),
-                       (k_losses.mean_squared_error, (2, 16, 16)),
-                       (k_losses.logcosh, (2, 16, 16)),
-                       (losses.DSSIMObjective(), ())]
-_PLIDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm", "mae", "mse", "logcosh",
+_LWPARAMS = [losses.GeneralizedLoss(), losses.GradientLoss(), losses.GMSDLoss(),
+             losses.LInfNorm(), k_losses.mean_absolute_error, k_losses.mean_squared_error,
+             k_losses.logcosh, losses.DSSIMObjective()]
+_LWIDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm", "mae", "mse", "logcosh",
           "DSSIMObjective"]
-_PLIDS = ["{}[{}]".format(loss, get_backend().upper()) for loss in _PLIDS]
+_LWIDS = ["{}[{}]".format(loss, get_backend().upper()) for loss in _LWIDS]
 
 
-@pytest.mark.parametrize(["loss_func", "output_shape"], _PLPARAMS, ids=_PLIDS)
-def test_penalized_loss(loss_func, output_shape):
+@pytest.mark.parametrize("loss_func", _LWPARAMS, ids=_LWIDS)
+def test_loss_wrapper(loss_func):
     """ Test penalized loss wrapper works as expected """
     if get_backend() == "amd":
         if isinstance(loss_func, losses.GMSDLoss):
@@ -62,10 +61,12 @@ def test_penalized_loss(loss_func, output_shape):
             pytest.skip("LogCosh Loss is not currently compatible with PlaidML")
     y_a = K.variable(np.random.random((2, 16, 16, 4)))
     y_b = K.variable(np.random.random((2, 16, 16, 3)))
-    p_loss = losses.PenalizedLoss(loss_func)
+    p_loss = losses.LossWrapper()
+    p_loss.add_loss(loss_func, 1.0, -1)
+    p_loss.add_loss(k_losses.mean_squared_error, 2.0, 3)
     output = p_loss(y_a, y_b)
     if get_backend() == "amd":
-        assert K.eval(output).shape == output_shape
+        assert K.dtype(output) == "float32" and K.eval(output).shape == (2, )
     else:
         output = output.numpy()
         assert output.dtype == "float32" and not np.isnan(output)
