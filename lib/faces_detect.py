@@ -571,7 +571,7 @@ class _LandmarksMask():  # pylint:disable=too-few-public-methods
     """
     def __init__(self, size, points, dilation=0, blur_kernel=0):
         logger.trace("Initializing: %s: (size: %s, points: %s, dilation: %s, blur_kernel: %s)",
-                     size, points, dilation, blur_kernel)
+                     self.__class__.__name__, size, points, dilation, blur_kernel)
         self._size = size
         self._points = points
         self._dilation = dilation

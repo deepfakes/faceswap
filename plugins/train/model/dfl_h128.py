@@ -27,7 +27,7 @@ class Model(OriginalModel):
         var_x = Dense(8 * 8 * self.encoder_dim)(var_x)
         var_x = Reshape((8, 8, self.encoder_dim))(var_x)
         var_x = UpscaleBlock(self.encoder_dim)(var_x)
-        return KerasModel(input_, var_x, name=self.name)
+        return KerasModel(input_, var_x, name="encoder")
 
     def decoder(self, side):
         """ DFL H128 Decoder """

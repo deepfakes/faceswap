@@ -292,22 +292,24 @@ class ModelBase():
         os.mkdir(self.model_dir)
         new_model = self.build_model(self._get_inputs())
         for model_name, layer_name in self._legacy_mapping().items():
-            logger.info("Updating legacy weights from '%s'...", model_name)
             old_model = load_model(os.path.join(archive_dir, model_name), compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
             if not layer:
+                logger.warning("Skipping legacy weights from '%s'...", model_name)
                 continue
             layer = layer[0]
+            logger.info("Updating legacy weights from '%s'...", model_name)
             layer.set_weights(old_model.get_weights())
         filename = self._io._filename  # pylint:disable=protected-access
         logger.info("Saving Tensorflow 2.x model to '%s'", filename)
         new_model.save(filename)
         # Penalized Loss and Learn Mask used to be disabled automatically if a mask wasn't
         # selected, so disable it if enabled, but mask_type is None
-        if self.config["penalized_mask_loss"] and self.config["mask_type"] is None:
+        if self.config["mask_type"] is None:
             self.config["penalized_mask_loss"] = False
-        if self.config["learn_mask"] and self.config["mask_type"] is None:
             self.config["learn_mask"] = False
+            self.config["eye_multiplier"] = 1
+            self.config["mouth_multiplier"] = 1
         self._state.save()
 
     def _validate_input_shape(self):
