@@ -226,6 +226,9 @@ class FaceswapControl():
             if output:
                 if self.command != "train" and self.capture_tqdm(output):
                     continue
+                if self.command == "train" and output.startswith("Reading training images"):
+                    print(output.strip(), file=sys.stdout)
+                    continue
                 print(output.strip(), file=sys.stderr)
         logger.debug("Terminated stderr reader")
 
