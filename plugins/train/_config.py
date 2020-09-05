@@ -271,12 +271,14 @@ class Config(FaceswapConfig):
             group="loss",
             min_max=(1, 40),
             rounding=1,
-            default=12,
+            default=6,
+            fixed=False,
             info="The amount of priority to give to the eyes.\n\nThe value given here is as a "
                  "multiplier of the main loss score. For example:"
                  "\n\t 1 - The eyes will receive the same priority as the rest of the face. "
                  "\n\t 10 - The eyes will be given a score 10 times higher than the rest of the "
-                 "face.")
+                 "face."
+                 "\n\nNB: Penalized Mask Loss must be enable to use this option.")
         self.add_item(
             section=section,
             title="mouth_multiplier",
@@ -284,12 +286,14 @@ class Config(FaceswapConfig):
             group="loss",
             min_max=(1, 40),
             rounding=1,
-            default=8,
+            default=4,
+            fixed=False,
             info="The amount of priority to give to the mouth.\n\nThe value given here is as a "
-                 "multiplier of the main loss score. For example:"
+                 "multiplier of the main loss score. For Example:"
                  "\n\t 1 - The mouth will receive the same priority as the rest of the face. "
                  "\n\t 10 - The mouth will be given a score 10 times higher than the rest of the "
-                 "face.")
+                 "face."
+                 "\n\nNB: Penalized Mask Loss must be enable to use this option.")
         self.add_item(
             section=section,
             title="penalized_mask_loss",
