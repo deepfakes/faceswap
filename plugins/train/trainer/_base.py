@@ -1047,16 +1047,14 @@ class _TrainingAlignments():
         self._hashes = self._get_image_hashes(image_list)
         self._detected_faces = self._load_alignments()
         self._check_all_faces()
+        self._landmarks = self._get_landmarks()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # Get landmarks
     @property
     def landmarks(self):
         """ dict: The :class:`numpy.ndarray` aligned landmarks for keys "a" and "b" """
-        retval = {side: self._transform_landmarks(side, detected_faces)
-                  for side, detected_faces in self._detected_faces.items()}
-        logger.trace(retval)
-        return retval
+        return self._landmarks
 
     def _get_alignments_paths(self):
         """ Obtain the alignments file paths from the command line arguments passed to the model.
@@ -1085,6 +1083,20 @@ class _TrainingAlignments():
                 raise FaceswapError("Alignments file does not exist: `{}`".format(alignments_path))
             retval[side] = alignments_path
         logger.debug("Alignments paths: %s", retval)
+        return retval
+
+    def _get_landmarks(self):
+        """ Pre-generate landmarks as they are needed for both warp to landmarks and eye/mouth
+        masks.
+
+        Returns
+        -------
+        dict
+            The :class:`numpy.ndarray` aligned landmarks for keys "a" and "b"
+        """
+        retval = {side: self._transform_landmarks(side, detected_faces)
+                  for side, detected_faces in self._detected_faces.items()}
+        logger.trace(retval)
         return retval
 
     def _transform_landmarks(self, side, detected_faces):
