@@ -3,6 +3,7 @@
 
 import logging
 
+from functools import partial
 from random import shuffle, choice
 from zlib import decompress
 
@@ -280,16 +281,47 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
             if item is None and key == "masks":
                 logger.trace("Creating dummy masks. side: %s", side)
                 masks = np.ones_like(batch[..., :1], dtype=batch.dtype)
-            else:
-                logger.trace("Obtaining masks for batch. (key: %s side: %s)", key, side)
-                masks = np.array([self._get_mask(item[side][filename], size)
-                                  for filename, face in zip(filenames, batch)], dtype=batch.dtype)
-                masks = self._resize_masks(size, masks)
+                continue
+
+            # Expand out partials for eye and mouth masks on first epoch
+            if item is not None and key in ("eyes", "mouths"):
+                self._expand_partials(side, item, filenames)
+
+            logger.trace("Obtaining masks for batch. (key: %s side: %s)", key, side)
+            masks = np.array([self._get_mask(item[side][filename], size)
+                              for filename in filenames], dtype=batch.dtype)
+            masks = self._resize_masks(size, masks)
 
             logger.trace("masks: (key: %s, shape: %s)", key, masks.shape)
             batch = np.concatenate((batch, masks), axis=-1)
         logger.trace("Output batch shape: %s, side: %s", batch.shape, side)
         return batch
+
+    @classmethod
+    def _expand_partials(cls, side, item, filenames):
+        """ Expand partials to their compressed byte masks and replace into the main item
+        dictionary.
+
+        This is run once for each mask on the first epoch, to save on start up time.
+
+        Parameters
+        ----------
+        item: dict
+            The mask objects with filenames for the current mask type and side
+        filenames: list
+            A list of filenames that are being processed this batch
+        """
+        to_process = {filename: item[side][filename] for filename in filenames}
+        if not any(isinstance(ptl, partial) for ptl in to_process.values()):
+            return
+
+        for filename, ptl in to_process.items():
+            if not isinstance(ptl, partial):
+                logger.debug("Mask already generated. side: '%s', filename: '%s'",
+                             side, filename)
+                continue
+            logger.debug("Generating mask. side: '%s', filename: '%s'", side, filename)
+            item[side][filename] = ptl()
 
     @classmethod
     def _get_mask(cls, item, size):

@@ -12,6 +12,8 @@ import logging
 import os
 import time
 
+from functools import partial
+
 import cv2
 import numpy as np
 
@@ -1178,12 +1180,13 @@ class _TrainingAlignments():
         logger.trace("side: %s, detected_faces: %s, area: %s", side, detected_faces, area)
         masks = dict()
         for fhash, face in detected_faces.items():
-            mask = face.get_landmark_mask(self._training_size,
-                                          area,
-                                          aligned=True,
-                                          dilation=self._training_size // 32,
-                                          blur_kernel=self._training_size // 16,
-                                          as_zip=True)
+            mask = partial(face.get_landmark_mask,
+                           self._training_size,
+                           area,
+                           aligned=True,
+                           dilation=self._training_size // 32,
+                           blur_kernel=self._training_size // 16,
+                           as_zip=True)
             for filename in self._hash_to_filenames(side, fhash):
                 masks[filename] = mask
         logger.trace("side: %s, area: %s, masks: %s",
