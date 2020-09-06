@@ -46,89 +46,89 @@ _HELPTEXT = ("Original Trainer Options.\n"
              "Only change them if you absolutely know what you are doing!")
 
 
-_DEFAULTS = {
-    "preview_images": {
-        "default": 14,
-        "info": "Number of sample faces to display for each side in the preview when training.",
-        "datatype": int,
-        "rounding": 2,
-        "min_max": (2, 16),
-        "group": "evaluation"
-    },
-    "zoom_amount": {
-        "default": 5,
-        "info": "Percentage amount to randomly zoom each training image in and out.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 25),
-        "group": "image augmentation",
-    },
-    "rotation_range": {
-        "default": 10,
-        "info": "Percentage amount to randomly rotate each training image.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 25),
-        "group": "image augmentation",
-    },
-    "shift_range": {
-        "default": 5,
-        "info": "Percentage amount to randomly shift each training image horizontally and "
-                "vertically.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 25),
-        "group": "image augmentation",
-    },
-    "flip_chance": {
-        "default": 50,
-        "info": "Percentage chance to randomly flip each training image horizontally.\n"
-                "NB: This is ignored if the 'no-flip' option is enabled",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 75),
-        "group": "image augmentation",
-    },
-    "color_lightness": {
-        "default": 30,
-        "info": "Percentage amount to randomly alter the lightness of each training image.\n"
-                "NB: This is ignored if the 'no-augment-color' option is enabled",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 75),
-        "group": "color augmentation",
-    },
-    "color_ab": {
-        "default": 8,
-        "info": "Percentage amount to randomly alter the 'a' and 'b' colors of the L*a*b* color "
-                "space of each training image.\n"
-                "NB: This is ignored if the 'no-augment-color' option is enabled",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 50),
-        "group": "color augmentation",
-    },
-    "color_clahe_chance": {
-        "default": 50,
-        "info": "Percentage chance to perform Contrast Limited Adaptive Histogram Equalization on "
-                "each training image.\n"
-                "NB: This is ignored if the 'no-augment-color' option is enabled",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 75),
-        "fixed": False,
-        "group": "color augmentation",
-    },
-    "color_clahe_max_size": {
-        "default": 4,
-        "info": "The grid size dictates how much Contrast Limited Adaptive Histogram Equalization "
-                "is performed on any training image selected for clahe. Contrast will be applied "
-                "randomly with a gridsize of 0 up to the maximum. This value is a multiplier "
-                "calculated from the training image size.\n"
-                "NB: This is ignored if the 'no-augment-color' option is enabled",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (1, 8),
-        "group": "color augmentation",
-    },
-}
+_DEFAULTS = dict(
+    preview_images=dict(
+        default=14,
+        info="Number of sample faces to display for each side in the preview when training.",
+        datatype=int,
+        rounding=2,
+        min_max=(2, 16),
+        group="evaluation"),
+    zoom_amount=dict(
+        default=5,
+        info="Percentage amount to randomly zoom each training image in and out.",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 25),
+        group="image augmentation"),
+    rotation_range=dict(
+        default=10,
+        info="Percentage amount to randomly rotate each training image.",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 25),
+        group="image augmentation"),
+    shift_range=dict(
+        default=5,
+        info="Percentage amount to randomly shift each training image horizontally and "
+             "vertically.",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 25),
+        group="image augmentation"),
+    flip_chance=dict(
+        default=50,
+        info="Percentage chance to randomly flip each training image horizontally.\n"
+             "NB: This is ignored if the 'no-flip' option is enabled",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 75),
+        group="image augmentation"),
+    disable_warp=dict(
+        default=False,
+        info="Disable warp augmentation. Warping is integral to the Neural Network training. If "
+             "you decide to disable warping, you should only do so towards the end of a model's "
+             "training session.",
+        datatype=bool,
+        group="image augmentation",
+        fixed=False),
+
+    color_lightness=dict(
+        default=30,
+        info="Percentage amount to randomly alter the lightness of each training image.\n"
+             "NB: This is ignored if the 'no-flip' option is enabled",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 75),
+        group="color augmentation"),
+    color_ab=dict(
+        default=8,
+        info="Percentage amount to randomly alter the 'a' and 'b' colors of the L*a*b* color "
+             "space of each training image.\nNB: This is ignored if the 'no-flip' option is "
+             "enabled",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 50),
+        group="color augmentation"),
+    color_clahe_chance=dict(
+        default=50,
+        info="Percentage chance to perform Contrast Limited Adaptive Histogram Equalization on "
+             "each training image.\nNB: This is ignored if the 'no-augment-color' option is "
+             "enabled",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 75),
+        fixed=False,
+        group="color augmentation"),
+    color_clahe_max_size=dict(
+        default=4,
+        info="The grid size dictates how much Contrast Limited Adaptive Histogram Equalization is "
+             "performed on any training image selected for clahe. Contrast will be applied "
+             "randomly with a gridsize of 0 up to the maximum. This value is a multiplier "
+             "calculated from the training image size.\nNB: This is ignored if the "
+             "'no-augment-color' option is enabled",
+        datatype=int,
+        rounding=1,
+        min_max=(1, 8),
+        group="color augmentation"),
+)

@@ -240,9 +240,14 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         processed.update(self._processing.get_targets(batch))
 
         # Random Warp # TODO change masks to have a input mask and a warped target mask
-        processed["feed"] = [self._processing.warp(batch[..., :3],
-                                                   self._warp_to_landmarks,
-                                                   **warp_kwargs)]
+        if not self._config["disable_warp"]:
+            processed["feed"] = [self._processing.warp(batch[..., :3],
+                                                       self._warp_to_landmarks,
+                                                       **warp_kwargs)]
+        else:
+            size = (self._model_input_size, self._model_input_size)
+            processed["feed"] = [np.array([cv2.resize(img, size)
+                                           for img in batch[..., :3]]).astype("float32") / 255.0]
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
                      filenames,
