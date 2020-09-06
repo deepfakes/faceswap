@@ -412,6 +412,7 @@ class Patch():
                                    thread_count=1,
                                    name="patch_thread")
         self._thread.start()
+        logger.debug("Initializing %s", self.__class__.__name__)
 
     @property
     def trigger(self):
@@ -479,6 +480,9 @@ class Patch():
         tk_vars: dict
             Global tkinter variables. `Refresh` and `Busy` :class:`tkinter.BooleanVar`
         """
+        logger.debug("Launching patch process thread: (trigger_event: %s, shutdown_event: %s, "
+                     "patch_queue_in: %s, samples: %s, tk_vars: %s)", trigger_event,
+                     shutdown_event, patch_queue_in, samples, tk_vars)
         patch_queue_out = queue_manager.get_queue("preview_patch_out")
         while True:
             trigger = trigger_event.wait(1)
@@ -489,7 +493,6 @@ class Patch():
                 continue
             # Clear trigger so calling process can set it during this run
             trigger_event.clear()
-            tk_vars["busy"].set(True)
             queue_manager.flush_queue("preview_patch_in")
             self._feed_swapped_faces(patch_queue_in, samples)
             with self._lock:
@@ -500,6 +503,7 @@ class Patch():
                 self._display.destination = swapped
             tk_vars["refresh"].set(True)
             tk_vars["busy"].set(False)
+        logger.debug("Closed patch process thread")
 
     def _update_converter_arguments(self):
         """ Update the converter arguments to the currently selected values. """
