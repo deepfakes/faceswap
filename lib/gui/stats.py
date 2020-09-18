@@ -5,6 +5,7 @@ import logging
 import time
 import os
 import warnings
+import zlib
 
 from math import ceil, sqrt
 
@@ -18,7 +19,18 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def convert_time(timestamp):
-    """ Convert time stamp to total hours, minutes and seconds """
+    """ Convert time stamp to total hours, minutes and seconds.
+
+    Parameters
+    ----------
+    timestamp: float
+        The Unix timestamp to be converted
+
+    Returns
+    -------
+    tuple
+        (`hours`, `minutes`, `seconds`) as ints
+    """
     hrs = int(timestamp // 3600)
     if hrs < 10:
         hrs = "{0:02d}".format(hrs)
@@ -28,11 +40,21 @@ def convert_time(timestamp):
 
 
 class TensorBoardLogs():
-    """ Parse and return data from TensorBoard logs """
+    """ Parse data from TensorBoard logs.
+
+    Process the input logs folder and stores the individual filenames per session.
+
+    Caches timestamp and loss data on request and returns this data from the cache.
+
+    Parameters
+    ----------
+    logs_folder: str
+        The folder that contains the Tensorboard log files
+    """
     def __init__(self, logs_folder):
         tf.config.set_visible_devices([], "GPU")  # Don't use the GPU for stats
-        self.folder_base = logs_folder
-        self.log_filenames = self._get_log_filenames()
+        self._folder_base = logs_folder
+        self._log_filenames = self._get_log_filenames()
         self._cache = dict()
 
     def _get_log_filenames(self):
@@ -43,9 +65,9 @@ class TensorBoardLogs():
         dict
             The full path of each log file for each training session that has been run
         """
-        logger.debug("Loading log filenames. base_dir: '%s'", self.folder_base)
+        logger.debug("Loading log filenames. base_dir: '%s'", self._folder_base)
         log_filenames = dict()
-        for dirpath, _, filenames in os.walk(self.folder_base):
+        for dirpath, _, filenames in os.walk(self._folder_base):
             if not any(filename.startswith("events.out.tfevents") for filename in filenames):
                 continue
             logfiles = [filename for filename in filenames
@@ -77,9 +99,8 @@ class TensorBoardLogs():
         step = []
         last_step = 0
 
-        start = time.time()
         try:
-            for record in tf.compat.v1.io.tf_record_iterator(self.log_filenames[session]):
+            for record in tf.compat.v1.io.tf_record_iterator(self._log_filenames[session]):
                 event = event_pb2.Event.FromString(record)
                 if not event.summary.value or not event.summary.value[0].tag.startswith("batch_"):
                     continue
@@ -110,11 +131,12 @@ class TensorBoardLogs():
 
         if step:
             data.append(step)
+
         data = np.array(data, dtype="float32")
-        logger.debug("Caching session id: %s, labels: %s, data shape: %s",
+        self._cache[session] = dict(labels=labels, data=zlib.compress(data), shape=data.shape)
+
+        logger.debug("Cached session id: %s, labels: %s, data shape: %s",
                      session, labels, data.shape)
-        self._cache[session] = dict(labels=labels, data=data)
-        print(time.time() - start)
 
     def _from_cache(self, session=None):
         """ Get the session data from the cache.
@@ -134,8 +156,8 @@ class TensorBoardLogs():
         """
         if session is not None and session not in self._cache:
             self._cache_data(session)
-        elif session is None and not all(idx in self._cache for idx in self.log_filenames):
-            for sess in self.log_filenames:
+        elif session is None and not all(idx in self._cache for idx in self._log_filenames):
+            for sess in self._log_filenames:
                 if sess not in self._cache:
                     self._cache_data(sess)
 
@@ -155,14 +177,16 @@ class TensorBoardLogs():
         Returns
         -------
         dict
-            A list of loss values for each step for the requested session
+            The session id(s) as key, with a further dictionary as value containing the loss name
+            and list of loss values for each step
         """
         logger.debug("Getting loss: (session: %s)", session)
-        retval = {sess: {title: info["data"][:, idx]
+        retval = {sess: {title: np.frombuffer(zlib.decompress(info["data"]),
+                                              dtype="float32").reshape(info["shape"])[:, idx]
                          for idx, title in enumerate(info["labels"])
                          if title != "timestamp"}
                   for sess, info in self._from_cache(session).items()}
-        logger.debug({key: {k: v.shape() for k, v in val.items}
+        logger.debug({key: {k: v.shape for k, v in val.items()}
                       for key, val in retval.items()})
         return retval
 
@@ -181,11 +205,13 @@ class TensorBoardLogs():
         Returns
         -------
         dict
-            The timestamps for each event for the requested session
+            The session id(s) as key with list of timestamps per step as value
         """
 
         logger.debug("Getting timestamps")
-        retval = {sess: info["data"][:, info["labels"].index("timestamp")].squeeze()
+        retval = {sess: np.frombuffer(
+            zlib.decompress(info["data"]),
+            dtype="float32").reshape(info["shape"])[:, info["labels"].index("timestamp")]
                   for sess, info in self._from_cache(session).items()}
         logger.debug({k: v.shape for k, v in retval.items()})
         return retval
@@ -347,8 +373,8 @@ class SessionsSummary():
     def time_stats(self):
         """ Return session time stats """
         ts_data = self.session.tb_logs.get_timestamps()
-        time_stats = {sess_id: {"start_time": min(timestamps) if np.any(timestamps) else 0,
-                                "end_time": max(timestamps) if np.any(timestamps) else 0,
+        time_stats = {sess_id: {"start_time": np.min(timestamps) if np.any(timestamps) else 0,
+                                "end_time": np.max(timestamps) if np.any(timestamps) else 0,
                                 "datapoints": timestamps.shape[0] if np.any(timestamps) else 0}
                       for sess_id, timestamps in ts_data.items()}
         return time_stats
