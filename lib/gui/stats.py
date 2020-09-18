@@ -52,7 +52,6 @@ class TensorBoardLogs():
         The folder that contains the Tensorboard log files
     """
     def __init__(self, logs_folder):
-        tf.config.set_visible_devices([], "GPU")  # Don't use the GPU for stats
         self._folder_base = logs_folder
         self._log_filenames = self._get_log_filenames()
         self._cache = dict()
@@ -115,15 +114,16 @@ class TensorBoardLogs():
 
                 if tag == "batch_total":
                     lbl = "timestamp"
-                    val = event.wall_time
-                else:
-                    lbl = tag.replace("batch_", "")
-                    val = summary.simple_value
+                    if lbl not in labels:
+                        labels.append(lbl)
+                    step.append(event.wall_time)
 
+                lbl = tag.replace("batch_", "")
                 if lbl not in labels:
                     labels.append(lbl)
 
-                step.append(val)
+                step.append(summary.simple_value)
+
         except tf_errors.DataLossError as err:
             logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
                            "The totals do not include this session. Original error message: "
@@ -133,10 +133,9 @@ class TensorBoardLogs():
             data.append(step)
 
         data = np.array(data, dtype="float32")
-        self._cache[session] = dict(labels=labels, data=zlib.compress(data), shape=data.shape)
-
-        logger.debug("Cached session id: %s, labels: %s, data shape: %s",
+        logger.debug("Caching session id: %s, labels: %s, data shape: %s",
                      session, labels, data.shape)
+        self._cache[session] = dict(labels=labels, data=zlib.compress(data), shape=data.shape)
 
     def _from_cache(self, session=None):
         """ Get the session data from the cache.
@@ -222,7 +221,6 @@ class Session():
     def __init__(self, model_dir=None, model_name=None):
         logger.debug("Initializing %s: (model_dir: %s, model_name: %s)",
                      self.__class__.__name__, model_dir, model_name)
-        self.serializer = get_serializer("json")
         self.state = None
         self.modeldir = model_dir  # Set and reset by wrapper for training sessions
         self.modelname = model_name  # Set and reset by wrapper for training sessions
@@ -349,7 +347,8 @@ class Session():
         """ Load the current state file """
         state_file = os.path.join(self.modeldir, "{}_state.json".format(self.modelname))
         logger.debug("Loading State: '%s'", state_file)
-        self.state = self.serializer.load(state_file)
+        serializer = get_serializer("json")
+        self.state = serializer.load(state_file)
         logger.debug("Loaded state: %s", self.state)
 
     def get_iterations_for_session(self, session_id):

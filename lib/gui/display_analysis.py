@@ -178,7 +178,13 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         return model_name
 
     def _set_session_summary(self, message):
-        """ Set the summary data and info message """
+        """ Set the summary data and info message.
+
+        Parameters
+        ----------
+        message: str
+            The information message to set
+        """
         if self._thread is None:
             logger.debug("Setting session summary. (message: '%s')", message)
             self._thread = LongRunningTask(target=self._summarise_data,
@@ -199,12 +205,18 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             self._summary = result
             self._thread = None
             self.set_info("Session: {}".format(message))
-            self._stats.session = self._session
+            self._stats.set_session(self._session)
             self._stats.tree_insert_data(self._summary)
 
     @classmethod
     def _summarise_data(cls, session):
-        """ Summarize data in a LongRunningThread as it can take a while """
+        """ Summarize data in a LongRunningThread as it can take a while.
+
+        Parameters
+        ----------
+        session: :class:`lib.gui.stats.Session`
+            The session object to generate the summary for
+        """
         return session.full_summary
 
     def _clear_session(self):
@@ -214,7 +226,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             logger.trace("No session loaded. Returning")
             return
         self._summary = None
-        self._stats.session = None
+        self._stats.set_session(None)
         self._stats.tree_clear()
         self._reset_session_info()
         self._session = None
@@ -316,76 +328,128 @@ class _Options():  # pylint:disable=too-few-public-methods
             Tooltip(btn, text=hlp, wraplength=200)
 
     @classmethod
-    def _set_help(cls, btntype):
-        """ Set the help text for option buttons """
+    def _set_help(cls, button_type):
+        """ Set the help text for option buttons.
+
+        Parameters
+        ----------
+        button_type: {"reload", "clear", "save", "load"}
+            The type of button to set the help text for
+        """
         logger.debug("Setting help")
         hlp = ""
-        if btntype == "reload":
+        if button_type == "reload":
             hlp = "Load/Refresh stats for the currently training session"
-        elif btntype == "clear":
+        elif button_type == "clear":
             hlp = "Clear currently displayed session stats"
-        elif btntype == "save":
+        elif button_type == "save":
             hlp = "Save session stats to csv"
-        elif btntype == "load":
+        elif button_type == "load":
             hlp = "Load saved session stats"
         return hlp
 
 
 class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
-    """ Stats frame of analysis tab """
+    """ Stats frame of analysis tab.
+
+    Holds the tree-view containing the summarized session statistics in the Analysis tab.
+
+    Parameters
+    ----------
+    parent: :class:`tkinter.Frame`
+        The frame within the Analysis Notebook that will hold the statistics
+    selected_id: :class:`tkinter.IntVar`
+        The tkinter variable that holds the currently selected session ID
+    helptext: str
+        The help text to display for the summary statistics page
+    """
     def __init__(self, parent, selected_id, helptext):
         logger.debug("Initializing: %s: (parent, %s, selected_id: %s, helptext: '%s')",
                      self.__class__.__name__, parent, selected_id, helptext)
         super().__init__(parent)
+        self._session = None  # set when loading or clearing from parent
+        self._selected_id = selected_id
+        self._popup_positions = list()
+
+        self._canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        tree_frame = ttk.Frame(self._canvas)
+        self._tree_canvas = self._canvas.create_window((0, 0), window=tree_frame, anchor=tk.NW)
+        self._sub_frame = ttk.Frame(tree_frame)
+
+        self._add_label()
+
+        self._tree = ttk.Treeview(self._sub_frame, height=1, selectmode=tk.BROWSE)
+        self._scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=self._tree.yview)
+
+        self._columns = self._tree_configure(helptext)
+        self._canvas.bind("<Configure>", self._resize_frame)
+
+        self._scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self._tree.pack(side=tk.TOP, fill=tk.X)
+        self._sub_frame.pack(side=tk.LEFT, fill=tk.X, anchor=tk.N, expand=True)
+        self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
-        self.session = None  # set when loading or clearing from parent
-        self.thread = None  # Thread for loading data popup
-        self.selected_id = selected_id
-        self.popup_positions = list()
 
-        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.tree_frame = ttk.Frame(self.canvas)
-        self.tree_canvas = self.canvas.create_window((0, 0), window=self.tree_frame, anchor=tk.NW)
-        self.sub_frame = ttk.Frame(self.tree_frame)
-        self.sub_frame.pack(side=tk.LEFT, fill=tk.X, anchor=tk.N, expand=True)
-
-        self.add_label()
-        self.tree = ttk.Treeview(self.sub_frame, height=1, selectmode=tk.BROWSE)
-        self.scrollbar = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.tree.yview)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        self.columns = self.tree_configure(helptext)
-        self.canvas.bind("<Configure>", self.resize_frame)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def add_label(self):
-        """ Add tree-view Title """
+    def set_session(self, session):
+        """ Set or clear the current session.
+
+        Parameters
+        ----------
+        :class:`lib.gui.stats.Session` or ``None``
+            The session to set the statistics for. Set to ``None`` to clear the session
+        """
+        self._session = session
+
+    def _add_label(self):
+        """ Add the title above the tree-view. """
         logger.debug("Adding Treeview title")
-        lbl = ttk.Label(self.sub_frame, text="Session Stats", anchor=tk.CENTER)
+        lbl = ttk.Label(self._sub_frame, text="Session Stats", anchor=tk.CENTER)
         lbl.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
-    def resize_frame(self, event):
-        """ Resize the options frame to fit the canvas """
+    def _resize_frame(self, event):
+        """ Resize the options frame to fit the canvas.
+
+        Parameters
+        ----------
+        event: `tkinter.Event`
+            The tkinter resize event
+        """
         logger.debug("Resize Analysis Frame")
         canvas_width = event.width
         canvas_height = event.height
-        self.canvas.itemconfig(self.tree_canvas, width=canvas_width, height=canvas_height)
+        self._canvas.itemconfig(self._tree_canvas, width=canvas_width, height=canvas_height)
         logger.debug("Resized Analysis Frame")
 
-    def tree_configure(self, helptext):
-        """ Build a tree-view widget to hold the sessions stats """
-        logger.debug("Configuring Treeview")
-        self.tree.configure(yscrollcommand=self.scrollbar.set)
-        self.tree.tag_configure("total", background="black", foreground="white")
-        self.tree.pack(side=tk.TOP, fill=tk.X)
-        self.tree.bind("<ButtonRelease-1>", self.select_item)
-        Tooltip(self.tree, text=helptext, wraplength=200)
-        return self.tree_columns()
+    def _tree_configure(self, helptext):
+        """ Build a tree-view widget to hold the sessions stats.
 
-    def tree_columns(self):
-        """ Add the columns to the totals tree-view """
+        Parameters
+        ----------
+        helptext: str
+            The helptext to display when the mouse is over the tree-view
+
+        Returns
+        -------
+        list
+            The list of tree-view columns
+        """
+        logger.debug("Configuring Treeview")
+        self._tree.configure(yscrollcommand=self._scrollbar.set)
+        self._tree.tag_configure("total", background="black", foreground="white")
+        self._tree.bind("<ButtonRelease-1>", self._select_item)
+        Tooltip(self._tree, text=helptext, wraplength=200)
+        return self._tree_columns()
+
+    def _tree_columns(self):
+        """ Add the columns to the totals tree-view.
+
+        Returns
+        -------
+        list
+            The list of tree-view columns
+        """
         logger.debug("Adding Treeview columns")
         columns = (("session", 40, "#"),
                    ("start", 130, None),
@@ -394,84 +458,108 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
                    ("batch", 50, None),
                    ("iterations", 90, None),
                    ("rate", 60, "EGs/sec"))
-        self.tree["columns"] = [column[0] for column in columns]
+        self._tree["columns"] = [column[0] for column in columns]
 
         for column in columns:
             text = column[2] if column[2] else column[0].title()
             logger.debug("Adding heading: '%s'", text)
-            self.tree.heading(column[0], text=text)
-            self.tree.column(column[0], width=column[1], anchor=tk.E, minwidth=40)
-        self.tree.column("#0", width=40)
-        self.tree.heading("#0", text="Graphs")
+            self._tree.heading(column[0], text=text)
+            self._tree.column(column[0], width=column[1], anchor=tk.E, minwidth=40)
+        self._tree.column("#0", width=40)
+        self._tree.heading("#0", text="Graphs")
 
         return [column[0] for column in columns]
 
     def tree_insert_data(self, sessions_summary):
-        """ Insert the data into the totals tree-view """
+        """ Insert the summary data into the statistics tree-view.
+
+        Parameters
+        ----------
+        sessions_summary: list
+            List of session summary dicts for populating into the tree-view
+        """
         logger.debug("Inserting treeview data")
-        self.tree.configure(height=len(sessions_summary))
+        self._tree.configure(height=len(sessions_summary))
 
         for item in sessions_summary:
-            values = [item[column] for column in self.columns]
+            values = [item[column] for column in self._columns]
             kwargs = {"values": values}
-            if self.check_valid_data(values):
+            if self._check_valid_data(values):
                 # Don't show graph icon for non-existent sessions
                 kwargs["image"] = get_images().icons["graph"]
             if values[0] == "Total":
                 kwargs["tags"] = "total"
-            self.tree.insert("", "end", **kwargs)
+            self._tree.insert("", "end", **kwargs)
 
     def tree_clear(self):
-        """ Clear the totals tree """
+        """ Clear all of the summary data from the tree-view. """
         logger.debug("Clearing treeview data")
         try:
-            self.tree.delete(* self.tree.get_children())
-            self.tree.configure(height=1)
+            self._tree.delete(* self._tree.get_children())
+            self._tree.configure(height=1)
         except tk.TclError:
             # Catch non-existent tree view when rebuilding the GUI
             pass
 
-    def select_item(self, event):
-        """ Update the session summary info with
-            the selected item or launch graph """
-        region = self.tree.identify("region", event.x, event.y)
-        selection = self.tree.focus()
-        values = self.tree.item(selection, "values")
+    def _select_item(self, event):
+        """ Update the session summary info with the selected item or launch graph.
+
+        If the mouse is clicked on the graph icon, then the session summary pop-up graph is
+        launched. Otherwise the selected ID is stored.
+
+        Parameters
+        ----------
+        event: :class:`tkinter.Event`
+            The tkinter mouse button release event
+        """
+        region = self._tree.identify("region", event.x, event.y)
+        selection = self._tree.focus()
+        values = self._tree.item(selection, "values")
         if values:
             logger.debug("Selected values: %s", values)
-            self.selected_id.set(values[0])
-            if region == "tree" and self.check_valid_data(values):
-                datapoints = int(values[self.columns.index("iterations")])
-                self.data_popup(datapoints)
+            self._selected_id.set(values[0])
+            if region == "tree" and self._check_valid_data(values):
+                datapoints = int(values[self._columns.index("iterations")])
+                self._data_popup(datapoints)
 
-    def check_valid_data(self, values):
-        """ Check there is valid data available for popping up a graph """
-        col_indices = [self.columns.index("batch"), self.columns.index("iterations")]
+    def _check_valid_data(self, values):
+        """ Check there is valid data available for popping up a graph.
+
+        Parameters
+        ----------
+        values: list
+            The values that exist for a single session that are to be validated
+        """
+        col_indices = [self._columns.index("batch"), self._columns.index("iterations")]
         for idx in col_indices:
             if (isinstance(values[idx], int) or values[idx].isdigit()) and int(values[idx]) == 0:
                 logger.warning("No data to graph for selected session")
                 return False
         return True
 
-    def data_popup(self, datapoints):
+    def _data_popup(self, data_points):
         """ Pop up a window and control it's position
 
-            The default view is rolling average over 500 points.
-            If there are fewer data points than this, switch the default
-            to smoothed
+        The default view is rolling average over 500 points. If there are fewer data points than
+        this, switch the default to smoothed,
+
+        Parameters
+        ----------
+        data_points: int
+            The number of iterations that are to be plotted
         """
         logger.debug("Popping up data window")
         scaling_factor = get_config().scaling_factor
-        toplevel = SessionPopUp(self.session.modeldir,
-                                self.session.modelname,
-                                self.selected_id.get(),
-                                datapoints)
-        toplevel.title(self.data_popup_title())
+        toplevel = SessionPopUp(self._session.modeldir,
+                                self._session.modelname,
+                                self._selected_id.get(),
+                                data_points)
+        toplevel.title(self._data_popup_title())
         toplevel.tk.call(
             'wm',
             'iconphoto',
             toplevel._w, get_images().icons["favicon"])  # pylint:disable=protected-access
-        position = self.data_popup_get_position()
+        position = self._data_popup_get_position()
         height = int(900 * scaling_factor)
         width = int(480 * scaling_factor)
         toplevel.geometry("{}x{}+{}+{}".format(str(height),
@@ -480,32 +568,58 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
                                                str(position[1])))
         toplevel.update()
 
-    def data_popup_title(self):
-        """ Set the data popup title """
+    def _data_popup_title(self):
+        """ Get the summary graph popup title.
+
+        Returns
+        -------
+        str
+            The title to display at the top of the pop-up graph window
+        """
         logger.debug("Setting poup title")
-        selected_id = self.selected_id.get()
+        selected_id = self._selected_id.get()
         title = "All Sessions"
         if selected_id != "Total":
-            title = "{} Model: Session #{}".format(self.session.modelname.title(), selected_id)
+            title = "{} Model: Session #{}".format(self._session.modelname.title(), selected_id)
         logger.debug("Title: '%s'", title)
-        return "{} - {}".format(title, self.session.modeldir)
+        return "{} - {}".format(title, self._session.modeldir)
 
-    def data_popup_get_position(self):
-        """ Get the position of the next window """
+    def _data_popup_get_position(self):
+        """ Get the position of the next window to pop the summary graph to.
+
+        Returns
+        -------
+        list
+            The [x, y] co-ordinates that the pop up window should be placed at
+        """
         logger.debug("getting poup position")
         init_pos = [120, 120]
         pos = init_pos
         while True:
-            if pos not in self.popup_positions:
-                self.popup_positions.append(pos)
+            if pos not in self._popup_positions:
+                self._popup_positions.append(pos)
                 break
             pos = [item + 200 for item in pos]
-            init_pos, pos = self.data_popup_check_boundaries(init_pos, pos)
+            init_pos, pos = self._data_popup_check_boundaries(init_pos, pos)
         logger.debug("Position: %s", pos)
         return pos
 
-    def data_popup_check_boundaries(self, initial_position, position):
-        """ Check that the popup remains within the screen boundaries """
+    def _data_popup_check_boundaries(self, initial_position, position):
+        """ Check that the popup remains within the screen boundaries.
+
+        Parameters
+        ----------
+        initial_position: list
+            The [x, y] position of the last displayed popup window
+        position: list
+            The requested [x, y] position for the new popup window
+
+        Returns
+        -------
+        tuple
+            The original initial_position and position, adjusted if the new window would go out of
+            bounds
+        """
         logger.debug("Checking poup boundaries: (initial_position: %s, position: %s)",
                      initial_position, position)
         boundary_x = self.winfo_screenwidth() - 120
@@ -843,7 +957,7 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Getting Popup from background Thread")
         self.display_data = self.thread.get_result()
         self.thread = None
-        if not self.check_valid_data():
+        if not self._check_valid_data():
             logger.warning("No valid data to display. Not refreshing")
             self.vars["status"].set("")
             return False
@@ -865,7 +979,7 @@ class SessionPopUp(tk.Toplevel):
             return False
         return True
 
-    def check_valid_data(self):
+    def _check_valid_data(self):
         """ Check that the selections holds valid data to display
             NB: len-as-condition is used as data could be a list or a numpy array
         """

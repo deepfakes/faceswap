@@ -40,7 +40,19 @@ display module
 
 display\_analysis module
 ========================
-.. autoclass:: lib.gui.display_analysis.Analysis
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.gui.display_analysis.Analysis
+   ~lib.gui.display_analysis.SessionPopUp
+   ~lib.gui.display_analysis.StatsData
+
+.. rubric:: Module
+
+.. automodule:: lib.gui.display_analysis
    :members:
    :undoc-members:
    :show-inheritance:
