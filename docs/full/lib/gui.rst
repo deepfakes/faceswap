@@ -47,7 +47,6 @@ display\_analysis module
    :nosignatures:
    
    ~lib.gui.display_analysis.Analysis
-   ~lib.gui.display_analysis.SessionPopUp
    ~lib.gui.display_analysis.StatsData
 
 .. rubric:: Module
@@ -60,6 +59,13 @@ display\_analysis module
 popup_configure module
 ======================
 .. automodule:: lib.gui.popup_configure
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+popup_session module
+======================
+.. automodule:: lib.gui.popup_session
    :members:
    :undoc-members:
    :show-inheritance:

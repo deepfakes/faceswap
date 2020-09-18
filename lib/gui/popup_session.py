@@ -44,7 +44,7 @@ class SessionPopUp(tk.Toplevel):
 
         optsframe = self._layout_frames()
         self._build_options(optsframe)
-        self.compile_display_data()
+        self._compile_display_data()
 
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -63,7 +63,7 @@ class SessionPopUp(tk.Toplevel):
 
         var = tk.BooleanVar()
         var.set(False)
-        var.trace("w", self.graph_build)
+        var.trace("w", self._graph_build)
 
         retval["buildgraph"] = var
         return retval
@@ -122,11 +122,11 @@ class SessionPopUp(tk.Toplevel):
             cmb["values"] = choices[item]
             cmb.current(0)
 
-            cmd = self.optbtn_reload if item == "Display" else self.graph_scale
+            cmd = self._option_button_reload if item == "Display" else self._graph_scale
             var.trace("w", cmd)
             self._vars[item.lower().strip()] = var
 
-            hlp = self.set_help(item)
+            hlp = self._set_help(item)
             Tooltip(cmbframe, text=hlp, wraplength=200)
 
             cmb.pack(fill=tk.X, side=tk.RIGHT)
@@ -158,7 +158,7 @@ class SessionPopUp(tk.Toplevel):
             self._vars[item] = var
 
             ctl = ttk.Checkbutton(frame, variable=var, text=text)
-            hlp = self.set_help(item)
+            hlp = self._set_help(item)
             Tooltip(ctl, text=hlp, wraplength=200)
             ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
 
@@ -230,7 +230,7 @@ class SessionPopUp(tk.Toplevel):
                                         default=default,
                                         rounding=rounding,
                                         min_max=min_max,
-                                        helptext=self.set_help(item))
+                                        helptext=self._set_help(item))
             self._vars[item] = slider.tk_var
             ControlBuilder(frame, slider, 1, 19, None, True)
         logger.debug("Built Sliders")
@@ -251,11 +251,11 @@ class SessionPopUp(tk.Toplevel):
                               anchor=tk.W)
 
         for btntype in ("reload", "save"):
-            cmd = getattr(self, "optbtn_{}".format(btntype))
+            cmd = getattr(self, "_option_button_{}".format(btntype))
             btn = ttk.Button(btnframe,
                              image=get_images().icons[btntype],
                              command=cmd)
-            hlp = self.set_help(btntype)
+            hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wraplength=200)
             btn.pack(padx=2, side=tk.RIGHT)
 
@@ -278,8 +278,8 @@ class SessionPopUp(tk.Toplevel):
         lbl.pack(side=tk.TOP, padx=5, pady=0, anchor=tk.CENTER)
         sep.pack(fill=tk.X, pady=(5, 0), side=tk.TOP)
 
-    def optbtn_save(self):
-        """ Action for save button press """
+    def _option_button_save(self):
+        """ Action for save button press. """
         logger.debug("Saving File")
         savefile = FileHandler("save", "csv").retfile
         if not savefile:
@@ -294,12 +294,12 @@ class SessionPopUp(tk.Toplevel):
             csvout.writerow(fieldnames)
             csvout.writerows(zip(*[save_data[key] for key in fieldnames]))
 
-    def optbtn_reload(self, *args):  # pylint: disable=unused-argument
-        """ Action for reset button press and checkbox changes"""
+    def _option_button_reload(self, *args):  # pylint: disable=unused-argument
+        """ Action for reset button press and checkbox changes. """
         logger.debug("Refreshing Graph")
         if not self._graph_initialised:
             return
-        valid = self.compile_display_data()
+        valid = self._compile_display_data()
         if not valid:
             logger.debug("Invalid data")
             return
@@ -308,53 +308,64 @@ class SessionPopUp(tk.Toplevel):
                             self._vars["scale"].get())
         logger.debug("Refreshed Graph")
 
-    def graph_scale(self, *args):  # pylint: disable=unused-argument
-        """ Action for changing graph scale """
+    def _graph_scale(self, *args):  # pylint: disable=unused-argument
+        """ Action for changing graph scale. """
         if not self._graph_initialised:
             return
         self._graph.set_yscale_type(self._vars["scale"].get())
 
-    @staticmethod
-    def set_help(control):
-        """ Set the help text for option buttons """
+    @classmethod
+    def _set_help(cls, action):
+        """ Set the help text for option buttons.
+
+        Parameters
+        ----------
+        action: string
+            The action to get the help text for
+
+        Returns
+        -------
+        str
+            The help text for the given action
+        """
         hlp = ""
-        control = control.lower()
-        if control == "reload":
+        action = action.lower()
+        if action == "reload":
             hlp = "Refresh graph"
-        elif control == "save":
+        elif action == "save":
             hlp = "Save display data to csv"
-        elif control == "avgiterations":
+        elif action == "avgiterations":
             hlp = "Number of data points to sample for rolling average"
-        elif control == "smoothamount":
+        elif action == "smoothamount":
             hlp = "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing"
-        elif control == "outliers":
+        elif action == "outliers":
             hlp = "Flatten data points that fall more than 1 standard " \
                   "deviation from the mean to the mean value."
-        elif control == "avg":
+        elif action == "avg":
             hlp = "Display rolling average of the data"
-        elif control == "smoothed":
+        elif action == "smoothed":
             hlp = "Smooth the data"
-        elif control == "raw":
+        elif action == "raw":
             hlp = "Display raw data"
-        elif control == "trend":
+        elif action == "trend":
             hlp = "Display polynormal data trend"
-        elif control == "display":
+        elif action == "display":
             hlp = "Set the data to display"
-        elif control == "scale":
+        elif action == "scale":
             hlp = "Change y-axis scale"
         return hlp
 
-    def compile_display_data(self):
-        """ Compile the data to be displayed """
+    def _compile_display_data(self):
+        """ Compile the data to be displayed. """
         if self._thread is None:
             logger.debug("Compiling Display Data in background thread")
             loss_keys = [key for key, val in self._vars["loss_keys"].items()
                          if val.get()]
             logger.debug("Selected loss_keys: %s", loss_keys)
 
-            selections = self.selections_to_list()
+            selections = self._selections_to_list()
 
-            if not self.check_valid_selection(loss_keys, selections):
+            if not self._check_valid_selection(loss_keys, selections):
                 logger.warning("No data to display. Not refreshing")
                 return False
             self._vars["status"].set("Loading Data...")
@@ -366,15 +377,15 @@ class SessionPopUp(tk.Toplevel):
                           smooth_amount=self._vars["smoothamount"].get(),
                           flatten_outliers=self._vars["outliers"].get(),
                           is_totals=self._session_id == "Total")
-            self._thread = LongRunningTask(target=self.get_display_data,
+            self._thread = LongRunningTask(target=self._get_display_data,
                                            kwargs=kwargs,
                                            widget=self)
             self._thread.start()
-            self.after(1000, self.compile_display_data)
+            self.after(1000, self._compile_display_data)
             return True
         if not self._thread.complete.is_set():
             logger.debug("Popup Data not yet available")
-            self.after(1000, self.compile_display_data)
+            self.after(1000, self._compile_display_data)
             return True
 
         logger.debug("Getting Popup from background Thread")
@@ -389,12 +400,36 @@ class SessionPopUp(tk.Toplevel):
         return True
 
     @staticmethod
-    def get_display_data(**kwargs):
-        """ Get the display data in a LongRunningTask """
+    def _get_display_data(**kwargs):
+        """ Get the display data in a LongRunningTask.
+
+        Parameters
+        ----------
+        kwargs: dict
+            The keyword arguments to pass to `lib.gui.stats.Calculations`
+
+        Returns
+        -------
+        :class:`lib.gui.stats.Calculations`
+            The summarized results for the given session
+        """
         return Calculations(**kwargs)
 
-    def check_valid_selection(self, loss_keys, selections):
-        """ Check that there will be data to display """
+    def _check_valid_selection(self, loss_keys, selections):
+        """ Check that there will be data to display.
+
+        Parameters
+        ----------
+        loss_keys: list
+            The selected loss to display
+        selections: list
+            The selected checkbox options
+
+        Returns
+        -------
+        bool
+            ``True` if there is data to be displayed, otherwise ``False``
+        """
         display = self._vars["display"].get().lower()
         logger.debug("Validating selection. (loss_keys: %s, selections: %s, display: %s)",
                      loss_keys, selections, display)
@@ -413,8 +448,14 @@ class SessionPopUp(tk.Toplevel):
             return False
         return True
 
-    def selections_to_list(self):
-        """ Compile checkbox selections to list """
+    def _selections_to_list(self):
+        """ Compile checkbox selections to a list.
+
+        Returns
+        -------
+        list
+            The selected options from the check-boxes
+        """
         logger.debug("Compiling selections to list")
         selections = list()
         for key, val in self._vars.items():
@@ -425,7 +466,7 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Compiling selections to list: %s", selections)
         return selections
 
-    def graph_build(self, *args):  # pylint:disable=unused-argument
+    def _graph_build(self, *args):  # pylint:disable=unused-argument
         """ Build the graph in the top right paned window """
         if not self._vars["buildgraph"].get():
             return

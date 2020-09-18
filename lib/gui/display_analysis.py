@@ -228,6 +228,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         self._stats.set_session(None)
         self._stats.tree_clear()
         self._reset_session_info()
+        del self._session
         self._session = None
 
     def _load_session(self, full_path=None):
