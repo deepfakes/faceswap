@@ -33,6 +33,7 @@ class TensorBoardLogs():
         tf.config.set_visible_devices([], "GPU")  # Don't use the GPU for stats
         self.folder_base = logs_folder
         self.log_filenames = self._get_log_filenames()
+        self._cache = dict()
 
     def _get_log_filenames(self):
         """ Get the TensorBoard log filenames for all existing sessions.
@@ -61,6 +62,87 @@ class TensorBoardLogs():
         logger.debug("logfiles: %s", log_filenames)
         return log_filenames
 
+    def _cache_data(self, session):
+        """ Cache TensorBoard logs for the given session on first access.
+
+        Populates :attr:`_cache` with timestamps and loss data.
+
+        Parameters
+        -------
+        session: int
+            The session index to cache the data for
+        """
+        labels = []
+        data = []
+        step = []
+        last_step = 0
+
+        start = time.time()
+        try:
+            for record in tf.compat.v1.io.tf_record_iterator(self.log_filenames[session]):
+                event = event_pb2.Event.FromString(record)
+                if not event.summary.value or not event.summary.value[0].tag.startswith("batch_"):
+                    continue
+
+                if event.step != last_step:
+                    data.append(step)
+                    step = []
+                    last_step = event.step
+
+                summary = event.summary.value[0]
+                tag = summary.tag
+
+                if tag == "batch_total":
+                    lbl = "timestamp"
+                    val = event.wall_time
+                else:
+                    lbl = tag.replace("batch_", "")
+                    val = summary.simple_value
+
+                if lbl not in labels:
+                    labels.append(lbl)
+
+                step.append(val)
+        except tf_errors.DataLossError as err:
+            logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
+                           "The totals do not include this session. Original error message: "
+                           "'%s'", session, str(err))
+
+        if step:
+            data.append(step)
+        data = np.array(data, dtype="float32")
+        logger.debug("Caching session id: %s, labels: %s, data shape: %s",
+                     session, labels, data.shape)
+        self._cache[session] = dict(labels=labels, data=data)
+        print(time.time() - start)
+
+    def _from_cache(self, session=None):
+        """ Get the session data from the cache.
+
+        If the request data does not exist in the cache, then populate it.
+
+        Parameters
+        ----------
+        session: int, optional
+            The Session ID to return the data for. Set to ``None`` to return all session
+            data. Default ``None`
+
+        Returns
+        -------
+        dict
+            The session id(s) as key, with the event data as value
+        """
+        if session is not None and session not in self._cache:
+            self._cache_data(session)
+        elif session is None and not all(idx in self._cache for idx in self.log_filenames):
+            for sess in self.log_filenames:
+                if sess not in self._cache:
+                    self._cache_data(sess)
+
+        if session is None:
+            return self._cache
+        return {session: self._cache[session]}
+
     def get_loss(self, session=None):
         """ Read the loss from the TensorBoard event logs
 
@@ -76,23 +158,13 @@ class TensorBoardLogs():
             A list of loss values for each step for the requested session
         """
         logger.debug("Getting loss: (session: %s)", session)
-        all_loss = dict()
-        for sess, logfile in self.log_filenames.items():
-            if session is not None and sess != session:
-                logger.debug("Skipping session: %s", sess)
-                continue
-            loss = dict()
-            events = [event_pb2.Event.FromString(record.numpy())
-                      for record in tf.data.TFRecordDataset(logfile)]
-            for event in events:
-                if not event.summary.value or not event.summary.value[0].tag.startswith("batch_"):
-                    continue
-                summary = event.summary.value[0]
-                tag = summary.tag.replace("batch_", "")
-                loss.setdefault(tag, []).append(summary.simple_value)
-            all_loss[sess] = loss
-        logger.debug(all_loss)
-        return all_loss
+        retval = {sess: {title: info["data"][:, idx]
+                         for idx, title in enumerate(info["labels"])
+                         if title != "timestamp"}
+                  for sess, info in self._from_cache(session).items()}
+        logger.debug({key: {k: v.shape() for k, v in val.items}
+                      for key, val in retval.items()})
+        return retval
 
     def get_timestamps(self, session=None):
         """ Read the timestamps from the TensorBoard logs.
@@ -113,26 +185,10 @@ class TensorBoardLogs():
         """
 
         logger.debug("Getting timestamps")
-        all_timestamps = dict()
-        for sess, logfile in self.log_filenames.items():
-            if session is not None and sess != session:
-                logger.debug("Skipping sessions: %s", sess)
-                continue
-            try:
-                events = [event_pb2.Event.FromString(record.numpy())
-                          for record in tf.data.TFRecordDataset(logfile)]
-                timestamps = [event.wall_time
-                              for event in events
-                              if event.summary.value
-                              and event.summary.value[0].tag == "batch_total"]
-                logger.debug("Total timestamps for session %s: %s", sess, len(timestamps))
-                all_timestamps[sess] = timestamps
-            except tf_errors.DataLossError as err:
-                logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
-                               "The totals do not include this session. Original error message: "
-                               "'%s'", sess, str(err))
-        logger.debug(all_timestamps)
-        return all_timestamps
+        retval = {sess: info["data"][:, info["labels"].index("timestamp")].squeeze()
+                  for sess, info in self._from_cache(session).items()}
+        logger.debug({k: v.shape for k, v in retval.items()})
+        return retval
 
 
 class Session():
@@ -291,9 +347,9 @@ class SessionsSummary():
     def time_stats(self):
         """ Return session time stats """
         ts_data = self.session.tb_logs.get_timestamps()
-        time_stats = {sess_id: {"start_time": min(timestamps) if timestamps else 0,
-                                "end_time": max(timestamps) if timestamps else 0,
-                                "datapoints": len(timestamps) if timestamps else 0}
+        time_stats = {sess_id: {"start_time": min(timestamps) if np.any(timestamps) else 0,
+                                "end_time": max(timestamps) if np.any(timestamps) else 0,
+                                "datapoints": timestamps.shape[0] if np.any(timestamps) else 0}
                       for sess_id, timestamps in ts_data.items()}
         return time_stats
 
@@ -307,8 +363,9 @@ class SessionsSummary():
                 logger.debug("Session state dict doesn't exist. Most likely task has been "
                              "terminated during compilation")
                 return None
+
             iterations = self.session.get_iterations_for_session(sess_idx)
-            elapsed = ts_data["end_time"] - ts_data["start_time"]
+            elapsed = int(ts_data["end_time"] - ts_data["start_time"])
             batchsize = self.session.total_batchsize.get(sess_idx, 0)
             compiled.append(
                 {"session": sess_idx,
