@@ -7,7 +7,7 @@ import os
 import warnings
 import zlib
 
-from math import ceil, sqrt
+from math import ceil
 
 import numpy as np
 import tensorflow as tf
@@ -132,7 +132,7 @@ class TensorBoardLogs():
         if step:
             data.append(step)
 
-        data = np.array(data, dtype="float32")
+        data = np.array(data, dtype="float64")
         logger.debug("Caching session id: %s, labels: %s, data shape: %s",
                      session, labels, data.shape)
         self._cache[session] = dict(labels=labels, data=zlib.compress(data), shape=data.shape)
@@ -181,7 +181,7 @@ class TensorBoardLogs():
         """
         logger.debug("Getting loss: (session: %s)", session)
         retval = {sess: {title: np.frombuffer(zlib.decompress(info["data"]),
-                                              dtype="float32").reshape(info["shape"])[:, idx]
+                                              dtype="float64").reshape(info["shape"])[:, idx]
                          for idx, title in enumerate(info["labels"])
                          if title != "timestamp"}
                   for sess, info in self._from_cache(session).items()}
@@ -210,7 +210,7 @@ class TensorBoardLogs():
         logger.debug("Getting timestamps")
         retval = {sess: np.frombuffer(
             zlib.decompress(info["data"]),
-            dtype="float32").reshape(info["shape"])[:, info["labels"].index("timestamp")]
+            dtype="float64").reshape(info["shape"])[:, info["labels"].index("timestamp")]
                   for sess, info in self._from_cache(session).items()}
         logger.debug({k: v.shape for k, v in retval.items()})
         return retval
@@ -576,6 +576,30 @@ class Calculations():
         logger.debug("Got Raw Data")
         return raw
 
+    @classmethod
+    def _flatten_outliers(cls, data):
+        """ Remove the outliers from a provided list.
+
+        Removes data more than 1 Standard Deviation from the mean.
+
+        Parameters
+        ----------
+        data: :class:`numpy.ndarray`
+            The data to remove the outliers from
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The data with outliers removed
+        """
+        logger.debug("Flattening outliers: %s", data.shape)
+        mean = np.mean(data)
+        limit = np.std(data)
+        logger.info("mean: %s, limit: %s", mean, limit)
+        retdata = np.where(abs(data - mean) < limit, data, mean)
+        logger.debug("Flattened outliers")
+        return retdata
+
     def _remove_raw(self):
         """ Remove raw values from :attr:`stats` if they are not requested. """
         if "raw" in self._selections:
@@ -591,23 +615,20 @@ class Calculations():
 
         Returns
         -------
-        list
+        :class:`numpy.ndarray`
             The training rate for each iteration of the selected session
         """
         logger.debug("Calculating rate")
-        batchsize = self._session.batchsize
-        timestamps = self._session.timestamps
-        iterations = range(len(timestamps) - 1)
-        rate = [(batchsize * 2) / (timestamps[i + 1] - timestamps[i]) for i in iterations]
-        logger.debug("Calculated rate: Item_count: %s", len(rate))
-        return rate
+        retval = (self._session.batchsize * 2) / np.diff(self._session.timestamps)
+        logger.debug("Calculated rate: Item_count: %s", len(retval))
+        return retval
 
     def _calc_rate_total(self):
         """ Calculate rate per iteration for all sessions.
 
         Returns
         -------
-        list
+        :class:`numpy.ndarray`
             The training rate for each iteration in all sessions
 
         Notes
@@ -622,34 +643,10 @@ class Calculations():
         for sess_id in sorted(total_timestamps.keys()):
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
-            iterations = range(len(timestamps) - 1)
-            rate.extend([(batchsize * 2) / (timestamps[i + 1] - timestamps[i])
-                         for i in iterations])
-        logger.debug("Calculated totals rate: Item_count: %s", len(rate))
-        return rate
-
-    @classmethod
-    def _flatten_outliers(cls, data):
-        """ Remove the outliers from a provided list.
-
-        data: :class:`numpy.ndarray`
-            The data to remove the outliers from
-        """
-        logger.debug("Flattening outliers")
-        retdata = list()
-        samples = len(data)
-        mean = (sum(data) / samples)
-        limit = sqrt(sum([(item - mean)**2 for item in data]) / samples)
-        logger.debug("samples: %s, mean: %s, limit: %s", samples, mean, limit)
-
-        for idx, item in enumerate(data):
-            if (mean - limit) <= item <= (mean + limit):
-                retdata.append(item)
-            else:
-                logger.trace("Item idx: %s, value: %s flattened to %s", idx, item, mean)
-                retdata.append(mean)
-        logger.debug("Flattened outliers")
-        return retdata
+            rate.extend((batchsize * 2) / np.diff(timestamps))
+        retval = np.array(rate)
+        logger.debug("Calculated totals rate: Item_count: %s", len(retval))
+        return retval
 
     def _get_calculations(self):
         """ Perform the required calculations and populate :attr:`stats`. """
@@ -673,26 +670,23 @@ class Calculations():
 
         Returns
         -------
-        list
+        :class:`numpy.ndarray`
             The moving average for the given data
         """
         logger.debug("Calculating Average")
-        avgs = list()
-        presample = ceil(self._args["avg_samples"] / 2)
-        postsample = self._args["avg_samples"] - presample
+        window = self._args["avg_samples"]
+        presample = ceil(window / 2)
         datapoints = len(data)
-
         if datapoints <= (self._args["avg_samples"] * 2):
             logger.info("Not enough data to compile rolling average")
-            return avgs
-
-        for idx in range(0, datapoints):
-            if idx < presample or idx >= datapoints - postsample:
-                avgs.append(None)
-                continue
-            avg = sum(data[idx - presample:idx + postsample]) / self._args["avg_samples"]
-            avgs.append(avg)
-        logger.debug("Calculated Average")
+            return np.array([], dtype="float64")
+        avgs = np.cumsum(data, dtype="float64")
+        avgs[window:] = avgs[window:] - avgs[:-window]
+        avgs = avgs[window - 1:] / window
+        avgs = np.pad(avgs,
+                      (presample, datapoints - (avgs.shape[0] + presample)),
+                      constant_values=(np.nan,))
+        logger.debug("Calculated Average: shape: %s", avgs.shape)
         return avgs
 
     def _calc_smoothed(self, data):

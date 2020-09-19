@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 from math import ceil, floor
 
+import numpy as np
 import matplotlib
 # pylint: disable=wrong-import-position
 matplotlib.use("TkAgg")
@@ -161,12 +162,11 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
     def axes_data_get_min_max(data):
         """ Return the minimum and maximum values from list of lists """
         ymin, ymax = list(), list()
+
+        # TODO Handle as array not loop
         for item in data:
-            dataset = list(filter(lambda x: x is not None, item))
-            if not dataset:
-                continue
-            ymin.append(min(dataset) * 1000)
-            ymax.append(max(dataset) * 1000)
+            ymin.append(np.nanmin(item) * 1000)
+            ymax.append(np.nanmax(item) * 1000)
         ymin = floor(min(ymin)) / 1000
         ymax = ceil(max(ymax)) / 1000
         logger.trace("ymin: %s, ymax: %s", ymin, ymax)
