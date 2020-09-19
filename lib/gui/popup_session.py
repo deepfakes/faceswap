@@ -181,7 +181,7 @@ class SessionPopUp(tk.Toplevel):
             helptext = "Display {}".format(text)
 
             var = tk.BooleanVar()
-            if loss_key.startswith("total"):
+            if not loss_key.startswith("total"):
                 var.set(True)
             lk_vars[loss_key] = var
 
