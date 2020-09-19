@@ -44,6 +44,11 @@ class SessionPopUp(tk.Toplevel):
 
         optsframe = self._layout_frames()
         self._build_options(optsframe)
+
+        self._lbl_loading = ttk.Label(self._graph_frame, text="Loading Data...", anchor=tk.CENTER)
+        self._lbl_loading.pack(fill=tk.BOTH, expand=True)
+        self.update_idletasks()
+
         self._compile_display_data()
 
         logger.debug("Initialized: %s", self.__class__.__name__)
@@ -370,6 +375,12 @@ class SessionPopUp(tk.Toplevel):
                 logger.warning("No data to display. Not refreshing")
                 return False
             self._vars["status"].set("Loading Data...")
+
+            if self._graph is not None:
+                self._graph.pack_forget()
+            self._lbl_loading.pack(fill=tk.BOTH, expand=True)
+            self.update_idletasks()
+
             kwargs = dict(session=self._session,
                           session_id=self._session_id,
                           display=self._vars["display"].get(),
@@ -473,6 +484,8 @@ class SessionPopUp(tk.Toplevel):
             return
         self._vars["status"].set("Loading Data...")
         logger.debug("Building Graph")
+        self._lbl_loading.pack_forget()
+        self.update_idletasks()
         if self._graph is None:
             self._graph = SessionGraph(self._graph_frame,
                                        self._display_data,
@@ -485,6 +498,7 @@ class SessionPopUp(tk.Toplevel):
             self._graph.refresh(self._display_data,
                                 self._vars["display"].get(),
                                 self._vars["scale"].get())
+            self._graph.pack(fill=tk.BOTH, expand=True)
         self._vars["status"].set("")
         self._vars["buildgraph"].set(False)
         logger.debug("Built Graph")

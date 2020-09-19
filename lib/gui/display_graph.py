@@ -163,8 +163,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Return the minimum and maximum values from list of lists """
         ymin, ymax = list(), list()
 
-        # TODO Handle as array not loop
-        for item in data:
+        for item in data:  # TODO Handle as array not loop
             ymin.append(np.nanmin(item) * 1000)
             ymax.append(np.nanmax(item) * 1000)
         ymin = floor(min(ymin)) / 1000
@@ -215,8 +214,9 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.trace("Setting lines style")
         groups = int(len(lines) / groupsize)
         colours = self.lines_create_colors(groupsize, groups)
+        widths = list(reversed(range(1, groups + 1)))
         for idx, item in enumerate(lines):
-            linewidth = ceil((idx + 1) / groupsize)
+            linewidth = widths[idx // groupsize]
             item.extend((linewidth, colours[idx]))
         return lines
 
