@@ -17,9 +17,6 @@ from lib.serializer import get_serializer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Timestamps float64, loss float32/float16
-# TODO SUM totals rather than store
-
 
 def convert_time(timestamp):
     """ Convert time stamp to total hours, minutes and seconds.
@@ -97,8 +94,9 @@ class TensorBoardLogs():
             The session index to cache the data for
         """
         labels = []
-        data = []
         step = []
+        loss = []
+        timestamps = []
         last_step = 0
 
         try:
@@ -108,7 +106,7 @@ class TensorBoardLogs():
                     continue
 
                 if event.step != last_step:
-                    data.append(step)
+                    loss.append(step)
                     step = []
                     last_step = event.step
 
@@ -116,10 +114,8 @@ class TensorBoardLogs():
                 tag = summary.tag
 
                 if tag == "batch_total":
-                    lbl = "timestamp"
-                    if lbl not in labels:
-                        labels.append(lbl)
-                    step.append(event.wall_time)
+                    timestamps.append(event.wall_time)
+                    continue
 
                 lbl = tag.replace("batch_", "")
                 if lbl not in labels:
@@ -133,12 +129,17 @@ class TensorBoardLogs():
                            "'%s'", session, str(err))
 
         if step:
-            data.append(step)
+            loss.append(step)
 
-        data = np.array(data, dtype="float64")
-        logger.debug("Caching session id: %s, labels: %s, data shape: %s",
-                     session, labels, data.shape)
-        self._cache[session] = dict(labels=labels, data=zlib.compress(data), shape=data.shape)
+        loss = np.array(loss, dtype="float32")
+        timestamps = np.array(timestamps, dtype="float64")
+        logger.debug("Caching session id: %s, labels: %s, loss shape: %s, loss shape: %s",
+                     session, labels, loss.shape, timestamps.shape)
+        self._cache[session] = dict(labels=labels,
+                                    loss=zlib.compress(loss),
+                                    loss_shape=loss.shape,
+                                    timestamps=zlib.compress(timestamps),
+                                    timestamps_shape=timestamps.shape)
 
     def _from_cache(self, session=None):
         """ Get the session data from the cache.
@@ -183,11 +184,12 @@ class TensorBoardLogs():
             and list of loss values for each step
         """
         logger.debug("Getting loss: (session: %s)", session)
-        retval = {sess: {title: np.frombuffer(zlib.decompress(info["data"]),
-                                              dtype="float64").reshape(info["shape"])[:, idx]
-                         for idx, title in enumerate(info["labels"])
-                         if title != "timestamp"}
-                  for sess, info in self._from_cache(session).items()}
+        retval = dict()
+        for sess, info in self._from_cache(session).items():
+            arr = np.frombuffer(zlib.decompress(info["loss"]),
+                                dtype="float32").reshape(info["loss_shape"])
+            for idx, title in enumerate(info["labels"]):
+                retval.setdefault(sess, dict())[title] = arr[:, idx]
         logger.debug({key: {k: v.shape for k, v in val.items()}
                       for key, val in retval.items()})
         return retval
@@ -211,9 +213,8 @@ class TensorBoardLogs():
         """
 
         logger.debug("Getting timestamps")
-        retval = {sess: np.frombuffer(
-            zlib.decompress(info["data"]),
-            dtype="float64").reshape(info["shape"])[:, info["labels"].index("timestamp")]
+        retval = {sess: np.frombuffer(zlib.decompress(info["timestamps"]),
+                                      dtype="float64").reshape(info["timestamps_shape"])
                   for sess, info in self._from_cache(session).items()}
         logger.debug({k: v.shape for k, v in retval.items()})
         return retval
@@ -724,7 +725,7 @@ class Calculations():
             The trend for the given data
         """
         logger.debug("Calculating Trend")
-        points = data.shape(0)
+        points = data.shape[0]
         if points < 10:
             dummy = np.empty((points, ), dtype=data.dtype)
             dummy[:] = np.nan

@@ -177,17 +177,18 @@ class SessionPopUp(tk.Toplevel):
         lk_vars = dict()
         section_added = False
         for loss_key in sorted(loss_keys):
+            if loss_key.startswith("total"):
+                continue
+
             text = loss_key.replace("_", " ").title()
             helptext = "Display {}".format(text)
 
             var = tk.BooleanVar()
-            if not loss_key.startswith("total"):
-                var.set(True)
+            var.set(True)
             lk_vars[loss_key] = var
 
             if len(loss_keys) == 1:
                 # Don't display if there's only one item
-                var.set(True)
                 break
 
             if not section_added:
