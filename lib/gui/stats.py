@@ -18,6 +18,7 @@ from lib.serializer import get_serializer
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # TODO Timestamps float64, loss float32/float16
+# TODO SUM totals rather than store
 
 
 def convert_time(timestamp):
@@ -316,7 +317,8 @@ class Session():
         for key in sorted(all_loss):
             for loss_key, loss in all_loss[key].items():
                 loss_dict.setdefault(loss_key, []).extend(loss)
-        return loss_dict
+        retval = {key: np.array(val, dtype="float32") for key, val in loss_dict.items()}
+        return retval
 
     @property
     def _total_loss_keys(self):
@@ -557,14 +559,15 @@ class Calculations():
                     continue
                 if self._args["flatten_outliers"]:
                     loss = self._flatten_outliers(loss)
-                iterations.add(len(loss))
+                iterations.add(loss.shape[0])
                 raw["raw_{}".format(loss_name)] = loss
 
             self._iterations = 0 if not iterations else min(iterations)
             if len(iterations) > 1:
                 # Crop all losses to the same number of items
                 if self._iterations == 0:
-                    raw = {lossname: list() for lossname in raw}
+                    raw = {lossname: np.array(list(), dtype=loss.dtype)
+                           for lossname, loss in raw.items()}
                 else:
                     raw = {lossname: loss[:self._iterations] for lossname, loss in raw.items()}
 
@@ -572,7 +575,7 @@ class Calculations():
             data = self._calc_rate_total() if self._is_totals else self._calc_rate()
             if self._args["flatten_outliers"]:
                 data = self._flatten_outliers(data)
-            self._iterations = len(data)
+            self._iterations = data.shape[0]
             raw = {"raw_rate": data}
 
         logger.debug("Got Raw Data")
@@ -667,7 +670,7 @@ class Calculations():
 
         Parameters
         ----------
-        data: list
+        data: :class:`numpy.ndarray`
             The data to calculate the moving average for
 
         Returns
@@ -678,7 +681,7 @@ class Calculations():
         logger.debug("Calculating Average")
         window = self._args["avg_samples"]
         pad = ceil(window / 2)
-        datapoints = len(data)
+        datapoints = data.shape[0]
 
         if datapoints <= (self._args["avg_samples"] * 2):
             logger.info("Not enough data to compile rolling average")
@@ -696,7 +699,7 @@ class Calculations():
 
         Parameters
         ----------
-        data: list
+        data: :class:`numpy.ndarray`
             The data to smoothen
 
         Returns
@@ -712,23 +715,22 @@ class Calculations():
 
         Parameters
         ----------
-        data: list
+        data: :class:`numpy.ndarray`
             The data to calculate the trend for
 
         Returns
         -------
-        list
+        :class:`numpy.ndarray`
             The trend for the given data
         """
         logger.debug("Calculating Trend")
-        points = len(data)
+        points = data.shape(0)
         if points < 10:
-            dummy = [None for i in range(points)]
+            dummy = np.empty((points, ), dtype=data.dtype)
+            dummy[:] = np.nan
             return dummy
         x_range = range(points)
-        fit = np.polyfit(x_range, data, 3)
-        poly = np.poly1d(fit)
-        trend = poly(x_range)
+        trend = np.poly1d(np.polyfit(x_range, data, 3))(x_range)
         logger.debug("Calculated Trend")
         return trend
 
@@ -773,7 +775,12 @@ class ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
         return self._out
 
     def _get_max_row_size(self):
-        """ Returns the maximum row size possible on the running platform for the given dtype.
+        """ Calculate the maximum row size for the running platform for the given dtype.
+
+        Returns
+        -------
+        int
+            The maximum row size possible on the running platform for the given :attr:`_dtype`
 
         Notes
         -----
@@ -788,8 +795,7 @@ class ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
         return retval
 
     def _ewma_vectorized_safe(self):
-        """ Perform the vectorized exponential moving average by the most appropriate method
-        """
+        """ Perform the vectorized exponential moving average in a safe way. """
         num_rows = int(self._data.size // self._row_size)  # the number of rows to use
         leftover = int(self._data.size % self._row_size)  # the amount of data leftover
         first_offset = self._data[0]
@@ -836,8 +842,8 @@ class ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
         out: :class:`numpy.ndarray`
             A location into which the result is stored. It must have the same shape and dtype as
             the input data
-        :param offset: optional
-            The offset for the moving average, scalar. Defaults to data[0].
+        offset: float, optional
+            The offset for the moving average, scalar. Default: the value held in data[0].
         """
         if data.size < 1:  # empty input, return empty array
             return
