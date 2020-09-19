@@ -32,7 +32,7 @@ class SessionPopUp(tk.Toplevel):
         super().__init__()
         self._thread = None  # Thread for loading data in a background task
         self._default_view = "avg" if data_points > 1000 else "smoothed"
-        self._session_id = session_id
+        self._session_id = None if session_id == "Total" else int(session_id)
         self._session = session
 
         self._graph_frame = None
@@ -370,13 +370,13 @@ class SessionPopUp(tk.Toplevel):
                 return False
             self._vars["status"].set("Loading Data...")
             kwargs = dict(session=self._session,
+                          session_id=self._session_id,
                           display=self._vars["display"].get(),
                           loss_keys=loss_keys,
                           selections=selections,
                           avg_samples=self._vars["avgiterations"].get(),
                           smooth_amount=self._vars["smoothamount"].get(),
-                          flatten_outliers=self._vars["outliers"].get(),
-                          is_totals=self._session_id == "Total")
+                          flatten_outliers=self._vars["outliers"].get())
             self._thread = LongRunningTask(target=self._get_display_data,
                                            kwargs=kwargs,
                                            widget=self)

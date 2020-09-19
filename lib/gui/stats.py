@@ -416,8 +416,8 @@ class SessionsSummary():
         logger.debug("Final stats: %s", compiled_stats)
         return compiled_stats
 
-    @staticmethod
-    def total_stats(sessions_stats):
+    @classmethod
+    def total_stats(cls, sessions_stats):
         """ Return total stats """
         logger.debug("Compiling Totals")
         elapsed = 0
@@ -445,8 +445,8 @@ class SessionsSummary():
         logger.debug(totals)
         return totals
 
-    @staticmethod
-    def format_stats(compiled_stats):
+    @classmethod
+    def format_stats(cls, compiled_stats):
         """ Format for display """
         logger.debug("Formatting stats")
         for summary in compiled_stats:
@@ -459,39 +459,81 @@ class SessionsSummary():
 
 
 class Calculations():
-    """ Class to pull raw data for given session(s) and perform calculations """
-    def __init__(self, session, display="loss", loss_keys=["loss"], selections=["raw"],
-                 avg_samples=500, smooth_amount=0.90, flatten_outliers=False, is_totals=False):
-        logger.debug("Initializing %s: (session: %s, display: %s, loss_keys: %s, selections: %s, "
-                     "avg_samples: %s, smooth_amount: %s, flatten_outliers: %s, is_totals: %s",
-                     self.__class__.__name__, session, display, loss_keys, selections, avg_samples,
-                     smooth_amount, flatten_outliers, is_totals)
+    """ Class to perform calculations on the raw data for the given session.
+
+    Parameters
+    ----------
+    session: :class:`Session`
+        The session to perform calculations on
+    session_id: int or ``None``
+        The session id number for the selected session from the Analysis tab. Should be ``None``
+        if all sessions are being calculated
+    display: {"loss", "rate"}, optional
+        Whether to display a graph for loss or training rate. Default: `"loss"`
+    loss_keys: list, optional
+        The list of loss keys to display on the graph. Default: `["loss"]`
+    selections: list, optional
+        The selected annotations to display. Default: `["raw"]`
+    avg_samples: int, optional
+        The number of samples to use for performing moving average calculation. Default: `500`.
+    smooth_amount: float, optional
+        The amount of smoothing to apply for performing smoothing calculation. Default: `0.9`.
+    flatten_outliers: bool, optional
+        ``True`` if values significantly away from the average should be excluded, otherwise
+        ``False``. Default: ``False``
+    """
+    def __init__(self, session, session_id,
+                 display="loss",
+                 loss_keys="loss",
+                 selections="raw",
+                 avg_samples=500,
+                 smooth_amount=0.90,
+                 flatten_outliers=False):
+        logger.debug("Initializing %s: (session: %s, session_id: %s, display: %s, loss_keys: %s, "
+                     "selections: %s, avg_samples: %s, smooth_amount: %s, flatten_outliers: %s)",
+                     self.__class__.__name__, session, session_id, display, loss_keys, selections,
+                     avg_samples, smooth_amount, flatten_outliers)
 
         warnings.simplefilter("ignore", np.RankWarning)
 
-        self.session = session
-        self.display = display
-        self.loss_keys = loss_keys
-        self.selections = selections
-        self.is_totals = is_totals
-        self.args = {"avg_samples": avg_samples,
-                     "smooth_amount": smooth_amount,
-                     "flatten_outliers": flatten_outliers}
-        self.iterations = 0
-        self.stats = None
+        self._session = session
+        self._session_id = session_id
+
+        self._display = display
+        self._loss_keys = loss_keys if isinstance(loss_keys, list) else [loss_keys]
+        self._selections = selections if isinstance(selections, list) else [selections]
+        self._is_totals = session_id is None
+        self._args = dict(avg_samples=avg_samples,
+                          smooth_amount=smooth_amount,
+                          flatten_outliers=flatten_outliers)
+        self._iterations = 0
+        self._stats = None
         self.refresh()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def iterations(self):
+        """ int: The number of iterations in the data set. """
+        return self._iterations
+
+    @property
+    def stats(self):
+        """ dict: The final calculated statistics """
+        return self._stats
 
     def refresh(self):
         """ Refresh the stats """
         logger.debug("Refreshing")
-        if not self.session.initialized:
+        if not self._session.initialized:
             logger.warning("Session data is not initialized. Not refreshing")
             return None
-        self.iterations = 0
-        self.stats = self._get_raw()
-        self.get_calculations()
-        self.remove_raw()
+        old_id = self._session.session_id
+        self._session.session_id = self._session_id
+        self._iterations = 0
+        self._stats = self._get_raw()
+        self._get_calculations()
+        self._remove_raw()
+        self._session.session_id = old_id
         logger.debug("Refreshed")
         return self
 
@@ -506,62 +548,76 @@ class Calculations():
         logger.debug("Getting Raw Data")
         raw = dict()
         iterations = set()
-        if self.display.lower() == "loss":
-            loss_dict = self.session.total_loss if self.is_totals else self.session.loss
+        if self._display.lower() == "loss":
+            loss_dict = self._session.total_loss if self._is_totals else self._session.loss
             for loss_name, loss in loss_dict.items():
-                if loss_name not in self.loss_keys:
+                if loss_name not in self._loss_keys:
                     continue
-                if self.args["flatten_outliers"]:
-                    loss = self.flatten_outliers(loss)
+                if self._args["flatten_outliers"]:
+                    loss = self._flatten_outliers(loss)
                 iterations.add(len(loss))
                 raw["raw_{}".format(loss_name)] = loss
 
-            self.iterations = 0 if not iterations else min(iterations)
+            self._iterations = 0 if not iterations else min(iterations)
             if len(iterations) > 1:
                 # Crop all losses to the same number of items
-                if self.iterations == 0:
+                if self._iterations == 0:
                     raw = {lossname: list() for lossname in raw}
                 else:
-                    raw = {lossname: loss[:self.iterations] for lossname, loss in raw.items()}
+                    raw = {lossname: loss[:self._iterations] for lossname, loss in raw.items()}
 
         else:  # Rate calculation
-            data = self.calc_rate_total() if self.is_totals else self.calc_rate()
-            if self.args["flatten_outliers"]:
-                data = self.flatten_outliers(data)
-            self.iterations = len(data)
+            data = self._calc_rate_total() if self._is_totals else self._calc_rate()
+            if self._args["flatten_outliers"]:
+                data = self._flatten_outliers(data)
+            self._iterations = len(data)
             raw = {"raw_rate": data}
 
         logger.debug("Got Raw Data")
         return raw
 
-    def remove_raw(self):
-        """ Remove raw values from stats if not requested """
-        if "raw" in self.selections:
+    def _remove_raw(self):
+        """ Remove raw values from :attr:`stats` if they are not requested. """
+        if "raw" in self._selections:
             return
         logger.debug("Removing Raw Data from output")
-        for key in list(self.stats.keys()):
+        for key in list(self._stats.keys()):
             if key.startswith("raw"):
-                del self.stats[key]
+                del self._stats[key]
         logger.debug("Removed Raw Data from output")
 
-    def calc_rate(self):
-        """ Calculate rate per iteration """
+    def _calc_rate(self):
+        """ Calculate rate per iteration.
+
+        Returns
+        -------
+        list
+            The training rate for each iteration of the selected session
+        """
         logger.debug("Calculating rate")
-        batchsize = self.session.batchsize
-        timestamps = self.session.timestamps
+        batchsize = self._session.batchsize
+        timestamps = self._session.timestamps
         iterations = range(len(timestamps) - 1)
         rate = [(batchsize * 2) / (timestamps[i + 1] - timestamps[i]) for i in iterations]
         logger.debug("Calculated rate: Item_count: %s", len(rate))
         return rate
 
-    def calc_rate_total(self):
-        """ Calculate rate per iteration
-            NB: For totals, gaps between sessions can be large
-            so time difference has to be reset for each session's
-            rate calculation """
+    def _calc_rate_total(self):
+        """ Calculate rate per iteration for all sessions.
+
+        Returns
+        -------
+        list
+            The training rate for each iteration in all sessions
+
+        Notes
+        -----
+        For totals, gaps between sessions can be large so the time difference has to be reset for
+        each session's rate calculation.
+        """
         logger.debug("Calculating totals rate")
-        batchsizes = self.session.total_batchsize
-        total_timestamps = self.session.total_timestamps
+        batchsizes = self._session.total_batchsize
+        total_timestamps = self._session.total_timestamps
         rate = list()
         for sess_id in sorted(total_timestamps.keys()):
             batchsize = batchsizes[sess_id]
@@ -572,9 +628,13 @@ class Calculations():
         logger.debug("Calculated totals rate: Item_count: %s", len(rate))
         return rate
 
-    @staticmethod
-    def flatten_outliers(data):
-        """ Remove the outliers from a provided list """
+    @classmethod
+    def _flatten_outliers(cls, data):
+        """ Remove the outliers from a provided list.
+
+        data: :class:`numpy.ndarray`
+            The data to remove the outliers from
+        """
         logger.debug("Flattening outliers")
         retdata = list()
         samples = len(data)
@@ -591,27 +651,38 @@ class Calculations():
         logger.debug("Flattened outliers")
         return retdata
 
-    def get_calculations(self):
-        """ Perform the required calculations """
-        for selection in self.selections:
+    def _get_calculations(self):
+        """ Perform the required calculations and populate :attr:`stats`. """
+        for selection in self._selections:
             if selection == "raw":
                 continue
             logger.debug("Calculating: %s", selection)
-            method = getattr(self, "calc_{}".format(selection))
-            raw_keys = [key for key in self.stats.keys() if key.startswith("raw_")]
+            method = getattr(self, "_calc_{}".format(selection))
+            raw_keys = [key for key in self._stats.keys() if key.startswith("raw_")]
             for key in raw_keys:
                 selected_key = "{}_{}".format(selection, key.replace("raw_", ""))
-                self.stats[selected_key] = method(self.stats[key])
+                self._stats[selected_key] = method(self._stats[key])
 
-    def calc_avg(self, data):
-        """ Calculate rolling average """
+    def _calc_avg(self, data):
+        """ Calculate moving average.
+
+        Parameters
+        ----------
+        data: list
+            The data to calculate the moving average for
+
+        Returns
+        -------
+        list
+            The moving average for the given data
+        """
         logger.debug("Calculating Average")
         avgs = list()
-        presample = ceil(self.args["avg_samples"] / 2)
-        postsample = self.args["avg_samples"] - presample
+        presample = ceil(self._args["avg_samples"] / 2)
+        postsample = self._args["avg_samples"] - presample
         datapoints = len(data)
 
-        if datapoints <= (self.args["avg_samples"] * 2):
+        if datapoints <= (self._args["avg_samples"] * 2):
             logger.info("Not enough data to compile rolling average")
             return avgs
 
@@ -619,15 +690,26 @@ class Calculations():
             if idx < presample or idx >= datapoints - postsample:
                 avgs.append(None)
                 continue
-            avg = sum(data[idx - presample:idx + postsample]) / self.args["avg_samples"]
+            avg = sum(data[idx - presample:idx + postsample]) / self._args["avg_samples"]
             avgs.append(avg)
         logger.debug("Calculated Average")
         return avgs
 
-    def calc_smoothed(self, data):
-        """ Smooth the data """
+    def _calc_smoothed(self, data):
+        """ Smooth the data.
+
+        Parameters
+        ----------
+        data: list
+            The data to smoothen
+
+        Returns
+        -------
+        list
+            The smoothed data
+        """
         last = data[0]  # First value in the plot (first time step)
-        weight = self.args["smooth_amount"]
+        weight = self._args["smooth_amount"]
         smoothed = list()
         for point in data:
             smoothed_val = last * weight + (1 - weight) * point  # Calculate smoothed value
@@ -636,9 +718,20 @@ class Calculations():
 
         return smoothed
 
-    @staticmethod
-    def calc_trend(data):
-        """ Compile trend data """
+    @classmethod
+    def _calc_trend(cls, data):
+        """ Calculate polynomial trend of the given data.
+
+        Parameters
+        ----------
+        data: list
+            The data to calculate the trend for
+
+        Returns
+        -------
+        list
+            The trend for the given data
+        """
         logger.debug("Calculating Trend")
         points = len(data)
         if points < 10:
