@@ -255,7 +255,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         model_name = self._get_model_name(model_dir, state_file)
         if not model_name:
             return
-        self._session = Session(model_dir=model_dir, model_name=model_name)
+        self._session = Session(model_folder=model_dir, model_name=model_name)
         self._session.initialize_session(is_training=False)
         msg = full_path
         if len(msg) > 70:
@@ -268,7 +268,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Reset current training session")
         self._clear_session()
         session = get_config().session
-        if not session.initialized:
+        if not session.is_initialized:
             logger.debug("Training not running")
             return
         if session.logging_disabled:
@@ -277,7 +277,8 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         msg = "Currently running training session"
         self._session = session
         # Reload the state file to get approx currently training iterations
-        self._session.load_state_file()
+        # TODO This is now broken
+        # self._session.load_state_file()
         self._set_session_summary(msg)
 
     def _save_session(self):
@@ -577,11 +578,12 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         """
         logger.debug("Setting poup title")
         selected_id = self._selected_id.get()
+        model_dir, model_name = os.path.split(self._session.model_filename)
         title = "All Sessions"
         if selected_id != "Total":
-            title = "{} Model: Session #{}".format(self._session.modelname.title(), selected_id)
+            title = "{} Model: Session #{}".format(model_name.title(), selected_id)
         logger.debug("Title: '%s'", title)
-        return "{} - {}".format(title, self._session.modeldir)
+        return "{} - {}".format(title, model_dir)
 
     def _data_popup_get_position(self):
         """ Get the position of the next window to pop the summary graph to.

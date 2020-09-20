@@ -221,18 +221,44 @@ class TensorBoardLogs():
 
 
 class Session():
-    """ The Loaded or current training session """
-    def __init__(self, model_dir=None, model_name=None):
+    """ Holds information about a loaded or current training session by accessing a model's state
+    file and Tensorboard logs.
+
+    Parameters
+    ----------
+    model_folder: str, optional
+        If loading a session manually (e.g. for the analysis tab), then the path to the model
+        folder must be provided. For training sessions, this should be left at ``None``
+    model_name: str, optional
+        If loading a session manually (e.g. for the analysis tab), then the model filename
+        must be provided. For training sessions, this should be left at ``None``
+    """
+    def __init__(self, model_folder=None, model_name=None):
         logger.debug("Initializing %s: (model_dir: %s, model_name: %s)",
-                     self.__class__.__name__, model_dir, model_name)
-        self.state = None
-        self.modeldir = model_dir  # Set and reset by wrapper for training sessions
-        self.modelname = model_name  # Set and reset by wrapper for training sessions
-        self.tb_logs = None
-        self.initialized = False
-        self.session_id = None  # Set to specific session_id or current training session
-        self.summary = SessionsSummary(self)
+                     self.__class__.__name__, model_folder, model_name)
+        self._state = None
+        self._model_dir = model_folder
+        self._model_name = model_name
+
+        self._tb_logs = None
+        self._summary = None
+        self._session_id = None  # Set to specific session_id or current training session
+
+        self._is_training = False
+        self._initialized = False
+
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def model_filename(self):
+        """ str: The full model filename """
+        return os.path.join(self._model_dir, self._model_name)
+
+    @property
+    def is_initialized(self):
+        """ bool: ``True`` if the session has been initialized for training otherwise ``False``.
+        """
+        return self._initialized
 
     @property
     def batchsize(self):
@@ -242,16 +268,16 @@ class Session():
     @property
     def config(self):
         """ Return config and other information """
-        retval = self.state["config"].copy()
-        retval["training_size"] = self.state["training_size"]
-        retval["input_size"] = [val[0] for key, val in self.state["inputs"].items()
+        retval = self._state["config"].copy()
+        retval["training_size"] = self._state["training_size"]
+        retval["input_size"] = [val[0] for key, val in self._state["inputs"].items()
                                 if key.startswith("face")][0]
         return retval
 
     @property
     def full_summary(self):
         """ Return all sessions summary data"""
-        return self.summary.compile_stats()
+        return self._summary.compile_stats()
 
     @property
     def iterations(self):
@@ -266,13 +292,13 @@ class Session():
     @property
     def loss(self):
         """ dict: The loss for the current session id for each loss key """
-        loss_dict = self.tb_logs.get_loss(session=self.session_id)[self.session_id]
+        loss_dict = self._tb_logs.get_loss(session=self._session_id)[self._session_id]
         return loss_dict
 
     @property
     def loss_keys(self):
         """ list: The loss keys for the current session, or loss keys for all sessions. """
-        if self.session_id is None:
+        if self._session_id is None:
             retval = self._total_loss_keys
         else:
             retval = self.session["loss_names"]
@@ -281,40 +307,40 @@ class Session():
     @property
     def lowest_loss(self):
         """ Return the lowest average loss per save iteration seen """
-        return self.state["lowest_avg_loss"]
+        return self._state["lowest_avg_loss"]
 
     @property
     def session(self):
         """ Return current session dictionary """
-        return self.state["sessions"].get(str(self.session_id), dict())
+        return self._state["sessions"].get(str(self._session_id), dict())
 
     @property
     def session_ids(self):
         """ Return sorted list of all existing session ids in the state file """
-        return sorted([int(key) for key in self.state["sessions"].keys()])
+        return sorted([int(key) for key in self._state["sessions"].keys()])
 
     @property
     def timestamps(self):
         """ Return timestamps from logs for current session """
-        ts_dict = self.tb_logs.get_timestamps(session=self.session_id)
-        return ts_dict[self.session_id]
+        ts_dict = self._tb_logs.get_timestamps(session=self._session_id)
+        return ts_dict[self._session_id]
 
     @property
     def total_batchsize(self):
         """ Return all session batch sizes """
         return {int(sess_id): sess["batchsize"]
-                for sess_id, sess in self.state["sessions"].items()}
+                for sess_id, sess in self._state["sessions"].items()}
 
     @property
     def total_iterations(self):
         """ Return session iterations """
-        return self.state["iterations"]
+        return self._state["iterations"]
 
     @property
     def total_loss(self):
         """ dict: The collated loss for all sessions for each loss key """
         loss_dict = dict()
-        all_loss = self.tb_logs.get_loss()
+        all_loss = self._tb_logs.get_loss()
         for key in sorted(all_loss):
             for loss_key, loss in all_loss[key].items():
                 loss_dict.setdefault(loss_key, []).extend(loss)
@@ -325,40 +351,87 @@ class Session():
     def _total_loss_keys(self):
         """ list: The loss keys for all sessions. """
         loss_keys = set(loss_key
-                        for session in self.state["sessions"].values()
+                        for session in self._state["sessions"].values()
                         for loss_key in session["loss_names"])
         return list(loss_keys)
 
     @property
     def total_timestamps(self):
         """ Return timestamps from logs separated per session for all sessions """
-        return self.tb_logs.get_timestamps()
+        return self._tb_logs.get_timestamps()
 
-    def initialize_session(self, is_training=False, session_id=None):
-        """ Initialize the training session """
-        logger.debug("Initializing session: (is_training: %s, session_id: %s)",
-                     is_training, session_id)
-        self.load_state_file()
-        self.tb_logs = TensorBoardLogs(os.path.join(self.modeldir,
-                                                    "{}_logs".format(self.modelname)))
+    def prime_training(self, model_folder, model_name):
+        """ Set the :attr:`_model_dir` and :attr:`_model_name` for an incoming training
+        session.
+
+        Parameters
+        ----------
+        model_folder: str
+            The folder that contains the model to be trained
+        model_name: str
+            The name of the model that is to be trained
+        """
+        logger.debug("Setting model folder and name for incoming training session: (%s, %s)",
+                     model_folder, model_name)
+        self._model_dir = model_folder
+        self._model_name = model_name
+
+    def initialize_session(self, is_training=False):
+        """ Initialize a Session.
+
+        Load's the model's state file, and sets the paths to any underlying Tensorboard logs, ready
+        for access on request.
+
+        Parameters
+        ----------
+        is_training: bool, optional
+            ``True`` if the session is being initialized for a training session, otherwise
+            ``False``. Default: ``False``
+         """
+        logger.debug("Initializing session: (is_training: %s)", is_training)
+        self._load_state_file()
+        self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir,
+                                                     "{}_logs".format(self._model_name)))
         if is_training:
-            self.session_id = max(int(key) for key in self.state["sessions"].keys())
-        else:
-            self.session_id = session_id
-        self.initialized = True
-        logger.debug("Initialized session. Session_ID: %s", self.session_id)
+            self._session_id = max(int(key) for key in self._state["sessions"].keys())
+            self._is_training = True
 
-    def load_state_file(self):
-        """ Load the current state file """
-        state_file = os.path.join(self.modeldir, "{}_state.json".format(self.modelname))
+        self._summary = SessionsSummary(self)
+        self._initialized = True
+        logger.debug("Initialized session. Session_ID: %s", self._session_id)
+
+    def set_session_id(self, session_id):
+        """ Set the session id to obtain data for a specific session.
+
+        Parameters
+        ----------
+        session_id: int
+            The session to set to obtain data for
+        """
+        if self._session_id is not None and self._session_id == session_id:
+            return
+        if self._is_training:
+            logger.warning("Can't set a new session while training. Not updating session id")
+            return
+        self._session_id = session_id
+
+    def clear_session_id(self):
+        """ Clear the session_id for obtaining data for a specific session. """
+        if self._is_training:
+            return
+        self._session_id = None
+
+    def _load_state_file(self):
+        """ Load the current state file to :attr:`_state`. """
+        state_file = os.path.join(self._model_dir, "{}_state.json".format(self._model_name))
         logger.debug("Loading State: '%s'", state_file)
         serializer = get_serializer("json")
-        self.state = serializer.load(state_file)
-        logger.debug("Loaded state: %s", self.state)
+        self._state = serializer.load(state_file)
+        logger.debug("Loaded state: %s", self._state)
 
     def get_iterations_for_session(self, session_id):
         """ Return the number of iterations for the given session id """
-        session = self.state["sessions"].get(str(session_id), None)
+        session = self._state["sessions"].get(str(session_id), None)
         if session is None:
             logger.warning("No session data found for session id: %s", session_id)
             return 0
@@ -371,12 +444,14 @@ class SessionsSummary():
     def __init__(self, session):
         logger.debug("Initializing %s: (session: %s)", self.__class__.__name__, session)
         self.session = session
+        self._tb_logs = session._tb_logs
+        self._state = session._state
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
     def time_stats(self):
         """ Return session time stats """
-        ts_data = self.session.tb_logs.get_timestamps()
+        ts_data = self._tb_logs.get_timestamps()
         time_stats = {sess_id: {"start_time": np.min(timestamps) if np.any(timestamps) else 0,
                                 "end_time": np.max(timestamps) if np.any(timestamps) else 0,
                                 "datapoints": timestamps.shape[0] if np.any(timestamps) else 0}
@@ -389,7 +464,7 @@ class SessionsSummary():
         compiled = list()
         for sess_idx, ts_data in self.time_stats.items():
             logger.debug("Compiling session ID: %s", sess_idx)
-            if self.session.state is None:
+            if self._state is None:
                 logger.debug("Session state dict doesn't exist. Most likely task has been "
                              "terminated during compilation")
                 return None
@@ -529,16 +604,15 @@ class Calculations():
     def refresh(self):
         """ Refresh the stats """
         logger.debug("Refreshing")
-        if not self._session.initialized:
+        if not self._session.is_initialized:
             logger.warning("Session data is not initialized. Not refreshing")
             return None
-        old_id = self._session.session_id
-        self._session.session_id = self._session_id
+        self._session.set_session_id(self._session_id)
         self._iterations = 0
         self._stats = self._get_raw()
         self._get_calculations()
         self._remove_raw()
-        self._session.session_id = old_id
+        self._session.clear_session_id()
         logger.debug("Refreshed")
         return self
 

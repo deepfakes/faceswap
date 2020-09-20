@@ -84,7 +84,11 @@ class ProcessWrapper():
         return args
 
     def build_args(self, category, command=None, generate=False):
-        """ Build the faceswap command and arguments list """
+        """ Build the faceswap command and arguments list.
+
+        If training, pass the model folder and name to the training :class:`lib.gui.stats.Session`
+        for the GUI.
+        """
         logger.debug("Build cli arguments: (category: %s, command: %s, generate: %s)",
                      category, command, generate)
         command = self.command if not command else command
@@ -95,10 +99,15 @@ class ProcessWrapper():
         args.extend([pathexecscript, command])
 
         cli_opts = get_config().cli_opts
+        session_info = dict()
         for cliopt in cli_opts.gen_cli_arguments(command):
             args.extend(cliopt)
             if command == "train" and not generate:
-                self.init_training_session(cliopt)
+                self._get_session_info(cliopt, session_info)
+
+        if command == "train" and not generate:
+            get_config().session.prime_training(**session_info)
+
         if not generate:
             args.append("-gui")  # Indicate to Faceswap that we are running the GUI
         if generate:
@@ -109,16 +118,25 @@ class ProcessWrapper():
         logger.debug("Built cli arguments: (%s)", args)
         return args
 
-    @staticmethod
-    def init_training_session(cliopt):
-        """ Set the session stats for disable logging, model folder and model name """
-        session = get_config().session
-        if cliopt[0] == "-t":
-            session.modelname = cliopt[1].lower().replace("-", "_")
-            logger.debug("modelname: '%s'", session.modelname)
-        if cliopt[0] == "-m":
-            session.modeldir = cliopt[1]
-            logger.debug("modeldir: '%s'", session.modeldir)
+    @classmethod
+    def _get_session_info(cls, cli_option, session_info):
+        """ Set the model folder and model name to the global session for logging to the graph and
+        analysis tab.
+
+        Parameters
+        ----------
+        cli_option: list
+            The command line option to be checked for model folder or name
+        session_info: dict
+            The dictionary that holds the information required to pass to the GUI's global
+            :class:`lib.gui.stats.Session`
+        """
+        if cli_option[0] == "-t":
+            session_info["model_name"] = cli_option[1].lower().replace("-", "_")
+            logger.debug("model_name: '%s'", session_info["model_name"])
+        if cli_option[0] == "-m":
+            session_info["model_folder"] = cli_option[1]
+            logger.debug("model_folder: '%s'", session_info["model_folder"])
 
     def terminate(self, message):
         """ Finalize wrapper when process has exited """
@@ -194,7 +212,7 @@ class FaceswapControl():
                         logger.debug("Trigger GUI Training update")
                         logger.trace("tk_vars: %s", {itm: var.get()
                                                      for itm, var in self.wrapper.tk_vars.items()})
-                        if not self.config.session.initialized:
+                        if not self.config.session.is_initialized:
                             # Don't initialize session until after the first save as state
                             # file must exist first
                             logger.debug("Initializing curret training session")
