@@ -11,7 +11,7 @@ from tkinter import ttk
 from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .custom_widgets import Tooltip
-from .stats import Calculations
+from .stats import Calculations, Session
 from .control_helper import set_slider_rounding
 from .utils import FileHandler, get_config, get_images, preview_trigger
 
@@ -245,18 +245,17 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def display_item_set(self):
         """ Load the graph(s) if available """
-        session = get_config().session
         smooth_amount_var = get_config().tk_vars["smoothgraph"]
-        if session.is_initialized and session.logging_disabled:
+        if Session.is_loaded and Session.logging_disabled:
             logger.trace("Logs disabled. Hiding graph")
             self.set_info("Graph is disabled as 'no-logs' has been selected")
             self.display_item = None
             if self.trace_var is not None:
                 smooth_amount_var.trace_vdelete("w", self.trace_var)
                 self.trace_var = None
-        elif session.is_initialized:
+        elif Session.is_loaded:
             logger.trace("Loading graph")
-            self.display_item = session
+            self.display_item = Session
             if self.trace_var is None:
                 self.trace_var = smooth_amount_var.trace("w", self.smooth_amount_callback)
         else:
@@ -269,9 +268,10 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Add a single graph to the graph window """
         logger.debug("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
-        loss_keys = [key for key in self.display_item.loss_keys if key != "total"]
+        loss_keys = [key
+                     for key in self.display_item.get_loss_keys(Session.session_ids[-1])
+                     if key != "total"]
         display_tabs = sorted(set(key[:-1].rstrip("_") for key in loss_keys))
-        session = get_config().session
 
         for loss_key in display_tabs:
             tabname = loss_key.replace("_", " ").title()
@@ -279,8 +279,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                 continue
 
             display_keys = [key for key in loss_keys if key.startswith(loss_key)]
-            data = Calculations(session=session,
-                                session_id=session.session_ids[-1],
+            data = Calculations(session_id=Session.session_ids[-1],
                                 display="loss",
                                 loss_keys=display_keys,
                                 selections=["raw", "smoothed"],

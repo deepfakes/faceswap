@@ -11,6 +11,7 @@ from time import time
 
 import psutil
 
+from .stats import Session
 from .utils import get_config, get_images, LongRunningTask, preview_trigger
 
 if os.name == "nt":
@@ -31,6 +32,7 @@ class ProcessWrapper():
         self.pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
         self.command = None
         self.statusbar = get_config().statusbar
+        self._training_session_location = dict()
         self.task = FaceswapControl(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -99,14 +101,10 @@ class ProcessWrapper():
         args.extend([pathexecscript, command])
 
         cli_opts = get_config().cli_opts
-        session_info = dict()
         for cliopt in cli_opts.gen_cli_arguments(command):
             args.extend(cliopt)
             if command == "train" and not generate:
-                self._get_session_info(cliopt, session_info)
-
-        if command == "train" and not generate:
-            get_config().session.prime_training(**session_info)
+                self._get_training_session_info(cliopt)
 
         if not generate:
             args.append("-gui")  # Indicate to Faceswap that we are running the GUI
@@ -118,25 +116,21 @@ class ProcessWrapper():
         logger.debug("Built cli arguments: (%s)", args)
         return args
 
-    @classmethod
-    def _get_session_info(cls, cli_option, session_info):
-        """ Set the model folder and model name to the global session for logging to the graph and
-        analysis tab.
+    def _get_training_session_info(self, cli_option):
+        """ Set the model folder and model name to :`attr:_training_session_location` so the global
+        session picks them up for logging to the graph and analysis tab.
 
         Parameters
         ----------
         cli_option: list
             The command line option to be checked for model folder or name
-        session_info: dict
-            The dictionary that holds the information required to pass to the GUI's global
-            :class:`lib.gui.stats.Session`
         """
         if cli_option[0] == "-t":
-            session_info["model_name"] = cli_option[1].lower().replace("-", "_")
-            logger.debug("model_name: '%s'", session_info["model_name"])
+            self._training_session_location["model_name"] = cli_option[1].lower().replace("-", "_")
+            logger.debug("model_name: '%s'", self._training_session_location["model_name"])
         if cli_option[0] == "-m":
-            session_info["model_folder"] = cli_option[1]
-            logger.debug("model_folder: '%s'", session_info["model_folder"])
+            self._training_session_location["model_folder"] = cli_option[1]
+            logger.debug("model_folder: '%s'", self._training_session_location["model_folder"])
 
     def terminate(self, message):
         """ Finalize wrapper when process has exited """
@@ -148,7 +142,7 @@ class ProcessWrapper():
         self.statusbar.message.set(message)
         self.tk_vars["display"].set(None)
         get_images().delete_preview()
-        get_config().session.__init__()
+        Session.stop_training()
         preview_trigger().clear()
         self.command = None
         logger.debug("Terminated Faceswap processes")
@@ -160,6 +154,7 @@ class FaceswapControl():
     def __init__(self, wrapper):
         logger.debug("Initializing %s", self.__class__.__name__)
         self.wrapper = wrapper
+        self._session_info = wrapper._training_session_location
         self.config = get_config()
         self.statusbar = self.config.statusbar
         self.command = None
@@ -212,11 +207,14 @@ class FaceswapControl():
                         logger.debug("Trigger GUI Training update")
                         logger.trace("tk_vars: %s", {itm: var.get()
                                                      for itm, var in self.wrapper.tk_vars.items()})
-                        if not self.config.session.is_initialized:
+                        if not Session.is_loaded:
                             # Don't initialize session until after the first save as state
                             # file must exist first
                             logger.debug("Initializing curret training session")
-                            self.config.session.initialize_session(is_training=True)
+                            Session.initialize_session(
+                                self._session_info["model_folder"],
+                                self._session_info["model_name"],
+                                is_training=True)
                         self.wrapper.tk_vars["updatepreview"].set(True)
                         self.wrapper.tk_vars["refreshgraph"].set(True)
                     if "[preview updated]" in output.strip().lower():

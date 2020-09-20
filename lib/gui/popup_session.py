@@ -9,7 +9,7 @@ from tkinter import ttk
 from .control_helper import ControlBuilder, ControlPanelOption
 from .custom_widgets import Tooltip
 from .display_graph import SessionGraph
-from .stats import Calculations
+from .stats import Calculations, Session
 from .utils import FileHandler, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -18,22 +18,19 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class SessionPopUp(tk.Toplevel):
     """ Pop up for detailed graph/stats for selected session.
 
-    session: :class:`lib.gui.stats.Session`
-        The loaded session from the Analysis tab in Faceswap
     session_id: int or `"Total"`
         The session id number for the selected session from the Analysis tab. Should be the string
         `"Total"` if all sessions are being graphed
     data_points: int
         The number of iterations in the selected session
     """
-    def __init__(self, session, session_id, data_points):
-        logger.debug("Initializing: %s: (session: %s, session_id: %s, data_points: %s)",
-                     self.__class__.__name__, session, session_id, data_points)
+    def __init__(self, session_id, data_points):
+        logger.debug("Initializing: %s: (session_id: %s, data_points: %s)",
+                     self.__class__.__name__, session_id, data_points)
         super().__init__()
         self._thread = None  # Thread for loading data in a background task
         self._default_view = "avg" if data_points > 1000 else "smoothed"
         self._session_id = None if session_id == "Total" else int(session_id)
-        self._session = session
 
         self._graph_frame = None
         self._graph = None
@@ -178,7 +175,7 @@ class SessionPopUp(tk.Toplevel):
             The frame that the options reside in
         """
         logger.debug("Building Loss Key Check Buttons")
-        loss_keys = self._session.loss_keys
+        loss_keys = Session.get_loss_keys(self._session_id)
         lk_vars = dict()
         section_added = False
         for loss_key in sorted(loss_keys):
@@ -381,8 +378,7 @@ class SessionPopUp(tk.Toplevel):
             self._lbl_loading.pack(fill=tk.BOTH, expand=True)
             self.update_idletasks()
 
-            kwargs = dict(session=self._session,
-                          session_id=self._session_id,
+            kwargs = dict(session_id=self._session_id,
                           display=self._vars["display"].get(),
                           loss_keys=loss_keys,
                           selections=selections,

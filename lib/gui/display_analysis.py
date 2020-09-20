@@ -35,7 +35,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
                      self.__class__.__name__, parent, tab_name, helptext)
         super().__init__(parent, tab_name, helptext)
         self._summary = None
-        self._session = None
 
         self._reset_session_info()
         _Options(self)
@@ -187,7 +186,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         if self._thread is None:
             logger.debug("Setting session summary. (message: '%s')", message)
             self._thread = LongRunningTask(target=self._summarise_data,
-                                           args=(self._session, ),
+                                           args=(Session, ),
                                            widget=self)
             self._thread.start()
             self.after(1000, lambda msg=message: self._set_session_summary(msg))
@@ -204,7 +203,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             self._summary = result
             self._thread = None
             self.set_info("Session: {}".format(message))
-            self._stats.set_session(self._session)
             self._stats.tree_insert_data(self._summary)
 
     @classmethod
@@ -221,15 +219,13 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
     def _clear_session(self):
         """ Clear the currently displayed analysis data from the Tree-View. """
         logger.debug("Clearing session")
-        if self._session is None:
+        if not Session.is_loaded:
             logger.trace("No session loaded. Returning")
             return
         self._summary = None
-        self._stats.set_session(None)
         self._stats.tree_clear()
         self._reset_session_info()
-        del self._session
-        self._session = None
+        Session.clear()
 
     def _load_session(self, full_path=None):
         """ Load the session statistics from a model's state file into the Analysis tab of the GUI
@@ -255,8 +251,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         model_name = self._get_model_name(model_dir, state_file)
         if not model_name:
             return
-        self._session = Session(model_folder=model_dir, model_name=model_name)
-        self._session.initialize_session(is_training=False)
+        Session.initialize_session(model_dir, model_name, is_training=False)
         msg = full_path
         if len(msg) > 70:
             msg = "...{}".format(msg[-70:])
@@ -267,18 +262,17 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         data. """
         logger.debug("Reset current training session")
         self._clear_session()
-        session = get_config().session
-        if not session.is_initialized:
+
+        if not Session.is_loaded:
             logger.debug("Training not running")
             return
-        if session.logging_disabled:
+        if Session.logging_disabled:
             logger.trace("Logging disabled. Not triggering analysis update")
             return
         msg = "Currently running training session"
-        self._session = session
         # Reload the state file to get approx currently training iterations
         # TODO This is now broken
-        # self._session.load_state_file()
+        # Session.load_state_file()
         self._set_session_summary(msg)
 
     def _save_session(self):
@@ -368,7 +362,6 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Initializing: %s: (parent, %s, selected_id: %s, helptext: '%s')",
                      self.__class__.__name__, parent, selected_id, helptext)
         super().__init__(parent)
-        self._session = None  # set when loading or clearing from parent
         self._selected_id = selected_id
         self._popup_positions = list()
 
@@ -392,16 +385,6 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.pack(side=tk.TOP, padx=5, pady=5, fill=tk.BOTH, expand=True)
 
         logger.debug("Initialized: %s", self.__class__.__name__)
-
-    def set_session(self, session):
-        """ Set or clear the current session.
-
-        Parameters
-        ----------
-        :class:`lib.gui.stats.Session` or ``None``
-            The session to set the statistics for. Set to ``None`` to clear the session
-        """
-        self._session = session
 
     def _add_label(self):
         """ Add the title above the tree-view. """
@@ -551,8 +534,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         """
         logger.debug("Popping up data window")
         scaling_factor = get_config().scaling_factor
-        toplevel = SessionPopUp(self._session,
-                                self._selected_id.get(),
+        toplevel = SessionPopUp(self._selected_id.get(),
                                 data_points)
         toplevel.title(self._data_popup_title())
         toplevel.tk.call(
@@ -578,7 +560,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         """
         logger.debug("Setting poup title")
         selected_id = self._selected_id.get()
-        model_dir, model_name = os.path.split(self._session.model_filename)
+        model_dir, model_name = os.path.split(Session.model_filename)
         title = "All Sessions"
         if selected_id != "Total":
             title = "{} Model: Session #{}".format(model_name.title(), selected_id)

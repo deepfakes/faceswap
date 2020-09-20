@@ -89,6 +89,27 @@ project module
    :undoc-members:
    :show-inheritance:
 
+stats module
+============
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.gui.stats.convert_time
+   ~lib.gui.stats.Calculations
+   ~lib.gui.stats.ExponentialMovingAverage
+   ~lib.gui.stats.GlobalSession
+   ~lib.gui.stats.TensorBoardLogs
+
+.. rubric:: Module
+
+.. automodule:: lib.gui.stats
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 utils module
 ============
 

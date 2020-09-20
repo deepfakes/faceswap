@@ -1,5 +1,10 @@
 #!/usr/bin python3
-""" Stats functions for the GUI """
+""" Stats functions for the GUI.
+
+Holds the globally loaded training session. This will either be a user selected session (loaded in
+the analysis tab) or the currently training session.
+
+"""
 
 import logging
 import time
@@ -37,6 +42,200 @@ def convert_time(timestamp):
     mins = "{0:02d}".format((int(timestamp % 3600) // 60))
     secs = "{0:02d}".format((int(timestamp % 3600) % 60))
     return hrs, mins, secs
+
+
+class GlobalSession():
+    """ Holds information about a loaded or current training session by accessing a model's state
+    file and Tensorboard logs. This class should not be accessed directly, rather through
+    :attr:`lib.stats.Session`
+    """
+    def __init__(self):
+        logger.debug("Initializing %s", self.__class__.__name__)
+        self._state = None
+        self._model_dir = None
+        self._model_name = None
+
+        self._tb_logs = None
+        self._summary = None
+
+        self._is_training = False
+        self._initialized = False
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def is_loaded(self):
+        """ bool: ``True`` if session data is loaded otherwise ``False`` """
+        return self._initialized
+
+    @property
+    def model_filename(self):
+        """ str: The full model filename """
+        return os.path.join(self._model_dir, self._model_name)
+
+    @property
+    def batch_sizes(self):
+        """ dict: The batch sizes for each session_id for the model. """
+        return {int(sess_id): sess["batchsize"]
+                for sess_id, sess in self._state["sessions"].items()}
+
+    @property
+    def full_summary(self):
+        """ list: List of dictionaries containing summary statistics for each session id. """
+        return self._summary.compile_stats()
+
+    @property
+    def logging_disabled(self):
+        """ bool: ``True`` if logging is enabled for the currently training session otherwise
+        ``False``. """
+        return self._state["sessions"][str(self.session_ids[-1])]["no_logs"]
+
+    @property
+    def session_ids(self):
+        """ list: The sorted list of all existing session ids `int`s in the state file """
+        return sorted([int(key) for key in self._state["sessions"]])
+
+    def _load_state_file(self):
+        """ Load the current state file to :attr:`_state`. """
+        state_file = os.path.join(self._model_dir, "{}_state.json".format(self._model_name))
+        logger.debug("Loading State: '%s'", state_file)
+        serializer = get_serializer("json")
+        self._state = serializer.load(state_file)
+        logger.debug("Loaded state: %s", self._state)
+
+    def initialize_session(self, model_folder, model_name, is_training=False):
+        """ Initialize a Session.
+
+        Load's the model's state file, and sets the paths to any underlying Tensorboard logs, ready
+        for access on request.
+
+        Parameters
+        ----------
+        model_folder: str, optional
+            If loading a session manually (e.g. for the analysis tab), then the path to the model
+            folder must be provided. For training sessions, this should be left at ``None``
+        model_name: str, optional
+            If loading a session manually (e.g. for the analysis tab), then the model filename
+            must be provided. For training sessions, this should be left at ``None``
+        is_training: bool, optional
+            ``True`` if the session is being initialized for a training session, otherwise
+            ``False``. Default: ``False``
+         """
+        logger.debug("Initializing session: (is_training: %s)", is_training)
+        if self._model_dir == model_folder and self._model_name == model_name:
+            logger.debug("Requestes session is already loaded. Not initializing: (model_folder: "
+                         "%s, model_name: %s)", model_folder, model_name)
+            return
+        self._model_dir = model_folder
+        self._model_name = model_name
+        self._load_state_file()
+        self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir,
+                                                     "{}_logs".format(self._model_name)))
+        if is_training:
+            self._is_training = True
+
+        self._summary = SessionsSummary(self)
+        self._initialized = True
+        logger.debug("Initialized session. Session_IDS: %s", self.session_ids)
+
+    def stop_training(self):
+        """ Clears the internal training flag. To be called when training completes. """
+        self._is_training = False
+
+    def clear(self):
+        """ Clear the currently loaded session. """
+        self._state = None
+        self._model_dir = None
+        self._model_name = None
+
+        del self._tb_logs
+        self._tb_logs = None
+
+        del self._summary
+        self._summary = None
+
+        self._is_training = False
+        self._initialized = False
+
+    def get_loss(self, session_id):
+        """ Obtain the loss values for the given session_id.
+
+        Parameters
+        ----------
+        session_id: int or ``None``
+            The session ID to return loss for. Pass ``None`` to return loss for all sessions.
+
+        Returns
+        -------
+        dict
+            Loss names as key, :class:`numpy.ndarray` as value. If No session ID was provided
+            all session's losses are collated
+        """
+        loss_dict = self._tb_logs.get_loss(session=session_id)
+        if session_id is None:
+            retval = dict()
+            for key in sorted(loss_dict):
+                for loss_key, loss in loss_dict[key].items():
+                    retval.setdefault(loss_key, []).extend(loss)
+            retval = {key: np.array(val, dtype="float32") for key, val in retval.items()}
+        else:
+            retval = loss_dict[session_id]
+        return retval
+
+    def get_timestamps(self, session_id):
+        """ Obtain the time stamps keys for the given session_id.
+
+        Parameters
+        ----------
+        session_id: int or ``None``
+            The session ID to return the time stamps for. Pass ``None`` to return time stamps for
+            all sessions.
+
+        Returns
+        -------
+        dict or :class:`numpy.ndarray`
+            If a session ID has been given then a single :class:`numpy.ndarray` will be returned
+            with the session's time stamps. Otherwise a 'dict' will be returned with the session
+            IDs as key with :class:`numpy.ndarray` of timestamps as values
+        """
+        retval = self._tb_logs.get_timestamps(session=session_id)
+        if session_id is not None:
+            retval = retval[session_id]
+        return retval
+
+    def get_loss_keys(self, session_id):
+        """ Obtain the loss keys for the given session_id.
+
+        Parameters
+        ----------
+        session_id: int or ``None``
+            The session ID to return the loss keys for. Pass ``None`` to return loss keys for
+            all sessions.
+
+        Returns
+        -------
+        list
+            The loss keys for the given session. If ``None`` is passed as session_id then a unique
+            list of all loss keys for all sessions is returned
+        """
+        if session_id is None:
+            retval = list(set(loss_key
+                              for session in self._state["sessions"].values()
+                              for loss_key in session["loss_names"]))
+        else:
+            retval = self._state["sessions"][str(session_id)]["loss_names"]
+        return retval
+
+    def get_iterations_for_session(self, session_id):
+        """ Return the number of iterations for the given session id """
+        session = self._state["sessions"].get(str(session_id), None)
+        if session is None:
+            logger.warning("No session data found for session id: %s", session_id)
+            return 0
+        return session["iterations"]
+
+
+Session = GlobalSession()
 
 
 class TensorBoardLogs():
@@ -220,224 +419,6 @@ class TensorBoardLogs():
         return retval
 
 
-class Session():
-    """ Holds information about a loaded or current training session by accessing a model's state
-    file and Tensorboard logs.
-
-    Parameters
-    ----------
-    model_folder: str, optional
-        If loading a session manually (e.g. for the analysis tab), then the path to the model
-        folder must be provided. For training sessions, this should be left at ``None``
-    model_name: str, optional
-        If loading a session manually (e.g. for the analysis tab), then the model filename
-        must be provided. For training sessions, this should be left at ``None``
-    """
-    def __init__(self, model_folder=None, model_name=None):
-        logger.debug("Initializing %s: (model_dir: %s, model_name: %s)",
-                     self.__class__.__name__, model_folder, model_name)
-        self._state = None
-        self._model_dir = model_folder
-        self._model_name = model_name
-
-        self._tb_logs = None
-        self._summary = None
-        self._session_id = None  # Set to specific session_id or current training session
-
-        self._is_training = False
-        self._initialized = False
-
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def model_filename(self):
-        """ str: The full model filename """
-        return os.path.join(self._model_dir, self._model_name)
-
-    @property
-    def is_initialized(self):
-        """ bool: ``True`` if the session has been initialized for training otherwise ``False``.
-        """
-        return self._initialized
-
-    @property
-    def batchsize(self):
-        """ Return the session batchsize """
-        return self.session["batchsize"]
-
-    @property
-    def config(self):
-        """ Return config and other information """
-        retval = self._state["config"].copy()
-        retval["training_size"] = self._state["training_size"]
-        retval["input_size"] = [val[0] for key, val in self._state["inputs"].items()
-                                if key.startswith("face")][0]
-        return retval
-
-    @property
-    def full_summary(self):
-        """ Return all sessions summary data"""
-        return self._summary.compile_stats()
-
-    @property
-    def iterations(self):
-        """ Return session iterations """
-        return self.session["iterations"]
-
-    @property
-    def logging_disabled(self):
-        """ Return whether logging is disabled for this session """
-        return self.session["no_logs"]
-
-    @property
-    def loss(self):
-        """ dict: The loss for the current session id for each loss key """
-        loss_dict = self._tb_logs.get_loss(session=self._session_id)[self._session_id]
-        return loss_dict
-
-    @property
-    def loss_keys(self):
-        """ list: The loss keys for the current session, or loss keys for all sessions. """
-        if self._session_id is None:
-            retval = self._total_loss_keys
-        else:
-            retval = self.session["loss_names"]
-        return retval
-
-    @property
-    def lowest_loss(self):
-        """ Return the lowest average loss per save iteration seen """
-        return self._state["lowest_avg_loss"]
-
-    @property
-    def session(self):
-        """ Return current session dictionary """
-        return self._state["sessions"].get(str(self._session_id), dict())
-
-    @property
-    def session_ids(self):
-        """ Return sorted list of all existing session ids in the state file """
-        return sorted([int(key) for key in self._state["sessions"].keys()])
-
-    @property
-    def timestamps(self):
-        """ Return timestamps from logs for current session """
-        ts_dict = self._tb_logs.get_timestamps(session=self._session_id)
-        return ts_dict[self._session_id]
-
-    @property
-    def total_batchsize(self):
-        """ Return all session batch sizes """
-        return {int(sess_id): sess["batchsize"]
-                for sess_id, sess in self._state["sessions"].items()}
-
-    @property
-    def total_iterations(self):
-        """ Return session iterations """
-        return self._state["iterations"]
-
-    @property
-    def total_loss(self):
-        """ dict: The collated loss for all sessions for each loss key """
-        loss_dict = dict()
-        all_loss = self._tb_logs.get_loss()
-        for key in sorted(all_loss):
-            for loss_key, loss in all_loss[key].items():
-                loss_dict.setdefault(loss_key, []).extend(loss)
-        retval = {key: np.array(val, dtype="float32") for key, val in loss_dict.items()}
-        return retval
-
-    @property
-    def _total_loss_keys(self):
-        """ list: The loss keys for all sessions. """
-        loss_keys = set(loss_key
-                        for session in self._state["sessions"].values()
-                        for loss_key in session["loss_names"])
-        return list(loss_keys)
-
-    @property
-    def total_timestamps(self):
-        """ Return timestamps from logs separated per session for all sessions """
-        return self._tb_logs.get_timestamps()
-
-    def prime_training(self, model_folder, model_name):
-        """ Set the :attr:`_model_dir` and :attr:`_model_name` for an incoming training
-        session.
-
-        Parameters
-        ----------
-        model_folder: str
-            The folder that contains the model to be trained
-        model_name: str
-            The name of the model that is to be trained
-        """
-        logger.debug("Setting model folder and name for incoming training session: (%s, %s)",
-                     model_folder, model_name)
-        self._model_dir = model_folder
-        self._model_name = model_name
-
-    def initialize_session(self, is_training=False):
-        """ Initialize a Session.
-
-        Load's the model's state file, and sets the paths to any underlying Tensorboard logs, ready
-        for access on request.
-
-        Parameters
-        ----------
-        is_training: bool, optional
-            ``True`` if the session is being initialized for a training session, otherwise
-            ``False``. Default: ``False``
-         """
-        logger.debug("Initializing session: (is_training: %s)", is_training)
-        self._load_state_file()
-        self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir,
-                                                     "{}_logs".format(self._model_name)))
-        if is_training:
-            self._session_id = max(int(key) for key in self._state["sessions"].keys())
-            self._is_training = True
-
-        self._summary = SessionsSummary(self)
-        self._initialized = True
-        logger.debug("Initialized session. Session_ID: %s", self._session_id)
-
-    def set_session_id(self, session_id):
-        """ Set the session id to obtain data for a specific session.
-
-        Parameters
-        ----------
-        session_id: int
-            The session to set to obtain data for
-        """
-        if self._session_id is not None and self._session_id == session_id:
-            return
-        if self._is_training:
-            logger.warning("Can't set a new session while training. Not updating session id")
-            return
-        self._session_id = session_id
-
-    def clear_session_id(self):
-        """ Clear the session_id for obtaining data for a specific session. """
-        if self._is_training:
-            return
-        self._session_id = None
-
-    def _load_state_file(self):
-        """ Load the current state file to :attr:`_state`. """
-        state_file = os.path.join(self._model_dir, "{}_state.json".format(self._model_name))
-        logger.debug("Loading State: '%s'", state_file)
-        serializer = get_serializer("json")
-        self._state = serializer.load(state_file)
-        logger.debug("Loaded state: %s", self._state)
-
-    def get_iterations_for_session(self, session_id):
-        """ Return the number of iterations for the given session id """
-        session = self._state["sessions"].get(str(session_id), None)
-        if session is None:
-            logger.warning("No session data found for session id: %s", session_id)
-            return 0
-        return session["iterations"]
-
-
 class SessionsSummary():
     """ Calculations for analysis summary stats """
 
@@ -471,7 +452,7 @@ class SessionsSummary():
 
             iterations = self.session.get_iterations_for_session(sess_idx)
             elapsed = int(ts_data["end_time"] - ts_data["start_time"])
-            batchsize = self.session.total_batchsize.get(sess_idx, 0)
+            batchsize = self.session.batch_sizes.get(sess_idx, 0)
             compiled.append(
                 {"session": sess_idx,
                  "start": ts_data["start_time"],
@@ -539,12 +520,11 @@ class SessionsSummary():
 
 
 class Calculations():
-    """ Class to perform calculations on the raw data for the given session.
+    """ Class that performs calculations on the :class:`GlobalSession` raw data for the given
+    session id.
 
     Parameters
     ----------
-    session: :class:`Session`
-        The session to perform calculations on
     session_id: int or ``None``
         The session id number for the selected session from the Analysis tab. Should be ``None``
         if all sessions are being calculated
@@ -562,21 +542,20 @@ class Calculations():
         ``True`` if values significantly away from the average should be excluded, otherwise
         ``False``. Default: ``False``
     """
-    def __init__(self, session, session_id,
+    def __init__(self, session_id,
                  display="loss",
                  loss_keys="loss",
                  selections="raw",
                  avg_samples=500,
                  smooth_amount=0.90,
                  flatten_outliers=False):
-        logger.debug("Initializing %s: (session: %s, session_id: %s, display: %s, loss_keys: %s, "
+        logger.debug("Initializing %s: (session_id: %s, display: %s, loss_keys: %s, "
                      "selections: %s, avg_samples: %s, smooth_amount: %s, flatten_outliers: %s)",
-                     self.__class__.__name__, session, session_id, display, loss_keys, selections,
+                     self.__class__.__name__, session_id, display, loss_keys, selections,
                      avg_samples, smooth_amount, flatten_outliers)
 
         warnings.simplefilter("ignore", np.RankWarning)
 
-        self._session = session
         self._session_id = session_id
 
         self._display = display
@@ -604,15 +583,13 @@ class Calculations():
     def refresh(self):
         """ Refresh the stats """
         logger.debug("Refreshing")
-        if not self._session.is_initialized:
+        if not Session.is_loaded:
             logger.warning("Session data is not initialized. Not refreshing")
             return None
-        self._session.set_session_id(self._session_id)
         self._iterations = 0
         self._stats = self._get_raw()
         self._get_calculations()
         self._remove_raw()
-        self._session.clear_session_id()
         logger.debug("Refreshed")
         return self
 
@@ -628,7 +605,7 @@ class Calculations():
         raw = dict()
         iterations = set()
         if self._display.lower() == "loss":
-            loss_dict = self._session.total_loss if self._is_totals else self._session.loss
+            loss_dict = Session.get_loss(self._session_id)
             for loss_name, loss in loss_dict.items():
                 if loss_name not in self._loss_keys:
                     continue
@@ -699,11 +676,13 @@ class Calculations():
             The training rate for each iteration of the selected session
         """
         logger.debug("Calculating rate")
-        retval = (self._session.batchsize * 2) / np.diff(self._session.timestamps)
+        retval = (Session.batch_sizes[self._session_id] * 2) / np.diff(Session.get_timestamps(
+            self._session_id))
         logger.debug("Calculated rate: Item_count: %s", len(retval))
         return retval
 
-    def _calc_rate_total(self):
+    @classmethod
+    def _calc_rate_total(cls):
         """ Calculate rate per iteration for all sessions.
 
         Returns
@@ -717,8 +696,8 @@ class Calculations():
         each session's rate calculation.
         """
         logger.debug("Calculating totals rate")
-        batchsizes = self._session.total_batchsize
-        total_timestamps = self._session.total_timestamps
+        batchsizes = Session.batch_sizes
+        total_timestamps = Session.get_timestamps(None)
         rate = list()
         for sess_id in sorted(total_timestamps.keys()):
             batchsize = batchsizes[sess_id]
