@@ -207,7 +207,7 @@ class FaceswapControl():
                         logger.debug("Trigger GUI Training update")
                         logger.trace("tk_vars: %s", {itm: var.get()
                                                      for itm, var in self.wrapper.tk_vars.items()})
-                        if not Session.is_loaded:
+                        if not Session.is_training:
                             # Don't initialize session until after the first save as state
                             # file must exist first
                             logger.debug("Initializing curret training session")

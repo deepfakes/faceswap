@@ -254,7 +254,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
     """ Live graph to be displayed during training. """
 
     def __init__(self, parent, data, ylabel):
-        GraphBase.__init__(self, parent, data, ylabel)
+        super().__init__(parent, data, ylabel)
         self.thread = None  # Thread for LongRunningTask
         self.add_callback()
 
@@ -317,7 +317,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
     """ Session Graph for session pop-up """
     def __init__(self, parent, data, ylabel, scale):
-        GraphBase.__init__(self, parent, data, ylabel)
+        super().__init__(parent, data, ylabel)
         self.scale = scale
 
     def build(self):

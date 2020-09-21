@@ -69,6 +69,12 @@ class GlobalSession():
         return self._initialized
 
     @property
+    def is_training(self):
+        """ bool: ``True`` if the loaded session is the currently training model, otherwise
+        ``False`` """
+        return self._is_training
+
+    @property
     def model_filename(self):
         """ str: The full model filename """
         return os.path.join(self._model_dir, self._model_name)
@@ -93,7 +99,7 @@ class GlobalSession():
     @property
     def session_ids(self):
         """ list: The sorted list of all existing session ids `int`s in the state file """
-        return sorted([int(key) for key in self._state["sessions"]])
+        return self._tb_logs.session_ids
 
     def _load_state_file(self):
         """ Load the current state file to :attr:`_state`. """
@@ -122,17 +128,22 @@ class GlobalSession():
             ``False``. Default: ``False``
          """
         logger.debug("Initializing session: (is_training: %s)", is_training)
+
         if self._model_dir == model_folder and self._model_name == model_name:
-            logger.debug("Requestes session is already loaded. Not initializing: (model_folder: "
+            if is_training:
+                self._tb_logs.refresh_log_filenames()
+                self._load_state_file()
+                self._is_training = True
+            logger.debug("Requested session is already loaded. Not initializing: (model_folder: "
                          "%s, model_name: %s)", model_folder, model_name)
             return
+
+        self._is_training = is_training
         self._model_dir = model_folder
         self._model_name = model_name
         self._load_state_file()
         self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir,
                                                      "{}_logs".format(self._model_name)))
-        if is_training:
-            self._is_training = True
 
         self._summary = SessionsSummary(self)
         self._initialized = True
@@ -171,7 +182,7 @@ class GlobalSession():
             Loss names as key, :class:`numpy.ndarray` as value. If No session ID was provided
             all session's losses are collated
         """
-        loss_dict = self._tb_logs.get_loss(session=session_id)
+        loss_dict = self._tb_logs.get_loss(session_id=session_id, is_training=self._is_training)
         if session_id is None:
             retval = dict()
             for key in sorted(loss_dict):
@@ -198,7 +209,7 @@ class GlobalSession():
             with the session's time stamps. Otherwise a 'dict' will be returned with the session
             IDs as key with :class:`numpy.ndarray` of timestamps as values
         """
-        retval = self._tb_logs.get_timestamps(session=session_id)
+        retval = self._tb_logs.get_timestamps(session_id=session_id, is_training=self._is_training)
         if session_id is not None:
             retval = retval[session_id]
         return retval
@@ -254,6 +265,13 @@ class TensorBoardLogs():
         self._folder_base = logs_folder
         self._log_filenames = self._get_log_filenames()
         self._cache = dict()
+        self._training_iterator = None
+        self._training_rollover = dict()
+
+    @property
+    def session_ids(self):
+        """ list: Sorted list of integers of available session ids. """
+        return list(sorted(self._log_filenames))
 
     def _get_log_filenames(self):
         """ Get the TensorBoard log filenames for all existing sessions.
@@ -282,27 +300,42 @@ class TensorBoardLogs():
         logger.debug("logfiles: %s", log_filenames)
         return log_filenames
 
-    def _cache_data(self, session):
-        """ Cache TensorBoard logs for the given session on first access.
+    def _cache_data(self, session_id, is_training=False):
+        """ Cache TensorBoard logs for the given session ID on first access.
 
         Populates :attr:`_cache` with timestamps and loss data.
 
+        If this is a training session and the data is being queried for the training session ID
+        then get the latest available data and append to the cache
+
         Parameters
         -------
-        session: int
-            The session index to cache the data for
+        session_id: int
+            The session ID to cache the data for
+        is_training: bool, optional
+            ``True`` if a current training session is running otherwise ``False``.
+            Default: ``False``
         """
         labels = []
         step = []
         loss = []
         timestamps = []
-        last_step = 0
+        last_step = -1
+        live_data = is_training and session_id == max(self._log_filenames)
+
+        if live_data:
+            iterator = self._get_latest_live()
+        else:
+            iterator = tf.compat.v1.io.tf_record_iterator(self._log_filenames[session_id])
 
         try:
-            for record in tf.compat.v1.io.tf_record_iterator(self._log_filenames[session]):
+            for record in iterator:
                 event = event_pb2.Event.FromString(record)
                 if not event.summary.value or not event.summary.value[0].tag.startswith("batch_"):
                     continue
+
+                if last_step == -1:
+                    last_step = event.step if live_data else 0
 
                 if event.step != last_step:
                     loss.append(step)
@@ -325,56 +358,128 @@ class TensorBoardLogs():
         except tf_errors.DataLossError as err:
             logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
                            "The totals do not include this session. Original error message: "
-                           "'%s'", session, str(err))
+                           "'%s'", session_id, str(err))
 
         if step:
             loss.append(step)
 
         loss = np.array(loss, dtype="float32")
         timestamps = np.array(timestamps, dtype="float64")
-        logger.debug("Caching session id: %s, labels: %s, loss shape: %s, loss shape: %s",
-                     session, labels, loss.shape, timestamps.shape)
-        self._cache[session] = dict(labels=labels,
-                                    loss=zlib.compress(loss),
-                                    loss_shape=loss.shape,
-                                    timestamps=zlib.compress(timestamps),
-                                    timestamps_shape=timestamps.shape)
 
-    def _from_cache(self, session=None):
+        logger.debug("Caching session id: %s, labels: %s, loss: %s, timestamps: %s",
+                     session_id, labels, loss.shape, timestamps.shape)
+
+        if live_data and session_id in self._cache:
+            self._add_latest_data_to_cache(session_id, loss, timestamps)
+        else:
+            self._cache[session_id] = dict(labels=labels,
+                                           loss=zlib.compress(loss),
+                                           loss_shape=loss.shape,
+                                           timestamps=zlib.compress(timestamps),
+                                           timestamps_shape=timestamps.shape)
+
+    def _get_latest_live(self):
+        """ Obtain the latest event logs for live training data and add to the cache """
+        if self._training_iterator is None:
+            training_session_id = self.session_ids[-1]
+            filename = self._log_filenames[training_session_id]
+            self._training_iterator = tf.compat.v1.io.tf_record_iterator(filename)
+            logger.debug("Set live training iterator %s for session_id: %s",
+                         self._training_iterator, training_session_id)
+
+        i = 0
+        while True:
+            try:
+                yield next(self._training_iterator)
+                i += 1
+            except StopIteration:
+                logger.debug("End of data reached")
+                break
+            except tf.errors.DataLossError as err:
+                # Truncated records are ignored. The iterator holds the offset, so the record will
+                # be completed at the next call.
+                logger.debug("Truncated record. Original Error: %s", err)
+                break
+        logger.debug("Collected %s records from live log file", i)
+
+    def _add_latest_data_to_cache(self, session_id, loss, timestamps):
+        """ Append the latest received live training data to the cached data.
+
+        Parameters
+        ----------
+        session_id: int
+            The training session ID to update the cache for
+        loss: :class:`numpy.ndarray`
+            The latest loss values returned from the iterator
+        timestamps: :class:`numpy.ndarray`
+            The latest time stamps returned from the iterator
+        """
+        if not np.any(loss) and not np.any(timestamps):
+            logger.debug("No new live data to cache.")
+            return
+
+        logger.debug("Adding live data to cache: (loss: %s, timestamps: %s)",
+                     loss.shape, timestamps.shape)
+
+        cache = self._cache[session_id]
+
+        past_loss = np.frombuffer(zlib.decompress(cache["loss"]),
+                                  dtype="float32").reshape(cache["loss_shape"])
+        new_loss = np.concatenate((past_loss, loss))
+        cache["loss_shape"] = new_loss.shape
+        cache["loss"] = zlib.compress(new_loss)
+        del past_loss
+
+        past_timestamps = np.frombuffer(zlib.decompress(cache["timestamps"]),
+                                        dtype="float64").reshape(cache["timestamps_shape"])
+        new_timestamps = np.concatenate((past_timestamps, timestamps))
+        cache["timestamps_shape"] = new_timestamps.shape
+        cache["timestamps"] = zlib.compress(new_loss)
+        del past_timestamps
+
+    def _from_cache(self, session_id=None, is_training=False):
         """ Get the session data from the cache.
 
         If the request data does not exist in the cache, then populate it.
 
         Parameters
         ----------
-        session: int, optional
+        session_id: int, optional
             The Session ID to return the data for. Set to ``None`` to return all session
             data. Default ``None`
+        is_training: bool, optional
+            ``True`` if a current training session is running otherwise ``False``.
+            Default: ``False``
 
         Returns
         -------
         dict
             The session id(s) as key, with the event data as value
         """
-        if session is not None and session not in self._cache:
-            self._cache_data(session)
-        elif session is None and not all(idx in self._cache for idx in self._log_filenames):
+        if session_id is not None and session_id not in self._cache:
+            self._cache_data(session_id)
+        elif is_training and session_id == self.session_ids[-1]:
+            self._cache_data(session_id, is_training=is_training)
+        elif session_id is None and not all(idx in self._cache for idx in self._log_filenames):
             for sess in self._log_filenames:
                 if sess not in self._cache:
                     self._cache_data(sess)
 
-        if session is None:
+        if session_id is None:
             return self._cache
-        return {session: self._cache[session]}
+        return {session_id: self._cache[session_id]}
 
-    def get_loss(self, session=None):
+    def get_loss(self, session_id=None, is_training=False):
         """ Read the loss from the TensorBoard event logs
 
         Parameters
         ----------
-        session: int, optional
+        session_id: int, optional
             The Session ID to return the loss for. Set to ``None`` to return all session
             losses. Default ``None``
+        is_training: bool, optional
+            ``True`` if a current training session is running otherwise ``False``.
+            Default: ``False``
 
         Returns
         -------
@@ -382,9 +487,9 @@ class TensorBoardLogs():
             The session id(s) as key, with a further dictionary as value containing the loss name
             and list of loss values for each step
         """
-        logger.debug("Getting loss: (session: %s)", session)
+        logger.debug("Getting loss: (session_id: %s)", session_id)
         retval = dict()
-        for sess, info in self._from_cache(session).items():
+        for sess, info in self._from_cache(session_id, is_training).items():
             arr = np.frombuffer(zlib.decompress(info["loss"]),
                                 dtype="float32").reshape(info["loss_shape"])
             for idx, title in enumerate(info["labels"]):
@@ -393,7 +498,7 @@ class TensorBoardLogs():
                       for key, val in retval.items()})
         return retval
 
-    def get_timestamps(self, session=None):
+    def get_timestamps(self, session_id=None, is_training=False):
         """ Read the timestamps from the TensorBoard logs.
 
         As loss timestamps are slightly different for each loss, we collect the timestamp from the
@@ -401,9 +506,12 @@ class TensorBoardLogs():
 
         Parameters
         ----------
-        session: int, optional
+        session_id: int, optional
             The Session ID to return the timestamps for. Set to ``None`` to return all session
             timestamps. Default ``None``
+        is_training: bool, optional
+            ``True`` if a current training session is running otherwise ``False``.
+            Default: ``False``
 
         Returns
         -------
@@ -414,9 +522,16 @@ class TensorBoardLogs():
         logger.debug("Getting timestamps")
         retval = {sess: np.frombuffer(zlib.decompress(info["timestamps"]),
                                       dtype="float64").reshape(info["timestamps_shape"])
-                  for sess, info in self._from_cache(session).items()}
+                  for sess, info in self._from_cache(session_id, is_training).items()}
         logger.debug({k: v.shape for k, v in retval.items()})
         return retval
+
+    def refresh_log_filenames(self):
+        """ Refresh the log file list in :attr:`_log_filenames`.
+
+        Called when a training session is loaded, to add the latest log filename to the list.
+        """
+        self._log_filenames = self._get_log_filenames()
 
 
 class SessionsSummary():

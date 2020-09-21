@@ -310,6 +310,7 @@ class _Options():  # pylint:disable=too-few-public-methods
         self._add_buttons()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
+    # TODO Disable clear and load when training
     def _add_buttons(self):
         """ Add the option buttons """
         for btntype in ("clear", "save", "load"):

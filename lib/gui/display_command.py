@@ -266,6 +266,11 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
+        if not Session.is_training:
+            logger.debug("Waiting for Session Data to become available to graph")
+            self.after(1000, self.display_item_process)
+            return
+
         logger.debug("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
         loss_keys = [key
