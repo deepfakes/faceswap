@@ -191,16 +191,50 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
     def __init__(self, parent, tab_name, helptext, waittime, command=None):
-        self.trace_var = None
+        self._trace_vars = dict()
         super().__init__(parent, tab_name, helptext, waittime, command)
+
+    def set_vars(self):
+        """ Add graphing specific variables to the default variables.
+
+        Overrides original method.
+
+        Returns
+        -------
+        dict
+            The variable names with their corresponding tkinter variable
+        """
+        tk_vars = super().set_vars()
+
+        smoothgraph = tk.DoubleVar()
+        smoothgraph.set(0.90)
+        tk_vars["smoothgraph"] = smoothgraph
+
+        raw_var = tk.BooleanVar()
+        raw_var.set(True)
+        tk_vars["raw_data"] = raw_var
+
+        smooth_var = tk.BooleanVar()
+        smooth_var.set(True)
+        tk_vars["smooth_data"] = smooth_var
+
+        iterations_var = tk.IntVar()
+        iterations_var.set(0)
+        tk_vars["display_iterations"] = iterations_var
+
+        logger.debug(tk_vars)
+        return tk_vars
 
     def add_options(self):
         """ Add the additional options """
-        self.add_option_refresh()
+        self._add_option_refresh()
         super().add_options()
-        self.add_option_smoothing()
+        self._add_option_raw()
+        self._add_option_smoothed()
+        self._add_option_smoothing()
+        self._add_option_iterations()
 
-    def add_option_refresh(self):
+    def _add_option_refresh(self):
         """ Add refresh button to refresh graph immediately """
         logger.debug("Adding refresh option")
         tk_var = get_config().tk_vars["refreshgraph"]
@@ -213,17 +247,41 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                 wraplength=200)
         logger.debug("Added refresh option")
 
-    def add_option_smoothing(self):
-        """ Add refresh button to refresh graph immediately """
+    def _add_option_raw(self):
+        """ Add check-button to hide/display raw data """
+        logger.debug("Adding display raw option")
+        tk_var = self.vars["raw_data"]
+        chkbtn = ttk.Checkbutton(
+            self.optsframe,
+            variable=tk_var,
+            text="Raw",
+            command=lambda v=tk_var: self._display_data_callback("raw", v))
+        chkbtn.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
+        Tooltip(chkbtn, text="Display the raw loss data", wraplength=200)
+
+    def _add_option_smoothed(self):
+        """ Add check-button to hide/display smoothed data """
+        logger.debug("Adding display smoothed option")
+        tk_var = self.vars["smooth_data"]
+        chkbtn = ttk.Checkbutton(
+            self.optsframe,
+            variable=tk_var,
+            text="Smoothed",
+            command=lambda v=tk_var: self._display_data_callback("smoothed", v))
+        chkbtn.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
+        Tooltip(chkbtn, text="Display the smoothed loss data", wraplength=200)
+
+    def _add_option_smoothing(self):
+        """ Add a slider to adjust the smoothing amount """
         logger.debug("Adding Smoothing Slider")
-        tk_var = get_config().tk_vars["smoothgraph"]
+        tk_var = self.vars["smoothgraph"]
         min_max = (0, 0.99)
         hlp = "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing."
 
         ctl_frame = ttk.Frame(self.optsframe)
         ctl_frame.pack(padx=2, side=tk.RIGHT)
 
-        lbl = ttk.Label(ctl_frame, text="Smoothing Amount:", anchor=tk.W)
+        lbl = ttk.Label(ctl_frame, text="Smoothing:", anchor=tk.W)
         lbl.pack(pady=5, side=tk.LEFT, anchor=tk.N, expand=True)
 
         tbox = ttk.Entry(ctl_frame, width=6, textvariable=tk_var, justify=tk.RIGHT)
@@ -243,26 +301,50 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                     wraplength=200)
         logger.debug("Added Smoothing Slider")
 
+    def _add_option_iterations(self):
+        """ Add a slider to adjust the amount if iterations to display """
+        logger.debug("Adding Iterations Slider")
+        tk_var = self.vars["display_iterations"]
+        min_max = (0, 100000)
+        hlp = "Set the number of iterations to display. 0 displays the full session."
+
+        ctl_frame = ttk.Frame(self.optsframe)
+        ctl_frame.pack(padx=2, side=tk.RIGHT)
+
+        lbl = ttk.Label(ctl_frame, text="Iterations:", anchor=tk.W)
+        lbl.pack(pady=5, side=tk.LEFT, anchor=tk.N, expand=True)
+
+        tbox = ttk.Entry(ctl_frame, width=6, textvariable=tk_var, justify=tk.RIGHT)
+        tbox.pack(padx=(0, 5), side=tk.RIGHT)
+
+        ctl = ttk.Scale(
+            ctl_frame,
+            variable=tk_var,
+            command=lambda val, var=tk_var, dt=int, rn=1000, mm=min_max:
+            set_slider_rounding(val, var, dt, rn, mm))
+        ctl["from_"] = min_max[0]
+        ctl["to"] = min_max[1]
+        ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
+        for item in (tbox, ctl):
+            Tooltip(item,
+                    text=hlp,
+                    wraplength=200)
+        logger.debug("Added Iterations Slider")
+
     def display_item_set(self):
         """ Load the graph(s) if available """
-        smooth_amount_var = get_config().tk_vars["smoothgraph"]
-        if Session.is_loaded and Session.logging_disabled:
+        if Session.is_training and Session.logging_disabled:
             logger.trace("Logs disabled. Hiding graph")
             self.set_info("Graph is disabled as 'no-logs' has been selected")
             self.display_item = None
-            if self.trace_var is not None:
-                smooth_amount_var.trace_vdelete("w", self.trace_var)
-                self.trace_var = None
+            self._clear_trace_variables()
         elif Session.is_loaded:
             logger.trace("Loading graph")
             self.display_item = Session
-            if self.trace_var is None:
-                self.trace_var = smooth_amount_var.trace("w", self.smooth_amount_callback)
+            self._add_trace_variables()
         else:
             self.display_item = None
-            if self.trace_var is not None:
-                smooth_amount_var.trace_vdelete("w", self.trace_var)
-                self.trace_var = None
+            self._clear_trace_variables()
 
     def display_item_process(self):
         """ Add a single graph to the graph window """
@@ -288,16 +370,48 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                                 display="loss",
                                 loss_keys=display_keys,
                                 selections=["raw", "smoothed"],
-                                smooth_amount=get_config().tk_vars["smoothgraph"].get())
+                                smooth_amount=self.vars["smoothgraph"].get())
             self.add_child(tabname, data)
 
-    def smooth_amount_callback(self, *args):
+    def _smooth_amount_callback(self, *args):
         """ Update each graph's smooth amount on variable change """
-        smooth_amount = get_config().tk_vars["smoothgraph"].get()
+        try:
+            smooth_amount = self.vars["smoothgraph"].get()
+        except tk.TclError:
+            # Don't update when there is no value in the variable
+            return
         logger.debug("Updating graph smooth_amount: (new_value: %s, args: %s)",
                      smooth_amount, args)
         for graph in self.subnotebook.children.values():
-            graph.calcs.args["smooth_amount"] = smooth_amount
+            graph.calcs.set_smooth_amount(smooth_amount)
+
+    def _iteration_limit_callback(self, *args):
+        """ Limit the amount of data displayed in the live graph on a iteration slider
+        variable change. """
+        try:
+            limit = self.vars["display_iterations"].get()
+        except tk.TclError:
+            # Don't update when there is no value in the variable
+            return
+        logger.debug("Updating graph iteration limit: (new_value: %s, args: %s)",
+                     limit, args)
+        for graph in self.subnotebook.children.values():
+            graph.calcs.set_iterations_limit(limit)
+
+    def _display_data_callback(self, line, variable):
+        """ Update the displayed graph lines based on option check button selection.
+
+        Parameters
+        ----------
+        line: str
+            The line to hide or display
+        variable: :class:`tkinter.BooleanVar`
+            The tkinter variable containing the ``True`` or ``False`` data for this display item
+        """
+        var = variable.get()
+        logger.debug("Updating display %s to %s", line, var)
+        for graph in self.subnotebook.children.values():
+            graph.calcs.update_selections(line, var)
 
     def add_child(self, name, data):
         """ Add the graph for the selected keys """
@@ -315,14 +429,29 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         for graph in self.subnotebook.children.values():
             graph.save_fig(graphlocation)
 
+    def _add_trace_variables(self):
+        """ Add tracing for when the option sliders are updated, for updating the graph. """
+        for name, action in zip(("smoothgraph", "display_iterations"),
+                                (self._smooth_amount_callback, self._iteration_limit_callback)):
+            var = self.vars[name]
+            if name not in self._trace_vars:
+                self._trace_vars[name] = (var, var.trace("w", action))
+
+    def _clear_trace_variables(self):
+        """ Clear all of the trace variables from :attr:`_trace_vars` and reset the dictionary. """
+        if self._trace_vars:
+            for name, (var, trace) in self._trace_vars.items():
+                logger.debug("Clearing trace from variable: %s", name)
+                var.trace_vdelete("w", trace)
+            self._trace_vars = dict()
+
     def close(self):
         """ Clear the plots from RAM """
-        if self.trace_var is not None:
-            get_config().tk_vars["smoothgraph"].trace_vdelete("w", self.trace_var)
-            self.trace_var = None
+        self._clear_trace_variables()
         if self.subnotebook is None:
             logger.debug("No graphs to clear. Returning")
             return
+
         for name, graph in self.subnotebook.children.items():
             logger.debug("Clearing: %s", name)
             graph.clear()

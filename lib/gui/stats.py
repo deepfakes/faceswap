@@ -13,6 +13,7 @@ import warnings
 import zlib
 
 from math import ceil
+from threading import Event
 
 import numpy as np
 import tensorflow as tf
@@ -39,6 +40,7 @@ class GlobalSession():
 
         self._is_training = False
         self._initialized = False
+        self._is_querying = Event()
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -161,6 +163,11 @@ class GlobalSession():
             Loss names as key, :class:`numpy.ndarray` as value. If No session ID was provided
             all session's losses are collated
         """
+        self._wait_for_thread()
+
+        if self._is_training:
+            self._is_querying.set()
+
         loss_dict = self._tb_logs.get_loss(session_id=session_id, is_training=self._is_training)
         if session_id is None:
             retval = dict()
@@ -170,6 +177,9 @@ class GlobalSession():
             retval = {key: np.array(val, dtype="float32") for key, val in retval.items()}
         else:
             retval = loss_dict[session_id]
+
+        if self._is_training:
+            self._is_querying.clear()
         return retval
 
     def get_timestamps(self, session_id):
@@ -188,10 +198,28 @@ class GlobalSession():
             with the session's time stamps. Otherwise a 'dict' will be returned with the session
             IDs as key with :class:`numpy.ndarray` of timestamps as values
         """
+        self._wait_for_thread()
+
+        if self._is_training:
+            self._is_querying.set()
+
         retval = self._tb_logs.get_timestamps(session_id=session_id, is_training=self._is_training)
         if session_id is not None:
             retval = retval[session_id]
+
+        if self._is_training:
+            self._is_querying.clear()
+
         return retval
+
+    def _wait_for_thread(self):
+        """ If a thread is querying the log files for live data, then block until task clears. """
+        while True:
+            if self._is_training and self._is_querying.is_set():
+                logger.debug("Waiting for available thread")
+                time.sleep(1)
+                continue
+            break
 
     def get_loss_keys(self, session_id):
         """ Obtain the loss keys for the given session_id.
@@ -780,7 +808,8 @@ class Calculations():
                           smooth_amount=smooth_amount,
                           flatten_outliers=flatten_outliers)
         self._iterations = 0
-        self._stats = None
+        self._limit = 0
+        self._stats = dict()
         self.refresh()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -807,6 +836,56 @@ class Calculations():
         logger.debug("Refreshed")
         return self
 
+    def set_smooth_amount(self, amount):
+        """ Set the amount of smoothing to apply to smoothed graph.
+
+        Parameters
+        ----------
+        amount: float
+            The amount of smoothing to apply to smoothed graph
+        """
+        update = max(min(amount, 0.999), 0.001)
+        logger.debug("Setting smooth amount to: %s (provided value: %s)", update, amount)
+        self._args["smooth_amount"] = update
+
+    def update_selections(self, selection, option):
+        """ Update the type of selected data.
+
+        Parameters
+        ----------
+        selection: str
+            The selection to update (as can exist in :attr:`_selections`)
+        option: bool
+            ``True`` if the selection should be included, ``False`` if it should be removed
+        """
+        # TODO Somewhat hacky, to ensure values are inserted in the correct order. Fine for
+        # now as this is only called from Live Graph and selections can only be "raw" and
+        # smoothed.
+        if option:
+            if selection not in self._selections:
+                if selection == "raw":
+                    self._selections.insert(0, selection)
+                else:
+                    self._selections.append(selection)
+        else:
+            if selection in self._selections:
+                self._selections.remove(selection)
+
+    def set_iterations_limit(self, limit):
+        """ Set the number of iterations to display in the calculations.
+
+        If a value greater than 0 is passed, then the latest iterations up to the given
+        limit will be calculated.
+
+        Parameters
+        ----------
+        limit: int
+            The number of iterations to calculate data for. `0` to calculate for all data
+        """
+        limit = max(0, limit)
+        logger.debug("Setting iteration limit to: %s", limit)
+        self._limit = limit
+
     def _get_raw(self):
         """ Obtain the raw loss values.
 
@@ -823,6 +902,8 @@ class Calculations():
             for loss_name, loss in loss_dict.items():
                 if loss_name not in self._loss_keys:
                     continue
+                if self._limit > 0:
+                    loss = loss[-self._limit:]
                 if self._args["flatten_outliers"]:
                     loss = self._flatten_outliers(loss)
                 iterations.add(loss.shape[0])

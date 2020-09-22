@@ -80,9 +80,8 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Adding options info")
         lblinfo = ttk.Label(self.optsframe,
                             textvariable=self.vars["info"],
-                            anchor=tk.W,
-                            width=70)
-        lblinfo.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.W)
+                            anchor=tk.W)
+        lblinfo.pack(side=tk.LEFT, expand=True, padx=5, pady=5, anchor=tk.W)
 
     def set_info(self, msg):
         """ Set the info message """
