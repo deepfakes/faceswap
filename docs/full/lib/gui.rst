@@ -97,10 +97,10 @@ stats module
 .. autosummary::
    :nosignatures:
    
-   ~lib.gui.stats.convert_time
    ~lib.gui.stats.Calculations
    ~lib.gui.stats.ExponentialMovingAverage
    ~lib.gui.stats.GlobalSession
+   ~lib.gui.stats.SessionsSummary
    ~lib.gui.stats.TensorBoardLogs
 
 .. rubric:: Module

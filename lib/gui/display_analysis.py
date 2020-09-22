@@ -93,12 +93,9 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         Training graph refresh - Updates the stats for the current training session when the graph
         has been updated.
 
-        When training is commenced - Removes the currently displayed session.
-
         When the analysis folder has been populated - Updates the stats from that folder.
         """
         self.vars["refresh_graph"].trace("w", self._update_current_session)
-        self.vars["is_training"].trace("w", self._remove_current_session)
         self.vars["analysis_folder"].trace("w", self._populate_from_folder)
 
     def _update_current_session(self, *args):  # pylint:disable=unused-argument
@@ -110,13 +107,6 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             return
         logger.debug("Analysis update callback received")
         self._reset_session()
-
-    def _remove_current_session(self, *args):  # pylint:disable=unused-argument
-        """ Remove the current session data on a is_training=False callback """
-        if self.vars["is_training"].get():
-            return
-        logger.debug("Remove current training Analysis callback received")
-        self._clear_session()
 
     def _reset_session_info(self):
         """ Reset the session info status to default """
@@ -224,8 +214,9 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             return
         self._summary = None
         self._stats.tree_clear()
-        self._reset_session_info()
-        Session.clear()
+        if not Session.is_training:
+            self._reset_session_info()
+            Session.clear()
 
     def _load_session(self, full_path=None):
         """ Load the session statistics from a model's state file into the Analysis tab of the GUI
@@ -261,19 +252,14 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
         """ Reset currently training sessions. Clears the current session and loads in the latest
         data. """
         logger.debug("Reset current training session")
-        self._clear_session()
-
-        if not Session.is_loaded:
+        if not Session.is_training:
             logger.debug("Training not running")
             return
         if Session.logging_disabled:
             logger.trace("Logging disabled. Not triggering analysis update")
             return
-        msg = "Currently running training session"
-        # Reload the state file to get approx currently training iterations
-        # TODO This is now broken
-        # Session.load_state_file()
-        self._set_session_summary(msg)
+        self._clear_session()
+        self._set_session_summary("Currently running training session")
 
     def _save_session(self):
         """ Launch a file dialog pop-up to save the current analysis data to a CSV file. """

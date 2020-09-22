@@ -23,27 +23,6 @@ from lib.serializer import get_serializer
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def convert_time(timestamp):
-    """ Convert time stamp to total hours, minutes and seconds.
-
-    Parameters
-    ----------
-    timestamp: float
-        The Unix timestamp to be converted
-
-    Returns
-    -------
-    tuple
-        (`hours`, `minutes`, `seconds`) as ints
-    """
-    hrs = int(timestamp // 3600)
-    if hrs < 10:
-        hrs = "{0:02d}".format(hrs)
-    mins = "{0:02d}".format((int(timestamp % 3600) // 60))
-    secs = "{0:02d}".format((int(timestamp % 3600) % 60))
-    return hrs, mins, secs
-
-
 class GlobalSession():
     """ Holds information about a loaded or current training session by accessing a model's state
     file and Tensorboard logs. This class should not be accessed directly, rather through
@@ -88,7 +67,7 @@ class GlobalSession():
     @property
     def full_summary(self):
         """ list: List of dictionaries containing summary statistics for each session id. """
-        return self._summary.compile_stats()
+        return self._summary.get_summary_stats()
 
     @property
     def logging_disabled(self):
@@ -236,14 +215,6 @@ class GlobalSession():
         else:
             retval = self._state["sessions"][str(session_id)]["loss_names"]
         return retval
-
-    def get_iterations_for_session(self, session_id):
-        """ Return the number of iterations for the given session id """
-        session = self._state["sessions"].get(str(session_id), None)
-        if session is None:
-            logger.warning("No session data found for session id: %s", session_id)
-            return 0
-        return session["iterations"]
 
 
 Session = GlobalSession()
@@ -434,7 +405,7 @@ class TensorBoardLogs():
                                         dtype="float64").reshape(cache["timestamps_shape"])
         new_timestamps = np.concatenate((past_timestamps, timestamps))
         cache["timestamps_shape"] = new_timestamps.shape
-        cache["timestamps"] = zlib.compress(new_loss)
+        cache["timestamps"] = zlib.compress(new_timestamps)
         del past_timestamps
 
     def _from_cache(self, session_id=None, is_training=False):
@@ -519,7 +490,8 @@ class TensorBoardLogs():
             The session id(s) as key with list of timestamps per step as value
         """
 
-        logger.debug("Getting timestamps")
+        logger.debug("Getting timestamps: (session_id: %s, is_training: %s)",
+                     session_id, is_training)
         retval = {sess: np.frombuffer(zlib.decompress(info["timestamps"]),
                                       dtype="float64").reshape(info["timestamps_shape"])
                   for sess, info in self._from_cache(session_id, is_training).items()}
@@ -534,74 +506,163 @@ class TensorBoardLogs():
         self._log_filenames = self._get_log_filenames()
 
 
-class SessionsSummary():
-    """ Calculations for analysis summary stats """
+class SessionsSummary():  # pylint:disable=too-few-public-methods
+    """ Performs top level summary calculations for each session ID within the loaded or currently
+    training Session for display in the Analysis tree view.
 
+    Parameters
+    ----------
+    session: :class:`GlobalSession`
+        The loaded or currently training session
+    """
     def __init__(self, session):
         logger.debug("Initializing %s: (session: %s)", self.__class__.__name__, session)
-        self.session = session
-        self._tb_logs = session._tb_logs
+        self._session = session
         self._state = session._state
+
+        self._time_stats = None
+        self._per_session_stats = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    @property
-    def time_stats(self):
-        """ Return session time stats """
-        ts_data = self._tb_logs.get_timestamps()
-        time_stats = {sess_id: {"start_time": np.min(timestamps) if np.any(timestamps) else 0,
-                                "end_time": np.max(timestamps) if np.any(timestamps) else 0,
-                                "datapoints": timestamps.shape[0] if np.any(timestamps) else 0}
-                      for sess_id, timestamps in ts_data.items()}
-        return time_stats
+    def get_summary_stats(self):
+        """ Compile the individual session statistics and calculate the total.
 
-    @property
-    def sessions_stats(self):
-        """ Return compiled stats """
-        compiled = list()
-        for sess_idx, ts_data in self.time_stats.items():
-            logger.debug("Compiling session ID: %s", sess_idx)
-            if self._state is None:
-                logger.debug("Session state dict doesn't exist. Most likely task has been "
-                             "terminated during compilation")
-                return None
+        Format the stats for display
 
-            iterations = self.session.get_iterations_for_session(sess_idx)
-            elapsed = int(ts_data["end_time"] - ts_data["start_time"])
-            batchsize = self.session.batch_sizes.get(sess_idx, 0)
-            compiled.append(
-                {"session": sess_idx,
-                 "start": ts_data["start_time"],
-                 "end": ts_data["end_time"],
-                 "elapsed": elapsed,
-                 "rate": ((batchsize * 2) * iterations) / elapsed if elapsed != 0 else 0,
-                 "batch": batchsize,
-                 "iterations": iterations})
-        compiled = sorted(compiled, key=lambda k: k["session"])
-        return compiled
-
-    def compile_stats(self):
-        """ Compile sessions stats with totals, format and return """
+        Returns
+        -------
+        list
+            A list of summary statistics dictionaries containing the Session ID, start time, end
+            time, elapsed time, rate, batch size and number of iterations for each session id
+            within the loaded data as well as the totals.
+        """
         logger.debug("Compiling sessions summary data")
-        compiled_stats = self.sessions_stats
-        if not compiled_stats:
-            return compiled_stats
-        logger.debug("sessions_stats: %s", compiled_stats)
-        total_stats = self.total_stats(compiled_stats)
-        compiled_stats.append(total_stats)
-        compiled_stats = self.format_stats(compiled_stats)
-        logger.debug("Final stats: %s", compiled_stats)
-        return compiled_stats
+        self._get_time_stats()
+        self._get_per_session_stats()
+        if not self._per_session_stats:
+            return self._per_session_stats
 
-    @classmethod
-    def total_stats(cls, sessions_stats):
-        """ Return total stats """
+        total_stats = self._total_stats()
+        retval = self._per_session_stats + [total_stats]
+        retval = self._format_stats(retval)
+        logger.debug("Final stats: %s", retval)
+        return retval
+
+    def _get_time_stats(self):
+        """ Populates the attribute :attr:`_time_stats` with the start start time, end time and
+        data points for each session id within the loaded session if it has not already been
+        calculated.
+
+        If the main Session is currently training, then the training session ID is updated with the
+        latest stats.
+        """
+        if self._time_stats is None:
+            logger.debug("Collating summary time stamps")
+
+            self._time_stats = {
+                sess_id: dict(start_time=np.min(timestamps) if np.any(timestamps) else 0,
+                              end_time=np.max(timestamps) if np.any(timestamps) else 0,
+                              iterations=timestamps.shape[0] if np.any(timestamps) else 0)
+                for sess_id, timestamps in self._session.get_timestamps(None).items()}
+
+        elif Session.is_training:
+            logger.debug("Updating summary time stamps for training session")
+
+            session_id = Session.session_ids[-1]
+            latest = self._session.get_timestamps(session_id)
+
+            self._time_stats[session_id] = dict(
+                start_time=np.min(latest) if np.any(latest) else 0,
+                end_time=np.max(latest) if np.any(latest) else 0,
+                iterations=latest.shape[0] if np.any(latest) else 0)
+
+        logger.debug("time_stats: %s", self._time_stats)
+
+    def _get_per_session_stats(self):
+        """ Populate the attribute :attr:`_per_session_stats` with a sorted list by session ID
+        of each ID in the training/loaded session. Stats contain the session ID, start, end and
+        elapsed times, the training rate, batch size and number of iterations for each session.
+
+        If a training session is running, then updates the training sessions stats only.
+        """
+        if self._per_session_stats is None:
+            logger.debug("Collating per session stats")
+            compiled = list()
+            for session_id, ts_data in self._time_stats.items():
+                logger.debug("Compiling session ID: %s", session_id)
+                if self._state is None:
+                    logger.debug("Session state dict doesn't exist. Most likely task has been "
+                                 "terminated during compilation")
+                    return
+                compiled.append(self._collate_stats(session_id, ts_data))
+
+            self._per_session_stats = list(sorted(compiled, key=lambda k: k["session"]))
+
+        elif self._session.is_training:
+            logger.debug("Collating per session stats for latest training data")
+            session_id = self._session.session_ids[-1]
+            ts_data = self._time_stats[session_id]
+
+            if session_id > len(self._per_session_stats):
+                self._per_session_stats.append(self._collate_stats(session_id, ts_data))
+
+            stats = self._per_session_stats[-1]
+
+            stats["start"] = ts_data["start_time"]
+            stats["end"] = ts_data["end_time"]
+            stats["elapsed"] = int(stats["end"] - stats["start"])
+            stats["iterations"] = ts_data["iterations"]
+            stats["rate"] = (((stats["batch"] * 2) * stats["iterations"])
+                             / stats["elapsed"] if stats["elapsed"] != 0 else 0)
+        logger.debug("per_session_stats: %s", self._per_session_stats)
+
+    def _collate_stats(self, session_id, timestamps):
+        """ Collate the session summary statistics for the given session ID.
+
+        Parameters
+        ----------
+        session_id: int
+            The session id to compile the stats for
+        timestamps:
+            The time stamp summary data for the given session id
+
+        Returns
+        -------
+        dict
+            The collated session summary statistics
+        """
+        timestamps = self._time_stats[session_id]
+        elapsed = int(timestamps["end_time"] - timestamps["start_time"])
+        batchsize = self._session.batch_sizes.get(session_id, 0)
+        retval = dict(
+            session=session_id,
+            start=timestamps["start_time"],
+            end=timestamps["end_time"],
+            elapsed=elapsed,
+            rate=(((batchsize * 2) * timestamps["iterations"]) / elapsed if elapsed != 0 else 0),
+            batch=batchsize,
+            iterations=timestamps["iterations"])
+        logger.debug(retval)
+        return retval
+
+    def _total_stats(self):
+        """ Compile the Totals stats.
+        Totals are fully calculated each time as they will change on the basis of the training
+        session.
+
+        Returns
+        -------
+        dict:
+            The Session name, start time, end time, elapsed time, rate, batch size and number of
+            iterations for all session ids within the loaded data.
+        """
         logger.debug("Compiling Totals")
         elapsed = 0
         examples = 0
         iterations = 0
         batchset = set()
-        total_summaries = len(sessions_stats)
-        for idx, summary in enumerate(sessions_stats):
+        total_summaries = len(self._per_session_stats)
+        for idx, summary in enumerate(self._per_session_stats):
             if idx == 0:
                 starttime = summary["start"]
             if idx == total_summaries - 1:
@@ -621,17 +682,55 @@ class SessionsSummary():
         logger.debug(totals)
         return totals
 
-    @classmethod
-    def format_stats(cls, compiled_stats):
-        """ Format for display """
+    def _format_stats(self, compiled_stats):
+        """ Format for the incoming list of statistics for display.
+
+        Parameters
+        ----------
+        compiled_stats: list
+            List of summary statistics dictionaries to be formatted for display
+
+        Returns
+        -------
+        list
+            The original statistics formatted for display
+        """
         logger.debug("Formatting stats")
+        retval = []
         for summary in compiled_stats:
-            hrs, mins, secs = convert_time(summary["elapsed"])
-            summary["start"] = time.strftime("%x %X", time.localtime(summary["start"]))
-            summary["end"] = time.strftime("%x %X", time.localtime(summary["end"]))
-            summary["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
-            summary["rate"] = "{0:.1f}".format(summary["rate"])
-        return compiled_stats
+            hrs, mins, secs = self._convert_time(summary["elapsed"])
+            stats = dict()
+            for key in summary:
+                if key not in ("start", "end", "elapsed", "rate"):
+                    stats[key] = summary[key]
+                    continue
+                stats["start"] = time.strftime("%x %X", time.localtime(summary["start"]))
+                stats["end"] = time.strftime("%x %X", time.localtime(summary["end"]))
+                stats["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
+                stats["rate"] = "{0:.1f}".format(summary["rate"])
+            retval.append(stats)
+        return retval
+
+    @classmethod
+    def _convert_time(cls, timestamp):
+        """ Convert time stamp to total hours, minutes and seconds.
+
+        Parameters
+        ----------
+        timestamp: float
+            The Unix timestamp to be converted
+
+        Returns
+        -------
+        tuple
+            (`hours`, `minutes`, `seconds`) as ints
+        """
+        hrs = int(timestamp // 3600)
+        if hrs < 10:
+            hrs = "{0:02d}".format(hrs)
+        mins = "{0:02d}".format((int(timestamp % 3600) // 60))
+        secs = "{0:02d}".format((int(timestamp % 3600) % 60))
+        return hrs, mins, secs
 
 
 class Calculations():
