@@ -118,6 +118,9 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
 
         Triggered when :attr:`vars` ``analysis_folder`` variable is is set.
         """
+        if Session.is_training:
+            return
+
         folder = self.vars["analysis_folder"].get()
         if not folder or not os.path.isdir(folder):
             logger.debug("Not a valid folder")
