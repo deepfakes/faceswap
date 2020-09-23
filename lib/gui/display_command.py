@@ -228,10 +228,12 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def on_tab_select(self):
         """ Callback for when the graph tab is selected.
 
-        Update to stats to latest.
+        Pull latest data and run the tab's update code when the tab is selected.
         """
-        logger.debug("Training graph update callback received")
-        get_config().tk_vars["refreshgraph"].set(True)
+        logger.debug("Callback received for '%s' tab", self.tabname)
+        if self.display_item is not None:
+            get_config().tk_vars["refreshgraph"].set(True)
+        self._update_page()
 
     def add_options(self):
         """ Add the additional options """
@@ -346,7 +348,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             self.set_info("Graph is disabled as 'no-logs' has been selected")
             self.display_item = None
             self._clear_trace_variables()
-        elif Session.is_loaded:
+        elif Session.is_training and self.display_item is None:
             logger.trace("Loading graph")
             self.display_item = Session
             self._add_trace_variables()
