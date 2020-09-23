@@ -346,7 +346,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             self.set_info("Graph is disabled as 'no-logs' has been selected")
             self.display_item = None
             self._clear_trace_variables()
-        elif Session.is_loaded:
+        elif Session.is_training:
             logger.trace("Loading graph")
             self.display_item = Session
             self._add_trace_variables()

@@ -39,7 +39,6 @@ class GlobalSession():
         self._summary = None
 
         self._is_training = False
-        self._initialized = False
         self._is_querying = Event()
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -47,7 +46,7 @@ class GlobalSession():
     @property
     def is_loaded(self):
         """ bool: ``True`` if session data is loaded otherwise ``False`` """
-        return self._initialized
+        return self._model_dir is not None
 
     @property
     def is_training(self):
@@ -127,7 +126,6 @@ class GlobalSession():
                                                      "{}_logs".format(self._model_name)))
 
         self._summary = SessionsSummary(self)
-        self._initialized = True
         logger.debug("Initialized session. Session_IDS: %s", self.session_ids)
 
     def stop_training(self):
@@ -147,7 +145,6 @@ class GlobalSession():
         self._summary = None
 
         self._is_training = False
-        self._initialized = False
 
     def get_loss(self, session_id):
         """ Obtain the loss values for the given session_id.
