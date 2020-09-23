@@ -122,8 +122,14 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         fulldata = [item for item in self.calcs.stats.values()]
         self.axes_limits_set(fulldata)
 
-        xrng = [x for x in range(self.calcs.iterations)]
+        if self.calcs.start_iteration > 0:
+            end_iteration = self.calcs.start_iteration + self.calcs.iterations
+            xrng = list(range(self.calcs.start_iteration, end_iteration))
+        else:
+            xrng = list(range(self.calcs.iterations))
+
         keys = list(self.calcs.stats.keys())
+
         for idx, item in enumerate(self.lines_sort(keys)):
             if initiate:
                 self.lines.extend(self.ax1.plot(xrng, self.calcs.stats[item[0]],
@@ -149,11 +155,17 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def axes_limits_set(self, data):
         """ Set the axes limits """
-        xmax = self.calcs.iterations - 1 if self.calcs.iterations > 1 else 1
+        xmin = self.calcs.start_iteration
+        if self.calcs.start_iteration > 0:
+            xmax = self.calcs.iterations + self.calcs.start_iteration
+        else:
+            xmax = self.calcs.iterations
+        xmax = max(1, xmax - 1)
+
         if data:
             ymin, ymax = self.axes_data_get_min_max(data)
             self.ax1.set_ylim(ymin, ymax)
-            self.ax1.set_xlim(0, xmax)
+            self.ax1.set_xlim(xmin, xmax)
             logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)", ymin, ymax, xmax)
         else:
             self.axes_limits_set_default()
@@ -214,7 +226,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.trace("Setting lines style")
         groups = int(len(lines) / groupsize)
         colours = self.lines_create_colors(groupsize, groups)
-        widths = list(reversed(range(1, groups + 1)))
+        widths = list(range(1, groups + 1))
         for idx, item in enumerate(lines):
             linewidth = widths[idx // groupsize]
             item.extend((linewidth, colours[idx]))
@@ -256,6 +268,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
     def __init__(self, parent, data, ylabel):
         super().__init__(parent, data, ylabel)
         self.thread = None  # Thread for LongRunningTask
+        self._displayed_keys = []
         self.add_callback()
 
     def add_callback(self):
@@ -286,7 +299,17 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
             logger.debug("Updating plot with data from background thread")
             self.calcs = self.thread.get_result()  # Terminate the LongRunningTask object
             self.thread = None
-            self.update_plot(initiate=False)
+
+            dsp_keys = list(sorted(self.calcs.stats))
+            if dsp_keys != self._displayed_keys:
+                logger.debug("Reinitializing graph for keys change. Old keys: %s New keys: %s",
+                             self._displayed_keys, dsp_keys)
+                initiate = True
+                self._displayed_keys = dsp_keys
+            else:
+                initiate = False
+
+            self.update_plot(initiate=initiate)
             self.plotcanvas.draw()
             refresh_var.set(False)
 

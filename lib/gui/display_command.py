@@ -207,7 +207,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         tk_vars = super().set_vars()
 
         smoothgraph = tk.DoubleVar()
-        smoothgraph.set(0.90)
+        smoothgraph.set(0.900)
         tk_vars["smoothgraph"] = smoothgraph
 
         raw_var = tk.BooleanVar()
@@ -219,11 +219,19 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         tk_vars["smooth_data"] = smooth_var
 
         iterations_var = tk.IntVar()
-        iterations_var.set(0)
+        iterations_var.set(10000)
         tk_vars["display_iterations"] = iterations_var
 
         logger.debug(tk_vars)
         return tk_vars
+
+    def on_tab_select(self):
+        """ Callback for when the graph tab is selected.
+
+        Update to stats to latest.
+        """
+        logger.debug("Training graph update callback received")
+        get_config().tk_vars["refreshgraph"].set(True)
 
     def add_options(self):
         """ Add the additional options """
@@ -275,7 +283,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Add a slider to adjust the smoothing amount """
         logger.debug("Adding Smoothing Slider")
         tk_var = self.vars["smoothgraph"]
-        min_max = (0, 0.99)
+        min_max = (0, 0.999)
         hlp = "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing."
 
         ctl_frame = ttk.Frame(self.optsframe)
@@ -290,7 +298,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         ctl = ttk.Scale(
             ctl_frame,
             variable=tk_var,
-            command=lambda val, var=tk_var, dt=float, rn=2, mm=(0, 0.99):
+            command=lambda val, var=tk_var, dt=float, rn=3, mm=min_max:
             set_slider_rounding(val, var, dt, rn, mm))
         ctl["from_"] = min_max[0]
         ctl["to"] = min_max[1]

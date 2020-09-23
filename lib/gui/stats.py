@@ -809,6 +809,7 @@ class Calculations():
                           flatten_outliers=flatten_outliers)
         self._iterations = 0
         self._limit = 0
+        self._start_iteration = 0
         self._stats = dict()
         self.refresh()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -817,6 +818,11 @@ class Calculations():
     def iterations(self):
         """ int: The number of iterations in the data set. """
         return self._iterations
+
+    @property
+    def start_iteration(self):
+        """ int: The starting iteration number of a limit has been set on the amount of data. """
+        return self._start_iteration
 
     @property
     def stats(self):
@@ -830,7 +836,7 @@ class Calculations():
             logger.warning("Session data is not initialized. Not refreshing")
             return None
         self._iterations = 0
-        self._stats = self._get_raw()
+        self._get_raw()
         self._get_calculations()
         self._remove_raw()
         logger.debug("Refreshed")
@@ -887,46 +893,50 @@ class Calculations():
         self._limit = limit
 
     def _get_raw(self):
-        """ Obtain the raw loss values.
-
-        Returns
-        -------
-        dict
-            The loss name as key with list of loss values as value
-        """
+        """ Obtain the raw loss values and add them to a new :attr:`stats` dictionary. """
         logger.debug("Getting Raw Data")
-        raw = dict()
+        self.stats.clear()
         iterations = set()
+
         if self._display.lower() == "loss":
             loss_dict = Session.get_loss(self._session_id)
             for loss_name, loss in loss_dict.items():
                 if loss_name not in self._loss_keys:
                     continue
+                iterations.add(loss.shape[0])
+
                 if self._limit > 0:
                     loss = loss[-self._limit:]
+
                 if self._args["flatten_outliers"]:
                     loss = self._flatten_outliers(loss)
-                iterations.add(loss.shape[0])
-                raw["raw_{}".format(loss_name)] = loss
+
+                self.stats["raw_{}".format(loss_name)] = loss
 
             self._iterations = 0 if not iterations else min(iterations)
+            if self._limit > 1:
+                self._start_iteration = max(0, self._iterations - self._limit)
+                self._iterations = min(self._iterations, self._limit)
+            else:
+                self._start_iteration = 0
+
             if len(iterations) > 1:
                 # Crop all losses to the same number of items
                 if self._iterations == 0:
-                    raw = {lossname: np.array(list(), dtype=loss.dtype)
-                           for lossname, loss in raw.items()}
+                    self.stats = {lossname: np.array(list(), dtype=loss.dtype)
+                                  for lossname, loss in self.stats.items()}
                 else:
-                    raw = {lossname: loss[:self._iterations] for lossname, loss in raw.items()}
+                    self.stats = {lossname: loss[:self._iterations]
+                                  for lossname, loss in self.stats.items()}
 
         else:  # Rate calculation
             data = self._calc_rate_total() if self._is_totals else self._calc_rate()
             if self._args["flatten_outliers"]:
                 data = self._flatten_outliers(data)
             self._iterations = data.shape[0]
-            raw = {"raw_rate": data}
+            self.stats["raw_rate"] = data
 
         logger.debug("Got Raw Data")
-        return raw
 
     @classmethod
     def _flatten_outliers(cls, data):
@@ -1009,7 +1019,7 @@ class Calculations():
                 continue
             logger.debug("Calculating: %s", selection)
             method = getattr(self, "_calc_{}".format(selection))
-            raw_keys = [key for key in self._stats.keys() if key.startswith("raw_")]
+            raw_keys = [key for key in self._stats if key.startswith("raw_")]
             for key in raw_keys:
                 selected_key = "{}_{}".format(selection, key.replace("raw_", ""))
                 self._stats[selected_key] = method(self._stats[key])
