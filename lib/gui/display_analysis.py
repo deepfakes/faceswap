@@ -293,12 +293,19 @@ class _Options():  # pylint:disable=too-few-public-methods
     def __init__(self, parent):
         logger.debug("Initializing: %s (parent: %s)", self.__class__.__name__, parent)
         self._parent = parent
-        self._add_buttons()
+        self._buttons = self._add_buttons()
+        self._add_training_callback()
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    # TODO Disable clear and load when training
     def _add_buttons(self):
-        """ Add the option buttons """
+        """ Add the option buttons.
+
+        Returns
+        -------
+        dict
+            The button names to button objects
+        """
+        buttons = dict()
         for btntype in ("clear", "save", "load"):
             logger.debug("Adding button: '%s'", btntype)
             cmd = getattr(self._parent, "_{}_session".format(btntype))
@@ -308,6 +315,9 @@ class _Options():  # pylint:disable=too-few-public-methods
             btn.pack(padx=2, side=tk.RIGHT)
             hlp = self._set_help(btntype)
             Tooltip(btn, text=hlp, wraplength=200)
+            buttons[btntype] = btn
+        logger.debug("buttons: %s", buttons)
+        return buttons
 
     @classmethod
     def _set_help(cls, button_type):
@@ -329,6 +339,22 @@ class _Options():  # pylint:disable=too-few-public-methods
         elif button_type == "load":
             hlp = "Load saved session stats"
         return hlp
+
+    def _add_training_callback(self):
+        """ Add a callback to the training tkinter variable to disable save and clear buttons
+        when a model is training. """
+        var = self._parent.vars["is_training"]
+        var.trace("w", self._set_buttons_state)
+
+    def _set_buttons_state(self, *args):  # pylint:disable=unused-argument
+        """ Callback to enable/disable button when training is commenced and stopped. """
+        is_training = self._parent.vars["is_training"].get()
+        state = "disabled" if is_training else "!disabled"
+        for name, button in self._buttons.items():
+            if name not in ("load", "clear"):
+                continue
+            logger.debug("Setting %s button state to %s", name, state)
+            button.state([state])
 
 
 class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
