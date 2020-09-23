@@ -263,7 +263,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         if not self.runningtask.get() or not self._tab_is_active:
             return
         if self.vars["enabled"].get():
-            logger.trace("Updating page")
+            logger.trace("Updating page: %s", self.__class__.__name__)
             self.display_item_set()
             self.load_display()
         self.after(self._waittime, self._update_page)
