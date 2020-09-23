@@ -2,7 +2,7 @@
 gui package
 ***********
 
-The GUI Package contains the entire code base for Faceswap's optional GUI. The GUI itself itself
+The GUI Package contains the entire code base for Faceswap's optional GUI. The GUI itself
 is largely self-generated from the command line options specified in :mod:`lib.cli.args`.
 
 .. contents:: Contents
