@@ -2,7 +2,7 @@
 gui package
 ***********
 
-The GUI Package contains the entire code base for Faceswap's optional GUI. The GUI itself itself
+The GUI Package contains the entire code base for Faceswap's optional GUI. The GUI itself
 is largely self-generated from the command line options specified in :mod:`lib.cli.args`.
 
 .. contents:: Contents
@@ -40,7 +40,18 @@ display module
 
 display\_analysis module
 ========================
-.. autoclass:: lib.gui.display_analysis.Analysis
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.gui.display_analysis.Analysis
+   ~lib.gui.display_analysis.StatsData
+
+.. rubric:: Module
+
+.. automodule:: lib.gui.display_analysis
    :members:
    :undoc-members:
    :show-inheritance:
@@ -48,6 +59,13 @@ display\_analysis module
 popup_configure module
 ======================
 .. automodule:: lib.gui.popup_configure
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+popup_session module
+======================
+.. automodule:: lib.gui.popup_session
    :members:
    :undoc-members:
    :show-inheritance:
@@ -67,6 +85,27 @@ project module
 .. rubric:: Module
 
 .. automodule:: lib.gui.project
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+stats module
+============
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+   
+   ~lib.gui.stats.Calculations
+   ~lib.gui.stats.ExponentialMovingAverage
+   ~lib.gui.stats.GlobalSession
+   ~lib.gui.stats.SessionsSummary
+   ~lib.gui.stats.TensorBoardLogs
+
+.. rubric:: Module
+
+.. automodule:: lib.gui.stats
    :members:
    :undoc-members:
    :show-inheritance:

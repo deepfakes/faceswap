@@ -6,7 +6,7 @@ import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, Session, DisplayNotebook,
+from lib.gui import (TaskBar, CliOptions, CommandNotebook, ConsoleOut, DisplayNotebook,
                      get_images, initialize_images, initialize_config, LastSession,
                      MainMenuBar, preview_trigger, ProcessWrapper, StatusBar)
 
@@ -40,8 +40,7 @@ class FaceswapGui(tk.Tk):
         """ Initialize config and images global constants """
         cliopts = CliOptions()
         statusbar = StatusBar(self)
-        session = Session()
-        config = initialize_config(self, cliopts, statusbar, session)
+        config = initialize_config(self, cliopts, statusbar)
         initialize_images()
         return config
 

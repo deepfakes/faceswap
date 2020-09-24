@@ -24,7 +24,7 @@ _PREVIEW_TRIGGER = None
 PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
 
 
-def initialize_config(root, cli_opts, statusbar, session):
+def initialize_config(root, cli_opts, statusbar):
     """ Initialize the GUI Master :class:`Config` and add to global constant.
 
     This should only be called once on first GUI startup. Future access to :class:`Config`
@@ -38,15 +38,13 @@ def initialize_config(root, cli_opts, statusbar, session):
         The command line options object
     statusbar: :class:`lib.gui.custom_widgets.StatusBar`
         The GUI Status bar
-    session: :class:`lib.gui.stats.Session`
-        The current training Session
     """
     global _CONFIG  # pylint: disable=global-statement
     if _CONFIG is not None:
         return None
     logger.debug("Initializing config: (root: %s, cli_opts: %s, "
-                 "statusbar: %s, session: %s)", root, cli_opts, statusbar, session)
-    _CONFIG = Config(root, cli_opts, statusbar, session)
+                 "statusbar: %s)", root, cli_opts, statusbar)
+    _CONFIG = Config(root, cli_opts, statusbar)
     return _CONFIG
 
 
@@ -764,12 +762,10 @@ class Config():
         The command line options object
     statusbar: :class:`lib.gui.custom_widgets.StatusBar`
         The GUI Status bar
-    session: :class:`lib.gui.stats.Session`
-        The current training Session
     """
-    def __init__(self, root, cli_opts, statusbar, session):
-        logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s, session: %s)",
-                     self.__class__.__name__, root, cli_opts, statusbar, session)
+    def __init__(self, root, cli_opts, statusbar):
+        logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s)",
+                     self.__class__.__name__, root, cli_opts, statusbar)
         self._default_font = self._set_default_font()
         self._constants = dict(
             root=root,
@@ -784,7 +780,6 @@ class Config():
             status_bar=statusbar,
             command_notebook=None)  # set in command.py
         self._user_config = UserConfig(None)
-        self.session = session
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # Constants
@@ -1037,9 +1032,6 @@ class Config():
         refreshgraph = tk.BooleanVar()
         refreshgraph.set(False)
 
-        smoothgraph = tk.DoubleVar()
-        smoothgraph.set(0.90)
-
         updatepreview = tk.BooleanVar()
         updatepreview.set(False)
 
@@ -1053,7 +1045,6 @@ class Config():
                    "generate": generatecommand,
                    "consoleclear": consoleclear,
                    "refreshgraph": refreshgraph,
-                   "smoothgraph": smoothgraph,
                    "updatepreview": updatepreview,
                    "analysis_folder": analysis_folder}
         logger.debug(tk_vars)

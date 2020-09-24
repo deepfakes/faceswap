@@ -80,9 +80,8 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Adding options info")
         lblinfo = ttk.Label(self.optsframe,
                             textvariable=self.vars["info"],
-                            anchor=tk.W,
-                            width=70)
-        lblinfo.pack(side=tk.LEFT, padx=5, pady=5, anchor=tk.W)
+                            anchor=tk.W)
+        lblinfo.pack(side=tk.LEFT, expand=True, padx=5, pady=5, anchor=tk.W)
 
     def set_info(self, msg):
         """ Set the info message """
@@ -264,7 +263,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         if not self.runningtask.get() or not self._tab_is_active:
             return
         if self.vars["enabled"].get():
-            logger.trace("Updating page")
+            logger.trace("Updating page: %s", self.__class__.__name__)
             self.display_item_set()
             self.load_display()
         self.after(self._waittime, self._update_page)

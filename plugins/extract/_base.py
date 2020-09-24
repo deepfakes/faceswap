@@ -70,6 +70,7 @@ class Extractor():
         launched), the instance of the plugin must be passed in for naming convention reasons.
         Default: 0
 
+
     The following attributes should be set in the plugin's :func:`__init__` method after
     initializing the parent.
 
