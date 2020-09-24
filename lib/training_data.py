@@ -245,9 +245,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
                                                        self._warp_to_landmarks,
                                                        **warp_kwargs)]
         else:
-            size = (self._model_input_size, self._model_input_size)
-            processed["feed"] = [np.array([cv2.resize(img, size)
-                                           for img in batch[..., :3]]).astype("float32") / 255.0]
+            processed["feed"] = [self._processing.skip_warp(batch[..., :3])]
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
                      filenames,
@@ -845,3 +843,27 @@ class ImageAugmentation():
                                  for image in warped_batch])
         logger.trace("Warped batch shape: %s", warped_batch.shape)
         return warped_batch
+
+    def skip_warp(self, batch):
+        """ Returns the images resized and cropped for feeding the model, if warping has been
+        disabled.
+
+        Parameters
+        ----------
+        batch: :class:`numpy.ndarray`
+            The batch should be a 4-dimensional array of shape (`batchsize`, `height`, `width`,
+            `3`) and in `BGR` format.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The given batch cropped and resized for feeding the model
+        """
+        logger.trace("Compiling skip warp images: batch shape: %s", batch.shape)
+        slices = self._constants["tgt_slices"]
+        retval = np.array([cv2.resize(image[slices, slices, :],
+                                      (self._input_size, self._input_size),
+                                      cv2.INTER_AREA)
+                           for image in batch], dtype='float32') / 255.
+        logger.trace("feed batch shape: %s", retval.shape)
+        return retval
