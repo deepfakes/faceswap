@@ -133,7 +133,7 @@ class Manual(tk.Tk):
         logger.debug("Initializing tkinter")
         for widget in ("TButton", "TCheckbutton", "TRadiobutton"):
             self.unbind_class(widget, "<Key-space>")
-        initialize_config(self, None, None, None)
+        initialize_config(self, None, None)
         initialize_images()
         get_config().set_geometry(940, 600, fullscreen=True)
         self.title("Faceswap.py - Visual Alignments")

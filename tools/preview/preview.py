@@ -87,7 +87,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
     def _initialize_tkinter(self):
         """ Initialize a standalone tkinter instance. """
         logger.debug("Initializing tkinter")
-        initialize_config(self, None, None, None)
+        initialize_config(self, None, None)
         initialize_images()
         get_config().set_geometry(940, 600, fullscreen=False)
         self.title("Faceswap.py - Convert Settings")
