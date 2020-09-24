@@ -1084,7 +1084,7 @@ class Config():
             initial_dimensions = (round(width * self.scaling_factor),
                                   round(height * self.scaling_factor))
 
-        if fullscreen and sys.platform == "win32":
+        if fullscreen and sys.platform in ("win32", "darwin"):
             self.root.state('zoomed')
         elif fullscreen:
             self.root.attributes('-zoomed', True)
