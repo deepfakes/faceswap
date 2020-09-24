@@ -107,9 +107,10 @@ class TrainerBase():
             are required for training, `masks_eye` if eye masks are required and `masks_mouth` if
             mouth masks are required. """
         retval = dict()
+        penalized_loss = self._model.config["penalized_mask_loss"]
 
         if not any([self._model.config["learn_mask"],
-                    self._model.config["penalized_mask_loss"],
+                    penalized_loss,
                     self._model.config["eye_multiplier"] > 1,
                     self._model.config["mouth_multiplier"] > 1,
                     self._model.command_line_arguments.warp_to_landmarks]):
@@ -121,14 +122,14 @@ class TrainerBase():
             logger.debug("Adding landmarks to training opts dict")
             retval["landmarks"] = alignments.landmarks
 
-        if self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]:
+        if self._model.config["learn_mask"] or penalized_loss:
             logger.debug("Adding masks to training opts dict")
             retval["masks"] = alignments.masks
 
-        if self._model.config["eye_multiplier"] > 1:
+        if penalized_loss and self._model.config["eye_multiplier"] > 1:
             retval["masks_eye"] = alignments.masks_eye
 
-        if self._model.config["mouth_multiplier"] > 1:
+        if penalized_loss and self._model.config["mouth_multiplier"] > 1:
             retval["masks_mouth"] = alignments.masks_mouth
 
         logger.debug({key: {k: len(v) for k, v in val.items()} for key, val in retval.items()})

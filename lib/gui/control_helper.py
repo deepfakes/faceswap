@@ -293,7 +293,7 @@ class ControlPanelOption():
             var.trace("w",
                       lambda name, index, mode, cmd=self._command: self._modified_callback(cmd))
 
-        if track_modified and self._command in ("train", "convert") and self.title == "Model Dir":
+        if track_modified and self._command == "train" and self.title == "Model Dir":
             var.trace("w", lambda name, index, mode, v=var: self._model_callback(v))
 
         return var

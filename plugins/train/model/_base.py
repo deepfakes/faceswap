@@ -1044,9 +1044,17 @@ class _Loss():
         list:
             A list of channel indices that contain the mask for the corresponding config item
         """
+        eye_multiplier = self._config["eye_multiplier"]
+        mouth_multiplier = self._config["mouth_multiplier"]
+        if not self._config["penalized_mask_loss"] and (eye_multiplier > 1 or
+                                                        mouth_multiplier > 1):
+            logger.warning("You have selected eye/mouth loss multipliers greate than 1x, but "
+                           "Penalized Mask Loss is disabled. Disabling all multipliers.")
+            eye_multiplier = 1
+            mouth_multiplier = 1
         uses_masks = (self._config["penalized_mask_loss"],
-                      self._config["eye_multiplier"] > 1,
-                      self._config["mouth_multiplier"] > 1)
+                      eye_multiplier > 1,
+                      mouth_multiplier > 1)
         mask_channels = [-1 for _ in range(len(uses_masks))]
         current_channel = 3
         for idx, mask_required in enumerate(uses_masks):

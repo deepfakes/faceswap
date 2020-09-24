@@ -271,7 +271,7 @@ class Config(FaceswapConfig):
             group="loss",
             min_max=(1, 40),
             rounding=1,
-            default=6,
+            default=3,
             fixed=False,
             info="The amount of priority to give to the eyes.\n\nThe value given here is as a "
                  "multiplier of the main loss score. For example:"
@@ -286,7 +286,7 @@ class Config(FaceswapConfig):
             group="loss",
             min_max=(1, 40),
             rounding=1,
-            default=4,
+            default=2,
             fixed=False,
             info="The amount of priority to give to the mouth.\n\nThe value given here is as a "
                  "multiplier of the main loss score. For Example:"

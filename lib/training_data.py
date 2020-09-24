@@ -283,19 +283,19 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
             item = self._masks[key]
             if item is None and key != "masks":
                 continue
-            if item is None and key == "masks":
-                logger.trace("Creating dummy masks. side: %s", side)
-                masks = np.ones_like(batch[..., :1], dtype=batch.dtype)
-                continue
 
             # Expand out partials for eye and mouth masks on first epoch
             if item is not None and key in ("eyes", "mouths"):
                 self._expand_partials(side, item, filenames)
 
-            logger.trace("Obtaining masks for batch. (key: %s side: %s)", key, side)
-            masks = np.array([self._get_mask(item[side][filename], size)
-                              for filename in filenames], dtype=batch.dtype)
-            masks = self._resize_masks(size, masks)
+            if item is None and key == "masks":
+                logger.trace("Creating dummy masks. side: %s", side)
+                masks = np.ones_like(batch[..., :1], dtype=batch.dtype)
+            else:
+                logger.trace("Obtaining masks for batch. (key: %s side: %s)", key, side)
+                masks = np.array([self._get_mask(item[side][filename], size)
+                                  for filename in filenames], dtype=batch.dtype)
+                masks = self._resize_masks(size, masks)
 
             logger.trace("masks: (key: %s, shape: %s)", key, masks.shape)
             batch = np.concatenate((batch, masks), axis=-1)
