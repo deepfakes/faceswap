@@ -47,8 +47,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         script = getattr(module, self._command.title())
         return script
 
-    @staticmethod
-    def _test_for_tf_version():
+    def _test_for_tf_version(self):
         """ Check that the required Tensorflow version is installed.
 
         Raises
@@ -64,20 +63,47 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             os.environ["KMP_AFFINITY"] = "disabled"
             import tensorflow as tf  # pylint:disable=import-outside-toplevel
         except ImportError as err:
-            raise FaceswapError("There was an error importing Tensorflow. This is most likely "
-                                "because you do not have TensorFlow installed, or you are trying "
-                                "to run tensorflow-gpu on a system without an Nvidia graphics "
-                                "card. Original import error: {}".format(str(err)))
+            if "DLL load failed while importing" in str(err):
+                msg = (
+                    "A DLL library file failed to load. Make sure that you have Microsoft Visual "
+                    "C++ Redistributable (2015, 2017, 2019) installed for your machine from: "
+                    "https://support.microsoft.com/en-gb/help/2977003")
+            else:
+                msg = (
+                    "There was an error importing Tensorflow. This is most likely because you do "
+                    "not have TensorFlow installed, or you are trying to run tensorflow-gpu on a "
+                    "system without an Nvidia graphics card. Original import "
+                    "error: {}".format(str(err)))
+            self._handle_import_error(msg)
+
         tf_ver = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
         if tf_ver < min_ver:
-            raise FaceswapError("The minimum supported Tensorflow is version {} but you have "
-                                "version {} installed. Please upgrade Tensorflow.".format(
-                                    min_ver, tf_ver))
+            msg = ("The minimum supported Tensorflow is version {} but you have version {} "
+                   "installed. Please upgrade Tensorflow.".format(min_ver, tf_ver))
+            self._handle_import_error(msg)
         if tf_ver > max_ver:
-            raise FaceswapError("The maximumum supported Tensorflow is version {} but you have "
-                                "version {} installed. Please downgrade Tensorflow.".format(
-                                    max_ver, tf_ver))
+            msg = ("The maximumum supported Tensorflow is version {} but you have version {} "
+                   "installed. Please downgrade Tensorflow.".format(max_ver, tf_ver))
+            self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
+
+    @classmethod
+    def _handle_import_error(cls, message):
+        """ Display the error message to the console and wait for user input to dismiss it, if
+        running GUI under Windows, otherwise use standard error handling.
+
+        Parameters
+        ----------
+        message: str
+            The error message to display
+        """
+        if "gui" in sys.argv and platform.system() == "Windows":
+            logger.error(message)
+            logger.info("Press \"ENTER\" to dismiss the message and close FaceSwap")
+            input()
+            sys.exit(1)
+        else:
+            raise FaceswapError(message)
 
     def _test_for_gui(self):
         """ If running the gui, performs check to ensure necessary prerequisites are present. """
