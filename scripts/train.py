@@ -84,7 +84,7 @@ class Train():  # pylint:disable=too-few-public-methods
         for folder in (self._args.timelapse_input_a, self._args.timelapse_input_b):
             if folder is not None and not os.path.isdir(folder):
                 raise FaceswapError("The Timelapse path '{}' does not exist".format(folder))
-            exts = [os.path.splitext(fname)[-1] for fname in os.listdir(folder)]
+            exts = [os.path.splitext(fname)[-1].lower() for fname in os.listdir(folder)]
             if not any(ext in _image_extensions for ext in exts):
                 raise FaceswapError("The Timelapse path '{}' does not contain any valid "
                                     "images".format(folder))
