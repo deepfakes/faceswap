@@ -1048,7 +1048,7 @@ class _Loss():
         mouth_multiplier = self._config["mouth_multiplier"]
         if not self._config["penalized_mask_loss"] and (eye_multiplier > 1 or
                                                         mouth_multiplier > 1):
-            logger.warning("You have selected eye/mouth loss multipliers greate than 1x, but "
+            logger.warning("You have selected eye/mouth loss multipliers greater than 1x, but "
                            "Penalized Mask Loss is disabled. Disabling all multipliers.")
             eye_multiplier = 1
             mouth_multiplier = 1
