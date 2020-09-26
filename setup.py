@@ -545,6 +545,7 @@ class Checks():
             return list()
         cudnn_vers = chk[0]
         cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]
+        cudnn_path = os.path.realpath(cudnn_path)
         cudnn_path = cudnn_path.replace("lib", "include")
         cudnn_checkfiles = [os.path.join(cudnn_path, "cudnn_v{}.h".format(cudnn_vers)),
                             os.path.join(cudnn_path, "cudnn.h")]
