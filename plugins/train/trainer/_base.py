@@ -93,7 +93,8 @@ class TrainerBase():
         self._timelapse = _Timelapse(self._model,
                                      self._model.coverage_ratio,
                                      self._config.get("preview_images", 14),
-                                     self._feeder)
+                                     self._feeder,
+                                     self._images)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_alignments_data(self):
@@ -960,15 +961,18 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         The number of preview images to be displayed in the time-lapse
     feeder: dict
         The :class:`_Feeder` for generating the time-lapse images.
+    image_paths: dict
+        The full paths to the training images for each side of the model
     """
-    def __init__(self, model, coverage_ratio, image_count, feeder):
+    def __init__(self, model, coverage_ratio, image_count, feeder, image_paths):
         logger.debug("Initializing %s: model: %s, coverage_ratio: %s, image_count: %s, "
-                     "feeder: '%s')", self.__class__.__name__, model, coverage_ratio,
-                     image_count, feeder)
+                     "feeder: '%s', image_paths: %s)", self.__class__.__name__, model,
+                     coverage_ratio, image_count, feeder, len(image_paths))
         self._num_images = image_count
         self._samples = _Samples(model, coverage_ratio)
         self._model = model
         self._feeder = feeder
+        self._image_paths = image_paths
         self._output_file = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -992,7 +996,13 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         self._output_file = str(output)
         logger.debug("Time-lapse output set to '%s'", self._output_file)
 
-        images = {"a": get_image_paths(input_a), "b": get_image_paths(input_b)}
+        # Rewrite paths to pull from the training images so mask and landmark data can be accessed
+        images = dict()
+        for side, input_ in zip(("a", "b"), (input_a, input_b)):
+            training_path = os.path.dirname(self._image_paths[side][0])
+            images[side] = [os.path.join(training_path, os.path.basename(pth))
+                            for pth in get_image_paths(input_)]
+
         batchsize = min(len(images["a"]),
                         len(images["b"]),
                         self._num_images)
