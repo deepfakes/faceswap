@@ -239,9 +239,8 @@ class Converter():
                            frame_size,
                            placeholder,
                            flags=cv2.WARP_INVERSE_MAP | interpolator,
-                           borderMode=cv2.BORDER_CONSTANT)
+                           borderMode=cv2.BORDER_TRANSPARENT)
 
-        np.clip(placeholder, 0.0, 1.0, out=placeholder)
         logger.trace("Got filename: '%s'. (placeholders: %s)",
                      predicted["filename"], placeholder.shape)
 
