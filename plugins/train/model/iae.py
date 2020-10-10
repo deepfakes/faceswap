@@ -44,7 +44,7 @@ class Model(ModelBase):
 
     def intermediate(self, side):
         """ Intermediate Network """
-        input_ = Input(shape=(4 * 4 * 1024))
+        input_ = Input(shape=(4 * 4 * 1024, ))
         var_x = Dense(self.encoder_dim)(input_)
         var_x = Dense(4 * 4 * int(self.encoder_dim/2))(var_x)
         var_x = Reshape((4, 4, int(self.encoder_dim/2)))(var_x)
