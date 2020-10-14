@@ -80,7 +80,8 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods
     """
     def __init__(self, *args, padding="same", check_icnr_init=False, **kwargs):
         if kwargs.get("name", None) is None:
-            kwargs["name"] = _get_name("conv2d_{}".format(args[0]))
+            filters = kwargs["filters"] if "filters" in kwargs else args[0]
+            kwargs["name"] = _get_name("conv2d_{}".format(filters))
         initializer = self._get_default_initializer(kwargs.pop("kernel_initializer", None))
         if check_icnr_init and _CONFIG["icnr_init"]:
             initializer = ICNR(initializer=initializer)
