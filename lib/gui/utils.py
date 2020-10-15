@@ -488,7 +488,6 @@ class Images():
         gui_preview = os.path.join(self._pathoutput, ".gui_preview.jpg")
         if not image_files or (len(image_files) == 1 and gui_preview not in image_files):
             logger.debug("No preview to display")
-            self._previewoutput = None
             return
         # Filter to just the gui_preview if it exists in folder output
         image_files = [gui_preview] if gui_preview in image_files else image_files
