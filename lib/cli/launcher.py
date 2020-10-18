@@ -226,12 +226,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             arguments.exclude_gpus = [int(idx) for idx in arguments.exclude_gpus]
             set_exclude_devices(arguments.exclude_gpus)
 
-        if ((get_backend() == "cpu" or GPUStats().exclude_all_devices) and
-                (self._command == "extract" and arguments.detector == "s3fd")):
-            logger.error("Extracting on CPU is not currently for detector: '%s'",
-                         arguments.detector.upper())
-            sys.exit(0)
-
         if GPUStats().exclude_all_devices and get_backend() != "cpu":
             msg = "Switching backend to CPU"
             if get_backend() == "amd":

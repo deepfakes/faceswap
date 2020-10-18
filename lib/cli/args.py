@@ -364,8 +364,9 @@ class ExtractArgs(ExtractConvertArgs):
                  "resource intensive. Use this if not using a GPU and time is important."
                  "\nL|mtcnn: Good detector. Fast on CPU, faster on GPU. Uses fewer resources "
                  "than other GPU detectors but can often return more false positives."
-                 "\nL|s3fd: Best detector. GPU only. Can detect more faces and fewer false "
-                 "positives than other GPU detectors, but is a lot more resource intensive."))
+                 "\nL|s3fd: Best detector. Slow on CPU, faster on GPU. Can detect more faces and "
+                 "fewer false positives than other GPU detectors, but is a lot more resource "
+                 "intensive."))
         argument_list.append(dict(
             opts=("-A", "--aligner"),
             action=Radio,
