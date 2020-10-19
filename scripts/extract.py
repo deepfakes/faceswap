@@ -38,7 +38,8 @@ class Extract():  # pylint:disable=too-few-public-methods
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self._args = arguments
-        self._output_dir = str(get_folder(self._args.output_dir))
+        self._output_dir = None if self._args.skip_saving_faces else str(get_folder(
+            self._args.output_dir))
 
         logger.info("Output Directory: %s", self._args.output_dir)
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
@@ -192,7 +193,8 @@ class Extract():  # pylint:disable=too-few-public-methods
         processing.
         """
         size = self._args.size if hasattr(self._args, "size") else 256
-        saver = ImagesSaver(self._output_dir, as_bytes=True)
+        saver = None if self._args.skip_saving_faces else ImagesSaver(self._output_dir,
+                                                                      as_bytes=True)
         exception = False
 
         for phase in range(self._extractor.passes):
@@ -214,8 +216,7 @@ class Extract():  # pylint:disable=too-few-public-methods
                 self._check_thread_error()
                 if is_final:
                     self._output_processing(extract_media, size)
-                    if not self._args.skip_saving_faces:
-                        self._output_faces(saver, extract_media)
+                    self._output_faces(saver, extract_media)
                     if self._save_interval and (idx + 1) % self._save_interval == 0:
                         self._alignments.save()
                 else:
@@ -227,7 +228,8 @@ class Extract():  # pylint:disable=too-few-public-methods
             if not is_final:
                 logger.debug("Reloading images")
                 self._threaded_redirector("reload", detected_faces)
-        saver.close()
+        if not self._args.skip_saving_faces:
+            saver.close()
 
     def _check_thread_error(self):
         """ Check if any errors have occurred in the running threads and their errors """
@@ -282,7 +284,8 @@ class Extract():  # pylint:disable=too-few-public-methods
             output_filename = "{}_{}{}".format(filename, str(idx), extension)
             face.hash, image = encode_image_with_hash(face.aligned_face, extension)
 
-            saver.save(output_filename, image)
+            if not self._args.skip_saving_faces:
+                saver.save(output_filename, image)
             final_faces.append(face.to_alignment())
         self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces)
         del extract_media

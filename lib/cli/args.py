@@ -562,7 +562,7 @@ class ExtractArgs(ExtractConvertArgs):
             dest="skip_saving_faces",
             default=False,
             group="settings",
-            help="Skip saving out the face images"))
+            help="Skip saving the detected faces to disk. Just create an alignments file"))
         return argument_list
 
 
