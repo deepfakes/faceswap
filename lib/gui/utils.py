@@ -171,13 +171,19 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                                ("WebM", "*.webm"),
                                ("Windows Media Video", "*.wmv"),
                                all_files]}
-        # Add in multi-select options
-        for key, val in filetypes.items():
-            if len(val) < 3:
-                continue
-            multi = ["{} Files".format(key.title())]
-            multi.append(" ".join([ftype[1] for ftype in val if ftype[0] != "All files"]))
-            val.insert(0, tuple(multi))
+
+        # Add in multi-select options and upper case extensions for Linux
+        for key in filetypes:
+            if platform.system() == "Linux":
+                filetypes[key] = [item
+                                  if item[0] == "All files"
+                                  else (item[0], "{} {}".format(item[1], item[1].upper()))
+                                  for item in filetypes[key]]
+            if len(filetypes[key]) > 2:
+                multi = ["{} Files".format(key.title())]
+                multi.append(" ".join([ftype[1]
+                             for ftype in filetypes[key] if ftype[0] != "All files"]))
+                filetypes[key].insert(0, tuple(multi))
         return filetypes
 
     @property
