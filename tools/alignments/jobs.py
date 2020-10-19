@@ -74,8 +74,12 @@ class Check():
                            "be nothing to move. Defaulting to output: console")
             self.output = "console"
         if self.type == "faces" and self.job not in ("multi-faces", "leftover-faces"):
-            logger.warning("The selected folder is not valid. Faces folder (-fc) is only "
-                           "supported for 'multi-faces' and 'leftover-faces'")
+            logger.error("The selected folder is not valid. Faces folder (-fc) is only "
+                         "supported for 'multi-faces' and 'leftover-faces'")
+            sys.exit(1)
+        if self.type == "frames" and self.job == "leftover-faces":
+            logger.error("You must provide a faces folder (-fc) NOT a frames folder (-fr) if "
+                         "running the 'leftover-faces' job.")
             sys.exit(1)
 
     def compile_output(self):
