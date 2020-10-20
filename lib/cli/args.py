@@ -670,18 +670,6 @@ class ConvertArgs(ExtractConvertArgs):
                  "testing for further description. Profile faces may result in sub-par "
                  "performance."))
         argument_list.append(dict(
-            opts=("-sc", "--scaling"),
-            action=Radio,
-            type=str.lower,
-            default="none",
-            choices=PluginLoader.get_available_convert_plugins("scaling", True),
-            group="plugins",
-            help="R|Performs a scaling process to attempt to get better definition on the "
-                 "final swap. Some of these options have configurable settings in "
-                 "'/config/convert.ini' or 'Settings > Configure Convert Plugins':"
-                 "\nL|sharpen: Perform sharpening on the final face."
-                 "\nL|none: Don't perform any scaling operations."))
-        argument_list.append(dict(
             opts=("-w", "--writer"),
             action=Radio,
             type=str,

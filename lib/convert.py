@@ -49,7 +49,7 @@ class Converter():
         self._configfile = configfile
 
         self._scale = arguments.output_scale / 100
-        self._adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
+        self._adjustments = dict(box=None, mask=None, color=None, seamless=None, sharpening=None)
 
         self._load_plugins()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -72,7 +72,7 @@ class Converter():
             Pre-loaded :class:`lib.config.FaceswapConfig`. used over any configuration on disk.
         """
         logger.debug("Reinitializing converter")
-        self._adjustments = dict(box=None, mask=None, color=None, seamless=None, scaling=None)
+        self._adjustments = dict(box=None, mask=None, color=None, seamless=None, sharpening=None)
         self._load_plugins(config=config, disable_logging=True)
         logger.debug("Reinitialized converter")
 
@@ -114,11 +114,12 @@ class Converter():
                 self._args.color_adjustment,
                 disable_logging=disable_logging)(configfile=self._configfile, config=config)
 
-        if self._args.scaling != "none" and self._args.scaling is not None:
-            self._adjustments["scaling"] = PluginLoader.get_converter(
-                "scaling",
-                self._args.scaling,
-                disable_logging=disable_logging)(configfile=self._configfile, config=config)
+        sharpening = PluginLoader.get_converter(
+            "scaling",
+            "sharpen",
+            disable_logging=disable_logging)(configfile=self._configfile, config=config)
+        if sharpening.config.get("method", None) is not None:
+            self._adjustments["sharpening"] = sharpening
         logger.debug("Loaded plugins: %s", self._adjustments)
 
     def process(self, in_queue, out_queue):
@@ -328,8 +329,8 @@ class Converter():
         :class:`numpy.ndarray`
             The final merged and swapped frame with any requested post-warp adjustments applied
         """
-        if self._adjustments["scaling"] is not None:
-            new_image = self._adjustments["scaling"].run(new_image)
+        if self._adjustments["sharpening"] is not None:
+            new_image = self._adjustments["sharpening"].run(new_image)
 
         if self._draw_transparent:
             frame = new_image
