@@ -44,36 +44,37 @@
 
 
 _HELPTEXT = (
-    "S3FD Detector options.Fast on GPU, slow on CPU. Can detect more faces and fewer false "
-    "positives than other GPU detectors, but is a lot more resource intensive."
+    "S3FD Detector options.\n"
+    "Fast on GPU, slow on CPU. Can detect more faces and fewer false positives than other GPU "
+    "detectors, but is a lot more resource intensive."
     )
 
 
 _DEFAULTS = {
-    "confidence": {
-        "default": 70,
-        "info": "The confidence level at which the detector has succesfully found a face.\n"
-                "Higher levels will be more discriminating, lower levels will have more false "
-                "positives.",
-        "datatype": int,
-        "rounding": 5,
-        "min_max": (25, 100),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "batch-size": {
-        "default": 4,
-        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
-                "but setting it too high can harm performance.\n"
-                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-                "accomodate then this will automatically be lowered."
-                "\n\tAMD users: A batchsize of 8 requires about 2 GB vram.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (1, 64),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    }
+    "confidence": dict(
+        default=70,
+        info="The confidence level at which the detector has succesfully found a face.\n"
+             "Higher levels will be more discriminating, lower levels will have more false "
+             "positives.",
+        datatype=int,
+        rounding=5,
+        min_max=(25, 100),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+    ),
+    "batch-size": dict(
+        default=4,
+        info="The batch size to use. To a point, higher batch sizes equal better performance, "
+             "but setting it too high can harm performance.\n"
+             "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+             "accomodate then this will automatically be lowered."
+             "\n\tAMD users: A batchsize of 8 requires about 2 GB vram.",
+        datatype=int,
+        rounding=1,
+        min_max=(1, 64),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+    )
 }
