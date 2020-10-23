@@ -135,7 +135,7 @@ class _ConfigurePlugins(tk.Toplevel):
         self._tree.focus(select)
         self._select_item(0)
 
-        self.title("Congigure Settings")
+        self.title("Configure Settings")
         self.tk.call('wm', 'iconphoto', self._w, get_images().icons["favicon"])
         self.protocol("WM_DELETE_WINDOW", _STATE.close_popup)
 
