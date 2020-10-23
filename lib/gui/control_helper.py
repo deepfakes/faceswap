@@ -143,7 +143,7 @@ class ControlPanelOption():
                              min_max=min_max,
                              helptext=helptext)
         self.control = self.get_control()
-        self.tk_var = self.get_tk_var(track_modified)
+        self.tk_var = self.get_tk_var(initial_value, track_modified)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -276,7 +276,7 @@ class ControlPanelOption():
         logger.debug("Setting control '%s' to %s", self.title, control)
         return control
 
-    def get_tk_var(self, track_modified):
+    def get_tk_var(self, initial_value, track_modified):
         """ Correct variable type for control """
         if self.dtype == bool:
             var = tk.BooleanVar()
@@ -286,8 +286,10 @@ class ControlPanelOption():
             var = tk.DoubleVar()
         else:
             var = tk.StringVar()
-        logger.debug("Setting tk variable: (name: '%s', dtype: %s, tk_var: %s)",
-                     self.name, self.dtype, var)
+        if initial_value is not None:
+            var.set(initial_value)
+        logger.debug("Setting tk variable: (name: '%s', dtype: %s, tk_var: %s, initial_value: %s)",
+                     self.name, self.dtype, var, initial_value)
         if track_modified and self._command is not None:
             logger.debug("Tracking variable modification: %s", self.name)
             var.trace("w",
@@ -417,10 +419,10 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Plugin information """
         gui_style = ttk.Style()
         gui_style.configure('White.TFrame', background='#FFFFFF')
-        gui_style.configure('Header.TLabel',
+        gui_style.configure('InfoHeader.TLabel',
                             background='#FFFFFF',
                             font=get_config().default_font + ("bold", ))
-        gui_style.configure('Body.TLabel',
+        gui_style.configure('InfoBody.TLabel',
                             background='#FFFFFF')
 
         info_frame = ttk.Frame(frame, style='White.TFrame', relief=tk.SOLID)
@@ -430,7 +432,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         for idx, line in enumerate(self.header_text.splitlines()):
             if not line:
                 continue
-            style = "Header.TLabel" if idx == 0 else "Body.TLabel"
+            style = "InfoHeader.TLabel" if idx == 0 else "InfoBody.TLabel"
             info = ttk.Label(label_frame, text=line, style=style, anchor=tk.W)
             info.bind("<Configure>", self._adjust_wraplength)
             info.pack(fill=tk.X, padx=0, pady=0, expand=True, side=tk.TOP)

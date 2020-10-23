@@ -51,11 +51,18 @@ class FaceswapGui(tk.Tk):
             tk.font.nametofont(font).configure(family=self._config.default_font[0],
                                                size=self._config.default_font[1])
 
-    @staticmethod
-    def set_styles():
+    def set_styles(self):
         """ Set global custom styles """
         gui_style = ttk.Style()
         gui_style.configure('TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
+        gui_style.configure('H1.TLabel',
+                            font=(self._config.default_font[0],
+                                  self._config.default_font[1] + 4,
+                                  "bold"))
+        gui_style.configure('H2.TLabel',
+                            font=(self._config.default_font[0],
+                                  self._config.default_font[1] + 2,
+                                  "bold"))
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """

@@ -9,14 +9,13 @@ import tkinter as tk
 from tkinter import ttk
 import webbrowser
 
-from importlib import import_module
 from subprocess import Popen, PIPE, STDOUT
 
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer
 import update_deps
 
-from .popup_configure import popup_config
+from .popup_configure import open_popup
 from .custom_widgets import Tooltip
 from .utils import get_config, get_images
 
@@ -25,8 +24,6 @@ _RESOURCES = [("faceswap.dev - Guides and Forum", "https://www.faceswap.dev"),
               ("Discord - The FaceSwap Discord server", "https://discord.gg/VasFUAy"),
               ("Github - Our Source Code", "https://github.com/deepfakes/faceswap")]
 
-_CONFIG_FILES = []
-_CONFIGS = dict()
 _WORKING_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
 
 
@@ -56,58 +53,16 @@ class SettingsMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent, tearoff=0)
         self.root = parent.root
-        self.configs = self.scan_for_plugin_configs()
         self.build()
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    def scan_for_plugin_configs(self):
-        """ Scan for config.ini file locations """
-        global _CONFIGS, _CONFIG_FILES  # pylint:disable=global-statement
-        root_path = os.path.abspath(os.path.dirname(sys.argv[0]))
-        plugins_path = os.path.join(root_path, "plugins")
-        logger.debug("Scanning path: '%s'", plugins_path)
-        configs = dict()
-        for dirpath, _, filenames in os.walk(plugins_path):
-            if "_config.py" in filenames:
-                plugin_type = os.path.split(dirpath)[-1]
-                config = self.load_config(plugin_type)
-                configs[plugin_type] = config
-        logger.debug("Configs loaded: %s", sorted(list(configs.keys())))
-        keys = list(configs.keys())
-        for key in ("extract", "train", "convert"):
-            if key in keys:
-                _CONFIG_FILES.append(keys.pop(keys.index(key)))
-        _CONFIG_FILES.extend([key for key in sorted(keys)])
-        _CONFIGS = configs
-        return configs
-
-    @staticmethod
-    def load_config(plugin_type):
-        """ Load the config to generate config file if it doesn't exist and get filename """
-        # Load config to generate default if doesn't exist
-        mod = ".".join(("plugins", plugin_type, "_config"))
-        module = import_module(mod)
-        config = module.Config(None)
-        logger.debug("Found '%s' config at '%s'", plugin_type, config.configfile)
-        return config
 
     def build(self):
         """ Add the settings menu to the menu bar """
         # pylint: disable=cell-var-from-loop
         logger.debug("Building settings menu")
-        for name in _CONFIG_FILES:
-            label = "Configure {} Plugins...".format(name.title())
-            config = self.configs[name]
-            self.add_command(
-                label=label,
-                underline=10,
-                command=lambda n=name, c=config: popup_config(n, c))
-        self.add_separator()
-        conf = get_config().user_config
-        self.add_command(
-            label="GUI Settings...",
-            underline=10,
-            command=lambda n="GUI", c=conf: popup_config(n, c))
+        self.add_command(label="Configure Settings...",
+                         underline=0,
+                         command=open_popup)
         logger.debug("Built settings menu")
 
 
@@ -386,7 +341,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         self.root.config(cursor="watch")
         self.clear_console()
         try:
-            from lib.sysinfo import sysinfo
+            from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
             info = sysinfo
         except Exception as err:  # pylint:disable=broad-except
             info = "Error obtaining system info: {}".format(str(err))
@@ -546,15 +501,14 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         # pylint: disable=cell-var-from-loop
         frame = ttk.Frame(self._btn_frame)
         frame.pack(side=tk.LEFT, anchor=tk.W, expand=False, padx=2)
-        for name in _CONFIG_FILES:
-            config = _CONFIGS[name]
+        for name in ("extract", "train", "convert"):
             btntype = "settings_{}".format(name)
             btntype = btntype if btntype in get_images().icons else "settings"
             logger.debug("Adding button: '%s'", btntype)
             btn = ttk.Button(
                 frame,
                 image=get_images().icons[btntype],
-                command=lambda n=name, c=config: popup_config(n, c))
+                command=lambda n=name: open_popup(name=n))
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = "Configure {} settings...".format(name.title())
             Tooltip(btn, text=hlp, wraplength=200)
