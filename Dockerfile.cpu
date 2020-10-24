@@ -1,6 +1,11 @@
-FROM tensorflow/tensorflow:2.2.0-py3
+FROM tensorflow/tensorflow:2.2.1-py3
 
-RUN add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
+# To disable tzdata and others from asking for input
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update -qq -y \
+ && apt-get install -y software-properties-common \
+ && add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
  && apt-get update -qq -y \
  && apt-get install -y libsm6 libxrender1 libxext-dev python3-tk ffmpeg git \
  && apt-get clean \
