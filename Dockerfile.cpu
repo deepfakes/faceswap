@@ -1,10 +1,8 @@
 FROM tensorflow/tensorflow:2.2.1-py3
 
-RUN apt-get update \
-  && apt-get install -y software-properties-common \
-  && rm -rf /var/lib/apt/lists/*
-
-RUN add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
+RUN apt-get update -qq -y \
+ && apt-get install -y software-properties-common \
+ && add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
  && apt-get update -qq -y \
  && apt-get install -y libsm6 libxrender1 libxext-dev python3-tk ffmpeg git \
  && apt-get clean \
