@@ -1,5 +1,6 @@
 FROM tensorflow/tensorflow:2.2.1-gpu-py3
 
+# To disable tzdata and others from asking for input
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
