@@ -182,7 +182,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
             if len(filetypes[key]) > 2:
                 multi = ["{} Files".format(key.title())]
                 multi.append(" ".join([ftype[1]
-                             for ftype in filetypes[key] if ftype[0] != "All files"]))
+                                       for ftype in filetypes[key] if ftype[0] != "All files"]))
                 filetypes[key].insert(0, tuple(multi))
         return filetypes
 
@@ -771,7 +771,7 @@ class Config():
     def __init__(self, root, cli_opts, statusbar):
         logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s)",
                      self.__class__.__name__, root, cli_opts, statusbar)
-        self._default_font = self._set_default_font()
+        self._default_font = tk.font.nametofont("TkDefaultFont").configure()["family"]
         self._constants = dict(
             root=root,
             scaling_factor=self._get_scaling(root),
@@ -893,25 +893,6 @@ class Config():
         scaling = dpi / 72.0
         logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
         return scaling
-
-    @classmethod
-    def _set_default_font(cls):
-        """ Set the default font.
-
-        For macOS and Windows, this just pulls back the system default font.
-
-        For Linux, quite often the default is not ideal, so we try to pull a sane default from
-        installed fonts.
-        """
-        if platform.system() == "Linux":
-            for family in ("DejaVu Sans", "Noto Sans", "Nimbus Sans"):
-                if family in tk.font.families():
-                    logger.debug("Setting default font to: '%s'", family)
-                    tk.font.nametofont("TkDefaultFont").configure(family=family)
-                    tk.font.nametofont("TkHeadingFont").configure(family=family)
-                    tk.font.nametofont("TkMenuFont").configure(family=family)
-                    break
-        return tk.font.nametofont("TkDefaultFont").configure()["family"]
 
     def set_default_options(self):
         """ Set the default options for :mod:`lib.gui.projects`
