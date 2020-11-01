@@ -17,7 +17,7 @@ from threading import Event
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 from tensorflow.core.util import event_pb2
 from lib.serializer import get_serializer
 

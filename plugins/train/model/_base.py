@@ -385,7 +385,7 @@ class ModelBase():
                                self.config.get("clipnorm", False),
                                self._args).optimizer
         if self._settings.use_mixed_precision:
-            optimizer = self._settings.LossScaleOptimizer(optimizer, loss_scale="dynamic")
+            optimizer = self._settings.LossScaleOptimizer(optimizer, True)
         if get_backend() == "amd":
             self._rewrite_plaid_outputs()
         self._loss.configure(self._model)
@@ -643,7 +643,7 @@ class _Settings():
 
         use_mixed_precision = not is_predict and mixed_precision and get_backend() == "nvidia"
         if use_mixed_precision:
-            self._mixed_precision = tf.keras.mixed_precision.experimental
+            self._mixed_precision = tf.keras.mixed_precision
         else:
             self._mixed_precision = None
 
@@ -746,7 +746,7 @@ class _Settings():
             # TODO remove this hacky fix to disable mixed precision compatibility testing if/when
             # fixed upstream.
             # pylint:disable=import-outside-toplevel,protected-access
-            from tensorflow.python.keras.mixed_precision.experimental import \
+            from tensorflow.python.keras.mixed_precision import \
                 device_compatibility_check
             logger.debug("Overriding tensorflow _logged_compatibility_check parameter. Initial "
                          "value: %s", device_compatibility_check._logged_compatibility_check)
@@ -754,7 +754,7 @@ class _Settings():
             logger.debug("New value: %s", device_compatibility_check._logged_compatibility_check)
 
         policy = self._mixed_precision.Policy('mixed_float16')
-        self._mixed_precision.set_policy(policy)
+        self._mixed_precision.set_global_policy(policy)
         logger.debug("Enabled mixed precision. (Compute dtype: %s, variable_dtype: %s)",
                      policy.compute_dtype, policy.variable_dtype)
         return True
