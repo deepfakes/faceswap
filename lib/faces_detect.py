@@ -7,7 +7,7 @@ from zlib import compress, decompress
 import cv2
 import numpy as np
 
-from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
+from lib.aligner import Extract as AlignerExtract, get_align_matrix, get_matrix_scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -314,7 +314,7 @@ class DetectedFace():
             padding = int(size * self._extract_ratio) // 2
             self.aligned["size"] = size
             self.aligned["padding"] = padding
-            self.aligned["matrix"] = get_align_mat(self)
+            self.aligned["matrix"] = get_align_matrix(self)
             self.aligned["face"] = None
         if image is not None and (self.aligned["face"] is None or force):
             logger.trace("Getting aligned face")
@@ -362,7 +362,7 @@ class DetectedFace():
 
         self.feed["size"] = size
         self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
-        self.feed["matrix"] = get_align_mat(self)
+        self.feed["matrix"] = get_align_matrix(self)
         if is_aligned_face:
             original_size = image.shape[0]
             interp = cv2.INTER_CUBIC if original_size < size else cv2.INTER_AREA
@@ -404,7 +404,7 @@ class DetectedFace():
 
         self.reference["size"] = size
         self.reference["padding"] = self._padding_from_coverage(size, coverage_ratio)
-        self.reference["matrix"] = get_align_mat(self)
+        self.reference["matrix"] = get_align_matrix(self)
 
         face = AlignerExtract().transform(image,
                                           self.reference["matrix"],
