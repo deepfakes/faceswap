@@ -46,8 +46,9 @@ _HELPTEXT = "Options for sharpening the face after placement"
 
 _DEFAULTS = {
     "method": {
-        "default": "unsharp_mask",
+        "default": "none",
         "info": "The type of sharpening to use:"
+                "\n\t none: Don't perform any sharpening."
                 "\n\t box: Fastest, but weakest method. Uses a box filter to assess edges."
                 "\n\t gaussian: Slower, but better than box. Uses a gaussian filter to assess "
                 "edges."
@@ -56,7 +57,7 @@ _DEFAULTS = {
         "datatype": str,
         "rounding": None,
         "min_max": None,
-        "choices": ["box", "gaussian", "unsharp_mask"],
+        "choices": ["none", "box", "gaussian", "unsharp_mask"],
         "gui_radio": True,
         "fixed": True,
     },

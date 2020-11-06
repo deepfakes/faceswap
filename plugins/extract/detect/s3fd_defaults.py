@@ -18,7 +18,7 @@
     The following keys are expected for the _DEFAULTS <metadata> dict:
     datatype:  [required] A python type class. This limits the type of data that can be
                 provided in the .ini file and ensures that the value is returned in the
-                correct type to faceswap. Valid datatypes are: <class 'int'>, <class 'float'>,
+                correct type to faceswap. Valid data types are: <class 'int'>, <class 'float'>,
                 <class 'str'>, <class 'bool'>.
     default:   [required] The default value for this option.
     info:      [required] A string describing what this option does.
@@ -29,10 +29,10 @@
                 a combobox / radio option in the GUI.
     gui_radio: [optional] If <choices> are defined, this indicates that the GUI should use
                 radio buttons rather than a combobox to display this option.
-    min_max:   [partial] For <class 'int'> and <class 'float'> datatypes this is required
+    min_max:   [partial] For <class 'int'> and <class 'float'> data types this is required
                 otherwise it is ignored. Should be a tuple of min and max accepted values.
                 This is used for controlling the GUI slider range. Values are not enforced.
-    rounding:  [partial] For <class 'int'> and <class 'float'> datatypes this is
+    rounding:  [partial] For <class 'int'> and <class 'float'> data types this is
                 required otherwise it is ignored. Used for the GUI slider. For floats, this
                 is the number of decimal places to display. For ints this is the step size.
     fixed:     [optional] [train only]. Training configurations are fixed when the model is
@@ -44,36 +44,37 @@
 
 
 _HELPTEXT = (
-    "S3FD Detector options.Fast on GPU, slow on CPU. Can detect more faces and fewer false "
-    "positives than other GPU detectors, but is a lot more resource intensive."
+    "S3FD Detector options.\n"
+    "Fast on GPU, slow on CPU. Can detect more faces and fewer false positives than other GPU "
+    "detectors, but is a lot more resource intensive."
     )
 
 
 _DEFAULTS = {
-    "confidence": {
-        "default": 50,
-        "info": "The confidence level at which the detector has succesfully found a face.\n"
-                "Higher levels will be more discriminating, lower levels will have more false "
-                "positives.",
-        "datatype": int,
-        "rounding": 5,
-        "min_max": (25, 100),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "batch-size": {
-        "default": 8,
-        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
-                "but setting it too high can harm performance.\n"
-                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-                "accomodate then this will automatically be lowered."
-                "\n\tAMD users: A batchsize of 8 requires about 2 GB vram.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (1, 64),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    }
+    "confidence": dict(
+        default=70,
+        info="The confidence level at which the detector has succesfully found a face.\n"
+             "Higher levels will be more discriminating, lower levels will have more false "
+             "positives.",
+        datatype=int,
+        rounding=5,
+        min_max=(25, 100),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+    ),
+    "batch-size": dict(
+        default=4,
+        info="The batch size to use. To a point, higher batch sizes equal better performance, "
+             "but setting it too high can harm performance.\n"
+             "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
+             "accomodate then this will automatically be lowered."
+             "\n\tAMD users: A batchsize of 8 requires about 2 GB vram.",
+        datatype=int,
+        rounding=1,
+        min_max=(1, 64),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+    )
 }

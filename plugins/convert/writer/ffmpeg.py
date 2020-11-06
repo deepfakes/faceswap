@@ -145,20 +145,22 @@ class Writer(Output):
             ImageIO is a useful lib for frames > video as it also packages the ffmpeg binary
             however muxing audio is non-trivial, so this is done afterwards with ffmpy.
             A future fix could be implemented to mux audio with the frames """
+        if self.config["skip_mux"]:
+            logger.info("Skipping audio muxing due to configuration settings.")
+            self._rename_tmp_file()
+            return
+
         logger.info("Muxing Audio...")
         if self.frame_ranges is not None:
             logger.warning("Muxing audio is not currently supported for limited frame ranges."
                            "The output video has been created but you will need to mux audio "
                            "yourself")
-            os.rename(self.video_tmp_file, self.video_file)
-            logger.debug("Removing temp file")
-            if os.path.isfile(self.video_tmp_file):
-                os.remove(self.video_tmp_file)
+            self._rename_tmp_file()
             return
 
         exe = im_ffm.get_ffmpeg_exe()
         inputs = OrderedDict([(self.video_tmp_file, None), (self.source_video, None)])
-        outputs = {self.video_file: "-map 0:0 -map 1:1 -c: copy"}
+        outputs = {self.video_file: "-map 0:v:0 -map 1:a:0 -c: copy"}
         ffm = FFmpeg(executable=exe,
                      global_options="-hide_banner -nostats -v 0 -y",
                      inputs=inputs,
@@ -180,6 +182,13 @@ class Writer(Output):
                              "EFFMpeg tool or an external application.")
                 os.rename(self.video_tmp_file, self.video_file)
             break
+        logger.debug("Removing temp file")
+        if os.path.isfile(self.video_tmp_file):
+            os.remove(self.video_tmp_file)
+
+    def _rename_tmp_file(self):
+        """ Rename the temporary video file if not muxing audio. """
+        os.rename(self.video_tmp_file, self.video_file)
         logger.debug("Removing temp file")
         if os.path.isfile(self.video_tmp_file):
             os.remove(self.video_tmp_file)

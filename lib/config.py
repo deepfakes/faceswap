@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-""" Default configurations for faceswap
-    Extends out configparser funcionality by checking for default config updates
-    and returning data in it's correct format """
+""" Default configurations for faceswap.
+    Extends out :class:`configparser.ConfigParser` functionality by checking for default
+    configuration updates and returning data in it's correct format """
 
 import logging
 import os
 import sys
 from collections import OrderedDict
 from configparser import ConfigParser
+from importlib import import_module
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -64,10 +65,12 @@ class FaceswapConfig():
 
     @property
     def config_dict(self):
-        """ Collate global options and requested section into a dictionary
-            with the correct datatypes """
+        """ Collate global options and requested section into a dictionary with the correct
+        data types """
         conf = dict()
-        for sect in ("global", self.section):
+        sections = [sect for sect in self.config.sections() if sect.startswith("global")]
+        sections.append(self.section)
+        for sect in sections:
             if sect not in self.config.sections():
                 continue
             for key in self.config[sect]:
@@ -133,10 +136,10 @@ class FaceswapConfig():
             is_radio is to indicate to the GUI that it should display Radio Buttons rather than
             combo boxes for multiple choice options.
 
-            The 'fixed' parameter is only for training configs. Training configurations
+            The 'fixed' parameter is only for training configurations. Training configurations
             are set when the model is created, and then reloaded from the state file.
             Marking an item as fixed=False indicates that this value can be changed for
-            existing models, and will overide the value saved in the state file with the
+            existing models, and will override the value saved in the state file with the
             updated value in config.
 
             The 'Group' parameter allows you to assign the config item to a group in the GUI
@@ -177,6 +180,7 @@ class FaceswapConfig():
     @staticmethod
     def expand_helptext(helptext, choices, default, datatype, min_max, fixed):
         """ Add extra helptext info from parameters """
+        helptext += "\n"
         if not fixed:
             helptext += "\nThis option can be updated for existing models."
         if choices:
@@ -339,3 +343,22 @@ class FaceswapConfig():
         self.load_config()
         self.validate_config()
         logger.debug("Handled config")
+
+
+def generate_configs():
+    """ Generate config files if they don't exist.
+
+    This script is run prior to anything being set up, so don't use logging
+    Generates the default config files for plugins in the faceswap config folder
+    """
+
+    base_path = os.path.realpath(os.path.dirname(sys.argv[0]))
+    plugins_path = os.path.join(base_path, "plugins")
+    configs_path = os.path.join(base_path, "config")
+    for dirpath, _, filenames in os.walk(plugins_path):
+        if "_config.py" in filenames:
+            section = os.path.split(dirpath)[-1]
+            config_file = os.path.join(configs_path, "{}.ini".format(section))
+            if not os.path.exists(config_file):
+                mod = import_module("plugins.{}.{}".format(section, "_config"))
+                mod.Config(None)

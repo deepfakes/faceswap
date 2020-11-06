@@ -1,35 +1,35 @@
 # Installing faceswap
-- [Installing faceswap](#Installing-faceswap)
-- [Prerequisites](#Prerequisites)
-  - [Hardware Requirements](#Hardware-Requirements)
-  - [Supported operating systems](#Supported-operating-systems)
-- [Important before you proceed](#Important-before-you-proceed)
-- [Windows Install Guide](#Windows-Install-Guide)
-  - [Installer](#Installer)
-  - [Manual Install](#Manual-Install)
-  - [Prerequisites](#Prerequisites-1)
-    - [Anaconda](#Anaconda)
-    - [Git](#Git)
-  - [Setup](#Setup)
-    - [Anaconda](#Anaconda-1)
-      - [Set up a virtual environment](#Set-up-a-virtual-environment)
-      - [Entering your virtual environment](#Entering-your-virtual-environment)
+- [Installing faceswap](#installing-faceswap)
+- [Prerequisites](#prerequisites)
+  - [Hardware Requirements](#hardware-requirements)
+  - [Supported operating systems](#supported-operating-systems)
+- [Important before you proceed](#important-before-you-proceed)
+- [Linux and Windows Install Guide](#linux-and-windows-install-guide)
+  - [Installer](#installer)
+  - [Manual Install](#manual-install)
+  - [Prerequisites](#prerequisites-1)
+    - [Anaconda](#anaconda)
+    - [Git](#git)
+  - [Setup](#setup)
+    - [Anaconda](#anaconda-1)
+      - [Set up a virtual environment](#set-up-a-virtual-environment)
+      - [Entering your virtual environment](#entering-your-virtual-environment)
     - [faceswap](#faceswap)
-      - [Easy install](#Easy-install)
-      - [Manual install](#Manual-install)
-  - [Running faceswap](#Running-faceswap)
-  - [Create a desktop shortcut](#Create-a-desktop-shortcut)
-  - [Updating faceswap](#Updating-faceswap)
-- [General Install Guide](#General-Install-Guide)
-  - [Installing dependencies](#Installing-dependencies)
-    - [Git](#Git-1)
-    - [Python](#Python)
-    - [Virtual Environment](#Virtual-Environment)
-  - [Getting the faceswap code](#Getting-the-faceswap-code)
-  - [Setup](#Setup-1)
-    - [About some of the options](#About-some-of-the-options)
-  - [Run the project](#Run-the-project)
-  - [Notes](#Notes)
+      - [Easy install](#easy-install)
+      - [Manual install](#manual-install-1)
+  - [Running faceswap](#running-faceswap)
+  - [Create a desktop shortcut](#create-a-desktop-shortcut)
+  - [Updating faceswap](#updating-faceswap)
+- [General Install Guide](#general-install-guide)
+  - [Installing dependencies](#installing-dependencies)
+    - [Git](#git-1)
+    - [Python](#python)
+    - [Virtual Environment](#virtual-environment)
+  - [Getting the faceswap code](#getting-the-faceswap-code)
+  - [Setup](#setup-1)
+    - [About some of the options](#about-some-of-the-options)
+  - [Run the project](#run-the-project)
+  - [Notes](#notes)
 
 # Prerequisites
 Machine learning essentially involves a ton of trial and error. You're letting a program try millions of different settings to land on an algorithm that sort of does what you want it to do. This process is really really slow unless you have the hardware required to speed this up. 
@@ -43,7 +43,7 @@ The type of computations that the process does are well suited for graphics card
     - Laptop CPUs can often run the software, but will not be fast enough to train at reasonable speeds
 - **A powerful GPU**
     - Currently, Nvidia GPUs are fully supported. and AMD graphics cards are partially supported through plaidML.
-    - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.0 or higher.
+    - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.5. (Release 1.0 will work on Compute Capability 3.0)
       To see which version your GPU supports, consult this list: https://developer.nvidia.com/cuda-gpus
       Desktop cards later than the 7xx series are most likely supported.
 - **A lot of patience**
@@ -64,10 +64,10 @@ Alternatively, there is a docker image that is based on Debian.
 
 The developers are also not responsible for any damage you might cause to your own computer.
 
-# Windows Install Guide
+# Linux and Windows Install Guide
 
 ## Installer
-Windows now has an installer which installs everything for you and creates a desktop shortcut to launch straight into the GUI. You can download the installer from https://github.com/deepfakes/faceswap/releases.
+Windows and Linux now both have an installer which installs everything for you and creates a desktop shortcut to launch straight into the GUI. You can download the installer from https://github.com/deepfakes/faceswap/releases.
 
 If you have issues with the installer then read on for the more manual way to install faceswap on Windows.
 
@@ -93,9 +93,9 @@ Reboot your PC, so that everything you have just installed gets registered.
 - Select "Create" at the bottom
 - In the pop up:
     - Give it the name: faceswap
-    - **IMPORTANT**: Select python version 3.6
-    - Hit "Create" (NB: This may take a while as it will need to download Python 3.6)
-![Anaconda virtual env setup](https://i.imgur.com/Tl5tyVq.png)
+    - **IMPORTANT**: Select python version 3.8
+    - Hit "Create" (NB: This may take a while as it will need to download Python)
+![Anaconda virtual env setup](https://i.imgur.com/CLIDDfa.png)
 
 #### Entering your virtual environment
 To enter the virtual environment:
@@ -115,11 +115,12 @@ To enter the virtual environment:
 
 #### Manual install
 Do not follow these steps if the Easy Install above completed succesfully.
+If you are using an Nvidia card make sure you have the correct versions of Cuda/cuDNN installed for the required version of Tensorflow
 - Install tkinter (required for the GUI) by typing: `conda install tk`
-- Install requirements: `pip install -r requirements.txt`
-- Install Tensorflow (either GPU or CPU version depending on your setup):
-    - GPU Version: `conda install tensorflow-gpu`
-    - Non GPU Version: `conda install tensorflow`
+- Install requirements:
+  - For Nvidia GPU users: `pip install -r requirements_nvidia.txt`
+  - For AMD GPU users: `pip install -r requirements_amd.txt`
+  - For CPU users: `pip install -r requirements_cpu.txt`
 
 ## Running faceswap
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
@@ -154,7 +155,7 @@ Obtain git for your distribution from the [git website](https://git-scm.com/down
 The recommended install method is to use a Conda3 Environment as this will handle the installation of Nvidia's CUDA and cuDNN straight into your Conda Environment. This is by far the easiest and most reliable way to setup the project.
   - MiniConda3 is recommended: [MiniConda3](https://docs.conda.io/en/latest/miniconda.html)
   
-Alternatively you can install Python (>= 3.2-3.7 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install no higher than version 10.0 of CUDA and 7.5.x of CUDNN.
+Alternatively you can install Python (>= 3.7-3.8 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Tensorflow (Current release: Tensorflow 2.2. Release v1.0: Tensorflow 1.15). You can check for the compatible versions here: (https://www.tensorflow.org/install/source#gpu).
   - Python distributions:
     - apt/yum install python3 (Linux)
     - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)
@@ -192,7 +193,7 @@ CUDA with Docker in 20 minutes.
 INFO    The tool provides tips for installation
         and installs required python packages
 INFO    Setup in Linux 4.14.39-1-MANJARO
-INFO    Installed Python: 3.6.5 64bit
+INFO    Installed Python: 3.7.5 64bit
 INFO    Installed PIP: 10.0.1
 Enable  Docker? [Y/n] 
 INFO    Docker Enabled
@@ -240,7 +241,7 @@ A successful setup log, without docker.
 INFO    The tool provides tips for installation
         and installs required python packages
 INFO    Setup in Linux 4.14.39-1-MANJARO
-INFO    Installed Python: 3.6.5 64bit
+INFO    Installed Python: 3.7.5 64bit
 INFO    Installed PIP: 10.0.1
 Enable  Docker? [Y/n] n
 INFO    Docker Disabled

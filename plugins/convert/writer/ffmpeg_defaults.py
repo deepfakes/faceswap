@@ -44,142 +44,103 @@
 _HELPTEXT = "Options for encoding converted frames to video."
 
 
-_DEFAULTS = {
-    "container": {
-        "default": "mp4",
-        "info": "Video container to use.",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": ["avi", "flv", "mkv", "mov", "mp4", "mpeg", "webm"],
-        "gui_radio": True,
-        "fixed": True,
-    },
-    "codec": {
-        "default": "libx264",
-        "info": "Video codec to use:"
-                "\n\t libx264: H.264. A widely supported and commonly used codec."
-                "\n\t libx265: H.265 / HEVC video encoder application library.",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": ["libx264", "libx265"],
-        "gui_radio": True,
-        "fixed": True,
-    },
-    "crf": {
-        "default": 23,
-        "info": "Constant Rate Factor:  0 is lossless and 51 is worst quality possible. A "
-                "lower value generally leads to higher quality, and a subjectively sane range "
-                "is 17-28. Consider 17 or 18 to be visually lossless or nearly so; it should "
-                "look the same or nearly the same as the input but it isn't technically "
-                "lossless.\nThe range is exponential, so increasing the CRF value +6 results "
-                "in roughly half the bitrate / file size, while -6 leads to roughly twice the "
-                "bitrate.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 51),
-        "choices": [],
-        "gui_radio": False,
-        "group": "quality",
-        "fixed": True,
-    },
-    "preset": {
-        "default": "medium",
-        "info": "A preset is a collection of options that will provide a certain encoding "
-                "speed to compression ratio.\nA slower preset will provide better compression "
-                "(compression is quality per filesize).\nUse the slowest preset that you have "
-                "patience for.",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": [
-            "ultrafast",
-            "superfast",
-            "veryfast",
-            "faster",
-            "fast",
-            "medium",
-            "slow",
-            "slower",
-            "veryslow",
-        ],
-        "gui_radio": True,
-        "group": "quality",
-        "fixed": True,
-    },
-    "tune": {
-        "default": "none",
-        "info": "Change settings based upon the specifics of your input:"
-                "\n\t none: Don't perform any additional tuning."
-                "\n\t film: [H.264 only] Use for high quality movie content; lowers "
-                "deblocking."
-                "\n\t animation: [H.264 only] Good for cartoons; uses higher deblocking and "
-                "more reference frames."
-                "\n\t grain: Preserves the grain structure in old, grainy film material."
-                "\n\t stillimage: [H.264 only] Good for slideshow-like content."
-                "\n\t fastdecode: Allows faster decoding by disabling certain filters."
-                "\n\t zerolatency: Good for fast encoding and low-latency streaming.",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": [
-            "none",
-            "film",
-            "animation",
-            "grain",
-            "stillimage",
-            "fastdecode",
-            "zerolatency",
-        ],
-        "gui_radio": False,
-        "group": "settings",
-        "fixed": True,
-    },
-    "profile": {
-        "default": "auto",
-        "info": "[H.264 Only] Limit the output to a specific H.264 profile. Don't change this "
-                "unless your target device only supports a certain profile.",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": ["auto", "baseline", "main", "high", "high10", "high422", "high444"],
-        "gui_radio": False,
-        "group": "settings",
-        "fixed": True,
-    },
-    "level": {
-        "default": "auto",
-        "info": "[H.264 Only] Set the encoder level, Don't change this unless your target "
-                "device only supports a certain level.",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": [
-            "auto",
-            "1",
-            "1b",
-            "1.1",
-            "1.2",
-            "1.3",
-            "2",
-            "2.1",
-            "2.2",
-            "3",
-            "3.1",
-            "3.2",
-            "4",
-            "4.1",
-            "4.2",
-            "5",
-            "5.1",
-            "5.2",
-            "6",
-            "6.1",
-            "6.2",
-        ],
-        "gui_radio": False,
-        "group": "settings",
-        "fixed": True,
-    },
-}
+_DEFAULTS = dict(
+    container=dict(
+        default="mp4",
+        info="Video container to use.",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["avi", "flv", "mkv", "mov", "mp4", "mpeg", "webm"],
+        gui_radio=True,
+    ),
+    codec=dict(
+        default="libx264",
+        info="Video codec to use:"
+             "\n\t libx264: H.264. A widely supported and commonly used codec."
+             "\n\t libx265: H.265 / HEVC video encoder application library.",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["libx264", "libx265"],
+        gui_radio=True,
+    ),
+    crf=dict(
+        default=23,
+        info="Constant Rate Factor:  0 is lossless and 51 is worst quality possible. A "
+             "lower value generally leads to higher quality, and a subjectively sane range "
+             "is 17-28. Consider 17 or 18 to be visually lossless or nearly so; it should "
+             "look the same or nearly the same as the input but it isn't technically "
+             "lossless.\nThe range is exponential, so increasing the CRF value +6 results "
+             "in roughly half the bitrate / file size, while -6 leads to roughly twice the "
+             "bitrate.",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 51),
+        choices=[],
+        gui_radio=False,
+        group="quality",
+    ),
+    preset=dict(
+        default="medium",
+        info="A preset is a collection of options that will provide a certain encoding "
+             "speed to compression ratio.\nA slower preset will provide better compression "
+             "(compression is quality per filesize).\nUse the slowest preset that you have "
+             "patience for.",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow",
+                 "slower", "veryslow"],
+        gui_radio=True,
+        group="quality",
+    ),
+    tune=dict(
+        default="none",
+        info="Change settings based upon the specifics of your input:"
+             "\n\t none: Don't perform any additional tuning."
+             "\n\t film: [H.264 only] Use for high quality movie content; lowers deblocking."
+             "\n\t animation: [H.264 only] Good for cartoons; uses higher deblocking and more "
+             "reference frames."
+             "\n\t grain: Preserves the grain structure in old, grainy film material."
+             "\n\t stillimage: [H.264 only] Good for slideshow-like content."
+             "\n\t fastdecode: Allows faster decoding by disabling certain filters."
+             "\n\t zerolatency: Good for fast encoding and low-latency streaming.",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["none", "film", "animation", "grain", "stillimage", "fastdecode", "zerolatency"],
+        gui_radio=False,
+        group="settings",
+    ),
+    profile=dict(
+        default="auto",
+        info="[H.264 Only] Limit the output to a specific H.264 profile. Don't change this "
+             "unless your target device only supports a certain profile.",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["auto", "baseline", "main", "high", "high10", "high422", "high444"],
+        gui_radio=False,
+        group="settings",
+    ),
+    level=dict(
+        default="auto",
+        info="[H.264 Only] Set the encoder level, Don't change this unless your target "
+             "device only supports a certain level.",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["auto", "1", "1b", "1.1", "1.2", "1.3", "2", "2.1", "2.2", "3", "3.1", "3.2", "4",
+                 "4.1", "4.2", "5", "5.1", "5.2", "6", "6.1", "6.2"],
+        gui_radio=False,
+        group="settings",
+    ),
+    skip_mux=dict(
+        default=False,
+        info="Skip muxing audio to the final video output. This will result in a video without an "
+             "audio track.",
+        datatype=bool,
+        group="settings",
+    ),
+)

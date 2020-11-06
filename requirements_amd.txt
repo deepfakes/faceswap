@@ -1,0 +1,3 @@
+-r _requirements_base.txt
+tensorflow>=2.2.0,<2.3.0
+plaidml-keras==0.7.0

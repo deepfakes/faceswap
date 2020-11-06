@@ -43,7 +43,7 @@
 
 _HELPTEXT = (
     "A Higher resolution version of the Original Model by VillainGuy.\n"
-    "Extremely VRAM heavy. Full model requires 9GB+ for batchsize 16\n"
+    "Extremely VRAM heavy. Don't try to run this if you have a small GPU.\n"
 )
 
 

@@ -39,8 +39,9 @@ class Align(Aligner):
 
         self.name = "cv2-DNN Aligner"
         self.input_size = 128
-        self.colorformat = "RGB"
+        self.color_format = "RGB"
         self.vram = 0  # Doesn't use GPU
+        self.vram_per_batch = 0
         self.batchsize = 1
 
     def init_model(self):
@@ -50,42 +51,39 @@ class Align(Aligner):
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        faces, batch["roi"] = self.align_image(batch["detected_faces"])
+        faces, batch["roi"], batch["offsets"] = self.align_image(batch)
         faces = self._normalize_faces(faces)
-        batch["feed"] = np.array(faces, dtype="float32").transpose((0, 3, 1, 2))
+        batch["feed"] = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2))
         return batch
 
-    def align_image(self, detected_faces):
+    def align_image(self, batch):
         """ Align the incoming image for prediction """
         logger.trace("Aligning image around center")
+        sizes = (self.input_size, self.input_size)
         rois = []
         faces = []
-        for face in detected_faces:
-            box = (face.left,
-                   face.top,
-                   face.right,
-                   face.bottom)
-            diff_height_width = face.h - face.w
+        offsets = []
+        for det_face, image in zip(batch["detected_faces"], batch["image"]):
+            box = (det_face.left,
+                   det_face.top,
+                   det_face.right,
+                   det_face.bottom)
+            diff_height_width = det_face.h - det_face.w
             offset_y = int(abs(diff_height_width / 2))
             box_moved = self.move_box(box, [0, offset_y])
-
             # Make box square.
             roi = self.get_square_box(box_moved)
-            # Pad the image if face is outside of boundaries
-            image = self.pad_image(roi, face.image)
-            face = image[roi[1]: roi[3], roi[0]: roi[2]]
 
-            if face.shape[0] < self.input_size:
-                interpolation = cv2.INTER_CUBIC  # pylint:disable=no-member
-            else:
-                interpolation = cv2.INTER_AREA  # pylint:disable=no-member
-
-            face = cv2.resize(face,  # pylint:disable=no-member
-                              dsize=(int(self.input_size), int(self.input_size)),
-                              interpolation=interpolation)
+            # Pad the image and adjust roi if face is outside of boundaries
+            image, offset = self.pad_image(roi, image)
+            face = image[roi[1] + abs(offset[1]): roi[3] + abs(offset[1]),
+                         roi[0] + abs(offset[0]): roi[2] + abs(offset[0])]
+            interpolation = cv2.INTER_CUBIC if face.shape[0] < self.input_size else cv2.INTER_AREA
+            face = cv2.resize(face, dsize=sizes, interpolation=interpolation)
             faces.append(face)
             rois.append(roi)
-        return faces, rois
+            offsets.append(offset)
+        return faces, rois, offsets
 
     @staticmethod
     def move_box(box, offset):
@@ -124,14 +122,6 @@ class Align(Aligner):
             if diff % 2 == 1:
                 bottom += 1
 
-        # Shift the box if any points fall below zero
-        if left < 0:
-            right += abs(left)
-            left += abs(left)
-        if top < 0:
-            bottom += abs(top)
-            top += abs(top)
-
         # Make sure box is always square.
         assert ((right - left) == (bottom - top)), 'Box is not square.'
 
@@ -139,22 +129,24 @@ class Align(Aligner):
 
     @staticmethod
     def pad_image(box, image):
-        """Pad image if facebox falls outside of boundaries """
-        width, height = image.shape[:2]
+        """Pad image if face-box falls outside of boundaries """
+        height, width = image.shape[:2]
         pad_l = 1 - box[0] if box[0] < 0 else 0
         pad_t = 1 - box[1] if box[1] < 0 else 0
         pad_r = box[2] - width if box[2] > width else 0
         pad_b = box[3] - height if box[3] > height else 0
         logger.trace("Padding: (l: %s, t: %s, r: %s, b: %s)", pad_l, pad_t, pad_r, pad_b)
-        retval = cv2.copyMakeBorder(image.copy(),  # pylint: disable=no-member
-                                    pad_t,
-                                    pad_b,
-                                    pad_l,
-                                    pad_r,
-                                    cv2.BORDER_CONSTANT,  # pylint: disable=no-member
-                                    value=(0, 0, 0))
-        logger.trace("Padded shape: %s", retval.shape)
-        return retval
+        padded_image = cv2.copyMakeBorder(image.copy(),
+                                          pad_t,
+                                          pad_b,
+                                          pad_l,
+                                          pad_r,
+                                          cv2.BORDER_CONSTANT,
+                                          value=(0, 0, 0))
+        offsets = (pad_l - pad_r, pad_t - pad_b)
+        logger.trace("image_shape: %s, Padded shape: %s, box: %s, offsets: %s",
+                     image.shape, padded_image.shape, box, offsets)
+        return padded_image, offsets
 
     def predict(self, batch):
         """ Predict the 68 point landmarks """
@@ -171,12 +163,10 @@ class Align(Aligner):
     @staticmethod
     def get_pts_from_predict(batch):
         """ Get points from predictor """
-        for prediction, roi in zip(batch["prediction"], batch["roi"]):
-            points = np.array(prediction).flatten()
-            points = np.reshape(points, (-1, 2))
+        for prediction, roi, offset in zip(batch["prediction"], batch["roi"], batch["offsets"]):
+            points = np.reshape(prediction, (-1, 2))
             points *= (roi[2] - roi[0])
-            points[:, 0] += roi[0]
-            points[:, 1] += roi[1]
-            landmarks = np.rint(points).astype("uint").tolist()
-            batch.setdefault("landmarks", []).append(landmarks)
+            points[:, 0] += (roi[0] - offset[0])
+            points[:, 1] += (roi[1] - offset[1])
+            batch.setdefault("landmarks", []).append(points)
         logger.trace("Predicted Landmarks: %s", batch["landmarks"])

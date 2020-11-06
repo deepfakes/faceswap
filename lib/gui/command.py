@@ -5,8 +5,8 @@ import logging
 import tkinter as tk
 from tkinter import ttk
 
-from .control_helper import set_slider_rounding, ControlPanel
-from .tooltip import Tooltip
+from .control_helper import ControlPanel
+from .custom_widgets import Tooltip
 from .utils import get_images, get_config
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
@@ -24,8 +24,21 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         self.tools_notebook = ToolsNotebook(self)
         self.set_running_task_trace()
         self.build_tabs()
-        get_config().command_notebook = self
+        self.modified_vars = self._set_modified_vars()
+        get_config().set_command_notebook(self)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def tab_names(self):
+        """ dict: Command tab titles with their IDs """
+        return {self.tab(tab_id, "text").lower(): tab_id
+                for tab_id in range(0, self.index("end"))}
+
+    @property
+    def tools_tab_names(self):
+        """ dict: Tools tab titles with their IDs """
+        return {self.tools_notebook.tab(tab_id, "text").lower(): tab_id
+                for tab_id in range(0, self.tools_notebook.index("end"))}
 
     def set_running_task_trace(self):
         """ Set trigger action for the running task
@@ -56,14 +69,33 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         for cmd, action in self.actionbtns.items():
             btnact = action
             if tk_vars["runningtask"].get():
-                ttl = "Terminate"
+                ttl = " Stop"
+                img = get_images().icons["stop"]
                 hlp = "Exit the running process"
             else:
-                ttl = cmd.title()
+                ttl = " {}".format(cmd.title())
+                img = get_images().icons["start"]
                 hlp = "Run the {} script".format(cmd.title())
             logger.debug("Updated Action Button: '%s'", ttl)
-            btnact.config(text=ttl)
+            btnact.config(text=ttl, image=img)
             Tooltip(btnact, text=hlp, wraplength=200)
+
+    def _set_modified_vars(self):
+        """ Set the tkinter variable for each tab to indicate whether contents
+        have been modified """
+        tkvars = dict()
+        for tab in self.tab_names:
+            if tab == "tools":
+                for ttab in self.tools_tab_names:
+                    var = tk.BooleanVar()
+                    var.set(False)
+                    tkvars[ttab] = var
+                continue
+            var = tk.BooleanVar()
+            var.set(False)
+            tkvars[tab] = var
+        logger.debug("Set modified vars: %s", tkvars)
+        return tkvars
 
 
 class ToolsNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
@@ -124,86 +156,38 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self.add_action_button(parent.category,
                                parent.actionbtns)
-        self.add_util_buttons()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_action_button(self, category, actionbtns):
         """ Add the action buttons for page """
         logger.debug("Add action buttons: '%s'", self.title)
         actframe = ttk.Frame(self)
-        actframe.pack(fill=tk.X, side=tk.LEFT)
-        tk_vars = get_config().tk_vars
+        actframe.pack(fill=tk.X, side=tk.RIGHT)
 
+        tk_vars = get_config().tk_vars
         var_value = "{},{}".format(category, self.command)
 
+        btngen = ttk.Button(actframe,
+                            image=get_images().icons["generate"],
+                            text=" Generate",
+                            compound=tk.LEFT,
+                            width=14,
+                            command=lambda: tk_vars["generate"].set(var_value))
+        btngen.pack(side=tk.LEFT, padx=5)
+        Tooltip(btngen,
+                text="Output command line options to the console",
+                wraplength=200)
+
         btnact = ttk.Button(actframe,
-                            text=self.title,
-                            width=10,
+                            image=get_images().icons["start"],
+                            text=" {}".format(self.title),
+                            compound=tk.LEFT,
+                            width=14,
                             command=lambda: tk_vars["action"].set(var_value))
-        btnact.pack(side=tk.LEFT)
+        btnact.pack(side=tk.LEFT, fill=tk.X, expand=True)
         Tooltip(btnact,
                 text="Run the {} script".format(self.title),
                 wraplength=200)
         actionbtns[self.command] = btnact
 
-        btngen = ttk.Button(actframe,
-                            text="Generate",
-                            width=10,
-                            command=lambda: tk_vars["generate"].set(var_value))
-        btngen.pack(side=tk.LEFT, padx=5)
-        if self.command == "train":
-            self.add_timeout(actframe)
-        Tooltip(btngen,
-                text="Output command line options to the console",
-                wraplength=200)
         logger.debug("Added action buttons: '%s'", self.title)
-
-    def add_timeout(self, actframe):
-        """ Add a timeout option for training """
-        logger.debug("Adding timeout box for %s", self.command)
-        tk_var = get_config().tk_vars["traintimeout"]
-        min_max = (10, 600)
-
-        frameto = ttk.Frame(actframe)
-        frameto.pack(padx=5, pady=5, side=tk.RIGHT, fill=tk.X, expand=True)
-        lblto = ttk.Label(frameto, text="Timeout:", anchor=tk.W)
-        lblto.pack(side=tk.LEFT)
-        sldto = ttk.Scale(frameto,
-                          variable=tk_var,
-                          from_=min_max[0],
-                          to=min_max[1],
-                          command=lambda val, var=tk_var, dt=int, rn=10, mm=min_max:
-                          set_slider_rounding(val, var, dt, rn, mm))
-        sldto.pack(padx=5, side=tk.LEFT, fill=tk.X, expand=True)
-        tboxto = ttk.Entry(frameto, width=3, textvariable=tk_var, justify=tk.RIGHT)
-        tboxto.pack(side=tk.RIGHT)
-        helptxt = ("Training can take some time to save and shutdown. "
-                   "Set the timeout in seconds before giving up and force quitting.")
-        Tooltip(sldto,
-                text=helptxt,
-                wraplength=200)
-        Tooltip(tboxto,
-                text=helptxt,
-                wraplength=200)
-        logger.debug("Added timeout box for %s", self.command)
-
-    def add_util_buttons(self):
-        """ Add the section utility buttons """
-        logger.debug("Add util buttons")
-        utlframe = ttk.Frame(self)
-        utlframe.pack(side=tk.RIGHT)
-
-        config = get_config()
-        for utl in ("load", "save", "clear", "reset"):
-            logger.debug("Adding button: '%s'", utl)
-            img = get_images().icons[utl]
-            action_cls = config if utl in (("save", "load")) else config.cli_opts
-            action = getattr(action_cls, utl)
-            btnutl = ttk.Button(utlframe,
-                                image=img,
-                                command=lambda cmd=action: cmd(self.command))
-            btnutl.pack(padx=2, side=tk.LEFT)
-            Tooltip(btnutl,
-                    text=utl.capitalize() + " " + self.title + " config",
-                    wraplength=200)
-        logger.debug("Added util buttons")

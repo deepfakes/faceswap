@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-""" Base class for Faceswap :mod:`~plugins.extract.detect` and :mod:`~plugins.extract.align`
-Plugins
+""" Base class for Faceswap :mod:`~plugins.extract.detect`, :mod:`~plugins.extract.align` and
+:mod:`~plugins.extract.mask` Plugins
 """
 import logging
 import os
 import sys
-
-import cv2
-import numpy as np
 
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
@@ -15,15 +12,16 @@ from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
 from lib.utils import GetModel, FaceswapError
 from ._config import Config
+from .pipeline import ExtractMedia
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-# TODO Cpu mode
+# TODO CPU mode
 # TODO Run with warnings mode
 
 
 def _get_config(plugin_name, configfile=None):
-    """ Return the config for the requested model
+    """ Return the configuration for the requested model
 
     Parameters
     ----------
@@ -31,12 +29,12 @@ def _get_config(plugin_name, configfile=None):
         The module name of the child plugin.
     configfile: str, optional
         Path to a :file:`./config/<plugin_type>.ini` file for this plugin. Default: use system
-        config.
+        configuration.
 
     Returns
     -------
     config_dict, dict
-       A dictionary of configuration items from the config file
+       A dictionary of configuration items from the configuration file
     """
     return Config(plugin_name, configfile=configfile).config_dict
 
@@ -44,7 +42,7 @@ def _get_config(plugin_name, configfile=None):
 class Extractor():
     """ Extractor Plugin Object
 
-    All ``_base`` classes for Aligners and Detectors inherit from this class.
+    All ``_base`` classes for Aligners, Detectors and Maskers inherit from this class.
 
     This class sets up a pipeline for working with ML plugins.
 
@@ -62,11 +60,15 @@ class Extractor():
         https://github.com/deepfakes-models/faceswap-models for more information
     model_filename: str
         The name of the model file to be loaded
-
-    Other Parameters
-    ----------------
+    exclude_gpus: list, optional
+        A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
+        ``None`` to not exclude any GPUs. Default: ``None``
     configfile: str, optional
         Path to a custom configuration ``ini`` file. Default: Use system configfile
+    instance: int, optional
+        If this plugin is being executed multiple times (i.e. multiple pipelines have been
+        launched), the instance of the plugin must be passed in for naming convention reasons.
+        Default: 0
 
 
     The following attributes should be set in the plugin's :func:`__init__` method after
@@ -79,7 +81,7 @@ class Extractor():
     input_size: int
         The input size to the model in pixels across one edge. The input size should always be
         square.
-    colorformat: str
+    color_format: str
         Color format for model. Must be ``'BGR'``, ``'RGB'`` or ``'GRAY'``. Defaults to ``'BGR'``
         if not explicitly set.
     vram: int
@@ -96,14 +98,18 @@ class Extractor():
     --------
     plugins.extract.detect._base : Detector parent class for extraction plugins.
     plugins.extract.align._base : Aligner parent class for extraction plugins.
+    plugins.extract.mask._base : Masker parent class for extraction plugins.
     plugins.extract.pipeline : The extract pipeline that configures and calls all plugins
 
     """
-    def __init__(self, git_model_id=None, model_filename=None, configfile=None):
-        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, "
-                     " configfile: %s)", self.__class__.__name__, git_model_id,
-                     model_filename, configfile)
+    def __init__(self, git_model_id=None, model_filename=None, exclude_gpus=None, configfile=None,
+                 instance=0):
+        logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, exclude_gpus: %s, "
+                     "configfile: %s, instance: %s, )", self.__class__.__name__, git_model_id,
+                     model_filename, exclude_gpus, configfile, instance)
 
+        self._instance = instance
+        self._exclude_gpus = exclude_gpus
         self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         """ dict: Config for this plugin, loaded from ``extract.ini`` configfile """
 
@@ -114,13 +120,13 @@ class Extractor():
         # << SET THE FOLLOWING IN PLUGINS __init__ IF DIFFERENT FROM DEFAULT >> #
         self.name = None
         self.input_size = None
-        self.colorformat = "BGR"
+        self.color_format = "BGR"
         self.vram = None
         self.vram_warnings = None  # Will run at this with warnings
         self.vram_per_batch = None
 
         # << THE FOLLOWING ARE SET IN self.initialize METHOD >> #
-        self.queue_size = 32
+        self.queue_size = 1
         """ int: Queue size for all internal queues. Set in :func:`initialize()` """
 
         self.model = None
@@ -138,6 +144,10 @@ class Extractor():
 
         self._threads = []
         """ list: Internal threads for this plugin """
+
+        self._extract_media = dict()
+        """ dict: The :class:`plugins.extract.pipeline.ExtractMedia` objects currently being
+        processed. Stored at input for pairing back up on output of extractor process """
 
         # << THE FOLLOWING PROTECTED ATTRIBUTES ARE SET IN PLUGIN TYPE _base.py >>> #
         self._plugin_type = None
@@ -190,7 +200,7 @@ class Extractor():
         For Detect:
             the expected output for the ``prediction`` key of the :attr:`batch` dict should be a
             ``list`` of :attr:`batchsize` of detected face points. These points should be either
-            a ``list``, ``tuple`` or ``numpy.array`` with the first 4 items being the `left`,
+            a ``list``, ``tuple`` or ``numpy.ndarray`` with the first 4 items being the `left`,
             `top`, `right`, `bottom` points, in that order
         """
         raise NotImplementedError
@@ -209,18 +219,18 @@ class Extractor():
         -----
         For Align:
             The key ``landmarks`` must be returned in the :attr:`batch` ``dict`` from this method.
-            This should be a ``list`` or ``numpy.array`` of :attr:`batchsize` containing a
-            ``list``, ``tuple`` or ``numpy.array`` of `(x, y)` co-ords of the 68 point landmarks
-            as calculated from the :attr:`model`.
+            This should be a ``list`` or ``numpy.ndarray`` of :attr:`batchsize` containing a
+            ``list``, ``tuple`` or ``numpy.ndarray`` of `(x, y)` coordinates of the 68 point
+            landmarks as calculated from the :attr:`model`.
         """
         raise NotImplementedError
 
     def _predict(self, batch):
         """ **Override method** (at `<plugin_type>` level)
 
-        This method is overridable at the `<plugin_type>` level (ie.
+        This method should be overridden at the `<plugin_type>` level (IE.
         ``plugins.extract.detect._base`` or ``plugins.extract.align._base``) and should not
-        be overriden within plugins themselves.
+        be overridden within plugins themselves.
 
         It acts as a wrapper for the plugin's ``self.predict`` method and handles any
         predict processing that is consistent for all plugins within the `plugin_type`
@@ -235,9 +245,9 @@ class Extractor():
     def finalize(self, batch):
         """ **Override method** (at `<plugin_type>` level)
 
-        This method is overridable at the `<plugin_type>` level (ie.
-        :mod:`plugins.extract.detect._base` or :mod:`plugins.extract.align._base`) and should not
-        be overriden within plugins themselves.
+        This method should be overridden at the `<plugin_type>` level (IE.
+        :mod:`plugins.extract.detect._base`, :mod:`plugins.extract.align._base` or
+        :mod:`plugins.extract.mask._base`) and should not be overridden within plugins themselves.
 
         Handles consistent finalization for all plugins that exist within that plugin type. Its
         input is always the output from :func:`process_output()`
@@ -252,11 +262,12 @@ class Extractor():
     def get_batch(self, queue):
         """ **Override method** (at `<plugin_type>` level)
 
-        This method is overridable at the `<plugin_type>` level (ie.
-        :mod:`plugins.extract.detect._base` or :mod:`plugins.extract.align._base`) and should not
-        be overriden within plugins themselves.
+        This method should be overridden at the `<plugin_type>` level (IE.
+        :mod:`plugins.extract.detect._base`, :mod:`plugins.extract.align._base` or
+        :mod:`plugins.extract.mask._base`) and should not be overridden within plugins themselves.
 
-        Get items from the queue in batches of :attr:`batchsize`
+        Get :class:`~plugins.extract.pipeline.ExtractMedia` items from the queue in batches of
+        :attr:`batchsize`
 
         Parameters
         ----------
@@ -306,7 +317,7 @@ class Extractor():
             logger.debug("No git_model_id specified. Returning None")
             return None
         plugin_path = os.path.join(*self.__module__.split(".")[:-1])
-        if os.path.basename(plugin_path) in ("detect", "align"):
+        if os.path.basename(plugin_path) in ("detect", "align", "mask", "recognition"):
             base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
             cache_path = os.path.join(base_path, plugin_path, ".cache")
         else:
@@ -316,46 +327,64 @@ class Extractor():
 
     # <<< PLUGIN INITIALIZATION >>> #
     def initialize(self, *args, **kwargs):
-        """ Inititalize the extractor plugin
+        """ Initialize the extractor plugin
 
             Should be called from :mod:`~plugins.extract.pipeline`
         """
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
-        p_type = "Detector" if self._plugin_type == "detect" else "Aligner"
-        logger.info("Initializing %s %s...", self.name, p_type)
+        logger.info("Initializing %s (%s)...", self.name, self._plugin_type.title())
         self.queue_size = 1
-        self._add_queues(kwargs["in_queue"], kwargs["out_queue"], ["predict", "post"])
+        name = self.name.replace(" ", "_").lower()
+        self._add_queues(kwargs["in_queue"],
+                         kwargs["out_queue"],
+                         ["predict_{}".format(name), "post_{}".format(name)])
         self._compile_threads()
-        self.init_model()
-        logger.info("Initialized %s %s with batchsize of %s", self.name, p_type, self.batchsize)
+        try:
+            self.init_model()
+        except tf_errors.UnknownError as err:
+            if "failed to get convolution algorithm" in str(err).lower():
+                msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
+                       "failure to launch cuDNN which can occur for some GPU/Tensorflow "
+                       "combinations. You should enable `allow_growth` to attempt to resolve this "
+                       "issue:"
+                       "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
+                       "`allow_growth` option."
+                       "\nCLI: Go to `faceswap/config/extract.ini` and change the `allow_growth "
+                       "option to `True`.")
+                raise FaceswapError(msg) from err
+            raise err
+        logger.info("Initialized %s (%s) with batchsize of %s",
+                    self.name, self._plugin_type.title(), self.batchsize)
 
     def _add_queues(self, in_queue, out_queue, queues):
         """ Add the queues
-            in_queue and out_queue should be pre-created queue manager queues
+            in_queue and out_queue should be previously created queue manager queues.
             queues should be a list of queue names """
         self._queues["in"] = in_queue
         self._queues["out"] = out_queue
         for q_name in queues:
             self._queues[q_name] = queue_manager.get_queue(
-                name="{}_{}".format(self._plugin_type, q_name),
+                name="{}{}_{}".format(self._plugin_type, self._instance, q_name),
                 maxsize=self.queue_size)
 
     # <<< THREAD METHODS >>> #
     def _compile_threads(self):
         """ Compile the threads into self._threads list """
         logger.debug("Compiling %s threads", self._plugin_type)
-        self._add_thread("{}_input".format(self._plugin_type),
+        name = self.name.replace(" ", "_").lower()
+        base_name = "{}_{}".format(self._plugin_type, name)
+        self._add_thread("{}_input".format(base_name),
                          self.process_input,
                          self._queues["in"],
-                         self._queues["predict"])
-        self._add_thread("{}_predict".format(self._plugin_type),
+                         self._queues["predict_{}".format(name)])
+        self._add_thread("{}_predict".format(base_name),
                          self._predict,
-                         self._queues["predict"],
-                         self._queues["post"])
-        self._add_thread("{}_output".format(self._plugin_type),
+                         self._queues["predict_{}".format(name)],
+                         self._queues["post_{}".format(name)])
+        self._add_thread("{}_output".format(base_name),
                          self.process_output,
-                         self._queues["post"],
+                         self._queues["post_{}".format(name)],
                          self._queues["out"])
         logger.debug("Compiled %s threads: %s", self._plugin_type, self._threads)
 
@@ -391,15 +420,17 @@ class Extractor():
             try:
                 batch = function(batch)
             except tf_errors.UnknownError as err:
-                msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
-                       "failure to launch cuDNN which can occur for some GPU/Tensorflow "
-                       "combinations. You should enable `allow_growth` to attempt to resolve this "
-                       "issue:"
-                       "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
-                       "`allow_growth` option."
-                       "\nCLI: Go to `faceswap/config/extract.ini` and change the `allow_growth "
-                       "option to `True`.")
-                raise FaceswapError(msg) from err
+                if "failed to get convolution algorithm" in str(err).lower():
+                    msg = ("Tensorflow raised an unknown error. This is most likely caused by a "
+                           "failure to launch cuDNN which can occur for some GPU/Tensorflow "
+                           "combinations. You should enable `allow_growth` to attempt to resolve "
+                           "this issue:"
+                           "\nGUI: Go to Settings > Extract Plugins > Global and enable the "
+                           "`allow_growth` option."
+                           "\nCLI: Go to `faceswap/config/extract.ini` and change the "
+                           "`allow_growth option to `True`.")
+                    raise FaceswapError(msg) from err
+                raise err
             if func_name == "process_output":
                 # Process output items to individual items from batch
                 for item in self.finalize(batch):
@@ -410,40 +441,19 @@ class Extractor():
         out_queue.put("EOF")
 
     # <<< QUEUE METHODS >>> #
-    @staticmethod
-    def _get_item(queue):
+    def _get_item(self, queue):
         """ Yield one item from a queue """
         item = queue.get()
-        if isinstance(item, dict):
-            logger.trace("item: %s, queue: %s",
-                         {k: v.shape if isinstance(v, np.ndarray) else v
-                          for k, v in item.items()},
-                         queue)
+        if isinstance(item, ExtractMedia):
+            logger.trace("filename: '%s', image shape: %s, detected_faces: %s, queue: %s, "
+                         "item: %s",
+                         item.filename, item.image_shape, item.detected_faces, queue, item)
+            self._extract_media[item.filename] = item
         else:
             logger.trace("item: %s, queue: %s", item, queue)
         return item
-
-    # <<< MISC UTILITY METHODS >>> #
-    def _convert_color(self, image):
-        """ Convert the image to the correct color format """
-        logger.trace("Converting image to color format: %s", self.colorformat)
-        if self.colorformat == "RGB":
-            cvt_image = image[:, :, ::-1].copy()
-        elif self.colorformat == "GRAY":
-            cvt_image = cv2.cvtColor(image.copy(), cv2.COLOR_BGR2GRAY)  # pylint:disable=no-member
-        else:
-            cvt_image = image.copy()
-        return cvt_image
 
     @staticmethod
     def _dict_lists_to_list_dicts(dictionary):
         """ Convert a dictionary of lists to a list of dictionaries """
         return [dict(zip(dictionary, val)) for val in zip(*dictionary.values())]
-
-    @staticmethod
-    def _remove_invalid_keys(dictionary, valid_keys):
-        """ Remove items from dict that are no longer required """
-        for key in list(dictionary.keys()):
-            if key not in valid_keys:
-                logger.trace("Removing from output: '%s'", key)
-                del dictionary[key]

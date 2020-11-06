@@ -30,7 +30,7 @@ release = '0.99'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.napoleon', ]
+extensions = ['sphinx.ext.napoleon', "sphinx.ext.autosummary", ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -47,10 +47,26 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # a list of builtin themes.
 #
 html_theme = 'sphinx_rtd_theme'
+html_theme_options = {
+    'analytics_id': 'UA-145659566-2',
+    'logo_only': True,
+    # Toc options
+    'navigation_depth': -1,
+}
+html_logo = '_static/logo.png'
+latext_logo = '_static/logo.png'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+html_context = {
+    'css_files': [
+        '_static/theme_overrides.css',  # override wide tables in RTD theme
+        ],
+    }
+
 master_doc = 'index'
+
+autosummary_generate = True
