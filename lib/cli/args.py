@@ -488,17 +488,27 @@ class ExtractArgs(ExtractConvertArgs):
                  "significantly decrease extraction speed and its accuracy cannot be "
                  "guaranteed."))
         argument_list.append(dict(
-            opts=("-een", "--extract-every-n"),
-            action=Slider,
-            min_max=(1, 100),
-            rounding=1,
-            type=int,
-            dest="extract_every_n",
-            default=1,
+            opts=("-t", "--extract-type"),
+            action=Radio,
+            type=str.lower,
+            dest="extract_type",
+            default="face",
+            choices=["face", "head"],
             group="output",
-            help="Extract every 'nth' frame. This option will skip frames when extracting "
-                 "faces. For example a value of 1 will extract faces from every frame, a value "
-                 "of 10 will extract faces from every 10th frame."))
+            help="R|The type of extraction images to generate. NB: The type of extraction only "
+                 "impacts the final extracted face images. It has no impact on the alignments "
+                 "file itself. Once an alignments file has been generated, either face type "
+                 "can be re-extracted from the alignments file with the alignments tool."
+                 "\nL|face: This is the 'traditional' extraction method. It generates faces from "
+                 "frames focussed on the center of the face (just above the nose), This works "
+                 "fine in most instances, but can lead to some cropping at the edge of the face "
+                 "in certain poses."
+                 "\nL|head: This method generates faces from frames focussed on the center of the "
+                 "head in 3D space. This is an attempt to ensure that the whole head is extracted "
+                 "regardless of pose, which mitigates some of the limitations of the 'face' "
+                 "method of extraction. However, the location of the center of the head in 3D "
+                 "space is an estimate, so it can be very wrong in some cases, and is unlikely to "
+                 "perform well with distorted lens effects."))
         argument_list.append(dict(
             opts=("-sz", "--size"),
             action=Slider,
@@ -510,6 +520,18 @@ class ExtractArgs(ExtractConvertArgs):
             help="The output size of extracted faces. Make sure that the model you intend to "
                  "train supports your required size. This will only need to be changed for "
                  "hi-res models."))
+        argument_list.append(dict(
+            opts=("-een", "--extract-every-n"),
+            action=Slider,
+            min_max=(1, 100),
+            rounding=1,
+            type=int,
+            dest="extract_every_n",
+            default=1,
+            group="output",
+            help="Extract every 'nth' frame. This option will skip frames when extracting "
+                 "faces. For example a value of 1 will extract faces from every frame, a value "
+                 "of 10 will extract faces from every 10th frame."))
         argument_list.append(dict(
             opts=("-si", "--save-interval"),
             action=Slider,
