@@ -152,7 +152,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            item = ExtractMedia(filename, image[..., :3])
+            item = ExtractMedia(filename, image[..., :3], extract_type=self._args.extract_type)
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
@@ -251,7 +251,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         """
         for face in extract_media.detected_faces:
             face.load_aligned(extract_media.image, size=size)
-            face.thumbnail = generate_thumbnail(face.aligned_face, size=80, quality=60)
+            face.thumbnail = generate_thumbnail(face.aligned.face, size=80, quality=60)
         self._post_process.do_actions(extract_media)
         extract_media.remove_image()
 
@@ -282,7 +282,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         filename, extension = os.path.splitext(os.path.basename(extract_media.filename))
         for idx, face in enumerate(extract_media.detected_faces):
             output_filename = "{}_{}{}".format(filename, str(idx), extension)
-            face.hash, image = encode_image_with_hash(face.aligned_face, extension)
+            face.hash, image = encode_image_with_hash(face.aligned.face, extension)
 
             if not self._args.skip_saving_faces:
                 saver.save(output_filename, image)

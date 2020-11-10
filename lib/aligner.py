@@ -29,6 +29,13 @@ _MEAN_FACE = np.stack([
      0.864805, 0.784792, 0.778746, 0.785343, 0.778746, 0.784792, 0.824182,
      0.831803, 0.824182]], axis=1)
 
+# _MEAN_FACE = np.array([(0.5, 0.187727), (0.5, 0.291384), (0.5, 0.39418), (0.5, 0.5),
+#                       (0.376753, 0.571701), (0.435909, 0.59372), (0.5, 0.612481),
+#                       (0.564091, 0.59372), (0.623247, 0.571701), (0.13161, 0.200798),
+#                       (0.344479, 0.216108), (0.270791, 0.229474), (0.192616, 0.228452),
+#                       (0.655521, 0.216108), (0.86839, 0.200798), (0.807384, 0.228452),
+#                       (0.729209, 0.229474)])
+
 
 class Extract():
     """ Alignment tools for transforming face and landmark points to and from a source frame/
@@ -166,18 +173,20 @@ def get_matrix_scaling(matrix):
     return interpolators
 
 
-def get_align_matrix(face):
+def get_align_matrix(landmarks):
     """ Get the Umeyama alignment Matrix for the core 52 face landmarks. for aligning a face
 
     Parameters
     ----------
-    face: :class:`lib.faces_detect.DetectedFace`
-        The detected face object to retrieve the alignment matrix
+    landmarks: :class:`numpy.ndarry`
+        The original 68 point landmark co-ordinates relating to the original frame
 
     Returns
     -------
     :class:`numpy.ndarry`
         The alignment matrix
     """
-    mat_umeyama = umeyama(face.landmarks_xy[17:], _MEAN_FACE, True)[0:2]
+    # indices = [27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 39, 40, 41, 42, 45, 46, 47]
+    # mat_umeyama = umeyama(landmarks[indices], _MEAN_FACE, True)[0:2]
+    mat_umeyama = umeyama(landmarks[17:], _MEAN_FACE, True)[0:2]
     return mat_umeyama

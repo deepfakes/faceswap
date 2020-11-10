@@ -393,7 +393,7 @@ class Draw():
         alignments = self.alignments.get_faces_in_frame(frame)
         image = self.frames.load_image(frame)
         self.extracted_faces.get_faces_in_frame(frame)
-        original_roi = [face.original_roi
+        original_roi = [face.aligned.original_roi
                         for face in self.extracted_faces.faces]
         annotate = Annotate(image, alignments, original_roi)
         annotate.draw_bounding_box(1, 1)
@@ -511,12 +511,12 @@ class Extract():  # pylint:disable=too-few-public-methods
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), extension)
             if self._arguments.large:
-                self._frames.save_image(self._faces_dir, output, face.aligned_face)
+                self._frames.save_image(self._faces_dir, output, face.aligned.face)
             else:
                 output = os.path.join(self._faces_dir, output)
                 f_hash = self._extracted_faces.save_face_with_hash(output,
                                                                    extension,
-                                                                   face.aligned_face)
+                                                                   face.aligned.face)
                 self._alignments.data[filename]["faces"][idx]["hash"] = f_hash
             face_count += 1
         return face_count

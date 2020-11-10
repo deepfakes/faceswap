@@ -70,7 +70,7 @@ class Landmarks(Editor):
         for face_idx, face in enumerate(self._face_iterator):
             face_index = self._globals.face_index if self._globals.is_zoomed else face_idx
             if self._globals.is_zoomed:
-                landmarks = face.aligned_landmarks + zoomed_offset
+                landmarks = face.aligned.landmarks + zoomed_offset
                 # Hide all landmarks and only display selected
                 self._canvas.itemconfig("lm_dsp", state="hidden")
                 self._canvas.itemconfig("lm_dsp_face_{}".format(face_index), state="normal")
@@ -438,7 +438,7 @@ class Mesh(Editor):
         for face_idx, face in enumerate(self._face_iterator):
             face_index = self._globals.face_index if self._globals.is_zoomed else face_idx
             if self._globals.is_zoomed:
-                landmarks = face.aligned_landmarks + zoomed_offset
+                landmarks = face.aligned.landmarks + zoomed_offset
                 # Hide all meshes and only display selected
                 self._canvas.itemconfig("Mesh", state="hidden")
                 self._canvas.itemconfig("Mesh_face_{}".format(face_index), state="normal")

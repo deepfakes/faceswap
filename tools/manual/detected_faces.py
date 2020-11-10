@@ -348,7 +348,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         thread.start()
         self._monitor_extract(thread, queue, pbar)
 
-    def _monitor_extract(self, thread, queue, pbar):
+    def _monitor_extract(self, thread, queue, progress_bar):
         """ Monitor the extraction thread, and update the progress bar.
 
         On completion, save alignments and clear progress bar.
@@ -359,27 +359,27 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             The thread that is performing the extraction task
         queue: :class:`queue.Queue`
             The queue that the worker thread is putting it's incremental counts to
-        pbar: :class:`lib.gui.custom_widget.PopupProgress`
+        progress_bar: :class:`lib.gui.custom_widget.PopupProgress`
             The popped up progress bar
         """
         thread.check_and_raise_error()
         if not thread.is_alive():
             thread.join()
             # Update hashes in alignments file.
-            pbar.update_title("Saving Alignments...")
+            progress_bar.update_title("Saving Alignments...")
             self._alignments.backup()
             self._alignments.save()
             self._updated_frame_indices.clear()
             self._tk_unsaved.set(False)
-            pbar.stop()
+            progress_bar.stop()
             return
 
         while True:
             try:
-                pbar.step(queue.get(False, 0))
+                progress_bar.step(queue.get(False, 0))
             except Empty:
                 break
-        pbar.after(100, self._monitor_extract, thread, queue, pbar)
+        progress_bar.after(100, self._monitor_extract, thread, queue, progress_bar)
 
     def _background_extract(self, output_folder, progress_queue):
         """ Perform the background extraction in a thread so GUI doesn't become unresponsive.
@@ -389,7 +389,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         output_folder: str
             The location to save the output faces to
         progress_queue: :class:`queue.Queue`
-            The queue to place incrememental counts to for updating the GUI's progress bar
+            The queue to place incremental counts to for updating the GUI's progress bar
         """
         saver = ImagesSaver(str(get_folder(output_folder)), as_bytes=True)
         loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
@@ -401,10 +401,10 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
                 output = "{}_{}{}".format(frame_name, str(face_idx), extension)
                 face.load_aligned(image, size=256, force=True)  # TODO user selectable size
-                face.hash, b_image = encode_image_with_hash(face.aligned_face, extension)
+                face.hash, b_image = encode_image_with_hash(face.aligned.face, extension)
                 saver.save(output, b_image)
                 final_faces.append(face.to_alignment())
-                face.aligned = dict()
+                face.aligned = None
             self._alignments.data[filename]["faces"] = final_faces
         saver.close()
 
@@ -548,9 +548,9 @@ class FaceUpdate():
             The detected face object to generate the thumbnail for
         """
         face.load_aligned(self._globals.current_frame["image"], 80, force=True)
-        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
+        jpg = cv2.imencode(".jpg", face.aligned.face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
         face.thumbnail = jpg
-        face.aligned = dict()
+        face.aligned = None
 
     def add(self, frame_index, pnt_x, width, pnt_y, height):
         """ Add a :class:`~lib.faces_detect.DetectedFace` object to the current frame with the
@@ -648,13 +648,13 @@ class FaceUpdate():
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
         if is_zoomed:
-            if not np.any(face.aligned_landmarks):  # This will be None on a resize
+            if not np.any(face.aligned.landmarks):  # This will be None on a resize
                 face.load_aligned(None, size=min(self._globals.frame_display_dims))
-            landmark = face.aligned_landmarks[landmark_index]
+            landmark = face.aligned.landmarks[landmark_index]
             landmark += (shift_x, shift_y)
-            matrix = AlignerExtract.transform_matrix(face.aligned["matrix"],
-                                                     face.aligned["size"],
-                                                     face.aligned["padding"])
+            matrix = AlignerExtract.transform_matrix(face.aligned.matrix,
+                                                     face.aligned.size,
+                                                     face.aligned.padding)
             matrix = cv2.invertAffineTransform(matrix)
             if landmark.ndim == 1:
                 landmark = np.reshape(landmark, (1, 1, 2))
@@ -804,9 +804,9 @@ class FaceUpdate():
         """
         face = self._frame_faces[frame_index][face_index]
         face.load_aligned(self._globals.current_frame["image"], 80, force=True)
-        jpg = cv2.imencode(".jpg", face.aligned_face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
+        jpg = cv2.imencode(".jpg", face.aligned.face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
         face.thumbnail = jpg
-        face.aligned = dict()
+        face.aligned = None
         self._tk_edited.set(True)
 
 
@@ -1031,10 +1031,10 @@ class ThumbsCreator():
         for face_idx, face in enumerate(self._frame_faces[frame_index]):
             face.load_aligned(frame, size=self._size, force=True)
             jpg = cv2.imencode(".jpg",
-                               face.aligned_face,
+                               face.aligned.face,
                                [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])[1]
             face.thumbnail = jpg
             self._alignments.thumbnails.add_thumbnail(filename, face_idx, jpg)
-            face.aligned["face"] = None
+            face.aligned = None
         with self._pbar["lock"]:
             self._pbar["pbar"].update(1)

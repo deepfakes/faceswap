@@ -30,7 +30,7 @@ class Mask(Masker):
     def predict(self, batch):
         """ Run model to get predictions """
         for mask, face in zip(batch["feed"], batch["detected_faces"]):
-            parts = self.parse_parts(np.array(face.feed_landmarks))
+            parts = self.parse_parts(np.array(face.feed.landmarks))
             for item in parts:
                 item = np.rint(np.concatenate(item)).astype("int32")
                 hull = cv2.convexHull(item)

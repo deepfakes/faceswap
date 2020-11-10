@@ -918,7 +918,7 @@ class Predict():
             A batch of faces ready for feeding into the Faceswap model.
         """
         logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
-        feed_faces = np.stack([detected_face.feed_face[..., :3]
+        feed_faces = np.stack([detected_face.feed.face[..., :3]
                                for detected_face in detected_faces]) / 255.0
         logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
         return feed_faces

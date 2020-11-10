@@ -123,7 +123,10 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                     size=self.input_size,
                                     coverage_ratio=1.0,
                                     dtype="float32",
+                                    extract_type=item.extract_type,
                                     is_aligned_face=self._image_is_aligned)
+                cv2.imwrite("D:/fstest/extract/match_test/mask_{}".format(item.filename),
+                            face.feed.face)
 
                 batch.setdefault("detected_faces", []).append(face)
                 batch.setdefault("filename", []).append(item.filename)
@@ -217,10 +220,10 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         for mask, face in zip(batch["prediction"], batch["detected_faces"]):
             face.add_mask(self._storage_name,
                           mask,
-                          face.feed_matrix,
-                          face.feed_interpolators[1],
+                          face.feed.adjusted_matrix,
+                          face.feed.interpolators[1],
                           storage_size=self._storage_size)
-            face.feed = dict()
+            face.feed = None
 
         logger.trace("Item out: %s", {key: val.shape if isinstance(val, np.ndarray) else val
                                       for key, val in batch.items()})

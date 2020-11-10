@@ -98,7 +98,7 @@ class AlignmentData(Alignments):
         Parameters
         ----------
         filename: str
-            The full path and filename to se the alignments file name to
+            The full path and filename to set the alignments file name to
         """
         self._file = filename
 
@@ -382,7 +382,7 @@ class ExtractedFaces():
             self.get_faces(frame)
         sizes = list()
         for face in self.faces:
-            roi = face.original_roi.squeeze()
+            roi = face.aligned.original_roi.squeeze()
             top_left, top_right = roi[0], roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
@@ -406,7 +406,7 @@ class ExtractedFaces():
     @staticmethod
     def align_eyes(face, image):
         """ Re-extract a face with the pupils forced to be absolutely horizontally aligned """
-        umeyama_landmarks = face.aligned_landmarks
+        umeyama_landmarks = face.aligned.landmarks
         left_eye_center = umeyama_landmarks[42:48].mean(axis=0)
         right_eye_center = umeyama_landmarks[36:42].mean(axis=0)
         d_y = right_eye_center[1] - left_eye_center[1]
@@ -418,12 +418,12 @@ class ExtractedFaces():
                                     [rot_sin, rot_cos, 0.],
                                     [0., 0., 1.]])
 
-        mat_umeyama = np.concatenate((face.aligned["matrix"], np.array([[0., 0., 1.]])), axis=0)
+        mat_umeyama = np.concatenate((face.aligned.matrix, np.array([[0., 0., 1.]])), axis=0)
         corrected_mat = np.dot(rotation_matrix, mat_umeyama)
-        face.aligned["matrix"] = corrected_mat[:2]
-        face.aligned["face"] = AlignerExtract().transform(image,
-                                                          face.aligned["matrix"],
-                                                          face.aligned["size"],
-                                                          int(face.aligned["size"] * 0.375) // 2)
-        logger.trace("Adjusted matrix: %s", face.aligned["matrix"])
+        face.aligned.matrix = corrected_mat[:2]
+        face.aligned.face = AlignerExtract().transform(image,
+                                                       face.aligned.matrix,
+                                                       face.aligned.size,
+                                                       int(face.aligned.size * 0.375) // 2)
+        logger.trace("Adjusted matrix: %s", face.aligned.matrix)
         return face

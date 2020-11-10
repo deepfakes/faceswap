@@ -2,7 +2,8 @@
 """ VGG Clear face mask plugin. """
 
 import numpy as np
-from keras.layers import (Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda,
+from keras.layers import (Add, Conv2D,    # pylint:disable=no-name-in-module,import-error
+                          Conv2DTranspose, Cropping2D, Dropout, Input, Lambda,
                           MaxPooling2D, ZeroPadding2D)
 
 from lib.model.session import KSession
@@ -33,7 +34,7 @@ class Mask(Masker):
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        input_ = np.array([face.feed_face[..., :3]
+        input_ = np.array([face.feed.face[..., :3]
                            for face in batch["detected_faces"]], dtype="float32")
         batch["feed"] = input_ - np.mean(input_, axis=(1, 2))[:, None, None, :]
         logger.trace("feed shape: %s", batch["feed"].shape)

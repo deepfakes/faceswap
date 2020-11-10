@@ -398,7 +398,7 @@ class Mask():  # pylint:disable=too-few-public-methods
                 face = detected_face.image
             else:
                 detected_face.load_aligned(detected_face.image)
-                face = detected_face.aligned_face
+                face = detected_face.aligned.face
             mask = cv2.resize(detected_face.mask[self._mask_type].mask,
                               (face.shape[1], face.shape[0]),
                               interpolation=cv2.INTER_CUBIC)[..., None]

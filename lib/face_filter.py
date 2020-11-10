@@ -32,8 +32,8 @@ class FaceFilter():
         # Whilst this vram can still be used, the pipeline for the extraction process can't see
         # it so thinks there is not enough vram available.
         # Either the pipeline will need to be changed to be re-usable by face-filter and extraction
-        # Or another vram measurement technique will need to be implemented to for when TF has
-        # already performed allocation. For now we force CPU detectors.
+        # Or another vram measurement technique will need to be implemented to for when tensorflow
+        # has already performed allocation. For now we force CPU detectors.
 
         # self.align_faces(detector, aligner, multiprocess)
         self.align_faces("cv2-dnn", "cv2-dnn", "none", multiprocess)
@@ -100,7 +100,7 @@ class FaceFilter():
             image = face["image"]
             detected_face = face["detected_face"]
             detected_face.load_aligned(image, size=224)
-            face["face"] = detected_face.aligned_face
+            face["face"] = detected_face.aligned.face
             del face["image"]
             logger.debug("Loaded aligned face: ('%s', shape: %s)",
                          filename, face["face"].shape)
@@ -118,7 +118,7 @@ class FaceFilter():
         """ Check the extracted Face """
         logger.trace("Checking face with FaceFilter")
         distances = {"filter": list(), "nfilter": list()}
-        encodings = self.vgg_face.predict(detected_face.aligned_face)
+        encodings = self.vgg_face.predict(detected_face.aligned.face)
         for filt in self.filters.values():
             similarity = self.vgg_face.find_cosine_similiarity(filt["encoding"], encodings)
             distances[filt["type"]].append(similarity)
@@ -144,7 +144,7 @@ class FaceFilter():
                    "{}, nfilter: {})".format(round(mins["filter"], 2), round(mins["nfilter"], 2)))
             retval = False
         elif distances["filter"] and distances["nfilter"]:
-            # k-nn classifier
+            # k-nearest-neighbor classifier
             var_k = min(5, min(len(distances["filter"]), len(distances["nfilter"])) + 1)
             var_n = sum(list(map(lambda x: x[0],
                                  list(sorted([(1, d) for d in distances["filter"]] +

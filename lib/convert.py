@@ -230,13 +230,13 @@ class Converter():
                                            predicted["detected_faces"]):
             predicted_mask = new_face[:, :, -1] if new_face.shape[2] == 4 else None
             new_face = new_face[:, :, :3]
-            interpolator = detected_face.reference_interpolators[1]
+            interpolator = detected_face.reference.interpolators[1]
 
             new_face = self._pre_warp_adjustments(new_face, detected_face, predicted_mask)
 
             # Warp face with the mask
             cv2.warpAffine(new_face,
-                           detected_face.reference_matrix,
+                           detected_face.reference.adjusted_matrix,
                            frame_size,
                            placeholder,
                            flags=cv2.WARP_INVERSE_MAP | interpolator,
@@ -272,7 +272,7 @@ class Converter():
         """
         logger.trace("new_face shape: %s, predicted_mask shape: %s", new_face.shape,
                      predicted_mask.shape if predicted_mask is not None else None)
-        old_face = detected_face.reference_face[..., :3] / 255.0
+        old_face = detected_face.reference.face[..., :3] / 255.0
         new_face = self._adjustments["box"].run(new_face)
         new_face, raw_mask = self._get_image_mask(new_face, detected_face, predicted_mask)
         if self._adjustments["color"] is not None:

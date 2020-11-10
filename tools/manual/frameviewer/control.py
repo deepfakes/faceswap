@@ -234,8 +234,7 @@ class BackgroundImage():
         else:
             det_face = self._det_faces.current_faces[frame_idx][face_idx]
             det_face.load_aligned(self._globals.current_frame["image"], size=size, force=True)
-            face = det_face.aligned_face.copy()
-            det_face.aligned["image"] = None
+            face = det_face.aligned.face.copy()
 
         logger.trace("face shape: %s", face.shape)
         return face[..., 2::-1]

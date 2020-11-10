@@ -1129,7 +1129,7 @@ class _TrainingAlignments():
         for face in detected_faces.values():
             face.load_aligned(None, size=self._training_size)
             for filename in self._hash_to_filenames(side, face.hash):
-                landmarks[filename] = face.aligned_landmarks
+                landmarks[filename] = face.aligned.landmarks
         return landmarks
 
     # Get masks

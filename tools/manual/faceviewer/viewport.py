@@ -193,8 +193,8 @@ class Viewport():
                 face.load_aligned(self._active_frame.current_frame,
                                   size=self.face_size,
                                   force=True)
-                image = face.aligned_face
-                face.aligned = dict()
+                image = face.aligned.face
+                face.aligned = None
             else:
                 image = face.thumbnail
             tk_face = self._get_tk_face_object(face, image, is_active)
@@ -266,7 +266,7 @@ class Viewport():
             face.load_aligned(None, size=self.face_size, force=True)
             landmarks = dict(polygon=[], line=[])
             for area, val in self._landmark_mapping.items():
-                points = face.aligned_landmarks[val[0]:val[1]] + top_left
+                points = face.aligned.landmarks[val[0]:val[1]] + top_left
                 shape = "polygon" if area.endswith("eye") or area.startswith("mouth") else "line"
                 landmarks[shape].append(points)
             self._landmarks[key] = landmarks

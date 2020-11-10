@@ -666,16 +666,23 @@ class ExtractMedia():
         The base name of the original frame's filename
     image: :class:`numpy.ndarray`
         The original frame
+    extract_type: ["face", "head"], optional
+        The type of extracted face that this object holds. A "face" type aligns for the face being
+        the center of the extracted image. "head" aligns for the center of the skull (in 3D space)
+        being the center of the extracted image, with the crop holding the full head.
+        Default: `"face"`
     detected_faces: list, optional
         A list of :class:`~lib.faces_detect.DetectedFace` objects. Detected faces can be added
-        later with :func:`add_detected_faces`. Default: None
+        later with :func:`add_detected_faces`. Default: ``None``
     """
 
-    def __init__(self, filename, image, detected_faces=None):
-        logger.trace("Initializing %s: (filename: '%s', image shape: %s, detected_faces: %s)",
-                     self.__class__.__name__, filename, image.shape, detected_faces)
+    def __init__(self, filename, image, extract_type="face", detected_faces=None):
+        logger.trace("Initializing %s: (filename: '%s', image shape: %s, extract_type: %s, "
+                     "detected_faces: %s)", self.__class__.__name__, filename, image.shape,
+                     extract_type, detected_faces)
         self._filename = filename
         self._image = image
+        self._type = extract_type
         self._detected_faces = detected_faces
 
     @property
@@ -703,6 +710,12 @@ class ExtractMedia():
         """list: A list of :class:`~lib.faces_detect.DetectedFace` objects in the
         :attr:`image`. """
         return self._detected_faces
+
+    @property
+    def extract_type(self):
+        """ str: `"face"` if the type of extraction should be focused on the face (i.e. the
+        traditional method). `"head"` if the type of extraction should contain the full head. """
+        return self._type
 
     def get_image_copy(self, color_format):
         """ Get a copy of the image in the requested color format.
