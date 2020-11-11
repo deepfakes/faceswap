@@ -125,8 +125,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                     dtype="float32",
                                     extract_type=item.extract_type,
                                     is_aligned_face=self._image_is_aligned)
-                cv2.imwrite("D:/fstest/extract/match_test/mask_{}".format(item.filename),
-                            face.feed.face)
 
                 batch.setdefault("detected_faces", []).append(face)
                 batch.setdefault("filename", []).append(item.filename)

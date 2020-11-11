@@ -494,7 +494,7 @@ class AlignedFace():
         if self._cache["interpolators"] is None:
             interpolators = get_matrix_scaling(self.adjusted_matrix)
             logger.trace("interpolators: %s", interpolators)
-            self._cache["adjusted_matrix"] = interpolators
+            self._cache["interpolators"] = interpolators
         return self._cache["interpolators"]
 
     def _extract_face(self, image):
