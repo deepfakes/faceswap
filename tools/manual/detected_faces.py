@@ -16,7 +16,6 @@ import imageio
 import numpy as np
 from tqdm import tqdm
 
-from lib.aligner import Extract as AlignerExtract
 from lib.alignments import Alignments
 from lib.faces_detect import DetectedFace
 from lib.gui.custom_widgets import PopupProgress
@@ -652,9 +651,7 @@ class FaceUpdate():
                 face.load_aligned(None, size=min(self._globals.frame_display_dims))
             landmark = face.aligned.landmarks[landmark_index]
             landmark += (shift_x, shift_y)
-            matrix = AlignerExtract.transform_matrix(face.aligned.matrix,
-                                                     face.aligned.size,
-                                                     face.aligned.padding)
+            matrix = face.aligned.adjusted_matrix
             matrix = cv2.invertAffineTransform(matrix)
             if landmark.ndim == 1:
                 landmark = np.reshape(landmark, (1, 1, 2))

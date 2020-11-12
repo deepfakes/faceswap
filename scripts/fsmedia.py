@@ -500,9 +500,21 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         frame = os.path.splitext(os.path.basename(extract_media.filename))[0]
         for idx, face in enumerate(extract_media.detected_faces):
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)
+            if extract_media.extract_type == "head":
+                self._annotate_pose(face)
             aligned_landmarks = face.aligned.landmarks
             for (pos_x, pos_y) in aligned_landmarks:
-                cv2.circle(face.aligned.face, (pos_x, pos_y), 2, (0, 0, 255), -1)
+                cv2.circle(face.aligned.face, (pos_x, pos_y), 1, (0, 255, 255), -1)
+
+    @classmethod
+    def _annotate_pose(cls, face):
+        """ For full face extracts add pose annotation. """
+        center = face.aligned.pose.center_2d.reshape(-1, 2)
+        center = tuple(face.aligned.transform_points(center).astype("int"))
+        points = face.aligned.transform_points(face.aligned.pose.xyz_2d).astype("int")
+        cv2.line(face.aligned.face, center, tuple(points[1].ravel()), (0, 255, 0), 1)
+        cv2.line(face.aligned.face, center, tuple(points[0].ravel()), (255, 0, 0), 1)
+        cv2.line(face.aligned.face, center, tuple(points[2].ravel()), (0, 0, 255), 1)
 
 
 class FaceFilter(PostProcessAction):

@@ -7,7 +7,8 @@ from zlib import compress, decompress
 import cv2
 import numpy as np
 
-from lib.aligner import Extract as AlignerExtract, get_align_matrix, get_matrix_scaling
+from lib.aligner import (Extract as AlignerExtract, PoseEstimate, get_align_matrix,
+                         get_matrix_scaling)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -271,7 +272,7 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, dtype=None, force=False):
+    def load_aligned(self, image, size=256, dtype=None, extract_type="face", force=False):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
@@ -290,6 +291,11 @@ class DetectedFace():
             The size of the output face in pixels
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+        extract_type: ["face", "head"], optional
+            The type of extracted face that should be loaded. A "face" type aligns for the face
+            being the center of the extracted image. "head" aligns for the center of the skull (in
+            3D space) being the center of the extracted image, with the crop holding the full head.
+            Default: `"face"`
         force: bool, optional
             Force an update of the aligned face, even if it is already loaded. Default: ``False``
 
@@ -304,7 +310,7 @@ class DetectedFace():
             logger.trace("Loading aligned face: (size: %s, dtype: %s)", size, dtype)
             self.aligned = AlignedFace(self.landmarks_xy,
                                        image=image,
-                                       extract_type="face",
+                                       extract_type=extract_type,
                                        size=size,
                                        coverage_ratio=1.0,
                                        dtype=dtype,
@@ -414,19 +420,21 @@ class AlignedFace():
                      "coverage_ratio: %s, dtype: %s, is_aligned: %s)", self.__class__.__name__,
                      image.shape, extract_type, size, coverage_ratio, dtype, is_aligned)
         self._frame_landmarks = landmarks
+        self._frame_dimensions = None if image is None else tuple(reversed(image.shape[:2]))
         self._type = extract_type
         self._size = size
         self._dtype = dtype
         self._is_aligned = is_aligned
 
-        self._matrix = get_align_matrix(landmarks)
-        self._padding = self._padding_from_coverage(size, coverage_ratio)
-        self._face = self._extract_face(image)
-
+        self._pose = None
         self._cache = dict(original_roi=None,
                            landmarks=None,
                            adjusted_matrix=None,
                            interpolators=None)
+
+        self._matrix = get_align_matrix(landmarks)
+        self._padding = self._padding_from_coverage(size, coverage_ratio)
+        self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
                      self.__class__.__name__, self._matrix, self._padding, self._face.shape)
 
@@ -448,11 +456,23 @@ class AlignedFace():
         return self._matrix
 
     @property
+    def pose(self):
+        """ :class:`lib.aligner.PoseEstimate`: The estimate pose in 3D space. """
+        if self._pose is None:
+            if self._frame_dimensions is None:
+                raise ValueError("An original frame must have been passed to :class:`AlignedFace` "
+                                 "to be able to calculate the full head pose estimates.")
+            self._pose = PoseEstimate(self._matrix, self._frame_dimensions, self._frame_landmarks)
+        return self._pose
+
+    @property
     def adjusted_matrix(self):
         """ :class:`numpy.ndarray`: The 3x2 transformation matrix for extracting and aligning the
         core face area out of the original frame with padding and sizing applied. """
         if self._cache["adjusted_matrix"] is None:
-            mat = AlignerExtract().transform_matrix(self._matrix, self._size, self._padding)
+            matrix = self._matrix if self._type == "face" else self.pose.matrix
+            mat = matrix * (self._size - 2 * self._padding)
+            mat[:, 2] += self._padding
             logger.trace("adjusted_matrix: %s", mat)
             self._cache["adjusted_matrix"] = mat
         return self._cache["adjusted_matrix"]
@@ -479,27 +499,42 @@ class AlignedFace():
         """ :class:`numpy.ndarray`: The 68 point facial landmarks aligned to the extracted face
         box. """
         if self._cache["landmarks"] is None:
-            lms = AlignerExtract().transform_points(self._frame_landmarks,
-                                                    self._matrix,
-                                                    self._size,
-                                                    self._padding)
+            lms = self.transform_points(self._frame_landmarks)
             logger.trace("aligned landmarks: %s", lms)
             self._cache["landmarks"] = lms
         return self._cache["landmarks"]
 
     @property
     def interpolators(self):
-        """ tuple:  Tuple of (`interpolator` and `reverse interpolator`) for the
-        :attr:`adjusted matrix`. """
+        """ tuple: (`interpolator` and `reverse interpolator`) for the :attr:`adjusted matrix`. """
         if self._cache["interpolators"] is None:
             interpolators = get_matrix_scaling(self.adjusted_matrix)
             logger.trace("interpolators: %s", interpolators)
             self._cache["interpolators"] = interpolators
         return self._cache["interpolators"]
 
+    def transform_points(self, points):
+        """ Perform transformation on a series of (x, y) co-ordinates in world space into
+        aligned face space.
+
+        Parameters
+        ----------
+        points: :class:`numpy.ndarray`
+            The points to transform
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The transformed points
+        """
+        retval = np.expand_dims(points, axis=1)
+        retval = cv2.transform(retval, self.adjusted_matrix, retval.shape).squeeze()
+        logger.trace("Original points: %s, transformed points: %s", points, retval)
+        return retval
+
     def _extract_face(self, image):
         """ Extract the face from a source image and populate :attr:`face`. If an image is not
-        provided then the attribute is populated with an all zeros array of the correct dimensions.
+        provided then ``None`` is returned.
 
         Parameters
         ----------
@@ -509,8 +544,9 @@ class AlignedFace():
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The extracted face at the given size, with the given coverage of the given dtype.
+        :class:`numpy.ndarray` or ``None``
+            The extracted face at the given size, with the given coverage of the given dtype or
+            ``None`` if no image has been provided.
         """
         if image is None:
             logger.debug("_extract_face called without a loaded image. Returning empty face.")
@@ -520,7 +556,8 @@ class AlignedFace():
             interp = cv2.INTER_CUBIC if original_size < self._size else cv2.INTER_AREA
             retval = cv2.resize(image, (self._size, self._size), interpolation=interp)
         else:
-            retval = AlignerExtract().transform(image, self._matrix, self._size, self._padding)
+            matrix = self._matrix if self._type == "face" else self.pose.matrix
+            retval = AlignerExtract().transform(image, matrix, self._size, self._padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 

@@ -250,7 +250,9 @@ class Extract():  # pylint:disable=too-few-public-methods
             The size that the aligned face should be created at
         """
         for face in extract_media.detected_faces:
-            face.load_aligned(extract_media.image, size=size)
+            face.load_aligned(extract_media.image,
+                              size=size,
+                              extract_type=extract_media.extract_type)
             face.thumbnail = generate_thumbnail(face.aligned.face, size=80, quality=60)
         self._post_process.do_actions(extract_media)
         extract_media.remove_image()
