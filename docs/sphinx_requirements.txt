@@ -17,4 +17,4 @@ nvidia-ml-py3
 pywin32==227 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
 plaidml-keras==0.7.0
-tensorflow==2.2.0
+tensorflow==2.3.1
