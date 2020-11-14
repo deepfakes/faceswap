@@ -9,12 +9,13 @@ import sys
 from datetime import datetime
 from PIL import Image
 
+import cv2
 import numpy as np
 from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
-from .annotate import Annotate
+from lib.faces_detect import DetectedFace
 from .media import ExtractedFaces, Faces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -348,61 +349,109 @@ class Dfl():
 
 
 class Draw():
-    """ Draw Alignments on passed in images """
+    """ Draws annotations onto original frames and saves into a sub-folder next to the original
+    frames.
+
+    Parameters
+    ---------
+    alignments: :class:`tools.alignments.media.AlignmentsData`
+        The loaded alignments corresponding to the frames to be annotated
+    arguments: :class:`argparse.Namespace`
+        The command line arguments that have called this job
+    """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.arguments = arguments
-        self.alignments = alignments
-        self.frames = Frames(arguments.frames_dir)
-        self.output_folder = self.set_output()
-        self.extracted_faces = None
+        self._alignments = alignments
+        self._frames = Frames(arguments.frames_dir)
+        self._output_folder = self._set_output()
+        self._mesh_areas = dict(mouth=(48, 68),
+                                right_eyebrow=(17, 22),
+                                left_eyebrow=(22, 27),
+                                right_eye=(36, 42),
+                                left_eye=(42, 48),
+                                nose=(27, 36),
+                                jaw=(0, 17),
+                                chin=(8, 11))
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_output(self):
-        """ Set the output folder path """
+    def _set_output(self):
+        """ Set the output folder path.
+
+        If annotating a folder of frames, output will be placed in a sub folder within the frames
+        folder. If annotating a video, output will be a folder next to the original video.
+
+        Returns
+        -------
+        str
+            Full path to the output folder
+
+        """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = "drawn_landmarks_{}".format(now)
-        if self.frames.is_video:
-            dest_folder = os.path.dirname(self.frames.folder)
+        if self._frames.is_video:
+            dest_folder = os.path.dirname(self._frames.folder)
         else:
-            dest_folder = self.frames.folder
+            dest_folder = self._frames.folder
         output_folder = os.path.join(dest_folder, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)
         os.makedirs(output_folder)
         return output_folder
 
     def process(self):
-        """ Run the draw alignments process """
+        """ Runs the process to draw face annotations onto original source frames. """
         logger.info("[DRAW LANDMARKS]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256)
         frames_drawn = 0
-        for frame in tqdm(self.frames.file_list_sorted, desc="Drawing landmarks"):
+        for frame in tqdm(self._frames.file_list_sorted, desc="Drawing landmarks"):
             frame_name = frame["frame_fullname"]
 
-            if not self.alignments.frame_exists(frame_name):
+            if not self._alignments.frame_exists(frame_name):
                 logger.verbose("Skipping '%s' - Alignments not found", frame_name)
                 continue
 
-            self.annotate_image(frame_name)
+            self._annotate_image(frame_name)
             frames_drawn += 1
         logger.info("%s Frame(s) output", frames_drawn)
 
-    def annotate_image(self, frame):
-        """ Draw the alignments """
-        logger.trace("Annotating frame: '%s'", frame)
-        alignments = self.alignments.get_faces_in_frame(frame)
-        image = self.frames.load_image(frame)
-        self.extracted_faces.get_faces_in_frame(frame)
-        original_roi = [face.aligned.original_roi
-                        for face in self.extracted_faces.faces]
-        annotate = Annotate(image, alignments, original_roi)
-        annotate.draw_bounding_box(1, 1)
-        annotate.draw_extract_box(2, 1)
-        annotate.draw_landmarks(3, 1)
-        annotate.draw_landmarks_mesh(4, 1)
+    def _annotate_image(self, frame_name):
+        """ Annotate the frame with each face that appears in the alignments file.
 
-        image = annotate.image
-        self.frames.save_image(self.output_folder, frame, image)
+        Parameters
+        ----------
+        frame_name: str
+            The full path to the original frame
+        """
+        logger.trace("Annotating frame: '%s'", frame_name)
+        image = self._frames.load_image(frame_name)
+
+        for idx, alignment in enumerate(self._alignments.get_faces_in_frame(frame_name)):
+            face = DetectedFace()
+            face.from_alignment(alignment, image=image)
+            landmarks = np.rint(face.landmarks_xy).astype("int32")
+            # Bounding Box
+            cv2.rectangle(image, (face.left, face.top), (face.right, face.bottom), (255, 0, 0), 1)
+            # Mesh
+            for area, indices in self._mesh_areas.items():
+                fill = area in ("right_eye", "left_eye", "mouth")
+                cv2.polylines(image, [landmarks[indices[0]:indices[1]]], fill, (255, 255, 0), 1)
+            # Landmarks
+            for (pos_x, pos_y) in landmarks:
+                cv2.circle(image, (pos_x, pos_y), 1, (0, 255, 255), -1)
+            # Extract boxes
+            for area in ("face", "head"):
+                face.load_aligned(image, extract_type=area, force=True)
+                color = (0, 255, 0) if area == "face" else (0, 0, 255)
+                top_left = face.aligned.original_roi.squeeze()[0]
+                top_left = (top_left[0], top_left[1] - 10)
+                cv2.putText(image, str(idx), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
+                cv2.polylines(image, [face.aligned.original_roi], True, color, 1)
+            # Pose (head is still loaded)
+            center = tuple(face.aligned.pose.center_2d.astype("int32").squeeze())
+            points = face.aligned.pose.xyz_2d.astype("int32")
+            cv2.line(image, center, tuple(points[1].ravel()), (0, 255, 0), 2)
+            cv2.line(image, center, tuple(points[0].ravel()), (255, 0, 0), 2)
+            cv2.line(image, center, tuple(points[2].ravel()), (0, 0, 255), 2)
+
+        self._frames.save_image(self._output_folder, frame_name, image)
 
 
 class Extract():  # pylint:disable=too-few-public-methods

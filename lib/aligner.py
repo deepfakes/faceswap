@@ -93,31 +93,6 @@ class Extract():
         retval = cv2.warpAffine(image, mat, (size, size), flags=interpolators[0])
         return retval
 
-    def get_original_roi(self, matrix, size, padding=0):
-        """ Return the square aligned box location on an original frame.
-
-        Parameters
-        ----------
-        matrix: :class:`numpy.ndarray`
-            The transformation matrix used to extract the image
-        size: int
-            The final size of the transformed image
-        padding: int, optional
-            The amount of padding applied to the final image. Default: `0`
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The original ROI points
-        """
-        logger.trace("matrix: %s, size: %s. padding: %s", matrix, size, padding)
-        mat = self.transform_matrix(matrix, size, padding)
-        points = np.array([[0, 0], [0, size - 1], [size - 1, size - 1], [size - 1, 0]], np.int32)
-        points = points.reshape((-1, 1, 2))
-        mat = cv2.invertAffineTransform(mat)
-        logger.trace("Returning: (points: %s, matrix: %s", points, mat)
-        return cv2.transform(points, mat)
-
 
 def get_matrix_scaling(matrix):
     """ Given a matrix, return the cv2 Interpolation method and inverse interpolation method for

@@ -418,7 +418,8 @@ class AlignedFace():
                  dtype=None, is_aligned=False):
         logger.trace("Initializing: %s (image shape: %s, extract_type: %s, size: %s, "
                      "coverage_ratio: %s, dtype: %s, is_aligned: %s)", self.__class__.__name__,
-                     image.shape, extract_type, size, coverage_ratio, dtype, is_aligned)
+                     image if image is None else image.shape, extract_type, size, coverage_ratio,
+                     dtype, is_aligned)
         self._frame_landmarks = landmarks
         self._frame_dimensions = None if image is None else tuple(reversed(image.shape[:2]))
         self._type = extract_type
@@ -436,7 +437,8 @@ class AlignedFace():
         self._padding = self._padding_from_coverage(size, coverage_ratio)
         self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
-                     self.__class__.__name__, self._matrix, self._padding, self._face.shape)
+                     self.__class__.__name__, self._matrix, self._padding,
+                     self._face if self._face is None else self._face.shape)
 
     @property
     def size(self):
@@ -489,7 +491,11 @@ class AlignedFace():
         """ :class:`numpy.ndarray`: The location of the extracted face box within the original
         frame. """
         if self._cache["original_roi"] is None:
-            roi = AlignerExtract().get_original_roi(self._matrix, self._size, self._padding)
+            points = np.array([[0, 0],
+                               [0, self._size - 1],
+                               [self._size - 1, self._size - 1],
+                               [self._size - 1, 0]], dtype="int32").reshape(-1, 1, 2)
+            roi = cv2.transform(points, cv2.invertAffineTransform(self.adjusted_matrix))
             logger.trace("original roi: %s", roi)
             self._cache["original_roi"] = roi
         return self._cache["original_roi"]
