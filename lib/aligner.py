@@ -156,13 +156,22 @@ class PoseEstimate():
     Head Pose Estimation using OpenCV and Dlib - https://www.learnopencv.com/tag/solvepnp/
     """
     def __init__(self, matrix, frame_dimensions, landmarks):
-        center = 500.0
-        self._mean_face = np.array([(0.0, -170.0, center),             # Nose tip
-                                    (0.0, -25.0, center - 55.0),       # Between Eyes
-                                    (-225.0, 0.0, center - 135.0),     # Left eye left corner
-                                    (225.0, 0.0, center - 135.0),      # Right eye right corner
-                                    (-150.0, -320.0, center - 125.0),  # Left Mouth corner
-                                    (150.0, -320.0, center - 125.0)])  # Right mouth corner
+        self._mean_face = np.array([
+            [0.0, -0.42518563843677776, 0.5242554871053209],                    # Nose Tip
+            [0.5290975077240023, 0.09885141631060307, 0.34122436374987125],     # left brow left
+            [0.10311999385474899, 0.12687493910364753, 0.5351317597470401],     # left brow right
+            [-0.10311999385474899, 0.12687493910364753, 0.5351317597470401],    # right brow left
+            [-0.5290975077240023, 0.09885141631060307, 0.34122436374987125],    # right brow right
+            [0.4117063931151485, 0.0, 0.3090960489245074],                      # left eye left
+            [0.13874330392041126, -0.00710819819736719, 0.34209809318163165],   # left eye right
+            [-0.13874330392041126, -0.00710819819736719, 0.34209809318163165],  # right eye left
+            [-0.4117063931151485, 0.0, 0.3090960489245074],                     # right eye right
+            [0.15546275840691345, -0.3159039607646497, 0.47791976742302295],    # nose left
+            [-0.15546275840691345, -0.3159039607646497, 0.47791976742302295],   # nose right
+            [0.21502293733541514, -0.5864732855598461, 0.39132808036326433],    # mouth left
+            [-0.21502293733541514, -0.5864732855598461, 0.39132808036326433],   # mouth right
+            [0.0, -0.666748572341456, 0.47265002865277544],                     # mouth center
+            [0.0, -1.0, 0.3155125963305689]])                                   # chin
         self._distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
         self._cache = dict(center_2d=None, xyz_2d=None)
 
@@ -188,8 +197,7 @@ class PoseEstimate():
         """ :class:`numpy.ndarray` projected (x, y) coordinates for each x, y, z point at a
         constant distance from center of the skull in the 2D space. """
         if self._cache["xyz_2d"] is None:
-            points = np.float32([[500, 0, 0], [0, 500, 0], [0, 0, 500]])
-            xyz, _ = cv2.projectPoints(points,
+            xyz, _ = cv2.projectPoints(np.float32([[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
                                        self._rotation,
                                        self._translation,
                                        self._camera_matrix,
@@ -243,7 +251,7 @@ class PoseEstimate():
         translation: :class:`numpy.ndarray`
             The solved translation vector
         """
-        points = landmarks[np.array((30, 27, 36, 45, 48, 54))]  # Extract 6 face points
+        points = landmarks[[33, 17, 21, 22, 26, 36, 39, 42, 45, 31, 35, 48, 54, 57, 8]]
         _, rotation, translation = cv2.solvePnP(self._mean_face,
                                                 points,
                                                 self._camera_matrix,
