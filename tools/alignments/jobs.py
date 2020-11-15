@@ -440,7 +440,7 @@ class Draw():
             for area in ("face", "head"):
                 face.load_aligned(image, extract_type=area, force=True)
                 color = (0, 255, 0) if area == "face" else (0, 0, 255)
-                top_left = face.aligned.original_roi.squeeze()[0]
+                top_left = face.aligned.original_roi[0]
                 top_left = (top_left[0], top_left[1] - 10)
                 cv2.putText(image, str(idx), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
                 cv2.polylines(image, [face.aligned.original_roi], True, color, 1)

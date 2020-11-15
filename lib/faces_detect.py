@@ -491,11 +491,11 @@ class AlignedFace():
         """ :class:`numpy.ndarray`: The location of the extracted face box within the original
         frame. """
         if self._cache["original_roi"] is None:
-            points = np.array([[0, 0],
-                               [0, self._size - 1],
-                               [self._size - 1, self._size - 1],
-                               [self._size - 1, 0]], dtype="int32").reshape(-1, 1, 2)
-            roi = cv2.transform(points, cv2.invertAffineTransform(self.adjusted_matrix))
+            roi = np.array([[0, 0],
+                            [0, self._size - 1],
+                            [self._size - 1, self._size - 1],
+                            [self._size - 1, 0]])
+            roi = np.rint(self.transform_points(roi, invert=True)).astype("int32")
             logger.trace("original roi: %s", roi)
             self._cache["original_roi"] = roi
         return self._cache["original_roi"]
@@ -519,7 +519,7 @@ class AlignedFace():
             self._cache["interpolators"] = interpolators
         return self._cache["interpolators"]
 
-    def transform_points(self, points):
+    def transform_points(self, points, invert=False):
         """ Perform transformation on a series of (x, y) co-ordinates in world space into
         aligned face space.
 
@@ -527,6 +527,9 @@ class AlignedFace():
         ----------
         points: :class:`numpy.ndarray`
             The points to transform
+        invert: bool, optional
+            ``True`` to reverse the transformation (i.e. transform the points into world space from
+            aligned face space). Default: ``False``
 
         Returns
         -------
@@ -534,8 +537,10 @@ class AlignedFace():
             The transformed points
         """
         retval = np.expand_dims(points, axis=1)
-        retval = cv2.transform(retval, self.adjusted_matrix, retval.shape).squeeze()
-        logger.trace("Original points: %s, transformed points: %s", points, retval)
+        mat = cv2.invertAffineTransform(self.adjusted_matrix) if invert else self.adjusted_matrix
+        retval = cv2.transform(retval, mat, retval.shape).squeeze()
+        logger.trace("invert: %s, Original points: %s, transformed points: %s",
+                     invert, points, retval)
         return retval
 
     def _extract_face(self, image):
