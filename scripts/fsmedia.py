@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import cv2
+import numpy as np
 import imageio
 
 from lib.alignments import Alignments as AlignmentsBase
@@ -509,12 +510,11 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
     @classmethod
     def _annotate_pose(cls, face):
         """ For full face extracts add pose annotation. """
-        center = face.aligned.pose.center_2d.reshape(-1, 2)
-        center = tuple(face.aligned.transform_points(center).astype("int"))
-        points = face.aligned.transform_points(face.aligned.pose.xyz_2d).astype("int")
-        cv2.line(face.aligned.face, center, tuple(points[1].ravel()), (0, 255, 0), 1)
-        cv2.line(face.aligned.face, center, tuple(points[0].ravel()), (255, 0, 0), 1)
-        cv2.line(face.aligned.face, center, tuple(points[2].ravel()), (0, 0, 255), 1)
+        center = tuple(np.int32((face.aligned.size / 2, face.aligned.size / 2)))
+        points = (face.aligned.pose.xyz_2d * face.aligned.size).astype("int32")
+        cv2.line(face.aligned.face, center, tuple(points[1]), (0, 255, 0), 1)
+        cv2.line(face.aligned.face, center, tuple(points[0]), (255, 0, 0), 1)
+        cv2.line(face.aligned.face, center, tuple(points[2]), (0, 0, 255), 1)
 
 
 class FaceFilter(PostProcessAction):

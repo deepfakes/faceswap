@@ -306,7 +306,7 @@ class Dfl():
             img = Image.open(filename)
             try:
                 dfl_alignments = pickle.loads(img.app["APP15"])
-                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
+                dfl_alignments["source_rect"] = [n.item()  # comes as np.int32
                                                  for n in dfl_alignments["source_rect"]]
                 return dfl_alignments
             except pickle.UnpicklingError:
@@ -348,7 +348,7 @@ class Dfl():
         alignments.setdefault(sourcefile, dict()).setdefault("faces", []).append(alignment)
 
 
-class Draw():
+class Draw():  # pylint:disable=too-few-public-methods
     """ Draws annotations onto original frames and saves into a sub-folder next to the original
     frames.
 
@@ -440,16 +440,19 @@ class Draw():
             for area in ("face", "head"):
                 face.load_aligned(image, extract_type=area, force=True)
                 color = (0, 255, 0) if area == "face" else (0, 0, 255)
-                top_left = face.aligned.original_roi[0]
+                top_left = face.aligned.original_roi[0]  #pylint:disable=unsubscriptable-object
                 top_left = (top_left[0], top_left[1] - 10)
                 cv2.putText(image, str(idx), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
                 cv2.polylines(image, [face.aligned.original_roi], True, color, 1)
             # Pose (head is still loaded)
-            center = tuple(face.aligned.pose.center_2d.astype("int32").squeeze())
-            points = face.aligned.pose.xyz_2d.astype("int32")
-            cv2.line(image, center, tuple(points[1].ravel()), (0, 255, 0), 2)
-            cv2.line(image, center, tuple(points[0].ravel()), (255, 0, 0), 2)
-            cv2.line(image, center, tuple(points[2].ravel()), (0, 0, 255), 2)
+            center = np.int32((face.aligned.size / 2, face.aligned.size / 2)).reshape(1, 2)
+            center = np.rint(face.aligned.transform_points(center, invert=True)).astype("int32")
+            points = face.aligned.pose.xyz_2d * face.aligned.size
+            points = np.rint(face.aligned.transform_points(points, invert=True)).astype("int32")
+
+            cv2.line(image, tuple(center), tuple(points[1]), (0, 255, 0), 2)
+            cv2.line(image, tuple(center), tuple(points[0]), (255, 0, 0), 2)
+            cv2.line(image, tuple(center), tuple(points[2]), (0, 0, 255), 2)
 
         self._frames.save_image(self._output_folder, frame_name, image)
 
@@ -769,7 +772,7 @@ class RemoveAlignments():
         return pre_face_count - post_face_count
 
 
-class Rename():
+class Rename():  #pylint:disable=too-few-public-methods
     """ Rename faces in a folder to match their filename as stored in an alignments file.
 
     Parameters

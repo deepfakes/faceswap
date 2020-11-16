@@ -6,11 +6,30 @@ from zlib import compress, decompress
 
 import cv2
 import numpy as np
+from skimage.transform._geometric import _umeyama as umeyama
 
-from lib.aligner import (Extract as AlignerExtract, PoseEstimate, get_align_matrix,
-                         get_matrix_scaling)
+from lib.aligner import Extract as AlignerExtract, PoseEstimate, get_matrix_scaling
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+
+_MEAN_FACE = np.array([[0.010086, 0.106454], [0.085135, 0.038915], [0.191003, 0.018748],
+                       [0.300643, 0.034489], [0.403270, 0.077391], [0.596729, 0.077391],
+                       [0.699356, 0.034489], [0.808997, 0.018748], [0.914864, 0.038915],
+                       [0.989913, 0.106454], [0.500000, 0.203352], [0.500000, 0.307009],
+                       [0.500000, 0.409805], [0.500000, 0.515625], [0.376753, 0.587326],
+                       [0.435909, 0.609345], [0.500000, 0.628106], [0.564090, 0.609345],
+                       [0.623246, 0.587326], [0.131610, 0.216423], [0.196995, 0.178758],
+                       [0.275698, 0.179852], [0.344479, 0.231733], [0.270791, 0.245099],
+                       [0.192616, 0.244077], [0.655520, 0.231733], [0.724301, 0.179852],
+                       [0.803005, 0.178758], [0.868389, 0.216423], [0.807383, 0.244077],
+                       [0.729208, 0.245099], [0.264022, 0.780233], [0.350858, 0.745405],
+                       [0.438731, 0.727388], [0.500000, 0.742578], [0.561268, 0.727388],
+                       [0.649141, 0.745405], [0.735977, 0.780233], [0.652032, 0.864805],
+                       [0.566594, 0.902192], [0.500000, 0.909281], [0.433405, 0.902192],
+                       [0.347967, 0.864805], [0.300252, 0.784792], [0.437969, 0.778746],
+                       [0.500000, 0.785343], [0.562030, 0.778746], [0.699747, 0.784792],
+                       [0.563237, 0.824182], [0.500000, 0.831803], [0.436763, 0.824182]])
 
 
 class DetectedFace():
@@ -182,7 +201,7 @@ class DetectedFace():
             self.load_aligned(None, size=size, force=True)
         size = (size, size) if aligned else size
         landmarks = self.aligned.landmarks if aligned else self.landmarks_xy
-        points = [landmarks[zone] for zone in areas[area]]
+        points = [landmarks[zone] for zone in areas[area]]  #pylint:disable=unsubscriptable-object
         mask = _LandmarksMask(size, points, dilation=dilation, blur_kernel=blur_kernel)
         retval = mask.get(as_zip=as_zip)
         return retval
@@ -421,7 +440,6 @@ class AlignedFace():
                      image if image is None else image.shape, extract_type, size, coverage_ratio,
                      dtype, is_aligned)
         self._frame_landmarks = landmarks
-        self._frame_dimensions = None if image is None else tuple(reversed(image.shape[:2]))
         self._type = extract_type
         self._size = size
         self._dtype = dtype
@@ -433,7 +451,7 @@ class AlignedFace():
                            adjusted_matrix=None,
                            interpolators=None)
 
-        self._matrix = get_align_matrix(landmarks)
+        self._matrix = umeyama(landmarks[17:], _MEAN_FACE, True)[0:2]
         self._padding = self._padding_from_coverage(size, coverage_ratio)
         self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
@@ -448,8 +466,8 @@ class AlignedFace():
     @property
     def padding(self):
         """ int: The amount of padding (in pixels) that is applied to each side of the
-        extracted face image. """
-        return self._padding
+        extracted face image for the selected extract type. """
+        return self._padding[self._type]
 
     @property
     def matrix(self):
@@ -459,12 +477,10 @@ class AlignedFace():
 
     @property
     def pose(self):
-        """ :class:`lib.aligner.PoseEstimate`: The estimate pose in 3D space. """
+        """ :class:`lib.aligner.PoseEstimate`: The estimated pose in 3D space. """
         if self._pose is None:
-            if self._frame_dimensions is None:
-                raise ValueError("An original frame must have been passed to :class:`AlignedFace` "
-                                 "to be able to calculate the full head pose estimates.")
-            self._pose = PoseEstimate(self._matrix, self._frame_dimensions, self._frame_landmarks)
+            lms = cv2.transform(np.expand_dims(self._frame_landmarks, axis=1), self._matrix)
+            self._pose = PoseEstimate(self._matrix, lms.squeeze())
         return self._pose
 
     @property
@@ -473,8 +489,8 @@ class AlignedFace():
         core face area out of the original frame with padding and sizing applied. """
         if self._cache["adjusted_matrix"] is None:
             matrix = self._matrix if self._type == "face" else self.pose.matrix
-            mat = matrix * (self._size - 2 * self._padding)
-            mat[:, 2] += self._padding
+            mat = matrix * (self._size - 2 * self.padding)
+            mat[:, 2] += self.padding
             logger.trace("adjusted_matrix: %s", mat)
             self._cache["adjusted_matrix"] = mat
         return self._cache["adjusted_matrix"]
@@ -568,25 +584,19 @@ class AlignedFace():
             retval = cv2.resize(image, (self._size, self._size), interpolation=interp)
         else:
             matrix = self._matrix if self._type == "face" else self.pose.matrix
-            retval = AlignerExtract().transform(image, matrix, self._size, self._padding)
+            retval = AlignerExtract().transform(image, matrix, self._size, self.padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 
-    @property
-    def _extract_ratio(self):
-        """ float: The default ratio that images are extracted. This is the amount of padding added
-        to each edge of the extracted image at extraction time. These are constant for each
-        :attr:`_type` with a `face` type adding 0.375 of the extracted face image size and a
-        `head` type adding 0.625 of the extracted face image size to each side. """
-        return dict(face=0.375, head=0.625)[self._type]
-
-    def _padding_from_coverage(self, size, coverage_ratio):
+    @classmethod
+    def _padding_from_coverage(cls, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
             pre-padded training image """
-        adjusted_ratio = coverage_ratio - (1 - self._extract_ratio)
-        padding = round((size * adjusted_ratio) / 2)
-        logger.trace(padding)
-        return padding
+        ratios = dict(face=0.375, head=0.625)
+        retval = {_type: round((size * (coverage_ratio - (1 - ratios[_type]))) / 2)
+                  for _type in ("face", "head")}
+        logger.trace(retval)
+        return retval
 
 
 class _LandmarksMask():  # pylint:disable=too-few-public-methods
