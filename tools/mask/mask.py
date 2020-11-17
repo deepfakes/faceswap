@@ -349,6 +349,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         for idx, face in enumerate(extractor_output.detected_faces):
             self._alignments.update_face(frame, idx, face.to_alignment())
             if self._saver is not None:
+                face.image = extractor_output.image
                 self._save(frame, idx, face)
 
     def _save(self, frame, idx, detected_face):
@@ -397,7 +398,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             if self._input_is_faces:
                 face = detected_face.image
             else:
-                detected_face.load_aligned(detected_face.image)
+                detected_face.load_aligned(detected_face.image, centering="face")
                 face = detected_face.aligned.face
             mask = cv2.resize(detected_face.mask[self._mask_type].mask,
                               (face.shape[1], face.shape[0]),

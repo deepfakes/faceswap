@@ -502,7 +502,7 @@ class AlignedFace():
         """ :class:`numpy.ndarray`: The 3x2 transformation matrix for extracting and aligning the
         core face area out of the original frame with padding and sizing applied. """
         if self._cache["adjusted_matrix"] is None:
-            matrix = self._matrices[self._centering].copy()
+            matrix = self.matrix.copy()
             mat = matrix * (self._size - 2 * self.padding)
             mat[:, 2] += self.padding
             logger.trace("adjusted_matrix: %s", mat)
