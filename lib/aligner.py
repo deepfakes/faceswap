@@ -97,8 +97,6 @@ class PoseEstimate():
 
     Parameters
     ----------
-    matrix: :class:`numpy.ndarray`
-        The original umeyama transformation matrix with no adjustments applied
     landmarks: :class:`numpy.ndarry`
         The original 68 point landmarks aligned to 0.0 - 1.0 range
 
@@ -107,7 +105,7 @@ class PoseEstimate():
     Head Pose Estimation using OpenCV and Dlib - https://www.learnopencv.com/tag/solvepnp/
     3D Model points - http://aifi.isr.uc.pt/Downloads/OpenGL/glAnthropometric3DModel.cpp
     """
-    def __init__(self, matrix, landmarks):
+    def __init__(self, landmarks):
         self._mean_face = np.array([
             [4.056931, -11.432347, 3.942019],   # 8 chin LL
             [1.833492, -12.542305, 6.367065],   # 7 chin L
@@ -141,7 +139,6 @@ class PoseEstimate():
         self._camera_matrix = self._get_camera_matrix()
         self._rotation, self._translation = self._solve_pnp(landmarks)
         self._offset = self._get_offset()
-        self._matrix = self._adjust_matrix(matrix)
 
     @property
     def xyz_2d(self):
@@ -153,14 +150,15 @@ class PoseEstimate():
                                     self._translation,
                                     self._camera_matrix,
                                     self._distortion_coefficients)[0].squeeze()
-            self._xyz_2d = xyz - self._offset
+            self._xyz_2d = xyz - self._offset["head"]
         return self._xyz_2d
 
     @property
-    def matrix(self):
-        """:class:`numpy.ndarray`: The adjusted umeyama transformation matrix focused on the
-        center of the skull. """
-        return self._matrix
+    def offset(self):
+        """ dict: The amount to offset a standard 0.0 - 1.0 umeyama transformation matrix for a
+        from the center of the face (between the eyes) or center of the head (middle of skull)
+        rather than the nose area. """
+        return self._offset
 
     @classmethod
     def _get_camera_matrix(cls):
@@ -215,31 +213,15 @@ class PoseEstimate():
         :class:`numpy.ndarray`
             The x, y offset of the new center from the old center.
         """
-        center = cv2.projectPoints(np.float32([[0, 0, 0]]),
-                                   self._rotation,
-                                   self._translation,
-                                   self._camera_matrix,
-                                   self._distortion_coefficients)[0].squeeze()
-        offset = center - (0.5, 0.5)
-        logger.trace("Head center: %s, offset: %s", center, offset)
+        points = dict(head=(0, 0, 0), face=(0, -1.5, 6.5))
+        offset = dict()
+        for key, pnts in points.items():
+            center = cv2.projectPoints(np.float32([pnts]),
+                                       self._rotation,
+                                       self._translation,
+                                       self._camera_matrix,
+                                       self._distortion_coefficients)[0].squeeze()
+            logger.trace("center %s: %s", key, center)
+            offset[key] = center - (0.5, 0.5)
+        logger.trace("offset: %s", offset)
         return offset
-
-    def _adjust_matrix(self, matrix):
-        """ Adjust a standard face umeyama transformation matrix to center on the full head rather
-        than the face.
-
-        Parameters
-        ----------
-        matrix: :class:`numpy.ndarray`
-            The original umeyama transformation matrix with no adjustments applied
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The original umeyama transformation matrix adjusted to center on the middle of the
-            skull
-        """
-        retval = matrix.copy()
-        retval[:, 2] -= self._offset  # Adjust matrix to new center
-        logger.trace("original matrix: %s, new matrix: %s", matrix, retval)
-        return retval

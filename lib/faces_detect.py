@@ -449,6 +449,10 @@ class AlignedFace():
         self._size = size
         self._dtype = dtype
         self._is_aligned = is_aligned
+        self._matrices = dict(legacy=umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
+                              face=None,
+                              head=None)
+        self._padding = self._padding_from_coverage(size, coverage_ratio)
 
         self._pose = None
         self._cache = dict(original_roi=None,
@@ -456,11 +460,9 @@ class AlignedFace():
                            adjusted_matrix=None,
                            interpolators=None)
 
-        self._matrix = umeyama(landmarks[17:], _MEAN_FACE, True)[0:2]
-        self._padding = self._padding_from_coverage(size, coverage_ratio)
         self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
-                     self.__class__.__name__, self._matrix, self._padding,
+                     self.__class__.__name__, self._matrices["legacy"], self._padding,
                      self._face if self._face is None else self._face.shape)
 
     @property
@@ -477,15 +479,22 @@ class AlignedFace():
     @property
     def matrix(self):
         """ :class:`numpy.ndarray`: The 3x2 transformation matrix for extracting and aligning the
-        core face area out of the original frame, with no padding or sizing applied. """
-        return self._matrix
+        core face area out of the original frame, with no padding or sizing applied. The returned
+        matrix is offset for the given :attr:`centering`. """
+        if self._matrices[self._centering] is None:
+            matrix = self._matrices["legacy"].copy()
+            matrix[:, 2] -= self.pose.offset[self._centering]
+            self._matrices[self._centering] = matrix
+            logger.trace("original matrix: %s, new matrix: %s", self._matrices["legacy"], matrix)
+        return self._matrices[self._centering]
 
     @property
     def pose(self):
         """ :class:`lib.aligner.PoseEstimate`: The estimated pose in 3D space. """
         if self._pose is None:
-            lms = cv2.transform(np.expand_dims(self._frame_landmarks, axis=1), self._matrix)
-            self._pose = PoseEstimate(self._matrix, lms.squeeze())
+            lms = cv2.transform(np.expand_dims(self._frame_landmarks, axis=1),
+                                self._matrices["legacy"]).squeeze()
+            self._pose = PoseEstimate(lms)
         return self._pose
 
     @property
@@ -493,7 +502,7 @@ class AlignedFace():
         """ :class:`numpy.ndarray`: The 3x2 transformation matrix for extracting and aligning the
         core face area out of the original frame with padding and sizing applied. """
         if self._cache["adjusted_matrix"] is None:
-            matrix = self._matrix if self._centering == "legacy" else self.pose.matrix
+            matrix = self._matrices[self._centering].copy()
             mat = matrix * (self._size - 2 * self.padding)
             mat[:, 2] += self.padding
             logger.trace("adjusted_matrix: %s", mat)
@@ -588,8 +597,7 @@ class AlignedFace():
             interp = cv2.INTER_CUBIC if original_size < self._size else cv2.INTER_AREA
             retval = cv2.resize(image, (self._size, self._size), interpolation=interp)
         else:
-            matrix = self._matrix if self._centering == "legacy" else self.pose.matrix
-            retval = AlignerExtract().transform(image, matrix, self._size, self.padding)
+            retval = AlignerExtract().transform(image, self.matrix, self._size, self.padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 
@@ -597,9 +605,9 @@ class AlignedFace():
     def _padding_from_coverage(cls, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
             pre-padded training image """
-        ratios = dict(face=0.375, head=0.625)
+        ratios = dict(legacy=0.375, face=0.5625, head=0.625)
         retval = {_type: round((size * (coverage_ratio - (1 - ratios[_type]))) / 2)
-                  for _type in ("face", "head")}
+                  for _type in ("legacy", "face", "head")}
         logger.trace(retval)
         return retval
 
