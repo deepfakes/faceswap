@@ -201,7 +201,7 @@ class DetectedFace():
             self.load_aligned(None, size=size, force=True)
         size = (size, size) if aligned else size
         landmarks = self.aligned.landmarks if aligned else self.landmarks_xy
-        points = [landmarks[zone] for zone in areas[area]]  #pylint:disable=unsubscriptable-object
+        points = [landmarks[zone] for zone in areas[area]]  # pylint:disable=unsubscriptable-object
         mask = _LandmarksMask(size, points, dilation=dilation, blur_kernel=blur_kernel)
         retval = mask.get(as_zip=as_zip)
         return retval
@@ -291,7 +291,7 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, dtype=None, extract_type="face", force=False):
+    def load_aligned(self, image, size=256, dtype=None, centering="legacy", force=False):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
@@ -310,11 +310,13 @@ class DetectedFace():
             The size of the output face in pixels
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
-        extract_type: ["face", "head"], optional
-            The type of extracted face that should be loaded. A "face" type aligns for the face
-            being the center of the extracted image. "head" aligns for the center of the skull (in
-            3D space) being the center of the extracted image, with the crop holding the full head.
-            Default: `"face"`
+        centering: ["legacy", "face", "head"], optional
+            The type of extracted face that should be loaded. "legacy" places the nose in the
+            center of the image (the original method for aligning). "face" aligns for the nose to
+            be in the center of the face (top to bottom) but the center of the skull for left to
+            right. "head" aligns for the center of the skull (in 3D space) being the center of the
+            extracted image, with the crop holding the full head.
+            Default: `"legacy"`
         force: bool, optional
             Force an update of the aligned face, even if it is already loaded. Default: ``False``
 
@@ -329,14 +331,14 @@ class DetectedFace():
             logger.trace("Loading aligned face: (size: %s, dtype: %s)", size, dtype)
             self.aligned = AlignedFace(self.landmarks_xy,
                                        image=image,
-                                       extract_type=extract_type,
+                                       centering=centering,
                                        size=size,
                                        coverage_ratio=1.0,
                                        dtype=dtype,
                                        is_aligned=False)
 
     def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None,
-                       extract_type="face", is_aligned_face=False):
+                       centering="legacy", is_aligned_face=False):
         """ Align a face in the correct dimensions for feeding into a model.
 
         Parameters
@@ -349,11 +351,13 @@ class DetectedFace():
             the ratio of the extracted image that was used for training. Default: `0.625`
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
-        extract_type: ["face", "head"], optional
-            The type of extracted face that should be loaded. A "face" type aligns for the face
-            being the center of the extracted image. "head" aligns for the center of the skull (in
-            3D space) being the center of the extracted image, with the crop holding the full head.
-            Default: `"face"`
+        centering: ["legacy", "face", "head"], optional
+            The type of extracted face that should be loaded. "legacy" places the nose in the
+            center of the image (the original method for aligning). "face" aligns for the nose to
+            be in the center of the face (top to bottom) but the center of the skull for left to
+            right. "head" aligns for the center of the skull (in 3D space) being the center of the
+            extracted image, with the crop holding the full head.
+            Default: `"legacy"`
         is_aligned_face: bool, optional
             Indicates that the :attr:`image` is an aligned face rather than a frame.
             Default: ``False``
@@ -363,11 +367,11 @@ class DetectedFace():
         This method must be executed to get access to the :attr:`feed` attribute.
         """
         logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s, "
-                     "extract_type: %s, is_aligned_face: %s)", size, coverage_ratio, dtype,
-                     extract_type, is_aligned_face)
+                     "centering: %s, is_aligned_face: %s)", size, coverage_ratio, dtype,
+                     centering, is_aligned_face)
         self.feed = AlignedFace(self.landmarks_xy,
                                 image=image,
-                                extract_type=extract_type,
+                                centering=centering,
                                 size=size,
                                 coverage_ratio=coverage_ratio,
                                 dtype=dtype,
@@ -395,7 +399,7 @@ class DetectedFace():
                      size, coverage_ratio, dtype)
         self.reference = AlignedFace(self.landmarks_xy,
                                      image=image,
-                                     extract_type="face",
+                                     centering="legacy",
                                      size=size,
                                      coverage_ratio=coverage_ratio,
                                      dtype=dtype,
@@ -415,11 +419,12 @@ class AlignedFace():
     image: :class:`numpy.ndarray`, optional
         The original frame that contains the face that is to be aligned. Pass `None` if the aligned
         face is not to be generated, and just the co-ordinates should be calculated.
-    extract_type: ["face", "head"], optional
-        The type of extracted face that this object holds. A "face" type aligns for the face being
-        the center of the extracted image. "head" aligns for the center of the skull (in 3D space)
-        being the center of the extracted image, with the crop holding the full head.
-        Default: `"face"`
+    centering: ["legacy", "face", "head"], optional
+        The type of extracted face that should be loaded. "legacy" places the nose in the center of
+        the image (the original method for aligning). "face" aligns for the nose to be in the
+        center of the face (top to bottom) but the center of the skull for left to right. "head"
+        aligns for the center of the skull (in 3D space) being the center of the extracted image,
+        with the crop holding the full head. Default: `"legacy"`
     size: int, optional
         The size in pixels, of each edge of the final aligned face. Default: `64`
     coverage_ratio: float, optional
@@ -433,14 +438,14 @@ class AlignedFace():
         Indicates that the :attr:`image` is an aligned face rather than a frame.
         Default: ``False``
     """
-    def __init__(self, landmarks, image=None, extract_type="face", size=64, coverage_ratio=1.0,
+    def __init__(self, landmarks, image=None, centering="legacy", size=64, coverage_ratio=1.0,
                  dtype=None, is_aligned=False):
-        logger.trace("Initializing: %s (image shape: %s, extract_type: %s, size: %s, "
+        logger.trace("Initializing: %s (image shape: %s, centering: %s, size: %s, "
                      "coverage_ratio: %s, dtype: %s, is_aligned: %s)", self.__class__.__name__,
-                     image if image is None else image.shape, extract_type, size, coverage_ratio,
+                     image if image is None else image.shape, centering, size, coverage_ratio,
                      dtype, is_aligned)
         self._frame_landmarks = landmarks
-        self._type = extract_type
+        self._centering = centering
         self._size = size
         self._dtype = dtype
         self._is_aligned = is_aligned
@@ -467,7 +472,7 @@ class AlignedFace():
     def padding(self):
         """ int: The amount of padding (in pixels) that is applied to each side of the
         extracted face image for the selected extract type. """
-        return self._padding[self._type]
+        return self._padding[self._centering]
 
     @property
     def matrix(self):
@@ -488,7 +493,7 @@ class AlignedFace():
         """ :class:`numpy.ndarray`: The 3x2 transformation matrix for extracting and aligning the
         core face area out of the original frame with padding and sizing applied. """
         if self._cache["adjusted_matrix"] is None:
-            matrix = self._matrix if self._type == "face" else self.pose.matrix
+            matrix = self._matrix if self._centering == "legacy" else self.pose.matrix
             mat = matrix * (self._size - 2 * self.padding)
             mat[:, 2] += self.padding
             logger.trace("adjusted_matrix: %s", mat)
@@ -583,7 +588,7 @@ class AlignedFace():
             interp = cv2.INTER_CUBIC if original_size < self._size else cv2.INTER_AREA
             retval = cv2.resize(image, (self._size, self._size), interpolation=interp)
         else:
-            matrix = self._matrix if self._type == "face" else self.pose.matrix
+            matrix = self._matrix if self._centering == "legacy" else self.pose.matrix
             retval = AlignerExtract().transform(image, matrix, self._size, self.padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval

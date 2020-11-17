@@ -121,9 +121,9 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             for f_idx, face in enumerate(item.detected_faces):
                 face.load_feed_face(item.get_image_copy(self.color_format),
                                     size=self.input_size,
-                                    coverage_ratio=1.0,
+                                    coverage_ratio=self.coverage_ratio,
                                     dtype="float32",
-                                    extract_type=item.extract_type,
+                                    centering="face",
                                     is_aligned_face=self._image_is_aligned)
 
                 batch.setdefault("detected_faces", []).append(face)

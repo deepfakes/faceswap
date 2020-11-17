@@ -438,9 +438,9 @@ class Draw():  # pylint:disable=too-few-public-methods
                 cv2.circle(image, (pos_x, pos_y), 1, (0, 255, 255), -1)
             # Extract boxes
             for area in ("face", "head"):
-                face.load_aligned(image, extract_type=area, force=True)
+                face.load_aligned(image, centering=area, force=True)
                 color = (0, 255, 0) if area == "face" else (0, 0, 255)
-                top_left = face.aligned.original_roi[0]  #pylint:disable=unsubscriptable-object
+                top_left = face.aligned.original_roi[0]  # pylint:disable=unsubscriptable-object
                 top_left = (top_left[0], top_left[1] - 10)
                 cv2.putText(image, str(idx), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
                 cv2.polylines(image, [face.aligned.original_roi], True, color, 1)
@@ -772,7 +772,7 @@ class RemoveAlignments():
         return pre_face_count - post_face_count
 
 
-class Rename():  #pylint:disable=too-few-public-methods
+class Rename():  # pylint:disable=too-few-public-methods
     """ Rename faces in a folder to match their filename as stored in an alignments file.
 
     Parameters

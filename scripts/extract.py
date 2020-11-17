@@ -152,7 +152,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            item = ExtractMedia(filename, image[..., :3], extract_type=self._args.extract_type)
+            item = ExtractMedia(filename, image[..., :3])
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
@@ -252,7 +252,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         for face in extract_media.detected_faces:
             face.load_aligned(extract_media.image,
                               size=size,
-                              extract_type=extract_media.extract_type)
+                              centering="head")
             face.thumbnail = generate_thumbnail(face.aligned.face, size=80, quality=60)
         self._post_process.do_actions(extract_media)
         extract_media.remove_image()

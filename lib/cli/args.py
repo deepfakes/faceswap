@@ -488,28 +488,6 @@ class ExtractArgs(ExtractConvertArgs):
                  "significantly decrease extraction speed and its accuracy cannot be "
                  "guaranteed."))
         argument_list.append(dict(
-            opts=("-t", "--extract-type"),
-            action=Radio,
-            type=str.lower,
-            dest="extract_type",
-            default="face",
-            choices=["face", "head"],
-            group="output",
-            help="R|The type of extraction images to generate. NB: The type of extraction only "
-                 "impacts the final extracted face images. It has no impact on the alignments "
-                 "file itself. Once an alignments file has been generated, either face type "
-                 "can be re-extracted from the alignments file with the alignments tool."
-                 "\nL|face: This is the 'traditional' extraction method. It generates faces from "
-                 "frames focussed on the center of the face (just above the nose), This works "
-                 "fine in most instances, but can lead to some cropping at the edge of the face "
-                 "in certain poses."
-                 "\nL|head: This method generates faces from frames focussed on the center of the "
-                 "head in 3D space. This is an attempt to ensure that the whole head is extracted "
-                 "regardless of pose, which mitigates some of the limitations of the 'face' "
-                 "method of extraction. However, the location of the center of the head in 3D "
-                 "space is an estimate, so it can be very wrong in some cases, and is unlikely to "
-                 "perform well with distorted lens effects."))
-        argument_list.append(dict(
             opts=("-sz", "--size"),
             action=Slider,
             min_max=(128, 512),
