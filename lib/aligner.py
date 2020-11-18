@@ -107,32 +107,32 @@ class PoseEstimate():
     """
     def __init__(self, landmarks):
         self._mean_face = np.array([
-            [4.056931, -11.432347, 3.942019],   # 8 chin LL
-            [1.833492, -12.542305, 6.367065],   # 7 chin L
-            [0.0, -12.901019, 6.376224],        # 6 chin C
-            [-1.833492, -12.542305, 6.367065],  # 5 chin R
-            [-4.056931, -11.432347, 3.942019],  # 4 chin RR
-            [6.825897, 1.275284, 6.707932],     # 33 L eyebrow L
-            [1.330353, 1.636816, 9.209535],     # 29 L eyebrow R
-            [-1.330353, 1.636816, 9.209535],    # 34 R eyebrow L
-            [-6.825897, 1.275284, 6.707932],    # 38 R eyebrow R
-            [1.930245, -5.060977, 8.220166],    # 54 nose LL
-            [0.746313, -5.136947, 8.569017],    # 53 nose L
-            [0.0, -5.485328, 9.06922],          # 52 nose C
-            [-0.746313, -5.136947, 8.569017],   # 51 nose R
-            [-1.930245, -5.060977, 8.220166],   # 50 nose RR
-            [5.311432, 0.0, 6.293444],          # 13 L eye L
-            [1.78993, -0.091703, 6.719204],     # 17 L eye R
-            [-1.78993, -0.091703, 6.719204],    # 25 R eye L
-            [-5.311432, 0.0, 6.293444],         # 21 R eye R
-            [2.774015, -7.566103, 7.354321],    # 43 mouth L
-            [0.509714, -7.056507, 8.871957],    # 42 mouth top L
-            [0.0, -7.131772, 9.010746],         # 41 mouth top C
-            [-0.509714, -7.056507, 8.871957],   # 40 mouth top R
-            [-2.774015, -7.566103, 7.354321],   # 39 mouth R
-            [-0.589441, -8.443925, 8.415316],   # 46 mouth bottom R
-            [0.0, -8.601736, 8.403457],         # 45 mouth bottom C
-            [0.589441, -8.443925, 8.415316]])   # 44 mouth bottom L
+            [4.056931, -11.432347, 1.636229],   # 8 chin LL
+            [1.833492, -12.542305, 4.061275],   # 7 chin L
+            [0.0, -12.901019, 4.070434],        # 6 chin C
+            [-1.833492, -12.542305, 4.061275],  # 5 chin R
+            [-4.056931, -11.432347, 1.636229],  # 4 chin RR
+            [6.825897, 1.275284, 4.402142],     # 33 L eyebrow L
+            [1.330353, 1.636816, 6.903745],     # 29 L eyebrow R
+            [-1.330353, 1.636816, 6.903745],    # 34 R eyebrow L
+            [-6.825897, 1.275284, 4.402142],    # 38 R eyebrow R
+            [1.930245, -5.060977, 5.914376],    # 54 nose LL
+            [0.746313, -5.136947, 6.263227],    # 53 nose L
+            [0.0, -5.485328, 6.76343],          # 52 nose C
+            [-0.746313, -5.136947, 6.263227],   # 51 nose R
+            [-1.930245, -5.060977, 5.914376],   # 50 nose RR
+            [5.311432, 0.0, 3.987654],          # 13 L eye L
+            [1.78993, -0.091703, 4.413414],     # 17 L eye R
+            [-1.78993, -0.091703, 4.413414],    # 25 R eye L
+            [-5.311432, 0.0, 3.987654],         # 21 R eye R
+            [2.774015, -7.566103, 5.048531],    # 43 mouth L
+            [0.509714, -7.056507, 6.566167],    # 42 mouth top L
+            [0.0, -7.131772, 6.704956],         # 41 mouth top C
+            [-0.509714, -7.056507, 6.566167],   # 40 mouth top R
+            [-2.774015, -7.566103, 5.048531],   # 39 mouth R
+            [-0.589441, -8.443925, 6.109526],   # 46 mouth bottom R
+            [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
+            [0.589441, -8.443925, 6.109526]])   # 44 mouth bottom L
         self._distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
         self._xyz_2d = None
 
@@ -145,7 +145,7 @@ class PoseEstimate():
         """ :class:`numpy.ndarray` projected (x, y) coordinates for each x, y, z point at a
         constant distance from adjusted center of the skull (0.5, 0.5) in the 2D space. """
         if self._xyz_2d is None:
-            xyz = cv2.projectPoints(np.float32([[6, 0, 0], [0, 6, 0], [0, 0, 6]]),
+            xyz = cv2.projectPoints(np.float32([[6, 0, -2.3], [0, 6, -2.3], [0, 0, 3.7]]),
                                     self._rotation,
                                     self._translation,
                                     self._camera_matrix,
@@ -213,7 +213,7 @@ class PoseEstimate():
         :class:`numpy.ndarray`
             The x, y offset of the new center from the old center.
         """
-        points = dict(head=(0, 0, 0), face=(0, -1.5, 6.5))
+        points = dict(head=(0, 0, -2.3), face=(0, -1.5, 4.2))
         offset = dict()
         for key, pnts in points.items():
             center = cv2.projectPoints(np.float32([pnts]),

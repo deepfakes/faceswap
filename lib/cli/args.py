@@ -490,10 +490,10 @@ class ExtractArgs(ExtractConvertArgs):
         argument_list.append(dict(
             opts=("-sz", "--size"),
             action=Slider,
-            min_max=(128, 512),
+            min_max=(256, 1024),
             rounding=64,
             type=int,
-            default=256,
+            default=512,
             group="output",
             help="The output size of extracted faces. Make sure that the model you intend to "
                  "train supports your required size. This will only need to be changed for "
