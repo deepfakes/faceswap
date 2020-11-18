@@ -36,8 +36,10 @@ class Alignments():
     def __init__(self, folder, filename="alignments"):
         logger.debug("Initializing %s: (folder: '%s', filename: '%s')",
                      self.__class__.__name__, folder, filename)
+        self._version = 2.0
         self._serializer = get_serializer("compressed")
         self._file = self._get_location(folder, filename)
+        self._meta = None
         self._data = self._load()
         self._update_legacy()
         self._hashes_to_frame = dict()
@@ -179,6 +181,9 @@ class Alignments():
     def _load(self):
         """ Load the alignments data from the serialized alignments :attr:`file`.
 
+        Populates :attr:`_meta` with the alignment file's meta information as well as returning
+        the serialized data.
+
         Returns
         -------
         dict:
@@ -191,15 +196,19 @@ class Alignments():
 
         logger.info("Reading alignments from: '%s'", self._file)
         data = self._serializer.load(self._file)
+        self._meta = data.get("__meta__", dict(version=1.0))
+        data = data.get("__data__", data)
         logger.debug("Loaded alignments")
         return data
 
     def save(self):
-        """ Write the contents of :attr:`data` to a serialized ``.fsa`` file at the location
-        :attr:`file`. """
+        """ Write the contents of :attr:`data` and :attr:`_meta` to a serialized ``.fsa`` file at
+        the location :attr:`file`. """
         logger.debug("Saving alignments")
         logger.info("Writing alignments to: '%s'", self._file)
-        self._serializer.save(self._file, self._data)
+        data = dict(__meta__=dict(version=self._version),
+                    __data__=self._data)
+        self._serializer.save(self._file, data)
         logger.debug("Saved alignments")
 
     def backup(self):
