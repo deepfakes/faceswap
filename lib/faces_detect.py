@@ -449,16 +449,18 @@ class AlignedFace():
         self._size = size
         self._dtype = dtype
         self._is_aligned = is_aligned
+        self._ratios = dict(legacy=0.375, face=0.5, head=0.625)
         self._matrices = dict(legacy=umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
                               face=None,
                               head=None)
         self._padding = self._padding_from_coverage(size, coverage_ratio)
 
-        self._pose = None
-        self._cache = dict(original_roi=None,
+        self._cache = dict(pose=None,
+                           original_roi=None,
                            landmarks=None,
                            adjusted_matrix=None,
-                           interpolators=None)
+                           interpolators=None,
+                           sub_rois=dict())
 
         self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
@@ -491,11 +493,11 @@ class AlignedFace():
     @property
     def pose(self):
         """ :class:`lib.aligner.PoseEstimate`: The estimated pose in 3D space. """
-        if self._pose is None:
+        if self._cache["pose"] is None:
             lms = cv2.transform(np.expand_dims(self._frame_landmarks, axis=1),
                                 self._matrices["legacy"]).squeeze()
-            self._pose = PoseEstimate(lms)
-        return self._pose
+            self._cache["pose"] = PoseEstimate(lms)
+        return self._cache["pose"]
 
     @property
     def adjusted_matrix(self):
@@ -601,15 +603,64 @@ class AlignedFace():
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 
-    @classmethod
-    def _padding_from_coverage(cls, size, coverage_ratio):
+    def _padding_from_coverage(self, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
-            pre-padded training image """
-        ratios = dict(legacy=0.375, face=0.5625, head=0.625)
-        retval = {_type: round((size * (coverage_ratio - (1 - ratios[_type]))) / 2)
+            pre-padded training image.
+
+        Parameters
+        ----------
+        size: int
+            The final size of the aligned image in pixels
+        coverage_ratio: float
+            The ratio of the final image to pad to
+
+        Returns
+        -------
+        dict
+            The padding required, in pixels for 'head', 'face' and 'legacy' face types
+        """
+        retval = {_type: round((size * (coverage_ratio - (1 - self._ratios[_type]))) / 2)
                   for _type in ("legacy", "face", "head")}
         logger.trace(retval)
         return retval
+
+    def get_sub_roi(self, centering):
+        """ Obtain the region of interest within an aligned face set to centered coverage for
+        an alternative centering
+
+        Parameters
+        ----------
+        centering: ["legacy", "face"]
+            The type of centering to obtain the region of interest for. "legacy" places the nose
+            in the center of the image (the original method for aligning). "face" aligns for the
+            nose to be in the center of the face (top to bottom) but the center of the skull for
+            left to right.
+
+        Returns
+        -------
+        :class:`numpy.ndarray`:
+            The (`left`, `top`, `right`, `bottom` location of the region of interest within an
+            aligned face centered on the head for the given centering
+        """
+        if self._centering != "head":
+            raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
+                             "centering")
+        if not self._cache["sub_rois"].get(centering):
+            # Get offset from center without padding
+            offset = np.float32((0, 0)) if centering == "legacy" else self.pose.offset[centering]
+            offset -= self.pose.offset["head"]
+            offset *= ((self._size - self._padding["head"]) / 2)
+
+            # Get roi from sub image from adjusted center and correct padding
+            center = np.rint(offset + self._size / 2).astype("int32")
+            padding = np.rint((self._size / self._ratios["head"]) *
+                              self._ratios[centering] / 2).astype("int32")
+            roi = np.array([center - padding, center + padding]).ravel()
+
+            logger.trace("centering: '%s', center: %s, padding: %s, sub roi: %s",
+                         centering, center, padding, roi)
+            self._cache["sub_rois"][centering] = roi
+        return self._cache["sub_rois"][centering]
 
 
 class _LandmarksMask():  # pylint:disable=too-few-public-methods

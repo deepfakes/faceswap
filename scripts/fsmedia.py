@@ -510,6 +510,9 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
             cv2.line(face.aligned.face, center, tuple(points[1]), (0, 255, 0), 1)
             cv2.line(face.aligned.face, center, tuple(points[0]), (255, 0, 0), 1)
             cv2.line(face.aligned.face, center, tuple(points[2]), (0, 0, 255), 1)
+            # Face centering
+            roi = face.aligned.get_sub_roi("face")
+            cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 255, 0), 1)
 
 
 class FaceFilter(PostProcessAction):
