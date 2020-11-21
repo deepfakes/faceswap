@@ -44,6 +44,24 @@ class Config(FaceswapConfig):
                          info="Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
             section=section,
+            title="centering",
+            datatype=str,
+            gui_radio=True,
+            default="face",
+            choices=["face", "legacy"],
+            fixed=True,
+            group="face",
+            info="How to center the training image. The extracted images are centered on the "
+                 "middle of the skull based on the face's estimated pose. A subsection of these "
+                 "images are used for training. The centering used dictates how this subsection "
+                 "will be cropped from the aligned images."
+                 "\n\tface: Centers the training image on the center of the face, adjusting for "
+                 "pitch and yaw."
+                 "\n\tlegacy: The 'original' extraction technique. Centers the training image "
+                 "near the tip of the nose with no adjustment. Can result in the edges of the "
+                 "face appearing outside of the training area.")
+        self.add_item(
+            section=section,
             title="coverage",
             datatype=float,
             default=68.75,

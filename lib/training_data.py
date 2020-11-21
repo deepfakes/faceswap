@@ -44,14 +44,14 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         ``False``
     warp_to_landmarks: bool
         ``True`` if the random warp method should warp to similar landmarks from the other side,
-        ``False`` if the standard random warp method should be used. If ``True`` then
-        the key `landmarks` must be provided in the alignments dictionary.
+        ``False`` if the standard random warp method should be used.
     alignments: dict
-        A dictionary containing landmarks and masks if these are required for training:
+        A dictionary containing aligned face information and masks if these are required for
+        training:
 
-        * **landmarks** (`dict`, `optional`). Required if :attr:`warp_to_landmarks` is \
-        ``True``. Returning dictionary has a key of **side** (`str`) the value of which is a \
-        `dict` of {**filename** (`str`): **68 point landmarks** (:class:`numpy.ndarray`)}.
+        * **aligned_faces** (`dict`). Contains the aligned face information. Returning dictionary \
+        has a key of **side** (`str`) the value of which is a `dict` of {**filename** (`str`): \
+        :class:`lib.faces_detect.AlignedFace`}.
 
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
         :attr:`learn_mask` is ``True``. Returning dictionary has a key of **side** (`str`) the \
@@ -86,11 +86,11 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         self._augment_color = augment_color
         self._no_flip = no_flip
         self._warp_to_landmarks = warp_to_landmarks
-        self._landmarks = alignments.get("landmarks", None)
+        self._aligned_faces = alignments["aligned_faces"]
         self._masks = dict(masks=alignments.get("masks", None),
                            eyes=alignments.get("masks_eye", None),
                            mouths=alignments.get("masks_mouth", None))
-        self._nearest_landmarks = {}
+        self._cache = dict(nearest_landmarks=dict(), crop_size=0)
 
         # Batchsize and processing class are set when this class is called by a feeder
         # from lib.training_data
@@ -207,6 +207,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         :func:`minibatch_ab` for more details on the output. """
         logger.trace("Process batch: (filenames: '%s', side: '%s')", filenames, side)
         batch = read_image_batch(filenames)
+        batch, landmarks = self._crop_to_center(filenames, batch, side)
         batch = self._apply_mask(filenames, batch, side)
         processed = dict()
 
@@ -216,10 +217,8 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
 
         # Get Landmarks prior to manipulating the image
         if self._warp_to_landmarks:
-            batch_src_pts = self._get_landmarks(filenames, side)
-            batch_dst_pts = self._get_closest_match(filenames, side, batch_src_pts)
-            warp_kwargs = dict(batch_src_points=batch_src_pts,
-                               batch_dst_points=batch_dst_pts)
+            batch_dst_pts = self._get_closest_match(filenames, side, landmarks)
+            warp_kwargs = dict(batch_src_points=landmarks, batch_dst_points=batch_dst_pts)
         else:
             warp_kwargs = dict()
 
@@ -253,6 +252,76 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
                      {k: v.shape if isinstance(v, np.ndarray) else[i.shape for i in v]
                       for k, v in processed.items()})
         return processed
+
+    def _crop_to_center(self, filenames, batch, side):
+        """ Crops the training image out of the full extract image based on the centering used in
+        the user's configuration settings.
+
+        Parameters
+        ----------
+        filenames: list
+            The list of filenames that correspond to this batch
+        batch: :class:`numpy.ndarray`
+            The batch of faces that have been loaded from disk
+        side: str
+            '"a"' or '"b"' the side that is being processed
+
+        Returns
+        -------
+        batch: :class:`numpy.ndarray`
+            The centered faces cropped out of the loaded batch
+        landmarks: :class:`numpy.ndarray`
+            The aligned landmarks for this batch. NB: The aligned landmarks do not directly
+            correspond to the size of the extracted face. They are scaled to the source training
+            image, not the sub-image.
+
+        Raises
+        ------
+        FaceswapError
+            If Alignment information is not available for any of the images being loaded in
+            the batch
+        """
+        # TODO Remove try/except debug
+        logger.trace("Cropping training images info: (filenames: %s, side: '%s')", filenames, side)
+        aligned = [self._aligned_faces[side].get(filename, None) for filename in filenames]
+
+        # Raise error on missing alignments
+        if any(info is None for info in aligned):
+            missing = [filenames[idx] for idx, info in enumerate(aligned) if info is None]
+            msg = ("Files missing alignments for this batch: {}"
+                   "\nAt least one of your images does not have a matching entry in your "
+                   "alignments file."
+                   "\nEvery face you intend to train on must exist within the alignments file."
+                   "\nThe specific files that caused this failure are listed above."
+                   "\nMost likely there will be more than just these files missing from the "
+                   "alignments file. You can use the Alignments Tool to help identify missing "
+                   "alignments".format(missing))
+            raise FaceswapError(msg)
+
+        if not self._cache["crop_size"]:
+            size = aligned[0].get_cropped_size(self._config["centering"])
+            logger.debug("caching crop size: (centering: '%s', full size: %s, crop size: %s)",
+                         self._config["centering"], batch.shape[1], size)
+            self._cache["crop_size"] = size
+        size = self._cache["crop_size"]
+
+        landmarks = np.array([face.landmarks for face in aligned])
+        cropped = np.zeros((batch.shape[0], size, size, batch.shape[3]), dtype=batch.dtype)
+
+        for filename, out, align, img in zip(filenames, cropped, aligned, batch):
+            if filename.endswith("20201104_104244.mp4_00376_0.png"):
+                logger.info("PROCESS %s", filename)
+            try:
+                roi = align.get_cropped_roi(self._config["centering"])
+                slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
+                slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - align.size)),
+                             slice(max(roi[0] * -1, 0), size - max(0, roi[2] - align.size))]
+                out[slice_out[0], slice_out[1], :] = img[slice_in[0], slice_in[1], :]
+            except:
+                print(dict(filename=filename, slice_in=slice_in, slice_out=slice_out,
+                           roi=roi, offset=align.pose.offset["face"]))
+                raise
+        return cropped, landmarks
 
     def _apply_mask(self, filenames, batch, side):
         """ Applies the mask to the 4th channel of the image. If masks are not being used
@@ -364,36 +433,16 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         logger.trace("Resized masks: %s", masks.shape)
         return masks
 
-    def _get_landmarks(self, filenames, side):
-        """ Obtains the 68 Point Landmarks for the images in this batch. This is only called if
-        config :attr:`_warp_to_landmarks` is ``True``. If the landmarks for an image cannot be
-        found, then an error is raised. """
-        logger.trace("Retrieving landmarks: (filenames: %s, side: '%s')", filenames, side)
-        src_points = [self._landmarks[side].get(filename, None) for filename in filenames]
-        # Raise error on missing alignments
-        if not all(isinstance(pts, np.ndarray) for pts in src_points):
-            missing = [filenames[idx] for idx, pts in enumerate(src_points) if pts is None]
-            msg = ("Files missing alignments for this batch: {}"
-                   "\nAt least one of your images does not have a matching entry in your "
-                   "alignments file."
-                   "\nIf you are using 'warp to landmarks' then every "
-                   "face you intend to train on must exist within the alignments file."
-                   "\nThe specific files that caused this failure are listed above."
-                   "\nMost likely there will be more than just these files missing from the "
-                   "alignments file. You can use the Alignments Tool to help identify missing "
-                   "alignments".format(missing))
-            raise FaceswapError(msg)
-
-        logger.trace("Returning: (src_points: %s)", [str(src) for src in src_points])
-        return np.array(src_points)
-
     def _get_closest_match(self, filenames, side, batch_src_points):
         """ Only called if the :attr:`_warp_to_landmarks` is ``True``. Gets the closest
         matched 68 point landmarks from the opposite training set. """
+        # TODO Test for speed and correctness
         logger.trace("Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s'",
                      filenames, batch_src_points)
-        landmarks = self._landmarks["a"] if side == "b" else self._landmarks["b"]
-        closest_hashes = [self._nearest_landmarks.get(filename) for filename in filenames]
+        lm_side = "a" if side == "b" else "b"
+        landmarks = {key: aligned.landmarks
+                     for key, aligned in self._aligned_faces[lm_side].items()}
+        closest_hashes = [self._cache["nearest_landmarks"].get(filename) for filename in filenames]
         if None in closest_hashes:
             closest_hashes = self._cache_closest_hashes(filenames, batch_src_points, landmarks)
 
@@ -411,7 +460,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         for filename, src_points in zip(filenames, batch_src_points):
             closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
             closest_hashes = tuple(dst_landmarks[i][0] for i in closest)
-            self._nearest_landmarks[filename] = closest_hashes
+            self._cache["nearest_landmarks"][filename] = closest_hashes
             batch_closest_hashes.append(closest_hashes)
         logger.trace("Cached closest hashes")
         return batch_closest_hashes

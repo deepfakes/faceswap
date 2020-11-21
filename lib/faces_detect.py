@@ -460,7 +460,8 @@ class AlignedFace():
                            landmarks=None,
                            adjusted_matrix=None,
                            interpolators=None,
-                           sub_rois=dict())
+                           cropped_roi=dict(),
+                           cropped_size=dict())
 
         self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
@@ -624,7 +625,7 @@ class AlignedFace():
         logger.trace(retval)
         return retval
 
-    def get_sub_roi(self, centering):
+    def get_cropped_roi(self, centering):
         """ Obtain the region of interest within an aligned face set to centered coverage for
         an alternative centering
 
@@ -638,14 +639,14 @@ class AlignedFace():
 
         Returns
         -------
-        :class:`numpy.ndarray`:
+        :class:`numpy.ndarray`
             The (`left`, `top`, `right`, `bottom` location of the region of interest within an
             aligned face centered on the head for the given centering
         """
         if self._centering != "head":
             raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
                              "centering")
-        if not self._cache["sub_rois"].get(centering):
+        if not np.all(self._cache["cropped_roi"].get(centering)):
             # Get offset from center without padding
             offset = np.float32((0, 0)) if centering == "legacy" else self.pose.offset[centering]
             offset -= self.pose.offset["head"]
@@ -659,8 +660,33 @@ class AlignedFace():
 
             logger.trace("centering: '%s', center: %s, padding: %s, sub roi: %s",
                          centering, center, padding, roi)
-            self._cache["sub_rois"][centering] = roi
-        return self._cache["sub_rois"][centering]
+            self._cache["cropped_roi"][centering] = roi
+        return self._cache["cropped_roi"][centering]
+
+    def get_cropped_size(self, centering):
+        """ Obtain the size of a cropped face from a full head centered image.
+
+        Parameters
+        ----------
+        centering: ["legacy", "face"]
+            The type of centering to obtain the region of interest for. "legacy" places the nose
+            in the center of the image (the original method for aligning). "face" aligns for the
+            nose to be in the center of the face (top to bottom) but the center of the skull for
+            left to right.
+
+        Returns
+        -------
+        int
+           The pixel size of a sub-crop image from a full head aligned image
+        """
+        if self._centering != "head":
+            raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
+                             "centering")
+        if not self._cache["cropped_size"].get(centering):
+            size = int(np.rint(self._size / self._ratios["head"] * self._ratios[centering]))
+            logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
+            self._cache["cropped_size"][centering] = size
+        return self._cache["cropped_size"][centering]
 
 
 class _LandmarksMask():  # pylint:disable=too-few-public-methods

@@ -104,24 +104,13 @@ class TrainerBase():
         Returns
         -------
         dict:
-            Includes the key `landmarks` if landmarks are required for training, `masks` if masks
-            are required for training, `masks_eye` if eye masks are required and `masks_mouth` if
-            mouth masks are required. """
-        retval = dict()
+            Includes the key `aligned_faces` holding aligned face information. Also includes the
+            keys `masks` if masks are required for training, `masks_eye` if eye masks are required
+            and `masks_mouth` if mouth masks are required. """
         penalized_loss = self._model.config["penalized_mask_loss"]
 
-        if not any([self._model.config["learn_mask"],
-                    penalized_loss,
-                    self._model.config["eye_multiplier"] > 1,
-                    self._model.config["mouth_multiplier"] > 1,
-                    self._model.command_line_arguments.warp_to_landmarks]):
-            return retval
-
         alignments = _TrainingAlignments(self._model, self._images)
-
-        if self._model.command_line_arguments.warp_to_landmarks:
-            logger.debug("Adding landmarks to training opts dict")
-            retval["landmarks"] = alignments.landmarks
+        retval = dict(aligned_faces=alignments.aligned_faces)
 
         if self._model.config["learn_mask"] or penalized_loss:
             logger.debug("Adding masks to training opts dict")
@@ -335,8 +324,8 @@ class _Feeder():
     config: :class:`lib.config.FaceswapConfig`
         The configuration for this trainer
     alignments: dict
-        A dictionary containing landmarks and masks if these are required for training for each
-        side
+        A dictionary containing aligned face data and masks if these are required for training for
+        each side
     """
     def __init__(self, images, model, batch_size, config, alignments):
         logger.debug("Initializing %s: num_images: %s, batch_size: %s, config: %s)",
@@ -996,7 +985,7 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         self._output_file = str(output)
         logger.debug("Time-lapse output set to '%s'", self._output_file)
 
-        # Rewrite paths to pull from the training images so mask and landmark data can be accessed
+        # Rewrite paths to pull from the training images so mask and face data can be accessed
         images = dict()
         for side, input_ in zip(("a", "b"), (input_a, input_b)):
             training_path = os.path.dirname(self._image_paths[side][0])
@@ -1058,14 +1047,14 @@ class _TrainingAlignments():
         self._hashes = self._get_image_hashes(image_list)
         self._detected_faces = self._load_alignments()
         self._check_all_faces()
-        self._landmarks = self._get_landmarks()
+        self._aligned_faces = self._get_aligned_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    # Get landmarks
     @property
-    def landmarks(self):
-        """ dict: The :class:`numpy.ndarray` aligned landmarks for keys "a" and "b" """
-        return self._landmarks
+    def aligned_faces(self):
+        """ dict: The "a", "b" keys for each side, containing a sub-dictionary with the
+        filename as key and :class:`lib.faces.detected_face.aligned` object as value. """
+        return self._aligned_faces
 
     def _get_alignments_paths(self):
         """ Obtain the alignments file paths from the command line arguments passed to the model.
@@ -1096,41 +1085,24 @@ class _TrainingAlignments():
         logger.debug("Alignments paths: %s", retval)
         return retval
 
-    def _get_landmarks(self):
-        """ Pre-generate landmarks as they are needed for both warp to landmarks and eye/mouth
-        masks.
+    def _get_aligned_faces(self):
+        """ Pre-generate aligned faces as they are needed for all training functions.
 
         Returns
         -------
         dict
-            The :class:`numpy.ndarray` aligned landmarks for keys "a" and "b"
+            The "a", "b" keys for each side, containing a sub-dictionary with the
+            filename as key and :class:`lib.faces.detected_face.AlignedFace` object as value.
         """
-        retval = {side: self._transform_landmarks(side, detected_faces)
-                  for side, detected_faces in self._detected_faces.items()}
-        logger.trace(retval)
+        retval = dict()
+        for side, detected_faces in self._detected_faces.items():
+            ret_side = dict()
+            for fhash, face in detected_faces.items():
+                face.load_aligned(None, size=self._training_size, centering="head")
+                for filename in self._hash_to_filenames(side, fhash):
+                    ret_side[filename] = face.aligned
+            retval[side] = ret_side
         return retval
-
-    def _transform_landmarks(self, side, detected_faces):
-        """ Transform frame landmarks to their aligned face variant.
-
-        Parameters
-        ----------
-        side: {"a" or "b"}
-            The side currently being processed
-        detected_faces: list
-            A list of :class:`lib.faces_detect.DetectedFace` objects
-
-        Returns
-        -------
-        dict
-            The face filenames as keys with the aligned landmarks as value.
-        """
-        landmarks = dict()
-        for face in detected_faces.values():
-            face.load_aligned(None, size=self._training_size)
-            for filename in self._hash_to_filenames(side, face.hash):
-                landmarks[filename] = face.aligned.landmarks
-        return landmarks
 
     # Get masks
     @property
