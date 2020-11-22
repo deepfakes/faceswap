@@ -307,7 +307,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         landmarks = np.array([face.landmarks for face in aligned])
         cropped = np.zeros((batch.shape[0], size, size, batch.shape[3]), dtype=batch.dtype)
 
-        for out, align, img in zip(filenames, cropped, aligned, batch):
+        for out, align, img in zip(cropped, aligned, batch):
             roi = align.get_cropped_roi(self._config["centering"])
             slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
             slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - align.size)),
