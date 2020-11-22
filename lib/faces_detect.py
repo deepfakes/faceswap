@@ -646,7 +646,7 @@ class AlignedFace():
         if self._centering != "head":
             raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
                              "centering")
-        if not np.all(self._cache["cropped_roi"].get(centering)):
+        if centering not in self._cache["cropped_roi"]:
             # Get offset from center without padding
             offset = np.float32((0, 0)) if centering == "legacy" else self.pose.offset[centering]
             offset -= self.pose.offset["head"]

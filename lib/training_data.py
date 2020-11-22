@@ -281,7 +281,6 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
             If Alignment information is not available for any of the images being loaded in
             the batch
         """
-        # TODO Remove try/except debug
         logger.trace("Cropping training images info: (filenames: %s, side: '%s')", filenames, side)
         aligned = [self._aligned_faces[side].get(filename, None) for filename in filenames]
 
@@ -308,19 +307,12 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         landmarks = np.array([face.landmarks for face in aligned])
         cropped = np.zeros((batch.shape[0], size, size, batch.shape[3]), dtype=batch.dtype)
 
-        for filename, out, align, img in zip(filenames, cropped, aligned, batch):
-            if filename.endswith("20201104_104244.mp4_00376_0.png"):
-                logger.info("PROCESS %s", filename)
-            try:
-                roi = align.get_cropped_roi(self._config["centering"])
-                slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
-                slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - align.size)),
-                             slice(max(roi[0] * -1, 0), size - max(0, roi[2] - align.size))]
-                out[slice_out[0], slice_out[1], :] = img[slice_in[0], slice_in[1], :]
-            except:
-                print(dict(filename=filename, slice_in=slice_in, slice_out=slice_out,
-                           roi=roi, offset=align.pose.offset["face"]))
-                raise
+        for out, align, img in zip(filenames, cropped, aligned, batch):
+            roi = align.get_cropped_roi(self._config["centering"])
+            slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
+            slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - align.size)),
+                         slice(max(roi[0] * -1, 0), size - max(0, roi[2] - align.size))]
+            out[slice_out[0], slice_out[1], :] = img[slice_in[0], slice_in[1], :]
         return cropped, landmarks
 
     def _apply_mask(self, filenames, batch, side):
