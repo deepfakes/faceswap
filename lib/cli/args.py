@@ -1018,9 +1018,9 @@ class TrainArgs(FaceSwapArgs):
             rounding=25,
             type=int,
             dest="preview_scale",
-            default=50,
+            default=100,
             group="preview",
-            help="Percentage amount to scale the preview by."))
+            help="Percentage amount to scale the preview by. 100%% is the model output size."))
         argument_list.append(dict(
             opts=("-p", "--preview"),
             action="store_true",

@@ -731,7 +731,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         return preds
 
     def _to_full_frame(self, side, samples, predictions):
-        """ Patch targets and prediction images into images of training image size.
+        """ Patch targets and prediction images into images of model output size.
 
         Parameters
         ----------
@@ -750,58 +750,57 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
         full, faces = samples[:2]
+        full = self._process_full(side, full, predictions[0].shape[1], (0, 0, 255))
         images = [faces] + predictions
-        full_size = full.shape[1]
-        target_size = int(full_size * self._coverage_ratio)
-        if target_size != full_size:
-            frame = self._frame_overlay(full, target_size, (0, 0, 255))
-
         if self._display_mask:
             images = self._compile_masked(images, samples[-1])
-        images = [self._resize_sample(side, image, target_size) for image in images]
-        if target_size != full_size:
-            images = [self._overlay_foreground(frame, image) for image in images]
+        images = [self._overlay_foreground(full.copy(), image) for image in images]
+
         if self._scaling != 1.0:
-            new_size = int(full_size * self._scaling)
+            new_size = int(images[0].shape[1] * self._scaling)
             images = [self._resize_sample(side, image, new_size) for image in images]
         return images
 
-    @classmethod
-    def _frame_overlay(cls, images, target_size, color):
+    def _process_full(self, side, images, prediction_size, color):
         """ Add a frame overlay to preview images indicating the region of interest.
 
-        This is the red border that appears in the preview images.
+        This applies the red border that appears in the preview images.
 
         Parameters
         ----------
+        side: {"a" or "b"}
+            The side that these samples are for
         images: :class:`numpy.ndarray`
-            The samples to apply the frame to
-        target_size: int
-            The size of the sample within the full size frame
+            The input training images to to process
+        prediction_size: int
+            The size of the predicted output from the model
         color: tuple
             The (Blue, Green, Red) color to use for the frame
 
         Returns
         -------
         :class:`numpy,ndarray`
-            The samples with the frame overlay applied
+            The input training images, sized for output and annotated for coverage
         """
-        logger.debug("full_size: %s, target_size: %s, color: %s",
-                     images.shape[1], target_size, color)
-        new_images = list()
-        full_size = images.shape[1]
-        padding = (full_size - target_size) // 2
-        length = target_size // 4
-        t_l, b_r = (padding, full_size - padding)
+        logger.debug("full_size: %s, prediction_size: %s, color: %s",
+                     images.shape[1], prediction_size, color)
+
+        display_size = int(prediction_size * (1 + (1 - self._coverage_ratio)))
+        images = self._resize_sample(side, images, display_size)  # Resize targets to display size
+        padding = (display_size - prediction_size) // 2
+        if padding == 0:
+            logger.debug("Resized background. Shape: %s", images.shape)
+            return images
+
+        length = display_size // 4
+        t_l, b_r = (padding, display_size - padding)
         for img in images:
-            cv2.rectangle(img, (t_l, t_l), (t_l + length, t_l + length), color, 3)
-            cv2.rectangle(img, (b_r, t_l), (b_r - length, t_l + length), color, 3)
-            cv2.rectangle(img, (b_r, b_r), (b_r - length, b_r - length), color, 3)
-            cv2.rectangle(img, (t_l, b_r), (t_l + length, b_r - length), color, 3)
-            new_images.append(img)
-        retval = np.array(new_images)
-        logger.debug("Overlayed background. Shape: %s", retval.shape)
-        return retval
+            cv2.rectangle(img, (t_l, t_l), (t_l + length, t_l + length), color, 2)
+            cv2.rectangle(img, (b_r, t_l), (b_r - length, t_l + length), color, 2)
+            cv2.rectangle(img, (b_r, b_r), (b_r - length, b_r - length), color, 2)
+            cv2.rectangle(img, (t_l, b_r), (t_l + length, b_r - length), color, 2)
+        logger.debug("Overlayed background. Shape: %s", images.shape)
+        return images
 
     @classmethod
     def _compile_masked(cls, faces, masks):
@@ -857,16 +856,14 @@ class _Samples():  # pylint:disable=too-few-public-methods
             The preview images compiled into the full frame size for each preview
         """
         offset = (backgrounds.shape[1] - foregrounds.shape[1]) // 2
-        new_images = list()
-        for idx, img in enumerate(backgrounds):
-            img[offset:offset + foregrounds[idx].shape[0],
-                offset:offset + foregrounds[idx].shape[1], :3] = foregrounds[idx]
-            new_images.append(img)
-        retval = np.array(new_images)
-        logger.debug("Overlayed foreground. Shape: %s", retval.shape)
-        return retval
+        for foreground, background in zip(foregrounds, backgrounds):
+            background[offset:offset + foreground.shape[0],
+                       offset:offset + foreground.shape[1], :3] = foreground
+        logger.debug("Overlayed foreground. Shape: %s", backgrounds.shape)
+        return backgrounds
 
-    def _get_headers(self, side, width):
+    @classmethod
+    def _get_headers(cls, side, width):
         """ Set header row for the final preview frame
 
         Parameters
@@ -885,14 +882,15 @@ class _Samples():  # pylint:disable=too-few-public-methods
                      side, width)
         titles = ("Original", "Swap") if side == "a" else ("Swap", "Original")
         side = side.upper()
-        height = int(64 * self._scaling)
+        height = int(width / 4.5)
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX
         texts = ["{} ({})".format(titles[0], side),
                  "{0} > {0}".format(titles[0]),
                  "{} > {}".format(titles[0], titles[1])]
-        text_sizes = [cv2.getTextSize(texts[idx], font, self._scaling * 0.8, 1)[0]
+        scaling = (width / 144) * 0.45
+        text_sizes = [cv2.getTextSize(texts[idx], font, scaling, 1)[0]
                       for idx in range(len(texts))]
         text_y = int((height + text_sizes[0][1]) / 2)
         text_x = [int((width - text_sizes[idx][0]) / 2) + width * idx
@@ -905,7 +903,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
                         text,
                         (text_x[idx], text_y),
                         font,
-                        self._scaling * 0.8,
+                        scaling,
                         (0, 0, 0),
                         1,
                         lineType=cv2.LINE_AA)
