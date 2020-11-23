@@ -667,7 +667,7 @@ class ExtractMedia():
     image: :class:`numpy.ndarray`
         The original frame
     detected_faces: list, optional
-        A list of :class:`~lib.faces_detect.DetectedFace` objects. Detected faces can be added
+        A list of :class:`~lib.align.DetectedFace` objects. Detected faces can be added
         later with :func:`add_detected_faces`. Default: ``None``
     """
 
@@ -700,7 +700,7 @@ class ExtractMedia():
 
     @property
     def detected_faces(self):
-        """list: A list of :class:`~lib.faces_detect.DetectedFace` objects in the
+        """list: A list of :class:`~lib.align.DetectedFace` objects in the
         :attr:`image`. """
         return self._detected_faces
 
@@ -727,7 +727,7 @@ class ExtractMedia():
         Parameters
         ----------
         faces: list
-            A list of :class:`~lib.faces_detect.DetectedFace` objects
+            A list of :class:`~lib.align.DetectedFace` objects
         """
         logger.trace("Adding detected faces for filename: '%s'. (faces: %s, lrtb: %s)",
                      self._filename, faces,

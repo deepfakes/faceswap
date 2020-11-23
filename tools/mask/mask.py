@@ -8,8 +8,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.alignments import Alignments
-from lib.faces_detect import DetectedFace
+from lib.align import Alignments, DetectedFace
 from lib.image import FacesLoader, ImagesLoader, ImagesSaver
 
 from lib.multithreading import MultiThread

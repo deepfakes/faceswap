@@ -32,7 +32,7 @@ class Mask(Adjustment):
 
         Parameters
         ----------
-        detected_face: :class:`lib.faces_detect.DetectedFace`
+        detected_face: :class:`lib.align.DetectedFace`
             The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
         predicted_mask: :class:`numpy.ndarray`, optional
             The predicted mask as output from the Faceswap Model, if the model was trained
@@ -57,7 +57,7 @@ class Mask(Adjustment):
 
         Parameters
         ----------
-        detected_face: :class:`lib.faces_detect.DetectedFace`
+        detected_face: :class:`lib.align.DetectedFace`
             The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
         predicted_mask: :class:`numpy.ndarray`
             The predicted mask as output from the Faceswap Model if the model was trained

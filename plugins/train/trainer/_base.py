@@ -21,8 +21,7 @@ import tensorflow as tf
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 from tqdm import tqdm
 
-from lib.alignments import Alignments
-from lib.faces_detect import DetectedFace
+from lib.align import Alignments, DetectedFace
 from lib.image import read_image_hash_batch
 from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths
@@ -1105,7 +1104,7 @@ class _TrainingAlignments():
     # Get masks
     @property
     def masks(self):
-        """ dict: The :class:`lib.faces_detect.Mask` objects of requested mask type for
+        """ dict: The :class:`lib.align.Mask` objects of requested mask type for
         keys a" and "b"
         """
         retval = {side: self._get_masks(side, detected_faces)
@@ -1122,12 +1121,12 @@ class _TrainingAlignments():
             The side currently being processed
         detected_faces: dict
             Key is the hash of the face, value is the corresponding
-            :class:`lib.faces_detect.DetectedFace` object
+            :class:`lib.align.DetectedFace` object
 
         Returns
         -------
         dict
-            The face filenames as keys with the :class:`lib.faces_detect.Mask` as value.
+            The face filenames as keys with the :class:`lib.align.Mask` as value.
         """
         masks = dict()
         for fhash, face in detected_faces.items():
@@ -1161,7 +1160,7 @@ class _TrainingAlignments():
             The side currently being processed
         detected_faces: dict
             Key is the hash of the face, value is the corresponding
-            :class:`lib.faces_detect.DetectedFace` object
+            :class:`lib.align.DetectedFace` object
         area: {"eyes" or "mouth"}
             The area of the face to obtain the mask for
 
@@ -1218,13 +1217,13 @@ class _TrainingAlignments():
 
     # Hashes for Detected Faces
     def _load_alignments(self):
-        """ Load the alignments and convert to :class:`lib.faces_detect.DetectedFace` objects.
+        """ Load the alignments and convert to :class:`lib.align.DetectedFace` objects.
 
         Returns
         -------
         dict
             For keys "a" and "b" values are a dict with the key being the sha1 hash of the face
-            and the value being the corresponding :class:`lib.faces_detect.DetectedFace` object.
+            and the value being the corresponding :class:`lib.align.DetectedFace` object.
         """
         logger.debug("Loading alignments")
         retval = dict()
@@ -1243,7 +1242,7 @@ class _TrainingAlignments():
 
         Parameters
         ----------
-        alignments: :class:`lib.alignments.Alignments`
+        alignments: :class:`lib.align.Alignments`
             The alignments for the current faces
         side: {"a" or "b"}
             The side being processed
@@ -1252,7 +1251,7 @@ class _TrainingAlignments():
         -------
         dict
             key is sha1 hash of face, value is the corresponding
-            :class:`lib.faces_detect.DetectedFace` object
+            :class:`lib.align.DetectedFace` object
         """
         skip_count = 0
         dupe_count = 0

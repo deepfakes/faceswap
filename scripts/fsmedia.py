@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 import imageio
 
-from lib.alignments import Alignments as AlignmentsBase
+from lib.align import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
 from lib.image import count_frames, read_image
 from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
@@ -50,7 +50,7 @@ def finalize(images_found, num_faces_detected, verify_output):
 
 
 class Alignments(AlignmentsBase):
-    """ Override :class:`lib.alignments.Alignments` to add custom loading based on command
+    """ Override :class:`lib.align.Alignments` to add custom loading based on command
     line arguments.
 
     Parameters
@@ -108,7 +108,7 @@ class Alignments(AlignmentsBase):
         return folder, filename
 
     def _load(self):
-        """ Override the parent :func:`~lib.alignments.Alignments._load` to handle skip existing
+        """ Override the parent :func:`~lib.align.Alignments._load` to handle skip existing
         frames and faces on extract.
 
         If skip existing has been selected, existing alignments are loaded and returned to the

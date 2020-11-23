@@ -92,7 +92,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         to ``dict`` for internal processing.
 
         To ensure consistent batch sizes for aligner the items are split into separate items for
-        each :class:`~lib.faces_detect.DetectedFace` object.
+        each :class:`~lib.align.DetectedFace` object.
 
         Remember to put ``'EOF'`` to the out queue after processing
         the final batch
@@ -102,7 +102,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         >>> {'filename': [<filenames of source frames>],
         >>>  'image': [<source images>],
-        >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
+        >>>  'detected_faces': [[<lib.align.DetectedFace objects]]}
 
         Parameters
         ----------

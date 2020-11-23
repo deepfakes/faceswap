@@ -4,7 +4,7 @@ frame. """
 
 import numpy as np
 
-from lib.faces_detect import BlurMask
+from lib.align import BlurMask
 from ._base import Adjustment, logger
 
 

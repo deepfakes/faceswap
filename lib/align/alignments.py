@@ -131,7 +131,7 @@ class Alignments():
 
     @property
     def thumbnails(self):
-        """ :class:`~lib.alignments.Thumbnails`: The low resolution thumbnail images that exist
+        """ :class:`~lib.align.Thumbnails`: The low resolution thumbnail images that exist
         within the alignments file """
         return self._thumbnails
 
@@ -718,7 +718,7 @@ class Thumbnails():
 
     Parameters
     ----------
-    alignments: :class:'~lib.alignments.Alignments`
+    alignments: :class:'~lib.align.Alignments`
         The parent alignments class that these thumbs belong to
     """
     def __init__(self, alignments):

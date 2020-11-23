@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 # faceswap imports
 from lib.serializer import get_serializer_from_filename
-from lib.faces_detect import DetectedFace
+from lib.align import DetectedFace
 from lib.image import ImagesLoader, read_image
 from plugins.extract.recognition.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.extract.pipeline import Extractor, ExtractMedia
@@ -68,7 +68,7 @@ class Sort():
                 self.args.log_file_path = os.path.join(self.args.input_dir,
                                                        'sort_log.json')
 
-            # Set serializer based on logfile extension
+            # Set serializer based on log file extension
             self.serializer = get_serializer_from_filename(self.args.log_file_path)
 
         # Prepare sort, group and final process method names
@@ -566,7 +566,7 @@ class Sort():
 
     @staticmethod
     def _convert_color(imgs, same_size, method):
-        """ Helper function to convert colorspaces """
+        """ Helper function to convert color spaces """
 
         if method.endswith('gray'):
             conversion = np.array([[0.0722], [0.7152], [0.2126]])

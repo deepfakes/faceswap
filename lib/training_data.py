@@ -51,11 +51,11 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
 
         * **aligned_faces** (`dict`). Contains the aligned face information. Returning dictionary \
         has a key of **side** (`str`) the value of which is a `dict` of {**filename** (`str`): \
-        :class:`lib.faces_detect.AlignedFace`}.
+        :class:`lib.align.AlignedFace`}.
 
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
         :attr:`learn_mask` is ``True``. Returning dictionary has a key of **side** (`str`) the \
-        value of which is a `dict` of {**filename** (`str`): :class:`lib.faces_detect.Mask`}.
+        value of which is a `dict` of {**filename** (`str`): :class:`lib.align.Mask`}.
 
         * **masks_eye** (`dict`, `optional`). Required if config option "eye_multiplier" is \
         a value greater than 1. Returning dictionary has a key of **side** (`str`) the \
@@ -393,7 +393,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        item: :class:`lib.faces_detect.Mask` or `bytes`
+        item: :class:`lib.align.Mask` or `bytes`
             Either a stored face mask object or a zipped eye or mouth mask
         size: int
             The size of the stored eye or mouth mask for reshaping

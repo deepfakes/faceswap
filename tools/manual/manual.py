@@ -685,7 +685,7 @@ class Aligner():
         Parameters
         ----------
         detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
-            The class that holds the :class:`~lib.faces_detect.DetectedFace` objects for the
+            The class that holds the :class:`~lib.align.DetectedFace` objects for the
             current Manual session
         """
         logger.debug("Linking detected_faces: %s", detected_faces)

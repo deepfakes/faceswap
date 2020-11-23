@@ -15,7 +15,7 @@ from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
-from lib.faces_detect import DetectedFace
+from lib.align import DetectedFace
 from .media import ExtractedFaces, Faces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -586,7 +586,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         Returns
         -------
         list:
-            List of valid :class:`lib,faces_detect.DetectedFace` objects
+            List of valid :class:`lib,align.DetectedFace` objects
         """
         faces = self._extracted_faces.get_faces_in_frame(frame, image=image)
         if not self._arguments.large:

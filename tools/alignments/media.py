@@ -13,9 +13,8 @@ from tqdm import tqdm
 # TODO imageio single frame seek seems slow. Look into this
 # import imageio
 
-from lib.aligner import Extract as AlignerExtract
-from lib.alignments import Alignments, get_serializer
-from lib.faces_detect import DetectedFace
+from lib.align import Alignments, DetectedFace, Extract as AlignerExtract
+from lib.serializer import get_serializer
 from lib.image import (count_frames, encode_image_with_hash, ImagesLoader, read_image,
                        read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions

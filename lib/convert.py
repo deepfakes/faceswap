@@ -258,7 +258,7 @@ class Converter():
         ----------
         new_face: :class:`numpy.ndarray`
             The swapped face received from the faceswap model.
-        detected_face: :class:`~lib.faces_detect.DetectedFace`
+        detected_face: :class:`~lib.align.DetectedFace`
             The detected_face object as defined in :class:`scripts.convert.Predictor`
         predicted_mask: :class:`numpy.ndarray` or ``None``
             The predicted mask output from the Faceswap model. ``None`` if the model
@@ -292,7 +292,7 @@ class Converter():
         ----------
         new_face: :class:`numpy.ndarray`
             The swapped face received from the faceswap model, with any box mask applied
-        detected_face: :class:`~lib.faces_detect.DetectedFace`
+        detected_face: :class:`~lib.DetectedFace`
             The detected_face object as defined in :class:`scripts.convert.Predictor`
         predicted_mask: :class:`numpy.ndarray` or ``None``
             The predicted mask output from the Faceswap model. ``None`` if the model

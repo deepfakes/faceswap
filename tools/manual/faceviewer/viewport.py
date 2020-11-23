@@ -176,7 +176,7 @@ class Viewport():
             The frame index to obtain the face for
         face_index: int
             The face index of the face within the requested frame
-        face: :class:`~lib.faces_detect.DetectedFace`
+        face: :class:`~lib.align.DetectedFace`
             The detected face object, containing the thumbnail jpg
 
         Returns
@@ -213,7 +213,7 @@ class Viewport():
 
         Parameters
         ----------
-        face: :class:`lib.faces_detect.DetectedFace`
+        face: :class:`lib.align.DetectedFace`
             A detected face object to create the :class:`TKFace` from
         image: :class:`numpy.ndarray`
             The jpg thumbnail or the 3 channel image for the face
@@ -359,7 +359,7 @@ class VisibleObjects():
 
     @property
     def visible_faces(self):
-        """ :class:`numpy.ndarray`: The currently visible :class:`~lib.faces_detect.DetectedFace`
+        """ :class:`numpy.ndarray`: The currently visible :class:`~lib.align.DetectedFace`
         objects.
 
         A numpy array of shape (`rows`, `columns`) corresponding to the viewable area of the
@@ -881,7 +881,7 @@ class ActiveFrame():
             the mesh for the given face
         face_index: int
             The face index within the frame for the given face
-        detected_face: :class:`~lib.faces_detect.DetectedFace`
+        detected_face: :class:`~lib.align.DetectedFace`
             The detected face object that contains the landmarks for generating the mesh
         top_left: tuple
             The (x, y) top left co-ordinates of the mesh's bounding box

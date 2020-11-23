@@ -15,7 +15,7 @@ from tqdm import tqdm
 from scripts.fsmedia import Alignments, PostProcess, finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
-from lib.faces_detect import DetectedFace
+from lib.align import DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.image import read_image_hash, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
@@ -441,7 +441,7 @@ class DiskIO():
         In a background thread:
             * Loads frames from disk.
             * Discards or passes through cli selected skipped frames
-            * Pairs the frame with its :class:`~lib.faces_detect.DetectedFace` objects
+            * Pairs the frame with its :class:`~lib.align.DetectedFace` objects
             * Performs any pre-processing actions
             * Puts the frame and detected faces to the load queue
         """
@@ -515,7 +515,7 @@ class DiskIO():
         Returns
         -------
         list
-            List of :class:`lib.faces_detect.DetectedFace` objects
+            List of :class:`lib.align.DetectedFace` objects
         """
         logger.trace("Getting faces for: '%s'", filename)
         if not self._extractor:
@@ -538,7 +538,7 @@ class DiskIO():
         Returns
         -------
         list
-            List of :class:`lib.faces_detect.DetectedFace` objects
+            List of :class:`lib.align.DetectedFace` objects
         """
         if not self._check_alignments(frame_name):
             return list()
@@ -588,7 +588,7 @@ class DiskIO():
         Returns
         -------
         list
-            List of :class:`lib.faces_detect.DetectedFace` objects
+            List of :class:`lib.align.DetectedFace` objects
          """
         self._extractor.input_queue.put(ExtractMedia(filename, image))
         faces = next(self._extractor.detected_faces())
@@ -885,7 +885,7 @@ class Predict():
         Parameters
         ----------
         item: dict
-            The incoming image and list of :class:`~lib.faces_detect.DetectedFace` objects
+            The incoming image and list of :class:`~lib.align.DetectedFace` objects
 
         """
         logger.trace("Loading aligned faces: '%s'", item["filename"])
@@ -910,7 +910,7 @@ class Predict():
         Parameters
         ----------
         detected_faces: list
-            List of `~lib.faces_detect.DetectedFace` objects
+            List of `~lib.align.DetectedFace` objects
 
         Returns
         -------
@@ -998,7 +998,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         line arguments
     input_images: list
         List of input image files
-    alignments: :class:`lib.alignments.Alignments`
+    alignments: :class:`lib.align.Alignments`
         The alignments file for this conversion
     """
 
