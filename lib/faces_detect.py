@@ -2,6 +2,7 @@
 """ Face and landmarks detection for faceswap.py """
 import logging
 
+from threading import Lock
 from zlib import compress, decompress
 
 import cv2
@@ -455,13 +456,13 @@ class AlignedFace():
                               head=None)
         self._padding = self._padding_from_coverage(size, coverage_ratio)
 
-        self._cache = dict(pose=None,
-                           original_roi=None,
-                           landmarks=None,
-                           adjusted_matrix=None,
-                           interpolators=None,
-                           cropped_roi=dict(),
-                           cropped_size=dict())
+        self._cache = dict(pose=[None, Lock()],
+                           original_roi=[None, Lock()],
+                           landmarks=[None, Lock()],
+                           adjusted_matrix=[None, Lock()],
+                           interpolators=[None, Lock()],
+                           cropped_roi=[dict(), Lock()],
+                           cropped_size=[dict(), Lock()])
 
         self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
@@ -494,23 +495,25 @@ class AlignedFace():
     @property
     def pose(self):
         """ :class:`lib.aligner.PoseEstimate`: The estimated pose in 3D space. """
-        if self._cache["pose"] is None:
-            lms = cv2.transform(np.expand_dims(self._frame_landmarks, axis=1),
-                                self._matrices["legacy"]).squeeze()
-            self._cache["pose"] = PoseEstimate(lms)
-        return self._cache["pose"]
+        with self._cache["pose"][1]:
+            if self._cache["pose"][0] is None:
+                lms = cv2.transform(np.expand_dims(self._frame_landmarks, axis=1),
+                                    self._matrices["legacy"]).squeeze()
+                self._cache["pose"][0] = PoseEstimate(lms)
+        return self._cache["pose"][0]
 
     @property
     def adjusted_matrix(self):
         """ :class:`numpy.ndarray`: The 3x2 transformation matrix for extracting and aligning the
         core face area out of the original frame with padding and sizing applied. """
-        if self._cache["adjusted_matrix"] is None:
-            matrix = self.matrix.copy()
-            mat = matrix * (self._size - 2 * self.padding)
-            mat[:, 2] += self.padding
-            logger.trace("adjusted_matrix: %s", mat)
-            self._cache["adjusted_matrix"] = mat
-        return self._cache["adjusted_matrix"]
+        with self._cache["adjusted_matrix"][1]:
+            if self._cache["adjusted_matrix"][0] is None:
+                matrix = self.matrix.copy()
+                mat = matrix * (self._size - 2 * self.padding)
+                mat[:, 2] += self.padding
+                logger.trace("adjusted_matrix: %s", mat)
+                self._cache["adjusted_matrix"][0] = mat
+        return self._cache["adjusted_matrix"][0]
 
     @property
     def face(self):
@@ -523,34 +526,37 @@ class AlignedFace():
     def original_roi(self):
         """ :class:`numpy.ndarray`: The location of the extracted face box within the original
         frame. """
-        if self._cache["original_roi"] is None:
-            roi = np.array([[0, 0],
-                            [0, self._size - 1],
-                            [self._size - 1, self._size - 1],
-                            [self._size - 1, 0]])
-            roi = np.rint(self.transform_points(roi, invert=True)).astype("int32")
-            logger.trace("original roi: %s", roi)
-            self._cache["original_roi"] = roi
-        return self._cache["original_roi"]
+        with self._cache["original_roi"][1]:
+            if self._cache["original_roi"][0] is None:
+                roi = np.array([[0, 0],
+                                [0, self._size - 1],
+                                [self._size - 1, self._size - 1],
+                                [self._size - 1, 0]])
+                roi = np.rint(self.transform_points(roi, invert=True)).astype("int32")
+                logger.trace("original roi: %s", roi)
+                self._cache["original_roi"][0] = roi
+        return self._cache["original_roi"][0]
 
     @property
     def landmarks(self):
         """ :class:`numpy.ndarray`: The 68 point facial landmarks aligned to the extracted face
         box. """
-        if self._cache["landmarks"] is None:
-            lms = self.transform_points(self._frame_landmarks)
-            logger.trace("aligned landmarks: %s", lms)
-            self._cache["landmarks"] = lms
-        return self._cache["landmarks"]
+        with self._cache["landmarks"][1]:
+            if self._cache["landmarks"][0] is None:
+                lms = self.transform_points(self._frame_landmarks)
+                logger.trace("aligned landmarks: %s", lms)
+                self._cache["landmarks"][0] = lms
+        return self._cache["landmarks"][0]
 
     @property
     def interpolators(self):
         """ tuple: (`interpolator` and `reverse interpolator`) for the :attr:`adjusted matrix`. """
-        if self._cache["interpolators"] is None:
-            interpolators = get_matrix_scaling(self.adjusted_matrix)
-            logger.trace("interpolators: %s", interpolators)
-            self._cache["interpolators"] = interpolators
-        return self._cache["interpolators"]
+        with self._cache["interpolators"][1]:
+            if self._cache["interpolators"][0] is None:
+                interpolators = get_matrix_scaling(self.adjusted_matrix)
+                logger.trace("interpolators: %s", interpolators)
+                self._cache["interpolators"][0] = interpolators
+        return self._cache["interpolators"][0]
 
     def transform_points(self, points, invert=False):
         """ Perform transformation on a series of (x, y) co-ordinates in world space into
@@ -646,22 +652,26 @@ class AlignedFace():
         if self._centering != "head":
             raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
                              "centering")
-        if centering not in self._cache["cropped_roi"]:
-            # Get offset from center without padding
-            offset = np.float32((0, 0)) if centering == "legacy" else self.pose.offset[centering]
-            offset -= self.pose.offset["head"]
-            offset *= ((self._size - self._padding["head"]) / 2)
+        with self._cache["cropped_roi"][1]:
+            if centering not in self._cache["cropped_roi"][0]:
+                # Get offset from center without padding
+                if centering == "legacy":
+                    offset = np.float32((0, 0))
+                else:
+                    offset = self.pose.offset[centering]
+                offset -= self.pose.offset["head"]
+                offset *= ((self._size - self._padding["head"]) / 2)
 
-            # Get roi from sub image from adjusted center and correct padding
-            center = np.rint(offset + self._size / 2).astype("int32")
-            padding = np.rint((self._size / self._ratios["head"]) *
-                              self._ratios[centering] / 2).astype("int32")
-            roi = np.array([center - padding, center + padding]).ravel()
+                # Get roi from sub image from adjusted center and correct padding
+                center = np.rint(offset + self._size / 2).astype("int32")
+                padding = np.rint((self._size / self._ratios["head"]) *
+                                  self._ratios[centering] / 2).astype("int32")
+                roi = np.array([center - padding, center + padding]).ravel()
 
-            logger.trace("centering: '%s', center: %s, padding: %s, sub roi: %s",
-                         centering, center, padding, roi)
-            self._cache["cropped_roi"][centering] = roi
-        return self._cache["cropped_roi"][centering]
+                logger.trace("centering: '%s', center: %s, padding: %s, sub roi: %s",
+                             centering, center, padding, roi)
+                self._cache["cropped_roi"][0][centering] = roi
+        return self._cache["cropped_roi"][0][centering]
 
     def get_cropped_size(self, centering):
         """ Obtain the size of a cropped face from a full head centered image.
@@ -682,11 +692,12 @@ class AlignedFace():
         if self._centering != "head":
             raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
                              "centering")
-        if not self._cache["cropped_size"].get(centering):
-            size = int(np.rint(self._size / self._ratios["head"] * self._ratios[centering]))
-            logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
-            self._cache["cropped_size"][centering] = size
-        return self._cache["cropped_size"][centering]
+        with self._cache["cropped_size"][1]:
+            if not self._cache["cropped_size"][0].get(centering):
+                size = int(np.rint(self._size / self._ratios["head"] * self._ratios[centering]))
+                logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
+                self._cache["cropped_size"][0][centering] = size
+        return self._cache["cropped_size"][0][centering]
 
 
 class _LandmarksMask():  # pylint:disable=too-few-public-methods
