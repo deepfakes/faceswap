@@ -13,7 +13,7 @@ from tqdm import tqdm
 # TODO imageio single frame seek seems slow. Look into this
 # import imageio
 
-from lib.align import Alignments, DetectedFace, Extract as AlignerExtract
+from lib.align import Alignments, DetectedFace, transform_image
 from lib.serializer import get_serializer
 from lib.image import (count_frames, encode_image_with_hash, ImagesLoader, read_image,
                        read_image_hash_batch)
@@ -420,9 +420,9 @@ class ExtractedFaces():
         mat_umeyama = np.concatenate((face.aligned.matrix, np.array([[0., 0., 1.]])), axis=0)
         corrected_mat = np.dot(rotation_matrix, mat_umeyama)
         face.aligned.matrix = corrected_mat[:2]
-        face.aligned.face = AlignerExtract().transform(image,
-                                                       face.aligned.matrix,
-                                                       face.aligned.size,
-                                                       int(face.aligned.size * 0.375) // 2)
+        face.aligned.face = transform_image(image,
+                                            face.aligned.matrix,
+                                            face.aligned.size,
+                                            int(face.aligned.size * 0.375) // 2)
         logger.trace("Adjusted matrix: %s", face.aligned.matrix)
         return face

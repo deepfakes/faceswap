@@ -18,9 +18,9 @@ Handles aligned faces and corresponding pose estimates
    :nosignatures:
    
    ~lib.align.aligned_face.AlignedFace
-   ~lib.align.aligned_face.Extract
    ~lib.align.aligned_face.get_matrix_scaling
    ~lib.align.aligned_face.PoseEstimate
+   ~lib.align.aligned_face.transform_image
 
 .. rubric:: Module
 

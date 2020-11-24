@@ -29,6 +29,91 @@ _MEAN_FACE = np.array([[0.010086, 0.106454], [0.085135, 0.038915], [0.191003, 0.
                        [0.500000, 0.785343], [0.562030, 0.778746], [0.699747, 0.784792],
                        [0.563237, 0.824182], [0.500000, 0.831803], [0.436763, 0.824182]])
 
+_MEAN_FACE_3D = np.array([[4.056931, -11.432347, 1.636229],   # 8 chin LL
+                          [1.833492, -12.542305, 4.061275],   # 7 chin L
+                          [0.0, -12.901019, 4.070434],        # 6 chin C
+                          [-1.833492, -12.542305, 4.061275],  # 5 chin R
+                          [-4.056931, -11.432347, 1.636229],  # 4 chin RR
+                          [6.825897, 1.275284, 4.402142],     # 33 L eyebrow L
+                          [1.330353, 1.636816, 6.903745],     # 29 L eyebrow R
+                          [-1.330353, 1.636816, 6.903745],    # 34 R eyebrow L
+                          [-6.825897, 1.275284, 4.402142],    # 38 R eyebrow R
+                          [1.930245, -5.060977, 5.914376],    # 54 nose LL
+                          [0.746313, -5.136947, 6.263227],    # 53 nose L
+                          [0.0, -5.485328, 6.76343],          # 52 nose C
+                          [-0.746313, -5.136947, 6.263227],   # 51 nose R
+                          [-1.930245, -5.060977, 5.914376],   # 50 nose RR
+                          [5.311432, 0.0, 3.987654],          # 13 L eye L
+                          [1.78993, -0.091703, 4.413414],     # 17 L eye R
+                          [-1.78993, -0.091703, 4.413414],    # 25 R eye L
+                          [-5.311432, 0.0, 3.987654],         # 21 R eye R
+                          [2.774015, -7.566103, 5.048531],    # 43 mouth L
+                          [0.509714, -7.056507, 6.566167],    # 42 mouth top L
+                          [0.0, -7.131772, 6.704956],         # 41 mouth top C
+                          [-0.509714, -7.056507, 6.566167],   # 40 mouth top R
+                          [-2.774015, -7.566103, 5.048531],   # 39 mouth R
+                          [-0.589441, -8.443925, 6.109526],   # 46 mouth bottom R
+                          [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
+                          [0.589441, -8.443925, 6.109526]])   # 44 mouth bottom L
+
+
+def get_matrix_scaling(matrix):
+    """ Given a matrix, return the cv2 Interpolation method and inverse interpolation method for
+    applying the matrix on an image.
+
+    Parameters
+    ----------
+    matrix: :class:`numpy.ndarray`
+        The transform matrix to return the interpolator for
+
+    Returns
+    -------
+    tuple
+        The interpolator and inverse interpolator for the given matrix. This will be (Cubic, Area)
+        for an upscale matrix and (Area, Cubic) for a downscale matrix
+    """
+    x_scale = np.sqrt(matrix[0, 0] * matrix[0, 0] + matrix[0, 1] * matrix[0, 1])
+    y_scale = (matrix[0, 0] * matrix[1, 1] - matrix[0, 1] * matrix[1, 0]) / x_scale
+    avg_scale = (x_scale + y_scale) * 0.5
+    if avg_scale >= 1.:
+        interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA
+    else:
+        interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC
+    logger.trace("interpolator: %s, inverse interpolator: %s", interpolators[0], interpolators[1])
+    return interpolators
+
+
+def transform_image(image, matrix, size, padding=0):
+    """ Perform transformation on an image, applying the given size and padding to the matrix.
+
+    Parameters
+    ----------
+    image: :class:`numpy.ndarray`
+        The image to transform
+    matrix: :class:`numpy.ndarray`
+        The transformation matrix to apply to the image
+    size: int
+        The final size of the transformed image
+    padding: int, optional
+        The amount of padding to apply to the final image. Default: `0`
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        The transformed image
+    """
+    logger.trace("image shape: %s, matrix: %s, size: %s. padding: %s",
+                 image.shape, matrix, size, padding)
+    # transform the matrix for size and padding
+    mat = matrix * (size - 2 * padding)
+    mat[:, 2] += padding
+
+    # transform image
+    interpolators = get_matrix_scaling(mat)
+    retval = cv2.warpAffine(image, mat, (size, size), flags=interpolators[0])
+    logger.trace("transformed matrix: %s, final image shape: %s", mat, image.shape)
+    return retval
+
 
 class AlignedFace():
     """ Class to align a face.
@@ -229,7 +314,7 @@ class AlignedFace():
             interp = cv2.INTER_CUBIC if original_size < self._size else cv2.INTER_AREA
             retval = cv2.resize(image, (self._size, self._size), interpolation=interp)
         else:
-            retval = Extract().transform(image, self.matrix, self._size, self.padding)
+            retval = transform_image(image, self.matrix, self._size, self.padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 
@@ -323,89 +408,6 @@ class AlignedFace():
         return self._cache["cropped_size"][0][centering]
 
 
-class Extract():
-    """ Alignment tools for transforming face and landmark points to and from a source frame/
-    aligned face.
-
-    Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions.
-    """
-
-    @staticmethod
-    def transform_matrix(matrix, size, padding):
-        """ Adjust the given matrix to the given size and padding.
-
-        Parameters
-        ----------
-        matrix: :class:`numpy.ndarray`
-            The original transformation matrix to be adjusted
-        size: int
-            The size that the matrix is to be adjusted for
-        padding: int
-            The amount of padding to be applied to each side of the image
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The original matrix adjusted for the given size and padding
-        """
-        logger.trace("size: %s. padding: %s", size, padding)
-        retval = matrix * (size - 2 * padding)
-        retval[:, 2] += padding
-        logger.trace("Returning: %s", retval)
-        return retval
-
-    def transform(self, image, matrix, size, padding=0):
-        """ Perform transformation on an image.
-
-        Parameters
-        ----------
-        image: :class:`numpy.ndarray`
-            The image to transform
-        matrix: :class:`numpy.ndarray`
-            The transformation matrix to apply to the image
-        size: int
-            The final size of the transformed image
-        padding: int, optional
-            The amount of padding to apply to the final image. Default: `0`
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The transformed image
-        """
-        logger.trace("matrix: %s, size: %s. padding: %s", matrix, size, padding)
-        mat = self.transform_matrix(matrix, size, padding)
-        interpolators = get_matrix_scaling(mat)
-        retval = cv2.warpAffine(image, mat, (size, size), flags=interpolators[0])
-        return retval
-
-
-def get_matrix_scaling(matrix):
-    """ Given a matrix, return the cv2 Interpolation method and inverse interpolation method for
-    applying the matrix on an image.
-
-    Parameters
-    ----------
-    matrix: :class:`numpy.ndarray`
-        The transform matrix to return the interpolator for
-
-    Returns
-    -------
-    tuple
-        The interpolator and inverse interpolator for the given matrix. This will be (Cubic, Area)
-        for an upscale matrix and (Area, Cubic) for a downscale matrix
-    """
-    x_scale = np.sqrt(matrix[0, 0] * matrix[0, 0] + matrix[0, 1] * matrix[0, 1])
-    y_scale = (matrix[0, 0] * matrix[1, 1] - matrix[0, 1] * matrix[1, 0]) / x_scale
-    avg_scale = (x_scale + y_scale) * 0.5
-    if avg_scale >= 1.:
-        interpolators = cv2.INTER_CUBIC, cv2.INTER_AREA
-    else:
-        interpolators = cv2.INTER_AREA, cv2.INTER_CUBIC
-    logger.trace("interpolator: %s, inverse interpolator: %s", interpolators[0], interpolators[1])
-    return interpolators
-
-
 class PoseEstimate():
     """ Estimates pose from a generic 3D head model for the given 2D face landmarks.
 
@@ -420,33 +422,6 @@ class PoseEstimate():
     3D Model points - http://aifi.isr.uc.pt/Downloads/OpenGL/glAnthropometric3DModel.cpp
     """
     def __init__(self, landmarks):
-        self._mean_face = np.array([
-            [4.056931, -11.432347, 1.636229],   # 8 chin LL
-            [1.833492, -12.542305, 4.061275],   # 7 chin L
-            [0.0, -12.901019, 4.070434],        # 6 chin C
-            [-1.833492, -12.542305, 4.061275],  # 5 chin R
-            [-4.056931, -11.432347, 1.636229],  # 4 chin RR
-            [6.825897, 1.275284, 4.402142],     # 33 L eyebrow L
-            [1.330353, 1.636816, 6.903745],     # 29 L eyebrow R
-            [-1.330353, 1.636816, 6.903745],    # 34 R eyebrow L
-            [-6.825897, 1.275284, 4.402142],    # 38 R eyebrow R
-            [1.930245, -5.060977, 5.914376],    # 54 nose LL
-            [0.746313, -5.136947, 6.263227],    # 53 nose L
-            [0.0, -5.485328, 6.76343],          # 52 nose C
-            [-0.746313, -5.136947, 6.263227],   # 51 nose R
-            [-1.930245, -5.060977, 5.914376],   # 50 nose RR
-            [5.311432, 0.0, 3.987654],          # 13 L eye L
-            [1.78993, -0.091703, 4.413414],     # 17 L eye R
-            [-1.78993, -0.091703, 4.413414],    # 25 R eye L
-            [-5.311432, 0.0, 3.987654],         # 21 R eye R
-            [2.774015, -7.566103, 5.048531],    # 43 mouth L
-            [0.509714, -7.056507, 6.566167],    # 42 mouth top L
-            [0.0, -7.131772, 6.704956],         # 41 mouth top C
-            [-0.509714, -7.056507, 6.566167],   # 40 mouth top R
-            [-2.774015, -7.566103, 5.048531],   # 39 mouth R
-            [-0.589441, -8.443925, 6.109526],   # 46 mouth bottom R
-            [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
-            [0.589441, -8.443925, 6.109526]])   # 44 mouth bottom L
         self._distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
         self._xyz_2d = None
 
@@ -510,7 +485,7 @@ class PoseEstimate():
         """
         points = landmarks[[6, 7, 8, 9, 10, 17, 21, 22, 26, 31, 32, 33, 34,
                             35, 36, 39, 42, 45, 48, 50, 51, 52, 54, 56, 57, 58]]
-        _, rotation, translation = cv2.solvePnP(self._mean_face,
+        _, rotation, translation = cv2.solvePnP(_MEAN_FACE_3D,
                                                 points,
                                                 self._camera_matrix,
                                                 self._distortion_coefficients,

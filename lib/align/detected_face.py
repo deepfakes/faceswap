@@ -7,7 +7,7 @@ from zlib import compress, decompress
 import cv2
 import numpy as np
 
-from .aligned_face import AlignedFace
+from . import AlignedFace
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

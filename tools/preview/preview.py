@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from lib.align import Extract as AlignerExtract
+from lib.align import transform_image
 from lib.cli.args import ConvertArgs
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.gui.custom_widgets import Tooltip
@@ -704,11 +704,10 @@ class FacesDisplay():
             self._faces.setdefault("filenames",
                                    list()).append(os.path.splitext(image["filename"])[0])
             self._faces.setdefault("matrix", list()).append(matrix)
-            self._faces.setdefault("src", list()).append(AlignerExtract().transform(
-                src_img,
-                matrix,
-                self._size,
-                self._padding))
+            self._faces.setdefault("src", list()).append(transform_image(src_img,
+                                                                         matrix,
+                                                                         self._size,
+                                                                         self._padding))
         self.update_source = False
         logger.debug("Updated source faces")
 
@@ -720,11 +719,10 @@ class FacesDisplay():
         destination = self.destination if self.destination else [np.ones_like(src["image"])
                                                                  for src in self.source]
         for idx, image in enumerate(destination):
-            self._faces["dst"].append(AlignerExtract().transform(
-                image,
-                self._faces["matrix"][idx],
-                self._size,
-                self._padding))
+            self._faces["dst"].append(transform_image(image,
+                                                      self._faces["matrix"][idx],
+                                                      self._size,
+                                                      self._padding))
         logger.debug("Updated destination faces")
 
     def _header_text(self):
