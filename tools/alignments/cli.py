@@ -30,8 +30,8 @@ class AlignmentsArgs(FaceSwapArgs):
             action=Radio,
             type=str,
             choices=("draw", "extract", "merge", "missing-alignments", "missing-frames",
-                     "leftover-faces", "multi-faces", "no-faces", "remove-faces", "remove-frames",
-                     "rename", "sort", "spatial", "update-hashes"),
+                     "leftover-faces", "multi-faces", "no-faces", "remove-faces", "rename", "sort",
+                     "spatial", "update-hashes"),
             required=True,
             help="R|Choose which action you want to perform. NB: All actions require an "
                  "alignments file (-a) to be passed in."
@@ -56,8 +56,6 @@ class AlignmentsArgs(FaceSwapArgs):
                  "faces were detected.{3}{0}"
                  "\nL|'remove-faces': Remove deleted faces from an alignments file. The original "
                  "alignments file will be backed up.{4}"
-                 "\nL|'remove-frames': Remove deleted frames from an alignments file. The "
-                 "original alignments file will be backed up.{0}"
                  "\nL|'rename' - Rename faces to correspond with their parent frame and position "
                  "index in the alignments file (i.e. how they are named after running extract).{4}"
                  "\nL|'sort': Re-index the alignments from left to right. For alignments with "

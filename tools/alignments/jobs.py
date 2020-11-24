@@ -22,7 +22,7 @@ class Check():
     """ Frames and faces checking tasks """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
+        self._alignments = alignments
         self.job = arguments.job
         self.type = None
         self.is_video = False  # Set when getting items
@@ -93,7 +93,7 @@ class Check():
         for frame in tqdm(self.items, desc=self.output_message):
             logger.trace(frame)
             frame_name = frame["frame_fullname"]
-            if not self.alignments.frame_has_faces(frame_name):
+            if not self._alignments.frame_has_faces(frame_name):
                 logger.debug("Returning: '%s'", frame_name)
                 yield frame_name
 
@@ -109,7 +109,7 @@ class Check():
         self.output_message = "Frames with multiple faces"
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["frame_fullname"]
-            if not self.alignments.frame_has_multiple_faces(filename):
+            if not self._alignments.frame_has_multiple_faces(filename):
                 continue
             logger.trace("Returning: '%s'", filename)
             yield filename
@@ -121,7 +121,7 @@ class Check():
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["face_fullname"]
             f_hash = item["face_hash"]
-            frame_idx = list(self.alignments.hashes_to_frame[f_hash].items())
+            frame_idx = list(self._alignments.hashes_to_frame[f_hash].items())
 
             if len(frame_idx) > 1:
                 # If the same hash exists in multiple frames, select arbitrary frame
@@ -132,7 +132,7 @@ class Check():
                 frame_idx = [frame_idx]
 
             frame_name, idx = frame_idx[0]
-            if not self.alignments.frame_has_multiple_faces(frame_name):
+            if not self._alignments.frame_has_multiple_faces(frame_name):
                 continue
             retval = (filename, idx)
             logger.trace("Returning: '%s'", retval)
@@ -145,7 +145,7 @@ class Check():
         for frame in tqdm(self.items, desc=self.output_message):
             frame_name = frame["frame_fullname"]
             if (frame["frame_extension"] not in exclude_filetypes
-                    and not self.alignments.frame_exists(frame_name)):
+                    and not self._alignments.frame_exists(frame_name)):
                 logger.debug("Returning: '%s'", frame_name)
                 yield frame_name
 
@@ -154,7 +154,7 @@ class Check():
             not have a matching file """
         self.output_message = "Missing frames that are in alignments file"
         frames = set(item["frame_fullname"] for item in self.items)
-        for frame in tqdm(self.alignments.data.keys(), desc=self.output_message):
+        for frame in tqdm(self._alignments.data.keys(), desc=self.output_message):
             if frame not in frames:
                 logger.debug("Returning: '%s'", frame)
                 yield frame
@@ -164,7 +164,7 @@ class Check():
         self.output_message = "Faces missing from the alignments file"
         for face in tqdm(self.items, desc=self.output_message):
             f_hash = face["face_hash"]
-            if f_hash not in self.alignments.hashes_to_frame:
+            if f_hash not in self._alignments.hashes_to_frame:
                 logger.debug("Returning: '%s'", face["face_fullname"])
                 yield face["face_fullname"], -1
 
@@ -549,7 +549,7 @@ class Extract():  # pylint:disable=too-few-public-methods
 class Merge():
     """ Merge two alignments files into one """
     def __init__(self, alignments, arguments):
-        self.alignments = alignments
+        self._alignments = alignments
         self.faces = self.get_faces(arguments)
         self.final_alignments = alignments[0]
         self.process_alignments = alignments[1:]
@@ -601,7 +601,7 @@ class Merge():
         if not face_hashes:
             logger.error("No face hashes. This would remove all faces from your alignments file.")
             return
-        for alignments in tqdm(self.alignments, desc="Filtering out faces"):
+        for alignments in tqdm(self._alignments, desc="Filtering out faces"):
             pre_face_count = alignments.faces_count
             pre_frames_count = alignments.frames_count
             alignments.filter_hashes(face_hashes, filter_out=False)
@@ -651,71 +651,46 @@ class Merge():
         self.final_alignments.set_filename(filename)
 
 
-class RemoveAlignments():
-    """ Remove items from alignments file """
+class RemoveFaces():  # pylint:disable=too-few-public-methods
+    """ Remove items from alignments file.
+
+    Parameters
+    ---------
+    alignments: :class:`tools.alignments.media.AlignmentsData`
+        The loaded alignments containing faces to be removed
+    arguments: :class:`argparse.Namespace`
+        The command line arguments that have called this job
+    """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
-        self.type = arguments.job.replace("remove-", "")
-        self.items = self.get_items(arguments)
-        self.removed = set()
+        self._alignments = alignments
+        self._items = Faces(arguments.faces_dir)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def get_items(self, arguments):
-        """ Set the correct items to process """
-        retval = None
-        if self.type == "frames":
-            retval = Frames(arguments.frames_dir).items
-        elif self.type == "faces":
-            retval = Faces(arguments.faces_dir)
-        return retval
-
     def process(self):
-        """ run removal """
-        logger.info("[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
-        del_count = 0
-        task = getattr(self, "remove_{}".format(self.type))
+        """ Run the job to remove faces from an alignments file that do not exist within a faces
+        folder. """
+        logger.info("[REMOVE FACES FROM ALIGNMENTS]")  # Tidy up cli output
 
-        if self.type == "frames":
-            logger.debug("Removing Frames")
-            for frame in tqdm(list(item[3] for item in self.alignments.yield_faces()),
-                              desc="Removing Frames",
-                              total=self.alignments.frames_count):
-                del_count += task(frame)
-        else:
-            logger.debug("Removing Faces")
-            del_count = task()
+        face_hashes = self._items.items
+        if not face_hashes:
+            logger.error("No matching faces found in your faces folder. This would remove all "
+                         "faces from your alignments file. Process aborted.")
+            return
+
+        pre_face_count = self._alignments.faces_count
+        self._alignments.filter_hashes(face_hashes, filter_out=False)
+        del_count = pre_face_count - self._alignments.faces_count
 
         if del_count == 0:
             logger.info("No changes made to alignments file. Exiting")
             return
 
         logger.info("%s alignment(s) were removed from alignments file", del_count)
-        self.alignments.save()
+        self._alignments.save()
 
-        if self.type == "faces":
-            rename = Rename(self.alignments, None, self.items)
-            rename.process()
-
-    def remove_frames(self, frame):
-        """ Process to remove frames from an alignments file """
-        if frame in self.items:
-            logger.trace("Not deleting frame: '%s'", frame)
-            return 0
-        logger.debug("Deleting frame: '%s'", frame)
-        del self.alignments.data[frame]
-        return 1
-
-    def remove_faces(self):
-        """ Process to remove faces from an alignments file """
-        face_hashes = self.items.items
-        if not face_hashes:
-            logger.error("No face hashes. This would remove all faces from your alignments file.")
-            return 0
-        pre_face_count = self.alignments.faces_count
-        self.alignments.filter_hashes(face_hashes, filter_out=False)
-        post_face_count = self.alignments.faces_count
-        return pre_face_count - post_face_count
+        rename = Rename(self._alignments, None, self._items)
+        rename.process()
 
 
 class Rename():  # pylint:disable=too-few-public-methods
@@ -734,7 +709,7 @@ class Rename():  # pylint:disable=too-few-public-methods
     def __init__(self, alignments, arguments, faces=None):
         logger.debug("Initializing %s: (arguments: %s, faces: %s)",
                      self.__class__.__name__, arguments, faces)
-        self.alignments = alignments
+        self._alignments = alignments
         self.faces = faces if faces else Faces(arguments.faces_dir)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -762,7 +737,7 @@ class Rename():  # pylint:disable=too-few-public-methods
         errors = []
         pbar = tqdm(desc="Building Rename Lists", total=self.faces.count)
         for disk_hash, disk_faces in self.faces.items.items():
-            align_faces = self.alignments.hashes_to_frame.get(disk_hash, None)
+            align_faces = self._alignments.hashes_to_frame.get(disk_hash, None)
             face_error = self._validate_hash_match(disk_faces, align_faces)
             if face_error is not None:
                 errors.extend(face_error)
@@ -908,7 +883,7 @@ class Sort():
     """ Sort alignments' index by the order they appear in an image """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
+        self._alignments = alignments
         self.faces = self.get_faces(arguments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -925,16 +900,16 @@ class Sort():
         logger.info("[SORT INDEXES]")  # Tidy up cli output
         reindexed = self.reindex_faces()
         if reindexed:
-            self.alignments.save()
+            self._alignments.save()
         if self.faces:
-            rename = Rename(self.alignments, None, self.faces)
+            rename = Rename(self._alignments, None, self.faces)
             rename.process()
 
     def reindex_faces(self):
         """ Re-Index the faces """
         reindexed = 0
-        for alignment in tqdm(self.alignments.yield_faces(),
-                              desc="Sort alignment indexes", total=self.alignments.frames_count):
+        for alignment in tqdm(self._alignments.yield_faces(),
+                              desc="Sort alignment indexes", total=self._alignments.frames_count):
             frame, alignments, count, key = alignment
             if count <= 1:
                 logger.trace("0 or 1 face in frame. Not sorting: '%s'", frame)
@@ -944,7 +919,7 @@ class Sort():
                 logger.trace("Alignments already in correct order. Not sorting: '%s'", frame)
                 continue
             logger.trace("Sorting alignments for frame: '%s'", frame)
-            self.alignments.data[key]["faces"] = sorted_alignments
+            self._alignments.data[key]["faces"] = sorted_alignments
             reindexed += 1
         logger.info("%s Frames had their faces reindexed", reindexed)
         return reindexed
@@ -958,7 +933,7 @@ class Spatial():
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.arguments = arguments
-        self.alignments = alignments
+        self._alignments = alignments
         self.mappings = dict()
         self.normalized = dict()
         self.shapes_model = None
@@ -977,7 +952,7 @@ class Spatial():
         landmarks = self.spatially_filter()
         landmarks = self.temporally_smooth(landmarks)
         self.update_alignments(landmarks)
-        self.alignments.save()
+        self._alignments.save()
 
         logger.info("Done! To re-extract faces run: python tools.py "
                     "alignments -j extract -a %s -fr <path_to_frames_dir> -fc "
@@ -1021,12 +996,12 @@ class Spatial():
     def normalize(self):
         """ Compile all original and normalized alignments """
         logger.debug("Normalize")
-        count = sum(1 for val in self.alignments.data.values() if val["faces"])
+        count = sum(1 for val in self._alignments.data.values() if val["faces"])
         landmarks_all = np.zeros((68, 2, int(count)))
 
         end = 0
-        for key in tqdm(sorted(self.alignments.data.keys()), desc="Compiling"):
-            val = self.alignments.data[key]["faces"]
+        for key in tqdm(sorted(self._alignments.data.keys()), desc="Compiling"):
+            val = self._alignments.data[key]["faces"]
             if not val:
                 continue
             # We should only be normalizing a single face, so just take
@@ -1104,7 +1079,7 @@ class Spatial():
             logger.trace("Updating: (frame: %s)", frame)
             landmarks_update = landmarks[:, :, idx]
             landmarks_xy = landmarks_update.reshape(68, 2).tolist()
-            self.alignments.data[frame]["faces"][0]["landmarks_xy"] = landmarks_xy
+            self._alignments.data[frame]["faces"][0]["landmarks_xy"] = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
         logger.debug("Updated alignments")
 
@@ -1113,7 +1088,7 @@ class UpdateHashes():
     """ Update hashes in an alignments file """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
+        self._alignments = alignments
         self.faces = Faces(arguments.faces_dir).file_list_sorted
         self.face_hashes = dict()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -1126,7 +1101,7 @@ class UpdateHashes():
         if updated == 0:
             logger.info("No hashes were updated. Exiting")
             return
-        self.alignments.save()
+        self._alignments.save()
         logger.info("%s frame(s) had their face hashes updated.", updated)
 
     def get_hashes(self):
@@ -1150,15 +1125,15 @@ class UpdateHashes():
         logger.info("Updating hashes to alignments...")
         updated = 0
         for frame, hashes in self.face_hashes.items():
-            if not self.alignments.frame_exists(frame):
+            if not self._alignments.frame_exists(frame):
                 logger.warning("Frame not found in alignments file. Skipping: '%s'", frame)
                 continue
-            if not self.alignments.frame_has_faces(frame):
+            if not self._alignments.frame_has_faces(frame):
                 logger.warning("Frame does not have faces. Skipping: '%s'", frame)
                 continue
             existing = [face.get("hash", None)
-                        for face in self.alignments.get_faces_in_frame(frame)]
+                        for face in self._alignments.get_faces_in_frame(frame)]
             if any(hsh not in existing for hsh in list(hashes.values())):
-                self.alignments.add_face_hashes(frame, hashes)
+                self._alignments.add_face_hashes(frame, hashes)
                 updated += 1
         return updated
