@@ -14,7 +14,6 @@ from tqdm import tqdm
 # import imageio
 
 from lib.align import Alignments, DetectedFace, transform_image
-from lib.serializer import get_serializer
 from lib.image import (count_frames, encode_image_with_hash, ImagesLoader, read_image,
                        read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions
@@ -30,10 +29,6 @@ class AlignmentData(Alignments):
                      self.__class__.__name__, alignments_file)
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
-        if filename.lower() == "dfl":
-            self._serializer = get_serializer("compressed")
-            self._file = "{}.{}".format(filename.lower(), self._serializer.file_extension)
-            return
         super().__init__(folder, filename=filename)
         logger.verbose("%s items loaded", self.frames_count)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -42,11 +37,7 @@ class AlignmentData(Alignments):
     def check_file_exists(alignments_file):
         """ Check the alignments file exists"""
         folder, filename = os.path.split(alignments_file)
-        if filename.lower() == "dfl":
-            folder = None
-            filename = "dfl"
-            logger.info("Using extracted DFL faces for alignments")
-        elif not os.path.isfile(alignments_file):
+        if not os.path.isfile(alignments_file):
             logger.error("ERROR: alignments file not found at: '%s'", alignments_file)
             sys.exit(0)
         if folder:
@@ -76,20 +67,6 @@ class AlignmentData(Alignments):
                            abs(count_match), msg, frame_name)
         for idx, i_hash in hashes.items():
             faces[idx]["hash"] = i_hash
-
-    def data_from_dfl(self, alignments, faces_folder):
-        """ Set :attr:`data` from alignments extracted from a Deep Face Lab face set.
-
-        Parameters
-        ----------
-        alignments: dict
-            The extracted alignments from a Deep Face Lab face set
-        faces_folder: str
-            The folder that the faces are in, where the newly generated alignments file will
-            be saved
-        """
-        self._data = alignments
-        self.set_filename(self._get_location(faces_folder, "alignments"))
 
     def set_filename(self, filename):
         """ Set the :attr:`_file` to the given filename.
@@ -267,8 +244,7 @@ class Faces(MediaLoader):
 
     def sorted_items(self):
         """ Return the items sorted by face name """
-        items = sorted([item for item in self.process_folder()],
-                       key=lambda x: (x["face_name"]))
+        items = sorted(self.process_folder(), key=lambda x: (x["face_name"]))
         logger.trace(items)
         return items
 
@@ -322,8 +298,7 @@ class Frames(MediaLoader):
 
     def sorted_items(self):
         """ Return the items sorted by filename """
-        items = sorted([item for item in self.process_folder()],
-                       key=lambda x: (x["frame_name"]))
+        items = sorted(self.process_folder(), key=lambda x: (x["frame_name"]))
         logger.trace(items)
         return items
 

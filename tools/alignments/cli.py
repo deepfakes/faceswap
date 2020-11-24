@@ -29,15 +29,12 @@ class AlignmentsArgs(FaceSwapArgs):
             opts=("-j", "--job"),
             action=Radio,
             type=str,
-            choices=("dfl", "draw", "extract", "merge", "missing-alignments", "missing-frames",
+            choices=("draw", "extract", "merge", "missing-alignments", "missing-frames",
                      "leftover-faces", "multi-faces", "no-faces", "remove-faces", "remove-frames",
                      "rename", "sort", "spatial", "update-hashes"),
             required=True,
             help="R|Choose which action you want to perform. NB: All actions require an "
                  "alignments file (-a) to be passed in."
-                 "\nL|'dfl': Create an alignments file from faces extracted from DeepFaceLab. "
-                 "Specify 'dfl' as the 'alignments file' entry and the folder containing the dfl "
-                 "faces as the 'faces folder' ('-a dfl -fc <source faces folder>')"
                  "\nL|'draw': Draw landmarks on frames in the selected folder/video. A subfolder "
                  "will be created within the frames folder to hold the output.{0}"
                  "\nL|'extract': Re-extract faces from the source frames/video based on alignment "

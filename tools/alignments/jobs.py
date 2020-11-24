@@ -3,11 +3,8 @@
 
 import logging
 import os
-import pickle
-import struct
 import sys
 from datetime import datetime
-from PIL import Image
 
 import cv2
 import numpy as np
@@ -88,7 +85,7 @@ class Check():
         action = self.job.replace("-", "_")
         processor = getattr(self, "get_{}".format(action))
         logger.debug("Processor: %s", processor)
-        return [item for item in processor()]
+        return [item for item in processor()]  # pylint:disable=unnecessary-comprehension
 
     def get_no_faces(self):
         """ yield each frame that has no face match in alignments file """
@@ -124,8 +121,7 @@ class Check():
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["face_fullname"]
             f_hash = item["face_hash"]
-            frame_idx = [(frame, idx)
-                         for frame, idx in self.alignments.hashes_to_frame[f_hash].items()]
+            frame_idx = list(self.alignments.hashes_to_frame[f_hash].items())
 
             if len(frame_idx) > 1:
                 # If the same hash exists in multiple frames, select arbitrary frame
@@ -262,92 +258,6 @@ class Check():
             os.rename(src, dst)
 
 
-class Dfl():
-    """ Reformat Alignment file """
-    def __init__(self, alignments, arguments):
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
-        if self.alignments.file != "dfl.fsa":
-            logger.error("Alignments file must be specified as 'dfl' to reformat dfl alignmnets")
-            sys.exit(1)
-        logger.debug("Loading DFL faces")
-        self.faces = Faces(arguments.faces_dir)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def process(self):
-        """ Run reformat """
-        logger.info("[REFORMAT DFL ALIGNMENTS]")  # Tidy up cli output
-        self.alignments.data_from_dfl(self.load_dfl(), self.faces.folder)
-        self.alignments.save()
-
-    def load_dfl(self):
-        """ Load alignments from DeepFaceLab and format for Faceswap """
-        alignments = dict()
-        for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
-            if face["face_extension"] not in (".png", ".jpg"):
-                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
-                continue
-            f_hash = face["face_hash"]
-            fullpath = os.path.join(self.faces.folder, face["face_fullname"])
-            dfl = self.get_dfl_alignment(fullpath)
-
-            if not dfl:
-                continue
-
-            self.convert_dfl_alignment(dfl, f_hash, alignments)
-        return alignments
-
-    @staticmethod
-    def get_dfl_alignment(filename):
-        """ Process the alignment of one face """
-        ext = os.path.splitext(filename)[1]
-
-        if ext.lower() in (".jpg", ".jpeg"):
-            img = Image.open(filename)
-            try:
-                dfl_alignments = pickle.loads(img.app["APP15"])
-                dfl_alignments["source_rect"] = [n.item()  # comes as np.int32
-                                                 for n in dfl_alignments["source_rect"]]
-                return dfl_alignments
-            except pickle.UnpicklingError:
-                return None
-
-        with open(filename, "rb") as dfl:
-            header = dfl.read(8)
-            if header != b"\x89PNG\r\n\x1a\n":
-                logger.error("No Valid PNG header: %s", filename)
-                return None
-            while True:
-                chunk_start = dfl.tell()
-                chunk_hdr = dfl.read(8)
-                if not chunk_hdr:
-                    break
-                chunk_length, chunk_name = struct.unpack("!I4s", chunk_hdr)
-                dfl.seek(chunk_start, os.SEEK_SET)
-                if chunk_name == b"fcWp":
-                    chunk = dfl.read(chunk_length + 12)
-                    retval = pickle.loads(chunk[8:-4])
-                    logger.trace("Loaded DFL Alignment: (filename: '%s', alignment: %s",
-                                 filename, retval)
-                    return retval
-                dfl.seek(chunk_length+12, os.SEEK_CUR)
-            logger.error("Couldn't find DFL alignments: %s", filename)
-
-    @staticmethod
-    def convert_dfl_alignment(dfl_alignments, f_hash, alignments):
-        """ Add Deep Face Lab Alignments to alignments in Faceswap format """
-        sourcefile = dfl_alignments["source_filename"]
-        left, top, right, bottom = dfl_alignments["source_rect"]
-        alignment = {"x": left,
-                     "w": right - left,
-                     "y": top,
-                     "h": bottom - top,
-                     "hash": f_hash,
-                     "landmarks_xy": np.array(dfl_alignments["source_landmarks"], dtype="float32")}
-        logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
-        alignments.setdefault(sourcefile, dict()).setdefault("faces", []).append(alignment)
-
-
 class Draw():  # pylint:disable=too-few-public-methods
     """ Draws annotations onto original frames and saves into a sub-folder next to the original
     frames.
@@ -426,35 +336,71 @@ class Draw():  # pylint:disable=too-few-public-methods
         for idx, alignment in enumerate(self._alignments.get_faces_in_frame(frame_name)):
             face = DetectedFace()
             face.from_alignment(alignment, image=image)
-            landmarks = np.rint(face.landmarks_xy).astype("int32")
             # Bounding Box
             cv2.rectangle(image, (face.left, face.top), (face.right, face.bottom), (255, 0, 0), 1)
-            # Mesh
-            for area, indices in self._mesh_areas.items():
-                fill = area in ("right_eye", "left_eye", "mouth")
-                cv2.polylines(image, [landmarks[indices[0]:indices[1]]], fill, (255, 255, 0), 1)
-            # Landmarks
-            for (pos_x, pos_y) in landmarks:
-                cv2.circle(image, (pos_x, pos_y), 1, (0, 255, 255), -1)
-            # Extract boxes
-            for area in ("face", "head"):
-                face.load_aligned(image, centering=area, force=True)
-                color = (0, 255, 0) if area == "face" else (0, 0, 255)
-                top_left = face.aligned.original_roi[0]  # pylint:disable=unsubscriptable-object
-                top_left = (top_left[0], top_left[1] - 10)
-                cv2.putText(image, str(idx), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
-                cv2.polylines(image, [face.aligned.original_roi], True, color, 1)
-            # Pose (head is still loaded)
-            center = np.int32((face.aligned.size / 2, face.aligned.size / 2)).reshape(1, 2)
-            center = np.rint(face.aligned.transform_points(center, invert=True)).astype("int32")
-            points = face.aligned.pose.xyz_2d * face.aligned.size
-            points = np.rint(face.aligned.transform_points(points, invert=True)).astype("int32")
-
-            cv2.line(image, tuple(center), tuple(points[1]), (0, 255, 0), 2)
-            cv2.line(image, tuple(center), tuple(points[0]), (255, 0, 0), 2)
-            cv2.line(image, tuple(center), tuple(points[2]), (0, 0, 255), 2)
+            self._annotate_landmarks(image, np.rint(face.landmarks_xy).astype("int32"))
+            self._annotate_extract_boxes(image, face, idx)
+            self._annotate_pose(image, face)  # Pose (head is still loaded)
 
         self._frames.save_image(self._output_folder, frame_name, image)
+
+    def _annotate_landmarks(self, image, landmarks):
+        """ Annotate the extract boxes onto the frame.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The frame that extract boxes are to be annotated on to
+        landmarks: :class:`numpy.ndarray`
+            The 68 point landmarks that are to be annotated onto the frame
+        index: int
+            The face index for the given face
+        """
+        # Mesh
+        for area, indices in self._mesh_areas.items():
+            fill = area in ("right_eye", "left_eye", "mouth")
+            cv2.polylines(image, [landmarks[indices[0]:indices[1]]], fill, (255, 255, 0), 1)
+        # Landmarks
+        for (pos_x, pos_y) in landmarks:
+            cv2.circle(image, (pos_x, pos_y), 1, (0, 255, 255), -1)
+
+    @classmethod
+    def _annotate_extract_boxes(cls, image, face, index):
+        """ Annotate the mesh and landmarks boxes onto the frame.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The frame that mesh and landmarks are to be annotated on to
+        face: :class:`lib.align.AlignedFace`
+            The aligned face
+        """
+        for area in ("face", "head"):
+            face.load_aligned(image, centering=area, force=True)
+            color = (0, 255, 0) if area == "face" else (0, 0, 255)
+            top_left = face.aligned.original_roi[0]  # pylint:disable=unsubscriptable-object
+            top_left = (top_left[0], top_left[1] - 10)
+            cv2.putText(image, str(index), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
+            cv2.polylines(image, [face.aligned.original_roi], True, color, 1)
+
+    @classmethod
+    def _annotate_pose(cls, image, face):
+        """ Annotate the pose onto the frame.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The frame that pose is to be annotated on to
+        face: :class:`lib.align.AlignedFace`
+            The aligned face loaded for head centering
+        """
+        center = np.int32((face.aligned.size / 2, face.aligned.size / 2)).reshape(1, 2)
+        center = np.rint(face.aligned.transform_points(center, invert=True)).astype("int32")
+        points = face.aligned.pose.xyz_2d * face.aligned.size
+        points = np.rint(face.aligned.transform_points(points, invert=True)).astype("int32")
+        cv2.line(image, tuple(center), tuple(points[1]), (0, 255, 0), 2)
+        cv2.line(image, tuple(center), tuple(points[0]), (255, 0, 0), 2)
+        cv2.line(image, tuple(center), tuple(points[2]), (0, 0, 255), 2)
 
 
 class Extract():  # pylint:disable=too-few-public-methods
@@ -889,7 +835,7 @@ class Rename():  # pylint:disable=too-few-public-methods
         source_filenames = []
         dest_filenames = []
         # Force deterministic order on alignments dict for multi hash faces
-        sorted_aligned = sorted([(frame, idx) for frame, idx in align_faces.items()])
+        sorted_aligned = sorted(list(align_faces.items()))
         for disk_face, align_face in zip(disk_faces, sorted_aligned):
             extension = disk_face[1]
             src_fname = disk_face[0] + extension
@@ -993,7 +939,7 @@ class Sort():
             if count <= 1:
                 logger.trace("0 or 1 face in frame. Not sorting: '%s'", frame)
                 continue
-            sorted_alignments = sorted([item for item in alignments], key=lambda x: (x["x"]))
+            sorted_alignments = sorted(alignments, key=lambda x: (x["x"]))
             if sorted_alignments == alignments:
                 logger.trace("Alignments already in correct order. Not sorting: '%s'", frame)
                 continue
