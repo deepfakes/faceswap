@@ -638,56 +638,88 @@ class Extract():  # pylint:disable=too-few-public-methods
             mask.replace_mask(new_mask)
 
 
-class Merge():
-    """ Merge two alignments files into one """
+class Merge():  # pylint:disable=too-few-public-methods
+    """ Merge multiple alignments files into one.
+
+    Parameters
+    ----------
+    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+        The alignments data loaded from an alignments file for this rename job
+    arguments: :class:`argparse.Namespace`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+    """
     def __init__(self, alignments, arguments):
         self._alignments = alignments
-        self.faces = self.get_faces(arguments)
-        self.final_alignments = alignments[0]
-        self.process_alignments = alignments[1:]
+        self._check_versions()
+        self._faces = self._get_faces(arguments)
+        self._final_alignments = alignments[0]
+        self._process_alignments = alignments[1:]
         self._hashes_to_frame = None
 
+    def _check_versions(self):
+        """ Ensure all alignments files are compatible versions. If not, exit with error. """
+        versions = [al.version for al in self._alignments]
+        logger.debug(versions)
+        if any(vers < 2.0 for vers in versions) and any(vers >= 2.0 for vers in versions):
+            logger.error("You have selected incompatible alignments files for merging. You cannot "
+                         "merge alignments files for legacy extracted faces with aligments files "
+                         "for full-head extracted faces.")
+            logger.info("You can update legacy alignments files by using the Extract job in the "
+                        "Alignments tool to re-extract the faces in full-head format.")
+            sys.exit(0)
+
     @staticmethod
-    def get_faces(arguments):
-        """ If faces argument is specified, load faces_dir
-            otherwise return None """
+    def _get_faces(arguments):
+        """ If faces argument is specified, load the faces folder otherwise return ``None``.
+
+        Parameters
+        ----------
+        arguments: :class:`argparse.Namespace`
+            The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+
+        Returns
+        -------
+        :class:`tools.alignments.media.Faces` or ``None``
+            The faces object or ``None`` if not faces folder specified
+        """
         if not hasattr(arguments, "faces_dir") or not arguments.faces_dir:
             return None
         return Faces(arguments.faces_dir)
 
     def process(self):
-        """Process the alignments file merge """
+        """Run the alignments file merging process. """
         logger.info("[MERGE ALIGNMENTS]")  # Tidy up cli output
-        if self.faces is not None:
-            self.remove_faces()
-        self._hashes_to_frame = self.final_alignments.hashes_to_frame
+        if self._faces is not None:
+            self._remove_faces()
+        self._hashes_to_frame = self._final_alignments.hashes_to_frame
         skip_count = 0
         merge_count = 0
-        total_count = sum([alignments.frames_count for alignments in self.process_alignments])
+        total_count = sum([alignments.frames_count for alignments in self._process_alignments])
 
         with tqdm(desc="Merging Alignments", total=total_count) as pbar:
-            for alignments in self.process_alignments:
+            for alignments in self._process_alignments:
                 for _, src_alignments, _, frame in alignments.yield_faces():
                     for idx, alignment in enumerate(src_alignments):
                         if not alignment.get("hash", None):
                             logger.warning("Alignment '%s':%s has no Hash! Skipping", frame, idx)
                             skip_count += 1
                             continue
-                        if self.check_exists(frame, alignment, idx):
+                        if self._check_exists(frame, alignment, idx):
                             skip_count += 1
                             continue
-                        self.merge_alignment(frame, alignment, idx)
+                        self._merge_alignment(frame, alignment, idx)
                         merge_count += 1
                     pbar.update(1)
         logger.info("Alignments Merged: %s", merge_count)
         logger.info("Alignments Skipped: %s", skip_count)
         if merge_count != 0:
-            self.set_destination_filename()
-            self.final_alignments.save()
+            self._set_destination_filename()
+            self._final_alignments.save()
 
-    def remove_faces(self):
-        """ Process to remove faces from an alignments file """
-        face_hashes = list(self.faces.items.keys())
+    def _remove_faces(self):
+        """ Removes faces from the alignments file if a faces folder has been provided and the
+        faces do not exist within each alignments file. """
+        face_hashes = list(self._faces.items.keys())
         del_faces_count = 0
         del_frames_count = 0
         if not face_hashes:
@@ -712,35 +744,61 @@ class Merge():
                            removed_faces, removed_frames, os.path.basename(alignments.file))
         logger.info("Total removed - faces: %s, frames: %s", del_faces_count, del_frames_count)
 
-    def check_exists(self, frame, alignment, idx):
-        """ Check whether this face already exists """
+    def _check_exists(self, frame, alignment, index):
+        """ Remove duplicate faces from the alignments file when an instance of the face already
+        exists.
+
+        Parameters
+        ----------
+        frame: str
+            The frame name for the current frame being processed
+        alignment: dict
+            The alignment dictionary for the current face in the frame
+        index: int
+            The face index for the current face in the frame
+
+        Returns
+        -------
+        bool
+            ``True`` if the face has been already been seen, otherwise ``False``
+        """
         existing_frame = self._hashes_to_frame.get(alignment["hash"], None)
         if not existing_frame:
             return False
         if frame in existing_frame.keys():
             logger.verbose("Face '%s': %s already exists in destination at position %s. "
-                           "Skipping", frame, idx, existing_frame[frame])
+                           "Skipping", frame, index, existing_frame[frame])
         elif frame not in existing_frame.keys():
             logger.verbose("Face '%s': %s exists in destination as: %s. "
-                           "Skipping", frame, idx, existing_frame)
+                           "Skipping", frame, index, existing_frame)
         return True
 
-    def merge_alignment(self, frame, alignment, idx):
-        """ Merge the source alignment into the destination """
+    def _merge_alignment(self, frame, alignment, idx):
+        """ Merge the source alignment into the destination final alignments dictionary
+
+        Parameters
+        ----------
+        frame: str
+            The frame name for the current frame being processed
+        alignment: dict
+            The alignment dictionary for the current face in the frame
+        index: int
+            The face index for the current face in the frame
+        """
         logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
                      frame, idx, alignment["hash"])
         self._hashes_to_frame.setdefault(alignment["hash"], dict())[frame] = idx
-        self.final_alignments.data.setdefault(frame,
-                                              dict()).setdefault("faces", []).append(alignment)
+        self._final_alignments.data.setdefault(frame,
+                                               dict()).setdefault("faces", []).append(alignment)
 
-    def set_destination_filename(self):
+    def _set_destination_filename(self):
         """ Set the destination filename """
-        folder = os.path.split(self.final_alignments.file)[0]
-        ext = os.path.splitext(self.final_alignments.file)[1]
+        folder = os.path.split(self._final_alignments.file)[0]
+        ext = os.path.splitext(self._final_alignments.file)[1]
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(folder, "alignments_merged_{}{}".format(now, ext))
         logger.debug("Output set to: '%s'", filename)
-        self.final_alignments.set_filename(filename)
+        self._final_alignments.set_filename(filename)
 
 
 class RemoveFaces():  # pylint:disable=too-few-public-methods
@@ -802,7 +860,7 @@ class Rename():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s, faces: %s)",
                      self.__class__.__name__, arguments, faces)
         self._alignments = alignments
-        self.faces = faces if faces else Faces(arguments.faces_dir)
+        self._faces = faces if faces else Faces(arguments.faces_dir)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
@@ -827,8 +885,8 @@ class Rename():  # pylint:disable=too-few-public-methods
         source_filenames = []
         dest_filenames = []
         errors = []
-        pbar = tqdm(desc="Building Rename Lists", total=self.faces.count)
-        for disk_hash, disk_faces in self.faces.items.items():
+        pbar = tqdm(desc="Building Rename Lists", total=self._faces.count)
+        for disk_hash, disk_faces in self._faces.items.items():
             align_faces = self._alignments.hashes_to_frame.get(disk_hash, None)
             face_error = self._validate_hash_match(disk_faces, align_faces)
             if face_error is not None:
@@ -957,8 +1015,8 @@ class Rename():  # pylint:disable=too-few-public-methods
             if src == dst:
                 logger.debug("Skipping rename of '%s' as destination name is same as souce", src)
                 continue
-            old = os.path.join(self.faces.folder, src)
-            new = os.path.join(self.faces.folder, dst)
+            old = os.path.join(self._faces.folder, src)
+            new = os.path.join(self._faces.folder, dst)
             if os.path.exists(new):
                 # This should never happen, but is a safety measure to prevent deletion of faces
                 # when multiple files have the same hash.
