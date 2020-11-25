@@ -13,6 +13,9 @@ from sklearn import decomposition
 from tqdm import tqdm
 
 from lib.align import DetectedFace
+from lib.align.alignments import _VERSION
+from plugins.extract.pipeline import Extractor, ExtractMedia
+
 from .media import ExtractedFaces, Faces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -417,7 +420,9 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._arguments = arguments
         self._alignments = alignments
-        print(self._alignments._meta)
+        # pylint:disable=protected-access
+        self._is_legacy = self._alignments.version == 1.0
+        self._mask_pipeline = None
         self._faces_dir = arguments.faces_dir
         self._frames = Frames(arguments.frames_dir)
         self._extracted_faces = ExtractedFaces(self._frames,
@@ -429,6 +434,8 @@ class Extract():  # pylint:disable=too-few-public-methods
         """ Run the re-extraction from Alignments file process"""
         logger.info("[EXTRACT FACES]")  # Tidy up cli output
         self._check_folder()
+        if self._is_legacy:
+            self._legacy_check()
         self._export_faces()
 
     def _check_folder(self):
@@ -445,6 +452,35 @@ class Extract():  # pylint:disable=too-few-public-methods
             logger.error(err)
             sys.exit(0)
         logger.verbose("Creating output folder at '%s'", self._faces_dir)
+
+    def _legacy_check(self):
+        """ Check whether the alignments file was created with the legacy extraction method.
+
+        If so, force user to re-extract all faces if any options have been specified, otherwise
+        raise the appropriate warnings and set the legacy options.
+        """
+        if self._arguments.large or self._arguments.extract_every_n != 1:
+            logger.warning("This alignments file was generated with the legacy extraction method.")
+            logger.warning("You should run this extraction job, but with 'large' deselected and "
+                           "'extract-every-n' set to 1 to update the alignments file.")
+            logger.warning("You can then re-run this extraction job with your chosen options.")
+            sys.exit(0)
+
+        maskers = ["components", "extended"]
+        nn_masks = [mask for mask in list(self._alignments.mask_summary) if mask not in maskers]
+        logtype = logger.warning if nn_masks else logger.info
+        logtype("This alignments file was created with the legacy extraction method and will be "
+                "updated.")
+        logtype("Faces will be extracted using the new method and landmarks based masks will be "
+                "regenerated.")
+        if nn_masks:
+            logtype("However, the NN based masks '%s' will be cropped to the legacy extraction "
+                    "method, so you may want to run the mask tool to regenerate these "
+                    "masks.", "', '".join(nn_masks))
+        self._mask_pipeline = Extractor(None, None, maskers, multiprocess=True)
+        self._mask_pipeline.launch()
+        # Update alignments versioning
+        self._alignments._version = _VERSION  # pylint:disable=protected-access
 
     def _export_faces(self):
         """ Export the faces to the output folder and update the alignments file with
@@ -505,6 +541,8 @@ class Extract():  # pylint:disable=too-few-public-methods
         face_count = 0
         frame_name, extension = os.path.splitext(filename)
         faces = self._select_valid_faces(filename, image)
+        if self._is_legacy:
+            faces = self._process_legacy(filename, image, faces)
 
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), extension)
@@ -544,6 +582,60 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.trace("frame: '%s', total_faces: %s, valid_faces: %s",
                      frame, len(faces), len(valid_faces))
         return valid_faces
+
+    def _process_legacy(self, filename, image, detected_faces):
+        """ Process legacy face extractions to new extraction method.
+
+        Updates stored masks to new extract size
+
+        Parameters
+        ----------
+        filename: str
+            The current frame filename
+        image: :class:`numpy.ndarray`
+            The current image the contains the faces
+        detected_faces: list
+            list of :class:`lib.align.DetectedFace` objects for the current frame
+        """
+        # Update landmarks based masks for face centering
+        mask_item = ExtractMedia(filename, image, detected_faces=detected_faces)
+        self._mask_pipeline.input_queue.put(mask_item)
+        faces = next(self._mask_pipeline.detected_faces()).detected_faces
+
+        # Pad and shift Neural Network based masks to face centering
+        for face in faces:
+            self._pad_legacy_masks(face)
+        return faces
+
+    @classmethod
+    def _pad_legacy_masks(cls, detected_face):
+        """ Recenter legacy Neural Network based masks from legacy centering to face centering
+        and pad accordingly.
+
+        Update the masks back into the detected face objects.
+
+        Parameters
+        ----------
+        detected_face: :class:`lib.align.DetectedFace`
+            The detected face to update the masks for
+        """
+        detected_face.load_aligned(None, centering="head")
+        offset = detected_face.aligned.pose.offset["face"]
+        for name, mask in detected_face.mask.items():  # Re-center mask and pad to face size
+            if name in ("components", "extended"):
+                continue
+            old_mask = mask.mask
+            size = old_mask.shape[0]
+            new_mask = np.ones((size * 2, size * 2, 1), dtype=old_mask.dtype)
+            pos = (size // 2, size + (size // 2))
+            shift = np.rint(offset * size).astype("int32")
+            new_mask[pos[0] + shift[0]:pos[1] + shift[0],
+                     pos[0] + shift[1]: pos[1] + shift[1],
+                     :] = old_mask
+            new_size = int(size + (size * 0.125))  # ratio difference between legacy and face
+            crop = slice(size - new_size // 2, size + new_size // 2)
+            new_mask = new_mask[crop, crop, :].astype("float32") / 255.0
+            mask.replace_mask(new_mask)
 
 
 class Merge():

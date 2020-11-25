@@ -12,6 +12,7 @@ from lib.serializer import get_serializer, get_serializer_from_filename
 from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_VERSION = 2.0
 
 
 class Alignments():
@@ -36,7 +37,7 @@ class Alignments():
     def __init__(self, folder, filename="alignments"):
         logger.debug("Initializing %s: (folder: '%s', filename: '%s')",
                      self.__class__.__name__, folder, filename)
-        self._version = 2.0
+        self._version = _VERSION
         self._serializer = get_serializer("compressed")
         self._file = self._get_location(folder, filename)
         self._meta = None
@@ -135,6 +136,11 @@ class Alignments():
         within the alignments file """
         return self._thumbnails
 
+    @property
+    def version(self):
+        """ float: The alignments file version number. """
+        return self._version
+
     # << INIT FUNCTIONS >> #
 
     def _get_location(self, folder, filename):
@@ -197,6 +203,7 @@ class Alignments():
         logger.info("Reading alignments from: '%s'", self._file)
         data = self._serializer.load(self._file)
         self._meta = data.get("__meta__", dict(version=1.0))
+        self._version = self._meta["version"]
         data = data.get("__data__", data)
         logger.debug("Loaded alignments")
         return data

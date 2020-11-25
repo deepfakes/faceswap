@@ -119,8 +119,8 @@ class AlignmentsArgs(FaceSwapArgs):
             opts=("-sz", "--size"),
             type=int,
             action=Slider,
-            min_max=(128, 512),
-            default=256,
+            min_max=(256, 1024),
+            default=512,
             group="extract",
             rounding=64,
             help="[Extract only] The output size of extracted faces."))

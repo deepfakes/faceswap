@@ -13,8 +13,8 @@ from tqdm import tqdm
 # import imageio
 
 from lib.align import Alignments, DetectedFace
-from lib.image import (count_frames, encode_image_with_hash, ImagesLoader, read_image,
-                       read_image_hash_batch)
+from lib.image import (count_frames, encode_image_with_hash, generate_thumbnail, ImagesLoader,
+                       read_image, read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -335,7 +335,8 @@ class ExtractedFaces():
                      self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        face.load_aligned(image, size=self.size)
+        face.load_aligned(image, size=self.size, centering="head")
+        face.thumbnail = generate_thumbnail(face.aligned.face, size=80, quality=60)
         return face
 
     def get_faces_in_frame(self, frame, update=False, image=None):

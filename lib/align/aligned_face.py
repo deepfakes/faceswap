@@ -149,7 +149,7 @@ class AlignedFace():
     """
     def __init__(self, landmarks, image=None, centering="legacy", size=64, coverage_ratio=1.0,
                  dtype=None, is_aligned=False):
-        logger.trace("Initializing: %s (image shape: %s, centering: %s, size: %s, "
+        logger.trace("Initializing: %s (image shape: %s, centering: '%s', size: %s, "
                      "coverage_ratio: %s, dtype: %s, is_aligned: %s)", self.__class__.__name__,
                      image if image is None else image.shape, centering, size, coverage_ratio,
                      dtype, is_aligned)
