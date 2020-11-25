@@ -417,12 +417,12 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._arguments = arguments
         self._alignments = alignments
+        print(self._alignments._meta)
         self._faces_dir = arguments.faces_dir
         self._frames = Frames(arguments.frames_dir)
         self._extracted_faces = ExtractedFaces(self._frames,
                                                self._alignments,
-                                               size=arguments.size,
-                                               align_eyes=arguments.align_eyes)
+                                               size=arguments.size)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
