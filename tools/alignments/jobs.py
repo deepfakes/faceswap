@@ -420,8 +420,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._arguments = arguments
         self._alignments = alignments
-        # pylint:disable=protected-access
-        self._is_legacy = self._alignments.version == 1.0
+        self._is_legacy = self._alignments.version == 1.0  # pylint:disable=protected-access
         self._mask_pipeline = None
         self._faces_dir = arguments.faces_dir
         self._frames = Frames(arguments.frames_dir)
@@ -553,6 +552,8 @@ class Extract():  # pylint:disable=too-few-public-methods
                 f_hash = self._extracted_faces.save_face_with_hash(output,
                                                                    extension,
                                                                    face.aligned.face)
+                if self._is_legacy:
+                    self._alignments.data[filename]["faces"][idx] = face.to_alignment()
                 self._alignments.data[filename]["faces"][idx]["hash"] = f_hash
             face_count += 1
         return face_count
@@ -619,22 +620,30 @@ class Extract():  # pylint:disable=too-few-public-methods
         detected_face: :class:`lib.align.DetectedFace`
             The detected face to update the masks for
         """
-        detected_face.load_aligned(None, centering="head")
         offset = detected_face.aligned.pose.offset["face"]
+        ratios = detected_face.aligned._ratios  # pylint:disable=protected-access
         for name, mask in detected_face.mask.items():  # Re-center mask and pad to face size
             if name in ("components", "extended"):
                 continue
-            old_mask = mask.mask
+            old_mask = mask.mask.astype("float32") / 255.0
             size = old_mask.shape[0]
-            new_mask = np.ones((size * 2, size * 2, 1), dtype=old_mask.dtype)
-            pos = (size // 2, size + (size // 2))
-            shift = np.rint(offset * size).astype("int32")
-            new_mask[pos[0] + shift[0]:pos[1] + shift[0],
-                     pos[0] + shift[1]: pos[1] + shift[1],
-                     :] = old_mask
-            new_size = int(size + (size * 0.125))  # ratio difference between legacy and face
-            crop = slice(size - new_size // 2, size + new_size // 2)
-            new_mask = new_mask[crop, crop, :].astype("float32") / 255.0
+            new_size = int(size + (size * ratios["face"]) / 2)
+
+            shift = np.rint(offset * (size - (size * ratios["legacy"]))).astype("int32")
+            pos = np.array([(new_size // 2 - size // 2) - shift[1],
+                            (new_size // 2) + (size // 2) - shift[1],
+                            (new_size // 2 - size // 2) - shift[0],
+                            (new_size // 2) + (size // 2) - shift[0]])
+            bounds = np.array([max(0, pos[0]), min(new_size, pos[1]),
+                               max(0, pos[2]), min(new_size, pos[3])])
+
+            slice_in = [slice(0 - (pos[0] - bounds[0]), size - (pos[1] - bounds[1])),
+                        slice(0 - (pos[2] - bounds[2]), size - (pos[3] - bounds[3]))]
+            slice_out = [slice(bounds[0], bounds[1]), slice(bounds[2], bounds[3])]
+
+            new_mask = np.zeros((new_size, new_size, 1), dtype="float32")
+            new_mask[slice_out[0], slice_out[1], :] = old_mask[slice_in[0], slice_in[1], :]
+
             mask.replace_mask(new_mask)
 
 
