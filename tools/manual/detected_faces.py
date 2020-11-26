@@ -5,6 +5,7 @@ when edits are made in the GUI. """
 
 import logging
 import os
+import sys
 import tkinter as tk
 from copy import deepcopy
 from queue import Queue, Empty
@@ -221,6 +222,11 @@ class DetectedFaces():
             else:
                 folder = input_location
         retval = Alignments(folder, filename)
+        if retval.version == 1.0:
+            logger.error("The Manual Tool is not compatible with legacy Alignments files.")
+            logger.info("You can update legacy Alignments files by using the Extract job in the "
+                        "Alignments tool to re-extract the faces in full-head format.")
+            sys.exit(0)
         logger.debug("folder: %s, filename: %s, alignments: %s", folder, filename, retval)
         return retval
 
@@ -398,7 +404,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             progress_queue.put(1)
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
                 output = "{}_{}{}".format(frame_name, str(face_idx), extension)
-                face.load_aligned(image, size=256, force=True)  # TODO user selectable size
+                # TODO user selectable size
+                face.load_aligned(image, centering="head", size=512, force=True)
                 face.hash, b_image = encode_image_with_hash(face.aligned.face, extension)
                 saver.save(output, b_image)
                 final_faces.append(face.to_alignment())

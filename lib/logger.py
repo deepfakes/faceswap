@@ -189,8 +189,8 @@ def log_setup(loglevel, log_file, command, is_gui=False):
     numeric_loglevel = get_loglevel(loglevel)
     root_loglevel = min(logging.DEBUG, numeric_loglevel)
     rootlogger = _set_root_logger(loglevel=root_loglevel)
-    log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
-                                   "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
+    log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-30s "
+                                   "%(module)-15s %(funcName)-30s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
     f_handler = _file_handler(numeric_loglevel, log_file, log_format, command)
     s_handler = _stream_handler(numeric_loglevel, is_gui)
