@@ -645,6 +645,9 @@ class Extract():  # pylint:disable=too-few-public-methods
             new_mask[slice_out[0], slice_out[1], :] = old_mask[slice_in[0], slice_in[1], :]
 
             mask.replace_mask(new_mask)
+            # Get the affine matrix from recently generated components mask
+            # pylint:disable=protected-access
+            mask._affine_matrix = detected_face.mask["components"].affine_matrix
 
 
 class Merge():  # pylint:disable=too-few-public-methods
