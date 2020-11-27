@@ -53,6 +53,10 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         has a key of **side** (`str`) the value of which is a `dict` of {**filename** (`str`): \
         :class:`lib.align.AlignedFace`}.
 
+        * **versions** (`dict`). The Alignments file versions that the extracted faces originated \
+        from for each key of **side**(`str`). Version 1.0 will be a legacy extract. Anything \
+        above this will be a full-face extract
+
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
         :attr:`learn_mask` is ``True``. Returning dictionary has a key of **side** (`str`) the \
         value of which is a `dict` of {**filename** (`str`): :class:`lib.align.Mask`}.
@@ -86,6 +90,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         self._augment_color = augment_color
         self._no_flip = no_flip
         self._warp_to_landmarks = warp_to_landmarks
+        self._extract_versions = alignments["versions"]
         self._aligned_faces = alignments["aligned_faces"]
         self._masks = dict(masks=alignments.get("masks", None),
                            eyes=alignments.get("masks_eye", None),
@@ -257,6 +262,9 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         """ Crops the training image out of the full extract image based on the centering used in
         the user's configuration settings.
 
+        If legacy extract images are being used then this just returns the extracted batch with
+        their corresponding landmarks.
+
         Parameters
         ----------
         filenames: list
@@ -283,7 +291,6 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         """
         logger.trace("Cropping training images info: (filenames: %s, side: '%s')", filenames, side)
         aligned = [self._aligned_faces[side].get(filename, None) for filename in filenames]
-
         # Raise error on missing alignments
         if any(info is None for info in aligned):
             missing = [filenames[idx] for idx, info in enumerate(aligned) if info is None]
@@ -296,6 +303,10 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
                    "alignments file. You can use the Alignments Tool to help identify missing "
                    "alignments".format(missing))
             raise FaceswapError(msg)
+
+        if self._extract_versions[side] == 1.0:
+            # Legacy extract. Don't crop, just return batch with landmarks
+            return batch, np.array([face.landmarks for face in aligned])
 
         if not self._cache["crop_size"]:
             size = aligned[0].get_cropped_size(self._config["centering"])

@@ -103,13 +103,16 @@ class TrainerBase():
         Returns
         -------
         dict:
-            Includes the key `aligned_faces` holding aligned face information. Also includes the
-            keys `masks` if masks are required for training, `masks_eye` if eye masks are required
-            and `masks_mouth` if mouth masks are required. """
+            Includes the key `aligned_faces` holding aligned face information and the key
+            `versions` indicating the alignments file versions that the faces have come from.
+            In addition, the following optional keys are provided: `masks` if masks are required
+            for training, `masks_eye` if eye masks are required and `masks_mouth` if mouth masks
+            are required. """
         penalized_loss = self._model.config["penalized_mask_loss"]
 
         alignments = _TrainingAlignments(self._model, self._images)
-        retval = dict(aligned_faces=alignments.aligned_faces)
+        retval = dict(aligned_faces=alignments.aligned_faces,
+                      versions=alignments.versions)
 
         if self._model.config["learn_mask"] or penalized_loss:
             logger.debug("Adding masks to training opts dict")
@@ -121,7 +124,9 @@ class TrainerBase():
         if penalized_loss and self._model.config["mouth_multiplier"] > 1:
             retval["masks_mouth"] = alignments.masks_mouth
 
-        logger.debug({key: {k: len(v) for k, v in val.items()} for key, val in retval.items()})
+        logger.debug({key: {k: v if isinstance(v, float) else len(v)
+                            for k, v in val.items()}
+                      for key, val in retval.items()})
         return retval
 
     def _set_tensorboard(self):
@@ -323,8 +328,8 @@ class _Feeder():
     config: :class:`lib.config.FaceswapConfig`
         The configuration for this trainer
     alignments: dict
-        A dictionary containing aligned face data and masks if these are required for training for
-        each side
+        A dictionary containing aligned face data, extract version information and masks if these
+        are required for training for each side
     """
     def __init__(self, images, model, batch_size, config, alignments):
         logger.debug("Initializing %s: num_images: %s, batch_size: %s, config: %s)",
@@ -1042,7 +1047,9 @@ class _TrainingAlignments():
         self._training_size = model.state.training_size
         self._alignments_paths = self._get_alignments_paths()
         self._hashes = self._get_image_hashes(image_list)
-        self._detected_faces = self._load_alignments()
+        self._alignments_version = dict()
+        self._detected_faces = dict()
+        self._load_alignments()
         self._check_all_faces()
         self._aligned_faces = self._get_aligned_faces()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -1052,6 +1059,13 @@ class _TrainingAlignments():
         """ dict: The "a", "b" keys for each side, containing a sub-dictionary with the
         filename as key and :class:`lib.faces.detected_face.aligned` object as value. """
         return self._aligned_faces
+
+    @property
+    def versions(self):
+        """ dict: The "a", "b" keys for each side, with value being the alignment file version
+        that provided the data. This is used to crop the faces correctly based on whether the
+        extracted faces are legacy or full-head extracts. """
+        return self._alignments_version
 
     def _get_alignments_paths(self):
         """ Obtain the alignments file paths from the command line arguments passed to the model.
@@ -1093,9 +1107,11 @@ class _TrainingAlignments():
         """
         retval = dict()
         for side, detected_faces in self._detected_faces.items():
+            centering = "legacy" if self._alignments_version[side] == 1.0 else "head"
+            logger.debug("side: %s, centering: %s", side, centering)
             ret_side = dict()
             for fhash, face in detected_faces.items():
-                face.load_aligned(None, size=self._training_size, centering="head")
+                face.load_aligned(None, size=self._training_size, centering=centering)
                 for filename in self._hash_to_filenames(side, fhash):
                     ret_side[filename] = face.aligned
             retval[side] = ret_side
@@ -1219,21 +1235,18 @@ class _TrainingAlignments():
     def _load_alignments(self):
         """ Load the alignments and convert to :class:`lib.align.DetectedFace` objects.
 
-        Returns
-        -------
-        dict
-            For keys "a" and "b" values are a dict with the key being the sha1 hash of the face
-            and the value being the corresponding :class:`lib.align.DetectedFace` object.
+        Assign the alignments file version to :attr:`_alignments_version` and the converted
+        detected faces to :attr:`_detected_faces` for each side
         """
         logger.debug("Loading alignments")
-        retval = dict()
         for side, fullpath in self._alignments_paths.items():
             logger.debug("side: '%s', path: '%s'", side, fullpath)
             path, filename = os.path.split(fullpath)
             alignments = Alignments(path, filename=filename)
-            retval[side] = self._to_detected_faces(alignments, side)
-        logger.debug("Returning: %s", {k: len(v) for k, v in retval.items()})
-        return retval
+            self._detected_faces[side] = self._to_detected_faces(alignments, side)
+            self._alignments_version[side] = alignments.version
+        logger.debug("alignments_versions: %s, detected_faces: %s, ", self._alignments_version,
+                     {k: len(v) for k, v in self._detected_faces.items()})
 
     def _to_detected_faces(self, alignments, side):
         """ Convert alignments to DetectedFace objects.
