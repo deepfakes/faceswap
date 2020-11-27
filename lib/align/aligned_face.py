@@ -396,13 +396,20 @@ class AlignedFace():
         -------
         int
            The pixel size of a sub-crop image from a full head aligned image
+
+        Notes
+        -----
+        The ROI in relation to the source image is calculated by rounding the padding of one side
+        to the nearest integer then applying this padding to the center of the crop, so the size
+        is calculated in the same way.
         """
         if self._centering != "head":
             raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
                              "centering")
         with self._cache["cropped_size"][1]:
             if not self._cache["cropped_size"][0].get(centering):
-                size = int(np.rint(self._size / self._ratios["head"] * self._ratios[centering]))
+                size = 2 * int(np.rint((self._size / self._ratios["head"])
+                                       * self._ratios[centering] / 2))
                 logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
                 self._cache["cropped_size"][0][centering] = size
         return self._cache["cropped_size"][0][centering]
