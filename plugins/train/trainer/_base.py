@@ -1149,6 +1149,8 @@ class _TrainingAlignments():
             mask = face.mask[self._config["mask_type"]]
             mask.set_blur_and_threshold(blur_kernel=self._config["mask_blur_kernel"],
                                         threshold=self._config["mask_threshold"])
+            if self._alignments_version[side] > 1.0 and self._config["centering"] == "legacy":
+                mask.set_sub_crop(face.aligned.pose.offset["face"] * -1)
             for filename in self._hash_to_filenames(side, fhash):
                 masks[filename] = mask
         return masks

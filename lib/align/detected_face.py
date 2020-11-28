@@ -7,7 +7,7 @@ from zlib import compress, decompress
 import cv2
 import numpy as np
 
-from . import AlignedFace
+from . import AlignedFace, _EXTRACT_RATIOS
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -486,6 +486,7 @@ class Mask():
         self._blur = dict()
         self._blur_kernel = 0
         self._threshold = 0.0
+        self._sub_crop = dict(size=None, slice_in=[], slice_out=[])
         self.set_blur_and_threshold()
 
     @property
@@ -504,6 +505,11 @@ class Mask():
                             mask,
                             self._blur["kernel"],
                             passes=self._blur["passes"]).blurred
+        if self._sub_crop["size"]:  # Crop the mask to the given centering
+            out = np.zeros((self._sub_crop["size"], self._sub_crop["size"], 1), dtype=mask.dtype)
+            slice_in, slice_out = self._sub_crop["slice_in"], self._sub_crop["slice_out"]
+            out[slice_out[0], slice_out[1], :] = mask[slice_in[0], slice_in[1], :]
+            mask = out
         logger.trace("mask shape: %s", mask.shape)
         return mask
 
@@ -616,6 +622,38 @@ class Mask():
             self._blur["type"] = blur_type
             self._blur["passes"] = blur_passes
         self._threshold = (threshold / 100.0) * 255.0
+
+    def set_sub_crop(self, offset):
+        """ Set the internal crop area of the mask to be returned.
+
+        This impacts the returned mask from :attr:`mask` if the requested mask is required for
+        different face centering than what has been stored.
+
+        Parameters
+        ----------
+        offset: :class:`numpy.ndarray`
+            The (x, y) offset from the center point to return the mask for
+
+        Notes
+        -----
+        All masks are currently stored with `face` centering and all crops are for 'legacy`
+        centering. This may change in future
+        """
+        in_padding = (self.stored_size - (self.stored_size * _EXTRACT_RATIOS["face"])) / 2
+        offset *= ((self.stored_size - in_padding) / 2)
+        center = np.rint(offset + self.stored_size / 2).astype("int32")
+
+        adjusted_ratio = _EXTRACT_RATIOS["legacy"] / _EXTRACT_RATIOS["face"]
+        crop_size = 2 * int(np.rint(self.stored_size * adjusted_ratio / 2))
+        roi = np.array([center - crop_size // 2, center + crop_size // 2]).ravel()
+
+        self._sub_crop["size"] = crop_size
+        self._sub_crop["slice_in"] = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
+        self._sub_crop["slice_out"] = [slice(max(roi[1] * -1, 0),
+                                             crop_size - max(0, roi[3] - self.stored_size)),
+                                       slice(max(roi[0] * -1, 0),
+                                             crop_size - max(0, roi[2] - self.stored_size))]
+        logger.trace("in_padding: %s, roi: %s, sub_crop: %s", in_padding, roi, self._sub_crop)
 
     def _adjust_affine_matrix(self, mask_size, affine_matrix):
         """ Adjust the affine matrix for the mask's storage size

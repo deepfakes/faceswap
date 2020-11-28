@@ -347,7 +347,8 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         :class:`numpy.ndarray`
             The batch with masks applied to the final channels
         """
-        logger.trace("Input batch shape: %s, side: %s", batch.shape, side)
+        logger.trace("Input filenames: %s, batch shape: %s, side: %s",
+                     filenames, batch.shape, side)
         size = batch.shape[1]
         for key in ("masks", "eyes", "mouths"):
             item = self._masks[key]
@@ -366,6 +367,9 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
                 masks = np.array([self._get_mask(item[side][filename], size)
                                   for filename in filenames], dtype=batch.dtype)
                 masks = self._resize_masks(size, masks)
+                # TODO Landmark based masks. Are these centered/sized correctly? Check
+                # TODO Make sure when training on legacy face sets that a "face" centered config
+                # doesn't break things
 
             logger.trace("masks: (key: %s, shape: %s)", key, masks.shape)
             batch = np.concatenate((batch, masks), axis=-1)
@@ -420,8 +424,8 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
             retval = item.mask
         return retval
 
-    @staticmethod
-    def _resize_masks(target_size, masks):
+    @classmethod
+    def _resize_masks(cls, target_size, masks):
         """ Resize the masks to the target size """
         logger.trace("target size: %s, masks shape: %s", target_size, masks.shape)
         mask_size = masks.shape[1]

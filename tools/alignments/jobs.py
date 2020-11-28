@@ -12,7 +12,7 @@ from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
-from lib.align import DetectedFace
+from lib.align import DetectedFace, _EXTRACT_RATIOS
 from lib.align.alignments import _VERSION
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
@@ -621,15 +621,14 @@ class Extract():  # pylint:disable=too-few-public-methods
             The detected face to update the masks for
         """
         offset = detected_face.aligned.pose.offset["face"]
-        ratios = detected_face.aligned._ratios  # pylint:disable=protected-access
         for name, mask in detected_face.mask.items():  # Re-center mask and pad to face size
             if name in ("components", "extended"):
                 continue
             old_mask = mask.mask.astype("float32") / 255.0
             size = old_mask.shape[0]
-            new_size = int(size + (size * ratios["face"]) / 2)
+            new_size = int(size + (size * _EXTRACT_RATIOS["face"]) / 2)
 
-            shift = np.rint(offset * (size - (size * ratios["legacy"]))).astype("int32")
+            shift = np.rint(offset * (size - (size * _EXTRACT_RATIOS))).astype("int32")
             pos = np.array([(new_size // 2 - size // 2) - shift[1],
                             (new_size // 2) + (size // 2) - shift[1],
                             (new_size // 2 - size // 2) - shift[0],

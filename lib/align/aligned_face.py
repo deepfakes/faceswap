@@ -56,6 +56,8 @@ _MEAN_FACE_3D = np.array([[4.056931, -11.432347, 1.636229],   # 8 chin LL
                           [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
                           [0.589441, -8.443925, 6.109526]])   # 44 mouth bottom L
 
+_EXTRACT_RATIOS = dict(legacy=0.375, face=0.5, head=0.625)
+
 
 def get_matrix_scaling(matrix):
     """ Given a matrix, return the cv2 Interpolation method and inverse interpolation method for
@@ -158,7 +160,6 @@ class AlignedFace():
         self._size = size
         self._dtype = dtype
         self._is_aligned = is_aligned
-        self._ratios = dict(legacy=0.375, face=0.5, head=0.625)
         self._matrices = dict(legacy=umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
                               face=None,
                               head=None)
@@ -318,7 +319,8 @@ class AlignedFace():
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 
-    def _padding_from_coverage(self, size, coverage_ratio):
+    @classmethod
+    def _padding_from_coverage(cls, size, coverage_ratio):
         """ Return the image padding for a face from coverage_ratio set against a
             pre-padded training image.
 
@@ -334,7 +336,7 @@ class AlignedFace():
         dict
             The padding required, in pixels for 'head', 'face' and 'legacy' face types
         """
-        retval = {_type: round((size * (coverage_ratio - (1 - self._ratios[_type]))) / 2)
+        retval = {_type: round((size * (coverage_ratio - (1 - _EXTRACT_RATIOS[_type]))) / 2)
                   for _type in ("legacy", "face", "head")}
         logger.trace(retval)
         return retval
@@ -362,20 +364,13 @@ class AlignedFace():
                              "centering")
         with self._cache["cropped_roi"][1]:
             if centering not in self._cache["cropped_roi"][0]:
-                # Get offset from center without padding
-                if centering == "legacy":
-                    offset = np.float32((0, 0))
-                else:
-                    offset = self.pose.offset[centering]
+                offset = self.pose.offset.get(centering, np.float32((0, 0)))  # legacy = 0,0
                 offset -= self.pose.offset["head"]
                 offset *= ((self._size - self._padding["head"]) / 2)
 
-                # Get roi from sub image from adjusted center and correct padding
                 center = np.rint(offset + self._size / 2).astype("int32")
-                padding = np.rint((self._size / self._ratios["head"]) *
-                                  self._ratios[centering] / 2).astype("int32")
+                padding = self.get_cropped_size(centering) // 2
                 roi = np.array([center - padding, center + padding]).ravel()
-
                 logger.trace("centering: '%s', center: %s, padding: %s, sub roi: %s",
                              centering, center, padding, roi)
                 self._cache["cropped_roi"][0][centering] = roi
@@ -408,8 +403,8 @@ class AlignedFace():
                              "centering")
         with self._cache["cropped_size"][1]:
             if not self._cache["cropped_size"][0].get(centering):
-                size = 2 * int(np.rint((self._size / self._ratios["head"])
-                                       * self._ratios[centering] / 2))
+                adjusted_ratio = _EXTRACT_RATIOS[centering] / _EXTRACT_RATIOS["head"]
+                size = 2 * int(np.rint(self._size * adjusted_ratio / 2))
                 logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
                 self._cache["cropped_size"][0][centering] = size
         return self._cache["cropped_size"][0][centering]
