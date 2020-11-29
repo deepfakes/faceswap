@@ -136,6 +136,13 @@ class TrainerBase():
         penalized_loss = self._model.config["penalized_mask_loss"]
 
         alignments = _TrainingAlignments(self._model, self._images)
+        if (any(version == 1.0 for version in alignments.versions.values())
+                and self._config["centering"] != "legacy"):
+            logger.warning("You are using legacy extracted faces but have selected '%s' "
+                           "centering which is incompatible. Switching centering to 'legacy'",
+                           self._config["centering"])
+            self._config["centering"] = "legacy"
+            self._model.config["centering"] = "legacy"
         retval = dict(aligned_faces=alignments.aligned_faces,
                       versions=alignments.versions)
 

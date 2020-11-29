@@ -18,6 +18,10 @@ from lib.utils import FaceswapError
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+# TODO Face masks appear to be coming out too big?
+# TODO Test _get_closest_match for speed and correctness
+
+
 class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
     """ A Training Data Generator for compiling data for feeding to a model.
 
@@ -367,10 +371,6 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
                 masks = np.array([self._get_mask(item[side][filename], size)
                                   for filename in filenames], dtype=batch.dtype)
                 masks = self._resize_masks(size, masks)
-                # TODO Face masks appear to be coming out too big?
-                # TODO Make sure when training on legacy face sets that a "face" centered config
-                # doesn't break things
-
             logger.trace("masks: (key: %s, shape: %s)", key, masks.shape)
             batch = np.concatenate((batch, masks), axis=-1)
         logger.trace("Output batch shape: %s, side: %s", batch.shape, side)
@@ -443,7 +443,6 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
     def _get_closest_match(self, filenames, side, batch_src_points):
         """ Only called if the :attr:`_warp_to_landmarks` is ``True``. Gets the closest
         matched 68 point landmarks from the opposite training set. """
-        # TODO Test for speed and correctness
         logger.trace("Retrieving closest matched landmarks: (filenames: '%s', src_points: '%s'",
                      filenames, batch_src_points)
         lm_side = "a" if side == "b" else "b"
