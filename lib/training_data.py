@@ -367,7 +367,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
                 masks = np.array([self._get_mask(item[side][filename], size)
                                   for filename in filenames], dtype=batch.dtype)
                 masks = self._resize_masks(size, masks)
-                # TODO Landmark based masks. Are these centered/sized correctly? Check
+                # TODO Face masks appear to be coming out too big?
                 # TODO Make sure when training on legacy face sets that a "face" centered config
                 # doesn't break things
 

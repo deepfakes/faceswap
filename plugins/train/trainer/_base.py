@@ -72,9 +72,9 @@ class TrainerBase():
     def __init__(self, model, images, batch_size, configfile):
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
-        self._config = _get_config(".".join(self.__module__.split(".")[-2:]),
-                                   configfile=configfile)
         self._model = model
+        self._config = self._get_config(configfile)
+
         self._model.state.add_session_batchsize(batch_size)
         self._images = images
         self._sides = sorted(key for key in self._images.keys())
@@ -95,6 +95,31 @@ class TrainerBase():
                                      self._feeder,
                                      self._images)
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _get_config(self, configfile):
+        """ Get the saved training config options. Override any global settings with the setting
+        provided from the model's saved config.
+
+        Parameters
+        -----------
+        configfile: str
+            The path to a custom configuration file. If ``None`` is passed then configuration is
+            loaded from the default :file:`.config.train.ini` file.
+
+        Returns
+        -------
+        dict
+            The trainer configuration options
+        """
+        config = _get_config(".".join(self.__module__.split(".")[-2:]),
+                             configfile=configfile)
+        for key, val in config.items():
+            if key in self._model.config and val != self._model.config[key]:
+                new_val = self._model.config[key]
+                logger.debug("Updating global training config item for '%s' form '%s' to '%s'",
+                             key, val, new_val)
+                config[key] = new_val
+        return config
 
     def _get_alignments_data(self):
         """ Extrapolate alignments and masks from the alignments file into a `dict` for the
@@ -1189,13 +1214,20 @@ class _TrainingAlignments():
         """
         logger.trace("side: %s, detected_faces: %s, area: %s", side, detected_faces, area)
         masks = dict()
+        if self._alignments_version[side] == 1.0:
+            centering = "legacy"
+            size = self._training_size
+        else:
+            centering = self._config["centering"]
+            size = list(self._aligned_faces[side].values())[0].get_cropped_size(centering)
         for fhash, face in detected_faces.items():
             mask = partial(face.get_landmark_mask,
-                           self._training_size,
+                           size,
                            area,
                            aligned=True,
-                           dilation=self._training_size // 32,
-                           blur_kernel=self._training_size // 16,
+                           centering=centering,
+                           dilation=size // 32,
+                           blur_kernel=size // 16,
                            as_zip=True)
             for filename in self._hash_to_filenames(side, fhash):
                 masks[filename] = mask

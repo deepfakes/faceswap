@@ -142,7 +142,8 @@ class DetectedFace():
         fsmask.add(mask, affine_matrix, interpolator)
         self.mask[name] = fsmask
 
-    def get_landmark_mask(self, size, area, aligned=True, dilation=0, blur_kernel=0, as_zip=False):
+    def get_landmark_mask(self, size, area,
+                          aligned=True, centering="head", dilation=0, blur_kernel=0, as_zip=False):
         """ Obtain a single channel mask based on the face's landmark points.
 
         Parameters
@@ -154,9 +155,17 @@ class DetectedFace():
         area: ["mouth", "eyes"]
             The type of mask to obtain. `face` is a full face mask the others are masks for those
             specific areas
-        aligned: bool
+        aligned: bool, optional
             ``True`` if the returned mask should be for an aligned face. ``False`` if a full frame
-            mask should be returned
+            mask should be returned. Default ``True``
+        centering: ["legacy", "face", "head"], optional
+            Only used if `aligned`=``True``. The centering for the landmarks based mask. Should be
+            the same as the centering used for the extracted face that this mask will be applied
+            to. "legacy" places the nose in the center of the image (the original method for
+            aligning). "face" aligns for the nose to be in the center of the face (top to bottom)
+            but the center of the skull for left to right. "head" aligns for the center of the
+            skull (in 3D space) being the center of the extracted image, with the crop holding the
+            full head. Default: `"face"`
         dilation: int, optional
             The amount of dilation to apply to the mask. `0` for none. Default: `0`
         blur_kernel: int, optional
@@ -175,12 +184,13 @@ class DetectedFace():
         # TODO Face mask generation from landmarks
         logger.trace("size: %s, area: %s, aligned: %s, dilation: %s, blur_kernel: %s, as_zip: %s",
                      size, area, aligned, dilation, blur_kernel, as_zip)
-        areas = dict(mouth=[slice(48, 60)],
-                     eyes=[slice(36, 42), slice(42, 48)])
-        if aligned and self.aligned is not None and self.aligned.size != size:
-            self.load_aligned(None, size=size, force=True)
-        size = (size, size) if aligned else size
-        landmarks = self.aligned.landmarks if aligned else self.landmarks_xy
+        areas = dict(mouth=[slice(48, 60)], eyes=[slice(36, 42), slice(42, 48)])
+        if aligned:
+            face = AlignedFace(self.landmarks_xy, centering=centering, size=size)
+            landmarks = face.landmarks
+            size = (size, size)
+        else:
+            landmarks = self.landmarks_xy
         points = [landmarks[zone] for zone in areas[area]]  # pylint:disable=unsubscriptable-object
         mask = _LandmarksMask(size, points, dilation=dilation, blur_kernel=blur_kernel)
         retval = mask.get(as_zip=as_zip)
@@ -271,7 +281,7 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, dtype=None, centering="legacy", force=False):
+    def load_aligned(self, image, size=256, dtype=None, centering="head", force=False):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
@@ -296,7 +306,7 @@ class DetectedFace():
             be in the center of the face (top to bottom) but the center of the skull for left to
             right. "head" aligns for the center of the skull (in 3D space) being the center of the
             extracted image, with the crop holding the full head.
-            Default: `"legacy"`
+            Default: `"head"`
         force: bool, optional
             Force an update of the aligned face, even if it is already loaded. Default: ``False``
 
@@ -318,7 +328,7 @@ class DetectedFace():
                                        is_aligned=False)
 
     def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None,
-                       centering="legacy", is_aligned_face=False):
+                       centering="face", is_aligned_face=False):
         """ Align a face in the correct dimensions for feeding into a model.
 
         Parameters
@@ -379,7 +389,7 @@ class DetectedFace():
                      size, coverage_ratio, dtype)
         self.reference = AlignedFace(self.landmarks_xy,
                                      image=image,
-                                     centering="legacy",
+                                     centering="face",
                                      size=size,
                                      coverage_ratio=coverage_ratio,
                                      dtype=dtype,
