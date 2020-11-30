@@ -395,7 +395,11 @@ class Mask():  # pylint:disable=too-few-public-methods
         mask.set_blur_and_threshold(**self._output["opts"])
         if not self._output["full_frame"] or self._input_is_faces:
             if self._input_is_faces:
-                face = detected_face.image
+                detected_face.load_feed_face(detected_face.image,
+                                             size=detected_face.image.shape[0],
+                                             centering="face",
+                                             is_aligned_face=True)
+                face = detected_face.feed.face
             else:
                 centering = "legacy" if self._alignments.version == 1.0 else "face"
                 detected_face.load_aligned(detected_face.image, centering=centering)
