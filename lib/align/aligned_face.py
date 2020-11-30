@@ -135,7 +135,7 @@ class AlignedFace():
         the image (the original method for aligning). "face" aligns for the nose to be in the
         center of the face (top to bottom) but the center of the skull for left to right. "head"
         aligns for the center of the skull (in 3D space) being the center of the extracted image,
-        with the crop holding the full head. Default: `"legacy"`
+        with the crop holding the full head. Default: `"face"`
     size: int, optional
         The size in pixels, of each edge of the final aligned face. Default: `64`
     coverage_ratio: float, optional
@@ -149,7 +149,7 @@ class AlignedFace():
         Indicates that the :attr:`image` is an aligned face rather than a frame.
         Default: ``False``
     """
-    def __init__(self, landmarks, image=None, centering="legacy", size=64, coverage_ratio=1.0,
+    def __init__(self, landmarks, image=None, centering="face", size=64, coverage_ratio=1.0,
                  dtype=None, is_aligned=False):
         logger.trace("Initializing: %s (image shape: %s, centering: '%s', size: %s, "
                      "coverage_ratio: %s, dtype: %s, is_aligned: %s)", self.__class__.__name__,
@@ -165,13 +165,7 @@ class AlignedFace():
                               head=None)
         self._padding = self._padding_from_coverage(size, coverage_ratio)
 
-        self._cache = dict(pose=[None, Lock()],
-                           original_roi=[None, Lock()],
-                           landmarks=[None, Lock()],
-                           adjusted_matrix=[None, Lock()],
-                           interpolators=[None, Lock()],
-                           cropped_roi=[dict(), Lock()],
-                           cropped_size=[dict(), Lock()])
+        self._cache = self._set_cache()
 
         self._face = self._extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
@@ -267,6 +261,27 @@ class AlignedFace():
                 self._cache["interpolators"][0] = interpolators
         return self._cache["interpolators"][0]
 
+    @classmethod
+    def _set_cache(cls):
+        """ Set the cache items.
+
+        Items are cached so that they are only created the first time they are called.
+        Each item includes a threading lock to make cache creation thread safe.
+
+        Returns
+        -------
+        dict
+            The Aligned Face cache
+        """
+        return dict(pose=[None, Lock()],
+                    original_roi=[None, Lock()],
+                    landmarks=[None, Lock()],
+                    adjusted_matrix=[None, Lock()],
+                    interpolators=[None, Lock()],
+                    cropped_roi=[dict(), Lock()],
+                    cropped_size=[dict(), Lock()],
+                    cropped_slices=[dict(), Lock()])
+
     def transform_points(self, points, invert=False):
         """ Perform transformation on a series of (x, y) co-ordinates in world space into
         aligned face space.
@@ -309,7 +324,12 @@ class AlignedFace():
         """
         if image is None:
             logger.debug("_extract_face called without a loaded image. Returning empty face.")
+            if self._is_aligned:
+                raise ValueError("An aligned face must be provided if calling with "
+                                 "'is_aligned=True'")
             return None
+        if self._is_aligned and self._centering != "head":  # Crop out the sub face from full head
+            image = self._convert_full_head_to_alternative_centering(image)
         if self._is_aligned:  # Resize the given aligned face
             original_size = image.shape[0]
             interp = cv2.INTER_CUBIC if original_size < self._size else cv2.INTER_AREA
@@ -318,6 +338,44 @@ class AlignedFace():
             retval = transform_image(image, self.matrix, self._size, self.padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
+
+    def _convert_full_head_to_alternative_centering(self, image):
+        """ When the face being loaded is pre-aligned, the loaded image will have 'head' centering
+        so it needs to be cropped out to the appropriate centering.
+
+        This function temporarily converts this object to a full head aligned face, extracts the
+        sub-cropped face to the correct centering, revers the sub crop and returns the cropped
+        face.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The original head-centered aligned image
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The aligned image with the correct centering
+        """
+        # store requested size + centering whilst temporary converting to full head extract
+        old_centering = self._centering
+        old_size = self.size
+        self._centering = "head"
+        self._size = image.shape[0]
+
+        # crop the requested centering from image
+        size = self.get_cropped_size(old_centering)
+        out = np.zeros((size, size, image.shape[-1]), dtype=image.dtype)
+        slices = self.get_cropped_slices(old_centering)
+        out[slices["out"][0], slices["out"][1], :] = image[slices["in"][0], slices["in"][1], :]
+
+        # Revert back to the correct centering and size and reset the cache
+        self._centering = old_centering
+        self._size = old_size
+        self._cache = self._set_cache()
+        logger.trace("Cropped from aligned extract: (centering: %s, in shape: %s, out shape: %s)",
+                     old_centering, image.shape, out.shape)
+        return out
 
     @classmethod
     def _padding_from_coverage(cls, size, coverage_ratio):
@@ -408,6 +466,37 @@ class AlignedFace():
                 logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
                 self._cache["cropped_size"][0][centering] = size
         return self._cache["cropped_size"][0][centering]
+
+    def get_cropped_slices(self, centering):
+        """ Obtain the slices to turn a full head extract into an alternatively centered extract.
+
+        Parameters
+        ----------
+        centering: ["legacy", "face"]
+            The type of centering to obtain the region of interest for. "legacy" places the nose
+            in the center of the image (the original method for aligning). "face" aligns for the
+            nose to be in the center of the face (top to bottom) but the center of the skull for
+            left to right.
+
+        Returns
+        -------
+        dict
+            The slices for an input full head image and output cropped image
+        """
+        if self._centering != "head":
+            raise ValueError("Cropped slices can only be obtained from an aligned face with "
+                             "'head' centering")
+        with self._cache["cropped_slices"][1]:
+            if not self._cache["cropped_slices"][0].get(centering):
+                size = self.get_cropped_size(centering)
+                roi = self.get_cropped_roi(centering)
+                slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
+                slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - self.size)),
+                             slice(max(roi[0] * -1, 0), size - max(0, roi[2] - self.size))]
+            self._cache["cropped_slices"][0][centering] = {"in": slice_in, "out": slice_out}
+            logger.trace("centering: %s, cropped_slices: %s",
+                         centering, self._cache["cropped_slices"][0][centering])
+        return self._cache["cropped_slices"][0][centering]
 
 
 class PoseEstimate():
