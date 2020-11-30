@@ -323,11 +323,8 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         cropped = np.zeros((batch.shape[0], size, size, batch.shape[3]), dtype=batch.dtype)
 
         for out, align, img in zip(cropped, aligned, batch):
-            roi = align.get_cropped_roi(self._config["centering"])
-            slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
-            slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - align.size)),
-                         slice(max(roi[0] * -1, 0), size - max(0, roi[2] - align.size))]
-            out[slice_out[0], slice_out[1], :] = img[slice_in[0], slice_in[1], :]
+            slices = align.get_cropped_slices(self._config["centering"])
+            out[slices["out"][0], slices["out"][1], :] = img[slices["in"][0], slices["in"][1], :]
         return cropped, landmarks
 
     def _apply_mask(self, filenames, batch, side):
