@@ -493,9 +493,9 @@ class AlignedFace():
                 slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
                 slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - self.size)),
                              slice(max(roi[0] * -1, 0), size - max(0, roi[2] - self.size))]
-            self._cache["cropped_slices"][0][centering] = {"in": slice_in, "out": slice_out}
-            logger.trace("centering: %s, cropped_slices: %s",
-                         centering, self._cache["cropped_slices"][0][centering])
+                self._cache["cropped_slices"][0][centering] = {"in": slice_in, "out": slice_out}
+                logger.trace("centering: %s, cropped_slices: %s",
+                             centering, self._cache["cropped_slices"][0][centering])
         return self._cache["cropped_slices"][0][centering]
 
 
