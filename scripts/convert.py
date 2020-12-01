@@ -15,7 +15,7 @@ from tqdm import tqdm
 from scripts.fsmedia import Alignments, PostProcess, finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
-from lib.align import DetectedFace
+from lib.align import AlignedFace, DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.image import read_image_hash, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
@@ -852,10 +852,10 @@ class Predict():
             if batch:
                 logger.trace("Batching to predictor. Frames: %s, Faces: %s",
                              len(batch), faces_seen)
-                detected_batch = [detected_face for item in batch
-                                  for detected_face in item["detected_faces"]]
+                feed_batch = [feed_face for item in batch
+                              for feed_face in item["feed_faces"]]
                 if faces_seen != 0:
-                    feed_faces = self._compile_feed_faces(detected_batch)
+                    feed_faces = self._compile_feed_faces(feed_batch)
                     batch_size = None
                     if is_amd and feed_faces.shape[0] != self._batchsize:
                         logger.verbose("Fallback to BS=1")
@@ -885,43 +885,53 @@ class Predict():
         Parameters
         ----------
         item: dict
-            The incoming image and list of :class:`~lib.align.DetectedFace` objects
+            The incoming image, list of :class:`~lib.align.DetectedFace` objects and list of
+            :class:`~lib.align.AlignedFace` objects for the feed face(s) and list of
+            :class:`~lib.align.AlignedFace` objects for the reference face(s)
 
         """
         logger.trace("Loading aligned faces: '%s'", item["filename"])
+        feed_faces = []
+        reference_faces = []
         for detected_face in item["detected_faces"]:
-            detected_face.load_feed_face(item["image"],
-                                         size=self._sizes["input"],
-                                         coverage_ratio=self._coverage_ratio,
-                                         dtype="float32")
+            feed_face = AlignedFace(detected_face.landmarks_xy,
+                                    image=item["image"],
+                                    centering=self._model.config["centering"],
+                                    size=self._sizes["input"],
+                                    coverage_ratio=self._coverage_ratio,
+                                    dtype="float32")
             if self._sizes["input"] == self._sizes["output"]:
-                detected_face.reference = detected_face.feed
+                reference_faces.append(feed_face)
             else:
-                detected_face.load_reference_face(item["image"],
-                                                  size=self._sizes["output"],
-                                                  coverage_ratio=self._coverage_ratio,
-                                                  dtype="float32")
+                reference_faces.append(AlignedFace(detected_face.landmarks_xy,
+                                                   image=item["image"],
+                                                   centering=self._model.config["centering"],
+                                                   size=self._sizes["output"],
+                                                   coverage_ratio=self._coverage_ratio,
+                                                   dtype="float32"))
+            feed_faces.append(feed_face)
+        item["feed_faces"] = feed_faces
+        item["reference_faces"] = reference_faces
         logger.trace("Loaded aligned faces: '%s'", item["filename"])
 
     @staticmethod
-    def _compile_feed_faces(detected_faces):
+    def _compile_feed_faces(feed_faces):
         """ Compile a batch of faces for feeding into the Predictor.
 
         Parameters
         ----------
-        detected_faces: list
-            List of `~lib.align.DetectedFace` objects
+        feed_faces: list
+            List of :class:`~lib.align.AlignedFace` objects sized for feeding into the model
 
         Returns
         -------
         :class:`numpy.ndarray`
             A batch of faces ready for feeding into the Faceswap model.
         """
-        logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
-        feed_faces = np.stack([detected_face.feed.face[..., :3]
-                               for detected_face in detected_faces]) / 255.0
-        logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
-        return feed_faces
+        logger.trace("Compiling feed face. Batchsize: %s", len(feed_faces))
+        retval = np.stack([feed_face.face[..., :3] for feed_face in feed_faces]) / 255.0
+        logger.trace("Compiled Feed faces. Shape: %s", retval.shape)
+        return retval
 
     def _predict(self, feed_faces, batch_size=None):
         """ Run the Faceswap models' prediction function.
@@ -978,9 +988,9 @@ class Predict():
             else:
                 item["swapped_faces"] = swapped_faces[pointer:pointer + num_faces]
 
-            logger.trace("Putting to queue. ('%s', detected_faces: %s, swapped_faces: %s)",
-                         item["filename"], len(item["detected_faces"]),
-                         item["swapped_faces"].shape[0])
+            logger.trace("Putting to queue. ('%s', detected_faces: %s, reference_faces: %s, "
+                         "swapped_faces: %s)", item["filename"], len(item["detected_faces"]),
+                         len(item["reference_faces"]), item["swapped_faces"].shape[0])
             pointer += num_faces
         self._out_queue.put(batch)
         logger.trace("Queued out batch. Batchsize: %s", len(batch))

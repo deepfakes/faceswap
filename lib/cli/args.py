@@ -774,13 +774,6 @@ class ConvertArgs(ExtractConvertArgs):
                  "this to, it will never attempt to use more processes than are available on "
                  "your system. If singleprocess is enabled this setting will be ignored."))
         argument_list.append(dict(
-            opts=("-d", "--distributed"),
-            action="store_true",
-            default=False,
-            backend="nvidia",
-            group="settings",
-            help="Use the Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."))
-        argument_list.append(dict(
             opts=("-t", "--trainer"),
             type=str.lower,
             choices=PluginLoader.get_available_models(),

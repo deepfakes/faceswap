@@ -226,17 +226,21 @@ class Converter():
         background = predicted["image"] / np.array(255.0, dtype="float32")
         placeholder[:, :, :3] = background
 
-        for new_face, detected_face in zip(predicted["swapped_faces"],
-                                           predicted["detected_faces"]):
+        for new_face, detected_face, reference_face in zip(predicted["swapped_faces"],
+                                                           predicted["detected_faces"],
+                                                           predicted["reference_faces"]):
             predicted_mask = new_face[:, :, -1] if new_face.shape[2] == 4 else None
             new_face = new_face[:, :, :3]
-            interpolator = detected_face.reference.interpolators[1]
+            interpolator = reference_face.interpolators[1]
 
-            new_face = self._pre_warp_adjustments(new_face, detected_face, predicted_mask)
+            new_face = self._pre_warp_adjustments(new_face,
+                                                  detected_face,
+                                                  reference_face,
+                                                  predicted_mask)
 
             # Warp face with the mask
             cv2.warpAffine(new_face,
-                           detected_face.reference.adjusted_matrix,
+                           reference_face.adjusted_matrix,
                            frame_size,
                            placeholder,
                            flags=cv2.WARP_INVERSE_MAP | interpolator,
@@ -247,7 +251,7 @@ class Converter():
 
         return placeholder, background
 
-    def _pre_warp_adjustments(self, new_face, detected_face, predicted_mask):
+    def _pre_warp_adjustments(self, new_face, detected_face, reference_face, predicted_mask):
         """ Run any requested adjustments that can be performed on the raw output from the Faceswap
         model.
 
@@ -260,6 +264,8 @@ class Converter():
             The swapped face received from the faceswap model.
         detected_face: :class:`~lib.align.DetectedFace`
             The detected_face object as defined in :class:`scripts.convert.Predictor`
+        reference_face: :class:`~lib.align.AlignedFace`
+            The aligned face object sized to the model output of the original face for reference
         predicted_mask: :class:`numpy.ndarray` or ``None``
             The predicted mask output from the Faceswap model. ``None`` if the model
             did not learn a mask
@@ -272,7 +278,7 @@ class Converter():
         """
         logger.trace("new_face shape: %s, predicted_mask shape: %s", new_face.shape,
                      predicted_mask.shape if predicted_mask is not None else None)
-        old_face = detected_face.reference.face[..., :3] / 255.0
+        old_face = reference_face.face[..., :3] / 255.0
         new_face = self._adjustments["box"].run(new_face)
         new_face, raw_mask = self._get_image_mask(new_face, detected_face, predicted_mask)
         if self._adjustments["color"] is not None:

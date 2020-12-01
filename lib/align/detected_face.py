@@ -91,7 +91,6 @@ class DetectedFace():
 
         self.aligned = None
         self.feed = None
-        self.reference = None
         logger.trace("Initialized %s", self.__class__.__name__)
 
     @property
@@ -261,7 +260,6 @@ class DetectedFace():
         # Manual tool and legacy alignments will not have a mask
         self.aligned = None
         self.feed = None
-        self.reference = None
 
         if alignment.get("mask", None) is not None:
             self.mask = dict()
@@ -367,34 +365,6 @@ class DetectedFace():
                                 dtype=dtype,
                                 is_aligned=is_aligned_face)
 
-    def load_reference_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
-        """ Align a face in the correct dimensions for reference against the output from a model.
-
-        Parameters
-        ----------
-        image: numpy.ndarray
-            The image that contains the face to be aligned
-        size: int
-            The size of the face in pixels to be fed into the model
-        coverage_ratio: float, optional
-            the ratio of the extracted image that was used for training. Default: `0.625`
-        dtype: str, optional
-            Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
-
-        Notes
-        -----
-        This method must be executed to get access to the attribute :attr:`reference`.
-        """
-        logger.trace("Loading reference face: (size: %s, coverage_ratio: %s, dtype: %s)",
-                     size, coverage_ratio, dtype)
-        self.reference = AlignedFace(self.landmarks_xy,
-                                     image=image,
-                                     centering="face",
-                                     size=size,
-                                     coverage_ratio=coverage_ratio,
-                                     dtype=dtype,
-                                     is_aligned=False)
-
 
 class _LandmarksMask():  # pylint:disable=too-few-public-methods
     """ Create a single channel mask from aligned landmark points.
@@ -485,7 +455,6 @@ class Mask():
     stored_size: int
         The size, in pixels, of the stored mask across its height and width.
     """
-
     def __init__(self, storage_size=128):
         self.stored_size = storage_size
 
