@@ -64,6 +64,7 @@ class Convert():  # pylint:disable=too-few-public-methods
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
         self._converter = Converter(self._predictor.output_size,
                                     self._predictor.coverage_ratio,
+                                    self._predictor.centering,
                                     self._disk_io.draw_transparent,
                                     self._disk_io.pre_encode,
                                     arguments,
@@ -656,6 +657,7 @@ class Predict():
         self._batchsize = self._get_batchsize(queue_size)
         self._sizes = self._get_io_sizes()
         self._coverage_ratio = self._model.coverage_ratio
+        self._centering = self._model.config["centering"]
 
         self._thread = self._launch_predictor()
         logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self._out_queue)
@@ -690,6 +692,11 @@ class Predict():
     def coverage_ratio(self):
         """ float: The coverage ratio that the model was trained at. """
         return self._coverage_ratio
+
+    @property
+    def centering(self):
+        """ str: The centering that the model was trained on (`"face"` or `"legacy"`) """
+        return self._centering
 
     @property
     def has_predicted_mask(self):
@@ -896,7 +903,7 @@ class Predict():
         for detected_face in item["detected_faces"]:
             feed_face = AlignedFace(detected_face.landmarks_xy,
                                     image=item["image"],
-                                    centering=self._model.config["centering"],
+                                    centering=self._centering,
                                     size=self._sizes["input"],
                                     coverage_ratio=self._coverage_ratio,
                                     dtype="float32")
@@ -905,7 +912,7 @@ class Predict():
             else:
                 reference_faces.append(AlignedFace(detected_face.landmarks_xy,
                                                    image=item["image"],
-                                                   centering=self._model.config["centering"],
+                                                   centering=self._centering,
                                                    size=self._sizes["output"],
                                                    coverage_ratio=self._coverage_ratio,
                                                    dtype="float32"))

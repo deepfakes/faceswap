@@ -15,13 +15,12 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from lib.align import transform_image
+from lib.align import DetectedFace, transform_image
 from lib.cli.args import ConvertArgs
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import ControlPanel, ControlPanelOption
 from lib.convert import Converter
-from lib.align import DetectedFace
 from lib.multithreading import MultiThread
 from lib.utils import FaceswapError
 from lib.queue_manager import queue_manager
@@ -199,6 +198,7 @@ class Samples():
         self._predictor = Predict(queue_manager.get_queue("preview_predict_in"),
                                   sample_size,
                                   arguments)
+        self._display.set_centering(self._predictor.centering)
         self.generate()
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -301,11 +301,11 @@ class Samples():
 
         * Picks a random face from each indices group.
 
-        * Takes the first face from the image (if there) are multiple faces. Adds the images to \
-            :attr:`self._input_images`.
+        * Takes the first face from the image (if there are multiple faces). Adds the images to \
+        :attr:`self._input_images`.
 
-        * Sets :attr:`_display.source` to the input images and flags that the display should \
-            be updated
+        * Sets :attr:`_display.source` to the input images and flags that the display should be \
+        updated
         """
         self._input_images = list()
         for selection in self._random_choice:
@@ -395,6 +395,7 @@ class Patch():
         configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._converter = Converter(output_size=self._samples.predictor.output_size,
                                     coverage_ratio=self._samples.predictor.coverage_ratio,
+                                    centering=self._samples.predictor.centering,
                                     draw_transparent=False,
                                     pre_encode=None,
                                     arguments=self._generate_converter_arguments(arguments,
@@ -596,6 +597,7 @@ class FacesDisplay():
         self._padding = padding
 
         self._faces = dict()
+        self._centering = None
         self._faces_source = None
         self._faces_dest = None
         self._tk_image = None
@@ -618,6 +620,17 @@ class FacesDisplay():
     def _total_columns(self):
         """ Return the total number of images that are being displayed """
         return len(self.source)
+
+    def set_centering(self, centering):
+        """ The centering that the model uses is not known at initialization time.
+        Set :attr:`_centering` when the model has been loaded.
+
+        Parameters
+        ----------
+        centering: str
+            The centering that the model was trained on
+        """
+        self._centering = centering
 
     def set_display_dimensions(self, dimensions):
         """ Adjust the size of the frame that will hold the preview samples.
@@ -699,7 +712,7 @@ class FacesDisplay():
         for image in self.source:
             detected_face = image["detected_faces"][0]
             src_img = image["image"]
-            detected_face.load_aligned(src_img, self._size)
+            detected_face.load_aligned(src_img, size=self._size, centering=self._centering)
             matrix = detected_face.aligned.matrix
             self._faces.setdefault("filenames",
                                    list()).append(os.path.splitext(image["filename"])[0])
