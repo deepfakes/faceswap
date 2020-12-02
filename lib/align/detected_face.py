@@ -90,7 +90,6 @@ class DetectedFace():
         self.hash = None
 
         self.aligned = None
-        self.feed = None
         logger.trace("Initialized %s", self.__class__.__name__)
 
     @property
@@ -259,7 +258,6 @@ class DetectedFace():
         self.hash = alignment.get("hash", None)
         # Manual tool and legacy alignments will not have a mask
         self.aligned = None
-        self.feed = None
 
         if alignment.get("mask", None) is not None:
             self.mask = dict()
@@ -324,46 +322,6 @@ class DetectedFace():
                                        coverage_ratio=1.0,
                                        dtype=dtype,
                                        is_aligned=False)
-
-    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None,
-                       centering="face", is_aligned_face=False):
-        """ Align a face in the correct dimensions for feeding into a model.
-
-        Parameters
-        ----------
-        image: numpy.ndarray
-            The image that contains the face to be aligned
-        size: int
-            The size of the face in pixels to be fed into the model
-        coverage_ratio: float, optional
-            the ratio of the extracted image that was used for training. Default: `0.625`
-        dtype: str, optional
-            Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
-        centering: ["legacy", "face", "head"], optional
-            The type of extracted face that should be loaded. "legacy" places the nose in the
-            center of the image (the original method for aligning). "face" aligns for the nose to
-            be in the center of the face (top to bottom) but the center of the skull for left to
-            right. "head" aligns for the center of the skull (in 3D space) being the center of the
-            extracted image, with the crop holding the full head.
-            Default: `"legacy"`
-        is_aligned_face: bool, optional
-            Indicates that the :attr:`image` is an aligned face rather than a frame.
-            Default: ``False``
-
-        Notes
-        -----
-        This method must be executed to get access to the :attr:`feed` attribute.
-        """
-        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s, "
-                     "centering: %s, is_aligned_face: %s)", size, coverage_ratio, dtype,
-                     centering, is_aligned_face)
-        self.feed = AlignedFace(self.landmarks_xy,
-                                image=image,
-                                centering=centering,
-                                size=size,
-                                coverage_ratio=coverage_ratio,
-                                dtype=dtype,
-                                is_aligned=is_aligned_face)
 
 
 class _LandmarksMask():  # pylint:disable=too-few-public-methods

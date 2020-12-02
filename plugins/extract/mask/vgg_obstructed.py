@@ -34,7 +34,7 @@ class Mask(Masker):
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        input_ = [face.feed.face[..., :3] for face in batch["detected_faces"]]
+        input_ = [feed.face[..., :3] for feed in batch["feed_faces"]]
         batch["feed"] = input_ - np.mean(input_, axis=(1, 2))[:, None, None, :]
         logger.trace("feed shape: %s", batch["feed"].shape)
         return batch

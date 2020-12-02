@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import Alignments, DetectedFace
+from lib.align import Alignments, AlignedFace, DetectedFace
 from lib.image import FacesLoader, ImagesLoader, ImagesSaver
 
 from lib.multithreading import MultiThread
@@ -395,11 +395,11 @@ class Mask():  # pylint:disable=too-few-public-methods
         mask.set_blur_and_threshold(**self._output["opts"])
         if not self._output["full_frame"] or self._input_is_faces:
             if self._input_is_faces:
-                detected_face.load_feed_face(detected_face.image,
-                                             size=detected_face.image.shape[0],
-                                             centering="face",
-                                             is_aligned_face=True)
-                face = detected_face.feed.face
+                face = AlignedFace(detected_face.landmarks_xy,
+                                   image=detected_face.image,
+                                   centering="face",
+                                   size=detected_face.image.shape[0],
+                                   is_aligned=True).face
             else:
                 centering = "legacy" if self._alignments.version == 1.0 else "face"
                 detected_face.load_aligned(detected_face.image, centering=centering)
