@@ -48,8 +48,8 @@ class KSession():
     """
     def __init__(self, name, model_path, model_kwargs=None, allow_growth=False, exclude_gpus=None):
         logger.trace("Initializing: %s (name: %s, model_path: %s, model_kwargs: %s, "
-                     "allow_growth: %s, exclude_gpus)", self.__class__.__name__, name, model_path,
-                     model_kwargs, allow_growth, exclude_gpus)
+                     "allow_growth: %s, exclude_gpus: %s)", self.__class__.__name__, name,
+                     model_path, model_kwargs, allow_growth, exclude_gpus)
         self._name = name
         self._backend = get_backend()
         self._set_session(allow_growth, exclude_gpus)

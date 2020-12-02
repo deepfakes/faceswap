@@ -631,12 +631,11 @@ class FaceFilter(PostProcessAction):
         ret_faces = list()
         for idx, detect_face in enumerate(extract_media.detected_faces):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
-            check_item.load_aligned(extract_media.image)
-            if not self._filter.check(check_item):
+            if not self._filter.check(extract_media.image, check_item):
                 logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",
                                extract_media.filename, idx)
                 continue
             logger.trace("Accepting recognised face. Frame: %s. Face: %s",
                          extract_media.filename, idx)
             ret_faces.append(detect_face)
-        extract_media.detected_faces = ret_faces
+        extract_media.add_detected_faces(ret_faces)
