@@ -6,7 +6,6 @@ from threading import Lock
 
 import cv2
 import numpy as np
-from skimage.transform._geometric import _umeyama as umeyama
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -160,7 +159,7 @@ class AlignedFace():
         self._size = size
         self._dtype = dtype
         self._is_aligned = is_aligned
-        self._matrices = dict(legacy=umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
+        self._matrices = dict(legacy=_umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
                               face=None,
                               head=None)
         self._padding = self._padding_from_coverage(size, coverage_ratio)
@@ -605,3 +604,81 @@ class PoseEstimate():
             offset[key] = center - (0.5, 0.5)
         logger.trace("offset: %s", offset)
         return offset
+
+
+def _umeyama(source, destination, estimate_scale):
+    """Estimate N-D similarity transformation with or without scaling.
+
+    Imported, and slightly adapted, directly from:
+    https://github.com/scikit-image/scikit-image/blob/master/skimage/transform/_geometric.py
+
+
+    Parameters
+    ----------
+    source: :class:`numpy.ndarray`
+        (M, N) array source coordinates.
+    destination: :class:`numpy.ndarray`
+        (M, N) array destination coordinates.
+    estimate_scale: bool
+        Whether to estimate scaling factor.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        (N + 1, N + 1) The homogeneous similarity transformation matrix. The matrix contains
+        NaN values only if the problem is not well-conditioned.
+
+    References
+    ----------
+    .. [1] "Least-squares estimation of transformation parameters between two
+            point patterns", Shinji Umeyama, PAMI 1991, :DOI:`10.1109/34.88573`
+    """
+    # pylint:disable=invalid-name,too-many-locals
+    num = source.shape[0]
+    dim = source.shape[1]
+
+    # Compute mean of source and destination.
+    src_mean = source.mean(axis=0)
+    dst_mean = destination.mean(axis=0)
+
+    # Subtract mean from source and destination.
+    src_demean = source - src_mean
+    dst_demean = destination - dst_mean
+
+    # Eq. (38).
+    A = dst_demean.T @ src_demean / num
+
+    # Eq. (39).
+    d = np.ones((dim,), dtype=np.double)
+    if np.linalg.det(A) < 0:
+        d[dim - 1] = -1
+
+    T = np.eye(dim + 1, dtype=np.double)
+
+    U, S, V = np.linalg.svd(A)
+
+    # Eq. (40) and (43).
+    rank = np.linalg.matrix_rank(A)
+    if rank == 0:
+        return np.nan * T
+    if rank == dim - 1:
+        if np.linalg.det(U) * np.linalg.det(V) > 0:
+            T[:dim, :dim] = U @ V
+        else:
+            s = d[dim - 1]
+            d[dim - 1] = -1
+            T[:dim, :dim] = U @ np.diag(d) @ V
+            d[dim - 1] = s
+    else:
+        T[:dim, :dim] = U @ np.diag(d) @ V
+
+    if estimate_scale:
+        # Eq. (41) and (42).
+        scale = 1.0 / src_demean.var(axis=0).sum() * (S @ d)
+    else:
+        scale = 1.0
+
+    T[:dim, dim] = dst_mean - scale * (T[:dim, :dim] @ src_mean.T)
+    T[:dim, :dim] *= scale
+
+    return T
