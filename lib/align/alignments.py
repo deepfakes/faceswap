@@ -44,6 +44,7 @@ class Alignments():
         self._data = self._load()
         self._update_legacy()
         self._hashes_to_frame = dict()
+        self._hashes_to_alignment = dict()
         self._thumbnails = Thumbnails(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -99,6 +100,23 @@ class Alignments():
                 for idx, face in enumerate(val["faces"]):
                     self._hashes_to_frame.setdefault(face["hash"], dict())[frame_name] = idx
         return self._hashes_to_frame
+
+    @property
+    def hashes_to_alignment(self):
+        """ dict: The SHA1 hash of the face mapped to the alignment for the face that the hash
+        corresponds to. The structure of the dictionary is:
+
+        Notes
+        -----
+        The first time this property is referenced, the dictionary will be created and cached.
+        Subsequent references will be made to this cached dictionary.
+        """
+        if not self._hashes_to_alignment:
+            logger.debug("Generating hashes to alignment")
+            self._hashes_to_alignment = {face["hash"]: face
+                                         for val in self._data.values()
+                                         for face in val["faces"]}
+        return self._hashes_to_alignment
 
     @property
     def mask_summary(self):
