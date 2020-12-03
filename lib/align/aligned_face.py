@@ -328,7 +328,7 @@ class AlignedFace():
                                  "'is_aligned=True'")
             return None
         if self._is_aligned and self._centering != "head":  # Crop out the sub face from full head
-            image = self._convert_full_head_to_alternative_centering(image)
+            image = self._convert_centering(image)
         if self._is_aligned:  # Resize the given aligned face
             original_size = image.shape[0]
             interp = cv2.INTER_CUBIC if original_size < self._size else cv2.INTER_AREA
@@ -338,7 +338,7 @@ class AlignedFace():
         retval = retval if self._dtype is None else retval.astype(self._dtype)
         return retval
 
-    def _convert_full_head_to_alternative_centering(self, image):
+    def _convert_centering(self, image):
         """ When the face being loaded is pre-aligned, the loaded image will have 'head' centering
         so it needs to be cropped out to the appropriate centering.
 
@@ -460,8 +460,8 @@ class AlignedFace():
                              "centering")
         with self._cache["cropped_size"][1]:
             if not self._cache["cropped_size"][0].get(centering):
-                adjusted_ratio = _EXTRACT_RATIOS[centering] / _EXTRACT_RATIOS["head"]
-                size = 2 * int(np.rint(self._size * adjusted_ratio / 2))
+                src_size = self.size - (self._size * _EXTRACT_RATIOS["head"])
+                size = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS[centering]) / 2))
                 logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
                 self._cache["cropped_size"][0][centering] = size
         return self._cache["cropped_size"][0][centering]
