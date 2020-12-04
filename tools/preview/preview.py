@@ -189,6 +189,11 @@ class Samples():
         self._alignments = Alignments(arguments,
                                       is_extract=False,
                                       input_is_video=self._images.is_video)
+        if self._alignments.version == 1.0:
+            logger.error("The alignments file format has been updated since the given alignments "
+                         "file was generated. You need to update the file to proceed.")
+            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
+            sys.exit(1)
         if not self._alignments.have_alignments_file:
             logger.error("Alignments file not found at: '%s'", self._alignments.file)
             sys.exit(1)

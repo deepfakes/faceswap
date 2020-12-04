@@ -628,7 +628,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             size = old_mask.shape[0]
             new_size = int(size + (size * _EXTRACT_RATIOS["face"]) / 2)
 
-            shift = np.rint(offset * (size - (size * _EXTRACT_RATIOS))).astype("int32")
+            shift = np.rint(offset * (size - (size * _EXTRACT_RATIOS["face"]))).astype("int32")
             pos = np.array([(new_size // 2 - size // 2) - shift[1],
                             (new_size // 2) + (size // 2) - shift[1],
                             (new_size // 2 - size // 2) - shift[0],

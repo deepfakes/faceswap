@@ -52,6 +52,11 @@ class Convert():  # pylint:disable=too-few-public-methods
         self._patch_threads = None
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
         self._alignments = Alignments(self._args, False, self._images.is_video)
+        if self._alignments.version == 1.0:
+            logger.error("The alignments file format has been updated since the given alignments "
+                         "file was generated. You need to update the file to proceed.")
+            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
+            sys.exit(1)
 
         self._opts = OptionalActions(self._args, self._images.file_list, self._alignments)
 
