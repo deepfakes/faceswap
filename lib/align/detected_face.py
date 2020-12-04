@@ -576,12 +576,11 @@ class Mask():
         All masks are currently stored with `face` centering and all crops are for 'legacy`
         centering. This may change in future
         """
-        in_padding = (self.stored_size - (self.stored_size * _EXTRACT_RATIOS["face"])) / 2
-        offset *= ((self.stored_size - in_padding) / 2)
+        src_size = self.stored_size - (self.stored_size * _EXTRACT_RATIOS["face"])
+        offset *= ((self.stored_size - (src_size / 2)) / 2)
         center = np.rint(offset + self.stored_size / 2).astype("int32")
 
-        adjusted_ratio = _EXTRACT_RATIOS["legacy"] / _EXTRACT_RATIOS["face"]
-        crop_size = 2 * int(np.rint(self.stored_size * adjusted_ratio / 2))
+        crop_size = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS["legacy"]) / 2))
         roi = np.array([center - crop_size // 2, center + crop_size // 2]).ravel()
 
         self._sub_crop["size"] = crop_size
@@ -590,7 +589,7 @@ class Mask():
                                              crop_size - max(0, roi[3] - self.stored_size)),
                                        slice(max(roi[0] * -1, 0),
                                              crop_size - max(0, roi[2] - self.stored_size))]
-        logger.trace("in_padding: %s, roi: %s, sub_crop: %s", in_padding, roi, self._sub_crop)
+        logger.trace("src_size: %s, roi: %s, sub_crop: %s", src_size, roi, self._sub_crop)
 
     def _adjust_affine_matrix(self, mask_size, affine_matrix):
         """ Adjust the affine matrix for the mask's storage size
