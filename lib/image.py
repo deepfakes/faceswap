@@ -429,7 +429,7 @@ def encode_image_with_hash(image, extension):
     return image_hash, encoded_image
 
 
-def generate_thumbnail(image, size=80, quality=60):
+def generate_thumbnail(image, size=96, quality=60):
     """ Generate a jpg thumbnail for the given image.
 
     Parameters
