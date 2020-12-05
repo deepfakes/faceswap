@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+from lib.align import AlignedFace
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,6 +28,7 @@ class Viewport():
                      self.__class__.__name__, canvas, tk_edited_variable)
         self._canvas = canvas
         self._grid = canvas.grid
+        self._centering = "face"
         self._tk_selected_editor = canvas._display_frame.tk_selected_action
         self._landmark_mapping = dict(mouth_inner=(60, 68),
                                       mouth_outer=(48, 60),
@@ -190,13 +192,16 @@ class Viewport():
         if key not in self._tk_faces or is_active:
             logger.trace("creating new tk_face: (key: %s, is_active: %s)", key, is_active)
             if is_active:
-                face.load_aligned(self._active_frame.current_frame,
-                                  size=self.face_size,
-                                  force=True)
-                image = face.aligned.face
-                face.aligned = None
+                image = AlignedFace(face.landmarks_xy,
+                                    image=self._active_frame.current_frame,
+                                    centering=self._centering,
+                                    size=self.face_size).face
             else:
-                image = face.thumbnail
+                image = AlignedFace(face.landmarks_xy,
+                                    image=cv2.imdecode(face.thumbnail, cv2.IMREAD_UNCHANGED),
+                                    centering=self._centering,
+                                    size=self.face_size,
+                                    is_aligned=True).face
             tk_face = self._get_tk_face_object(face, image, is_active)
             self._tk_faces[key] = tk_face
         else:
@@ -263,10 +268,12 @@ class Viewport():
         key = "{}_{}".format(frame_index, face_index)
         landmarks = self._landmarks.get(key, None)
         if not landmarks or refresh:
-            face.load_aligned(None, size=self.face_size, force=True)
+            aligned = AlignedFace(face.landmarks_xy,
+                                  centering=self._centering,
+                                  size=self.face_size)
             landmarks = dict(polygon=[], line=[])
             for area, val in self._landmark_mapping.items():
-                points = face.aligned.landmarks[val[0]:val[1]] + top_left
+                points = aligned.landmarks[val[0]:val[1]] + top_left
                 shape = "polygon" if area.endswith("eye") or area.startswith("mouth") else "line"
                 landmarks[shape].append(points)
             self._landmarks[key] = landmarks

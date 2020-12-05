@@ -17,10 +17,11 @@ import imageio
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import Alignments, DetectedFace
+from lib.align import Alignments, AlignedFace, DetectedFace
 from lib.gui.custom_widgets import PopupProgress
 from lib.gui.utils import FileHandler
-from lib.image import SingleFrameLoader, ImagesLoader, ImagesSaver, encode_image_with_hash
+from lib.image import (SingleFrameLoader, ImagesLoader, ImagesSaver, encode_image_with_hash,
+                       generate_thumbnail)
 from lib.multithreading import MultiThread
 from lib.utils import get_folder
 
@@ -304,7 +305,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         reset_grid = self._add_remove_faces(alignments, faces)
 
         for detected_face, face in zip(faces, alignments):
-            detected_face.from_alignment(face)
+            detected_face.from_alignment(face, with_thumb=True)
 
         self._updated_frame_indices.remove(frame_index)
         if not self._updated_frame_indices:
@@ -404,12 +405,13 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             progress_queue.put(1)
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
                 output = "{}_{}{}".format(frame_name, str(face_idx), extension)
-                # TODO user selectable size
-                face.load_aligned(image, centering="head", size=512, force=True)
-                face.hash, b_image = encode_image_with_hash(face.aligned.face, extension)
+                aligned = AlignedFace(face.landmarks_xy,
+                                      image=image,
+                                      centering="head",
+                                      size=512)  # TODO user selectable size
+                face.hash, b_image = encode_image_with_hash(aligned.face, extension)
                 saver.save(output, b_image)
                 final_faces.append(face.to_alignment())
-                face.aligned = None
             self._alignments.data[filename]["faces"] = final_faces
         saver.close()
 
@@ -543,20 +545,6 @@ class FaceUpdate():
         retval = self._frame_faces[frame_index]
         return retval
 
-    def _generate_thumbnail(self, face):
-        """ Generate the jpg thumbnail from the currently active frame for the detected face and
-        assign to it's `thumbnail` attribute.
-
-        Parameters
-        ----------
-        face: class:`~lib.align.DetectedFace`
-            The detected face object to generate the thumbnail for
-        """
-        face.load_aligned(self._globals.current_frame["image"], 80, force=True)
-        jpg = cv2.imencode(".jpg", face.aligned.face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
-        face.thumbnail = jpg
-        face.aligned = None
-
     def add(self, frame_index, pnt_x, width, pnt_y, height):
         """ Add a :class:`~lib.align.DetectedFace` object to the current frame with the
         given dimensions.
@@ -653,11 +641,12 @@ class FaceUpdate():
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
         if is_zoomed:
-            if not np.any(face.aligned.landmarks):  # This will be None on a resize
-                face.load_aligned(None, size=min(self._globals.frame_display_dims))
-            landmark = face.aligned.landmarks[landmark_index]
+            aligned = AlignedFace(face.landmarks_xy,
+                                  centering="face",
+                                  size=min(self._globals.frame_display_dims))
+            landmark = aligned.landmarks[landmark_index]
             landmark += (shift_x, shift_y)
-            matrix = face.aligned.adjusted_matrix
+            matrix = aligned.adjusted_matrix
             matrix = cv2.invertAffineTransform(matrix)
             if landmark.ndim == 1:
                 landmark = np.reshape(landmark, (1, 1, 2))
@@ -806,10 +795,11 @@ class FaceUpdate():
             The face index within the frame
         """
         face = self._frame_faces[frame_index][face_index]
-        face.load_aligned(self._globals.current_frame["image"], 80, force=True)
-        jpg = cv2.imencode(".jpg", face.aligned.face, [cv2.IMWRITE_JPEG_QUALITY, 60])[1]
-        face.thumbnail = jpg
-        face.aligned = None
+        aligned = AlignedFace(face.landmarks_xy,
+                              image=self._globals.current_frame["image"],
+                              centering="head",
+                              size=96)
+        face.thumbnail = generate_thumbnail(aligned.face, size=96)
         self._tk_edited.set(True)
 
 
@@ -829,7 +819,6 @@ class ThumbsCreator():
                      "single_process: %s)", self.__class__.__name__, detected_faces,
                      input_location, single_process)
         self._size = 80
-        self._jpeg_quality = 60
         self._pbar = dict(pbar=None, lock=Lock())
         self._meta = dict(key_frames=detected_faces.video_meta_data.get("keyframes", None),
                           pts_times=detected_faces.video_meta_data.get("pts_time", None))
@@ -1032,12 +1021,11 @@ class ThumbsCreator():
             The frame index of this frame in the :attr:`_frame_faces`
         """
         for face_idx, face in enumerate(self._frame_faces[frame_index]):
-            face.load_aligned(frame, size=self._size, force=True)
-            jpg = cv2.imencode(".jpg",
-                               face.aligned.face,
-                               [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])[1]
-            face.thumbnail = jpg
-            self._alignments.thumbnails.add_thumbnail(filename, face_idx, jpg)
-            face.aligned = None
+            aligned = AlignedFace(face.landmarks_xy,
+                                  image=frame,
+                                  centering="head",
+                                  size=96)
+            face.thumbnail = generate_thumbnail(aligned.face, size=96)
+            self._alignments.thumbnails.add_thumbnail(filename, face_idx, face.thumbnail)
         with self._pbar["lock"]:
             self._pbar["pbar"].update(1)
