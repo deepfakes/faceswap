@@ -253,7 +253,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             face.load_aligned(extract_media.image,
                               size=size,
                               centering="head")
-            face.thumbnail = generate_thumbnail(face.aligned.face, size=80, quality=60)
+            face.thumbnail = generate_thumbnail(face.aligned.face, size=96, quality=60)
         self._post_process.do_actions(extract_media)
         extract_media.remove_image()
 

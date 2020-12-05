@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from lib.align import DetectedFace, _EXTRACT_RATIOS
 from lib.align.alignments import _VERSION
+from lib.image import generate_thumbnail
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .media import ExtractedFaces, Faces, Frames
@@ -552,7 +553,8 @@ class Extract():  # pylint:disable=too-few-public-methods
                 f_hash = self._extracted_faces.save_face_with_hash(output,
                                                                    extension,
                                                                    face.aligned.face)
-                if self._is_legacy:
+                if self._is_legacy:  # Generate the new thumbnail and store new face data for save
+                    face.thumbnail = generate_thumbnail(face.aligned.face, size=96, quality=60)
                     self._alignments.data[filename]["faces"][idx] = face.to_alignment()
                 self._alignments.data[filename]["faces"][idx]["hash"] = f_hash
             face_count += 1
