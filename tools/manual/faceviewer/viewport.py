@@ -902,18 +902,14 @@ class ActiveFrame():
 
         edited = (self._tk_vars["edited"].get() and
                   self._tk_vars["selected_editor"].get() not in ("Mask", "View"))
-        relocate = self._viewport.face_size != self._last_execution["size"] or (
-            state == "normal" and not self._optional_annotations["mesh"])
-        if relocate or edited:
-            landmarks = self._viewport.get_landmarks(self.frame_index,
-                                                     face_index,
-                                                     detected_face,
-                                                     top_left,
-                                                     edited)
+        landmarks = self._viewport.get_landmarks(self.frame_index,
+                                                 face_index,
+                                                 detected_face,
+                                                 top_left,
+                                                 edited)
         for key, kwarg in kwargs.items():
             for idx, mesh_id in enumerate(mesh_ids[key]):
-                if relocate or edited:
-                    self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
+                self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
                 self._canvas.itemconfig(mesh_id, state=state, **kwarg)
                 self._canvas.addtag_withtag("active_mesh_{}".format(key), mesh_id)
 
