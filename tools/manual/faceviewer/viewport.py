@@ -252,6 +252,8 @@ class Viewport():
             The frame index to obtain the face for
         face_index: int
             The face index of the face within the requested frame
+        face: :class:`lib.align.DetectedFace`
+            The detected face object to obtain landmarks for
         top_left: tuple
             The top left (x, y) points of the face's bounding box within the viewport
         refresh: bool, optional
@@ -910,7 +912,7 @@ class ActiveFrame():
                                                      edited)
         for key, kwarg in kwargs.items():
             for idx, mesh_id in enumerate(mesh_ids[key]):
-                if relocate:
+                if relocate or edited:
                     self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
                 self._canvas.itemconfig(mesh_id, state=state, **kwarg)
                 self._canvas.addtag_withtag("active_mesh_{}".format(key), mesh_id)

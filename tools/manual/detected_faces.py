@@ -412,7 +412,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                 face.hash, b_image = encode_image_with_hash(aligned.face, extension)
                 saver.save(output, b_image)
                 final_faces.append(face.to_alignment())
-            self._alignments.data[filename]["faces"] = final_faces
+            self._alignments.data.setdefault(filename, dict())["faces"] = final_faces
         saver.close()
 
 
