@@ -405,8 +405,8 @@ class VisibleObjects():
     def update(self):
         """ Load and unload thumbnails in the visible area of the faces viewer. """
         self._visible_grid, self._visible_faces = self._grid.visible_area
-        if (isinstance(self._images, np.ndarray) and
-                self._visible_grid.shape[-1] != self._images.shape[-1]):
+        if (isinstance(self._images, np.ndarray) and isinstance(self._visible_grid, np.ndarray)
+                and self._visible_grid.shape[-1] != self._images.shape[-1]):
             self._recycle_objects()
 
         required_rows = self._visible_grid.shape[1] if self._grid.is_valid else 0
@@ -530,12 +530,12 @@ class VisibleObjects():
         else:
             tags = ["viewport", "viewport_mesh"]
             mesh = dict(polygon=[self._canvas.create_polygon(0, 0,
-                                                             width=1,
+                                                             width=2,
                                                              tags=tags + ["viewport_polygon"],
                                                              **kwargs["polygon"])
                                  for _ in range(4)],
                         line=[self._canvas.create_line(0, 0, 0, 0,
-                                                       width=1,
+                                                       width=2,
                                                        tags=tags + ["viewport_line"],
                                                        **kwargs["line"])
                               for _ in range(5)])

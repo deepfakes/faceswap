@@ -400,7 +400,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
         for frame_idx, (filename, image) in enumerate(loader.load()):
             logger.trace("Outputting frame: %s: %s", frame_idx, filename)
-            frame_name, extension = os.path.splitext(filename)
+            basename = os.path.basename(filename)
+            frame_name, extension = os.path.splitext(basename)
             final_faces = []
             progress_queue.put(1)
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
@@ -412,7 +413,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                 face.hash, b_image = encode_image_with_hash(aligned.face, extension)
                 saver.save(output, b_image)
                 final_faces.append(face.to_alignment())
-            self._alignments.data.setdefault(filename, dict())["faces"] = final_faces
+            self._alignments.data[basename]["faces"] = final_faces
         saver.close()
 
 
