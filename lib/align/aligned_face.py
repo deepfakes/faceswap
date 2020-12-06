@@ -329,10 +329,12 @@ class AlignedFace():
             return None
         if self._is_aligned and self._centering != "head":  # Crop out the sub face from full head
             image = self._convert_centering(image)
-        if self._is_aligned:  # Resize the given aligned face
-            original_size = image.shape[0]
-            interp = cv2.INTER_CUBIC if original_size < self._size else cv2.INTER_AREA
+
+        if self._is_aligned and image.shape[0] != self._size:  # Resize the given aligned face
+            interp = cv2.INTER_CUBIC if image.shape[0] < self._size else cv2.INTER_AREA
             retval = cv2.resize(image, (self._size, self._size), interpolation=interp)
+        elif self._is_aligned:
+            retval = image
         else:
             retval = transform_image(image, self.matrix, self._size, self.padding)
         retval = retval if self._dtype is None else retval.astype(self._dtype)
@@ -356,6 +358,13 @@ class AlignedFace():
         :class:`numpy.ndarray`
             The aligned image with the correct centering
         """
+        # Input image is sized up because of integer rounding
+        src_size = self.size - (self._size * _EXTRACT_RATIOS[self._centering])
+        head_size = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS["head"]) / 2))
+        if head_size != image.shape[0]:
+            interp = cv2.INTER_CUBIC if image.shape[0] < head_size else cv2.INTER_AREA
+            image = cv2.resize(image, (head_size, head_size), interpolation=interp)
+
         # store requested size + centering whilst temporary converting to full head extract
         old_centering = self._centering
         old_size = self.size
