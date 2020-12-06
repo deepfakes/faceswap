@@ -325,7 +325,8 @@ class Mask(Editor):
                               frame_dims,
                               frame,
                               flags=cv2.WARP_INVERSE_MAP | interpolator,
-                              borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]][..., None]
+                              borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]]
+        mask = mask[..., None] if mask.ndim == 2 else mask
         rgb = np.tile(rgb_color, mask.shape).astype("uint8")
         rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
         return Image.fromarray(rgba)
