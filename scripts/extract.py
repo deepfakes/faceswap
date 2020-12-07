@@ -62,7 +62,8 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     exclude_gpus=self._args.exclude_gpus,
                                     rotate_images=self._args.rotate_images,
                                     min_size=self._args.min_size,
-                                    normalize_method=normalization)
+                                    normalize_method=normalization,
+                                    re_feed=self._args.re_feed)
         self._threads = list()
         self._verify_output = False
         logger.debug("Initialized %s", self.__class__.__name__)

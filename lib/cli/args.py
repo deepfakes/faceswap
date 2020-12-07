@@ -428,6 +428,21 @@ class ExtractArgs(ExtractConvertArgs):
                  "\nL|hist: Equalize the histograms on the RGB channels."
                  "\nL|mean: Normalize the face colors to the mean."))
         argument_list.append(dict(
+            opts=("-rf", "--re-feed"),
+            action=Slider,
+            min_max=(0, 10),
+            rounding=1,
+            type=int,
+            dest="re_feed",
+            default=0,
+            group="plugins",
+            help="The number of times to re-feed the detected face into the aligner. Each time "
+                 "the face is re-fed into the aligner the bounding box is adjusted by a small "
+                 "amount. The final landmarks are then averaged from each iteration. Helps to "
+                 "remove 'micro-jitter' but at the cost of slower extraction speed. The more "
+                 "times the face is re-fed into the aligner, the less micro-jitter should occur "
+                 "but the longer extraction will take."))
+        argument_list.append(dict(
             opts=("-r", "--rotate-images"),
             type=str,
             dest="rotate_images",
