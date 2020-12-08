@@ -242,6 +242,49 @@ class Extractor():
         """
         raise NotImplementedError
 
+    def _process_input(self, batch):
+        """ **Override method** (at `<plugin_type>` level)
+
+        This method should be overridden at the `<plugin_type>` level (IE.
+        ``plugins.extract.detect._base`` or ``plugins.extract.align._base``) and should not
+        be overridden within plugins themselves.
+
+        It acts as a wrapper for the plugin's :func:`process_input` method and handles any
+        input processing that is consistent for all plugins within the `plugin_type`.
+
+        If this method is not overridden then the plugin's :func:`process_input` is just called.
+
+        Parameters
+        ----------
+        batch : dict
+            Contains the batch that is currently being passed through the plugin process
+
+        Notes
+        -----
+        When preparing an input to the model a key ``feed`` must be added
+        to the :attr:`batch` ``dict`` which contains this input.
+        """
+        return self.process_input(batch)
+
+    def _process_output(self, batch):
+        """ **Override method** (at `<plugin_type>` level)
+
+        This method should be overridden at the `<plugin_type>` level (IE.
+        ``plugins.extract.detect._base`` or ``plugins.extract.align._base``) and should not
+        be overridden within plugins themselves.
+
+        It acts as a wrapper for the plugin's :func:`process_output` method and handles any
+        output processing that is consistent for all plugins within the `plugin_type`.
+
+        If this method is not overridden then the plugin's :func:`process_output` is just called.
+
+        Parameters
+        ----------
+        batch : dict
+            Contains the batch that is currently being passed through the plugin process
+        """
+        return self.process_output(batch)
+
     def finalize(self, batch):
         """ **Override method** (at `<plugin_type>` level)
 
@@ -258,6 +301,7 @@ class Extractor():
             Contains the batch that is currently being passed through the plugin process
 
         """
+        raise NotImplementedError
 
     def get_batch(self, queue):
         """ **Override method** (at `<plugin_type>` level)
@@ -375,7 +419,7 @@ class Extractor():
         name = self.name.replace(" ", "_").lower()
         base_name = "{}_{}".format(self._plugin_type, name)
         self._add_thread("{}_input".format(base_name),
-                         self.process_input,
+                         self._process_input,
                          self._queues["in"],
                          self._queues["predict_{}".format(name)])
         self._add_thread("{}_predict".format(base_name),
@@ -383,7 +427,7 @@ class Extractor():
                          self._queues["predict_{}".format(name)],
                          self._queues["post_{}".format(name)])
         self._add_thread("{}_output".format(base_name),
-                         self.process_output,
+                         self._process_output,
                          self._queues["post_{}".format(name)],
                          self._queues["out"])
         logger.debug("Compiled %s threads: %s", self._plugin_type, self._threads)
@@ -404,7 +448,7 @@ class Extractor():
         func_name = function.__name__
         logger.debug("threading: (function: '%s')", func_name)
         while True:
-            if func_name == "process_input":
+            if func_name == "_process_input":
                 # Process input items to batches
                 exhausted, batch = self.get_batch(in_queue)
                 if exhausted:
@@ -431,7 +475,7 @@ class Extractor():
                            "`allow_growth option to `True`.")
                     raise FaceswapError(msg) from err
                 raise err
-            if func_name == "process_output":
+            if func_name == "_process_output":
                 # Process output items to individual items from batch
                 for item in self.finalize(batch):
                     out_queue.put(item)

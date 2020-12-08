@@ -18,6 +18,7 @@ import numpy as np
 
 from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
+from lib.align import AlignedFace
 from lib.utils import get_backend, FaceswapError
 from plugins.extract._base import Extractor, ExtractMedia, logger
 
@@ -82,7 +83,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         to ``dict`` for internal processing.
 
         To ensure consistent batch sizes for masker the items are split into separate items for
-        each :class:`~lib.faces_detect.DetectedFace` object.
+        each :class:`~lib.align.DetectedFace` object.
 
         Remember to put ``'EOF'`` to the out queue after processing
         the final batch
@@ -91,7 +92,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         :attr:`~plugins.extract._base.Extractor.batchsize`:
 
         >>> {'filename': [<filenames of source frames>],
-        >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
+        >>>  'detected_faces': [[<lib.align.DetectedFace objects]]}
 
         Parameters
         ----------
@@ -119,13 +120,15 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 self._queues["out"].put(item)
                 continue
             for f_idx, face in enumerate(item.detected_faces):
-                face.load_feed_face(item.get_image_copy(self.color_format),
-                                    size=self.input_size,
-                                    coverage_ratio=1.0,
-                                    dtype="float32",
-                                    is_aligned_face=self._image_is_aligned)
-
+                feed_face = AlignedFace(face.landmarks_xy,
+                                        image=item.get_image_copy(self.color_format),
+                                        centering="face",
+                                        size=self.input_size,
+                                        coverage_ratio=self.coverage_ratio,
+                                        dtype="float32",
+                                        is_aligned=self._image_is_aligned)
                 batch.setdefault("detected_faces", []).append(face)
+                batch.setdefault("feed_faces", []).append(feed_face)
                 batch.setdefault("filename", []).append(item.filename)
                 idx += 1
                 if idx == self.batchsize:
@@ -206,7 +209,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         ----------
         batch : dict
             The final ``dict`` from the `plugin` process. It must contain the `keys`:
-            ``detected_faces``, ``filename``
+            ``detected_faces``, ``filename``, ``feed_faces``
 
         Yields
         ------
@@ -214,13 +217,15 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             The :attr:`DetectedFaces` list will be populated for this class with the bounding
             boxes, landmarks and masks for the detected faces found in the frame.
         """
-        for mask, face in zip(batch["prediction"], batch["detected_faces"]):
+        for mask, face, feed_face in zip(batch["prediction"],
+                                         batch["detected_faces"],
+                                         batch["feed_faces"]):
             face.add_mask(self._storage_name,
                           mask,
-                          face.feed_matrix,
-                          face.feed_interpolators[1],
+                          feed_face.adjusted_matrix,
+                          feed_face.interpolators[1],
                           storage_size=self._storage_size)
-            face.feed = dict()
+        del batch["feed_faces"]
 
         logger.trace("Item out: %s", {key: val.shape if isinstance(val, np.ndarray) else val
                                       for key, val in batch.items()})

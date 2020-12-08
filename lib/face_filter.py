@@ -3,9 +3,10 @@
 
 import logging
 
+from lib.align import AlignedFace
 from lib.vgg_face import VGGFace
 from lib.image import read_image
-from plugins.extract.pipeline import Extractor
+from plugins.extract.pipeline import Extractor, ExtractMedia
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -32,8 +33,8 @@ class FaceFilter():
         # Whilst this vram can still be used, the pipeline for the extraction process can't see
         # it so thinks there is not enough vram available.
         # Either the pipeline will need to be changed to be re-usable by face-filter and extraction
-        # Or another vram measurement technique will need to be implemented to for when TF has
-        # already performed allocation. For now we force CPU detectors.
+        # Or another vram measurement technique will need to be implemented to for when tensorflow
+        # has already performed allocation. For now we force CPU detectors.
 
         # self.align_faces(detector, aligner, multiprocess)
         self.align_faces("cv2-dnn", "cv2-dnn", "none", multiprocess)
@@ -69,11 +70,11 @@ class FaceFilter():
     def run_extractor(self, extractor):
         """ Run extractor to get faces """
         for _ in range(extractor.passes):
-            self.queue_images(extractor)
             extractor.launch()
+            self.queue_images(extractor)
             for faces in extractor.detected_faces():
-                filename = faces["filename"]
-                detected_faces = faces["detected_faces"]
+                filename = faces.filename
+                detected_faces = faces.detected_faces
                 if len(detected_faces) > 1:
                     logger.warning("Multiple faces found in %s file: '%s'. Using first detected "
                                    "face.", self.filters[filename]["type"], filename)
@@ -84,11 +85,8 @@ class FaceFilter():
         in_queue = extractor.input_queue
         for fname, img in self.filters.items():
             logger.debug("Adding to filter queue: '%s' (%s)", fname, img["type"])
-            feed_dict = dict(filename=fname, image=img["image"])
-            if img.get("detected_faces", None):
-                feed_dict["detected_faces"] = img["detected_faces"]
-            logger.debug("Queueing filename: '%s' items: %s",
-                         fname, list(feed_dict.keys()))
+            feed_dict = ExtractMedia(fname, img["image"], detected_faces=img.get("detected_faces"))
+            logger.debug("Queueing filename: '%s' items: %s", fname, feed_dict)
             in_queue.put(feed_dict)
         logger.debug("Sending EOF to filter queue")
         in_queue.put("EOF")
@@ -99,8 +97,8 @@ class FaceFilter():
             logger.debug("Loading aligned face: '%s'", filename)
             image = face["image"]
             detected_face = face["detected_face"]
-            detected_face.load_aligned(image, size=224)
-            face["face"] = detected_face.aligned_face
+            detected_face.load_aligned(image, centering="legacy", size=224)
+            face["face"] = detected_face.aligned.face
             del face["image"]
             logger.debug("Loaded aligned face: ('%s', shape: %s)",
                          filename, face["face"].shape)
@@ -114,11 +112,25 @@ class FaceFilter():
             face["encoding"] = encodings
             del face["face"]
 
-    def check(self, detected_face):
-        """ Check the extracted Face """
+    def check(self, image, detected_face):
+        """ Check the extracted Face
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The original frame that contains the face to be checked
+        detected_face: :class:`lib.align.DetectedFace`
+            The detected face object that contains the face to be checked
+
+        Returns
+        -------
+        bool
+            ``True`` if the face matches a filter otherwise ``False``
+        """
         logger.trace("Checking face with FaceFilter")
         distances = {"filter": list(), "nfilter": list()}
-        encodings = self.vgg_face.predict(detected_face.aligned_face)
+        feed = AlignedFace(detected_face.landmarks_xy, image=image, size=224, centering="legacy")
+        encodings = self.vgg_face.predict(feed.face)
         for filt in self.filters.values():
             similarity = self.vgg_face.find_cosine_similiarity(filt["encoding"], encodings)
             distances[filt["type"]].append(similarity)
@@ -144,7 +156,7 @@ class FaceFilter():
                    "{}, nfilter: {})".format(round(mins["filter"], 2), round(mins["nfilter"], 2)))
             retval = False
         elif distances["filter"] and distances["nfilter"]:
-            # k-nn classifier
+            # k-nearest-neighbor classifier
             var_k = min(5, min(len(distances["filter"]), len(distances["nfilter"])) + 1)
             var_n = sum(list(map(lambda x: x[0],
                                  list(sorted([(1, d) for d in distances["filter"]] +

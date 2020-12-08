@@ -7,17 +7,14 @@ import os
 import sys
 
 import cv2
-import numpy as np
 from tqdm import tqdm
 
 # TODO imageio single frame seek seems slow. Look into this
 # import imageio
 
-from lib.aligner import Extract as AlignerExtract
-from lib.alignments import Alignments, get_serializer
-from lib.faces_detect import DetectedFace
-from lib.image import (count_frames, encode_image_with_hash, ImagesLoader, read_image,
-                       read_image_hash_batch)
+from lib.align import Alignments, DetectedFace
+from lib.image import (count_frames, encode_image_with_hash, generate_thumbnail, ImagesLoader,
+                       read_image, read_image_hash_batch)
 from lib.utils import _image_extensions, _video_extensions
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -31,10 +28,6 @@ class AlignmentData(Alignments):
                      self.__class__.__name__, alignments_file)
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
-        if filename.lower() == "dfl":
-            self._serializer = get_serializer("compressed")
-            self._file = "{}.{}".format(filename.lower(), self._serializer.file_extension)
-            return
         super().__init__(folder, filename=filename)
         logger.verbose("%s items loaded", self.frames_count)
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -43,11 +36,7 @@ class AlignmentData(Alignments):
     def check_file_exists(alignments_file):
         """ Check the alignments file exists"""
         folder, filename = os.path.split(alignments_file)
-        if filename.lower() == "dfl":
-            folder = None
-            filename = "dfl"
-            logger.info("Using extracted DFL faces for alignments")
-        elif not os.path.isfile(alignments_file):
+        if not os.path.isfile(alignments_file):
             logger.error("ERROR: alignments file not found at: '%s'", alignments_file)
             sys.exit(0)
         if folder:
@@ -78,27 +67,13 @@ class AlignmentData(Alignments):
         for idx, i_hash in hashes.items():
             faces[idx]["hash"] = i_hash
 
-    def data_from_dfl(self, alignments, faces_folder):
-        """ Set :attr:`data` from alignments extracted from a Deep Face Lab face set.
-
-        Parameters
-        ----------
-        alignments: dict
-            The extracted alignments from a Deep Face Lab face set
-        faces_folder: str
-            The folder that the faces are in, where the newly generated alignments file will
-            be saved
-        """
-        self._data = alignments
-        self.set_filename(self._get_location(faces_folder, "alignments"))
-
     def set_filename(self, filename):
         """ Set the :attr:`_file` to the given filename.
 
         Parameters
         ----------
         filename: str
-            The full path and filename to se the alignments file name to
+            The full path and filename to set the alignments file name to
         """
         self._file = filename
 
@@ -268,8 +243,7 @@ class Faces(MediaLoader):
 
     def sorted_items(self):
         """ Return the items sorted by face name """
-        items = sorted([item for item in self.process_folder()],
-                       key=lambda x: (x["face_name"]))
+        items = sorted(self.process_folder(), key=lambda x: (x["face_name"]))
         logger.trace(items)
         return items
 
@@ -323,8 +297,7 @@ class Frames(MediaLoader):
 
     def sorted_items(self):
         """ Return the items sorted by filename """
-        items = sorted([item for item in self.process_folder()],
-                       key=lambda x: (x["frame_name"]))
+        items = sorted(self.process_folder(), key=lambda x: (x["frame_name"]))
         logger.trace(items)
         return items
 
@@ -332,11 +305,10 @@ class Frames(MediaLoader):
 class ExtractedFaces():
     """ Holds the extracted faces and matrix for
         alignments """
-    def __init__(self, frames, alignments, size=256, align_eyes=False):
+    def __init__(self, frames, alignments, size=512):
         logger.trace("Initializing %s: size: %s", self.__class__.__name__, size)
         self.size = size
         self.padding = int(size * 0.1875)
-        self.align_eyes_bool = align_eyes
         self.alignments = alignments
         self.frames = frames
         self.current_frame = None
@@ -363,8 +335,8 @@ class ExtractedFaces():
                      self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
-        face.load_aligned(image, size=self.size)
-        face = self.align_eyes(face, image) if self.align_eyes_bool else face
+        face.load_aligned(image, size=self.size, centering="head")
+        face.thumbnail = generate_thumbnail(face.aligned.face, size=80, quality=60)
         return face
 
     def get_faces_in_frame(self, frame, update=False, image=None):
@@ -382,7 +354,7 @@ class ExtractedFaces():
             self.get_faces(frame)
         sizes = list()
         for face in self.faces:
-            roi = face.original_roi.squeeze()
+            roi = face.aligned.original_roi.squeeze()
             top_left, top_right = roi[0], roi[3]
             len_x = top_right[0] - top_left[0]
             len_y = top_right[1] - top_left[1]
@@ -402,28 +374,3 @@ class ExtractedFaces():
         with open(filename, "wb") as out_file:
             out_file.write(img)
         return f_hash
-
-    @staticmethod
-    def align_eyes(face, image):
-        """ Re-extract a face with the pupils forced to be absolutely horizontally aligned """
-        umeyama_landmarks = face.aligned_landmarks
-        left_eye_center = umeyama_landmarks[42:48].mean(axis=0)
-        right_eye_center = umeyama_landmarks[36:42].mean(axis=0)
-        d_y = right_eye_center[1] - left_eye_center[1]
-        d_x = right_eye_center[0] - left_eye_center[0]
-        theta = np.pi - np.arctan2(d_y, d_x)
-        rot_cos = np.cos(theta)
-        rot_sin = np.sin(theta)
-        rotation_matrix = np.array([[rot_cos, -rot_sin, 0.],
-                                    [rot_sin, rot_cos, 0.],
-                                    [0., 0., 1.]])
-
-        mat_umeyama = np.concatenate((face.aligned["matrix"], np.array([[0., 0., 1.]])), axis=0)
-        corrected_mat = np.dot(rotation_matrix, mat_umeyama)
-        face.aligned["matrix"] = corrected_mat[:2]
-        face.aligned["face"] = AlignerExtract().transform(image,
-                                                          face.aligned["matrix"],
-                                                          face.aligned["size"],
-                                                          int(face.aligned["size"] * 0.375) // 2)
-        logger.trace("Adjusted matrix: %s", face.aligned["matrix"])
-        return face

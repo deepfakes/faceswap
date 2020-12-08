@@ -64,11 +64,11 @@ be imported as :mod:`lib.model.losses` depending on the backend in use.
    :nosignatures:
 
    ~lib.model.losses_tf.DSSIMObjective
-   ~lib.model.losses_tf.PenalizedLoss
    ~lib.model.losses_tf.GeneralizedLoss
    ~lib.model.losses_tf.GMSDLoss
    ~lib.model.losses_tf.GradientLoss
    ~lib.model.losses_tf.LInfNorm
+   ~lib.model.losses_tf.LossWrapper
 
 .. automodule:: lib.model.losses_tf
    :members:

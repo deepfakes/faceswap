@@ -23,46 +23,40 @@ class AlignmentsArgs(FaceSwapArgs):
         frames_and_faces_dir = (" Must Pass in a frames folder/source video file AND a faces "
                                 "folder (-fr and -fc).")
         output_opts = " Use the output option (-o) to process results."
-        align_eyes = " Can optionally use the align-eyes switch (-ae)."
         argument_list = list()
         argument_list.append(dict(
             opts=("-j", "--job"),
             action=Radio,
             type=str,
-            choices=("dfl", "draw", "extract", "merge", "missing-alignments", "missing-frames",
-                     "leftover-faces", "multi-faces", "no-faces", "remove-faces", "remove-frames",
-                     "rename", "sort", "spatial", "update-hashes"),
+            choices=("draw", "extract", "merge", "missing-alignments", "missing-frames",
+                     "leftover-faces", "multi-faces", "no-faces", "remove-faces", "rename", "sort",
+                     "spatial", "update-hashes"),
             required=True,
             help="R|Choose which action you want to perform. NB: All actions require an "
                  "alignments file (-a) to be passed in."
-                 "\nL|'dfl': Create an alignments file from faces extracted from DeepFaceLab. "
-                 "Specify 'dfl' as the 'alignments file' entry and the folder containing the dfl "
-                 "faces as the 'faces folder' ('-a dfl -fc <source faces folder>')"
                  "\nL|'draw': Draw landmarks on frames in the selected folder/video. A subfolder "
                  "will be created within the frames folder to hold the output.{0}"
                  "\nL|'extract': Re-extract faces from the source frames/video based on alignment "
                  "data. This is a lot quicker than re-detecting faces. Can pass in the '-een' "
-                 "(--extract-every-n) parameter to only extract every nth frame.{1}{2}"
+                 "(--extract-every-n) parameter to only extract every nth frame.{1}"
                  "\nL|'merge': Merge multiple alignment files into one. Specify a space separated "
                  "list of alignments files with the -a flag. Optionally specify a faces (-fc) "
                  "folder to filter the final alignments file to only those faces that appear "
                  "within the provided folder."
                  "\nL|'missing-alignments': Identify frames that do not exist in the alignments "
-                 "file.{3}{0}"
+                 "file.{2}{0}"
                  "\nL|'missing-frames': Identify frames in the alignments file that do not appear "
-                 "within the frames folder/video.{3}{0}"
+                 "within the frames folder/video.{2}{0}"
                  "\nL|'leftover-faces': Identify faces in the faces folder that do not exist in "
-                 "the alignments file.{3}{4}"
+                 "the alignments file.{2}{3}"
                  "\nL|'multi-faces': Identify where multiple faces exist within the alignments "
-                 "file.{3}{5}"
+                 "file.{2}{4}"
                  "\nL|'no-faces': Identify frames that exist within the alignment file but no "
-                 "faces were detected.{3}{0}"
+                 "faces were detected.{2}{0}"
                  "\nL|'remove-faces': Remove deleted faces from an alignments file. The original "
-                 "alignments file will be backed up.{4}"
-                 "\nL|'remove-frames': Remove deleted frames from an alignments file. The "
-                 "original alignments file will be backed up.{0}"
+                 "alignments file will be backed up.{3}"
                  "\nL|'rename' - Rename faces to correspond with their parent frame and position "
-                 "index in the alignments file (i.e. how they are named after running extract).{4}"
+                 "index in the alignments file (i.e. how they are named after running extract).{3}"
                  "\nL|'sort': Re-index the alignments from left to right. For alignments with "
                  "multiple faces this will ensure that the left-most face is at index 0 "
                  "Optionally pass in a faces folder (-fc) to also rename extracted faces."
@@ -71,8 +65,8 @@ class AlignmentsArgs(FaceSwapArgs):
                  "\nL|'update-hashes': Recalculate the face hashes. Only use this if you have "
                  "altered the extracted faces (e.g. colour adjust). The files MUST be named "
                  "'<frame_name>_face index' (i.e. how they are named after running extract)."
-                 "{4}".format(frames_dir, frames_and_faces_dir, align_eyes, output_opts,
-                              faces_dir, frames_or_faces_dir)))
+                 "{3}".format(frames_dir, frames_and_faces_dir, output_opts, faces_dir,
+                              frames_or_faces_dir)))
         argument_list.append(dict(
             opts=("-a", "--alignments_file"),
             action=FilesFullPaths,
@@ -125,19 +119,11 @@ class AlignmentsArgs(FaceSwapArgs):
             opts=("-sz", "--size"),
             type=int,
             action=Slider,
-            min_max=(128, 512),
-            default=256,
+            min_max=(256, 1024),
+            default=512,
             group="extract",
             rounding=64,
             help="[Extract only] The output size of extracted faces."))
-        argument_list.append(dict(
-            opts=("-ae", "--align-eyes"),
-            action="store_true",
-            dest="align_eyes",
-            group="extract",
-            default=False,
-            help="[Extract only] Perform extra alignment to ensure left/right eyes are at the "
-                 "same height."))
         argument_list.append(dict(
             opts=("-l", "--large"),
             action="store_true",

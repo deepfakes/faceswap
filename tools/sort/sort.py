@@ -15,8 +15,8 @@ from tqdm import tqdm
 
 # faceswap imports
 from lib.serializer import get_serializer_from_filename
-from lib.faces_detect import DetectedFace
-from lib.image import ImagesLoader, read_image
+from lib.align import Alignments, AlignedFace, DetectedFace, _EXTRACT_RATIOS
+from lib.image import FacesLoader, read_image
 from plugins.extract.recognition.vgg_face2_keras import VGGFace2 as VGGFace
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
@@ -27,12 +27,39 @@ class Sort():
     """ Sorts folders of faces based on input criteria """
     # pylint: disable=no-member
     def __init__(self, arguments):
-        self.args = arguments
+        self._args = arguments
+        self._alignments = self._get_alignments()
         self.changes = None
         self.serializer = None
-        self.vgg_face = None
-        # TODO set this as ImagesLoader in init. Need to move all processes to use it
+        self._vgg_face = None
+        # TODO set this as FacesLoader in init. Need to move all processes to use it
         self._loader = None
+
+    def _get_alignments(self):
+        """ Obtain the alignments data and validate for methods which require it.
+
+        Returns
+        -------
+        :class:`lib.align.Alignments`
+            The alignments object pertaining to the data to be sorted. Returns ``None`` if an
+            alignments file can't be found or is not required.
+        """
+        required_methods = ["face"]
+        if self._args.sort_method not in required_methods:
+            return None
+        if self._args.alignments_path is None:
+            path = os.path.join(self._args.input_dir, "alignments.fsa")
+        else:
+            path = self._args.alignments_path
+
+        if not os.path.isfile(path):
+            logger.warning("Alignments file not found at '%s'. Not using an alignments file will "
+                           "lead to vastly inferior results.", path)
+            logger.warning("It is highly recommended that you use an alignments file for sorting "
+                           "by '%s'.", self._args.sort_method)
+            return None
+
+        return Alignments(*os.path.split(path))
 
     def process(self):
         """ Main processing function of the sort tool """
@@ -41,53 +68,53 @@ class Sort():
 
         # Set output dir to the same value as input dir
         # if the user didn't specify it.
-        if self.args.output_dir is None:
+        if self._args.output_dir is None:
             logger.verbose("No output directory provided. Using input dir as output dir.")
-            self.args.output_dir = self.args.input_dir
+            self._args.output_dir = self._args.input_dir
 
         # Assigning default threshold values based on grouping method
-        if (self.args.final_process == "folders"
-                and self.args.min_threshold < 0.0):
-            method = self.args.group_method.lower()
+        if (self._args.final_process == "folders"
+                and self._args.min_threshold < 0.0):
+            method = self._args.group_method.lower()
             if method == 'face-cnn':
-                self.args.min_threshold = 7.2
+                self._args.min_threshold = 7.2
             elif method == 'hist':
-                self.args.min_threshold = 0.3
+                self._args.min_threshold = 0.3
 
         # Load VGG Face if sorting by face
-        if self.args.sort_method.lower() == "face":
-            self.vgg_face = VGGFace(exclude_gpus=self.args.exclude_gpus)
-            self.vgg_face.init_model()
+        if self._args.sort_method.lower() == "face":
+            self._vgg_face = VGGFace(exclude_gpus=self._args.exclude_gpus)
+            self._vgg_face.init_model()
 
         # If logging is enabled, prepare container
-        if self.args.log_changes:
+        if self._args.log_changes:
             self.changes = dict()
 
             # Assign default sort_log.json value if user didn't specify one
-            if self.args.log_file_path == 'sort_log.json':
-                self.args.log_file_path = os.path.join(self.args.input_dir,
-                                                       'sort_log.json')
+            if self._args.log_file_path == 'sort_log.json':
+                self._args.log_file_path = os.path.join(self._args.input_dir,
+                                                        'sort_log.json')
 
-            # Set serializer based on logfile extension
-            self.serializer = get_serializer_from_filename(self.args.log_file_path)
+            # Set serializer based on log file extension
+            self.serializer = get_serializer_from_filename(self._args.log_file_path)
 
         # Prepare sort, group and final process method names
-        _sort = "sort_" + self.args.sort_method.lower()
-        _group = "group_" + self.args.group_method.lower()
-        _final = "final_process_" + self.args.final_process.lower()
+        _sort = "sort_" + self._args.sort_method.lower()
+        _group = "group_" + self._args.group_method.lower()
+        _final = "final_process_" + self._args.final_process.lower()
         if _sort.startswith('sort_color-'):
-            self.args.color_method = _sort.replace('sort_color-', '')
+            self._args.color_method = _sort.replace('sort_color-', '')
             _sort = _sort[:10]
-        self.args.sort_method = _sort.replace('-', '_')
-        self.args.group_method = _group.replace('-', '_')
-        self.args.final_process = _final.replace('-', '_')
+        self._args.sort_method = _sort.replace('-', '_')
+        self._args.group_method = _group.replace('-', '_')
+        self._args.final_process = _final.replace('-', '_')
 
         self.sort_process()
 
     def launch_aligner(self):
         """ Load the aligner plugin to retrieve landmarks """
         extractor = Extractor(None, "fan", None,
-                              normalize_method="hist", exclude_gpus=self.args.exclude_gpus)
+                              normalize_method="hist", exclude_gpus=self._args.exclude_gpus)
         extractor.set_batchsize("align", 1)
         extractor.launch()
         return extractor
@@ -118,7 +145,7 @@ class Sort():
     def _get_images(self):
         """ Multi-threaded, parallel and sequentially ordered image loader """
         logger.info("Loading images...")
-        filename_list = self.find_images(self.args.input_dir)
+        filename_list = self.find_images(self._args.input_dir)
         with futures.ThreadPoolExecutor() as executor:
             image_list = list(tqdm(executor.map(read_image, filename_list),
                                    desc="Loading Images...",
@@ -133,13 +160,13 @@ class Sort():
         the core process of sorting, optionally grouping, renaming/moving into
         folders. After the functions are assigned they are executed.
         """
-        sort_method = self.args.sort_method.lower()
-        group_method = self.args.group_method.lower()
-        final_method = self.args.final_process.lower()
+        sort_method = self._args.sort_method.lower()
+        group_method = self._args.group_method.lower()
+        final_method = self._args.final_process.lower()
 
         img_list = getattr(self, sort_method)()
         if "folders" in final_method:
-            # Check if non-dissim sort method and group method are not the same
+            # Check if non-dissimilarity sort method and group method are not the same
             if group_method.replace('group_', '') not in sort_method:
                 img_list = self.reload_images(group_method, img_list)
                 img_list = getattr(self, group_method)(img_list)
@@ -168,21 +195,45 @@ class Sort():
         """ Sort by identity similarity """
         logger.info("Sorting by identity similarity...")
 
-        # TODO This should be set in init
-        self._loader = ImagesLoader(self.args.input_dir)
-
+        self._loader = FacesLoader(self._args.input_dir)  # TODO This should be set in init
+        ratio = _EXTRACT_RATIOS["legacy"] / _EXTRACT_RATIOS["head"]
         filenames = []
-        preds = np.empty((self._loader.count, 512), dtype="float32")
-        for idx, (filename, image) in enumerate(tqdm(self._loader.load(),
-                                                     desc="Classifying Faces...",
-                                                     total=self._loader.count)):
+        preds = []
+        no_hash = 0
+        for filename, image, hsh in tqdm(self._loader.load(),
+                                         desc="Classifying Faces...",
+                                         total=self._loader.count):
+            if self._alignments is not None and self._alignments.version != 1.0:
+                face = self._alignments.hashes_to_alignment.get(hsh)
+                if face:
+                    image = AlignedFace(face["landmarks_xy"],
+                                        image=image,
+                                        centering="legacy",
+                                        size=self._vgg_face.input_size,
+                                        is_aligned=True).face
+                elif image.shape[0] != image.shape[1]:
+                    logger.warning("Skipping image '%s' as it is not square (probably not a "
+                                   "face)", filename)
+                    continue
+                else:  # Center crop the image and add count to warning count
+                    center = image.shape[0] // 2
+                    crop = slice(center - int(center * ratio), center + int(center * ratio))
+                    image = image[crop, crop, :]
+                    no_hash += 1
+
             filenames.append(filename)
-            preds[idx] = self.vgg_face.predict(image)
+            preds.append(self._vgg_face.predict(image))
 
         logger.info("Sorting by ward linkage...")
 
-        indices = self.vgg_face.sorted_similarity(preds, method="ward")
+        indices = self._vgg_face.sorted_similarity(np.array(preds), method="ward")
         img_list = np.array(filenames)[indices]
+
+        if no_hash:
+            logger.warning("%s image(s) were not found in the alignments file. This will likely "
+                           "result in sub-par sorting results, so you should check the output "
+                           "carefully", no_hash)
+
         return img_list
 
     def sort_face_cnn(self):
@@ -294,7 +345,7 @@ class Sort():
         """ Score by channel average intensity """
         logger.info("Sorting by channel average intensity...")
         desired_channel = {'gray': 0, 'luma': 0, 'orange': 1, 'green': 2}
-        method = self.args.color_method
+        method = self._args.color_method
         channel_to_sort = next(v for (k, v) in desired_channel.items() if method.endswith(k))
         filename_list, image_list = self._get_images()
 
@@ -319,7 +370,7 @@ class Sort():
     def group_blur(self, img_list):
         """ Group into bins by blur """
         # Starting the binning process
-        num_bins = self.args.num_bins
+        num_bins = self._args.num_bins
 
         # The last bin will get all extra images if it's
         # not possible to distribute them evenly
@@ -355,7 +406,7 @@ class Sort():
         # faces have to be to be grouped together.
         # It is multiplied by 1000 here to allow the cli option to use smaller
         # numbers.
-        min_threshold = self.args.min_threshold * 1000
+        min_threshold = self._args.min_threshold * 1000
 
         img_list_len = len(img_list)
 
@@ -388,7 +439,7 @@ class Sort():
     def group_face_yaw(self, img_list):
         """ Group into bins by yaw of face """
         # Starting the binning process
-        num_bins = self.args.num_bins
+        num_bins = self._args.num_bins
 
         # The last bin will get all extra images if it's
         # not possible to distribute them evenly
@@ -420,7 +471,7 @@ class Sort():
         # an array containing the file paths to the images in that group
         bins = []
 
-        min_threshold = self.args.min_threshold
+        min_threshold = self._args.min_threshold
 
         img_list_len = len(img_list)
         reference_groups[0] = [img_list[0][1]]
@@ -447,17 +498,17 @@ class Sort():
     # Final process methods
     def final_process_rename(self, img_list):
         """ Rename the files """
-        output_dir = self.args.output_dir
+        output_dir = self._args.output_dir
 
-        process_file = self.set_process_file_method(self.args.log_changes,
-                                                    self.args.keep_original)
+        process_file = self.set_process_file_method(self._args.log_changes,
+                                                    self._args.keep_original)
 
         # Make sure output directory exists
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
         description = (
-            "Copying and Renaming" if self.args.keep_original
+            "Copying and Renaming" if self._args.keep_original
             else "Moving and Renaming"
         )
 
@@ -478,7 +529,7 @@ class Sort():
         for i in tqdm(range(0, len(img_list)),
                       desc=description,
                       file=sys.stdout):
-            renaming = self.set_renaming_method(self.args.log_changes)
+            renaming = self.set_renaming_method(self._args.log_changes)
             fname = img_list[i] if isinstance(img_list[i], str) else img_list[i][0]
             src, dst = renaming(fname, output_dir, i, self.changes)
 
@@ -488,15 +539,15 @@ class Sort():
                 logger.error(err)
                 logger.error('fail to rename %s', format(src))
 
-        if self.args.log_changes:
+        if self._args.log_changes:
             self.write_to_log(self.changes)
 
     def final_process_folders(self, bins):
         """ Move the files to folders """
-        output_dir = self.args.output_dir
+        output_dir = self._args.output_dir
 
-        process_file = self.set_process_file_method(self.args.log_changes,
-                                                    self.args.keep_original)
+        process_file = self.set_process_file_method(self._args.log_changes,
+                                                    self._args.keep_original)
 
         # First create new directories to avoid checking
         # for directory existence in the moving loop
@@ -507,7 +558,7 @@ class Sort():
                 os.makedirs(directory)
 
         description = (
-            "Copying into Groups" if self.args.keep_original
+            "Copying into Groups" if self._args.keep_original
             else "Moving into Groups"
         )
 
@@ -524,14 +575,14 @@ class Sort():
                     logger.error(err)
                     logger.error("Failed to move '%s' to '%s'", src, dst)
 
-        if self.args.log_changes:
+        if self._args.log_changes:
             self.write_to_log(self.changes)
 
     # Various helper methods
     def write_to_log(self, changes):
         """ Write the changes to log file """
-        logger.info("Writing sort log to: '%s'", self.args.log_file_path)
-        self.serializer.save(self.args.log_file_path, changes)
+        logger.info("Writing sort log to: '%s'", self._args.log_file_path)
+        self.serializer.save(self._args.log_file_path, changes)
 
     def reload_images(self, group_method, img_list):
         """
@@ -566,7 +617,7 @@ class Sort():
 
     @staticmethod
     def _convert_color(imgs, same_size, method):
-        """ Helper function to convert colorspaces """
+        """ Helper function to convert color spaces """
 
         if method.endswith('gray'):
             conversion = np.array([[0.0722], [0.7152], [0.2126]])

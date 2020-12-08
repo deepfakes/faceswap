@@ -4,8 +4,8 @@ import sys
 import logging
 
 from .media import AlignmentData
-from .jobs import (Check, Dfl, Draw, Extract, Merge,  # noqa pylint: disable=unused-import
-                   Rename, RemoveAlignments, Sort, Spatial, UpdateHashes)
+from .jobs import (Check, Draw, Extract, Merge, Rename,  # noqa pylint: disable=unused-import
+                   RemoveFaces, Sort, Spatial, UpdateHashes)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -57,15 +57,11 @@ class Alignments():  # pylint:disable=too-few-public-methods
 
         Launches the selected alignments job.
         """
-        if self.args.job == "update-hashes":
-            job = UpdateHashes
-        elif self.args.job.startswith("remove-"):
-            job = RemoveAlignments
-        elif self.args.job in ("missing-alignments", "missing-frames",
-                               "multi-faces", "leftover-faces", "no-faces"):
+        if self.args.job in ("missing-alignments", "missing-frames",
+                             "multi-faces", "leftover-faces", "no-faces"):
             job = Check
         else:
-            job = globals()[self.args.job.title()]
+            job = globals()[self.args.job.title().replace("-", "")]
         job = job(self.alignments, self.args)
         logger.debug(job)
         job.process()

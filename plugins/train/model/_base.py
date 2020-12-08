@@ -1252,11 +1252,18 @@ class State():
         """
         global _CONFIG  # pylint: disable=global-statement
         legacy_update = self._update_legacy_config()
-        # Add any new items to state config for legacy purposes
+        # Add any new items to state config for legacy purposes and set sensible defaults for
+        # any values that may have been changed in the config file which could be detrimental.
+        legacy_defaults = dict(centering="legacy",
+                               mask_loss_function="mse",
+                               l2_reg_term=100,
+                               optimizer="adam",
+                               mixed_precision=False)
         for key, val in _CONFIG.items():
             if key not in self._config.keys():
-                logger.info("Adding new config item to state file: '%s': '%s'", key, val)
-                self._config[key] = val
+                setting = legacy_defaults.get(key, val)
+                logger.info("Adding new config item to state file: '%s': '%s'", key, setting)
+                self._config[key] = setting
         self._update_changed_config_items(config_changeable_items)
         logger.debug("Replacing config. Old config: %s", _CONFIG)
         _CONFIG = self._config

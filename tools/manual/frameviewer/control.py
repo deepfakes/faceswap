@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+from lib.align import AlignedFace
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -148,7 +150,7 @@ class Navigation():
         self._globals.tk_transport_index.set(frame_count - 1)
 
 
-class BackgroundImage():
+class BackgroundImage():  # pylint:disable=too-few-public-methods
     """ The background image of the canvas """
     def __init__(self, canvas):
         self._canvas = canvas
@@ -233,10 +235,10 @@ class BackgroundImage():
             face = np.ones((size, size, 3), dtype="uint8")
         else:
             det_face = self._det_faces.current_faces[frame_idx][face_idx]
-            det_face.load_aligned(self._globals.current_frame["image"], size=size, force=True)
-            face = det_face.aligned_face.copy()
-            det_face.aligned["image"] = None
-
+            face = AlignedFace(det_face.landmarks_xy,
+                               image=self._globals.current_frame["image"],
+                               centering="face",
+                               size=size).face
         logger.trace("face shape: %s", face.shape)
         return face[..., 2::-1]
 

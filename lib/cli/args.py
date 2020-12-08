@@ -428,6 +428,21 @@ class ExtractArgs(ExtractConvertArgs):
                  "\nL|hist: Equalize the histograms on the RGB channels."
                  "\nL|mean: Normalize the face colors to the mean."))
         argument_list.append(dict(
+            opts=("-rf", "--re-feed"),
+            action=Slider,
+            min_max=(0, 10),
+            rounding=1,
+            type=int,
+            dest="re_feed",
+            default=0,
+            group="plugins",
+            help="The number of times to re-feed the detected face into the aligner. Each time "
+                 "the face is re-fed into the aligner the bounding box is adjusted by a small "
+                 "amount. The final landmarks are then averaged from each iteration. Helps to "
+                 "remove 'micro-jitter' but at the cost of slower extraction speed. The more "
+                 "times the face is re-fed into the aligner, the less micro-jitter should occur "
+                 "but the longer extraction will take."))
+        argument_list.append(dict(
             opts=("-r", "--rotate-images"),
             type=str,
             dest="rotate_images",
@@ -488,6 +503,17 @@ class ExtractArgs(ExtractConvertArgs):
                  "significantly decrease extraction speed and its accuracy cannot be "
                  "guaranteed."))
         argument_list.append(dict(
+            opts=("-sz", "--size"),
+            action=Slider,
+            min_max=(256, 1024),
+            rounding=64,
+            type=int,
+            default=512,
+            group="output",
+            help="The output size of extracted faces. Make sure that the model you intend to "
+                 "train supports your required size. This will only need to be changed for "
+                 "hi-res models."))
+        argument_list.append(dict(
             opts=("-een", "--extract-every-n"),
             action=Slider,
             min_max=(1, 100),
@@ -499,17 +525,6 @@ class ExtractArgs(ExtractConvertArgs):
             help="Extract every 'nth' frame. This option will skip frames when extracting "
                  "faces. For example a value of 1 will extract faces from every frame, a value "
                  "of 10 will extract faces from every 10th frame."))
-        argument_list.append(dict(
-            opts=("-sz", "--size"),
-            action=Slider,
-            min_max=(128, 512),
-            rounding=64,
-            type=int,
-            default=256,
-            group="output",
-            help="The output size of extracted faces. Make sure that the model you intend to "
-                 "train supports your required size. This will only need to be changed for "
-                 "hi-res models."))
         argument_list.append(dict(
             opts=("-si", "--save-interval"),
             action=Slider,
@@ -774,13 +789,6 @@ class ConvertArgs(ExtractConvertArgs):
                  "this to, it will never attempt to use more processes than are available on "
                  "your system. If singleprocess is enabled this setting will be ignored."))
         argument_list.append(dict(
-            opts=("-d", "--distributed"),
-            action="store_true",
-            default=False,
-            backend="nvidia",
-            group="settings",
-            help="Use the Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."))
-        argument_list.append(dict(
             opts=("-t", "--trainer"),
             type=str.lower,
             choices=PluginLoader.get_available_models(),
@@ -1018,9 +1026,9 @@ class TrainArgs(FaceSwapArgs):
             rounding=25,
             type=int,
             dest="preview_scale",
-            default=50,
+            default=100,
             group="preview",
-            help="Percentage amount to scale the preview by."))
+            help="Percentage amount to scale the preview by. 100%% is the model output size."))
         argument_list.append(dict(
             opts=("-p", "--preview"),
             action="store_true",

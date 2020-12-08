@@ -365,7 +365,7 @@ class BoundingBox(Editor):
         self._drag_data["current_location"] = (event.x, event.y)
 
     def _coords_to_bounding_box(self, coords):
-        """ Converts tkinter coordinates to :class:`lib.faces_detect.DetectedFace` bounding
+        """ Converts tkinter coordinates to :class:`lib.align.DetectedFace` bounding
         box format, scaled up and offset for feeding the model.
 
         Returns

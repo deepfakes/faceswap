@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
+from lib.align import AlignedFace
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,6 +28,7 @@ class Viewport():
                      self.__class__.__name__, canvas, tk_edited_variable)
         self._canvas = canvas
         self._grid = canvas.grid
+        self._centering = "face"
         self._tk_selected_editor = canvas._display_frame.tk_selected_action
         self._landmark_mapping = dict(mouth_inner=(60, 68),
                                       mouth_outer=(48, 60),
@@ -176,7 +178,7 @@ class Viewport():
             The frame index to obtain the face for
         face_index: int
             The face index of the face within the requested frame
-        face: :class:`~lib.faces_detect.DetectedFace`
+        face: :class:`~lib.align.DetectedFace`
             The detected face object, containing the thumbnail jpg
 
         Returns
@@ -190,13 +192,16 @@ class Viewport():
         if key not in self._tk_faces or is_active:
             logger.trace("creating new tk_face: (key: %s, is_active: %s)", key, is_active)
             if is_active:
-                face.load_aligned(self._active_frame.current_frame,
-                                  size=self.face_size,
-                                  force=True)
-                image = face.aligned_face
-                face.aligned = dict()
+                image = AlignedFace(face.landmarks_xy,
+                                    image=self._active_frame.current_frame,
+                                    centering=self._centering,
+                                    size=self.face_size).face
             else:
-                image = face.thumbnail
+                image = AlignedFace(face.landmarks_xy,
+                                    image=cv2.imdecode(face.thumbnail, cv2.IMREAD_UNCHANGED),
+                                    centering=self._centering,
+                                    size=self.face_size,
+                                    is_aligned=True).face
             tk_face = self._get_tk_face_object(face, image, is_active)
             self._tk_faces[key] = tk_face
         else:
@@ -213,7 +218,7 @@ class Viewport():
 
         Parameters
         ----------
-        face: :class:`lib.faces_detect.DetectedFace`
+        face: :class:`lib.align.DetectedFace`
             A detected face object to create the :class:`TKFace` from
         image: :class:`numpy.ndarray`
             The jpg thumbnail or the 3 channel image for the face
@@ -247,6 +252,8 @@ class Viewport():
             The frame index to obtain the face for
         face_index: int
             The face index of the face within the requested frame
+        face: :class:`lib.align.DetectedFace`
+            The detected face object to obtain landmarks for
         top_left: tuple
             The top left (x, y) points of the face's bounding box within the viewport
         refresh: bool, optional
@@ -263,10 +270,12 @@ class Viewport():
         key = "{}_{}".format(frame_index, face_index)
         landmarks = self._landmarks.get(key, None)
         if not landmarks or refresh:
-            face.load_aligned(None, size=self.face_size, force=True)
+            aligned = AlignedFace(face.landmarks_xy,
+                                  centering=self._centering,
+                                  size=self.face_size)
             landmarks = dict(polygon=[], line=[])
             for area, val in self._landmark_mapping.items():
-                points = face.aligned_landmarks[val[0]:val[1]] + top_left
+                points = aligned.landmarks[val[0]:val[1]] + top_left
                 shape = "polygon" if area.endswith("eye") or area.startswith("mouth") else "line"
                 landmarks[shape].append(points)
             self._landmarks[key] = landmarks
@@ -359,7 +368,7 @@ class VisibleObjects():
 
     @property
     def visible_faces(self):
-        """ :class:`numpy.ndarray`: The currently visible :class:`~lib.faces_detect.DetectedFace`
+        """ :class:`numpy.ndarray`: The currently visible :class:`~lib.align.DetectedFace`
         objects.
 
         A numpy array of shape (`rows`, `columns`) corresponding to the viewable area of the
@@ -396,8 +405,8 @@ class VisibleObjects():
     def update(self):
         """ Load and unload thumbnails in the visible area of the faces viewer. """
         self._visible_grid, self._visible_faces = self._grid.visible_area
-        if (isinstance(self._images, np.ndarray) and
-                self._visible_grid.shape[-1] != self._images.shape[-1]):
+        if (isinstance(self._images, np.ndarray) and isinstance(self._visible_grid, np.ndarray)
+                and self._visible_grid.shape[-1] != self._images.shape[-1]):
             self._recycle_objects()
 
         required_rows = self._visible_grid.shape[1] if self._grid.is_valid else 0
@@ -521,12 +530,12 @@ class VisibleObjects():
         else:
             tags = ["viewport", "viewport_mesh"]
             mesh = dict(polygon=[self._canvas.create_polygon(0, 0,
-                                                             width=1,
+                                                             width=2,
                                                              tags=tags + ["viewport_polygon"],
                                                              **kwargs["polygon"])
                                  for _ in range(4)],
                         line=[self._canvas.create_line(0, 0, 0, 0,
-                                                       width=1,
+                                                       width=2,
                                                        tags=tags + ["viewport_line"],
                                                        **kwargs["line"])
                               for _ in range(5)])
@@ -881,7 +890,7 @@ class ActiveFrame():
             the mesh for the given face
         face_index: int
             The face index within the frame for the given face
-        detected_face: :class:`~lib.faces_detect.DetectedFace`
+        detected_face: :class:`~lib.align.DetectedFace`
             The detected face object that contains the landmarks for generating the mesh
         top_left: tuple
             The (x, y) top left co-ordinates of the mesh's bounding box
@@ -893,18 +902,14 @@ class ActiveFrame():
 
         edited = (self._tk_vars["edited"].get() and
                   self._tk_vars["selected_editor"].get() not in ("Mask", "View"))
-        relocate = self._viewport.face_size != self._last_execution["size"] or (
-            state == "normal" and not self._optional_annotations["mesh"])
-        if relocate or edited:
-            landmarks = self._viewport.get_landmarks(self.frame_index,
-                                                     face_index,
-                                                     detected_face,
-                                                     top_left,
-                                                     edited)
+        landmarks = self._viewport.get_landmarks(self.frame_index,
+                                                 face_index,
+                                                 detected_face,
+                                                 top_left,
+                                                 edited)
         for key, kwarg in kwargs.items():
             for idx, mesh_id in enumerate(mesh_ids[key]):
-                if relocate:
-                    self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
+                self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
                 self._canvas.itemconfig(mesh_id, state=state, **kwarg)
                 self._canvas.addtag_withtag("active_mesh_{}".format(key), mesh_id)
 

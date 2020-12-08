@@ -5,6 +5,7 @@ import platform
 
 import numpy as np
 
+from lib.align import AlignedFace
 from lib.gui.custom_widgets import RightClickMenu
 from lib.gui.utils import get_config
 from ._base import Editor, logger
@@ -48,12 +49,12 @@ class ExtractBox(Editor):
         color = self._control_color
         roi = self._zoomed_roi
         for idx, face in enumerate(self._face_iterator):
-            logger.trace("Drawing Extract Box: (idx: %s, roi: %s)", idx, face.original_roi)
+            logger.trace("Drawing Extract Box: (idx: %s)", idx)
             if self._globals.is_zoomed:
                 box = np.array((roi[0], roi[1], roi[2], roi[1], roi[2], roi[3], roi[0], roi[3]))
             else:
-                face.load_aligned(None, force=True)
-                box = self._scale_to_display(face.original_roi).flatten()
+                aligned = AlignedFace(face.landmarks_xy, centering="face")
+                box = self._scale_to_display(aligned.original_roi).flatten()
             top_left = box[:2] - 10
             kwargs = dict(fill=color, font=("Default", 20, "bold"), text=str(idx))
             self._object_tracker("eb_text", "text", idx, top_left, kwargs)
