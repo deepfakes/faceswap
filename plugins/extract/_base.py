@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
