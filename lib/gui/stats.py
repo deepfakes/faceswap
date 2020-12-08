@@ -78,7 +78,7 @@ class GlobalSession():
 
     @property
     def session_ids(self):
-        """ list: The sorted list of all existing session ids `int`s in the state file """
+        """ list: The sorted list of all existing session ids in the state file """
         return self._tb_logs.session_ids
 
     def _load_state_file(self):

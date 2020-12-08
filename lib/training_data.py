@@ -58,7 +58,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         :class:`lib.align.AlignedFace`}.
 
         * **versions** (`dict`). The Alignments file versions that the extracted faces originated \
-        from for each key of **side**(`str`). Version 1.0 will be a legacy extract. Anything \
+        from for each key of **side** (`str`). Version 1.0 will be a legacy extract. Anything \
         above this will be a full-face extract
 
         * **masks** (`dict`, `optional`). Required if :attr:`penalized_mask_loss` or \
@@ -76,7 +76,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         mouth mask.
 
     config: dict
-        The configuration `dict` generated from :file:`config.train.ini` containing the trainer \
+        The configuration `dict` generated from :file:`config.train.ini` containing the trainer
         plugin configuration options.
     """
     def __init__(self, model_input_size, model_output_shapes, coverage_ratio, augment_color,
