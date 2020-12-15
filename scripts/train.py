@@ -10,7 +10,6 @@ from time import sleep
 
 import cv2
 
-from lib.image import read_image
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
 from lib.utils import (get_folder, get_image_paths, FaceswapError, _image_extensions)
@@ -49,15 +48,6 @@ class Train():  # pylint:disable=too-few-public-methods
 
         self.trainer_name = self._args.trainer
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def _image_size(self):
-        """ int: The training image size. Reads the first image in the training folder and returns
-        the size. """
-        image = read_image(self._images["a"][0], raise_error=True)
-        size = image.shape[0]
-        logger.debug("Training image size: %s", size)
-        return size
 
     def _get_images(self):
         """ Check the image folders exist and contains images and obtain image paths.
@@ -146,7 +136,7 @@ class Train():  # pylint:disable=too-few-public-methods
 
             training_folder = getattr(self._args, "input_{}".format(side))
             if folder == training_folder:
-                continue  # Timelapse folder is training folder
+                continue  # Time-lapse folder is training folder
 
             filenames = [fname for fname in os.listdir(folder)
                          if os.path.splitext(fname)[-1].lower() in _image_extensions]
@@ -154,7 +144,7 @@ class Train():  # pylint:disable=too-few-public-methods
                 raise FaceswapError("The Timelapse path '{}' does not contain any valid "
                                     "images".format(folder))
 
-            # Timelapse images must appear in the training set, as we need access to alignment and
+            # Time-lapse images must appear in the training set, as we need access to alignment and
             # mask info. Check filenames are there to save failing much later in the process.
             training_images = [os.path.basename(img) for img in self._images[side]]
             if not all(img in training_images for img in filenames):
@@ -254,7 +244,6 @@ class Train():  # pylint:disable=too-few-public-methods
         model = PluginLoader.get_model(self.trainer_name)(
             model_dir,
             self._args,
-            training_image_size=self._image_size,
             predict=False)
         model.build()
         logger.debug("Loaded Model")

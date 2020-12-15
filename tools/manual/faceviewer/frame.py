@@ -338,7 +338,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             self.yview_moveto(move_to)
         if size_change:
             self._view.reset()
-        self._view.update()
+        self._view.update(refresh_annotations=retain_position)
         if not size_change:
             trigger_var.set(False)
 

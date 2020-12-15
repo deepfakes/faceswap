@@ -84,7 +84,7 @@ class Navigation():
         """ Update The frame navigation position to the next frame based on filter. """
         if not is_playing:
             self.stop_playback()
-        position = self._globals.tk_transport_index.get()
+        position = self._get_safe_frame_index()
         face_count_change = self._check_face_count_change()
         if face_count_change:
             position -= 1
@@ -98,7 +98,7 @@ class Navigation():
     def decrement_frame(self):
         """ Update The frame navigation position to the previous frame based on filter. """
         self.stop_playback()
-        position = self._globals.tk_transport_index.get()
+        position = self._get_safe_frame_index()
         face_count_change = self._check_face_count_change()
         if face_count_change:
             position += 1
@@ -107,6 +107,26 @@ class Navigation():
             return
         self._globals.tk_transport_index.set(min(max(0, self._det_faces.filter.count - 1),
                                                  max(0, position - 1)))
+
+    def _get_safe_frame_index(self):
+        """ Obtain the current frame position from the tk_transport_index variable in
+        a safe manner (i.e. handle for non-numerics)
+
+        Returns
+        -------
+        int
+            The current transport frame index
+        """
+        try:
+            retval = self._globals.tk_transport_index.get()
+        except tk.TclError as err:
+            if "expected floating-point" not in str(err):
+                raise
+            val = str(err).split(" ")[-1].replace("\"", "")
+            retval = "".join(ch for ch in val if ch.isdigit())
+            retval = 0 if not retval else int(retval)
+            self._globals.tk_transport_index.set(retval)
+        return retval
 
     def _check_face_count_change(self):
         """ Check whether the face count for the current filter has changed, and update the

@@ -18,10 +18,6 @@ from lib.utils import FaceswapError
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-# TODO Face masks appear to be coming out too big?
-# TODO Test _get_closest_match for speed and correctness
-
-
 class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
     """ A Training Data Generator for compiling data for feeding to a model.
 
@@ -547,7 +543,7 @@ class ImageAugmentation():
          """
         logger.debug("Initializing constants. training_size: %s", training_size)
         self._training_size = training_size
-        coverage = int(self._training_size * self._coverage_ratio)
+        coverage = int(self._training_size * self._coverage_ratio // 2) * 2
 
         # Color Aug
         clahe_base_contrast = training_size // 128

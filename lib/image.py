@@ -339,13 +339,16 @@ def read_image_batch(filenames):
     return batch
 
 
-def read_image_hash(filename):
+def read_image_hash(filename, output_shape=False):
     """ Return the `sha1` hash of an image saved on disk.
 
     Parameters
     ----------
     filename: str
         Full path to the image to be loaded.
+    output_shape: bool
+        If ``True`` then a tuple is returned with the shape tuple of the image as the final value.
+        Default: ``False``
 
     Returns
     -------
@@ -357,12 +360,14 @@ def read_image_hash(filename):
     >>> image_hash = read_image_hash(image_file)
     """
     img = read_image(filename, raise_error=True)
-    image_hash = sha1(img).hexdigest()
-    logger.trace("filename: '%s', hash: %s", filename, image_hash)
-    return image_hash
+    retval = sha1(img).hexdigest()
+    if output_shape:
+        retval = (retval, img.shape)
+    logger.trace("filename: '%s', retval: %s", filename, retval)
+    return retval
 
 
-def read_image_hash_batch(filenames):
+def read_image_hash_batch(filenames, output_shape=False):
     """ Return the `sha` hash of a batch of images
 
     Leverages multi-threading to load multiple images from disk at the same time
@@ -378,10 +383,14 @@ def read_image_hash_batch(filenames):
     ----------
     filenames: list
         A list of ``str`` full paths to the images to be loaded.
+    output_shape: bool
+        If ``True`` then a 3rd item is added to the output tuple containing the shape of the read
+        image. Default: ``False``
 
     Yields
     -------
-    tuple: (`filename`, :func:`hashlib.hexdigest()` representation of the `sha1` hash of the image)
+    tuple: (`filename`, :func:`hashlib.hexdigest()` representation of the `sha1` hash of the image,
+            [optional shape tuple] )
     Example
     -------
     >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
@@ -392,11 +401,14 @@ def read_image_hash_batch(filenames):
     executor = futures.ThreadPoolExecutor()
     with executor:
         logger.debug("Submitting %s items to executor", len(filenames))
-        read_hashes = {executor.submit(read_image_hash, filename): filename
+        read_hashes = {executor.submit(read_image_hash,
+                                       filename,
+                                       output_shape=output_shape): filename
                        for filename in filenames}
         logger.debug("Succesfully submitted %s items to executor", len(filenames))
         for future in futures.as_completed(read_hashes):
-            retval = (read_hashes[future], future.result())
+            retval = (read_hashes[future],
+                      *future.result()) if output_shape else (read_hashes[future], future.result())
             logger.trace("Yielding: %s", retval)
             yield retval
 

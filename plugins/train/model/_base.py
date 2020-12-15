@@ -74,8 +74,6 @@ class ModelBase():
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the train or convert process as generated from
         Faceswap's command line arguments
-    training_image_size: int, optional
-        The size of the training images in the training folder. Default: `256`
     predict: bool, optional
         ``True`` if the model is being loaded for inference, ``False`` if the model is being loaded
         for training. Default: ``False``
@@ -94,10 +92,9 @@ class ModelBase():
         with the trainer name that a model requires in the model plugin's
         :func:`__init__` function.
     """
-    def __init__(self, model_dir, arguments, training_image_size=256, predict=False):
-        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', arguments: %s, "
-                     "training_image_size: %s, predict: %s)",
-                     self.__class__.__name__, model_dir, arguments, training_image_size, predict)
+    def __init__(self, model_dir, arguments, predict=False):
+        logger.debug("Initializing ModelBase (%s): (model_dir: '%s', arguments: %s, predict: %s)",
+                     self.__class__.__name__, model_dir, arguments, predict)
 
         self.input_shape = None  # Must be set within the plugin after initializing
         self.trainer = "original"  # Override for plugin specific trainer
@@ -120,8 +117,7 @@ class ModelBase():
         self._state = State(model_dir,
                             self.name,
                             self._config_changeable_items,
-                            False if self._is_predict else self._args.no_logs,
-                            training_image_size)
+                            False if self._is_predict else self._args.no_logs)
         self._settings = _Settings(self._args,
                                    self.config["mixed_precision"],
                                    self.config["allow_growth"],
@@ -143,13 +139,15 @@ class ModelBase():
 
     @property
     def coverage_ratio(self):
-        """ float: The ratio of the training image to crop out and train on. """
-        coverage_ratio = self.config.get("coverage", 62.5) / 100
-        logger.debug("Requested coverage_ratio: %s", coverage_ratio)
-        cropped_size = (self._state.training_size * coverage_ratio) // 2 * 2
-        retval = cropped_size / self._state.training_size
-        logger.debug("Final coverage_ratio: %s", retval)
-        return retval
+        """ float: The ratio of the training image to crop out and train on as defined in user
+        configuration options.
+
+        NB: The coverage ratio is a raw float, but will be applied to integer pixel images.
+
+        To ensure consistent rounding and guaranteed even image size, the calculation for coverage
+        should always be: :math:`(original_size * coverage_ratio // 2) * 2`
+        """
+        return self.config.get("coverage", 62.5) / 100
 
     @property
     def model_dir(self):
@@ -1078,25 +1076,16 @@ class State():
         Configuration options that can be altered when resuming a model, and their current values
     no_logs: bool
         ``True`` if Tensorboard logs should not be generated, otherwise ``False``
-    training_image_size: int
-        The size of the training images in the training folder
     """
-    def __init__(self,
-                 model_dir,
-                 model_name,
-                 config_changeable_items,
-                 no_logs,
-                 training_image_size):
+    def __init__(self, model_dir, model_name, config_changeable_items, no_logs):
         logger.debug("Initializing %s: (model_dir: '%s', model_name: '%s', "
-                     "config_changeable_items: '%s', no_logs: %s, training_image_size: '%s'",
-                     self.__class__.__name__, model_dir, model_name, config_changeable_items,
-                     no_logs, training_image_size)
+                     "config_changeable_items: '%s', no_logs: %s", self.__class__.__name__,
+                     model_dir, model_name, config_changeable_items, no_logs)
         self._serializer = get_serializer("json")
         filename = "{}_state.{}".format(model_name, self._serializer.file_extension)
         self._filename = os.path.join(model_dir, filename)
         self._name = model_name
         self._iterations = 0
-        self._training_size = training_image_size
         self._sessions = dict()
         self._lowest_avg_loss = dict()
         self._config = dict()
@@ -1119,11 +1108,6 @@ class State():
     def iterations(self):
         """ int: The total number of iterations that the model has trained. """
         return self._iterations
-
-    @property
-    def training_size(self):
-        """ int: The size of the training images in the training folder. """
-        return self._training_size
 
     @property
     def lowest_avg_loss(self):
@@ -1220,7 +1204,6 @@ class State():
         self._sessions = state.get("sessions", dict())
         self._lowest_avg_loss = state.get("lowest_avg_loss", dict())
         self._iterations = state.get("iterations", 0)
-        self._training_size = state.get("training_size", 256)
         self._config = state.get("config", dict())
         logger.debug("Loaded state: %s", state)
         self._replace_config(config_changeable_items)
@@ -1232,7 +1215,6 @@ class State():
                  "sessions": self._sessions,
                  "lowest_avg_loss": self._lowest_avg_loss,
                  "iterations": self._iterations,
-                 "training_size": self._training_size,
                  "config": _CONFIG}
         self._serializer.save(self._filename, state)
         logger.debug("Saved State")

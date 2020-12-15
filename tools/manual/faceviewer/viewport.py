@@ -58,7 +58,7 @@ class Viewport():
         face's mesh annotation based on the current user selected options. Key is the object
         type (`polygon` or `line`), value are the keyword arguments for that type. """
         state = "normal" if self._canvas.optional_annotations["mesh"] else "hidden"
-        color = self._canvas.get_muted_color("Mesh")
+        color = self._canvas.control_colors["Mesh"]
         kwargs = dict(polygon=dict(fill="", outline=color, state=state),
                       line=dict(fill=color, state=state))
         return kwargs
@@ -112,17 +112,28 @@ class Viewport():
         self._landmarks = dict()
         self._tk_faces = dict()
 
-    def update(self):
+    def update(self, refresh_annotations=False):
         """ Update the viewport.
+
+        Parameters
+        ----------
+        refresh_annotations: bool, optional
+            ``True`` if mesh annotations should be re-calculated otherwise ``False``.
+            Default: ``False``
 
         Obtains the objects that are currently visible. Updates the visible area of the canvas
         and reloads the active frame's annotations. """
         self._objects.update()
-        self._update_viewport()
+        self._update_viewport(refresh_annotations)
         self._active_frame.reload_annotations()
 
-    def _update_viewport(self):
+    def _update_viewport(self, refresh_annotations):
         """ Update the viewport
+
+        Parameters
+        ----------
+        refresh_annotations: bool
+            ``True`` if mesh annotations should be re-calculated otherwise ``False``
 
         Clear out cached objects that are not currently in view. Populate the cache for any
         faces that are now in view. Populate the correct face image and annotations for each
@@ -156,7 +167,8 @@ class Viewport():
                 self._canvas.itemconfig(image_id, image=tk_face.photo)
                 if (self._canvas.optional_annotations["mesh"]
                         or frame_idx == self._active_frame.frame_index):
-                    landmarks = self.get_landmarks(frame_idx, face_idx, face, top_left)
+                    landmarks = self.get_landmarks(frame_idx, face_idx, face, top_left,
+                                                   refresh=refresh_annotations)
                     self._locate_mesh(mesh_ids, landmarks)
 
     def _discard_tk_faces(self):
@@ -414,9 +426,13 @@ class VisibleObjects():
         logger.trace("existing_rows: %s. required_rows: %s", existing_rows, required_rows)
 
         if existing_rows > required_rows:
-            for image_id in self._images[required_rows: existing_rows].flatten():
+            for image_id, mesh_ids in zip(self._images[required_rows: existing_rows].flatten(),
+                                          self._meshes[required_rows: existing_rows].flatten()):
                 logger.trace("Hiding image id: %s", image_id)
                 self._canvas.itemconfig(image_id, image="")
+                for ids in mesh_ids.values():
+                    for mesh_id in ids:
+                        self._canvas.itemconfig(mesh_id, state="hidden")
 
         if existing_rows < required_rows:
             self._add_rows(existing_rows, required_rows)
@@ -530,12 +546,12 @@ class VisibleObjects():
         else:
             tags = ["viewport", "viewport_mesh"]
             mesh = dict(polygon=[self._canvas.create_polygon(0, 0,
-                                                             width=2,
+                                                             width=1,
                                                              tags=tags + ["viewport_polygon"],
                                                              **kwargs["polygon"])
                                  for _ in range(4)],
                         line=[self._canvas.create_line(0, 0, 0, 0,
-                                                       width=2,
+                                                       width=1,
                                                        tags=tags + ["viewport_line"],
                                                        **kwargs["line"])
                               for _ in range(5)])
@@ -763,7 +779,7 @@ class ActiveFrame():
 
         for key in ("polygon", "line"):
             tag = "active_mesh_{}".format(key)
-            self._canvas.itemconfig(tag, **self._viewport.mesh_kwargs[key])
+            self._canvas.itemconfig(tag, **self._viewport.mesh_kwargs[key], width=1)
             self._canvas.dtag(tag)
 
         if self._viewport.selected_editor == "mask" and not self._optional_annotations["mask"]:
@@ -897,8 +913,8 @@ class ActiveFrame():
         """
         state = "normal" if (self._tk_vars["selected_editor"].get() != "Mask" or
                              self._optional_annotations["mesh"]) else "hidden"
-        kwargs = dict(polygon=dict(fill="", outline=self._canvas.control_colors["Mesh"]),
-                      line=dict(fill=self._canvas.control_colors["Mesh"]))
+        kwargs = dict(polygon=dict(fill="", width=2, outline=self._canvas.control_colors["Mesh"]),
+                      line=dict(fill=self._canvas.control_colors["Mesh"], width=2))
 
         edited = (self._tk_vars["edited"].get() and
                   self._tk_vars["selected_editor"].get() not in ("Mask", "View"))

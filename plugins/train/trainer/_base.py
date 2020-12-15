@@ -821,7 +821,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("full_size: %s, prediction_size: %s, color: %s",
                      images.shape[1], prediction_size, color)
 
-        display_size = int(prediction_size * (1 + (1 - self._coverage_ratio)))
+        display_size = int((prediction_size / self._coverage_ratio // 2) * 2)
         images = self._resize_sample(side, images, display_size)  # Resize targets to display size
         padding = (display_size - prediction_size) // 2
         if padding == 0:
@@ -829,12 +829,12 @@ class _Samples():  # pylint:disable=too-few-public-methods
             return images
 
         length = display_size // 4
-        t_l, b_r = (padding, display_size - padding)
+        t_l, b_r = (padding - 1, display_size - padding)
         for img in images:
-            cv2.rectangle(img, (t_l, t_l), (t_l + length, t_l + length), color, 2)
-            cv2.rectangle(img, (b_r, t_l), (b_r - length, t_l + length), color, 2)
-            cv2.rectangle(img, (b_r, b_r), (b_r - length, b_r - length), color, 2)
-            cv2.rectangle(img, (t_l, b_r), (t_l + length, b_r - length), color, 2)
+            cv2.rectangle(img, (t_l, t_l), (t_l + length, t_l + length), color, 1)
+            cv2.rectangle(img, (b_r, t_l), (b_r - length, t_l + length), color, 1)
+            cv2.rectangle(img, (b_r, b_r), (b_r - length, b_r - length), color, 1)
+            cv2.rectangle(img, (t_l, b_r), (t_l + length, b_r - length), color, 1)
         logger.debug("Overlayed background. Shape: %s", images.shape)
         return images
 
@@ -1076,9 +1076,8 @@ class _TrainingAlignments():
                      self.__class__.__name__, model, {k: len(v) for k, v in image_list.items()})
         self._args = model.command_line_arguments
         self._config = model.config
-        self._training_size = model.state.training_size
         self._alignments_paths = self._get_alignments_paths()
-        self._hashes = self._get_image_hashes(image_list)
+        self._hashes, self._training_sizes = self._get_image_hashes(image_list)
         self._alignments_version = dict()
         self._detected_faces = dict()
         self._load_alignments()
@@ -1139,11 +1138,12 @@ class _TrainingAlignments():
         """
         retval = dict()
         for side, detected_faces in self._detected_faces.items():
+            size = self._training_sizes[side]
             centering = "legacy" if self._alignments_version[side] == 1.0 else "head"
             logger.debug("side: %s, centering: %s", side, centering)
             ret_side = dict()
             for fhash, face in detected_faces.items():
-                face.load_aligned(None, size=self._training_size, centering=centering)
+                face.load_aligned(None, size=size, centering=centering)
                 for filename in self._hash_to_filenames(side, fhash):
                     ret_side[filename] = face.aligned
             retval[side] = ret_side
@@ -1223,7 +1223,7 @@ class _TrainingAlignments():
         masks = dict()
         if self._alignments_version[side] == 1.0:
             centering = "legacy"
-            size = self._training_size
+            size = self._training_sizes[side]
         else:
             centering = self._config["centering"]
             size = list(self._aligned_faces[side].values())[0].get_cropped_size(centering)
@@ -1262,15 +1262,30 @@ class _TrainingAlignments():
             within the training data folder
         """
         hashes = {key: dict() for key in image_list}
+        sizes = {key: None for key in image_list}
         for side, filelist in image_list.items():
             logger.debug("side: %s, file count: %s", side, len(filelist))
-            for filename, hsh in tqdm(read_image_hash_batch(filelist),
-                                      desc="Reading training images ({})".format(side.upper()),
-                                      total=len(filelist),
-                                      leave=False):
+            for filename, hsh, shape in tqdm(
+                    read_image_hash_batch(filelist, output_shape=True),
+                    desc="Reading training images ({})".format(side.upper()),
+                    total=len(filelist),
+                    leave=False):
                 hashes[side].setdefault(hsh, list()).append(filename)
-        logger.trace(hashes)
-        return hashes
+                if shape[0] != shape[1]:
+                    msg = ("Training images must be created by the extraction process and must be "
+                           "square.\nThe image '{}' has dimensions {}x{} so the process cannot "
+                           "continue.\nThere may be more images with these issues. Please double "
+                           "check your dataset".format(filename, shape[1], shape[0]))
+                    raise FaceswapError(msg)
+                if not sizes[side]:
+                    sizes[side] = shape[0]
+                if shape[0] != sizes[side]:
+                    msg = ("All training images for each side must be of the same size.\nImages "
+                           "in side '{}' have mismatched sizes {} and {}.\nPlease double check "
+                           "your dataset".format(side.upper(), sizes[side], shape[0]))
+                    raise FaceswapError(msg)
+        logger.trace(hashes, sizes)
+        return hashes, sizes
 
     # Hashes for Detected Faces
     def _load_alignments(self):
