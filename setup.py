@@ -16,7 +16,7 @@ from pkg_resources import parse_requirements
 
 INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements
-TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.3.0": ["10.1", "7.6"]}
+TENSORFLOW_REQUIREMENTS = {">=2.3.0,<2.4.0": ["10.1", "7.6"]}
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
 CONDA_MAPPING = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
@@ -55,7 +55,7 @@ class Environment():
         self.upgrade_pip()
 
         self.installed_packages = self.get_installed_packages()
-        self.get_installed_conda_packages()
+        self.installed_packages.update(self.get_installed_conda_packages())
 
     @property
     def encoding(self):
@@ -231,9 +231,11 @@ class Environment():
         chk = os.popen("conda list").read()
         installed = [re.sub(" +", " ", line.strip())
                      for line in chk.splitlines() if not line.startswith("#")]
+        retval = dict()
         for pkg in installed:
             item = pkg.split(" ")
-            self.installed_packages[item[0]] = item[1]
+            retval[item[0]] = item[1]
+        return retval
 
     def update_tf_dep(self):
         """ Update Tensorflow Dependency """
@@ -260,7 +262,7 @@ class Environment():
             return
 
         self.output.warning(
-            "The minimum Tensorflow requirement is 2.2 \n"
+            "The minimum Tensorflow requirement is 2.3 \n"
             "Tensorflow currently has no official prebuild for your CUDA, cuDNN "
             "combination.\nEither install a combination that Tensorflow supports or "
             "build and install your own tensorflow-gpu.\r\n"
@@ -547,7 +549,8 @@ class Checks():
         cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]
         cudnn_path = os.path.realpath(cudnn_path)
         cudnn_path = cudnn_path.replace("lib", "include")
-        cudnn_checkfiles = [os.path.join(cudnn_path, "cudnn_v{}.h".format(cudnn_vers)),
+        cudnn_checkfiles = [os.path.join(cudnn_path, "cudnn_version.h"),
+                            os.path.join(cudnn_path, "cudnn_v{}.h".format(cudnn_vers)),
                             os.path.join(cudnn_path, "cudnn.h")]
         return cudnn_checkfiles
 
@@ -580,6 +583,8 @@ class Install():
                 not self.env.missing_packages and not self.env.conda_missing_packages):
             self.output.info("All Dependencies are up to date")
             return
+        if self.env.updater:
+            self._remove_unrequired_packages()
         self.install_missing_dep()
         if self.env.updater:
             return
@@ -626,6 +631,35 @@ class Install():
                 if pkg[0].split("==")[1] != self.env.installed_conda_packages.get(key):
                     self.env.conda_missing_packages.append(pkg)
                     continue
+
+    def _remove_unrequired_packages(self):
+        """ Remove packages that have been installed by Pip that might now be installed by
+        Conda.
+
+        This specifically relates to tensorflow 2.2 when a Conda version was not available for
+        Windows, so needed to be installed by Pip, with the Cuda toolkit coming from Conda.
+
+        This method is left here in case it is needed in the future. """
+        if not self.env.is_conda or self.env.os_version[0] != "Windows":
+            return
+        installed_pip = self.env.get_installed_packages()
+        if "tensorflow-gpu" not in installed_pip:
+            return
+        if not installed_pip["tensorflow-gpu"].startswith("2.2"):
+            return
+        remove_packages = ["tensorboard", "tensorboard-plugin-wit",
+                           "tensorflow-gpu", "tensorflow-gpu-estimator"]
+        self.output.info("Uninstalling Pip Tensorflow 2.2")
+        pipexe = [sys.executable, "-m", "pip", "uninstall", "-y"]
+        if not self.env.is_admin and not self.env.is_virtualenv:
+            pipexe.append("--user")
+        pipexe.extend([pkg for pkg in remove_packages if pkg in installed_pip])
+
+        try:
+            run(pipexe, check=True)
+        except CalledProcessError:
+            self.output.warning("Couldn't remove Tensorflow 2.2 with pip. You should attempt this "
+                                "manually")
 
     def install_missing_dep(self):
         """ Install missing dependencies """
@@ -710,13 +744,18 @@ class Install():
 
     def _tensorflow_dependency_install(self):
         """ Install the Cuda/cuDNN dependencies from Conda when tensorflow is not available
-        in Conda """
+        in Conda.
+        
+        This was used whilst Tensorflow 2.2 was not available for Windows in Conda. It is kept
+        here in case it is required again in the future.
+        """
         # TODO This will need to be more robust if/when we accept multiple Tensorflow Versions
         versions = list(TENSORFLOW_REQUIREMENTS.values())[-1]
         condaexe = ["conda", "search"]
         pkgs = ["cudatoolkit", "cudnn"]
+        shell = self.env.os_version[0] == "Windows"
         for pkg in pkgs:
-            chk = Popen(condaexe + [pkg], shell=True, stdout=PIPE)
+            chk = Popen(condaexe + [pkg], shell=shell, stdout=PIPE)
             available = [line.split()
                          for line in chk.communicate()[0].decode(self.env.encoding).splitlines()
                          if line.startswith(pkg)]
