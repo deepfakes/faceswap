@@ -12,7 +12,7 @@ import re
 import sys
 from subprocess import CalledProcessError, run, PIPE, Popen
 
-from pkg_resources import parse_requirements
+from pkg_resources import parse_requirements, Requirement
 
 INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements
@@ -647,10 +647,17 @@ class Install():
             return
         if not installed_pip["tensorflow-gpu"].startswith("2.2"):
             return
-        remove_packages = ["tensorboard", "tensorboard-plugin-wit",
-                           "tensorflow-gpu", "tensorflow-gpu-estimator"]
+        # The below are a load of pip installed tf dependencies. They may not need to be all
+        # removed, but won't hurt to take them out of pip and put in Conda
+        remove_packages = ["urllib3", "pyasn1", "idna", "chardet", "rsa", "requests",
+                           "pyasn1-modules", "oauthlib", "cachetools", "requests-oauthlib",
+                           "google-auth", "werkzeug", "tensorboard-plugin-wit", "protobuf", 
+                           "numpy", "markdown", "grpcio", "google-auth-oauthlib", "absl-py", 
+                           "wrapt", "termcolor", "tensorflow-gpu-estimator", "tensorboard", 
+                           "opt-einsum", "keras-preprocessing", "h5py", "google-pasta", "gast",
+                           "astunparse", "tensorflow-gpu"]
         self.output.info("Uninstalling Pip Tensorflow 2.2")
-        pipexe = [sys.executable, "-m", "pip", "uninstall", "-y"]
+        pipexe = [sys.executable, "-m", "pip", "uninstall", "-y", "-qq"]
         if not self.env.is_admin and not self.env.is_virtualenv:
             pipexe.append("--user")
         pipexe.extend([pkg for pkg in remove_packages if pkg in installed_pip])
@@ -697,15 +704,31 @@ class Install():
     def conda_installer(self, package, channel=None, verbose=False, conda_only=False):
         """ Install a conda package """
         #  Packages with special characters need to be enclosed in double quotes
-        if any(char in package for char in (" ", "<", ">", "*", "|")):
-            package = "\"{}\"".format(package)
+        cuda_cudnn = None
         success = True
         condaexe = ["conda", "install", "-y"]
         if not verbose or self.env.updater:
             condaexe.append("-q")
         if channel:
             condaexe.extend(["-c", channel])
+
+        # Windows TF2.3 doesn't pull in the Cuda toolkit, so we may as well be explicit
+        # TODO This is not a robust enough check if we have more than 1 tf version
+        if package.startswith("tensorflow-gpu"):  # Add toolkit
+            specs = Requirement.parse(package).specs
+            for key, val in TENSORFLOW_REQUIREMENTS.items():
+                req_specs = Requirement.parse("foobar" + key).specs
+                if all(item in req_specs for item in specs):
+                    cuda_cudnn = val
+                    break
+
+        if any(char in package for char in (" ", "<", ">", "*", "|")):
+            package = "\"{}\"".format(package)
         condaexe.append(package)
+
+        if cuda_cudnn is not None:
+            condaexe.extend(["cudatoolkit={}".format(cuda_cudnn[0]),
+                             "cudnn={}".format(cuda_cudnn[1])])
         self.output.info("Installing {}".format(package.replace("\"", "")))
         shell = self.env.os_version[0] == "Windows"
         try:
