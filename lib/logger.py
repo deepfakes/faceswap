@@ -110,10 +110,17 @@ class FaceswapFormatter(logging.Formatter):
         record: :class:`logging.LogRecord`
             The log record to check for rewriting
         """
-        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
-                                     record.module in ("deprecation", "deprecation_wrapper")):
+        if record.levelno == 30 and record.funcName == "warn" and record.module == "ag_logging":
+            # TF 2.3 in Conda is imported with the wrong gast(0.4 when 0.3.3 should be used). This
+            # causes warnings in autograph. They don't appear to impact performance so de-elevate
+            # warning to debug
             record.levelno = 10
             record.levelname = "DEBUG"
+
+        # Keras Deprecations. Not currently required
+        # if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
+        #                              record.module in ("deprecation", "deprecation_wrapper")):
+
         return record
 
 
