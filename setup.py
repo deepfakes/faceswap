@@ -651,9 +651,9 @@ class Install():
         # removed, but won't hurt to take them out of pip and put in Conda
         remove_packages = ["urllib3", "pyasn1", "idna", "chardet", "rsa", "requests",
                            "pyasn1-modules", "oauthlib", "cachetools", "requests-oauthlib",
-                           "google-auth", "werkzeug", "tensorboard-plugin-wit", "protobuf", 
-                           "numpy", "markdown", "grpcio", "google-auth-oauthlib", "absl-py", 
-                           "wrapt", "termcolor", "tensorflow-gpu-estimator", "tensorboard", 
+                           "google-auth", "werkzeug", "tensorboard-plugin-wit", "protobuf",
+                           "numpy", "markdown", "grpcio", "google-auth-oauthlib", "absl-py",
+                           "wrapt", "termcolor", "tensorflow-gpu-estimator", "tensorboard",
                            "opt-einsum", "keras-preprocessing", "h5py", "google-pasta", "gast",
                            "astunparse", "tensorflow-gpu"]
         self.output.info("Uninstalling Pip Tensorflow 2.2")
@@ -768,7 +768,7 @@ class Install():
     def _tensorflow_dependency_install(self):
         """ Install the Cuda/cuDNN dependencies from Conda when tensorflow is not available
         in Conda.
-        
+
         This was used whilst Tensorflow 2.2 was not available for Windows in Conda. It is kept
         here in case it is required again in the future.
         """
