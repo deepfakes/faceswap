@@ -8,7 +8,6 @@ https://github.com/1adrianb/face-alignment
 
 from scipy.special import logsumexp
 import numpy as np
-import tensorflow as tf
 import keras  # pylint:disable=import-error
 import keras.backend as K  # pylint:disable=import-error
 from keras.layers import Concatenate, Conv2D, Input, Maximum, MaxPooling2D, ZeroPadding2D
