@@ -317,6 +317,7 @@ class TensorBoardLogs():
         loss = []
         timestamps = []
         last_step = -1
+        carry_over = None
         live_data = is_training and session_id == max(self._log_filenames)
 
         if live_data:
@@ -335,6 +336,7 @@ class TensorBoardLogs():
 
                 if live_data and self._cache[session_id].get("carry_over"):
                     step = self._cache[session_id]["carry_over"]
+                    logger.debug("Retrieving carried over data: %s", step)
                     self._cache[session_id]["carry_over"] = None
 
                 if event.step != last_step:
@@ -375,8 +377,10 @@ class TensorBoardLogs():
         except ValueError as err:
             # When collecting live loss, the current batch may not be completely populated
             # Carry over the last loss to the next collection
-            if live_data and "setting an array element with a sequence" in str(err):
-                self._cache[session_id]["carry_over"] = loss[-1]
+            if "setting an array element with a sequence" in str(err):
+                carry_over = loss[-1]
+                logger.debug("Carrying over data: (carry_over: %s, new loss: %s)",
+                             carry_over, loss[:-1])
                 loss = np.array(loss[:-1], dtype="float32")
             else:
                 raise
@@ -393,6 +397,8 @@ class TensorBoardLogs():
                                            loss_shape=loss.shape,
                                            timestamps=zlib.compress(timestamps),
                                            timestamps_shape=timestamps.shape)
+        if carry_over:
+            self._cache[session_id]["carry_over"] = carry_over
 
     def _get_latest_live(self):
         """ Obtain the latest event logs for live training data and add to the cache """
