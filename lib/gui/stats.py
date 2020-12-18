@@ -334,18 +334,25 @@ class TensorBoardLogs():
                     last_step = event.step if live_data else 0
 
                 if event.step != last_step:
-                    loss.append(step)
+                    if last_step != 0:
+                        loss.append(step)
                     step = []
                     last_step = event.step
 
                 summary = event.summary.value[0]
                 tag = summary.tag
 
-                if tag == "batch_total":
+                # Pre tf2.3 totals were "batch_total"
+                if tag in ("batch_loss", "batch_total"):
                     timestamps.append(event.wall_time)
                     continue
 
-                lbl = tag.replace("batch_", "")
+                # tf2.3 stopped respecting loss names in tensorboard callback so rewrite
+                lbl_split = tag.replace("batch_", "").replace("_loss", "").split("_")
+                if lbl_split[-1] in ("a", "b"):
+                    lbl = "face_{}".format(lbl_split[-1])
+                else:
+                    lbl = "mask_{}".format(lbl_split[-2])
                 if lbl not in labels:
                     labels.append(lbl)
 
@@ -361,7 +368,6 @@ class TensorBoardLogs():
 
         loss = np.array(loss, dtype="float32")
         timestamps = np.array(timestamps, dtype="float64")
-
         logger.debug("Caching session id: %s, labels: %s, loss: %s, timestamps: %s",
                      session_id, labels, loss.shape, timestamps.shape)
 
@@ -498,7 +504,7 @@ class TensorBoardLogs():
         """ Read the timestamps from the TensorBoard logs.
 
         As loss timestamps are slightly different for each loss, we collect the timestamp from the
-        `batch_total` key.
+        `batch_loss` key.
 
         Parameters
         ----------
