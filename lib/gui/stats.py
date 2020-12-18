@@ -333,6 +333,10 @@ class TensorBoardLogs():
                 if last_step == -1:
                     last_step = event.step if live_data else 0
 
+                if live_data and self._cache[session_id].get("carry_over"):
+                    step = self._cache[session_id]["carry_over"]
+                    self._cache[session_id]["carry_over"] = None
+
                 if event.step != last_step:
                     if last_step != 0:
                         loss.append(step)
@@ -366,7 +370,17 @@ class TensorBoardLogs():
         if step:
             loss.append(step)
 
-        loss = np.array(loss, dtype="float32")
+        try:
+            loss = np.array(loss, dtype="float32")
+        except ValueError as err:
+            # When collecting live loss, the current batch may not be completely populated
+            # Carry over the last loss to the next collection
+            if live_data and "setting an array element with a sequence" in str(err):
+                self._cache[session_id]["carry_over"] = loss[-1]
+                loss = np.array(loss[:-1], dtype="float32")
+            else:
+                raise
+
         timestamps = np.array(timestamps, dtype="float64")
         logger.debug("Caching session id: %s, labels: %s, loss: %s, timestamps: %s",
                      session_id, labels, loss.shape, timestamps.shape)
