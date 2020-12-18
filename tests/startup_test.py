@@ -25,5 +25,5 @@ def test_backend(dummy):  # pylint:disable=unused-argument
 def test_keras(dummy):  # pylint:disable=unused-argument
     """ Sanity check to ensure that tensorflow keras is being used for CPU and standard
     keras for AMD. """
-    assert ((_BACKEND == "cpu" and keras.__version__.endswith("-tf")) or
-            (_BACKEND == "amd" and not keras.__version__.endswith("-tf")))
+    assert ((_BACKEND == "cpu" and keras.__version__ == "2.4.0") or
+            (_BACKEND == "amd" and keras.__version__ == "2.2.4"))

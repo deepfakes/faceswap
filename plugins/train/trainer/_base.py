@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 
 import tensorflow as tf
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import errors_impl as tf_errors
 from tqdm import tqdm
 
 from lib.align import Alignments, DetectedFace

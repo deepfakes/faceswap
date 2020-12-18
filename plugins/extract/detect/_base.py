@@ -18,7 +18,7 @@ To get a :class:`~lib.align.DetectedFace` object use the function:
 import cv2
 import numpy as np
 
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import errors_impl as tf_errors
 
 from lib.align import DetectedFace
 from lib.utils import get_backend, FaceswapError

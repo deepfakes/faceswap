@@ -17,7 +17,7 @@ from threading import Event
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import errors_impl as tf_errors
 from tensorflow.core.util import event_pb2
 from lib.serializer import get_serializer
 
@@ -317,6 +317,7 @@ class TensorBoardLogs():
         loss = []
         timestamps = []
         last_step = -1
+        carry_over = None
         live_data = is_training and session_id == max(self._log_filenames)
 
         if live_data:
@@ -333,19 +334,31 @@ class TensorBoardLogs():
                 if last_step == -1:
                     last_step = event.step if live_data else 0
 
+                if live_data and self._cache[session_id].get("carry_over"):
+                    step = self._cache[session_id]["carry_over"]
+                    logger.debug("Retrieving carried over data: %s", step)
+                    self._cache[session_id]["carry_over"] = None
+
                 if event.step != last_step:
-                    loss.append(step)
+                    if last_step != 0:
+                        loss.append(step)
                     step = []
                     last_step = event.step
 
                 summary = event.summary.value[0]
                 tag = summary.tag
 
-                if tag == "batch_total":
+                # Pre tf2.3 totals were "batch_total"
+                if tag in ("batch_loss", "batch_total"):
                     timestamps.append(event.wall_time)
                     continue
 
-                lbl = tag.replace("batch_", "")
+                # tf2.3 stopped respecting loss names in tensorboard callback so rewrite
+                lbl_split = tag.replace("batch_", "").replace("_loss", "").split("_")
+                if lbl_split[-1] in ("a", "b"):
+                    lbl = "face_{}".format(lbl_split[-1])
+                else:
+                    lbl = "mask_{}".format(lbl_split[-2])
                 if lbl not in labels:
                     labels.append(lbl)
 
@@ -359,9 +372,20 @@ class TensorBoardLogs():
         if step:
             loss.append(step)
 
-        loss = np.array(loss, dtype="float32")
-        timestamps = np.array(timestamps, dtype="float64")
+        try:
+            loss = np.array(loss, dtype="float32")
+        except ValueError as err:
+            # When collecting live loss, the current batch may not be completely populated
+            # Carry over the last loss to the next collection
+            if "setting an array element with a sequence" in str(err):
+                carry_over = loss[-1]
+                logger.debug("Carrying over data: (carry_over: %s, new loss: %s)",
+                             carry_over, loss[:-1])
+                loss = np.array(loss[:-1], dtype="float32")
+            else:
+                raise
 
+        timestamps = np.array(timestamps, dtype="float64")
         logger.debug("Caching session id: %s, labels: %s, loss: %s, timestamps: %s",
                      session_id, labels, loss.shape, timestamps.shape)
 
@@ -373,6 +397,8 @@ class TensorBoardLogs():
                                            loss_shape=loss.shape,
                                            timestamps=zlib.compress(timestamps),
                                            timestamps_shape=timestamps.shape)
+        if carry_over:
+            self._cache[session_id]["carry_over"] = carry_over
 
     def _get_latest_live(self):
         """ Obtain the latest event logs for live training data and add to the cache """
@@ -498,7 +524,7 @@ class TensorBoardLogs():
         """ Read the timestamps from the TensorBoard logs.
 
         As loss timestamps are slightly different for each loss, we collect the timestamp from the
-        `batch_total` key.
+        `batch_loss` key.
 
         Parameters
         ----------
