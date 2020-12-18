@@ -176,17 +176,6 @@ class SliceO2K(keras.layers.Layer):
             input_shape[a_x] = (min(size, end) - start) // steps
         return tuple(input_shape)
 
-    # The following decorator hides the following warning for tf2.3:
-    #
-    # AutoGraph could not transform <bound method SliceO2K.call of
-    # <plugins.extract.detect.s3fd.SliceO2K object at 0x0000024F3C771100>> and will run it as-is.
-    # Please report this to the TensorFlow team. When filing the bug, set the verbosity to 10 (on
-    # Linux, `export AUTOGRAPH_VERBOSITY=10`) and attach the full output.
-    # Cause: module 'gast' has no attribute 'Index'\nTo silence this warning, decorate the function
-    # with @tf.autograph.experimental.do_not_convert
-    #
-    # TODO Get to root cause of error and fix
-    @tf.autograph.experimental.do_not_convert
     def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
         """This is where the layer's logic lives.
 
