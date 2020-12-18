@@ -71,7 +71,7 @@ class DSSIMObjective(tf.keras.losses.Loss):
         self.dim_ordering = K.image_data_format()
 
     @staticmethod
-    def __int_shape(input_tensor):
+    def _int_shape(input_tensor):
         """ Returns the shape of tensor or variable as a tuple of int or None entries.
 
         Parameters
@@ -108,8 +108,8 @@ class DSSIMObjective(tf.keras.losses.Loss):
         """
 
         kernel = [self.kernel_size, self.kernel_size]
-        y_true = K.reshape(y_true, [-1] + list(self.__int_shape(y_pred)[1:]))
-        y_pred = K.reshape(y_pred, [-1] + list(self.__int_shape(y_pred)[1:]))
+        y_true = K.reshape(y_true, [-1] + list(self._int_shape(y_pred)[1:]))
+        y_pred = K.reshape(y_pred, [-1] + list(self._int_shape(y_pred)[1:]))
         patches_pred = self.extract_image_patches(y_pred,
                                                   kernel,
                                                   kernel,
