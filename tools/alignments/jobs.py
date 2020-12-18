@@ -541,6 +541,8 @@ class Extract():  # pylint:disable=too-few-public-methods
         face_count = 0
         frame_name, extension = os.path.splitext(filename)
         faces = self._select_valid_faces(filename, image)
+        if not faces:
+            return face_count
         if self._is_legacy:
             faces = self._process_legacy(filename, image, faces)
 
