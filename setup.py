@@ -16,7 +16,7 @@ from pkg_resources import parse_requirements, Requirement
 
 INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements
-TENSORFLOW_REQUIREMENTS = {">=2.3.0,<2.4.0": ["10.1", "7.6"]}
+TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.4.0": ["10.1", "7.6"]}
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
 CONDA_MAPPING = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
