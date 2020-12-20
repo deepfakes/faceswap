@@ -744,7 +744,7 @@ class ImageAugmentation():
             return batch
         logger.trace("Randomly transforming image")
         rotation_range = self._config.get("rotation_range", 10)
-        zoom_range = self._config.get("zoom_range", 5) / 100
+        zoom_range = self._config.get("zoom_amount", 5) / 100
         shift_range = self._config.get("shift_range", 5) / 100
 
         rotation = np.random.uniform(-rotation_range,

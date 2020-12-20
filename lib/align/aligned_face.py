@@ -432,7 +432,7 @@ class AlignedFace():
             if centering not in self._cache["cropped_roi"][0]:
                 offset = self.pose.offset.get(centering, np.float32((0, 0)))  # legacy = 0,0
                 offset -= self.pose.offset["head"]
-                offset *= ((self._size - self._padding["head"]) / 2)
+                offset *= (self.size - (self._size * _EXTRACT_RATIOS["head"]))
 
                 center = np.rint(offset + self._size / 2).astype("int32")
                 padding = self.get_cropped_size(centering) // 2
