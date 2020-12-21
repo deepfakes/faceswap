@@ -166,7 +166,7 @@ class AlignedFace():
 
         self._cache = self._set_cache()
 
-        self._face = self._extract_face(image)
+        self._face = self.extract_face(image)
         logger.trace("Initialized: %s (matrix: %s, padding: %s, face shape: %s)",
                      self.__class__.__name__, self._matrices["legacy"], self._padding,
                      self._face if self._face is None else self._face.shape)
@@ -193,6 +193,17 @@ class AlignedFace():
             self._matrices[self._centering] = matrix
             logger.trace("original matrix: %s, new matrix: %s", self._matrices["legacy"], matrix)
         return self._matrices[self._centering]
+
+    @property
+    def _head_size(self):
+        """ int: The size of the full head extract image calculated from the required
+        centering. """
+        with self._cache["head_size"][1]:
+            if self._centering not in self._cache["head_size"][0]:
+                self._cache["head_size"][0][self._centering] = get_centered_size(self._centering,
+                                                                                 "head",
+                                                                                 self.size)
+        return self._cache["head_size"][0][self._centering]
 
     @property
     def pose(self):
@@ -277,6 +288,7 @@ class AlignedFace():
                     landmarks=[None, Lock()],
                     adjusted_matrix=[None, Lock()],
                     interpolators=[None, Lock()],
+                    head_size=[dict(), Lock()],
                     cropped_roi=[dict(), Lock()],
                     cropped_size=[dict(), Lock()],
                     cropped_slices=[dict(), Lock()])
@@ -305,7 +317,7 @@ class AlignedFace():
                      invert, points, retval)
         return retval
 
-    def _extract_face(self, image):
+    def extract_face(self, image):
         """ Extract the face from a source image and populate :attr:`face`. If an image is not
         provided then ``None`` is returned.
 
@@ -323,10 +335,8 @@ class AlignedFace():
         """
         if image is None:
             logger.debug("_extract_face called without a loaded image. Returning empty face.")
-            if self._is_aligned:
-                raise ValueError("An aligned face must be provided if calling with "
-                                 "'is_aligned=True'")
             return None
+
         if self._is_aligned and self._centering != "head":  # Crop out the sub face from full head
             image = self._convert_centering(image)
 
@@ -345,7 +355,7 @@ class AlignedFace():
         so it needs to be cropped out to the appropriate centering.
 
         This function temporarily converts this object to a full head aligned face, extracts the
-        sub-cropped face to the correct centering, revers the sub crop and returns the cropped
+        sub-cropped face to the correct centering, reverse the sub crop and returns the cropped
         face.
 
         Parameters
@@ -359,30 +369,17 @@ class AlignedFace():
             The aligned image with the correct centering
         """
         # Input image is sized up because of integer rounding
-        src_size = self.size - (self._size * _EXTRACT_RATIOS[self._centering])
-        head_size = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS["head"]) / 2))
-        if head_size != image.shape[0]:
-            interp = cv2.INTER_CUBIC if image.shape[0] < head_size else cv2.INTER_AREA
-            image = cv2.resize(image, (head_size, head_size), interpolation=interp)
+        logger.trace("head_size: %s, image_size: %s, target_size: %s",
+                     self._head_size, image.shape[0], self.size)
+        if self._head_size != image.shape[0]:
+            interp = cv2.INTER_CUBIC if image.shape[0] < self._head_size else cv2.INTER_AREA
+            image = cv2.resize(image, (self._head_size, self._head_size), interpolation=interp)
 
-        # store requested size + centering whilst temporary converting to full head extract
-        old_centering = self._centering
-        old_size = self.size
-        self._centering = "head"
-        self._size = image.shape[0]
-
-        # crop the requested centering from image
-        size = self.get_cropped_size(old_centering)
-        out = np.zeros((size, size, image.shape[-1]), dtype=image.dtype)
-        slices = self.get_cropped_slices(old_centering)
+        out = np.zeros((self.size, self.size, image.shape[-1]), dtype=image.dtype)
+        slices = self._get_cropped_slices()
         out[slices["out"][0], slices["out"][1], :] = image[slices["in"][0], slices["in"][1], :]
-
-        # Revert back to the correct centering and size and reset the cache
-        self._centering = old_centering
-        self._size = old_size
-        self._cache = self._set_cache()
         logger.trace("Cropped from aligned extract: (centering: %s, in shape: %s, out shape: %s)",
-                     old_centering, image.shape, out.shape)
+                     self._centering, image.shape, out.shape)
         return out
 
     @classmethod
@@ -425,86 +422,40 @@ class AlignedFace():
             The (`left`, `top`, `right`, `bottom` location of the region of interest within an
             aligned face centered on the head for the given centering
         """
-        if self._centering != "head":
-            raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
-                             "centering")
         with self._cache["cropped_roi"][1]:
             if centering not in self._cache["cropped_roi"][0]:
                 offset = self.pose.offset.get(centering, np.float32((0, 0)))  # legacy = 0,0
                 offset -= self.pose.offset["head"]
-                offset *= (self.size - (self._size * _EXTRACT_RATIOS["head"]))
+                offset *= (self._head_size - (self._head_size * _EXTRACT_RATIOS["head"]))
 
-                center = np.rint(offset + self._size / 2).astype("int32")
-                padding = self.get_cropped_size(centering) // 2
+                center = np.rint(offset + self._head_size / 2).astype("int32")
+                padding = self.size // 2
                 roi = np.array([center - padding, center + padding]).ravel()
                 logger.trace("centering: '%s', center: %s, padding: %s, sub roi: %s",
                              centering, center, padding, roi)
                 self._cache["cropped_roi"][0][centering] = roi
         return self._cache["cropped_roi"][0][centering]
 
-    def get_cropped_size(self, centering):
-        """ Obtain the size of a cropped face from a full head centered image.
-
-        Parameters
-        ----------
-        centering: ["legacy", "face"]
-            The type of centering to obtain the region of interest for. "legacy" places the nose
-            in the center of the image (the original method for aligning). "face" aligns for the
-            nose to be in the center of the face (top to bottom) but the center of the skull for
-            left to right.
-
-        Returns
-        -------
-        int
-           The pixel size of a sub-crop image from a full head aligned image
-
-        Notes
-        -----
-        The ROI in relation to the source image is calculated by rounding the padding of one side
-        to the nearest integer then applying this padding to the center of the crop, so the size
-        is calculated in the same way.
-        """
-        if self._centering != "head":
-            raise ValueError("Sub ROI can only be obtained from an aligned face with 'head' "
-                             "centering")
-        with self._cache["cropped_size"][1]:
-            if not self._cache["cropped_size"][0].get(centering):
-                src_size = self.size - (self._size * _EXTRACT_RATIOS["head"])
-                size = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS[centering]) / 2))
-                logger.trace("centering: %s, size: %s, crop_size: %s", centering, self._size, size)
-                self._cache["cropped_size"][0][centering] = size
-        return self._cache["cropped_size"][0][centering]
-
-    def get_cropped_slices(self, centering):
+    def _get_cropped_slices(self):
         """ Obtain the slices to turn a full head extract into an alternatively centered extract.
-
-        Parameters
-        ----------
-        centering: ["legacy", "face"]
-            The type of centering to obtain the region of interest for. "legacy" places the nose
-            in the center of the image (the original method for aligning). "face" aligns for the
-            nose to be in the center of the face (top to bottom) but the center of the skull for
-            left to right.
 
         Returns
         -------
         dict
             The slices for an input full head image and output cropped image
         """
-        if self._centering != "head":
-            raise ValueError("Cropped slices can only be obtained from an aligned face with "
-                             "'head' centering")
         with self._cache["cropped_slices"][1]:
-            if not self._cache["cropped_slices"][0].get(centering):
-                size = self.get_cropped_size(centering)
-                roi = self.get_cropped_roi(centering)
+            if not self._cache["cropped_slices"][0].get(self._centering):
+                roi = self.get_cropped_roi(self._centering)
+                head_size = self._head_size
                 slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
-                slice_out = [slice(max(roi[1] * -1, 0), size - max(0, roi[3] - self.size)),
-                             slice(max(roi[0] * -1, 0), size - max(0, roi[2] - self.size))]
-                self._cache["cropped_slices"][0][centering] = {"in": slice_in, "out": slice_out}
+                slice_out = [slice(max(roi[1] * -1, 0), self._size - max(0, roi[3] - head_size)),
+                             slice(max(roi[0] * -1, 0), self._size - max(0, roi[2] - head_size))]
+                self._cache["cropped_slices"][0][self._centering] = {"in": slice_in,
+                                                                     "out": slice_out}
                 logger.trace("centering: %s, cropped_slices: %s",
-                             centering, self._cache["cropped_slices"][0][centering])
-        return self._cache["cropped_slices"][0][centering]
+                             self._centering, self._cache["cropped_slices"][0][self._centering])
+        return self._cache["cropped_slices"][0][self._centering]
 
 
 class PoseEstimate():
@@ -613,6 +564,47 @@ class PoseEstimate():
             offset[key] = center - (0.5, 0.5)
         logger.trace("offset: %s", offset)
         return offset
+
+
+def get_centered_size(source_centering, target_centering, size):
+    """ Obtain the size of a cropped face from an aligned image.
+
+    Given an image of a certain dimensions, returns the dimensions of the sub-crop within that
+    image for the requested centering.
+
+    Notes
+    -----
+    `"legacy"` places the nose in the center of the image (the original method for aligning).
+    `"face"` aligns for the nose to be in the center of the face (top to bottom) but the center
+    of the skull for left to right. `"head"` places the center in the middle of the skull in 3D
+    space.
+
+    The ROI in relation to the source image is calculated by rounding the padding of one side
+    to the nearest integer then applying this padding to the center of the crop, to ensure that
+    any dimensions always have an even number of pixels.
+
+    Parameters
+    ----------
+    source_centering: ["head", "face", "legacy"]
+        The centering that the original image is aligned at
+    target_centering: ["head", "face", "legacy"]
+        The centering that the sub-crop size should be obtained for
+    size: int
+        The size of the source image to obtain the cropped size for
+
+    Returns
+    -------
+    int
+        The pixel size of a sub-crop image from a full head aligned image
+    """
+    if source_centering == target_centering:
+        retval = size
+    else:
+        src_size = size - (size * _EXTRACT_RATIOS[source_centering])
+        retval = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS[target_centering]) / 2))
+    logger.trace("source_centering: %s, target_centering: %s, size: %s, crop_size: %s",
+                 source_centering, target_centering, size, retval)
+    return retval
 
 
 def _umeyama(source, destination, estimate_scale):

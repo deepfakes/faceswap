@@ -7,7 +7,7 @@ from zlib import compress, decompress
 import cv2
 import numpy as np
 
-from . import AlignedFace, _EXTRACT_RATIOS
+from . import AlignedFace, _EXTRACT_RATIOS, get_centered_size
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -580,7 +580,7 @@ class Mask():
         offset *= ((self.stored_size - (src_size / 2)) / 2)
         center = np.rint(offset + self.stored_size / 2).astype("int32")
 
-        crop_size = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS["legacy"]) / 2))
+        crop_size = get_centered_size("face", "legacy", self.stored_size)
         roi = np.array([center - crop_size // 2, center + crop_size // 2]).ravel()
 
         self._sub_crop["size"] = crop_size

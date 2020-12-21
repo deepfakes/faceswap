@@ -21,7 +21,7 @@ import tensorflow as tf
 from tensorflow.python.framework import errors_impl as tf_errors
 from tqdm import tqdm
 
-from lib.align import Alignments, DetectedFace
+from lib.align import Alignments, AlignedFace, DetectedFace, get_centered_size
 from lib.image import read_image_hash_batch
 from lib.training_data import TrainingDataGenerator
 from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths
@@ -1077,12 +1077,15 @@ class _TrainingAlignments():
         self._args = model.command_line_arguments
         self._config = model.config
         self._alignments_paths = self._get_alignments_paths()
-        self._hashes, self._training_sizes = self._get_image_hashes(image_list)
+        self._hashes, sizes = self._get_image_hashes(image_list)
+
         self._alignments_version = dict()
         self._detected_faces = dict()
+
         self._load_alignments()
         self._check_all_faces()
-        self._aligned_faces = self._get_aligned_faces()
+
+        self._aligned_faces = self._get_aligned_faces(sizes)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -1127,8 +1130,13 @@ class _TrainingAlignments():
         logger.debug("Alignments paths: %s", retval)
         return retval
 
-    def _get_aligned_faces(self):
+    def _get_aligned_faces(self, input_sizes):
         """ Pre-generate aligned faces as they are needed for all training functions.
+
+        Parameters
+        ----------
+        input_sizes: dict
+            The training image sizes in pixels for side `a` and `b` as they are saved on disk
 
         Returns
         -------
@@ -1138,12 +1146,15 @@ class _TrainingAlignments():
         """
         retval = dict()
         for side, detected_faces in self._detected_faces.items():
-            size = self._training_sizes[side]
-            centering = "legacy" if self._alignments_version[side] == 1.0 else "head"
-            logger.debug("side: %s, centering: %s", side, centering)
             ret_side = dict()
+            size = get_centered_size("legacy" if self._alignments_version[side] == 1.0 else "head",
+                                     self._config["centering"],
+                                     input_sizes[side])
             for fhash, face in detected_faces.items():
-                face.load_aligned(None, size=size, centering=centering)
+                face.aligned = AlignedFace(face.landmarks_xy,
+                                           centering=self._config["centering"],
+                                           size=size,
+                                           is_aligned=True)
                 for filename in self._hash_to_filenames(side, fhash):
                     ret_side[filename] = face.aligned
             retval[side] = ret_side
@@ -1221,18 +1232,13 @@ class _TrainingAlignments():
         """
         logger.trace("side: %s, detected_faces: %s, area: %s", side, detected_faces, area)
         masks = dict()
-        if self._alignments_version[side] == 1.0:
-            centering = "legacy"
-            size = self._training_sizes[side]
-        else:
-            centering = self._config["centering"]
-            size = list(self._aligned_faces[side].values())[0].get_cropped_size(centering)
+        size = list(self._aligned_faces[side].values())[0].size
         for fhash, face in detected_faces.items():
             mask = partial(face.get_landmark_mask,
                            size,
                            area,
                            aligned=True,
-                           centering=centering,
+                           centering=self._config["centering"],
                            dilation=size // 32,
                            blur_kernel=size // 16,
                            as_zip=True)
@@ -1301,6 +1307,11 @@ class _TrainingAlignments():
             alignments = Alignments(path, filename=filename)
             self._detected_faces[side] = self._to_detected_faces(alignments, side)
             self._alignments_version[side] = alignments.version
+
+        if 1.0 in self._alignments_version.values() and self._config["centering"] != "legacy":
+            logger.debug("Updating alignments config to legacy for old facesets")
+            self._config["centering"] = "legacy"
+
         logger.debug("alignments_versions: %s, detected_faces: %s, ", self._alignments_version,
                      {k: len(v) for k, v in self._detected_faces.items()})
 

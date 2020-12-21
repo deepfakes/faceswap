@@ -309,18 +309,14 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
             return batch, np.array([face.landmarks for face in aligned])
 
         if not self._cache["crop_size"]:
-            size = aligned[0].get_cropped_size(self._config["centering"])
+            size = aligned[0].size
             logger.debug("caching crop size: (centering: '%s', full size: %s, crop size: %s)",
                          self._config["centering"], batch.shape[1], size)
             self._cache["crop_size"] = size
         size = self._cache["crop_size"]
 
         landmarks = np.array([face.landmarks for face in aligned])
-        cropped = np.zeros((batch.shape[0], size, size, batch.shape[3]), dtype=batch.dtype)
-
-        for out, align, img in zip(cropped, aligned, batch):
-            slices = align.get_cropped_slices(self._config["centering"])
-            out[slices["out"][0], slices["out"][1], :] = img[slices["in"][0], slices["in"][1], :]
+        cropped = np.array([align.extract_face(img) for align, img in zip(aligned, batch)])
         return cropped, landmarks
 
     def _apply_mask(self, filenames, batch, side):
@@ -443,6 +439,12 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
                      for key, aligned in self._aligned_faces[lm_side].items()}
         closest_hashes = [self._cache["nearest_landmarks"].get(filename) for filename in filenames]
         if None in closest_hashes:
+            # Resize mismatched training image size landmarks
+            sizes = {side: list(self._aligned_faces[side].values())[0].size
+                     for side in self._aligned_faces}
+            if len(set(sizes.values())) > 1:
+                scale = sizes[side] / sizes[lm_side]
+                landmarks = {key: lms * scale for key, lms in landmarks.items()}
             closest_hashes = self._cache_closest_hashes(filenames, batch_src_points, landmarks)
 
         batch_dst_points = np.array([landmarks[choice(hsh)] for hsh in closest_hashes])
