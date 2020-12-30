@@ -702,7 +702,7 @@ class Alignments():
             logger.warning("This alignment file already exists. Change -al path.")
             sys.exit()
             raise
-            
+
         logger.debug("legacy landmarksXY: %s", retval)
         return retval
         
