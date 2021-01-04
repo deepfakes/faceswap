@@ -21,13 +21,14 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _RECREATE_OBJECTS = dict(tooltips=dict(), commands=dict(), contextmenus=dict())
 
 
-def _get_tooltip(widget, text, wraplength=600):
+def _get_tooltip(widget, text=None, text_variable=None, wraplength=600):
     """ Store the tooltip layout and widget id in _TOOLTIPS and return a tooltip """
     _RECREATE_OBJECTS["tooltips"][str(widget)] = {"text": text,
+                                                  "text_variable": text_variable,
                                                   "wraplength": wraplength}
     logger.debug("Adding to tooltips dict: (widget: %s. text: '%s', wraplength: %s)",
                  widget, text, wraplength)
-    return Tooltip(widget, text=text, wraplength=wraplength)
+    return Tooltip(widget, text=text, text_variable=text_variable, wraplength=wraplength)
 
 
 def _get_contextmenu(widget):
@@ -832,7 +833,10 @@ class ControlBuilder():
         if self.option.control != ttk.Checkbutton:
             ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
             if self.option.helptext is not None and not self.helpset:
-                _get_tooltip(ctl, text=self.option.helptext, wraplength=600)
+                tooltip_kwargs = dict(text=self.option.helptext, wraplength=600)
+                if self.option.sysbrowser is not None:
+                    tooltip_kwargs["text_variable"] = self.option.tk_var
+                _get_tooltip(ctl, **tooltip_kwargs)
 
         logger.debug("Built control: '%s'", self.option.name)
 

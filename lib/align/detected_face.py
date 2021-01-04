@@ -7,7 +7,7 @@ from zlib import compress, decompress
 import cv2
 import numpy as np
 
-from lib.aligner import Extract as AlignerExtract, get_align_mat, get_matrix_scaling
+from . import AlignedFace, _EXTRACT_RATIOS, get_centered_size
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -70,10 +70,10 @@ class DetectedFace():
         The hash of the face. This cannot be set until the file is saved due to image compression,
         but will be set if loading data from :func:`from_alignment`
     """
-    def __init__(self, image=None, x=None, w=None, y=None, h=None,
-                 landmarks_xy=None, mask=None, filename=None):
-        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, "
-                     "landmarks_xy: %s, mask: %s, filename: %s)",
+    def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None, mask=None,
+                 filename=None):
+        logger.trace("Initializing %s: (image: %s, x: %s, w: %s, y: %s, h:%s, landmarks_xy: %s, "
+                     "mask: %s, filename: %s)",
                      self.__class__.__name__,
                      image.shape if image is not None and image.any() else image,
                      x, w, y, h, landmarks_xy,
@@ -89,9 +89,7 @@ class DetectedFace():
         self.mask = dict() if mask is None else mask
         self.hash = None
 
-        self.aligned = dict()
-        self.feed = dict()
-        self.reference = dict()
+        self.aligned = None
         logger.trace("Initialized %s", self.__class__.__name__)
 
     @property
@@ -113,11 +111,6 @@ class DetectedFace():
     def bottom(self):
         """int: Bottom point (in pixels) of face detection bounding box within the parent image """
         return self.y + self.h
-
-    @property
-    def _extract_ratio(self):
-        """ float: The ratio of padding to add for training images """
-        return 0.375
 
     def add_mask(self, name, mask, affine_matrix, interpolator, storage_size=128):
         """ Add a :class:`Mask` to this detected face
@@ -147,7 +140,8 @@ class DetectedFace():
         fsmask.add(mask, affine_matrix, interpolator)
         self.mask[name] = fsmask
 
-    def get_landmark_mask(self, size, area, aligned=True, dilation=0, blur_kernel=0, as_zip=False):
+    def get_landmark_mask(self, size, area,
+                          aligned=True, centering="head", dilation=0, blur_kernel=0, as_zip=False):
         """ Obtain a single channel mask based on the face's landmark points.
 
         Parameters
@@ -159,9 +153,17 @@ class DetectedFace():
         area: ["mouth", "eyes"]
             The type of mask to obtain. `face` is a full face mask the others are masks for those
             specific areas
-        aligned: bool
+        aligned: bool, optional
             ``True`` if the returned mask should be for an aligned face. ``False`` if a full frame
-            mask should be returned
+            mask should be returned. Default ``True``
+        centering: ["legacy", "face", "head"], optional
+            Only used if `aligned`=``True``. The centering for the landmarks based mask. Should be
+            the same as the centering used for the extracted face that this mask will be applied
+            to. "legacy" places the nose in the center of the image (the original method for
+            aligning). "face" aligns for the nose to be in the center of the face (top to bottom)
+            but the center of the skull for left to right. "head" aligns for the center of the
+            skull (in 3D space) being the center of the extracted image, with the crop holding the
+            full head. Default: `"face"`
         dilation: int, optional
             The amount of dilation to apply to the mask. `0` for none. Default: `0`
         blur_kernel: int, optional
@@ -180,13 +182,14 @@ class DetectedFace():
         # TODO Face mask generation from landmarks
         logger.trace("size: %s, area: %s, aligned: %s, dilation: %s, blur_kernel: %s, as_zip: %s",
                      size, area, aligned, dilation, blur_kernel, as_zip)
-        areas = dict(mouth=[slice(48, 60)],
-                     eyes=[slice(36, 42), slice(42, 48)])
-        if aligned and self.aligned.get("size") != size:
-            self.load_aligned(None, size=size, force=True)
-        size = (size, size) if aligned else size
-        landmarks = self.aligned_landmarks if aligned else self.landmarks_xy
-        points = [landmarks[zone] for zone in areas[area]]
+        areas = dict(mouth=[slice(48, 60)], eyes=[slice(36, 42), slice(42, 48)])
+        if aligned:
+            face = AlignedFace(self.landmarks_xy, centering=centering, size=size)
+            landmarks = face.landmarks
+            size = (size, size)
+        else:
+            landmarks = self.landmarks_xy
+        points = [landmarks[zone] for zone in areas[area]]  # pylint:disable=unsubscriptable-object
         mask = _LandmarksMask(size, points, dilation=dilation, blur_kernel=blur_kernel)
         retval = mask.get(as_zip=as_zip)
         return retval
@@ -254,9 +257,7 @@ class DetectedFace():
         # Manual tool does not know the final hash so default to None
         self.hash = alignment.get("hash", None)
         # Manual tool and legacy alignments will not have a mask
-        self.aligned = dict()
-        self.feed = dict()
-        self.reference = dict()
+        self.aligned = None
 
         if alignment.get("mask", None) is not None:
             self.mask = dict()
@@ -276,16 +277,16 @@ class DetectedFace():
                            self.left: self.right]
 
     # <<< Aligned Face methods and properties >>> #
-    def load_aligned(self, image, size=256, dtype=None, force=False):
+    def load_aligned(self, image, size=256, dtype=None, centering="head", force=False):
         """ Align a face from a given image.
 
         Aligning a face is a relatively expensive task and is not required for all uses of
-        the :class:`~lib.faces_detect.DetectedFace` object, so call this function explicitly to
+        the :class:`~lib.align.DetectedFace` object, so call this function explicitly to
         load an aligned face.
 
-        This method plugs into :mod:`lib.aligner` to perform face alignment based on this face's
-        ``landmarks_xy``. If the face has already been aligned, then this function will return
-        having performed no action.
+        This method plugs into :mod:`lib.align.AlignedFace` to perform face alignment based on this
+        face's ``landmarks_xy``. If the face has already been aligned, then this function will
+        return having performed no action.
 
         Parameters
         ----------
@@ -295,264 +296,32 @@ class DetectedFace():
             The size of the output face in pixels
         dtype: str, optional
             Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
+        centering: ["legacy", "face", "head"], optional
+            The type of extracted face that should be loaded. "legacy" places the nose in the
+            center of the image (the original method for aligning). "face" aligns for the nose to
+            be in the center of the face (top to bottom) but the center of the skull for left to
+            right. "head" aligns for the center of the skull (in 3D space) being the center of the
+            extracted image, with the crop holding the full head.
+            Default: `"head"`
         force: bool, optional
             Force an update of the aligned face, even if it is already loaded. Default: ``False``
 
         Notes
         -----
-        This method must be executed to get access to the following `properties`:
-            - :func:`original_roi`
-            - :func:`aligned_landmarks`
-            - :func:`aligned_face`
-            - :func:`adjusted_interpolators`
+        This method must be executed to get access to the following an :class:`AlignedFace` object
         """
         if self.aligned and not force:
             # Don't reload an already aligned face
             logger.trace("Skipping alignment calculation for already aligned face")
         else:
             logger.trace("Loading aligned face: (size: %s, dtype: %s)", size, dtype)
-            padding = int(size * self._extract_ratio) // 2
-            self.aligned["size"] = size
-            self.aligned["padding"] = padding
-            self.aligned["matrix"] = get_align_mat(self)
-            self.aligned["face"] = None
-        if image is not None and (self.aligned["face"] is None or force):
-            logger.trace("Getting aligned face")
-            face = AlignerExtract().transform(image, self.aligned["matrix"], size, padding)
-            self.aligned["face"] = face if dtype is None else face.astype(dtype)
-
-        logger.trace("Loaded aligned face: %s", {k: str(v) if isinstance(v, np.ndarray) else v
-                                                 for k, v in self.aligned.items()
-                                                 if k != "face"})
-
-    def _padding_from_coverage(self, size, coverage_ratio):
-        """ Return the image padding for a face from coverage_ratio set against a
-            pre-padded training image """
-        adjusted_ratio = coverage_ratio - (1 - self._extract_ratio)
-        padding = round((size * adjusted_ratio) / 2)
-        logger.trace(padding)
-        return padding
-
-    def load_feed_face(self, image, size=64, coverage_ratio=0.625, dtype=None,
-                       is_aligned_face=False):
-        """ Align a face in the correct dimensions for feeding into a model.
-
-        Parameters
-        ----------
-        image: numpy.ndarray
-            The image that contains the face to be aligned
-        size: int
-            The size of the face in pixels to be fed into the model
-        coverage_ratio: float, optional
-            the ratio of the extracted image that was used for training. Default: `0.625`
-        dtype: str, optional
-            Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
-        is_aligned_face: bool, optional
-            Indicates that the :attr:`image` is an aligned face rather than a frame.
-            Default: ``False``
-
-        Notes
-        -----
-        This method must be executed to get access to the following `properties`:
-            - :func:`feed_face`
-            - :func:`feed_interpolators`
-        """
-        logger.trace("Loading feed face: (size: %s, coverage_ratio: %s, dtype: %s, "
-                     "is_aligned_face: %s)", size, coverage_ratio, dtype, is_aligned_face)
-
-        self.feed["size"] = size
-        self.feed["padding"] = self._padding_from_coverage(size, coverage_ratio)
-        self.feed["matrix"] = get_align_mat(self)
-        if is_aligned_face:
-            original_size = image.shape[0]
-            interp = cv2.INTER_CUBIC if original_size < size else cv2.INTER_AREA
-            face = cv2.resize(image, (size, size), interpolation=interp)
-        else:
-            face = AlignerExtract().transform(image,
-                                              self.feed["matrix"],
-                                              size,
-                                              self.feed["padding"])
-        self.feed["face"] = face if dtype is None else face.astype(dtype)
-
-        logger.trace("Loaded feed face. (face_shape: %s, matrix: %s)",
-                     self.feed_face.shape, self.feed_matrix)
-
-    def load_reference_face(self, image, size=64, coverage_ratio=0.625, dtype=None):
-        """ Align a face in the correct dimensions for reference against the output from a model.
-
-        Parameters
-        ----------
-        image: numpy.ndarray
-            The image that contains the face to be aligned
-        size: int
-            The size of the face in pixels to be fed into the model
-        coverage_ratio: float, optional
-            the ratio of the extracted image that was used for training. Default: `0.625`
-        dtype: str, optional
-            Optionally set a ``dtype`` for the final face to be formatted in. Default: ``None``
-
-        Notes
-        -----
-        This method must be executed to get access to the following `properties`:
-            - :func:`reference_face`
-            - :func:`reference_landmarks`
-            - :func:`reference_matrix`
-            - :func:`reference_interpolators`
-        """
-        logger.trace("Loading reference face: (size: %s, coverage_ratio: %s, dtype: %s)",
-                     size, coverage_ratio, dtype)
-
-        self.reference["size"] = size
-        self.reference["padding"] = self._padding_from_coverage(size, coverage_ratio)
-        self.reference["matrix"] = get_align_mat(self)
-
-        face = AlignerExtract().transform(image,
-                                          self.reference["matrix"],
-                                          size,
-                                          self.reference["padding"])
-        self.reference["face"] = face if dtype is None else face.astype(dtype)
-
-        logger.trace("Loaded reference face. (face_shape: %s, matrix: %s)",
-                     self.reference_face.shape, self.reference_matrix)
-
-    @property
-    def original_roi(self):
-        """ numpy.ndarray: The location of the extracted face box within the original frame.
-        Only available after :func:`load_aligned` has been called, otherwise returns ``None``"""
-        if not self.aligned:
-            return None
-        roi = AlignerExtract().get_original_roi(self.aligned["matrix"],
-                                                self.aligned["size"],
-                                                self.aligned["padding"])
-        logger.trace("Returning: %s", roi)
-        return roi
-
-    @property
-    def aligned_landmarks(self):
-        """ numpy.ndarray: The 68 point landmarks location transposed to the extracted face box.
-        Only available after :func:`load_aligned` has been called, otherwise returns ``None``"""
-        if not self.aligned:
-            return None
-        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
-                                                      self.aligned["matrix"],
-                                                      self.aligned["size"],
-                                                      self.aligned["padding"])
-        logger.trace("Returning: %s", landmarks)
-        return landmarks
-
-    @property
-    def aligned_face(self):
-        """ numpy.ndarray: The aligned detected face. Only available after :func:`load_aligned`
-        has been called with an image, otherwise returns ``None`` """
-        return self.aligned.get("face", None)
-
-    @property
-    def _adjusted_matrix(self):
-        """ numpy.ndarray: Adjusted matrix for size/padding combination. Only available after
-        :func:`load_aligned` has been called, otherwise returns ``None``"""
-        if not self.aligned:
-            return None
-        mat = AlignerExtract().transform_matrix(self.aligned["matrix"],
-                                                self.aligned["size"],
-                                                self.aligned["padding"])
-        logger.trace("Returning: %s", mat)
-        return mat
-
-    @property
-    def adjusted_interpolators(self):
-        """ tuple:  Tuple of (`interpolator` and `reverse interpolator`) for the adjusted matrix.
-        Only available after :func:`load_aligned` has been called, otherwise returns ``None``"""
-        if not self.aligned:
-            return None
-        return get_matrix_scaling(self._adjusted_matrix)
-
-    @property
-    def feed_face(self):
-        """ numpy.ndarray: The aligned face sized for feeding into a model. Only available after
-        :func:`load_feed_face` has been called with an image, otherwise returns ``None`` """
-        if not self.feed:
-            return None
-        return self.feed["face"]
-
-    @property
-    def feed_landmarks(self):
-        """ numpy.ndarray: The 68 point landmarks location transposed to the feed face box.
-        Only available after :func:`load_reference_face` has been called, otherwise returns
-        ``None``"""
-        if not self.feed:
-            return None
-        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
-                                                      self.feed["matrix"],
-                                                      self.feed["size"],
-                                                      self.feed["padding"])
-        logger.trace("Returning: %s", landmarks)
-        return landmarks
-
-    @property
-    def feed_matrix(self):
-        """ numpy.ndarray: The adjusted matrix face sized for feeding into a model. Only available
-        after :func:`load_feed_face` has been called with an image, otherwise returns ``None`` """
-        if not self.feed:
-            return None
-        mat = AlignerExtract().transform_matrix(self.feed["matrix"],
-                                                self.feed["size"],
-                                                self.feed["padding"])
-        logger.trace("Returning: %s", mat)
-        return mat
-
-    @property
-    def feed_interpolators(self):
-        """ tuple:  Tuple of (`interpolator` and `reverse interpolator`) for the adjusted feed
-        matrix. Only available after :func:`load_feed_face` has been called, otherwise returns
-        ``None``"""
-        if not self.feed:
-            return None
-        return get_matrix_scaling(self.feed_matrix)
-
-    @property
-    def reference_face(self):
-        """ numpy.ndarray: The aligned face sized for reference against a face coming out of a
-        model. Only available after :func:`load_reference_face` has been called, otherwise
-        returns ``None``"""
-        if not self.reference:
-            return None
-        return self.reference["face"]
-
-    @property
-    def reference_landmarks(self):
-        """ numpy.ndarray: The 68 point landmarks location transposed to the reference face box.
-        Only available after :func:`load_reference_face` has been called, otherwise returns
-        ``None``"""
-        if not self.reference:
-            return None
-        landmarks = AlignerExtract().transform_points(self.landmarks_xy,
-                                                      self.reference["matrix"],
-                                                      self.reference["size"],
-                                                      self.reference["padding"])
-        logger.trace("Returning: %s", landmarks)
-        return landmarks
-
-    @property
-    def reference_matrix(self):
-        """ numpy.ndarray: The adjusted matrix face sized for reference against a face coming out of
-         a model. Only available after :func:`load_reference_face` has been called, otherwise
-         returns ``None``"""
-        if not self.reference:
-            return None
-        mat = AlignerExtract().transform_matrix(self.reference["matrix"],
-                                                self.reference["size"],
-                                                self.reference["padding"])
-        logger.trace("Returning: %s", mat)
-        return mat
-
-    @property
-    def reference_interpolators(self):
-        """ tuple:  Tuple of (`interpolator` and `reverse interpolator`) for the reference
-        matrix. Only available after :func:`load_reference_face` has been called, otherwise
-        returns ``None``"""
-        if not self.reference:
-            return None
-        return get_matrix_scaling(self.reference_matrix)
+            self.aligned = AlignedFace(self.landmarks_xy,
+                                       image=image,
+                                       centering=centering,
+                                       size=size,
+                                       coverage_ratio=1.0,
+                                       dtype=dtype,
+                                       is_aligned=False)
 
 
 class _LandmarksMask():  # pylint:disable=too-few-public-methods
@@ -644,7 +413,6 @@ class Mask():
     stored_size: int
         The size, in pixels, of the stored mask across its height and width.
     """
-
     def __init__(self, storage_size=128):
         self.stored_size = storage_size
 
@@ -655,6 +423,7 @@ class Mask():
         self._blur = dict()
         self._blur_kernel = 0
         self._threshold = 0.0
+        self._sub_crop = dict(size=None, slice_in=[], slice_out=[])
         self.set_blur_and_threshold()
 
     @property
@@ -673,6 +442,11 @@ class Mask():
                             mask,
                             self._blur["kernel"],
                             passes=self._blur["passes"]).blurred
+        if self._sub_crop["size"]:  # Crop the mask to the given centering
+            out = np.zeros((self._sub_crop["size"], self._sub_crop["size"], 1), dtype=mask.dtype)
+            slice_in, slice_out = self._sub_crop["slice_in"], self._sub_crop["slice_out"]
+            out[slice_out[0], slice_out[1], :] = mask[slice_in[0], slice_in[1], :]
+            mask = out
         logger.trace("mask shape: %s", mask.shape)
         return mask
 
@@ -785,6 +559,37 @@ class Mask():
             self._blur["type"] = blur_type
             self._blur["passes"] = blur_passes
         self._threshold = (threshold / 100.0) * 255.0
+
+    def set_sub_crop(self, offset):
+        """ Set the internal crop area of the mask to be returned.
+
+        This impacts the returned mask from :attr:`mask` if the requested mask is required for
+        different face centering than what has been stored.
+
+        Parameters
+        ----------
+        offset: :class:`numpy.ndarray`
+            The (x, y) offset from the center point to return the mask for
+
+        Notes
+        -----
+        All masks are currently stored with `face` centering and all crops are for 'legacy`
+        centering. This may change in future
+        """
+        src_size = self.stored_size - (self.stored_size * _EXTRACT_RATIOS["face"])
+        offset *= ((self.stored_size - (src_size / 2)) / 2)
+        center = np.rint(offset + self.stored_size / 2).astype("int32")
+
+        crop_size = get_centered_size("face", "legacy", self.stored_size)
+        roi = np.array([center - crop_size // 2, center + crop_size // 2]).ravel()
+
+        self._sub_crop["size"] = crop_size
+        self._sub_crop["slice_in"] = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
+        self._sub_crop["slice_out"] = [slice(max(roi[1] * -1, 0),
+                                             crop_size - max(0, roi[3] - self.stored_size)),
+                                       slice(max(roi[0] * -1, 0),
+                                             crop_size - max(0, roi[2] - self.stored_size))]
+        logger.trace("src_size: %s, roi: %s, sub_crop: %s", src_size, roi, self._sub_crop)
 
     def _adjust_affine_matrix(self, mask_size, affine_matrix):
         """ Adjust the affine matrix for the mask's storage size

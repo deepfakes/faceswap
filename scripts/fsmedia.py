@@ -12,9 +12,10 @@ import sys
 from pathlib import Path
 
 import cv2
+import numpy as np
 import imageio
 
-from lib.alignments import Alignments as AlignmentsBase
+from lib.align import Alignments as AlignmentsBase
 from lib.face_filter import FaceFilter as FilterFunc
 from lib.image import count_frames, read_image
 from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
@@ -49,7 +50,7 @@ def finalize(images_found, num_faces_detected, verify_output):
 
 
 class Alignments(AlignmentsBase):
-    """ Override :class:`lib.alignments.Alignments` to add custom loading based on command
+    """ Override :class:`lib.align.Alignments` to add custom loading based on command
     line arguments.
 
     Parameters
@@ -107,7 +108,7 @@ class Alignments(AlignmentsBase):
         return folder, filename
 
     def _load(self):
-        """ Override the parent :func:`~lib.alignments.Alignments._load` to handle skip existing
+        """ Override the parent :func:`~lib.align.Alignments._load` to handle skip existing
         frames and faces on extract.
 
         If skip existing has been selected, existing alignments are loaded and returned to the
@@ -500,9 +501,18 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         frame = os.path.splitext(os.path.basename(extract_media.filename))[0]
         for idx, face in enumerate(extract_media.detected_faces):
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)
-            aligned_landmarks = face.aligned_landmarks
-            for (pos_x, pos_y) in aligned_landmarks:
-                cv2.circle(face.aligned_face, (pos_x, pos_y), 2, (0, 0, 255), -1)
+            # Landmarks
+            for (pos_x, pos_y) in face.aligned.landmarks:
+                cv2.circle(face.aligned.face, (pos_x, pos_y), 1, (0, 255, 255), -1)
+            # Pose
+            center = tuple(np.int32((face.aligned.size / 2, face.aligned.size / 2)))
+            points = (face.aligned.pose.xyz_2d * face.aligned.size).astype("int32")
+            cv2.line(face.aligned.face, center, tuple(points[1]), (0, 255, 0), 1)
+            cv2.line(face.aligned.face, center, tuple(points[0]), (255, 0, 0), 1)
+            cv2.line(face.aligned.face, center, tuple(points[2]), (0, 0, 255), 1)
+            # Face centering
+            roi = face.aligned.get_cropped_roi("face")
+            cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 255, 0), 1)
 
 
 class FaceFilter(PostProcessAction):
@@ -621,12 +631,11 @@ class FaceFilter(PostProcessAction):
         ret_faces = list()
         for idx, detect_face in enumerate(extract_media.detected_faces):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
-            check_item.load_aligned(extract_media.image)
-            if not self._filter.check(check_item):
+            if not self._filter.check(extract_media.image, check_item):
                 logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",
                                extract_media.filename, idx)
                 continue
             logger.trace("Accepting recognised face. Frame: %s. Face: %s",
                          extract_media.filename, idx)
             ret_faces.append(detect_face)
-        extract_media.detected_faces = ret_faces
+        extract_media.add_detected_faces(ret_faces)

@@ -79,7 +79,7 @@ class FaceswapFormatter(logging.Formatter):
         record.message = record.getMessage()
         record = self._rewrite_warnings(record)
         # strip newlines
-        if "\n" in record.message or "\r" in record.message:
+        if record.levelno < 30 and ("\n" in record.message or "\r" in record.message):
             record.message = record.message.replace("\n", "\\n").replace("\r", "\\r")
 
         if self.usesTime():
@@ -110,10 +110,19 @@ class FaceswapFormatter(logging.Formatter):
         record: :class:`logging.LogRecord`
             The log record to check for rewriting
         """
-        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
-                                     record.module in ("deprecation", "deprecation_wrapper")):
+        if record.levelno == 30 and record.funcName == "warn" and record.module == "ag_logging":
+            # TF 2.3 in Conda is imported with the wrong gast(0.4 when 0.3.3 should be used). This
+            # causes warnings in autograph. They don't appear to impact performance so de-elevate
+            # warning to debug
             record.levelno = 10
             record.levelname = "DEBUG"
+
+        if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
+                                     record.module in ("deprecation", "deprecation_wrapper")):
+            # Keras Deprecations.
+            record.levelno = 10
+            record.levelname = "DEBUG"
+
         return record
 
 
@@ -189,8 +198,8 @@ def log_setup(loglevel, log_file, command, is_gui=False):
     numeric_loglevel = get_loglevel(loglevel)
     root_loglevel = min(logging.DEBUG, numeric_loglevel)
     rootlogger = _set_root_logger(loglevel=root_loglevel)
-    log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-15s "
-                                   "%(module)-15s %(funcName)-25s %(levelname)-8s %(message)s",
+    log_format = FaceswapFormatter("%(asctime)s %(processName)-15s %(threadName)-30s "
+                                   "%(module)-15s %(funcName)-30s %(levelname)-8s %(message)s",
                                    datefmt="%m/%d/%Y %H:%M:%S")
     f_handler = _file_handler(numeric_loglevel, log_file, log_format, command)
     s_handler = _stream_handler(numeric_loglevel, is_gui)
@@ -271,7 +280,7 @@ def _stream_handler(loglevel, is_gui):
 
 
 def _crash_handler(log_format):
-    """ Add a handler that stores the last 100 debug lines to :attr:'_debug_buffer' for use in
+    """ Add a handler that stores the last 100 debug lines to :attr:'_DEBUG_BUFFER' for use in
     crash reports.
 
     Parameters
@@ -284,7 +293,7 @@ def _crash_handler(log_format):
     :class:`logging.StreamHandler`
         The crash log handler
     """
-    log_crash = logging.StreamHandler(_debug_buffer)
+    log_crash = logging.StreamHandler(_DEBUG_BUFFER)
     log_crash.setFormatter(log_format)
     log_crash.setLevel(logging.DEBUG)
     return log_crash
@@ -311,7 +320,7 @@ def get_loglevel(loglevel):
 
 
 def crash_log():
-    """ On a crash, write out the contents of :func:`_debug_buffer` containing the last 100 lines
+    """ On a crash, write out the contents of :func:`_DEBUG_BUFFER` containing the last 100 lines
     of debug messages to a crash report in the root Faceswap folder.
 
     Returns
@@ -322,7 +331,7 @@ def crash_log():
     original_traceback = traceback.format_exc()
     path = os.path.dirname(os.path.realpath(sys.argv[0]))
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
-    freeze_log = list(_debug_buffer)
+    freeze_log = list(_DEBUG_BUFFER)
     try:
         from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
     except Exception:  # pylint:disable=broad-except
@@ -335,13 +344,13 @@ def crash_log():
     return filename
 
 
-_old_factory = logging.getLogRecordFactory()
+_OLD_FACTORY = logging.getLogRecordFactory()
 
 
 def _faceswap_logrecord(*args, **kwargs):
     """ Add a flag to :class:`logging.LogRecord` to not strip formatting from particular
     records. """
-    record = _old_factory(*args, **kwargs)
+    record = _OLD_FACTORY(*args, **kwargs)
     record.strip_spaces = True
     return record
 
@@ -352,4 +361,4 @@ logging.setLogRecordFactory(_faceswap_logrecord)
 logging.setLoggerClass(FaceswapLogger)
 
 # Stores the last 100 debug messages
-_debug_buffer = RollingBuffer(maxlen=100)
+_DEBUG_BUFFER = RollingBuffer(maxlen=100)

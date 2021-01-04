@@ -82,7 +82,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                    "installed. Please upgrade Tensorflow.".format(min_ver, tf_ver))
             self._handle_import_error(msg)
         if tf_ver > max_ver:
-            msg = ("The maximumum supported Tensorflow is version {} but you have version {} "
+            msg = ("The maximum supported Tensorflow is version {} but you have version {} "
                    "installed. Please downgrade Tensorflow.".format(max_ver, tf_ver))
             self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)

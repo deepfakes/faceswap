@@ -176,7 +176,7 @@ class Mask(Editor):
 
         Parameters
         ----------
-        mask: :class:`lib.faces_detect.Mask`
+        mask: :class:`lib.align.Mask`
             The mask object
         mask_scale: float
             The scaling factor from the stored mask size to the internal mask size
@@ -325,7 +325,8 @@ class Mask(Editor):
                               frame_dims,
                               frame,
                               flags=cv2.WARP_INVERSE_MAP | interpolator,
-                              borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]][..., None]
+                              borderMode=cv2.BORDER_CONSTANT)[slices[0], slices[1]]
+        mask = mask[..., None] if mask.ndim == 2 else mask
         rgb = np.tile(rgb_color, mask.shape).astype("uint8")
         rgba = np.concatenate((rgb, np.minimum(mask, self._meta["roi_mask"][face_index])), axis=2)
         return Image.fromarray(rgba)
@@ -333,7 +334,7 @@ class Mask(Editor):
     def _update_roi_box(self, mask, face_index, color):
         """ Update the region of interest box for the current mask.
 
-        mask: :class:`~lib.faces_detect.Mask`
+        mask: :class:`~lib.align.Mask`
             The current mask object to create an ROI box for
         face_index: int
             The index of the face within the current frame

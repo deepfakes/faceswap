@@ -121,9 +121,9 @@ class Align(Aligner):
         logger.debug("Predicting Landmarks")
         # TODO Remove lazy transpose and change points from predict to use the correct
         # order
-        batch["prediction"] = self.model.predict(batch["feed"])[-1].transpose(0, 3, 1, 2)
-        logger.trace(batch["prediction"].shape)
-        return batch
+        retval = self.model.predict(batch)[-1].transpose(0, 3, 1, 2)
+        logger.trace(retval.shape)
+        return retval
 
     def process_output(self, batch):
         """ Process the output from the model """

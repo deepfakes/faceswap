@@ -3,18 +3,20 @@
 
 import logging
 import os
-import pickle
-import struct
 import sys
 from datetime import datetime
-from PIL import Image
 
+import cv2
 import numpy as np
 from scipy import signal
 from sklearn import decomposition
 from tqdm import tqdm
 
-from .annotate import Annotate
+from lib.align import DetectedFace, _EXTRACT_RATIOS
+from lib.align.alignments import _VERSION
+from lib.image import generate_thumbnail
+from plugins.extract.pipeline import Extractor, ExtractMedia
+
 from .media import ExtractedFaces, Faces, Frames
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -24,7 +26,7 @@ class Check():
     """ Frames and faces checking tasks """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
+        self._alignments = alignments
         self.job = arguments.job
         self.type = None
         self.is_video = False  # Set when getting items
@@ -87,7 +89,7 @@ class Check():
         action = self.job.replace("-", "_")
         processor = getattr(self, "get_{}".format(action))
         logger.debug("Processor: %s", processor)
-        return [item for item in processor()]
+        return [item for item in processor()]  # pylint:disable=unnecessary-comprehension
 
     def get_no_faces(self):
         """ yield each frame that has no face match in alignments file """
@@ -95,7 +97,7 @@ class Check():
         for frame in tqdm(self.items, desc=self.output_message):
             logger.trace(frame)
             frame_name = frame["frame_fullname"]
-            if not self.alignments.frame_has_faces(frame_name):
+            if not self._alignments.frame_has_faces(frame_name):
                 logger.debug("Returning: '%s'", frame_name)
                 yield frame_name
 
@@ -111,7 +113,7 @@ class Check():
         self.output_message = "Frames with multiple faces"
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["frame_fullname"]
-            if not self.alignments.frame_has_multiple_faces(filename):
+            if not self._alignments.frame_has_multiple_faces(filename):
                 continue
             logger.trace("Returning: '%s'", filename)
             yield filename
@@ -123,8 +125,7 @@ class Check():
         for item in tqdm(self.items, desc=self.output_message):
             filename = item["face_fullname"]
             f_hash = item["face_hash"]
-            frame_idx = [(frame, idx)
-                         for frame, idx in self.alignments.hashes_to_frame[f_hash].items()]
+            frame_idx = list(self._alignments.hashes_to_frame[f_hash].items())
 
             if len(frame_idx) > 1:
                 # If the same hash exists in multiple frames, select arbitrary frame
@@ -135,7 +136,7 @@ class Check():
                 frame_idx = [frame_idx]
 
             frame_name, idx = frame_idx[0]
-            if not self.alignments.frame_has_multiple_faces(frame_name):
+            if not self._alignments.frame_has_multiple_faces(frame_name):
                 continue
             retval = (filename, idx)
             logger.trace("Returning: '%s'", retval)
@@ -148,7 +149,7 @@ class Check():
         for frame in tqdm(self.items, desc=self.output_message):
             frame_name = frame["frame_fullname"]
             if (frame["frame_extension"] not in exclude_filetypes
-                    and not self.alignments.frame_exists(frame_name)):
+                    and not self._alignments.frame_exists(frame_name)):
                 logger.debug("Returning: '%s'", frame_name)
                 yield frame_name
 
@@ -157,7 +158,7 @@ class Check():
             not have a matching file """
         self.output_message = "Missing frames that are in alignments file"
         frames = set(item["frame_fullname"] for item in self.items)
-        for frame in tqdm(self.alignments.data.keys(), desc=self.output_message):
+        for frame in tqdm(self._alignments.data.keys(), desc=self.output_message):
             if frame not in frames:
                 logger.debug("Returning: '%s'", frame)
                 yield frame
@@ -167,7 +168,7 @@ class Check():
         self.output_message = "Faces missing from the alignments file"
         for face in tqdm(self.items, desc=self.output_message):
             f_hash = face["face_hash"]
-            if f_hash not in self.alignments.hashes_to_frame:
+            if f_hash not in self._alignments.hashes_to_frame:
                 logger.debug("Returning: '%s'", face["face_fullname"])
                 yield face["face_fullname"], -1
 
@@ -261,148 +262,149 @@ class Check():
             os.rename(src, dst)
 
 
-class Dfl():
-    """ Reformat Alignment file """
+class Draw():  # pylint:disable=too-few-public-methods
+    """ Draws annotations onto original frames and saves into a sub-folder next to the original
+    frames.
+
+    Parameters
+    ---------
+    alignments: :class:`tools.alignments.media.AlignmentsData`
+        The loaded alignments corresponding to the frames to be annotated
+    arguments: :class:`argparse.Namespace`
+        The command line arguments that have called this job
+    """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
-        if self.alignments.file != "dfl.fsa":
-            logger.error("Alignments file must be specified as 'dfl' to reformat dfl alignmnets")
-            sys.exit(1)
-        logger.debug("Loading DFL faces")
-        self.faces = Faces(arguments.faces_dir)
+        self._alignments = alignments
+        self._frames = Frames(arguments.frames_dir)
+        self._output_folder = self._set_output()
+        self._mesh_areas = dict(mouth=(48, 68),
+                                right_eyebrow=(17, 22),
+                                left_eyebrow=(22, 27),
+                                right_eye=(36, 42),
+                                left_eye=(42, 48),
+                                nose=(27, 36),
+                                jaw=(0, 17),
+                                chin=(8, 11))
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def process(self):
-        """ Run reformat """
-        logger.info("[REFORMAT DFL ALIGNMENTS]")  # Tidy up cli output
-        self.alignments.data_from_dfl(self.load_dfl(), self.faces.folder)
-        self.alignments.save()
+    def _set_output(self):
+        """ Set the output folder path.
 
-    def load_dfl(self):
-        """ Load alignments from DeepFaceLab and format for Faceswap """
-        alignments = dict()
-        for face in tqdm(self.faces.file_list_sorted, desc="Converting DFL Faces"):
-            if face["face_extension"] not in (".png", ".jpg"):
-                logger.verbose("'%s' is not a png or jpeg. Skipping", face["face_fullname"])
-                continue
-            f_hash = face["face_hash"]
-            fullpath = os.path.join(self.faces.folder, face["face_fullname"])
-            dfl = self.get_dfl_alignment(fullpath)
+        If annotating a folder of frames, output will be placed in a sub folder within the frames
+        folder. If annotating a video, output will be a folder next to the original video.
 
-            if not dfl:
-                continue
+        Returns
+        -------
+        str
+            Full path to the output folder
 
-            self.convert_dfl_alignment(dfl, f_hash, alignments)
-        return alignments
-
-    @staticmethod
-    def get_dfl_alignment(filename):
-        """ Process the alignment of one face """
-        ext = os.path.splitext(filename)[1]
-
-        if ext.lower() in (".jpg", ".jpeg"):
-            img = Image.open(filename)
-            try:
-                dfl_alignments = pickle.loads(img.app["APP15"])
-                dfl_alignments["source_rect"] = [n.item()  # comes as non-JSONable np.int32
-                                                 for n in dfl_alignments["source_rect"]]
-                return dfl_alignments
-            except pickle.UnpicklingError:
-                return None
-
-        with open(filename, "rb") as dfl:
-            header = dfl.read(8)
-            if header != b"\x89PNG\r\n\x1a\n":
-                logger.error("No Valid PNG header: %s", filename)
-                return None
-            while True:
-                chunk_start = dfl.tell()
-                chunk_hdr = dfl.read(8)
-                if not chunk_hdr:
-                    break
-                chunk_length, chunk_name = struct.unpack("!I4s", chunk_hdr)
-                dfl.seek(chunk_start, os.SEEK_SET)
-                if chunk_name == b"fcWp":
-                    chunk = dfl.read(chunk_length + 12)
-                    retval = pickle.loads(chunk[8:-4])
-                    logger.trace("Loaded DFL Alignment: (filename: '%s', alignment: %s",
-                                 filename, retval)
-                    return retval
-                dfl.seek(chunk_length+12, os.SEEK_CUR)
-            logger.error("Couldn't find DFL alignments: %s", filename)
-
-    @staticmethod
-    def convert_dfl_alignment(dfl_alignments, f_hash, alignments):
-        """ Add Deep Face Lab Alignments to alignments in Faceswap format """
-        sourcefile = dfl_alignments["source_filename"]
-        left, top, right, bottom = dfl_alignments["source_rect"]
-        alignment = {"x": left,
-                     "w": right - left,
-                     "y": top,
-                     "h": bottom - top,
-                     "hash": f_hash,
-                     "landmarks_xy": np.array(dfl_alignments["source_landmarks"], dtype="float32")}
-        logger.trace("Adding alignment: (frame: '%s', alignment: %s", sourcefile, alignment)
-        alignments.setdefault(sourcefile, dict()).setdefault("faces", []).append(alignment)
-
-
-class Draw():
-    """ Draw Alignments on passed in images """
-    def __init__(self, alignments, arguments):
-        logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.arguments = arguments
-        self.alignments = alignments
-        self.frames = Frames(arguments.frames_dir)
-        self.output_folder = self.set_output()
-        self.extracted_faces = None
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def set_output(self):
-        """ Set the output folder path """
+        """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         folder_name = "drawn_landmarks_{}".format(now)
-        if self.frames.is_video:
-            dest_folder = os.path.dirname(self.frames.folder)
+        if self._frames.is_video:
+            dest_folder = os.path.dirname(self._frames.folder)
         else:
-            dest_folder = self.frames.folder
+            dest_folder = self._frames.folder
         output_folder = os.path.join(dest_folder, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)
         os.makedirs(output_folder)
         return output_folder
 
     def process(self):
-        """ Run the draw alignments process """
+        """ Runs the process to draw face annotations onto original source frames. """
         logger.info("[DRAW LANDMARKS]")  # Tidy up cli output
-        self.extracted_faces = ExtractedFaces(self.frames, self.alignments, size=256)
         frames_drawn = 0
-        for frame in tqdm(self.frames.file_list_sorted, desc="Drawing landmarks"):
+        for frame in tqdm(self._frames.file_list_sorted, desc="Drawing landmarks"):
             frame_name = frame["frame_fullname"]
 
-            if not self.alignments.frame_exists(frame_name):
+            if not self._alignments.frame_exists(frame_name):
                 logger.verbose("Skipping '%s' - Alignments not found", frame_name)
                 continue
 
-            self.annotate_image(frame_name)
+            self._annotate_image(frame_name)
             frames_drawn += 1
         logger.info("%s Frame(s) output", frames_drawn)
 
-    def annotate_image(self, frame):
-        """ Draw the alignments """
-        logger.trace("Annotating frame: '%s'", frame)
-        alignments = self.alignments.get_faces_in_frame(frame)
-        image = self.frames.load_image(frame)
-        self.extracted_faces.get_faces_in_frame(frame)
-        original_roi = [face.original_roi
-                        for face in self.extracted_faces.faces]
-        annotate = Annotate(image, alignments, original_roi)
-        annotate.draw_bounding_box(1, 1)
-        annotate.draw_extract_box(2, 1)
-        annotate.draw_landmarks(3, 1)
-        annotate.draw_landmarks_mesh(4, 1)
+    def _annotate_image(self, frame_name):
+        """ Annotate the frame with each face that appears in the alignments file.
 
-        image = annotate.image
-        self.frames.save_image(self.output_folder, frame, image)
+        Parameters
+        ----------
+        frame_name: str
+            The full path to the original frame
+        """
+        logger.trace("Annotating frame: '%s'", frame_name)
+        image = self._frames.load_image(frame_name)
+
+        for idx, alignment in enumerate(self._alignments.get_faces_in_frame(frame_name)):
+            face = DetectedFace()
+            face.from_alignment(alignment, image=image)
+            # Bounding Box
+            cv2.rectangle(image, (face.left, face.top), (face.right, face.bottom), (255, 0, 0), 1)
+            self._annotate_landmarks(image, np.rint(face.landmarks_xy).astype("int32"))
+            self._annotate_extract_boxes(image, face, idx)
+            self._annotate_pose(image, face)  # Pose (head is still loaded)
+
+        self._frames.save_image(self._output_folder, frame_name, image)
+
+    def _annotate_landmarks(self, image, landmarks):
+        """ Annotate the extract boxes onto the frame.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The frame that extract boxes are to be annotated on to
+        landmarks: :class:`numpy.ndarray`
+            The 68 point landmarks that are to be annotated onto the frame
+        index: int
+            The face index for the given face
+        """
+        # Mesh
+        for area, indices in self._mesh_areas.items():
+            fill = area in ("right_eye", "left_eye", "mouth")
+            cv2.polylines(image, [landmarks[indices[0]:indices[1]]], fill, (255, 255, 0), 1)
+        # Landmarks
+        for (pos_x, pos_y) in landmarks:
+            cv2.circle(image, (pos_x, pos_y), 1, (0, 255, 255), -1)
+
+    @classmethod
+    def _annotate_extract_boxes(cls, image, face, index):
+        """ Annotate the mesh and landmarks boxes onto the frame.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The frame that mesh and landmarks are to be annotated on to
+        face: :class:`lib.align.AlignedFace`
+            The aligned face
+        """
+        for area in ("face", "head"):
+            face.load_aligned(image, centering=area, force=True)
+            color = (0, 255, 0) if area == "face" else (0, 0, 255)
+            top_left = face.aligned.original_roi[0]  # pylint:disable=unsubscriptable-object
+            top_left = (top_left[0], top_left[1] - 10)
+            cv2.putText(image, str(index), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
+            cv2.polylines(image, [face.aligned.original_roi], True, color, 1)
+
+    @classmethod
+    def _annotate_pose(cls, image, face):
+        """ Annotate the pose onto the frame.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The frame that pose is to be annotated on to
+        face: :class:`lib.align.AlignedFace`
+            The aligned face loaded for head centering
+        """
+        center = np.int32((face.aligned.size / 2, face.aligned.size / 2)).reshape(1, 2)
+        center = np.rint(face.aligned.transform_points(center, invert=True)).astype("int32")
+        points = face.aligned.pose.xyz_2d * face.aligned.size
+        points = np.rint(face.aligned.transform_points(points, invert=True)).astype("int32")
+        cv2.line(image, tuple(center), tuple(points[1]), (0, 255, 0), 2)
+        cv2.line(image, tuple(center), tuple(points[0]), (255, 0, 0), 2)
+        cv2.line(image, tuple(center), tuple(points[2]), (0, 0, 255), 2)
 
 
 class Extract():  # pylint:disable=too-few-public-methods
@@ -419,18 +421,21 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._arguments = arguments
         self._alignments = alignments
+        self._is_legacy = self._alignments.version == 1.0  # pylint:disable=protected-access
+        self._mask_pipeline = None
         self._faces_dir = arguments.faces_dir
         self._frames = Frames(arguments.frames_dir)
         self._extracted_faces = ExtractedFaces(self._frames,
                                                self._alignments,
-                                               size=arguments.size,
-                                               align_eyes=arguments.align_eyes)
+                                               size=arguments.size)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
         """ Run the re-extraction from Alignments file process"""
         logger.info("[EXTRACT FACES]")  # Tidy up cli output
         self._check_folder()
+        if self._is_legacy:
+            self._legacy_check()
         self._export_faces()
 
     def _check_folder(self):
@@ -447,6 +452,35 @@ class Extract():  # pylint:disable=too-few-public-methods
             logger.error(err)
             sys.exit(0)
         logger.verbose("Creating output folder at '%s'", self._faces_dir)
+
+    def _legacy_check(self):
+        """ Check whether the alignments file was created with the legacy extraction method.
+
+        If so, force user to re-extract all faces if any options have been specified, otherwise
+        raise the appropriate warnings and set the legacy options.
+        """
+        if self._arguments.large or self._arguments.extract_every_n != 1:
+            logger.warning("This alignments file was generated with the legacy extraction method.")
+            logger.warning("You should run this extraction job, but with 'large' deselected and "
+                           "'extract-every-n' set to 1 to update the alignments file.")
+            logger.warning("You can then re-run this extraction job with your chosen options.")
+            sys.exit(0)
+
+        maskers = ["components", "extended"]
+        nn_masks = [mask for mask in list(self._alignments.mask_summary) if mask not in maskers]
+        logtype = logger.warning if nn_masks else logger.info
+        logtype("This alignments file was created with the legacy extraction method and will be "
+                "updated.")
+        logtype("Faces will be extracted using the new method and landmarks based masks will be "
+                "regenerated.")
+        if nn_masks:
+            logtype("However, the NN based masks '%s' will be cropped to the legacy extraction "
+                    "method, so you may want to run the mask tool to regenerate these "
+                    "masks.", "', '".join(nn_masks))
+        self._mask_pipeline = Extractor(None, None, maskers, multiprocess=True)
+        self._mask_pipeline.launch()
+        # Update alignments versioning
+        self._alignments._version = _VERSION  # pylint:disable=protected-access
 
     def _export_faces(self):
         """ Export the faces to the output folder and update the alignments file with
@@ -507,16 +541,23 @@ class Extract():  # pylint:disable=too-few-public-methods
         face_count = 0
         frame_name, extension = os.path.splitext(filename)
         faces = self._select_valid_faces(filename, image)
+        if not faces:
+            return face_count
+        if self._is_legacy:
+            faces = self._process_legacy(filename, image, faces)
 
         for idx, face in enumerate(faces):
             output = "{}_{}{}".format(frame_name, str(idx), extension)
             if self._arguments.large:
-                self._frames.save_image(self._faces_dir, output, face.aligned_face)
+                self._frames.save_image(self._faces_dir, output, face.aligned.face)
             else:
                 output = os.path.join(self._faces_dir, output)
                 f_hash = self._extracted_faces.save_face_with_hash(output,
                                                                    extension,
-                                                                   face.aligned_face)
+                                                                   face.aligned.face)
+                if self._is_legacy:  # Generate the new thumbnail and store new face data for save
+                    face.thumbnail = generate_thumbnail(face.aligned.face, size=96, quality=60)
+                    self._alignments.data[filename]["faces"][idx] = face.to_alignment()
                 self._alignments.data[filename]["faces"][idx]["hash"] = f_hash
             face_count += 1
         return face_count
@@ -534,7 +575,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         Returns
         -------
         list:
-            List of valid :class:`lib,faces_detect.DetectedFace` objects
+            List of valid :class:`lib,align.DetectedFace` objects
         """
         faces = self._extracted_faces.get_faces_in_frame(frame, image=image)
         if not self._arguments.large:
@@ -547,63 +588,159 @@ class Extract():  # pylint:disable=too-few-public-methods
                      frame, len(faces), len(valid_faces))
         return valid_faces
 
+    def _process_legacy(self, filename, image, detected_faces):
+        """ Process legacy face extractions to new extraction method.
 
-class Merge():
-    """ Merge two alignments files into one """
+        Updates stored masks to new extract size
+
+        Parameters
+        ----------
+        filename: str
+            The current frame filename
+        image: :class:`numpy.ndarray`
+            The current image the contains the faces
+        detected_faces: list
+            list of :class:`lib.align.DetectedFace` objects for the current frame
+        """
+        # Update landmarks based masks for face centering
+        mask_item = ExtractMedia(filename, image, detected_faces=detected_faces)
+        self._mask_pipeline.input_queue.put(mask_item)
+        faces = next(self._mask_pipeline.detected_faces()).detected_faces
+
+        # Pad and shift Neural Network based masks to face centering
+        for face in faces:
+            self._pad_legacy_masks(face)
+        return faces
+
+    @classmethod
+    def _pad_legacy_masks(cls, detected_face):
+        """ Recenter legacy Neural Network based masks from legacy centering to face centering
+        and pad accordingly.
+
+        Update the masks back into the detected face objects.
+
+        Parameters
+        ----------
+        detected_face: :class:`lib.align.DetectedFace`
+            The detected face to update the masks for
+        """
+        offset = detected_face.aligned.pose.offset["face"]
+        for name, mask in detected_face.mask.items():  # Re-center mask and pad to face size
+            if name in ("components", "extended"):
+                continue
+            old_mask = mask.mask.astype("float32") / 255.0
+            size = old_mask.shape[0]
+            new_size = int(size + (size * _EXTRACT_RATIOS["face"]) / 2)
+
+            shift = np.rint(offset * (size - (size * _EXTRACT_RATIOS["face"]))).astype("int32")
+            pos = np.array([(new_size // 2 - size // 2) - shift[1],
+                            (new_size // 2) + (size // 2) - shift[1],
+                            (new_size // 2 - size // 2) - shift[0],
+                            (new_size // 2) + (size // 2) - shift[0]])
+            bounds = np.array([max(0, pos[0]), min(new_size, pos[1]),
+                               max(0, pos[2]), min(new_size, pos[3])])
+
+            slice_in = [slice(0 - (pos[0] - bounds[0]), size - (pos[1] - bounds[1])),
+                        slice(0 - (pos[2] - bounds[2]), size - (pos[3] - bounds[3]))]
+            slice_out = [slice(bounds[0], bounds[1]), slice(bounds[2], bounds[3])]
+
+            new_mask = np.zeros((new_size, new_size, 1), dtype="float32")
+            new_mask[slice_out[0], slice_out[1], :] = old_mask[slice_in[0], slice_in[1], :]
+
+            mask.replace_mask(new_mask)
+            # Get the affine matrix from recently generated components mask
+            # pylint:disable=protected-access
+            mask._affine_matrix = detected_face.mask["components"].affine_matrix
+
+
+class Merge():  # pylint:disable=too-few-public-methods
+    """ Merge multiple alignments files into one.
+
+    Parameters
+    ----------
+    alignments: :class:`tools.lib_alignments.media.AlignmentData`
+        The alignments data loaded from an alignments file for this rename job
+    arguments: :class:`argparse.Namespace`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+    """
     def __init__(self, alignments, arguments):
-        self.alignments = alignments
-        self.faces = self.get_faces(arguments)
-        self.final_alignments = alignments[0]
-        self.process_alignments = alignments[1:]
+        self._alignments = alignments
+        self._check_versions()
+        self._faces = self._get_faces(arguments)
+        self._final_alignments = alignments[0]
+        self._process_alignments = alignments[1:]
         self._hashes_to_frame = None
 
+    def _check_versions(self):
+        """ Ensure all alignments files are compatible versions. If not, exit with error. """
+        versions = [al.version for al in self._alignments]
+        logger.debug(versions)
+        if any(vers < 2.0 for vers in versions) and any(vers >= 2.0 for vers in versions):
+            logger.error("You have selected incompatible alignments files for merging. You cannot "
+                         "merge alignments files for legacy extracted faces with aligments files "
+                         "for full-head extracted faces.")
+            logger.info("You can update legacy alignments files by using the Extract job in the "
+                        "Alignments tool to re-extract the faces in full-head format.")
+            sys.exit(0)
+
     @staticmethod
-    def get_faces(arguments):
-        """ If faces argument is specified, load faces_dir
-            otherwise return None """
+    def _get_faces(arguments):
+        """ If faces argument is specified, load the faces folder otherwise return ``None``.
+
+        Parameters
+        ----------
+        arguments: :class:`argparse.Namespace`
+            The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+
+        Returns
+        -------
+        :class:`tools.alignments.media.Faces` or ``None``
+            The faces object or ``None`` if not faces folder specified
+        """
         if not hasattr(arguments, "faces_dir") or not arguments.faces_dir:
             return None
         return Faces(arguments.faces_dir)
 
     def process(self):
-        """Process the alignments file merge """
+        """Run the alignments file merging process. """
         logger.info("[MERGE ALIGNMENTS]")  # Tidy up cli output
-        if self.faces is not None:
-            self.remove_faces()
-        self._hashes_to_frame = self.final_alignments.hashes_to_frame
+        if self._faces is not None:
+            self._remove_faces()
+        self._hashes_to_frame = self._final_alignments.hashes_to_frame
         skip_count = 0
         merge_count = 0
-        total_count = sum([alignments.frames_count for alignments in self.process_alignments])
+        total_count = sum([alignments.frames_count for alignments in self._process_alignments])
 
         with tqdm(desc="Merging Alignments", total=total_count) as pbar:
-            for alignments in self.process_alignments:
+            for alignments in self._process_alignments:
                 for _, src_alignments, _, frame in alignments.yield_faces():
                     for idx, alignment in enumerate(src_alignments):
                         if not alignment.get("hash", None):
                             logger.warning("Alignment '%s':%s has no Hash! Skipping", frame, idx)
                             skip_count += 1
                             continue
-                        if self.check_exists(frame, alignment, idx):
+                        if self._check_exists(frame, alignment, idx):
                             skip_count += 1
                             continue
-                        self.merge_alignment(frame, alignment, idx)
+                        self._merge_alignment(frame, alignment, idx)
                         merge_count += 1
                     pbar.update(1)
         logger.info("Alignments Merged: %s", merge_count)
         logger.info("Alignments Skipped: %s", skip_count)
         if merge_count != 0:
-            self.set_destination_filename()
-            self.final_alignments.save()
+            self._set_destination_filename()
+            self._final_alignments.save()
 
-    def remove_faces(self):
-        """ Process to remove faces from an alignments file """
-        face_hashes = list(self.faces.items.keys())
+    def _remove_faces(self):
+        """ Removes faces from the alignments file if a faces folder has been provided and the
+        faces do not exist within each alignments file. """
+        face_hashes = list(self._faces.items.keys())
         del_faces_count = 0
         del_frames_count = 0
         if not face_hashes:
             logger.error("No face hashes. This would remove all faces from your alignments file.")
             return
-        for alignments in tqdm(self.alignments, desc="Filtering out faces"):
+        for alignments in tqdm(self._alignments, desc="Filtering out faces"):
             pre_face_count = alignments.faces_count
             pre_frames_count = alignments.frames_count
             alignments.filter_hashes(face_hashes, filter_out=False)
@@ -622,105 +759,106 @@ class Merge():
                            removed_faces, removed_frames, os.path.basename(alignments.file))
         logger.info("Total removed - faces: %s, frames: %s", del_faces_count, del_frames_count)
 
-    def check_exists(self, frame, alignment, idx):
-        """ Check whether this face already exists """
+    def _check_exists(self, frame, alignment, index):
+        """ Remove duplicate faces from the alignments file when an instance of the face already
+        exists.
+
+        Parameters
+        ----------
+        frame: str
+            The frame name for the current frame being processed
+        alignment: dict
+            The alignment dictionary for the current face in the frame
+        index: int
+            The face index for the current face in the frame
+
+        Returns
+        -------
+        bool
+            ``True`` if the face has been already been seen, otherwise ``False``
+        """
         existing_frame = self._hashes_to_frame.get(alignment["hash"], None)
         if not existing_frame:
             return False
         if frame in existing_frame.keys():
             logger.verbose("Face '%s': %s already exists in destination at position %s. "
-                           "Skipping", frame, idx, existing_frame[frame])
+                           "Skipping", frame, index, existing_frame[frame])
         elif frame not in existing_frame.keys():
             logger.verbose("Face '%s': %s exists in destination as: %s. "
-                           "Skipping", frame, idx, existing_frame)
+                           "Skipping", frame, index, existing_frame)
         return True
 
-    def merge_alignment(self, frame, alignment, idx):
-        """ Merge the source alignment into the destination """
+    def _merge_alignment(self, frame, alignment, idx):
+        """ Merge the source alignment into the destination final alignments dictionary
+
+        Parameters
+        ----------
+        frame: str
+            The frame name for the current frame being processed
+        alignment: dict
+            The alignment dictionary for the current face in the frame
+        index: int
+            The face index for the current face in the frame
+        """
         logger.debug("Merging alignment: (frame: %s, src_idx: %s, hash: %s)",
                      frame, idx, alignment["hash"])
         self._hashes_to_frame.setdefault(alignment["hash"], dict())[frame] = idx
-        self.final_alignments.data.setdefault(frame,
-                                              dict()).setdefault("faces", []).append(alignment)
+        self._final_alignments.data.setdefault(frame,
+                                               dict()).setdefault("faces", []).append(alignment)
 
-    def set_destination_filename(self):
+    def _set_destination_filename(self):
         """ Set the destination filename """
-        folder = os.path.split(self.final_alignments.file)[0]
-        ext = os.path.splitext(self.final_alignments.file)[1]
+        folder = os.path.split(self._final_alignments.file)[0]
+        ext = os.path.splitext(self._final_alignments.file)[1]
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(folder, "alignments_merged_{}{}".format(now, ext))
         logger.debug("Output set to: '%s'", filename)
-        self.final_alignments.set_filename(filename)
+        self._final_alignments.set_filename(filename)
 
 
-class RemoveAlignments():
-    """ Remove items from alignments file """
+class RemoveFaces():  # pylint:disable=too-few-public-methods
+    """ Remove items from alignments file.
+
+    Parameters
+    ---------
+    alignments: :class:`tools.alignments.media.AlignmentsData`
+        The loaded alignments containing faces to be removed
+    arguments: :class:`argparse.Namespace`
+        The command line arguments that have called this job
+    """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
-        self.type = arguments.job.replace("remove-", "")
-        self.items = self.get_items(arguments)
-        self.removed = set()
+        self._alignments = alignments
+        self._items = Faces(arguments.faces_dir)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def get_items(self, arguments):
-        """ Set the correct items to process """
-        retval = None
-        if self.type == "frames":
-            retval = Frames(arguments.frames_dir).items
-        elif self.type == "faces":
-            retval = Faces(arguments.faces_dir)
-        return retval
-
     def process(self):
-        """ run removal """
-        logger.info("[REMOVE ALIGNMENTS DATA]")  # Tidy up cli output
-        del_count = 0
-        task = getattr(self, "remove_{}".format(self.type))
+        """ Run the job to remove faces from an alignments file that do not exist within a faces
+        folder. """
+        logger.info("[REMOVE FACES FROM ALIGNMENTS]")  # Tidy up cli output
 
-        if self.type == "frames":
-            logger.debug("Removing Frames")
-            for frame in tqdm(list(item[3] for item in self.alignments.yield_faces()),
-                              desc="Removing Frames",
-                              total=self.alignments.frames_count):
-                del_count += task(frame)
-        else:
-            logger.debug("Removing Faces")
-            del_count = task()
+        face_hashes = self._items.items
+        if not face_hashes:
+            logger.error("No matching faces found in your faces folder. This would remove all "
+                         "faces from your alignments file. Process aborted.")
+            return
+
+        pre_face_count = self._alignments.faces_count
+        self._alignments.filter_hashes(face_hashes, filter_out=False)
+        del_count = pre_face_count - self._alignments.faces_count
 
         if del_count == 0:
             logger.info("No changes made to alignments file. Exiting")
             return
 
         logger.info("%s alignment(s) were removed from alignments file", del_count)
-        self.alignments.save()
+        self._alignments.save()
 
-        if self.type == "faces":
-            rename = Rename(self.alignments, None, self.items)
-            rename.process()
-
-    def remove_frames(self, frame):
-        """ Process to remove frames from an alignments file """
-        if frame in self.items:
-            logger.trace("Not deleting frame: '%s'", frame)
-            return 0
-        logger.debug("Deleting frame: '%s'", frame)
-        del self.alignments.data[frame]
-        return 1
-
-    def remove_faces(self):
-        """ Process to remove faces from an alignments file """
-        face_hashes = self.items.items
-        if not face_hashes:
-            logger.error("No face hashes. This would remove all faces from your alignments file.")
-            return 0
-        pre_face_count = self.alignments.faces_count
-        self.alignments.filter_hashes(face_hashes, filter_out=False)
-        post_face_count = self.alignments.faces_count
-        return pre_face_count - post_face_count
+        rename = Rename(self._alignments, None, self._items)
+        rename.process()
 
 
-class Rename():
+class Rename():  # pylint:disable=too-few-public-methods
     """ Rename faces in a folder to match their filename as stored in an alignments file.
 
     Parameters
@@ -736,8 +874,8 @@ class Rename():
     def __init__(self, alignments, arguments, faces=None):
         logger.debug("Initializing %s: (arguments: %s, faces: %s)",
                      self.__class__.__name__, arguments, faces)
-        self.alignments = alignments
-        self.faces = faces if faces else Faces(arguments.faces_dir)
+        self._alignments = alignments
+        self._faces = faces if faces else Faces(arguments.faces_dir)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self):
@@ -762,9 +900,9 @@ class Rename():
         source_filenames = []
         dest_filenames = []
         errors = []
-        pbar = tqdm(desc="Building Rename Lists", total=self.faces.count)
-        for disk_hash, disk_faces in self.faces.items.items():
-            align_faces = self.alignments.hashes_to_frame.get(disk_hash, None)
+        pbar = tqdm(desc="Building Rename Lists", total=self._faces.count)
+        for disk_hash, disk_faces in self._faces.items.items():
+            align_faces = self._alignments.hashes_to_frame.get(disk_hash, None)
             face_error = self._validate_hash_match(disk_faces, align_faces)
             if face_error is not None:
                 errors.extend(face_error)
@@ -837,7 +975,7 @@ class Rename():
         source_filenames = []
         dest_filenames = []
         # Force deterministic order on alignments dict for multi hash faces
-        sorted_aligned = sorted([(frame, idx) for frame, idx in align_faces.items()])
+        sorted_aligned = sorted(list(align_faces.items()))
         for disk_face, align_face in zip(disk_faces, sorted_aligned):
             extension = disk_face[1]
             src_fname = disk_face[0] + extension
@@ -892,8 +1030,8 @@ class Rename():
             if src == dst:
                 logger.debug("Skipping rename of '%s' as destination name is same as souce", src)
                 continue
-            old = os.path.join(self.faces.folder, src)
-            new = os.path.join(self.faces.folder, dst)
+            old = os.path.join(self._faces.folder, src)
+            new = os.path.join(self._faces.folder, dst)
             if os.path.exists(new):
                 # This should never happen, but is a safety measure to prevent deletion of faces
                 # when multiple files have the same hash.
@@ -910,7 +1048,7 @@ class Sort():
     """ Sort alignments' index by the order they appear in an image """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
+        self._alignments = alignments
         self.faces = self.get_faces(arguments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -927,26 +1065,26 @@ class Sort():
         logger.info("[SORT INDEXES]")  # Tidy up cli output
         reindexed = self.reindex_faces()
         if reindexed:
-            self.alignments.save()
+            self._alignments.save()
         if self.faces:
-            rename = Rename(self.alignments, None, self.faces)
+            rename = Rename(self._alignments, None, self.faces)
             rename.process()
 
     def reindex_faces(self):
         """ Re-Index the faces """
         reindexed = 0
-        for alignment in tqdm(self.alignments.yield_faces(),
-                              desc="Sort alignment indexes", total=self.alignments.frames_count):
+        for alignment in tqdm(self._alignments.yield_faces(),
+                              desc="Sort alignment indexes", total=self._alignments.frames_count):
             frame, alignments, count, key = alignment
             if count <= 1:
                 logger.trace("0 or 1 face in frame. Not sorting: '%s'", frame)
                 continue
-            sorted_alignments = sorted([item for item in alignments], key=lambda x: (x["x"]))
+            sorted_alignments = sorted(alignments, key=lambda x: (x["x"]))
             if sorted_alignments == alignments:
                 logger.trace("Alignments already in correct order. Not sorting: '%s'", frame)
                 continue
             logger.trace("Sorting alignments for frame: '%s'", frame)
-            self.alignments.data[key]["faces"] = sorted_alignments
+            self._alignments.data[key]["faces"] = sorted_alignments
             reindexed += 1
         logger.info("%s Frames had their faces reindexed", reindexed)
         return reindexed
@@ -960,7 +1098,7 @@ class Spatial():
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.arguments = arguments
-        self.alignments = alignments
+        self._alignments = alignments
         self.mappings = dict()
         self.normalized = dict()
         self.shapes_model = None
@@ -979,7 +1117,7 @@ class Spatial():
         landmarks = self.spatially_filter()
         landmarks = self.temporally_smooth(landmarks)
         self.update_alignments(landmarks)
-        self.alignments.save()
+        self._alignments.save()
 
         logger.info("Done! To re-extract faces run: python tools.py "
                     "alignments -j extract -a %s -fr <path_to_frames_dir> -fc "
@@ -1023,12 +1161,12 @@ class Spatial():
     def normalize(self):
         """ Compile all original and normalized alignments """
         logger.debug("Normalize")
-        count = sum(1 for val in self.alignments.data.values() if val["faces"])
+        count = sum(1 for val in self._alignments.data.values() if val["faces"])
         landmarks_all = np.zeros((68, 2, int(count)))
 
         end = 0
-        for key in tqdm(sorted(self.alignments.data.keys()), desc="Compiling"):
-            val = self.alignments.data[key]["faces"]
+        for key in tqdm(sorted(self._alignments.data.keys()), desc="Compiling"):
+            val = self._alignments.data[key]["faces"]
             if not val:
                 continue
             # We should only be normalizing a single face, so just take
@@ -1106,7 +1244,7 @@ class Spatial():
             logger.trace("Updating: (frame: %s)", frame)
             landmarks_update = landmarks[:, :, idx]
             landmarks_xy = landmarks_update.reshape(68, 2).tolist()
-            self.alignments.data[frame]["faces"][0]["landmarks_xy"] = landmarks_xy
+            self._alignments.data[frame]["faces"][0]["landmarks_xy"] = landmarks_xy
             logger.trace("Updated: (frame: '%s', landmarks: %s)", frame, landmarks_xy)
         logger.debug("Updated alignments")
 
@@ -1115,7 +1253,7 @@ class UpdateHashes():
     """ Update hashes in an alignments file """
     def __init__(self, alignments, arguments):
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
-        self.alignments = alignments
+        self._alignments = alignments
         self.faces = Faces(arguments.faces_dir).file_list_sorted
         self.face_hashes = dict()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -1128,7 +1266,7 @@ class UpdateHashes():
         if updated == 0:
             logger.info("No hashes were updated. Exiting")
             return
-        self.alignments.save()
+        self._alignments.save()
         logger.info("%s frame(s) had their face hashes updated.", updated)
 
     def get_hashes(self):
@@ -1152,15 +1290,15 @@ class UpdateHashes():
         logger.info("Updating hashes to alignments...")
         updated = 0
         for frame, hashes in self.face_hashes.items():
-            if not self.alignments.frame_exists(frame):
+            if not self._alignments.frame_exists(frame):
                 logger.warning("Frame not found in alignments file. Skipping: '%s'", frame)
                 continue
-            if not self.alignments.frame_has_faces(frame):
+            if not self._alignments.frame_has_faces(frame):
                 logger.warning("Frame does not have faces. Skipping: '%s'", frame)
                 continue
             existing = [face.get("hash", None)
-                        for face in self.alignments.get_faces_in_frame(frame)]
+                        for face in self._alignments.get_faces_in_frame(frame)]
             if any(hsh not in existing for hsh in list(hashes.values())):
-                self.alignments.add_face_hashes(frame, hashes)
+                self._alignments.add_face_hashes(frame, hashes)
                 updated += 1
         return updated

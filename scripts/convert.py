@@ -15,7 +15,7 @@ from tqdm import tqdm
 from scripts.fsmedia import Alignments, PostProcess, finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
-from lib.faces_detect import DetectedFace
+from lib.align import AlignedFace, DetectedFace
 from lib.gpu_stats import GPUStats
 from lib.image import read_image_hash, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
@@ -52,6 +52,11 @@ class Convert():  # pylint:disable=too-few-public-methods
         self._patch_threads = None
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
         self._alignments = Alignments(self._args, False, self._images.is_video)
+        if self._alignments.version == 1.0:
+            logger.error("The alignments file format has been updated since the given alignments "
+                         "file was generated. You need to update the file to proceed.")
+            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
+            sys.exit(1)
 
         self._opts = OptionalActions(self._args, self._images.file_list, self._alignments)
 
@@ -64,6 +69,7 @@ class Convert():  # pylint:disable=too-few-public-methods
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
         self._converter = Converter(self._predictor.output_size,
                                     self._predictor.coverage_ratio,
+                                    self._predictor.centering,
                                     self._disk_io.draw_transparent,
                                     self._disk_io.pre_encode,
                                     arguments,
@@ -441,7 +447,7 @@ class DiskIO():
         In a background thread:
             * Loads frames from disk.
             * Discards or passes through cli selected skipped frames
-            * Pairs the frame with its :class:`~lib.faces_detect.DetectedFace` objects
+            * Pairs the frame with its :class:`~lib.align.DetectedFace` objects
             * Performs any pre-processing actions
             * Puts the frame and detected faces to the load queue
         """
@@ -515,7 +521,7 @@ class DiskIO():
         Returns
         -------
         list
-            List of :class:`lib.faces_detect.DetectedFace` objects
+            List of :class:`lib.align.DetectedFace` objects
         """
         logger.trace("Getting faces for: '%s'", filename)
         if not self._extractor:
@@ -538,7 +544,7 @@ class DiskIO():
         Returns
         -------
         list
-            List of :class:`lib.faces_detect.DetectedFace` objects
+            List of :class:`lib.align.DetectedFace` objects
         """
         if not self._check_alignments(frame_name):
             return list()
@@ -588,7 +594,7 @@ class DiskIO():
         Returns
         -------
         list
-            List of :class:`lib.faces_detect.DetectedFace` objects
+            List of :class:`lib.align.DetectedFace` objects
          """
         self._extractor.input_queue.put(ExtractMedia(filename, image))
         faces = next(self._extractor.detected_faces())
@@ -656,6 +662,7 @@ class Predict():
         self._batchsize = self._get_batchsize(queue_size)
         self._sizes = self._get_io_sizes()
         self._coverage_ratio = self._model.coverage_ratio
+        self._centering = self._model.config["centering"]
 
         self._thread = self._launch_predictor()
         logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self._out_queue)
@@ -690,6 +697,11 @@ class Predict():
     def coverage_ratio(self):
         """ float: The coverage ratio that the model was trained at. """
         return self._coverage_ratio
+
+    @property
+    def centering(self):
+        """ str: The centering that the model was trained on (`"face"` or `"legacy"`) """
+        return self._centering
 
     @property
     def has_predicted_mask(self):
@@ -852,10 +864,10 @@ class Predict():
             if batch:
                 logger.trace("Batching to predictor. Frames: %s, Faces: %s",
                              len(batch), faces_seen)
-                detected_batch = [detected_face for item in batch
-                                  for detected_face in item["detected_faces"]]
+                feed_batch = [feed_face for item in batch
+                              for feed_face in item["feed_faces"]]
                 if faces_seen != 0:
-                    feed_faces = self._compile_feed_faces(detected_batch)
+                    feed_faces = self._compile_feed_faces(feed_batch)
                     batch_size = None
                     if is_amd and feed_faces.shape[0] != self._batchsize:
                         logger.verbose("Fallback to BS=1")
@@ -885,43 +897,53 @@ class Predict():
         Parameters
         ----------
         item: dict
-            The incoming image and list of :class:`~lib.faces_detect.DetectedFace` objects
+            The incoming image, list of :class:`~lib.align.DetectedFace` objects and list of
+            :class:`~lib.align.AlignedFace` objects for the feed face(s) and list of
+            :class:`~lib.align.AlignedFace` objects for the reference face(s)
 
         """
         logger.trace("Loading aligned faces: '%s'", item["filename"])
+        feed_faces = []
+        reference_faces = []
         for detected_face in item["detected_faces"]:
-            detected_face.load_feed_face(item["image"],
-                                         size=self._sizes["input"],
-                                         coverage_ratio=self._coverage_ratio,
-                                         dtype="float32")
+            feed_face = AlignedFace(detected_face.landmarks_xy,
+                                    image=item["image"],
+                                    centering=self._centering,
+                                    size=self._sizes["input"],
+                                    coverage_ratio=self._coverage_ratio,
+                                    dtype="float32")
             if self._sizes["input"] == self._sizes["output"]:
-                detected_face.reference = detected_face.feed
+                reference_faces.append(feed_face)
             else:
-                detected_face.load_reference_face(item["image"],
-                                                  size=self._sizes["output"],
-                                                  coverage_ratio=self._coverage_ratio,
-                                                  dtype="float32")
+                reference_faces.append(AlignedFace(detected_face.landmarks_xy,
+                                                   image=item["image"],
+                                                   centering=self._centering,
+                                                   size=self._sizes["output"],
+                                                   coverage_ratio=self._coverage_ratio,
+                                                   dtype="float32"))
+            feed_faces.append(feed_face)
+        item["feed_faces"] = feed_faces
+        item["reference_faces"] = reference_faces
         logger.trace("Loaded aligned faces: '%s'", item["filename"])
 
     @staticmethod
-    def _compile_feed_faces(detected_faces):
+    def _compile_feed_faces(feed_faces):
         """ Compile a batch of faces for feeding into the Predictor.
 
         Parameters
         ----------
-        detected_faces: list
-            List of `~lib.faces_detect.DetectedFace` objects
+        feed_faces: list
+            List of :class:`~lib.align.AlignedFace` objects sized for feeding into the model
 
         Returns
         -------
         :class:`numpy.ndarray`
             A batch of faces ready for feeding into the Faceswap model.
         """
-        logger.trace("Compiling feed face. Batchsize: %s", len(detected_faces))
-        feed_faces = np.stack([detected_face.feed_face[..., :3]
-                               for detected_face in detected_faces]) / 255.0
-        logger.trace("Compiled Feed faces. Shape: %s", feed_faces.shape)
-        return feed_faces
+        logger.trace("Compiling feed face. Batchsize: %s", len(feed_faces))
+        retval = np.stack([feed_face.face[..., :3] for feed_face in feed_faces]) / 255.0
+        logger.trace("Compiled Feed faces. Shape: %s", retval.shape)
+        return retval
 
     def _predict(self, feed_faces, batch_size=None):
         """ Run the Faceswap models' prediction function.
@@ -978,9 +1000,9 @@ class Predict():
             else:
                 item["swapped_faces"] = swapped_faces[pointer:pointer + num_faces]
 
-            logger.trace("Putting to queue. ('%s', detected_faces: %s, swapped_faces: %s)",
-                         item["filename"], len(item["detected_faces"]),
-                         item["swapped_faces"].shape[0])
+            logger.trace("Putting to queue. ('%s', detected_faces: %s, reference_faces: %s, "
+                         "swapped_faces: %s)", item["filename"], len(item["detected_faces"]),
+                         len(item["reference_faces"]), item["swapped_faces"].shape[0])
             pointer += num_faces
         self._out_queue.put(batch)
         logger.trace("Queued out batch. Batchsize: %s", len(batch))
@@ -998,7 +1020,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         line arguments
     input_images: list
         List of input image files
-    alignments: :class:`lib.alignments.Alignments`
+    alignments: :class:`lib.align.Alignments`
         The alignments file for this conversion
     """
 

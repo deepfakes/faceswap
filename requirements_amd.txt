@@ -1,3 +1,4 @@
 -r _requirements_base.txt
+# tf2.2 is last version that tensorboard logging works with old Keras
 tensorflow>=2.2.0,<2.3.0
 plaidml-keras==0.7.0

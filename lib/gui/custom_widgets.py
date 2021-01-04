@@ -529,9 +529,8 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
             self._pbar_position.set(position)
 
 
-class Tooltip:
-    """
-    Create a tooltip for a given widget as the mouse goes on it.
+class Tooltip:  # pylint:disable=too-few-public-methods
+    """ Create a tooltip for a given widget as the mouse goes on it.
 
     Parameters
     ----------
@@ -543,6 +542,9 @@ class Tooltip:
         (left, top, right, bottom) padding for the tool-tip. Default: (5, 3, 5, 3)
     text: str, optional
         The text to be displayed in the tool-tip. Default: 'widget info'
+    text_variable: :class:`tkinter.strVar`, optional
+        The text variable to use for dynamic help text. Appended after the contents of :attr:`text`
+        if provided. Default: ``None``
     waittime: int, optional
         The time in milliseconds to wait before showing the tool-tip. Default: 400
     wraplength: int, optional
@@ -560,12 +562,13 @@ class Tooltip:
     http://www.daniweb.com/programming/software-development/code/484591/a-tooltip-class-for-tkinter
     """
     def __init__(self, widget, *, background="#FFFFEA", pad=(5, 3, 5, 3), text="widget info",
-                 waittime=400, wraplength=250):
+                 text_variable=None, waittime=400, wraplength=250):
 
         self._waittime = waittime  # in milliseconds, originally 500
         self._wraplength = wraplength  # in pixels, originally 180
         self._widget = widget
         self._text = text
+        self._text_variable = text_variable
         self._widget.bind("<Enter>", self._on_enter)
         self._widget.bind("<Leave>", self._on_leave)
         self._widget.bind("<ButtonPress>", self._on_leave)
@@ -658,8 +661,12 @@ class Tooltip:
         win = tk.Frame(self._topwidget,
                        background=background,
                        borderwidth=0)
+
+        text = self._text
+        if self._text_variable and self._text_variable.get():
+            text += "\n\nCurrent value: '{}'".format(self._text_variable.get())
         label = tk.Label(win,
-                         text=self._text,
+                         text=text,
                          justify=tk.LEFT,
                          background=background,
                          relief=tk.SOLID,

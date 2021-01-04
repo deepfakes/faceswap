@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-    The default options for the faceswap Box_Blend Mask plugin.
+    The default options for the faceswap Dfl_SAE Model plugin.
 
     Defaults files should be named <plugin_name>_defaults.py
     Any items placed into this file will automatically get added to the relevant config .ini files
@@ -41,68 +41,17 @@
 """
 
 
-_HELPTEXT = "Options for blending the edges of the swapped box with the background image"
+_HELPTEXT = "Dfaker Model (Adapted from https://github.com/dfaker/df)"
 
 
 _DEFAULTS = dict(
-    type=dict(
-        default="gaussian",
-        info="The type of blending to use:"
-             "\n\t gaussian: Blend with Gaussian filter. Slower, but often better than Normalized"
-             "\n\t normalized: Blend with Normalized box filter. Faster than Gaussian"
-             "\n\t none: Don't perform blending",
-        datatype=str,
-        rounding=None,
-        min_max=None,
-        choices=["gaussian", "normalized", "none"],
-        gui_radio=True,
-        fixed=True,
-    ),
-    distance=dict(
-        default=11.0,
-        info="The distance from the edges of the swap box to start blending.\n"
-             "The distance is set as percentage of the swap box size to give the number of pixels "
-             "from the edge of the box. Eg: For a swap area of 256px and a percentage of 4%, "
-             "blending would commence 10 pixels from the edge.\nHigher percentages start the "
-             "blending from closer to the center of the face, so will reveal more of the source "
-             "face.",
-        datatype=float,
-        rounding=1,
-        group="settings",
-        min_max=(0.1, 25.0),
-        choices=[],
-        gui_radio=False,
-        fixed=True,
-    ),
-    radius=dict(
-        default=5.0,
-        info="Radius dictates how much blending should occur, or more specifically, how far the "
-             "blending will spread away from the 'distance' parameter.\n"
-             "This figure is set as a percentage of the swap box size to give the radius in "
-             "pixels. Eg: For a swap area of 256px and a percentage of 5%, the radius would be 13 "
-             "pixels.\n"
-             "NB: Higher percentage means more blending, but too high may reveal more of the "
-             "source face, or lead to hard lines at the border.",
-        datatype=float,
-        rounding=1,
-        min_max=(0.1, 25.0),
-        choices=[],
-        gui_radio=False,
-        group="settings",
-        fixed=True,
-    ),
-    passes=dict(
-        default=1,
-        info="The number of passes to perform. Additional passes of the blending algorithm can "
-             "improve smoothing at a time cost. This is more useful for 'box' type blending.\n"
-             "Additional passes have exponentially less effect so it's not worth setting this too "
-             "high.",
+    output_size=dict(
+        default=128,
+        info="Resolution (in pixels) of the output image to generate on.\n"
+             "BE AWARE Larger resolution will dramatically increase VRAM requirements.\n"
+             "Must be 128 or 256.",
         datatype=int,
-        rounding=1,
-        min_max=(1, 8),
-        choices=[],
-        gui_radio=False,
-        group="settings",
-        fixed=True,
-    ),
-)
+        rounding=128,
+        min_max=(128, 256),
+        group="size",
+        fixed=True))

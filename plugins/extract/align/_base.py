@@ -17,7 +17,7 @@ For each source item, the plugin must pass a dict to finalize containing:
 import cv2
 import numpy as np
 
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import errors_impl as tf_errors
 
 from lib.utils import get_backend, FaceswapError
 from plugins.extract._base import Extractor, logger, ExtractMedia
@@ -37,6 +37,9 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         The name of the model file to be loaded
     normalize_method: {`None`, 'clahe', 'hist', 'mean'}, optional
         Normalize the images fed to the aligner. Default: ``None``
+    re_feed: int
+        The number of times to re-feed a slightly adjusted bounding box into the aligner.
+        Default: `0`
 
     Other Parameters
     ----------------
@@ -53,21 +56,23 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self, git_model_id=None, model_filename=None,
-                 configfile=None, instance=0, normalize_method=None, **kwargs):
-        logger.debug("Initializing %s: (normalize_method: %s)", self.__class__.__name__,
-                     normalize_method)
+                 configfile=None, instance=0, normalize_method=None, re_feed=0, **kwargs):
+        logger.debug("Initializing %s: (normalize_method: %s, re_feed: %s)",
+                     self.__class__.__name__, normalize_method, re_feed)
         super().__init__(git_model_id,
                          model_filename,
                          configfile=configfile,
                          instance=instance,
                          **kwargs)
         self._normalize_method = None
+        self._re_feed = re_feed
         self.set_normalize_method(normalize_method)
 
         self._plugin_type = "align"
         self._faces_per_filename = dict()  # Tracking for recompiling face batches
         self._rollover = None  # Items that are rolled over from the previous batch in get_batch
         self._output_faces = []
+        self._additional_keys = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_normalize_method(self, method):
@@ -92,7 +97,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         to ``dict`` for internal processing.
 
         To ensure consistent batch sizes for aligner the items are split into separate items for
-        each :class:`~lib.faces_detect.DetectedFace` object.
+        each :class:`~lib.align.DetectedFace` object.
 
         Remember to put ``'EOF'`` to the out queue after processing
         the final batch
@@ -102,7 +107,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         >>> {'filename': [<filenames of source frames>],
         >>>  'image': [<source images>],
-        >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
+        >>>  'detected_faces': [[<lib.align.DetectedFace objects]]}
 
         Parameters
         ----------
@@ -215,11 +220,83 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             yield output
 
     # <<< PROTECTED METHODS >>> #
+
+    # << PROCESS_INPUT WRAPPER >>
+    def _process_input(self, batch):
+        """ Process the input to the aligner model multiple times based on the user selected
+        `re-feed` command line option. This adjusts the bounding box for the face to be fed
+        into the model by a random amount within 0.05 pixels of the detected face's shortest axis.
+
+        References
+        ----------
+        https://studios.disneyresearch.com/2020/06/29/high-resolution-neural-face-swapping-for-visual-effects/
+
+        Parameters
+        ----------
+        batch: dict
+            Contains the batch that is currently being passed through the plugin process
+
+        Returns
+        -------
+        dict
+            The batch with input processed
+        """
+        if not self._additional_keys:
+            existing_keys = list(batch.keys())
+
+        original_boxes = np.array([(face.x, face.y, face.w, face.h)
+                                   for face in batch["detected_faces"]])
+        adjusted_boxes = self._get_adjusted_boxes(original_boxes)
+        retval = dict()
+        for bounding_boxes in adjusted_boxes:
+            for face, box in zip(batch["detected_faces"], bounding_boxes):
+                face.x, face.y, face.w, face.h = box
+
+            result = self.process_input(batch)
+            if not self._additional_keys:
+                self._additional_keys = [key for key in result if key not in existing_keys]
+            for key in self._additional_keys:
+                retval.setdefault(key, []).append(batch[key])
+                del batch[key]
+
+        # Place the original bounding box back to detected face objects
+        for face, box in zip(batch["detected_faces"], original_boxes):
+            face.x, face.y, face.w, face.h = box
+
+        batch.update(retval)
+        return batch
+
+    def _get_adjusted_boxes(self, original_boxes):
+        """ Obtain an array of adjusted bounding boxes based on the number of re-feed iterations
+        that have been selected and the minimum dimension of the original bounding box.
+
+        Parameters
+        ----------
+        original_boxes: :class:`numpy.ndarray`
+            The original ('x', 'y', 'w', 'h') detected face boxes corresponding to the incoming
+            detected face objects
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The original boxes (in position 0) and the randomly adjusted bounding boxes
+        """
+        if self._re_feed == 0:
+            return original_boxes[None, ...]
+        beta = 0.05
+        max_shift = np.min(original_boxes[..., 2:], axis=1) * beta
+        rands = np.random.rand(self._re_feed, *original_boxes.shape) * 2 - 1
+        new_boxes = np.rint(original_boxes + (rands * max_shift[None, :, None])).astype("int32")
+        retval = np.concatenate((original_boxes[None, ...], new_boxes))
+        logger.trace(retval)
+        return retval
+
     # <<< PREDICT WRAPPER >>> #
     def _predict(self, batch):
         """ Just return the aligner's predict function """
         try:
-            return self.predict(batch)
+            batch["prediction"] = [self.predict(feed) for feed in batch["feed"]]
+            return batch
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
                    "selected batch size. You can try a number of things:"
@@ -247,6 +324,28 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                            "faceswap/config/extract.ini).")
                     raise FaceswapError(msg) from err
             raise
+
+    def _process_output(self, batch):
+        """ Process the output from the aligner model multiple times based on the user selected
+        `re-feed amount` configuration option, then average the results for final prediction.
+
+        Parameters
+        ----------
+        batch : dict
+            Contains the batch that is currently being passed through the plugin process
+        """
+        landmarks = []
+        for idx in range(self._re_feed + 1):
+            subbatch = {key: val
+                        for key, val in batch.items()
+                        if key not in ["feed", "prediction"] + self._additional_keys}
+            subbatch["prediction"] = batch["prediction"][idx]
+            for key in self._additional_keys:
+                subbatch[key] = batch[key][idx]
+            self.process_output(subbatch)
+            landmarks.append(subbatch["landmarks"])
+        batch["landmarks"] = np.average(landmarks, axis=0)
+        return batch
 
     # <<< FACE NORMALIZATION METHODS >>> #
     def _normalize_faces(self, faces):

@@ -34,7 +34,8 @@ class FaceswapConfig():
             Return a dict of config items with their set values for items
             that can be altered after the model has been created """
         retval = dict()
-        for sect in ("global", self.section):
+        sections = [sect for sect in self.config.sections() if sect.startswith("global")]
+        for sect in sections + [self.section]:
             if sect not in self.defaults:
                 continue
             for key, val in self.defaults[sect].items():

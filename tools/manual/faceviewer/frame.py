@@ -30,7 +30,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
-        The :class:`~lib.faces_detect.DetectedFace` objects for this video
+        The :class:`~lib.align.DetectedFace` objects for this video
     display_frame: :class:`~tools.manual.frameviewer.frame.DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
     """
@@ -228,7 +228,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         The :class:`tkinter.BooleanVar` objects for selectable optional annotations
         as set by the buttons in the :class:`FacesActionsFrame`
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
-        The :class:`~lib.faces_detect.DetectedFace` objects for this video
+        The :class:`~lib.align.DetectedFace` objects for this video
     display_frame: :class:`~tools.manual.frameviewer.frame.DisplayFrame`
         The section of the Manual Tool that holds the frames viewer
     event: :class:`threading.Event`
@@ -338,7 +338,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
             self.yview_moveto(move_to)
         if size_change:
             self._view.reset()
-        self._view.update()
+        self._view.update(refresh_annotations=retain_position)
         if not size_change:
             trigger_var.set(False)
 
@@ -467,7 +467,7 @@ class Grid():
     canvas: :class:`tkinter.Canvas`
         The :class:`~tools.manual.faceviewer.frame.FacesViewer` canvas
     detected_faces: :class:`~tools.manual.detected_faces.DetectedFaces`
-        The :class:`~lib.faces_detect.DetectedFace` objects for this video
+        The :class:`~lib.align.DetectedFace` objects for this video
     """
     def __init__(self, canvas, detected_faces):
         logger.debug("Initializing %s: (detected_faces: %s)",
@@ -652,7 +652,7 @@ class Grid():
         -------
         :class:`numpy.ndarray`
             Array of dimensions (rows, columns) corresponding to the display grid, containing the
-            corresponding :class:`lib.faces_detect.DetectFace` object
+            corresponding :class:`lib.align.DetectFace` object
 
             Any remaining placeholders at the end of the grid which are not populated with a face
             are replaced with ``None``

@@ -11,16 +11,16 @@ For each source frame, the plugin must pass a dict to finalize containing:
 >>> {'filename': <filename of source frame>,
 >>>  'detected_faces': <list of DetectedFace objects containing bounding box points}}
 
-To get a :class:`~lib.faces_detect.DetectedFace` object use the function:
+To get a :class:`~lib.align.DetectedFace` object use the function:
 
 >>> face = self.to_detected_face(<face left>, <face top>, <face right>, <face bottom>)
 """
 import cv2
 import numpy as np
 
-from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import errors_impl as tf_errors
 
-from lib.faces_detect import DetectedFace
+from lib.align import DetectedFace
 from lib.utils import get_backend, FaceswapError
 
 from plugins.extract._base import Extractor, logger
@@ -96,7 +96,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         >>>  'image': <numpy.ndarray of images standardized for prediction>,
         >>>  'scale': [<scaling factors for each image>],
         >>>  'pad': [<padding for each image>],
-        >>>  'detected_faces': [[<lib.faces_detect.DetectedFace objects]]}
+        >>>  'detected_faces': [[<lib.align.DetectedFace objects]]}
 
         Parameters
         ----------
@@ -193,7 +193,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
 
     @staticmethod
     def to_detected_face(left, top, right, bottom):
-        """ Return a :class:`~lib.faces_detect.DetectedFace` object for the bounding box """
+        """ Return a :class:`~lib.align.DetectedFace` object for the bounding box """
         return DetectedFace(x=int(round(left)),
                             w=int(round(right - left)),
                             y=int(round(top)),

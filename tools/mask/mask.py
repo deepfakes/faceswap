@@ -8,8 +8,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.alignments import Alignments
-from lib.faces_detect import DetectedFace
+from lib.align import Alignments, AlignedFace, DetectedFace
 from lib.image import FacesLoader, ImagesLoader, ImagesSaver
 
 from lib.multithreading import MultiThread
@@ -349,6 +348,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         for idx, face in enumerate(extractor_output.detected_faces):
             self._alignments.update_face(frame, idx, face.to_alignment())
             if self._saver is not None:
+                face.image = extractor_output.image
                 self._save(frame, idx, face)
 
     def _save(self, frame, idx, detected_face):
@@ -395,15 +395,20 @@ class Mask():  # pylint:disable=too-few-public-methods
         mask.set_blur_and_threshold(**self._output["opts"])
         if not self._output["full_frame"] or self._input_is_faces:
             if self._input_is_faces:
-                face = detected_face.image
+                face = AlignedFace(detected_face.landmarks_xy,
+                                   image=detected_face.image,
+                                   centering="face",
+                                   size=detected_face.image.shape[0],
+                                   is_aligned=True).face
             else:
-                detected_face.load_aligned(detected_face.image)
-                face = detected_face.aligned_face
+                centering = "legacy" if self._alignments.version == 1.0 else "face"
+                detected_face.load_aligned(detected_face.image, centering=centering)
+                face = detected_face.aligned.face
             mask = cv2.resize(detected_face.mask[self._mask_type].mask,
                               (face.shape[1], face.shape[0]),
                               interpolation=cv2.INTER_CUBIC)[..., None]
         else:
-            face = detected_face.image
+            face = np.array(detected_face.image)  # cv2 fails if this comes as imageio.core.Array
             mask = mask.get_full_frame_mask(face.shape[1], face.shape[0])
             mask = np.expand_dims(mask, -1)
 
