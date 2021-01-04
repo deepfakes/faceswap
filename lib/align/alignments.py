@@ -694,9 +694,9 @@ class Alignments():
         logger.debug("checking legacy landmarksXY")
         try:
             retval = (any(key == "landmarksXY"
-                for val in self._data.values()
-                for alignment in val["faces"]
-                for key in alignment))
+                      for val in self._data.values()
+                      for alignment in val["faces"]
+                      for key in alignment))
 
         except KeyError:
             logger.warning("This alignment file already exists. Change -al path.")
@@ -705,7 +705,7 @@ class Alignments():
 
         logger.debug("legacy landmarksXY: %s", retval)
         return retval
-        
+
     def _update_legacy_landmarksxy(self):
         """ Update legacy `landmarksXY` keys to PEP compliant `landmarks_xy` keys. """
         update_count = 0
