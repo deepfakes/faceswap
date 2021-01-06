@@ -715,6 +715,9 @@ class Install():
         # Windows TF2.3 doesn't pull in the Cuda toolkit, so we may as well be explicit
         # TODO This is not a robust enough check if we have more than 1 tf version
         if package.startswith("tensorflow-gpu"):  # Add toolkit
+            # TODO Remove this hack to lower the max supported TF version when TF2.4 can be
+            # installed by setup.py
+            package = package.replace("2.5.0", "2.4.0")
             specs = Requirement.parse(package).specs
             for key, val in TENSORFLOW_REQUIREMENTS.items():
                 req_specs = Requirement.parse("foobar" + key).specs
