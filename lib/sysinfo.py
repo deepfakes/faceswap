@@ -5,16 +5,16 @@ import json
 import locale
 import os
 import platform
-import re
 import sys
 from subprocess import PIPE, Popen
 
 import psutil
 
 from lib.gpu_stats import GPUStats
+from setup import CudaCheck
 
 
-class _SysInfo():
+class _SysInfo():  # pylint:disable=too-few-public-methods
     """ Obtain information about the System, Python and GPU """
     def __init__(self):
         self._state_file = _State().state_file
@@ -28,7 +28,7 @@ class _SysInfo():
         self._python = dict(implementation=platform.python_implementation(),
                             version=platform.python_version())
         self._gpu = GPUStats(log=False).sys_info
-        self._cuda_path = self._get_cuda_path()
+        self._cuda_check = CudaCheck()
 
     @property
     def _encoding(self):
@@ -146,202 +146,25 @@ class _SysInfo():
         return ". ".join(commits)
 
     @property
-    def _cuda_keys_windows(self):
-        """ list: The CUDA Path environment variables stored for Windows users. """
-        return [key for key in os.environ.keys() if key.lower().startswith("cuda_path_v")]
-
-    @property
     def _cuda_version(self):
         """ str: The installed CUDA version. """
         # TODO Handle multiple CUDA installs
-        chk = Popen("nvcc -V", shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = chk.communicate()
-        if not stderr:
-            version = re.search(r".*release (?P<cuda>\d+\.\d+)", stdout.decode(self._encoding))
-            version = version.groupdict().get("cuda", None)
-            if version:
-                return version
-        # Failed to load nvcc
-        if self._is_linux:
-            version = self._cuda_version_linux()
-        elif self._is_windows:
-            version = self._cuda_version_windows()
-        else:
-            version = "Unsupported OS"
+        retval = self._cuda_check.cuda_version
+        if not retval:
+            retval = "No global version found"
             if self._is_conda:
-                version += ". Check Conda packages for Conda Cuda"
-        return version
+                retval += ". Check Conda packages for Conda Cuda"
+        return retval
 
     @property
     def _cudnn_version(self):
         """ str: The installed cuDNN version. """
-        if self._is_linux:
-            cudnn_checkfiles = self._cudnn_checkfiles_linux()
-        elif self._is_windows:
-            cudnn_checkfiles = self._cudnn_checkfiles_windows()
-        else:
-            retval = "Unsupported OS"
-            if self._is_conda:
-                retval += ". Check Conda packages for Conda cuDNN"
-            return retval
-
-        cudnn_checkfile = None
-        for checkfile in cudnn_checkfiles:
-            if os.path.isfile(checkfile):
-                cudnn_checkfile = checkfile
-                break
-
-        if not cudnn_checkfile:
+        retval = self._cuda_check.cudnn_version
+        if not retval:
             retval = "No global version found"
             if self._is_conda:
                 retval += ". Check Conda packages for Conda cuDNN"
-            return retval
-
-        found = 0
-        with open(cudnn_checkfile, "r") as ofile:
-            for line in ofile:
-                if line.lower().startswith("#define cudnn_major"):
-                    major = line[line.rfind(" ") + 1:].strip()
-                    found += 1
-                elif line.lower().startswith("#define cudnn_minor"):
-                    minor = line[line.rfind(" ") + 1:].strip()
-                    found += 1
-                elif line.lower().startswith("#define cudnn_patchlevel"):
-                    patchlevel = line[line.rfind(" ") + 1:].strip()
-                    found += 1
-                if found == 3:
-                    break
-        if found != 3:
-            retval = "No global version found"
-            if self._is_conda:
-                retval += ". Check Conda packages for Conda cuDNN"
-            return retval
-        return "{}.{}.{}".format(major, minor, patchlevel)
-
-    @staticmethod
-    def _cudnn_checkfiles_linux():
-        """ Obtain the location of the files to check for cuDNN location in Linux.
-
-        Returns
-        str:
-            The location of the header files for cuDNN
-        """
-        chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
-        if "libcudnn.so." not in chk:
-            return list()
-        chk = chk.strip().replace("libcudnn.so.", "")
-        cudnn_vers = chk[0]
-        cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]
-        cudnn_path = cudnn_path.replace("lib", "include")
-        cudnn_checkfiles = [os.path.join(cudnn_path, "cudnn_v{}.h".format(cudnn_vers)),
-                            os.path.join(cudnn_path, "cudnn.h")]
-        return cudnn_checkfiles
-
-    def _cudnn_checkfiles_windows(self):
-        """ Obtain the location of the files to check for cuDNN location in Windows.
-
-        Returns
-        str:
-            The location of the header files for cuDNN
-        """
-        # TODO A more reliable way of getting the windows location
-        if not self._cuda_path and not self._cuda_keys_windows:
-            return list()
-        if not self._cuda_path:
-            self._cuda_path = os.environ[self._cuda_keys_windows[0]]
-
-        cudnn_checkfile = os.path.join(self._cuda_path, "include", "cudnn.h")
-        return [cudnn_checkfile]
-
-    def _get_cuda_path(self):
-        """ Obtain the path to Cuda install location.
-
-        Returns
-        -------
-        str
-            The path to the install location of Cuda on the system
-        """
-        if self._is_linux:
-            path = self._cuda_path_linux()
-        elif self._is_windows:
-            path = self._cuda_path_windows()
-        else:
-            path = None
-        return path
-
-    @staticmethod
-    def _cuda_path_linux():
-        """ Obtain the path to Cuda install location on Linux.
-
-        Returns
-        -------
-        str
-            The path to the install location of Cuda on a Linux system
-        """
-        ld_library_path = os.environ.get("LD_LIBRARY_PATH", None)
-        chk = os.popen("ldconfig -p | grep -P \"libcudart.so.\\d+.\\d+\" | head -n 1").read()
-        if ld_library_path and not chk:
-            paths = ld_library_path.split(":")
-            for path in paths:
-                chk = os.popen("ls {} | grep -P -o \"libcudart.so.\\d+.\\d+\" | "
-                               "head -n 1".format(path)).read()
-                if chk:
-                    break
-        if not chk:
-            return None
-        return chk[chk.find("=>") + 3:chk.find("targets") - 1]
-
-    @staticmethod
-    def _cuda_path_windows():
-        """ Obtain the path to Cuda install location on Windows.
-
-        Returns
-        -------
-        str
-            The path to the install location of Cuda on a Windows system
-        """
-        cuda_path = os.environ.get("CUDA_PATH", None)
-        return cuda_path
-
-    def _cuda_version_linux(self):
-        """ Obtain the installed version of Cuda on a Linux system.
-
-        Returns
-        -------
-        The installed CUDA version on a Linux system
-        """
-        ld_library_path = os.environ.get("LD_LIBRARY_PATH", None)
-        chk = os.popen("ldconfig -p | grep -P \"libcudart.so.\\d+.\\d+\" | head -n 1").read()
-        if ld_library_path and not chk:
-            paths = ld_library_path.split(":")
-            for path in paths:
-                chk = os.popen("ls {} | grep -P -o \"libcudart.so.\\d+.\\d+\" | "
-                               "head -n 1".format(path)).read()
-                if chk:
-                    break
-        if not chk:
-            retval = "No global version found"
-            if self._is_conda:
-                retval += ". Check Conda packages for Conda Cuda"
-            return retval
-        cudavers = chk.strip().replace("libcudart.so.", "")
-        return cudavers[:cudavers.find(" ")]
-
-    def _cuda_version_windows(self):
-        """ Obtain the installed version of Cuda on a Windows system.
-
-        Returns
-        -------
-        The installed CUDA version on a Windows system
-        """
-        cuda_keys = self._cuda_keys_windows
-        if not cuda_keys:
-            retval = "No global version found"
-            if self._is_conda:
-                retval += ". Check Conda packages for Conda Cuda"
-            return retval
-        cudavers = [key.lower().replace("cuda_path_v", "").replace("_", ".") for key in cuda_keys]
-        return " ".join(cudavers)
+        return retval
 
     def full_info(self):
         """ Obtain extensive system information stats, formatted into a human readable format.
@@ -422,7 +245,7 @@ def get_sysinfo():
     return retval
 
 
-class _Configs():
+class _Configs():  # pylint:disable=too-few-public-methods
     """ Parses the config files in /faceswap/config and outputs the information stored within them
     in a human readable format. """
 
@@ -533,7 +356,7 @@ class _Configs():
         return "{0: <25} {1}\n".format(key.strip() + ":", value.strip())
 
 
-class _State():
+class _State():  # pylint:disable=too-few-public-methods
     """ Parses the state file in the current model directory, if the model is training, and
     formats the content into a human readable format. """
     def __init__(self):

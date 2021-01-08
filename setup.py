@@ -36,7 +36,6 @@ class Environment():
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer = False
-        self.cuda_path = ""
         self.cuda_version = ""
         self.cudnn_version = ""
         self.enable_amd = False
@@ -77,11 +76,6 @@ class Environment():
         """ Check whether using Conda """
         return ("conda" in sys.version.lower() or
                 os.path.exists(os.path.join(sys.prefix, 'conda-meta')))
-
-    @property
-    def ld_library_path(self):
-        """ Get the ld library path """
-        return os.environ.get("LD_LIBRARY_PATH", None)
 
     @property
     def is_admin(self):
@@ -227,7 +221,7 @@ class Environment():
     def get_installed_conda_packages(self):
         """ Get currently installed conda packages """
         if not self.is_conda:
-            return
+            return None
         chk = os.popen("conda list").read()
         installed = [re.sub(" +", " ", line.strip())
                      for line in chk.splitlines() if not line.startswith("#")]
@@ -375,8 +369,25 @@ class Checks():
         if self.env.enable_cuda and self.env.is_conda:
             self.output.info("Skipping Cuda/cuDNN checks for Conda install")
         elif self.env.enable_cuda and self.env.os_version[0] in ("Linux", "Windows"):
-            self.cuda_check()
-            self.cudnn_check()
+            check = CudaCheck()
+            if check.cuda_version:
+                self.env.cuda_version = check.cuda_version
+                self.output.info("CUDA version: " + self.env.cuda_version)
+            else:
+                self.output.error("CUDA not found. Install and try again.\n"
+                                  "Recommended version:      CUDA 10.1     cuDNN 7.6\n"
+                                  "CUDA: https://developer.nvidia.com/cuda-downloads\n"
+                                  "cuDNN: https://developer.nvidia.com/rdp/cudnn-download")
+                return
+
+            if check.cudnn_version:
+                self.env.cudnn_version = ".".join(check.cudnn_version.split(".")[:2])
+                self.output.info(f"cuDNN version: {self.env.cudnn_version}")
+            else:
+                self.output.error("cuDNN not found. See "
+                                  "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#"
+                                  "cudnn for instructions")
+                return
         elif self.env.enable_cuda and self.env.os_version[0] not in ("Linux", "Windows"):
             self.tips.macos()
             self.output.warning("Cannot find CUDA on macOS")
@@ -385,11 +396,6 @@ class Checks():
         self.env.update_tf_dep()
         if self.env.os_version[0] == "Windows":
             self.tips.pip()
-
-    @property
-    def cuda_keys_windows(self):
-        """ Return the OS Environ CUDA Keys for Windows """
-        return [key for key in os.environ if key.lower().startswith("cuda_path_v")]
 
     def amd_ask_enable(self):
         """ Enable or disable Plaidml for AMD"""
@@ -439,81 +445,79 @@ class Checks():
             self.output.info("CUDA Disabled")
             self.env.enable_cuda = False
 
-    def cuda_check(self):
-        """ Check Cuda for Linux or Windows """
+
+class CudaCheck():  # pylint:disable=too-few-public-methods
+    """ Find the location of system installed Cuda and cuDNN on Windows and Linux. """
+
+    def __init__(self):
+        self.cuda_path = None
+        self.cuda_version = None
+        self.cudnn_version = None
+
+        self._os = platform.system().lower()
+        self._cuda_keys = [key for key in os.environ if key.lower().startswith("cuda_path_v")]
+        self._cudnn_header_files = ["cudnn_version.h", "cudnn.h"]
+
+        if self._os in ("windows", "linux"):
+            self._cuda_check()
+            self._cudnn_check()
+
+    def _cuda_check(self):
+        """ Obtain the location and version of Cuda and populate :attr:`cuda_version` and
+        :attr:`cuda_path`
+
+        Initially just calls `nvcc -V` to get the installed version of Cuda currently in use.
+        If this fails, drills down to more OS specific checking methods.
+        """
         chk = Popen("nvcc -V", shell=True, stdout=PIPE, stderr=PIPE)
         stdout, stderr = chk.communicate()
         if not stderr:
-            version = re.search(r".*release (?P<cuda>\d+\.\d+)", stdout.decode(self.env.encoding))
-            self.env.cuda_version = version.groupdict().get("cuda", None)
-            if self.env.cuda_version:
-                self.output.info("CUDA version: " + self.env.cuda_version)
-                return
-        # Failed to load nvcc
-        if self.env.os_version[0] == "Linux":
-            self.cuda_check_linux()
-        elif self.env.os_version[0] == "Windows":
-            self.cuda_check_windows()
+            version = re.search(r".*release (?P<cuda>\d+\.\d+)",
+                                stdout.decode(locale.getpreferredencoding()))
+            self.cuda_version = version.groupdict().get("cuda", None)
+            locate = "where" if self._os == "windows" else "which"
+            path = os.popen(f"{locate} nvcc").read()
+            if path:
+                path = path.split("\n")[0]  # Split multiple entries and take first found
+                while True:  # Get Cuda root folder
+                    path, split = os.path.split(path)
+                    if split == "bin":
+                        break
+                self.cuda_path = path
+            return
 
-    def cuda_check_linux(self):
-        """ Check Linux CUDA Version """
+        # Failed to load nvcc, manual check
+        getattr(self, f"_cuda_check_{self._os}")()
+
+    def _cuda_check_linux(self):
+        """ For Linux check the dynamic link loader for libcudart. If not found with ldconfig then
+        attempt to find it in LD_LIBRARY_PATH. """
         chk = os.popen("ldconfig -p | grep -P \"libcudart.so.\\d+.\\d+\" | head -n 1").read()
-        if self.env.ld_library_path and not chk:
-            paths = self.env.ld_library_path.split(":")
-            for path in paths:
-                chk = os.popen("ls {} | grep -P -o \"libcudart.so.\\d+.\\d+\" | "
-                               "head -n 1".format(path)).read()
+        if not chk and os.environ.get("LD_LIBRARY_PATH"):
+            for path in os.environ["LD_LIBRARY_PATH"].split(":"):
+                chk = os.popen(f"ls {path} | grep -P -o \"libcudart.so.\\d+.\\d+\" | "
+                               "head -n 1").read()
                 if chk:
                     break
-        if not chk:
-            self.output.error("CUDA not found. Install and try again.\n"
-                              "Recommended version:      CUDA 10.1     cuDNN 7.6\n"
-                              "CUDA: https://developer.nvidia.com/cuda-downloads\n"
-                              "cuDNN: https://developer.nvidia.com/rdp/cudnn-download")
+        if not chk:  # Cuda not found
             return
+
         cudavers = chk.strip().replace("libcudart.so.", "")
-        self.env.cuda_version = cudavers[:cudavers.find(" ")]
-        if self.env.cuda_version:
-            self.output.info("CUDA version: " + self.env.cuda_version)
-            self.env.cuda_path = chk[chk.find("=>") + 3:chk.find("targets") - 1]
+        self.cuda_version = cudavers[:cudavers.find(" ")]
+        self.cuda_path = chk[chk.find("=>") + 3:chk.find("targets") - 1]
 
-    def cuda_check_windows(self):
-        """ Check Windows CUDA Version """
-        cuda_keys = self.cuda_keys_windows
-        if not cuda_keys:
-            self.output.error("CUDA not found. See "
-                              "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cuda "
-                              "for instructions")
+    def _cuda_check_windows(self):
+        """ Check Windows CUDA Version and path from Environment Variables"""
+        if not self._cuda_keys:  # Cuda environment variable not found
             return
+        self.cuda_version = self._cuda_keys[0].lower().replace("cuda_path_v", "").replace("_", ".")
+        self.cuda_path = os.environ[self._cuda_keys[0][0]]
 
-        self.env.cuda_version = cuda_keys[0].lower().replace("cuda_path_v", "").replace("_", ".")
-        self.env.cuda_path = os.environ[cuda_keys[0]]
-        self.output.info("CUDA version: " + self.env.cuda_version)
-
-    def cudnn_check(self):
-        """ Check Linux or Windows cuDNN Version from cudnn.h """
-        if self.env.os_version[0] == "Linux":
-            cudnn_checkfiles = self.cudnn_checkfiles_linux()
-        elif self.env.os_version[0] == "Windows":
-            if not self.env.cuda_path and not self.cuda_keys_windows:
-                self.output.error(
-                    "CUDA not found. See "
-                    "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cuda "
-                    "for instructions")
-                return
-            if not self.env.cuda_path:
-                self.env.cuda_path = os.environ[self.cuda_keys_windows[0]]
-            cudnn_checkfiles = self.cudnn_checkfiles_windows()
-
-        cudnn_checkfile = None
-        for checkfile in cudnn_checkfiles:
-            if os.path.isfile(checkfile):
-                cudnn_checkfile = checkfile
-                break
+    def _cudnn_check(self):
+        """ Check Linux or Windows cuDNN Version from cudnn.h and add to :attr:`cudnn_version`. """
+        cudnn_checkfiles = getattr(self, f"_get_checkfiles_{self._os}")()
+        cudnn_checkfile = next((hdr for hdr in cudnn_checkfiles if os.path.isfile(hdr)), None)
         if not cudnn_checkfile:
-            self.output.error("cuDNN not found. See "
-                              "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cudnn "
-                              "for instructions")
             return
         found = 0
         with open(cudnn_checkfile, "r") as ofile:
@@ -529,38 +533,47 @@ class Checks():
                     found += 1
                 if found == 3:
                     break
-        if found != 3:
-            self.output.error("cuDNN version could not be determined. See "
-                              "https://github.com/deepfakes/faceswap/blob/master/INSTALL.md#cudnn "
-                              "for instructions")
+        if found != 3:  # Full version could not be determined
             return
+        self.cudnn_version = ".".join([str(major), str(minor), str(patchlevel)])
 
-        self.env.cudnn_version = "{}.{}".format(major, minor)
-        self.output.info("cuDNN version: {}.{}".format(self.env.cudnn_version, patchlevel))
+    def _get_checkfiles_linux(self):
+        """ Return the the files to check for cuDNN locations for Linux by querying
+        the dynamic link loader.
 
-    @staticmethod
-    def cudnn_checkfiles_linux():
-        """ Return the check-file locations for Linux """
+        Returns
+        -------
+        list
+            List of header file locations to scan for cuDNN versions
+        """
         chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\\d+\" | head -n 1").read()
         chk = chk.strip().replace("libcudnn.so.", "")
         if not chk:
             return list()
+
         cudnn_vers = chk[0]
-        cudnn_path = chk[chk.find("=>") + 3:chk.find("libcudnn") - 1]
-        cudnn_path = os.path.realpath(cudnn_path)
+        header_files = [f"cudnn_v{cudnn_vers}.h"] + self._cudnn_header_files
+
+        cudnn_path = os.path.realpath(chk[chk.find("=>") + 3:chk.find("libcudnn") - 1])
         cudnn_path = cudnn_path.replace("lib", "include")
-        cudnn_checkfiles = [os.path.join(cudnn_path, "cudnn_version.h"),
-                            os.path.join(cudnn_path, "cudnn_v{}.h".format(cudnn_vers)),
-                            os.path.join(cudnn_path, "cudnn.h")]
+        cudnn_checkfiles = [os.path.join(cudnn_path, header) for header in header_files]
         return cudnn_checkfiles
 
-    def cudnn_checkfiles_windows(self):
-        """ Return the check-file locations for Windows """
+    def _get_checkfiles_windows(self):
+        """ Return the check-file locations for Windows. Just looks inside the include folder of
+        the discovered :attr:`cuda_path`
+
+        Returns
+        -------
+        list
+            List of header file locations to scan for cuDNN versions
+        """
         # TODO A more reliable way of getting the windows location
-        if not self.env.cuda_path:
+        if not self.cuda_path:
             return list()
-        cudnn_checkfile = os.path.join(self.env.cuda_path, "include", "cudnn.h")
-        return [cudnn_checkfile]
+        scandir = os.path.join(self.cuda_path, "include")
+        cudnn_checkfiles = [os.path.join(scandir, header) for header in self._cudnn_header_files]
+        return cudnn_checkfiles
 
 
 class Install():
@@ -726,12 +739,12 @@ class Install():
                     break
 
         if any(char in package for char in (" ", "<", ">", "*", "|")):
-            package = "\"{}\"".format(package)
+            package = f"\"{package}\""
         condaexe.append(package)
 
         if cuda_cudnn is not None:
-            condaexe.extend(["cudatoolkit={}".format(cuda_cudnn[0]),
-                             "cudnn={}".format(cuda_cudnn[1])])
+            condaexe.extend([f"cudatoolkit={cuda_cudnn[0]}",
+                             f"cudnn={cuda_cudnn[1]}"])
         self.output.info("Installing {}".format(package.replace("\"", "")))
         shell = self.env.os_version[0] == "Windows"
         try:
@@ -742,10 +755,10 @@ class Install():
                     run(condaexe, stdout=devnull, stderr=devnull, check=True, shell=shell)
         except CalledProcessError:
             if not conda_only:
-                self.output.info("{} not available in Conda. Installing with pip".format(package))
+                self.output.info(f"{package} not available in Conda. Installing with pip")
             else:
-                self.output.warning("Couldn't install {} with Conda. "
-                                    "Please install this package manually".format(package))
+                self.output.warning(f"Couldn't install {package} with Conda. "
+                                    "Please install this package manually")
             success = False
         return success
 
@@ -759,14 +772,14 @@ class Install():
         # install as user to solve perm restriction
         if not self.env.is_admin and not self.env.is_virtualenv:
             pipexe.append("--user")
-        msg = "Installing {}".format(package)
+        msg = f"Installing {package}"
         self.output.info(msg)
         pipexe.append(package)
         try:
             run(pipexe, check=True)
         except CalledProcessError:
-            self.output.warning("Couldn't install {} with pip. "
-                                "Please install this package manually".format(package))
+            self.output.warning(f"Couldn't install {package} with pip. "
+                                "Please install this package manually")
 
     def _tensorflow_dependency_install(self):
         """ Install the Cuda/cuDNN dependencies from Conda when tensorflow is not available
