@@ -448,7 +448,8 @@ class AlignedFace():
             if not self._cache["cropped_slices"][0].get(self._centering):
                 roi = self.get_cropped_roi(self._centering)
                 head_size = self._head_size
-                slice_in = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
+                slice_in = [slice(max(roi[1], 0), max(roi[3], 0)),
+                            slice(max(roi[0], 0), max(roi[2], 0))]
                 slice_out = [slice(max(roi[1] * -1, 0), self._size - max(0, roi[3] - head_size)),
                              slice(max(roi[0] * -1, 0), self._size - max(0, roi[2] - head_size))]
                 self._cache["cropped_slices"][0][self._centering] = {"in": slice_in,
