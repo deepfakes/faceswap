@@ -233,7 +233,9 @@ INFO    1. Install Docker
             deepfakes-gpu
         
         1. Open a new terminal to interact with the project
-        docker exec faceswap-gpu python /srv/faceswap.py gui
+        docker exec -it deepfakes-gpu /bin/bash
+	# Launch deepfakes gui (Answer 3 for NVIDIA at the prompt)
+	python3.8 /srv/faceswap.py gui
 ```
 
 A successful setup log, without docker.
