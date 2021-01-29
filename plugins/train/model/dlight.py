@@ -63,27 +63,27 @@ class Model(ModelBase):
         input_ = Input(shape=self.input_shape)
         var_x = input_
 
-        var_x1 = Conv2DBlock(self.encoder_filters // 2)(var_x)
+        var_x1 = Conv2DBlock(self.encoder_filters // 2, activation="leakyrelu")(var_x)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
-        var_x1 = Conv2DBlock(self.encoder_filters)(var_x)
+        var_x1 = Conv2DBlock(self.encoder_filters, activation="leakyrelu")(var_x)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
-        var_x1 = Conv2DBlock(self.encoder_filters * 2)(var_x)
+        var_x1 = Conv2DBlock(self.encoder_filters * 2, activation="leakyrelu")(var_x)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
-        var_x1 = Conv2DBlock(self.encoder_filters * 4)(var_x)
+        var_x1 = Conv2DBlock(self.encoder_filters * 4, activation="leakyrelu")(var_x)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
 
-        var_x1 = Conv2DBlock(self.encoder_filters * 8)(var_x)
+        var_x1 = Conv2DBlock(self.encoder_filters * 8, activation="leakyrelu")(var_x)
         var_x2 = AveragePooling2D()(var_x)
         var_x2 = LeakyReLU(0.1)(var_x2)
         var_x = Concatenate()([var_x1, var_x2])
@@ -99,17 +99,17 @@ class Model(ModelBase):
     def decoder_a(self):
         """ DeLight Decoder A(old face) Network """
         input_ = Input(shape=(4, 4, 1024))
-        decoder_a_complexity = 256
+        dec_a_complexity = 256
         mask_complexity = 128
 
         var_xy = input_
         var_xy = UpSampling2D(self.upscale_ratio, interpolation='bilinear')(var_xy)
 
         var_x = var_xy
-        var_x = Upscale2xBlock(decoder_a_complexity, fast=False)(var_x)
-        var_x = Upscale2xBlock(decoder_a_complexity // 2, fast=False)(var_x)
-        var_x = Upscale2xBlock(decoder_a_complexity // 4, fast=False)(var_x)
-        var_x = Upscale2xBlock(decoder_a_complexity // 8, fast=False)(var_x)
+        var_x = Upscale2xBlock(dec_a_complexity, activation="leakyrelu", fast=False)(var_x)
+        var_x = Upscale2xBlock(dec_a_complexity // 2, activation="leakyrelu", fast=False)(var_x)
+        var_x = Upscale2xBlock(dec_a_complexity // 4, activation="leakyrelu", fast=False)(var_x)
+        var_x = Upscale2xBlock(dec_a_complexity // 8, activation="leakyrelu", fast=False)(var_x)
 
         var_x = Conv2DOutput(3, 5, name="face_out")(var_x)
 
@@ -117,10 +117,10 @@ class Model(ModelBase):
 
         if self.config.get("learn_mask", False):
             var_y = var_xy  # mask decoder
-            var_y = Upscale2xBlock(mask_complexity, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 2, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 4, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 8, fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 2, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 4, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 8, activation="leakyrelu", fast=False)(var_y)
 
             var_y = Conv2DOutput(1, 5, name="mask_out")(var_y)
 
@@ -132,18 +132,18 @@ class Model(ModelBase):
         """ DeLight Fast Decoder B(new face) Network  """
         input_ = Input(shape=(4, 4, 1024))
 
-        decoder_b_complexity = 512
+        dec_b_complexity = 512
         mask_complexity = 128
 
         var_xy = input_
 
-        var_xy = UpscaleBlock(512, scale_factor=self.upscale_ratio)(var_xy)
+        var_xy = UpscaleBlock(512, scale_factor=self.upscale_ratio, activation="leakyrelu")(var_xy)
         var_x = var_xy
 
-        var_x = Upscale2xBlock(decoder_b_complexity, fast=True)(var_x)
-        var_x = Upscale2xBlock(decoder_b_complexity // 2, fast=True)(var_x)
-        var_x = Upscale2xBlock(decoder_b_complexity // 4, fast=True)(var_x)
-        var_x = Upscale2xBlock(decoder_b_complexity // 8, fast=True)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity, activation="leakyrelu", fast=True)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity // 2, activation="leakyrelu", fast=True)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity // 4, activation="leakyrelu", fast=True)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity // 8, activation="leakyrelu", fast=True)(var_x)
 
         var_x = Conv2DOutput(3, 5, name="face_out")(var_x)
 
@@ -152,10 +152,10 @@ class Model(ModelBase):
         if self.config.get("learn_mask", False):
             var_y = var_xy  # mask decoder
 
-            var_y = Upscale2xBlock(mask_complexity, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 2, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 4, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 8, fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 2, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 4, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 8, activation="leakyrelu", fast=False)(var_y)
 
             var_y = Conv2DOutput(1, 5, name="mask_out")(var_y)
 
@@ -167,28 +167,30 @@ class Model(ModelBase):
         """ DeLight Decoder B(new face) Network  """
         input_ = Input(shape=(4, 4, 1024))
 
-        decoder_b_complexity = 512
+        dec_b_complexity = 512
         mask_complexity = 128
 
         var_xy = input_
 
-        var_xy = Upscale2xBlock(512, scale_factor=self.upscale_ratio, fast=False)(var_xy)
-
+        var_xy = Upscale2xBlock(512,
+                                scale_factor=self.upscale_ratio,
+                                activation="leakyrelu",
+                                fast=False)(var_xy)
         var_x = var_xy
 
         var_x = ResidualBlock(512, use_bias=True)(var_x)
         var_x = ResidualBlock(512, use_bias=False)(var_x)
         var_x = ResidualBlock(512, use_bias=False)(var_x)
-        var_x = Upscale2xBlock(decoder_b_complexity, fast=False)(var_x)
-        var_x = ResidualBlock(decoder_b_complexity, use_bias=True)(var_x)
-        var_x = ResidualBlock(decoder_b_complexity, use_bias=False)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity, activation=None, fast=False)(var_x)
+        var_x = ResidualBlock(dec_b_complexity, use_bias=True)(var_x)
+        var_x = ResidualBlock(dec_b_complexity, use_bias=False)(var_x)
         var_x = BatchNormalization()(var_x)
-        var_x = Upscale2xBlock(decoder_b_complexity // 2, fast=False)(var_x)
-        var_x = ResidualBlock(decoder_b_complexity // 2, use_bias=True)(var_x)
-        var_x = Upscale2xBlock(decoder_b_complexity // 4, fast=False)(var_x)
-        var_x = ResidualBlock(decoder_b_complexity // 4, use_bias=False)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity // 2, activation=None, fast=False)(var_x)
+        var_x = ResidualBlock(dec_b_complexity // 2, use_bias=True)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity // 4, activation=None, fast=False)(var_x)
+        var_x = ResidualBlock(dec_b_complexity // 4, use_bias=False)(var_x)
         var_x = BatchNormalization()(var_x)
-        var_x = Upscale2xBlock(decoder_b_complexity // 8, fast=False)(var_x)
+        var_x = Upscale2xBlock(dec_b_complexity // 8, activation="leakyrelu", fast=False)(var_x)
 
         var_x = Conv2DOutput(3, 5, name="face_out")(var_x)
 
@@ -197,10 +199,10 @@ class Model(ModelBase):
         if self.config.get("learn_mask", False):
             var_y = var_xy  # mask decoder
 
-            var_y = Upscale2xBlock(mask_complexity, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 2, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 4, fast=False)(var_y)
-            var_y = Upscale2xBlock(mask_complexity // 8, fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 2, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 4, activation="leakyrelu", fast=False)(var_y)
+            var_y = Upscale2xBlock(mask_complexity // 8, activation="leakyrelu", fast=False)(var_y)
 
             var_y = Conv2DOutput(1, 5, name="mask_out")(var_y)
 

@@ -83,11 +83,15 @@ class Model(ModelBase):
         encoder_complexity = self.config["complexity_encoder"]
 
         for idx in range(self.downscalers_no - 1):
-            var_x = Conv2DBlock(encoder_complexity * 2**idx)(var_x)
-            var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
-            var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
+            var_x = Conv2DBlock(encoder_complexity * 2**idx, activation="leakyrelu")(var_x)
+            var_x = ResidualBlock(encoder_complexity * 2**idx,
+                                  use_bias=True,
+                                  activation="leakyrelu")(var_x)
+            var_x = ResidualBlock(encoder_complexity * 2**idx,
+                                  use_bias=True,
+                                  activation="leakyrelu")(var_x)
 
-        var_x = Conv2DBlock(encoder_complexity * 2**(idx + 1))(var_x)
+        var_x = Conv2DBlock(encoder_complexity * 2**(idx + 1), activation="leakyrelu")(var_x)
 
         return KerasModel(input_, var_x, name="encoder")
 
@@ -102,17 +106,17 @@ class Model(ModelBase):
         var_xy = Dense(self.config["dense_nodes"])(Flatten()(var_xy))
         var_xy = Dense(self.dense_width * self.dense_width * self.dense_filters)(var_xy)
         var_xy = Reshape((self.dense_width, self.dense_width, self.dense_filters))(var_xy)
-        var_xy = UpscaleBlock(self.dense_filters)(var_xy)
+        var_xy = UpscaleBlock(self.dense_filters, activation="leakyrelu")(var_xy)
 
         var_x = var_xy
         var_x = ResidualBlock(self.dense_filters, use_bias=False)(var_x)
 
         decoder_b_complexity = self.config["complexity_decoder"]
         for idx in range(self.upscalers_no - 2):
-            var_x = UpscaleBlock(decoder_b_complexity // 2**idx)(var_x)
+            var_x = UpscaleBlock(decoder_b_complexity // 2**idx, activation=None)(var_x)
             var_x = ResidualBlock(decoder_b_complexity // 2**idx, use_bias=False)(var_x)
             var_x = ResidualBlock(decoder_b_complexity // 2**idx, use_bias=True)(var_x)
-        var_x = UpscaleBlock(decoder_b_complexity // 2**(idx + 1))(var_x)
+        var_x = UpscaleBlock(decoder_b_complexity // 2**(idx + 1), activation="leakyrelu")(var_x)
 
         var_x = Conv2DOutput(3, 5, name="face_out_b")(var_x)
 
@@ -122,8 +126,8 @@ class Model(ModelBase):
             var_y = var_xy
             mask_b_complexity = 384
             for idx in range(self.upscalers_no-2):
-                var_y = UpscaleBlock(mask_b_complexity // 2**idx)(var_y)
-            var_y = UpscaleBlock(mask_b_complexity // 2**(idx + 1))(var_y)
+                var_y = UpscaleBlock(mask_b_complexity // 2**idx, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(mask_b_complexity // 2**(idx + 1), activation="leakyrelu")(var_y)
 
             var_y = Conv2DOutput(1, 5, name="mask_out_b")(var_y)
 
@@ -146,15 +150,15 @@ class Model(ModelBase):
         var_xy = Dense(self.dense_width * self.dense_width * dense_filters)(var_xy)
         var_xy = Reshape((self.dense_width, self.dense_width, dense_filters))(var_xy)
 
-        var_xy = UpscaleBlock(dense_filters)(var_xy)
+        var_xy = UpscaleBlock(dense_filters, activation="leakyrelu")(var_xy)
 
         var_x = var_xy
         var_x = ResidualBlock(dense_filters, use_bias=False)(var_x)
 
         decoder_a_complexity = int(self.config["complexity_decoder"] / 1.5)
         for idx in range(self.upscalers_no-2):
-            var_x = UpscaleBlock(decoder_a_complexity // 2**idx)(var_x)
-        var_x = UpscaleBlock(decoder_a_complexity // 2**(idx + 1))(var_x)
+            var_x = UpscaleBlock(decoder_a_complexity // 2**idx, activation="leakyrelu")(var_x)
+        var_x = UpscaleBlock(decoder_a_complexity // 2**(idx + 1), activation="leakyrelu")(var_x)
 
         var_x = Conv2DOutput(3, 5, name="face_out_a")(var_x)
 
@@ -164,8 +168,8 @@ class Model(ModelBase):
             var_y = var_xy
             mask_a_complexity = 384
             for idx in range(self.upscalers_no-2):
-                var_y = UpscaleBlock(mask_a_complexity // 2**idx)(var_y)
-            var_y = UpscaleBlock(mask_a_complexity // 2**(idx + 1))(var_y)
+                var_y = UpscaleBlock(mask_a_complexity // 2**idx, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(mask_a_complexity // 2**(idx + 1), activation="leakyrelu")(var_y)
 
             var_y = Conv2DOutput(1, 5, name="mask_out_a")(var_y)
 

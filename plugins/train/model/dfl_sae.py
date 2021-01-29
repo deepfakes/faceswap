@@ -61,24 +61,24 @@ class Model(ModelBase):
         input_ = Input(shape=self.input_shape)
         dims = self.input_shape[-1] * self.encoder_dim
         lowest_dense_res = self.input_shape[0] // 16
-        var_x = Conv2DBlock(dims)(input_)
-        var_x = Conv2DBlock(dims * 2)(var_x)
-        var_x = Conv2DBlock(dims * 4)(var_x)
-        var_x = Conv2DBlock(dims * 8)(var_x)
+        var_x = Conv2DBlock(dims, activation="leakyrelu")(input_)
+        var_x = Conv2DBlock(dims * 2, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(dims * 4, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(dims * 8, activation="leakyrelu")(var_x)
         var_x = Dense(self.ae_dims)(Flatten()(var_x))
         var_x = Dense(lowest_dense_res * lowest_dense_res * self.ae_dims)(var_x)
         var_x = Reshape((lowest_dense_res, lowest_dense_res, self.ae_dims))(var_x)
-        var_x = UpscaleBlock(self.ae_dims)(var_x)
+        var_x = UpscaleBlock(self.ae_dims, activation="leakyrelu")(var_x)
         return KerasModel(input_, var_x, name="encoder_df")
 
     def encoder_liae(self):
         """ DFL SAE LIAE Encoder Network """
         input_ = Input(shape=self.input_shape)
         dims = self.input_shape[-1] * self.encoder_dim
-        var_x = Conv2DBlock(dims)(input_)
-        var_x = Conv2DBlock(dims * 2)(var_x)
-        var_x = Conv2DBlock(dims * 4)(var_x)
-        var_x = Conv2DBlock(dims * 8)(var_x)
+        var_x = Conv2DBlock(dims, activation="leakyrelu")(input_)
+        var_x = Conv2DBlock(dims * 2, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(dims * 4, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(dims * 8, activation="leakyrelu")(var_x)
         var_x = Flatten()(var_x)
         return KerasModel(input_, var_x, name="encoder_liae")
 
@@ -90,7 +90,7 @@ class Model(ModelBase):
         var_x = Dense(self.ae_dims)(var_x)
         var_x = Dense(lowest_dense_res * lowest_dense_res * self.ae_dims * 2)(var_x)
         var_x = Reshape((lowest_dense_res, lowest_dense_res, self.ae_dims * 2))(var_x)
-        var_x = UpscaleBlock(self.ae_dims * 2)(var_x)
+        var_x = UpscaleBlock(self.ae_dims * 2, activation="leakyrelu")(var_x)
         return KerasModel(input_, var_x, name="intermediate_{}".format(side))
 
     def decoder(self, side, input_shape):
@@ -101,19 +101,19 @@ class Model(ModelBase):
         dims = self.input_shape[-1] * self.decoder_dim
         var_x = input_
 
-        var_x1 = UpscaleBlock(dims * 8, res_block_follows=True)(var_x)
+        var_x1 = UpscaleBlock(dims * 8, activation=None)(var_x)
         var_x1 = ResidualBlock(dims * 8)(var_x1)
         var_x1 = ResidualBlock(dims * 8)(var_x1)
         if self.multiscale_count >= 3:
             outputs.append(Conv2DOutput(3, 5, name="face_out_32_{}".format(side))(var_x1))
 
-        var_x2 = UpscaleBlock(dims * 4, res_block_follows=True)(var_x1)
+        var_x2 = UpscaleBlock(dims * 4, activation=None)(var_x1)
         var_x2 = ResidualBlock(dims * 4)(var_x2)
         var_x2 = ResidualBlock(dims * 4)(var_x2)
         if self.multiscale_count >= 2:
             outputs.append(Conv2DOutput(3, 5, name="face_out_64_{}".format(side))(var_x2))
 
-        var_x3 = UpscaleBlock(dims * 2, res_block_follows=True)(var_x2)
+        var_x3 = UpscaleBlock(dims * 2, activation=None)(var_x2)
         var_x3 = ResidualBlock(dims * 2)(var_x3)
         var_x3 = ResidualBlock(dims * 2)(var_x3)
 
@@ -121,9 +121,9 @@ class Model(ModelBase):
 
         if self.use_mask:
             var_y = input_
-            var_y = UpscaleBlock(self.decoder_dim * 8)(var_y)
-            var_y = UpscaleBlock(self.decoder_dim * 4)(var_y)
-            var_y = UpscaleBlock(self.decoder_dim * 2)(var_y)
+            var_y = UpscaleBlock(self.decoder_dim * 8, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(self.decoder_dim * 4, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(self.decoder_dim * 2, activation="leakyrelu")(var_y)
             var_y = Conv2DOutput(1, 5, name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))

@@ -31,26 +31,26 @@ class Model(OriginalModel):
         var_x = input_
 
         if self._output_size == 256:
-            var_x = UpscaleBlock(1024, res_block_follows=True)(var_x)
+            var_x = UpscaleBlock(1024, activation=None)(var_x)
             var_x = ResidualBlock(1024, kernel_initializer=self.kernel_initializer)(var_x)
-        var_x = UpscaleBlock(512, res_block_follows=True)(var_x)
+        var_x = UpscaleBlock(512, activation=None)(var_x)
         var_x = ResidualBlock(512, kernel_initializer=self.kernel_initializer)(var_x)
-        var_x = UpscaleBlock(256, res_block_follows=True)(var_x)
+        var_x = UpscaleBlock(256, activation=None)(var_x)
         var_x = ResidualBlock(256, kernel_initializer=self.kernel_initializer)(var_x)
-        var_x = UpscaleBlock(128, res_block_follows=True)(var_x)
+        var_x = UpscaleBlock(128, activation=None)(var_x)
         var_x = ResidualBlock(128, kernel_initializer=self.kernel_initializer)(var_x)
-        var_x = UpscaleBlock(64)(var_x)
+        var_x = UpscaleBlock(64, activation="leakyrelu")(var_x)
         var_x = Conv2DOutput(3, 5, name="face_out_{}".format(side))(var_x)
         outputs = [var_x]
 
         if self.config.get("learn_mask", False):
             var_y = input_
             if self._output_size == 256:
-                var_y = UpscaleBlock(1024)(var_y)
-            var_y = UpscaleBlock(512)(var_y)
-            var_y = UpscaleBlock(256)(var_y)
-            var_y = UpscaleBlock(128)(var_y)
-            var_y = UpscaleBlock(64)(var_y)
+                var_y = UpscaleBlock(1024, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(512, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(256, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(128, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(64, activation="leakyrelu")(var_y)
             var_y = Conv2DOutput(1, 5, name="mask_out_{}".format(side))(var_y)
             outputs.append(var_y)
         return KerasModel([input_], outputs=outputs, name="decoder_{}".format(side))

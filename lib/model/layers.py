@@ -191,6 +191,76 @@ class PixelShuffler(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+class KResizeImages(Layer):
+    """ A custom upscale function that uses :class:`keras.backend.resize_images` to upsample.
+
+    Parameters
+    ----------
+    size: int, optional
+        The scale to upsample to. Default: `2`
+    interpolation: ["nearest", "bilinear"], optional
+        The interpolation to use. Default: `"nearest"`
+    kwargs: dict
+        The standard Keras Layer keyword arguments (if any)
+    """
+    def __init__(self, size=2, interpolation="nearest", **kwargs):
+        super().__init__(**kwargs)
+        self.size = size
+        self.interpolation = interpolation
+
+    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
+        """ Call the upsample layer
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        kwargs: dict
+            Additional keyword arguments. Unused
+
+        Returns
+        -------
+        tensor
+            A tensor or list/tuple of tensors
+        """
+        return K.resize_images(inputs,
+                               self.size,
+                               self.size,
+                               "channels_last",
+                               interpolation=self.interpolation)
+
+    def compute_output_shape(self, input_shape):
+        """Computes the output shape of the layer.
+
+        This is the input shape with size dimensions multiplied by :attr:`size`
+
+        Parameters
+        ----------
+        input_shape: tuple or list of tuples
+            Shape tuple (tuple of integers) or list of shape tuples (one per output tensor of the
+            layer).  Shape tuples can include None for free dimensions, instead of an integer.
+
+        Returns
+        -------
+        tuple
+            An input shape tuple
+        """
+        batch, height, width, channels = input_shape
+        return (batch, height * self.size, width * self.size, channels)
+
+    def get_config(self):
+        """Returns the config of the layer.
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
+        config = dict(size=self.size, interpolation=self.interpolation)
+        base_config = super().get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+
+
 class SubPixelUpscaling(Layer):
     """ Sub-pixel convolutional up-scaling layer.
 
@@ -659,6 +729,52 @@ class L2_normalize(Layer):  # pylint:disable=invalid-name
         """
         config = super(L2_normalize, self).get_config()
         config["axis"] = self.axis
+        return config
+
+
+class Swish(Layer):
+    """ Swish Activation Layer implementation for Keras.
+
+    Parameters
+    ----------
+    beta: float, optional
+        The beta value to apply to the activation function. Default: `1.0`
+    kwargs: dict
+        The standard Keras Layer keyword arguments (if any)
+
+    References
+    -----------
+    Swish: a Self-Gated Activation Function: https://arxiv.org/abs/1710.05941v1
+    """
+    def __init__(self, beta=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.beta = beta
+
+    def call(self, inputs):  # pylint:disable=arguments-differ
+        """ Call the Swish Activation function.
+
+        Parameters
+        ----------
+        inputs: tensor
+            Input tensor, or list/tuple of input tensors
+        """
+        if get_backend() == "amd":
+            return inputs * K.sigmoid(inputs * self.beta)
+        # Native TF Implementation has more memory-efficient gradients
+        return tf.nn.swish(inputs * self.beta)
+
+    def get_config(self):
+        """Returns the config of the layer.
+
+        Adds the :attr:`beta` to config.
+
+        Returns
+        --------
+        dict
+            A python dictionary containing the layer configuration
+        """
+        config = super().get_config()
+        config["beta"] = self.beta
         return config
 
 

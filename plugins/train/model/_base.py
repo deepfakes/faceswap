@@ -1508,7 +1508,11 @@ class _Inference():  # pylint:disable=too-few-public-methods
                 continue
             inbound = self._filter_node(layer["inbound_nodes"])
 
-            if self._input_names.intersection(inbound):
+            # TODO Currently any models which have a list input will not contain the main model
+            # input. This may not be true in future (if the main input is injected into a layer
+            # further down the model chain) so this should be made more robust
+            if (not any(isinstance(inb, list) for inb in inbound)
+                    and self._input_names.intersection(inbound)):
                 # Strip the input inbound nodes for applying the correct input layer at compile
                 # time
                 logger.debug("Stripping inbound nodes for input '%s': %s", name, inbound)
