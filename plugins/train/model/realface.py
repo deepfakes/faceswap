@@ -84,12 +84,8 @@ class Model(ModelBase):
 
         for idx in range(self.downscalers_no - 1):
             var_x = Conv2DBlock(encoder_complexity * 2**idx, activation="leakyrelu")(var_x)
-            var_x = ResidualBlock(encoder_complexity * 2**idx,
-                                  use_bias=True,
-                                  activation="leakyrelu")(var_x)
-            var_x = ResidualBlock(encoder_complexity * 2**idx,
-                                  use_bias=True,
-                                  activation="leakyrelu")(var_x)
+            var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
+            var_x = ResidualBlock(encoder_complexity * 2**idx, use_bias=True)(var_x)
 
         var_x = Conv2DBlock(encoder_complexity * 2**(idx + 1), activation="leakyrelu")(var_x)
 
