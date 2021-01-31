@@ -1369,12 +1369,11 @@ class _Inference():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing: %s (saved_model: %s, switch_sides: %s)",
                      self.__class__.__name__, saved_model, switch_sides)
         self._config = saved_model.get_config()
-        input_idx = 1 if switch_sides else 0
-        self._output_idx = 0 if switch_sides else 1
-        self._input_names = set(self._filter_node(self._config["input_layers"][input_idx]))
 
-        self._inputs = self._get_inputs(saved_model.inputs, input_idx)
-        self._outputs_dropout = self._get_outputs_dropout()
+        self._input_idx = 1 if switch_sides else 0
+        self._output_idx = 0 if switch_sides else 1
+
+        self._input_names = [inp[0] for inp in self._config["input_layers"]]
         self._model = self._make_inference_model(saved_model)
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -1383,72 +1382,25 @@ class _Inference():  # pylint:disable=too-few-public-methods
         """ :class:`keras.models.Model`: The Faceswap model, compiled for inference. """
         return self._model
 
-    @classmethod
-    def _filter_node(cls, node):
+    def _get_nodes(self, nodes):
         """ Given in input list of nodes from a :attr:`keras.models.Model.get_config` dictionary,
-        filters the information out and unravels the dictionary into a more usable format
+        filters the layer name(s) and output index of the node, splitting to the correct output
+        index in the event of multiple inputs.
 
         Parameters
         ----------
-        node: list
+        nodes: list
             A node entry from the :attr:`keras.models.Model.get_config` dictionary
 
         Returns
         -------
         list
-            A squeezed list with only the layer name entries remaining
+            The (node name, output index) for each node passed in
         """
-        retval = np.array(node)[..., 0].squeeze().tolist()
-        return retval if isinstance(retval, list) else [retval]
-
-    @classmethod
-    def _get_inputs(cls, inputs, input_index):
-        """ Obtain the inputs for the requested swap direction.
-
-        Parameters
-        ----------
-        inputs: list
-            The full list of input tensors to the saved faceswap training model
-        input_index: int
-            The input index for the requested swap direction
-
-        Returns
-        -------
-        list
-            List of input tensors to feed the model for the requested swap direction
-        """
-        input_split = len(inputs) // 2
-        start_idx = input_split * input_index
-        retval = inputs[start_idx: start_idx + input_split]
-        logger.debug("model inputs: %s, input_split: %s, start_idx: %s, inference_inputs: %s",
-                     inputs, input_split, start_idx, retval)
-        return retval
-
-    def _get_outputs_dropout(self):
-        """ Obtain the output layer names from the full model that will not be used for inference.
-
-        Returns
-        -------
-        set
-            The output layer names from the saved Faceswap model that are not used for inference
-            for the requested swap direction
-        """
-        outputs = self._config["output_layers"]
-        if get_backend() == "amd":
-            outputs = [outputs[:len(outputs) // 2], outputs[len(outputs) // 2:]]
-
-        output_names = self._filter_node(outputs)
-        if not all(isinstance(name, list) for name in output_names):
-            output_names = [[name] for name in output_names]
-        side_outputs = set(output_names[self._output_idx])
-        logger.debug("model outputs: %s, output_names: %s, side_outputs: %s",
-                     outputs, output_names, side_outputs)
-
-        outputs_all = {layer
-                       for side in output_names
-                       for layer in side}
-        retval = outputs_all.difference(side_outputs)
-        logger.debug("outputs dropout: %s", retval)
+        nodes = np.array(nodes, dtype="object")[..., :3]
+        num_layers = nodes.shape[0]
+        nodes = nodes[self._output_idx] if num_layers == 2 else nodes[0]
+        retval = [(node[0], node[2]) for node in nodes]
         return retval
 
     def _make_inference_model(self, saved_model):
@@ -1466,95 +1418,102 @@ class _Inference():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Compiling inference model. saved_model: %s", saved_model)
         struct = self._get_filtered_structure()
-        required_layers = self._get_required_layers(struct)
-        logger.debug("Compiling model")
-        layer_dict = {layer.name: layer for layer in saved_model.layers}
+        model_inputs = self._get_inputs(saved_model.inputs)
         compiled_layers = dict()
-        for name, inbound in struct.items():
-            if name not in required_layers:
-                logger.debug("Skipping unused layer: '%s'", name)
+        for layer in saved_model.layers:
+            if layer.name not in struct:
+                logger.debug("Skipping unused layer: '%s'", layer.name)
                 continue
-            layer = layer_dict[name]
+            inbound = struct[layer.name]
             logger.debug("Processing layer '%s': (layer: %s, inbound_nodes: %s)",
-                         name, layer, inbound)
+                         layer.name, layer, inbound)
             if not inbound:
-                logger.debug("Adding model inputs %s: %s", self._input_names, self._inputs)
-                model = layer(self._inputs)
+                model = model_inputs
+                logger.debug("Adding model inputs %s: %s", layer.name, model)
             else:
-                layer_inputs = [compiled_layers[inp] for inp in inbound]
-                logger.debug("Compiling layer '%s': layer inputs: %s", name, layer_inputs)
+                layer_inputs = []
+                for inp in inbound:
+                    inbound_layer = compiled_layers[inp[0]]
+                    if isinstance(inbound_layer, list) and len(inbound_layer) > 1:
+                        # Multi output inputs
+                        inbound_output_idx = inp[1]
+                        logger.debug("Selecting output index %s from multi output inbound "
+                                     "layer: %s", inbound_output_idx, inbound_layer)
+                        layer_inputs.append(inbound_layer[inbound_output_idx])
+                    else:
+                        layer_inputs.append(inbound_layer)
+
+                logger.debug("Compiling layer '%s': layer inputs: %s", layer.name, layer_inputs)
                 model = layer(layer_inputs)
-            compiled_layers[name] = model
-        retval = KerasModel(self._inputs, model, name="{}_inference".format(saved_model.name))
+            compiled_layers[layer.name] = model
+            retval = KerasModel(model_inputs, model, name="{}_inference".format(saved_model.name))
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
         return retval
 
     def _get_filtered_structure(self):
-        """ Obtain the structure of the full model, filtering out inbound nodes and
-        layers that are not required for the requested swap destination.
+        """ Obtain the structure of the inference model.
 
-        Input layers to the full model are not returned in the structure.
+        This parses the model config (in reverse) to obtain the required layers for an inference
+        model.
 
         Returns
         -------
         :class:`collections.OrderedDict`
-            The layer name as key with the inbound node layer names for each layer as value.
+            The layer name as key with the input name and output index as value.
         """
-        retval = OrderedDict()
-        for layer in self._config["layers"]:
-            name = layer["name"]
-            if not layer["inbound_nodes"]:
-                logger.debug("Skipping input layer: '%s'", name)
-                continue
-            inbound = self._filter_node(layer["inbound_nodes"])
+        # Filter output layer
+        out = np.array(self._config["output_layers"], dtype="object")
+        if out.ndim == 2:
+            out = np.expand_dims(out, axis=1)  # Needs to be expanded for _get_nodes
+        outputs = self._get_nodes(out)
 
-            # TODO Currently any models which have a list input will not contain the main model
-            # input. This may not be true in future (if the main input is injected into a layer
-            # further down the model chain) so this should be made more robust
-            if (not any(isinstance(inb, list) for inb in inbound)
-                    and self._input_names.intersection(inbound)):
-                # Strip the input inbound nodes for applying the correct input layer at compile
-                # time
-                logger.debug("Stripping inbound nodes for input '%s': %s", name, inbound)
-                inbound = ""
+        # Iterate backwards from the required output to get the reversed model structure
+        current_layers = [outputs[0]]
+        next_layers = []
+        struct = OrderedDict()
+        drop_input = self._input_names[abs(self._input_idx - 1)]
+        switch_input = self._input_names[self._input_idx]
+        while True:
+            layer_info = current_layers.pop(0)
+            current_layer = next(lyr for lyr in self._config["layers"]
+                                 if lyr["name"] == layer_info[0])
+            inbound = current_layer["inbound_nodes"]
 
-            if inbound and np.array(layer["inbound_nodes"]).shape[0] == 2:
-                # if inbound is not populated, then layer is already split at input
-                logger.debug("Filtering layer with split inbound nodes: '%s': %s", name, inbound)
-                inbound = inbound[self._output_idx]
-                inbound = inbound if isinstance(inbound, list) else [inbound]
-                logger.debug("Filtered inbound nodes for layer '%s': %s", name, inbound)
-            if name in self._outputs_dropout:
-                logger.debug("Dropping output layer '%s'", name)
-                continue
-            retval[name] = inbound
-        logger.debug("Model structure: %s", retval)
-        return retval
+            if not inbound:
+                break
 
-    @classmethod
-    def _get_required_layers(cls, filtered_structure):
-        """ Parse through the filtered model structure in reverse order to get the required layers
-        from the faceswap model for creating an inference model.
+            inbound_info = self._get_nodes(inbound)
+
+            if any(inb[0] == drop_input for inb in inbound_info):  # Switch inputs
+                inbound_info = [(switch_input if inb[0] == drop_input else inb[0], inb[1])
+                                for inb in inbound_info]
+            struct[layer_info[0]] = inbound_info
+            next_layers.extend(inbound_info)
+
+            if not current_layers:
+                current_layers = next_layers
+                next_layers = []
+
+        struct[switch_input] = []  # Add the input layer
+        logger.debug("Model structure: %s", struct)
+        return struct
+
+    def _get_inputs(self, inputs):
+        """ Obtain the inputs for the requested swap direction.
 
         Parameters
         ----------
-        filtered_structure: :class:`OrderedDict`
-            The full model structure with unused inbound nodes and layers removed
+        inputs: list
+            The full list of input tensors to the saved faceswap training model
 
         Returns
         -------
-        set
-            The layers from the saved model that are required to build the inference model
+        list
+            List of input tensors to feed the model for the requested swap direction
         """
-        retval = set()
-        for idx, (name, inbound) in enumerate(reversed(filtered_structure.items())):
-            if idx == 0:
-                logger.debug("Adding output layer: '%s'", name)
-                retval.add(name)
-            if idx != 0 and name not in retval:
-                logger.debug("Skipping unused layer: '%s'", name)
-                continue
-            logger.debug("Adding inbound layers: %s", inbound)
-            retval.update(inbound)
-        logger.debug("Required layers: %s", retval)
+        input_split = len(inputs) // 2
+        start_idx = input_split * self._input_idx
+        retval = inputs[start_idx: start_idx + input_split]
+        logger.debug("model inputs: %s, input_split: %s, start_idx: %s, inference_inputs: %s",
+                     inputs, input_split, start_idx, retval)
         return retval
