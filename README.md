@@ -128,9 +128,11 @@ Alternatively you can give a one off donation to any of our Devs:
 ### @torzdf
  There is very little FaceSwap code that hasn't been touched by torzdf. He is responsible for implementing the GUI, FAN aligner, MTCNN detector and porting the Villain, DFL-H128 and DFaker models to FaceSwap, as well as significantly improving many areas of the code.
 
-**Bitcoin:** 385a1r9tyZpt5LyZcNk1FALTxC8ZHta7yq
+**Bitcoin:** bc1qpm22suz59ylzk0j7qk5e4c7cnkjmve2rmtrnc6
 
-**Ethereum:** 0x18CBbff5fA7C78de7B949A2b0160A0d1bd649f80
+**Ethereum:** 0xd3e954dC241B87C4E8E1A801ada485DC1d530F01
+
+**Monero:** 45dLrtQZ2pkHizBpt3P3yyJKkhcFHnhfNYPMSnz3yVEbdWm3Hj6Kr5TgmGAn3Far8LVaQf1th2n3DJVTRkfeB5ZkHxWozSX
 
 **Paypal:** [![torzdf](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=JZ8PP3YE9J62L)
 
@@ -138,11 +140,6 @@ Alternatively you can give a one off donation to any of our Devs:
 Creator of the Unbalanced and OHR models, as well as expanding various capabilities within the training process. Andenixa is currently working on new models and will take requests for donations.
 
 **Paypal:** [![andenixa](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=NRVLQYGS6NWTU)
-
-### @kvrooman
-Responsible for consolidating the converters, adding a lot of code to fix model stability issues, and helping significantly towards making the training process more modular, kvrooman continues to be a very active contributor.
-
-**Ethereum:** 0x18CBbff5fA7C78de7B949A2b0160A0d1bd649f80
 
 # How to contribute
 
