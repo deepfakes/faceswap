@@ -4,12 +4,12 @@
 import logging
 
 from keras.layers import (Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D,
-                          DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, SeparableConv2D,
-                          UpSampling2D)
+                          Conv2DTranspose, DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU,
+                          SeparableConv2D, UpSampling2D)
 from keras.initializers import he_uniform, VarianceScaling
 
 from .initializers import ICNR, ConvolutionAware
-from .layers import PixelShuffler, ReflectionPadding2D, Swish
+from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
 from .normalization import InstanceNormalization
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -235,8 +235,8 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         Set to ``None`` to not apply normalization. Default: ``None``
     activation: str or ``None``, optional
         The activation function to use. This is applied at the end of the convolution block. Select
-        one of `"leakyrelu"` or `"swish"`. Set to ``None`` to not apply an activation function.
-        Default: `"leakyrelu"`
+        one of `"leakyrelu"`, `"prelu"` or `"swish"`. Set to ``None`` to not apply an activation
+        function. Default: `"leakyrelu"`
     use_depthwise: bool, optional
         Set to ``True`` to use a Depthwise Convolution 2D layer rather than a standard Convolution
         2D layer. Default: ``False``
@@ -276,8 +276,8 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         """ Validate the given arguments. """
         assert self._normalization in ("batch", "instance", None), (
             "normalization should be 'batch', 'instance' or None")
-        assert self._activation in ("leakyrelu", "swish", None), (
-            "activation should be 'leakyrelu', 'swish' or None")
+        assert self._activation in ("leakyrelu", "swish", "prelu", None), (
+            "activation should be 'leakyrelu', 'prelu', 'swish' or None")
 
     def __call__(self, inputs):
         """ Call the Faceswap Convolutional Layer.
@@ -313,6 +313,9 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
             var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(self._name))(var_x)
         if self._activation == "swish":
             var_x = Swish(name="{}_swish".format(self._name))(var_x)
+        if self._activation == "prelu":
+            var_x = PReLU(name="{}_prelu".format(self._name))(var_x)
+
         return var_x
 
 
@@ -399,8 +402,8 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
         Set to ``None`` to not apply normalization. Default: ``None``
     activation: str or ``None``, optional
         The activation function to use. This is applied at the end of the convolution block. Select
-        one of `"leakyrelu"` or `"swish"`. Set to ``None`` to not apply an activation function.
-        Default: `"leakyrelu"`
+        one of `"leakyrelu"`, `"prelu"` or `"swish"`. Set to ``None`` to not apply an activation
+        function. Default: `"leakyrelu"`
     kwargs: dict
         Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
     """
@@ -476,12 +479,12 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
         dimensions. Default: 3
     padding: ["valid", "same"], optional
         The padding to use. Default: `"same"`
-    interpolation: ["nearest", "bilinear"], optional
-        Interpolation to use for up-sampling. Default: `"bilinear"`
     activation: str or ``None``, optional
         The activation function to use. This is applied at the end of the convolution block. Select
-        one of `"leakyrelu"` or `"swish"`. Set to ``None`` to not apply an activation function.
-        Default: `"leakyrelu"`
+        one of `"leakyrelu"`, `"prelu"` or `"swish"`. Set to ``None`` to not apply an activation
+        function. Default: `"leakyrelu"`
+    interpolation: ["nearest", "bilinear"], optional
+        Interpolation to use for up-sampling. Default: `"bilinear"`
     scale_factor: int, optional
         The amount to upscale the image. Default: `2`
     sr_ratio: float, optional
@@ -492,8 +495,8 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     kwargs: dict
         Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
     """
-    def __init__(self, filters, kernel_size=3, padding="same", interpolation="bilinear",
-                 activation="leakyrelu", sr_ratio=0.5, scale_factor=2, fast=False, **kwargs):
+    def __init__(self, filters, kernel_size=3, padding="same", activation="leakyrelu",
+                 interpolation="bilinear", sr_ratio=0.5, scale_factor=2, fast=False, **kwargs):
         self._name = _get_name("upscale2x_{}_{}".format(filters, "fast" if fast else "hyb"))
 
         self._fast = fast
@@ -546,6 +549,82 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
                 var_x = Concatenate(name="{}_concatenate".format(self._name))([var_x_sr, var_x2])
         else:
             var_x = var_x_sr
+        return var_x
+
+
+class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
+    """ Upscale block that uses the Keras Backend function resize_images to perform the upscaling
+    Similar in methodolgy to the :class:`Upscale2xBlock`
+
+    Adds reflection padding if it has been selected by the user, and other post-processing
+    if requested by the plugin.
+
+    Parameters
+    ----------
+    filters: int
+        The dimensionality of the output space (i.e. the number of output filters in the
+        convolution)
+    kernel_size: int, optional
+        An integer or tuple/list of 2 integers, specifying the height and width of the 2D
+        convolution window. Can be a single integer to specify the same value for all spatial
+        dimensions. Default: 3
+    padding: ["valid", "same"], optional
+        The padding to use. Default: `"same"`
+    activation: str or ``None``, optional
+        The activation function to use. This is applied at the end of the convolution block. Select
+        one of `"leakyrelu"`, `"prelu"` or `"swish"`. Set to ``None`` to not apply an activation
+        function. Default: `"leakyrelu"`
+    scale_factor: int, optional
+        The amount to upscale the image. Default: `2`
+    interpolation: ["nearest", "bilinear"], optional
+        Interpolation to use for up-sampling. Default: `"bilinear"`
+    kwargs: dict
+        Any additional Keras standard layer keyword arguments to pass to the Convolutional 2D layer
+    """
+    def __init__(self, filters, kernel_size=3, padding="same", activation="leakyrelu",
+                 scale_factor=2, interpolation="bilinear"):
+        self._name = _get_name("upscale_ri_{}".format(filters))
+        self._interpolation = interpolation
+        self._size = scale_factor
+        self._filters = filters
+        self._kernel_size = kernel_size
+        self._padding = padding
+        self._activation = activation
+
+    def __call__(self, inputs):
+        """ Call the Faceswap Resize Images Layer.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The input to the layer
+
+        Returns
+        -------
+        Tensor
+            The output tensor from the Upscale Layer
+        """
+        var_x = inputs
+
+        var_x_sr = KResizeImages(size=self._size,
+                                 interpolation=self._interpolation,
+                                 name="{}_resize".format(self._name))(var_x)
+        var_x_sr = Conv2D(self._filters, self._kernel_size,
+                          strides=1,
+                          padding=self._padding,
+                          name="{}_conv".format(self._name))(var_x_sr)
+        var_x_us = Conv2DTranspose(self._filters, 3,
+                                   strides=2,
+                                   padding=self._padding,
+                                   name="{}_convtrans".format(self._name))(var_x)
+        var_x = Add()([var_x_sr, var_x_us])
+
+        if self._activation == "leakyrelu":
+            var_x = LeakyReLU(0.2, name="{}_leakyrelu".format(self._name))(var_x)
+        if self._activation == "swish":
+            var_x = Swish(name="{}_swish".format(self._name))(var_x)
+        if self._activation == "prelu":
+            var_x = PReLU(name="{}_prelu".format(self._name))(var_x)
         return var_x
 
 
