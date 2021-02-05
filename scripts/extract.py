@@ -282,7 +282,8 @@ class Extract():  # pylint:disable=too-few-public-methods
         """
         logger.trace("Outputting faces for %s", extract_media.filename)
         final_faces = list()
-        filename, extension = os.path.splitext(os.path.basename(extract_media.filename))
+        filename = os.path.splitext(os.path.basename(extract_media.filename))[0]
+        extension = ".png"
         for idx, face in enumerate(extract_media.detected_faces):
             output_filename = "{}_{}{}".format(filename, str(idx), extension)
             face.hash, image = encode_image_with_hash(face.aligned.face, extension)

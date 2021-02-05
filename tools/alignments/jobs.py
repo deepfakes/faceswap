@@ -539,7 +539,8 @@ class Extract():  # pylint:disable=too-few-public-methods
         """
         logger.trace("Outputting frame: %s", filename)
         face_count = 0
-        frame_name, extension = os.path.splitext(filename)
+        frame_name = os.path.splitext(filename)[0]
+        extension = ".png"
         faces = self._select_valid_faces(filename, image)
         if not faces:
             return face_count

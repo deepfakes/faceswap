@@ -401,7 +401,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         for frame_idx, (filename, image) in enumerate(loader.load()):
             logger.trace("Outputting frame: %s: %s", frame_idx, filename)
             basename = os.path.basename(filename)
-            frame_name, extension = os.path.splitext(basename)
+            frame_name = os.path.splitext(basename)[0]
+            extension = ".png"
             final_faces = []
             progress_queue.put(1)
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
