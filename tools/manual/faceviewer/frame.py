@@ -25,7 +25,7 @@ class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     Parameters
     ----------
-    parent: :class:`tkinter.PanedWindow`
+    parent: :class:`ttk.PanedWindow`
         The paned window that the faces frame resides in
     tk_globals: :class:`~tools.manual.manual.TkGlobals`
         The tkinter variables that apply to the whole of the GUI

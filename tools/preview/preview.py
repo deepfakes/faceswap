@@ -123,11 +123,8 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
 
     def _build_ui(self):
         """ Build the elements for displaying preview images and options panels. """
-        container = tk.PanedWindow(self,
-                                   sashrelief=tk.RIDGE,
-                                   sashwidth=4,
-                                   sashpad=8,
-                                   orient=tk.VERTICAL)
+        container = ttk.PanedWindow(self,
+                                    orient=tk.VERTICAL)
         container.pack(fill=tk.BOTH, expand=True)
         container.preview_display = self._display
         self._image_canvas = ImagesCanvas(container, self._tk_vars)

@@ -148,12 +148,9 @@ class Manual(tk.Tk):
             The main containers of the manual tool.
         """
         logger.debug("Creating containers")
-        main = tk.PanedWindow(self,
-                              sashrelief=tk.RIDGE,
-                              sashwidth=2,
-                              sashpad=4,
-                              orient=tk.VERTICAL,
-                              name="pw_main")
+        main = ttk.PanedWindow(self,
+                               orient=tk.VERTICAL,
+                               name="pw_main")
         main.pack(fill=tk.BOTH, expand=True)
 
         top = ttk.Frame(main, name="frame_top")
@@ -231,7 +228,7 @@ class Manual(tk.Tk):
                      "iconphoto",
                      self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
         location = int(self.winfo_screenheight() // 1.5)
-        self._containers["main"].sash_place(0, 1, location)
+        self._containers["main"].sashpos(0, location)
         self.update_idletasks()
 
     def process(self):
