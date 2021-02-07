@@ -1437,11 +1437,18 @@ class _Inference():  # pylint:disable=too-few-public-methods
                     if isinstance(inbound_layer, list) and len(inbound_layer) > 1:
                         # Multi output inputs
                         inbound_output_idx = inp[1]
-                        logger.debug("Selecting output index %s from multi output inbound "
-                                     "layer: %s", inbound_output_idx, inbound_layer)
-                        layer_inputs.append(inbound_layer[inbound_output_idx])
+                        next_input = inbound_layer[inbound_output_idx]
+                        logger.debug("Selecting output index %s from multi output inbound layer: "
+                                     "%s (using: %s)", inbound_output_idx, inbound_layer,
+                                     next_input)
                     else:
-                        layer_inputs.append(inbound_layer)
+                        next_input = inbound_layer
+
+                    if get_backend() == "amd" and isinstance(next_input, list):
+                        # tf.keras and keras 2.2 behave differently for layer inputs
+                        layer_inputs.extend(next_input)
+                    else:
+                        layer_inputs.append(next_input)
 
                 logger.debug("Compiling layer '%s': layer inputs: %s", layer.name, layer_inputs)
                 model = layer(layer_inputs)
