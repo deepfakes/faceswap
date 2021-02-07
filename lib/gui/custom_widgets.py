@@ -425,8 +425,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def __init__(self, parent, hide_status=False):
         super().__init__(parent)
-        self.pack(side=tk.BOTTOM, padx=10, pady=2, fill=tk.X, expand=False)
-
+        self._frame = ttk.Frame(self)
         self._message = tk.StringVar()
         self._pbar_message = tk.StringVar()
         self._pbar_position = tk.IntVar()
@@ -435,6 +434,8 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         self._status(hide_status)
         self._pbar = self._progress_bar()
+        self.pack(side=tk.BOTTOM, fill=tk.X, expand=False)
+        self._frame.pack(padx=10, pady=2, fill=tk.X, expand=False)
 
     @property
     def message(self):
@@ -454,7 +455,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         if hide_status:
             return
 
-        statusframe = ttk.Frame(self)
+        statusframe = ttk.Frame(self._frame)
         statusframe.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=False)
 
         lbltitle = ttk.Label(statusframe, text="Status:", width=6, anchor=tk.W)
@@ -468,7 +469,7 @@ class StatusBar(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def _progress_bar(self):
         """ Place progress bar into right of the status bar. """
-        progressframe = ttk.Frame(self)
+        progressframe = ttk.Frame(self._frame)
         progressframe.pack(side=tk.RIGHT, anchor=tk.E, fill=tk.X)
 
         lblmessage = ttk.Label(progressframe, textvariable=self._pbar_message)
