@@ -128,7 +128,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         container.pack(fill=tk.BOTH, expand=True)
         container.preview_display = self._display
         self._image_canvas = ImagesCanvas(container, self._tk_vars)
-        container.add(self._image_canvas, height=400 * get_config().scaling_factor)
+        container.add(self._image_canvas, weight=3)
 
         options_frame = ttk.Frame(container)
         self._cli_frame = ActionFrame(
@@ -144,7 +144,9 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         self._opts_book = OptionsBook(options_frame,
                                       self._config_tools,
                                       self._refresh)
-        container.add(options_frame)
+        container.add(options_frame, weight=1)
+        self.update_idletasks()
+        container.sashpos(0, int(400 * get_config().scaling_factor))
 
 
 class Samples():
