@@ -13,6 +13,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer
+from lib.utils import FaceswapError
 import update_deps
 
 from .popup_configure import open_popup
@@ -134,7 +135,16 @@ class FileMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         menu_file = os.path.join(self._config.pathcache, ".recent.json")
         if not os.path.isfile(menu_file) or os.path.getsize(menu_file) == 0:
             self.clear_recent_files(serializer, menu_file)
-        recent_files = serializer.load(menu_file)
+        try:
+            recent_files = serializer.load(menu_file)
+        except FaceswapError as err:
+            if "Error unserializing data for type" in str(err):
+                # Some reports of corruption breaking menus
+                logger.warning("There was an error opening the recent files list so it has been "
+                               "reset.")
+                self.clear_recent_files(serializer, menu_file)
+                recent_files = []
+
         logger.debug("Loaded recent files: %s", recent_files)
         removed_files = []
         for recent_item in recent_files:
