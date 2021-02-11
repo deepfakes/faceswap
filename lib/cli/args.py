@@ -1080,6 +1080,16 @@ class TrainArgs(FaceSwapArgs):
             help="Color augmentation helps make the model less susceptible to color "
                  "differences between the A and B sets, at an increased training time cost. "
                  "Enable this option to disable color augmentation."))
+        argument_list.append(dict(
+            opts=("-nw", "--no-warp"),
+            action="store_true",
+            dest="no_warp",
+            default=False,
+            group="augmentation",
+            help="Warping is integral to training the Neural Network. This option should only be "
+                 "enabled towards the very end of training to try to bring out more detail. Think "
+                 "of it as 'fine-tuning'. Enabling this option from the beginning is likely to "
+                 "kill a model and lead to terrible results."))
         return argument_list
 
 

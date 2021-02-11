@@ -42,6 +42,8 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
     no_flip: bool
         ``True`` if the image shouldn't be randomly flipped as part of augmentation, otherwise
         ``False``
+    no_warp: bool
+        ``True`` if the image shouldn't be warped as part of augmentation, otherwise ``False``
     warp_to_landmarks: bool
         ``True`` if the random warp method should warp to similar landmarks from the other side,
         ``False`` if the standard random warp method should be used.
@@ -76,12 +78,12 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         plugin configuration options.
     """
     def __init__(self, model_input_size, model_output_shapes, coverage_ratio, augment_color,
-                 no_flip, warp_to_landmarks, alignments, config):
+                 no_flip, no_warp, warp_to_landmarks, alignments, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
-                     "coverage_ratio: %s, augment_color: %s, no_flip: %s, warp_to_landmarks: %s, "
-                     "alignments: %s, config: %s)",
+                     "coverage_ratio: %s, augment_color: %s, no_flip: %s, no_warp: %s, "
+                     "warp_to_landmarks: %s, alignments: %s, config: %s)",
                      self.__class__.__name__, model_input_size, model_output_shapes,
-                     coverage_ratio, augment_color, no_flip, warp_to_landmarks,
+                     coverage_ratio, augment_color, no_flip, no_warp, warp_to_landmarks,
                      list(alignments.keys()), config)
         self._config = config
         self._model_input_size = model_input_size
@@ -90,6 +92,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         self._augment_color = augment_color
         self._no_flip = no_flip
         self._warp_to_landmarks = warp_to_landmarks
+        self._no_warp = no_warp
         self._extract_versions = alignments["versions"]
         self._aligned_faces = alignments["aligned_faces"]
         self._masks = dict(masks=alignments.get("masks", None),
@@ -244,12 +247,12 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         processed.update(self._processing.get_targets(batch))
 
         # Random Warp # TODO change masks to have a input mask and a warped target mask
-        if not self._config["disable_warp"]:
+        if self._no_warp:
+            processed["feed"] = [self._processing.skip_warp(batch[..., :3])]
+        else:
             processed["feed"] = [self._processing.warp(batch[..., :3],
                                                        self._warp_to_landmarks,
                                                        **warp_kwargs)]
-        else:
-            processed["feed"] = [self._processing.skip_warp(batch[..., :3])]
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
                      filenames,

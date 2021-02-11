@@ -402,6 +402,7 @@ class _Feeder():
                                           self._model.coverage_ratio,
                                           not self._model.command_line_arguments.no_augment_color,
                                           self._model.command_line_arguments.no_flip,
+                                          self._model.command_line_arguments.no_warp,
                                           self._model.command_line_arguments.warp_to_landmarks,
                                           self._alignments,
                                           self._config)
