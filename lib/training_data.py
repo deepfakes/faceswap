@@ -440,34 +440,35 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         lm_side = "a" if side == "b" else "b"
         landmarks = {key: aligned.landmarks
                      for key, aligned in self._aligned_faces[lm_side].items()}
-        closest_hashes = [self._cache["nearest_landmarks"].get(filename) for filename in filenames]
-        if None in closest_hashes:
+        closest_matches = [self._cache["nearest_landmarks"].get(filename)
+                           for filename in filenames]
+        if None in closest_matches:
             # Resize mismatched training image size landmarks
             sizes = {side: list(self._aligned_faces[side].values())[0].size
                      for side in self._aligned_faces}
             if len(set(sizes.values())) > 1:
                 scale = sizes[side] / sizes[lm_side]
                 landmarks = {key: lms * scale for key, lms in landmarks.items()}
-            closest_hashes = self._cache_closest_hashes(filenames, batch_src_points, landmarks)
+            closest_matches = self._cache_closest_matches(filenames, batch_src_points, landmarks)
 
-        batch_dst_points = np.array([landmarks[choice(hsh)] for hsh in closest_hashes])
+        batch_dst_points = np.array([landmarks[choice(fname)] for fname in closest_matches])
         logger.trace("Returning: (batch_dst_points: %s)", batch_dst_points.shape)
         return batch_dst_points
 
-    def _cache_closest_hashes(self, filenames, batch_src_points, landmarks):
+    def _cache_closest_matches(self, filenames, batch_src_points, landmarks):
         """ Cache the nearest landmarks for this batch """
-        logger.trace("Caching closest hashes")
+        logger.trace("Caching closest matches")
         dst_landmarks = list(landmarks.items())
         dst_points = np.array([lm[1] for lm in dst_landmarks])
-        batch_closest_hashes = list()
+        batch_closest_matches = list()
 
         for filename, src_points in zip(filenames, batch_src_points):
             closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
-            closest_hashes = tuple(dst_landmarks[i][0] for i in closest)
-            self._cache["nearest_landmarks"][filename] = closest_hashes
-            batch_closest_hashes.append(closest_hashes)
-        logger.trace("Cached closest hashes")
-        return batch_closest_hashes
+            closest_matches = tuple(dst_landmarks[i][0] for i in closest)
+            self._cache["nearest_landmarks"][filename] = closest_matches
+            batch_closest_matches.append(closest_matches)
+        logger.trace("Cached closest matches")
+        return batch_closest_matches
 
 
 class ImageAugmentation():

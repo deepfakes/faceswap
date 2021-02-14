@@ -75,8 +75,6 @@ When extracting faces for training, you are looking to gather around 500 to 5000
 
 You do not want to extract every single frame from a video for training as from frame to frame the faces will be very similar.
 
-If you plan to train with a mask or use the Warp to Landmarks option, then you will need to copy the output `alignments.json` file from your source frames folder into your output faces folder for training. If you have extracted from multiple sources, you can use the alignments tool to merge several `alignments.json` files together.
-
 You can see the full list of arguments for extracting by hovering over the options in the GUI or passing the help flag. i.e:
 ```bash
 python faceswap.py extract -h

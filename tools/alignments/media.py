@@ -12,10 +12,10 @@ from tqdm import tqdm
 # TODO imageio single frame seek seems slow. Look into this
 # import imageio
 
-from lib.align import Alignments, DetectedFace
-from lib.image import (count_frames, encode_image_with_hash, generate_thumbnail, ImagesLoader,
-                       read_image, read_image_hash_batch)
-from lib.utils import _image_extensions, _video_extensions
+from lib.align import Alignments, DetectedFace, update_legacy_png_header
+from lib.image import (count_frames, generate_thumbnail, ImagesLoader,
+                       png_write_meta, read_image, read_image_meta_batch)
+from lib.utils import _image_extensions, _video_extensions, FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -54,19 +54,6 @@ class AlignmentData(Alignments):
         self._data = self._load()
         logger.debug("Re-loaded alignments")
 
-    def add_face_hashes(self, frame_name, hashes):
-        """ Recalculate face hashes """
-        logger.trace("Adding face hash: (frame: '%s', hashes: %s)", frame_name, hashes)
-        faces = self.get_faces_in_frame(frame_name)
-        count_match = len(faces) - len(hashes)
-        if count_match != 0:
-            msg = "more" if count_match > 0 else "fewer"
-            logger.warning("There are %s %s face(s) in the alignments file than exist in the "
-                           "faces folder. Check your sources for frame '%s'.",
-                           abs(count_match), msg, frame_name)
-        for idx, i_hash in hashes.items():
-            faces[idx]["hash"] = i_hash
-
     def set_filename(self, filename):
         """ Set the :attr:`_file` to the given filename.
 
@@ -79,7 +66,13 @@ class AlignmentData(Alignments):
 
 
 class MediaLoader():
-    """ Class to load filenames from folder """
+    """ Class to load images.
+
+    Parameters
+    ----------
+    folder: str
+        The folder of images or video file to load images from
+    """
     def __init__(self, folder):
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
@@ -202,48 +195,108 @@ class MediaLoader():
             yield filename, image
 
     @staticmethod
-    def save_image(output_folder, filename, image):
+    def save_image(output_folder, filename, image, metadata=None):
         """ Save an image """
         output_file = os.path.join(output_folder, filename)
-        output_file = os.path.splitext(output_file)[0]+'.png'
+        output_file = os.path.splitext(output_file)[0] + ".png"
         logger.trace("Saving image: '%s'", output_file)
-        cv2.imwrite(output_file, image)  # pylint: disable=no-member
+        if metadata:
+            encoded_image = cv2.imencode(".png", image)[1]
+            encoded_image = png_write_meta(encoded_image.tobytes(), metadata)
+            with open(output_file, "wb") as out_file:
+                out_file.write(encoded_image)
+        else:
+            cv2.imwrite(output_file, image)  # pylint: disable=no-member
 
 
 class Faces(MediaLoader):
-    """ Object to hold the faces that are to be swapped out """
+    """ Object to load Extracted Faces from a folder.
+
+    Parameters
+    ----------
+    folder: str
+        The folder to load faces from
+    alignments: :class:`lib.align.Alignments`, optional
+        The alignments object that contains the faces. Used to update legacy hash based faces
+        for <v2.1 alignments to png header based version. Pass in ``None`` to not update legacy
+        faces (raises error instead). Default: ``None``
+    """
+    def __init__(self, folder, alignments=None):
+        self._alignments = alignments
+        super().__init__(folder)
 
     def process_folder(self):
-        """ Iterate through the faces folder pulling out various information """
+        """ Iterate through the faces folder pulling out various information for each face.
+
+        Yields
+        ------
+        dict
+            A dictionary for each face found containing the keys returned from
+            :class:`lib.image.read_image_meta_batch`
+        """
         logger.info("Loading file list from %s", self.folder)
 
-        filelist = [os.path.join(self.folder, face)
-                    for face in os.listdir(self.folder)
-                    if self.valid_extension(face)]
-        for fullpath, face_hash in tqdm(read_image_hash_batch(filelist),
-                                        total=len(filelist),
-                                        desc="Reading Face Hashes"):
-            filename = os.path.basename(fullpath)
-            face_name, extension = os.path.splitext(filename)
-            retval = {"face_fullname": filename,
-                      "face_name": face_name,
-                      "face_extension": extension,
-                      "face_hash": face_hash}
-            logger.trace(retval)
+        if self._alignments is not None:  # Legacy updating
+            filelist = [os.path.join(self.folder, face)
+                        for face in os.listdir(self.folder)
+                        if self.valid_extension(face)]
+        else:
+            filelist = [os.path.join(self.folder, face)
+                        for face in os.listdir(self.folder)
+                        if os.path.splitext(face)[-1] == ".png"]
+
+        log_once = False
+        for fullpath, metadata in tqdm(read_image_meta_batch(filelist),
+                                       total=len(filelist),
+                                       desc="Reading Face Data"):
+
+            if "itxt" not in metadata or "source" not in metadata["itxt"]:
+                if self._alignments is None:  # Can't update legacy
+                    raise FaceswapError(
+                        f"The folder '{self.folder}' contains images that do not include Faceswap "
+                        "metadata.\nAll images in the provided folder should contain faces "
+                        "generated from Faceswap's extraction process.\nPlease double check the "
+                        "source and try again.")
+
+                if not log_once:
+                    logger.warning("Legacy faces discovered. These faces will be updated")
+                    log_once = True
+                data = update_legacy_png_header(fullpath, self._alignments)
+                if not data:
+                    raise FaceswapError(
+                        "Some of the faces being passed in from '{}' could not be matched to the "
+                        "alignments file '{}'\nPlease double check your sources and try "
+                        "again.".format(self.folder, self._alignments.file))
+                retval = data["source"]
+            else:
+                retval = metadata["itxt"]["source"]
+
+            retval["current_filename"] = os.path.basename(fullpath)
             yield retval
 
     def load_items(self):
-        """ Load the face names into dictionary """
+        """ Load the face names into dictionary.
+
+        Returns
+        -------
+        dict
+            The source filename as key with list of face indices for the frame as value
+        """
         faces = dict()
         for face in self.file_list_sorted:
-            faces.setdefault(face["face_hash"], list()).append((face["face_name"],
-                                                                face["face_extension"]))
+            faces.setdefault(face["source_filename"], list()).append(face["face_index"])
         logger.trace(faces)
         return faces
 
     def sorted_items(self):
-        """ Return the items sorted by face name """
-        items = sorted(self.process_folder(), key=lambda x: (x["face_name"]))
+        """ Return the items sorted by the saved file name.
+
+        Returns
+        --------
+        list
+            List of `dict` objects for each face found, sorted by the face's current filename
+        """
+        items = sorted(self.process_folder(), key=lambda x: (x["current_filename"]))
         logger.trace(items)
         return items
 
@@ -365,12 +418,3 @@ class ExtractedFaces():
             sizes.append(length)
         logger.trace("sizes: '%s'", sizes)
         return sizes
-
-    @staticmethod
-    def save_face_with_hash(filename, extension, face):
-        """ Save a face and return it's hash """
-        f_hash, img = encode_image_with_hash(face, extension)
-        logger.trace("Saving face: '%s'", filename)
-        with open(filename, "wb") as out_file:
-            out_file.write(img)
-        return f_hash

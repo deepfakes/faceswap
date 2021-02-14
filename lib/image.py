@@ -5,11 +5,12 @@ import logging
 import re
 import subprocess
 import os
+import struct
 import sys
 
 from bisect import bisect
 from concurrent import futures
-from hashlib import sha1
+from zlib import crc32
 
 import cv2
 import imageio
@@ -230,7 +231,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
 imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader
 
 
-def read_image(filename, raise_error=False, with_hash=False):
+def read_image(filename, raise_error=False, with_metadata=False):
     """ Read an image file from a file location.
 
     Extends the functionality of :func:`cv2.imread()` by ensuring that an image was actually
@@ -245,20 +246,22 @@ def read_image(filename, raise_error=False, with_hash=False):
         If ``True`` then any failures (including the returned image being ``None``) will be
         raised. If ``False`` then an error message will be logged, but the error will not be
         raised. Default: ``False``
-    with_hash: bool, optional
-        If ``True`` then returns the image's sha1 hash with the image. Default: ``False``
+    with_metadata: bool, optional
+        Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
+        returns the Faceswap metadata stored with in a Face images .png exif header.
+        Default: ``False``
 
     Returns
     -------
     numpy.ndarray or tuple
-        If :attr:`with_hash` is ``False`` then returns a `numpy.ndarray` of the image in `BGR`
-        channel order. If :attr:`with_hash` is ``True`` then returns a `tuple` of (`numpy.ndarray`"
-        of the image in `BGR`, `str` of sha` hash of image)
+        If :attr:`with_metadata` is ``False`` then returns a `numpy.ndarray` of the image in `BGR`
+        channel order. If :attr:`with_metadata` is ``True`` then returns a `tuple` of
+        (`numpy.ndarray`" of the image in `BGR`, `dict` of face's Faceswap metadata)
     Example
     -------
     >>> image_file = "/path/to/image.png"
     >>> try:
-    >>>    image = read_image(image_file, raise_error=True, with_hash=False)
+    >>>    image = read_image(image_file, raise_error=True, with_metadata=False)
     >>> except:
     >>>     raise ValueError("There was an error")
     """
@@ -266,9 +269,16 @@ def read_image(filename, raise_error=False, with_hash=False):
     success = True
     image = None
     try:
-        image = cv2.imread(filename)
-        if image is None:
-            raise ValueError("Image is None")
+        if not with_metadata:
+            retval = cv2.imread(filename)
+            if retval is None:
+                raise ValueError("Image is None")
+        else:
+            with open(filename, "rb") as infile:
+                raw_file = infile.read()
+                metadata = png_read_meta(raw_file)
+            image = cv2.imdecode(np.frombuffer(raw_file, dtype="uint8"), cv2.IMREAD_UNCHANGED)
+            retval = (image, metadata)
     except TypeError as err:
         success = False
         msg = "Error while reading image (TypeError): '{}'".format(filename)
@@ -291,7 +301,6 @@ def read_image(filename, raise_error=False, with_hash=False):
         if raise_error:
             raise Exception(msg)
     logger.trace("Loaded image: '%s'. Success: %s", filename, success)
-    retval = (image, sha1(image).hexdigest()) if with_hash else image
     return retval
 
 
@@ -339,40 +348,59 @@ def read_image_batch(filenames):
     return batch
 
 
-def read_image_hash(filename, output_shape=False):
-    """ Return the `sha1` hash of an image saved on disk.
+def read_image_meta(filename):
+    """ Read the Faceswap metadata stored in an extracted face's exif header.
 
     Parameters
     ----------
     filename: str
-        Full path to the image to be loaded.
-    output_shape: bool
-        If ``True`` then a tuple is returned with the shape tuple of the image as the final value.
-        Default: ``False``
+        Full path to the image to be retrieve the meta information for.
 
     Returns
     -------
-    str
-        The :func:`hashlib.hexdigest()` representation of the `sha1` hash of the given image.
+    dict
+        The output dictionary will contain the `width` and `height` of the png image as well as any
+        `itxt` information.
     Example
     -------
     >>> image_file = "/path/to/image.png"
-    >>> image_hash = read_image_hash(image_file)
+    >>> metadata = read_image_meta(image_file)
+    >>> width = metadata["width]
+    >>> height = metadata["height"]
+    >>> faceswap_info = metadata["itxt"]
     """
-    img = read_image(filename, raise_error=True)
-    retval = sha1(img).hexdigest()
-    if output_shape:
-        retval = (retval, img.shape)
-    logger.trace("filename: '%s', retval: %s", filename, retval)
+    retval = dict()
+    if os.path.splitext(filename)[-1] != ".png":
+        raise ValueError(f"Only png files are supported for reading exif data. ({filename})")
+    with open(filename, "rb") as infile:
+        chunk = infile.read(8)
+        if chunk != b"\x89PNG\r\n\x1a\n":
+            raise ValueError(f"Invalid header found in png: {filename}")
+        while True:
+            chunk = infile.read(8)
+            length, field = struct.unpack(">I4s", chunk)
+            logger.trace("Read chunk: (chunk: %s, length: %s, field: %s", chunk, length, field)
+            if not chunk or field == b"IDAT":
+                break
+            if field == b"IHDR":
+                # Get dimensions
+                chunk = infile.read(8)
+                retval["width"], retval["height"] = struct.unpack(">II", chunk)
+                length -= 8
+            elif field == b"iTXt":
+                retval["itxt"] = eval(infile.read(length).split(b"\0\0\0\0\0", 1)[-1])
+                break
+            infile.seek(length + 4, 1)
+    logger.trace("filename: %s, metadata: %s", filename, retval)
     return retval
 
 
-def read_image_hash_batch(filenames, output_shape=False):
-    """ Return the `sha` hash of a batch of images
+def read_image_meta_batch(filenames):
+    """ Read the Faceswap metadata stored in a batch extracted faces' exif headers.
 
     Leverages multi-threading to load multiple images from disk at the same time
     leading to vastly reduced image read times. Creates a generator to retrieve filenames
-    with their hashes as they are calculated.
+    with their metadata as they are calculated.
 
     Notes
     -----
@@ -383,38 +411,33 @@ def read_image_hash_batch(filenames, output_shape=False):
     ----------
     filenames: list
         A list of ``str`` full paths to the images to be loaded.
-    output_shape: bool
-        If ``True`` then a 3rd item is added to the output tuple containing the shape of the read
-        image. Default: ``False``
 
     Yields
     -------
-    tuple: (`filename`, :func:`hashlib.hexdigest()` representation of the `sha1` hash of the image,
-            [optional shape tuple] )
+    tuple
+        (**filename** (`str`), **metadata** (`dict`) )
+
     Example
     -------
     >>> image_filenames = ["/path/to/image_1.png", "/path/to/image_2.png", "/path/to/image_3.png"]
-    >>> for filename, hash in read_image_hash_batch(image_filenames):
+    >>> for filename, meta in read_image_meta_batch(image_filenames):
     >>>         <do something>
     """
     logger.trace("Requested batch: '%s'", filenames)
     executor = futures.ThreadPoolExecutor()
     with executor:
         logger.debug("Submitting %s items to executor", len(filenames))
-        read_hashes = {executor.submit(read_image_hash,
-                                       filename,
-                                       output_shape=output_shape): filename
-                       for filename in filenames}
+        read_meta = {executor.submit(read_image_meta, filename): filename
+                     for filename in filenames}
         logger.debug("Succesfully submitted %s items to executor", len(filenames))
-        for future in futures.as_completed(read_hashes):
-            retval = (read_hashes[future],
-                      *future.result()) if output_shape else (read_hashes[future], future.result())
+        for future in futures.as_completed(read_meta):
+            retval = (read_meta[future], future.result())
             logger.trace("Yielding: %s", retval)
             yield retval
 
 
-def encode_image_with_hash(image, extension):
-    """ Encode an image, and get the encoded image back with its `sha1` hash.
+def encode_image(image, extension, metadata=None):
+    """ Encode an image.
 
     Parameters
     ----------
@@ -422,11 +445,12 @@ def encode_image_with_hash(image, extension):
         The image to be encoded in `BGR` channel order.
     extension: str
         A compatible `cv2` image file extension that the final image is to be saved to.
+    metadata: dict, optional
+        Metadata for the image. If provided, and the extension is png, this information will be
+        written to the PNG itxt header. Default:``None``
 
     Returns
     -------
-    image_hash: str
-        The :func:`hashlib.hexdigest()` representation of the `sha1` hash of the encoded image
     encoded_image: bytes
         The image encoded into the correct file format
 
@@ -434,11 +458,78 @@ def encode_image_with_hash(image, extension):
     -------
     >>> image_file = "/path/to/image.png"
     >>> image = read_image(image_file)
-    >>> image_hash, encoded_image = encode_image_with_hash(image, ".jpg")
+    >>> encoded_image = encode_image(image, ".jpg")
     """
-    encoded_image = cv2.imencode(extension, image)[1]
-    image_hash = sha1(cv2.imdecode(encoded_image, cv2.IMREAD_UNCHANGED)).hexdigest()
-    return image_hash, encoded_image
+    if metadata and extension.lower() != ".png":
+        raise ValueError("Metadata is only supported for .png images")
+    retval = cv2.imencode(extension, image)[1]
+    if metadata:
+        retval = np.frombuffer(png_write_meta(retval.tobytes(), metadata), dtype="uint8")
+    return retval
+
+
+def png_write_meta(png, data):
+    """ Write Faceswap information to a png's iTXt field.
+
+    Parameters
+    ----------
+    png: bytes
+        The bytes encoded png file to write header data to
+    data: dict or bytes
+        The dictionary to write to the header. Can be pre-encoded as utf-8.
+
+    Notes
+    -----
+    This is a fairly stripped down and non-robust header writer to fit a very specific task. OpenCV
+    will not write any iTXt headers to the PNG file, so we make the assumption that the only iTXt
+    header that exists is the one that we created for storing alignments.
+
+    References
+    ----------
+    PNG Specification: https://www.w3.org/TR/2003/REC-PNG-20031110/
+
+    """
+    if not isinstance(data, bytes):
+        data = str(data).encode("utf-8", "strict")
+    key = "faceswap".encode("latin-1", "strict")
+
+    split = png.find(b"IDAT") - 4
+    header, image = png[:split], png[split:]
+
+    chunk = key + b"\0\0\0\0\0" + data
+    crc = struct.pack(">I", crc32(chunk, crc32(b"iTXt")) & 0xFFFFFFFF)
+    length = struct.pack(">I", len(chunk))
+    retval = header + length + b"iTXt" + chunk + crc + image
+    return retval
+
+
+def png_read_meta(png):
+    """ Read the Faceswap information stored in a png's iTXt field.
+
+    Parameters
+    ----------
+    png: bytes
+        The bytes encoded png file to read header data from
+
+    Returns
+    -------
+    dict
+        The Faceswap information stored in the PNG header
+
+    Notes
+    -----
+    This is a very stripped down, non-robust and non-secure header reader to fit a very specific
+    task. OpenCV will not write any iTXt headers to the PNG file, so we make the assumption that
+    the only iTXt header that exists is the one that Faceswap created for storing alignments.
+    """
+    pointer = png.find(b"iTXt") - 4
+    if pointer < 0:
+        logger.trace("No metadata in png")
+        return None
+    length = struct.unpack(">I", png[pointer:pointer + 4])[0]
+    pointer += 8
+    data = png[pointer:pointer + length].split(b"\0\0\0\0\0", 1)[-1]
+    return eval(data)
 
 
 def generate_thumbnail(image, size=96, quality=60):
@@ -963,7 +1054,7 @@ class ImagesLoader(ImageIO):
             if idx in self._skip_list:
                 logger.trace("Skipping frame %s due to skip list")
                 continue
-            image_read = read_image(filename, raise_error=False, with_hash=False)
+            image_read = read_image(filename, raise_error=False)
             retval = filename, image_read
             if retval[1] is None:
                 logger.warning("Frame not loaded: '%s'", filename)
@@ -973,8 +1064,8 @@ class ImagesLoader(ImageIO):
     def load(self):
         """ Generator for loading images from the given :attr:`location`
 
-        If :class:`FacesLoader` is in use then the sha1 hash of the image is added as the final
-        item in the output `tuple`.
+        If :class:`FacesLoader` is in use then the Faceswap metadata of the image stored in the
+        image exif file is added as the final item in the output `tuple`.
 
         Yields
         ------
@@ -982,9 +1073,8 @@ class ImagesLoader(ImageIO):
             The filename of the loaded image.
         image: numpy.ndarray
             The loaded image.
-        sha1_hash: str, (:class:`FacesLoader` only)
-            The sha1 hash of the loaded image. Only yielded if :class:`FacesLoader` is being
-            executed.
+        metadata: dict, (:class:`FacesLoader` only)
+            The Faceswap metadata associated with the loaded image.
         """
         logger.debug("Initializing Load Generator")
         self._set_thread()
@@ -1005,14 +1095,14 @@ class ImagesLoader(ImageIO):
 
 
 class FacesLoader(ImagesLoader):
-    """ Loads faces from a faces folder along with the face's hash.
+    """ Loads faces from a faces folder along with the face's Faceswap metadata.
 
     Examples
     --------
-    Loading faces with their sha1 hash:
+    Loading faces with their Faceswap metadata:
 
     >>> loader = FacesLoader('/path/to/faces/folder')
-    >>> for filename, face, sha1_hash in loader.load():
+    >>> for filename, face, metadata in loader.load():
     >>>     <do processing>
     """
     def __init__(self, path, skip_list=None, count=None):
@@ -1031,15 +1121,15 @@ class FacesLoader(ImagesLoader):
             The filename of the loaded image.
         image: numpy.ndarray
             The loaded image.
-        sha1_hash: str
-            The sha1 hash of the loaded image.
+        metadata: dict
+            The Faceswap metadata associated with the loaded image.
         """
         logger.debug("Loading images from folder: '%s'", self.location)
         for idx, filename in enumerate(self.file_list):
             if idx in self._skip_list:
                 logger.trace("Skipping face %s due to skip list")
                 continue
-            image_read = read_image(filename, raise_error=False, with_hash=True)
+            image_read = read_image(filename, raise_error=False, with_metadata=True)
             retval = filename, *image_read
             if retval[1] is None:
                 logger.warning("Face not loaded: '%s'", filename)

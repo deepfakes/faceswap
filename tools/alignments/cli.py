@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 from lib.cli.args import FaceSwapArgs
-from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FilesFullPaths, Radio, Slider
+from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths, Radio, Slider
 
 _HELPTEXT = "This command lets you perform various tasks pertaining to an alignments file."
 
@@ -28,9 +28,8 @@ class AlignmentsArgs(FaceSwapArgs):
             opts=("-j", "--job"),
             action=Radio,
             type=str,
-            choices=("draw", "extract", "merge", "missing-alignments", "missing-frames",
-                     "leftover-faces", "multi-faces", "no-faces", "remove-faces", "rename", "sort",
-                     "spatial", "update-hashes"),
+            choices=("draw", "extract", "missing-alignments", "missing-frames", "multi-faces",
+                     "no-faces", "remove-faces", "rename", "sort", "spatial"),
             required=True,
             help="R|Choose which action you want to perform. NB: All actions require an "
                  "alignments file (-a) to be passed in."
@@ -39,16 +38,10 @@ class AlignmentsArgs(FaceSwapArgs):
                  "\nL|'extract': Re-extract faces from the source frames/video based on alignment "
                  "data. This is a lot quicker than re-detecting faces. Can pass in the '-een' "
                  "(--extract-every-n) parameter to only extract every nth frame.{1}"
-                 "\nL|'merge': Merge multiple alignment files into one. Specify a space separated "
-                 "list of alignments files with the -a flag. Optionally specify a faces (-fc) "
-                 "folder to filter the final alignments file to only those faces that appear "
-                 "within the provided folder."
                  "\nL|'missing-alignments': Identify frames that do not exist in the alignments "
                  "file.{2}{0}"
                  "\nL|'missing-frames': Identify frames in the alignments file that do not appear "
                  "within the frames folder/video.{2}{0}"
-                 "\nL|'leftover-faces': Identify faces in the faces folder that do not exist in "
-                 "the alignments file.{2}{3}"
                  "\nL|'multi-faces': Identify where multiple faces exist within the alignments "
                  "file.{2}{4}"
                  "\nL|'no-faces': Identify frames that exist within the alignment file but no "
@@ -58,20 +51,15 @@ class AlignmentsArgs(FaceSwapArgs):
                  "\nL|'rename' - Rename faces to correspond with their parent frame and position "
                  "index in the alignments file (i.e. how they are named after running extract).{3}"
                  "\nL|'sort': Re-index the alignments from left to right. For alignments with "
-                 "multiple faces this will ensure that the left-most face is at index 0 "
-                 "Optionally pass in a faces folder (-fc) to also rename extracted faces."
+                 "multiple faces this will ensure that the left-most face is at index 0."
                  "\nL|'spatial': Perform spatial and temporal filtering to smooth alignments "
-                 "(EXPERIMENTAL!)"
-                 "\nL|'update-hashes': Recalculate the face hashes. Only use this if you have "
-                 "altered the extracted faces (e.g. colour adjust). The files MUST be named "
-                 "'<frame_name>_face index' (i.e. how they are named after running extract)."
-                 "{3}".format(frames_dir, frames_and_faces_dir, output_opts, faces_dir,
-                              frames_or_faces_dir)))
+                 "(EXPERIMENTAL!)".format(frames_dir, frames_and_faces_dir, output_opts, faces_dir,
+                                          frames_or_faces_dir)))
         argument_list.append(dict(
             opts=("-a", "--alignments_file"),
-            action=FilesFullPaths,
+            action=FileFullPaths,
             dest="alignments_file",
-            nargs="+",
+            type=str,
             group="data",
             required=True,
             filetypes="alignments",

@@ -13,7 +13,7 @@ import numpy as np
 
 from lib.gui.control_helper import ControlPanel
 from lib.gui.utils import get_images, get_config, initialize_config, initialize_images
-from lib.image import SingleFrameLoader
+from lib.image import SingleFrameLoader, read_image_meta
 from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
@@ -41,6 +41,8 @@ class Manual(tk.Tk):
     def __init__(self, arguments):
         logger.debug("Initializing %s: (arguments: '%s')", self.__class__.__name__, arguments)
         super().__init__()
+        self._validate_non_faces(arguments.frames)
+
         self._initialize_tkinter()
         self._globals = TkGlobals(arguments.frames)
 
@@ -72,6 +74,30 @@ class Manual(tk.Tk):
         self.bind("<Key>", self._handle_key_press)
         self._set_initial_layout()
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    @classmethod
+    def _validate_non_faces(cls, frames_folder):
+        """ Quick check on the input to make sure that a folder of extracted faces is not being
+        passed in. """
+        if not os.path.isdir(frames_folder):
+            logger.debug("Input '%s' is not a folder", frames_folder)
+            return
+        test_file = next((fname
+                          for fname in os.listdir(frames_folder)
+                          if os.path.splitext(fname)[-1].lower() == ".png"),
+                         None)
+        if not test_file:
+            logger.debug("Input '%s' does not contain any .pngs", frames_folder)
+            return
+        test_file = os.path.join(frames_folder, test_file)
+        meta = read_image_meta(test_file)
+        logger.debug("Test file: (filename: %s, metadata: %s)", test_file, meta)
+        if "itxt" in meta and "alignments" in meta["itxt"]:
+            logger.error("The input folder '%s' contains extracted faces.", frames_folder)
+            logger.error("The Manual Tool works with source frames or a video file, not extracted "
+                         "faces. Please update your input.")
+            sys.exit(1)
+        logger.debug("Test input file '%s' does not contain Faceswap header data", test_file)
 
     def _wait_for_threads(self, extractor, loader, video_meta_data):
         """ The :class:`Aligner` and :class:`FramesLoader` are launched in background threads.

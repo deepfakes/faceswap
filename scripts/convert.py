@@ -15,9 +15,9 @@ from tqdm import tqdm
 from scripts.fsmedia import Alignments, PostProcess, finalize
 from lib.serializer import get_serializer
 from lib.convert import Converter
-from lib.align import AlignedFace, DetectedFace
+from lib.align import AlignedFace, DetectedFace, update_legacy_png_header
 from lib.gpu_stats import GPUStats
-from lib.image import read_image_hash, ImagesLoader
+from lib.image import read_image_meta_batch, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
 from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths
@@ -1038,41 +1038,61 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         """ If the user has specified an input aligned directory, remove any non-matching faces
         from the alignments file. """
         logger.debug("Filtering Faces")
-        face_hashes = self._get_face_hashes()
-        if not face_hashes:
-            logger.debug("No face hashes. Not skipping any faces")
+        accept_dict = self._get_face_metadata()
+        if not accept_dict:
+            logger.debug("No aligned face data. Not skipping any faces")
             return
         pre_face_count = self._alignments.faces_count
-        self._alignments.filter_hashes(face_hashes, filter_out=False)
+        self._alignments.filter_faces(accept_dict, filter_out=False)
         logger.info("Faces filtered out: %s", pre_face_count - self._alignments.faces_count)
 
-    def _get_face_hashes(self):
+    def _get_face_metadata(self):
         """ Check for the existence of an aligned directory for identifying which faces in the
-        target frames should be swapped.
+        target frames should be swapped. If it exists, scan the folder for face's metadata
 
         Returns
         -------
-        list
-            A list of face hashes that exist in the given input aligned directory.
+        dict
+            Dictionary of source frame names with a list of associated face indices to be skipped
         """
-        face_hashes = list()
+        retval = dict()
         input_aligned_dir = self._args.input_aligned_dir
 
         if input_aligned_dir is None:
             logger.verbose("Aligned directory not specified. All faces listed in the "
                            "alignments file will be converted")
-        elif not os.path.isdir(input_aligned_dir):
+            return retval
+        if not os.path.isdir(input_aligned_dir):
             logger.warning("Aligned directory not found. All faces listed in the "
                            "alignments file will be converted")
-        else:
-            file_list = get_image_paths(input_aligned_dir)
-            logger.info("Getting Face Hashes for selected Aligned Images")
-            for face in tqdm(file_list, desc="Hashing Faces"):
-                face_hashes.append(read_image_hash(face))
-            logger.debug("Face Hashes: %s", (len(face_hashes)))
-            if not face_hashes:
-                raise FaceswapError("Aligned directory is empty, no faces will be converted!")
-            if len(face_hashes) <= len(self._input_images) / 3:
-                logger.warning("Aligned directory contains far fewer images than the input "
-                               "directory, are you sure this is the right folder?")
-        return face_hashes
+            return retval
+
+        log_once = False
+        filelist = get_image_paths(input_aligned_dir)
+        for fullpath, metadata in tqdm(read_image_meta_batch(filelist),
+                                       total=len(filelist),
+                                       desc="Reading Face Data",
+                                       leave=False):
+            if "itxt" not in metadata or "source" not in metadata["itxt"]:
+                # UPDATE LEGACY FACES FROM ALIGNMENTS FILE
+                if not log_once:
+                    logger.warning("Legacy faces discovered in '%s'. These faces will be updated",
+                                   input_aligned_dir)
+                    log_once = True
+                data = update_legacy_png_header(fullpath, self._alignments)
+                if not data:
+                    raise FaceswapError(
+                        "Some of the faces being passed in from '{}' could not be matched to the "
+                        "alignments file '{}'\nPlease double check your sources and try "
+                        "again.".format(input_aligned_dir, self._alignments.file))
+                meta = data["source"]
+            else:
+                meta = metadata["itxt"]["source"]
+            retval.setdefault(meta["source_filename"], list()).append(meta["face_index"])
+
+        if not retval:
+            raise FaceswapError("Aligned directory is empty, no faces will be converted!")
+        if len(retval) <= len(self._input_images) / 3:
+            logger.warning("Aligned directory contains far fewer images than the input "
+                           "directory, are you sure this is the right folder?")
+        return retval

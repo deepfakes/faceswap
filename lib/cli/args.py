@@ -873,9 +873,9 @@ class TrainArgs(FaceSwapArgs):
             dest="alignments_path_a",
             default=None,
             group="faces",
-            help="Path to alignments file for training set A. Only required if you are using a "
-                 "masked model or warp-to-landmarks is enabled. Defaults to "
-                 "<input-A>/alignments.json if not provided."))
+            help="DEPRECATED - This option will be removed in a future update. Path to alignments "
+                 "file for training set A. Defaults to <input-A>/alignments.json if not "
+                 "provided."))
         argument_list.append(dict(
             opts=("-B", "--input-B"),
             action=DirFullPaths,
@@ -893,9 +893,9 @@ class TrainArgs(FaceSwapArgs):
             dest="alignments_path_b",
             default=None,
             group="faces",
-            help="Path to alignments file for training set B. Only required if you are using a "
-                 "masked model or warp-to-landmarks is enabled. Defaults to "
-                 "<input-B>/alignments.json if not provided."))
+            help="DEPRECATED - This option will be removed in a future update. Path to alignments "
+                 "file for training set B. Defaults to <input-B>/alignments.json if not "
+                 "provided."))
         argument_list.append(dict(
             opts=("-m", "--model-dir"),
             action=DirFullPaths,
@@ -1060,8 +1060,7 @@ class TrainArgs(FaceSwapArgs):
             group="augmentation",
             help="Warps training faces to closely matched Landmarks from the opposite face-set "
                  "rather than randomly warping the face. This is the 'dfaker' way of doing "
-                 "warping. Alignments files for both sets of faces must be provided if using "
-                 "this option."))
+                 "warping."))
         argument_list.append(dict(
             opts=("-nf", "--no-flip"),
             action="store_true",
