@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from lib.align import Alignments, AlignedFace, DetectedFace
-from lib.image import FacesLoader, ImagesLoader, ImagesSaver
+from lib.align import Alignments, AlignedFace, DetectedFace, update_legacy_png_header
+from lib.image import FacesLoader, ImagesLoader, ImagesSaver, encode_image
 
 from lib.multithreading import MultiThread
 from lib.utils import get_folder
@@ -47,6 +47,8 @@ class Mask():  # pylint:disable=too-few-public-methods
         self._saver = self._set_saver(arguments)
         loader = FacesLoader if self._input_is_faces else ImagesLoader
         self._loader = loader(arguments.input)
+        self._faces_saver = None
+
         self._alignments = Alignments(os.path.dirname(arguments.alignments),
                                       filename=os.path.basename(arguments.alignments))
 
@@ -151,38 +153,46 @@ class Mask():  # pylint:disable=too-few-public-methods
             The arguments that are to be loaded inside this thread. Contains the queue that the
             faces should be put to
         """
+        log_once = False
         logger.debug("args: %s", args)
         if self._update_type != "output":
             queue = args[0]
-        for filename, image, hsh in tqdm(self._loader.load(), total=self._loader.count):
-            if hsh not in self._alignments.hashes_to_frame:
+        for filename, image, metadata in tqdm(self._loader.load(), total=self._loader.count):
+            if not metadata:  # Legacy faces. Update the headers
+                if not log_once:
+                    logger.warning("Legacy faces discovered. These faces will be updated")
+                    log_once = True
+                metadata = update_legacy_png_header(filename, self._alignments)
+                if not metadata:
+                    # Face not found
+                    self._counts["skip"] += 1
+                    logger.warning("Legacy face not found in alignments file. This face has not "
+                                   "been updated: '%s'", filename)
+                    continue
+
+            frame_name = metadata["source"]["source_filename"]
+            face_index = metadata["source"]["face_index"]
+            alignment = self._alignments.get_faces_in_frame(frame_name)
+            if not alignment or face_index > len(alignment) - 1:
                 self._counts["skip"] += 1
-                logger.warning("Skipping face not in alignments file: '%s'", filename)
+                logger.warning("Skipping Face not found in alignments file. skipping: '%s'",
+                               filename)
+                continue
+            alignment = alignment[face_index]
+            self._counts["face"] += 1
+
+            if self._check_for_missing(frame_name, face_index, alignment):
                 continue
 
-            frames = self._alignments.hashes_to_frame[hsh]
-            if len(frames) > 1:
-                # Filter the output by filename in case of multiple frames with the same face
-                logger.debug("Filtering multiple hashes to current filename: (filename: '%s', "
-                             "frames: %s", filename, frames)
-                lookup = os.path.splitext(os.path.basename(filename))[0]
-                frames = {k: v
-                          for k, v in frames.items()
-                          if lookup.startswith(os.path.splitext(k)[0])}
-                logger.debug("Filtered: (filename: '%s', frame: '%s')", filename, frames)
-
-            for frame, idx in frames.items():
-                self._counts["face"] += 1
-                alignment = self._alignments.get_faces_in_frame(frame)[idx]
-                if self._check_for_missing(frame, idx, alignment):
-                    continue
-                detected_face = self._get_detected_face(alignment)
-                if self._update_type == "output":
-                    detected_face.image = image
-                    self._save(frame, idx, detected_face)
-                else:
-                    queue.put(ExtractMedia(filename, image, detected_faces=[detected_face]))
-                    self._counts["update"] += 1
+            detected_face = self._get_detected_face(alignment)
+            if self._update_type == "output":
+                detected_face.image = image
+                self._save(frame_name, face_index, detected_face)
+            else:
+                media = ExtractMedia(filename, image, detected_faces=[detected_face])
+                setattr(media, "mask_tool_face_info", metadata["source"])  # TODO formalize
+                queue.put(media)
+                self._counts["update"] += 1
         if self._update_type != "output":
             queue.put("EOF")
 
@@ -295,6 +305,8 @@ class Mask():  # pylint:disable=too-few-public-methods
         logger.debug("Starting masker process")
         updater = getattr(self, "_update_{}".format("faces" if self._input_is_faces else "frames"))
         if self._update_type != "output":
+            if self._input_is_faces:
+                self._faces_saver = ImagesSaver(self._loader.location, as_bytes=True)
             for extractor_output in self._extractor.detected_faces():
                 self._extractor_input_thread.check_and_raise_error()
                 updater(extractor_output)
@@ -302,6 +314,8 @@ class Mask():  # pylint:disable=too-few-public-methods
             if self._counts["update"] != 0:
                 self._alignments.backup()
                 self._alignments.save()
+            if self._input_is_faces:
+                self._faces_saver.close()
         else:
             self._extractor_input_thread.join()
             self._saver.close()
@@ -328,11 +342,19 @@ class Mask():  # pylint:disable=too-few-public-methods
             The output from the :class:`plugins.extract.pipeline.Extractor` object
         """
         for face in extractor_output.detected_faces:
-            for frame, idx in self._alignments.hashes_to_frame[face.hash].items():
-                self._alignments.update_face(frame, idx, face.to_alignment())
-                if self._saver is not None:
-                    face.image = extractor_output.image
-                    self._save(frame, idx, face)
+            frame_name = extractor_output.mask_tool_face_info["source_filename"]
+            face_index = extractor_output.mask_tool_face_info["face_index"]
+            logger.trace("Saving face: (frame: %s, face index: %s)", frame_name, face_index)
+
+            self._alignments.update_face(frame_name, face_index, face.to_alignment())
+            metadata = dict(alignments=face.to_png_meta(),
+                            source=extractor_output.mask_tool_face_info)
+            self._faces_saver.save(extractor_output.filename,
+                                   encode_image(extractor_output.image, ".png", metadata=metadata))
+
+            if self._saver is not None:
+                face.image = extractor_output.image
+                self._save(frame_name, face_index, face)
 
     def _update_frames(self, extractor_output):
         """ Update alignments for the mask if the input type is a frames folder or video

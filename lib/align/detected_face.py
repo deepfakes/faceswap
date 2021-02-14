@@ -1,12 +1,16 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
 import logging
+import os
 
+from hashlib import sha1
 from zlib import compress, decompress
 
 import cv2
 import numpy as np
 
+from lib.image import encode_image, read_image
+from lib.utils import FaceswapError
 from . import AlignedFace, _EXTRACT_RATIOS, get_centered_size
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -66,9 +70,6 @@ class DetectedFace():
     mask: dict
         The generated mask(s) for the face as generated in :mod:`plugins.extract.mask`. Is a
         dict of {**name** (`str`): :class:`Mask`}.
-    hash: str
-        The hash of the face. This cannot be set until the file is saved due to image compression,
-        but will be set if loading data from :func:`from_alignment`
     """
     def __init__(self, image=None, x=None, w=None, y=None, h=None, landmarks_xy=None, mask=None,
                  filename=None):
@@ -87,7 +88,6 @@ class DetectedFace():
         self.landmarks_xy = landmarks_xy
         self.thumbnail = None
         self.mask = dict() if mask is None else mask
-        self.hash = None
 
         self.aligned = None
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -201,17 +201,15 @@ class DetectedFace():
         -------
         alignment: dict
             The alignment dict will be returned with the keys ``x``, ``w``, ``y``, ``h``,
-            ``landmarks_xy``, ``mask``, ``hash``. The additional key ``thumb`` will be provided
-            if the detected face object contains a thumbnail.
+            ``landmarks_xy``, ``mask``. The additional key ``thumb`` will be provided if the
+            detected face object contains a thumbnail.
         """
-        alignment = dict()
-        alignment["x"] = self.x
-        alignment["w"] = self.w
-        alignment["y"] = self.y
-        alignment["h"] = self.h
-        alignment["landmarks_xy"] = self.landmarks_xy
-        alignment["hash"] = self.hash
-        alignment["mask"] = {name: mask.to_dict() for name, mask in self.mask.items()}
+        alignment = dict(x=self.x,
+                         w=self.w,
+                         y=self.y,
+                         h=self.h,
+                         landmarks_xy=self.landmarks_xy,
+                         mask={name: mask.to_dict() for name, mask in self.mask.items()})
         if self.thumbnail is not None:
             alignment["thumb"] = self.thumbnail
         logger.trace("Returning: %s", alignment)
@@ -228,8 +226,6 @@ class DetectedFace():
             ``x``, ``w``, ``y``, ``h``, ``landmarks_xy``.
             Optionally the key ``thumb`` will be provided. This is for use in the manual tool and
             contains the compressed jpg thumbnail of the face to be allocated to :attr:`thumbnail.
-            Optionally the key ``hash`` will be provided, but not all use cases will know the
-            face hash at this time.
             Optionally the key ``mask`` will be provided, but legacy alignments will not have
             this key.
         image: numpy.ndarray, optional
@@ -254,8 +250,6 @@ class DetectedFace():
         if with_thumb:
             # Thumbnails currently only used for manual tool. Default to None
             self.thumbnail = alignment.get("thumb", None)
-        # Manual tool does not know the final hash so default to None
-        self.hash = alignment.get("hash", None)
         # Manual tool and legacy alignments will not have a mask
         self.aligned = None
 
@@ -269,6 +263,42 @@ class DetectedFace():
         logger.trace("Created from alignment: (x: %s, w: %s, y: %s. h: %s, "
                      "landmarks: %s, mask: %s)",
                      self.x, self.w, self.y, self.h, self.landmarks_xy, self.mask)
+
+    def to_png_meta(self):
+        """ Return the detected face formatted for insertion into a png itxt header.
+
+        returns: dict
+            The alignments dict will be returned with the keys ``x``, ``w``, ``y``, ``h``,
+            ``landmarks_xy`` and ``mask``
+        """
+        alignment = dict(x=self.x,
+                         w=self.w,
+                         y=self.y,
+                         h=self.h,
+                         landmarks_xy=self.landmarks_xy.tolist(),
+                         mask={name: mask.to_png_meta() for name, mask in self.mask.items()})
+        return alignment
+
+    def from_png_meta(self, alignment):
+        """ Set the attributes of this class from alignments stored in a png exif header.
+
+        Parameters
+        ----------
+        alignment: dict
+            A dictionary entry for a face from alignments stored in a png exif header containing
+            the keys ``x``, ``w``, ``y``, ``h``, ``landmarks_xy`` and ``mask``
+        """
+        self.x = alignment["x"]
+        self.w = alignment["w"]
+        self.y = alignment["y"]
+        self.h = alignment["h"]
+        self.landmarks_xy = np.array(alignment["landmarks_xy"], dtype="float32")
+        self.mask = dict()
+        for name, mask_dict in alignment["mask"].items():
+            self.mask[name] = Mask()
+            self.mask[name].from_dict(mask_dict)
+        logger.trace("Created from png exif header: (x: %s, w: %s, y: %s. h: %s, landmarks: %s, "
+                     "mask: %s)", self.x, self.w, self.y, self.h, self.landmarks_xy, self.mask)
 
     def _image_to_face(self, image):
         """ set self.image to be the cropped face from detected bounding box """
@@ -629,6 +659,25 @@ class Mask():
         logger.trace({k: v if k != "mask" else type(v) for k, v in retval.items()})
         return retval
 
+    def to_png_meta(self):
+        """ Convert the mask to a dictionary supported by png itxt headers.
+
+        Returns
+        -------
+        dict:
+            The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
+            ``affine_matrix``, ``interpolator``, ``stored_size``
+        """
+        retval = dict()
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
+            val = getattr(self, self._attr_name(key))
+            if isinstance(val, np.ndarray):
+                retval[key] = val.tolist()
+            else:
+                retval[key] = val
+        logger.trace({k: v if k != "mask" else type(v) for k, v in retval.items()})
+        return retval
+
     def from_dict(self, mask_dict):
         """ Populates the :class:`Mask` from a dictionary loaded from an alignments file.
 
@@ -639,8 +688,11 @@ class Mask():
             ``affine_matrix``, ``interpolator``, ``stored_size``
         """
         for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
-            setattr(self, self._attr_name(key), mask_dict[key])
-            logger.trace("%s - %s", key, mask_dict[key] if key != "mask" else type(mask_dict[key]))
+            val = mask_dict[key]
+            if key == "affine_matrix" and not isinstance(val, np.ndarray):
+                val = np.array(val, dtype="float64")
+            setattr(self, self._attr_name(key), val)
+            logger.trace("%s - %s", key, val if key != "mask" else type(val))
 
     @staticmethod
     def _attr_name(dict_key):
@@ -801,3 +853,69 @@ class BlurMask():  # pylint:disable=too-few-public-methods
                   for kword in self._kwarg_requirements[self._blur_type]}
         logger.trace("BlurMask kwargs: %s", retval)
         return retval
+
+
+_HASHES_SEEN = dict()
+
+
+def update_legacy_png_header(filename, alignments):
+    """ Update a legacy extracted face from pre v2.1 alignments by placing the alignment data for
+    the face in the png exif header for the given filename with the given alignment data.
+
+    If the given file is not a .png then a png is created and the original file is removed
+
+    Parameters
+    ----------
+    filename: str
+        The image file to update
+    alignments: :class:`lib.align.alignments.Alignments`
+        The alignments data the contains the information to store in the image header. This must be
+        a v2.0 or less alignments file as later versions no longer store the face hash (unrequired)
+
+    Returns
+    -------
+    dict
+        The metadata that has been applied to the given image
+    """
+    if alignments.version > 2.0:
+        raise FaceswapError("The faces being passed in do not correspond to the given Alignments "
+                            "file. Please double check your sources and try again.")
+    # Track hashes for multiple files with the same hash. Not the most robust but should be
+    # effective enough
+    folder = os.path.dirname(filename)
+    if folder not in _HASHES_SEEN:
+        _HASHES_SEEN[folder] = dict()
+    hashes_seen = _HASHES_SEEN[folder]
+
+    in_image = read_image(filename, raise_error=True)
+    in_hash = sha1(in_image).hexdigest()
+    hashes_seen[in_hash] = hashes_seen.get(in_hash, -1) + 1
+
+    alignment = alignments.hashes_to_alignment.get(in_hash)
+    if not alignment:
+        logger.debug("Alignments not found for image: '%s'", filename)
+        return None
+
+    detected_face = DetectedFace()
+    detected_face.from_alignment(alignment)
+    # For dupe hash handling, make sure we get a different filename for repeat hashes
+    src_fname, face_idx = list(alignments.hashes_to_frame[in_hash].items())[hashes_seen[in_hash]]
+    orig_filename = "{}_{}.png".format(os.path.splitext(src_fname)[0], face_idx)
+    meta = dict(alignments=detected_face.to_png_meta(),
+                source=dict(alignments_version=alignments.version,
+                            original_filename=orig_filename,
+                            face_index=face_idx,
+                            source_filename=src_fname,
+                            source_is_video=False))  # Can't check so set false
+
+    out_filename = f"{os.path.splitext(filename)[0]}.png"  # Make sure saved file is png
+    out_image = encode_image(in_image, ".png", metadata=meta)
+
+    with open(out_filename, "wb") as out_file:
+        out_file.write(out_image)
+
+    if filename != out_filename:  # Remove the old non-png:
+        logger.debug("Removing replaced face with deprecated extension: '%s'", filename)
+        os.remove(filename)
+
+    return meta

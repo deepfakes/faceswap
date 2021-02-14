@@ -42,6 +42,8 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
     no_flip: bool
         ``True`` if the image shouldn't be randomly flipped as part of augmentation, otherwise
         ``False``
+    no_warp: bool
+        ``True`` if the image shouldn't be warped as part of augmentation, otherwise ``False``
     warp_to_landmarks: bool
         ``True`` if the random warp method should warp to similar landmarks from the other side,
         ``False`` if the standard random warp method should be used.
@@ -76,12 +78,12 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         plugin configuration options.
     """
     def __init__(self, model_input_size, model_output_shapes, coverage_ratio, augment_color,
-                 no_flip, warp_to_landmarks, alignments, config):
+                 no_flip, no_warp, warp_to_landmarks, alignments, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
-                     "coverage_ratio: %s, augment_color: %s, no_flip: %s, warp_to_landmarks: %s, "
-                     "alignments: %s, config: %s)",
+                     "coverage_ratio: %s, augment_color: %s, no_flip: %s, no_warp: %s, "
+                     "warp_to_landmarks: %s, alignments: %s, config: %s)",
                      self.__class__.__name__, model_input_size, model_output_shapes,
-                     coverage_ratio, augment_color, no_flip, warp_to_landmarks,
+                     coverage_ratio, augment_color, no_flip, no_warp, warp_to_landmarks,
                      list(alignments.keys()), config)
         self._config = config
         self._model_input_size = model_input_size
@@ -90,6 +92,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         self._augment_color = augment_color
         self._no_flip = no_flip
         self._warp_to_landmarks = warp_to_landmarks
+        self._no_warp = no_warp
         self._extract_versions = alignments["versions"]
         self._aligned_faces = alignments["aligned_faces"]
         self._masks = dict(masks=alignments.get("masks", None),
@@ -244,12 +247,12 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         processed.update(self._processing.get_targets(batch))
 
         # Random Warp # TODO change masks to have a input mask and a warped target mask
-        if not self._config["disable_warp"]:
+        if self._no_warp:
+            processed["feed"] = [self._processing.skip_warp(batch[..., :3])]
+        else:
             processed["feed"] = [self._processing.warp(batch[..., :3],
                                                        self._warp_to_landmarks,
                                                        **warp_kwargs)]
-        else:
-            processed["feed"] = [self._processing.skip_warp(batch[..., :3])]
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', processed: %s)",
                      filenames,
@@ -437,34 +440,35 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         lm_side = "a" if side == "b" else "b"
         landmarks = {key: aligned.landmarks
                      for key, aligned in self._aligned_faces[lm_side].items()}
-        closest_hashes = [self._cache["nearest_landmarks"].get(filename) for filename in filenames]
-        if None in closest_hashes:
+        closest_matches = [self._cache["nearest_landmarks"].get(filename)
+                           for filename in filenames]
+        if None in closest_matches:
             # Resize mismatched training image size landmarks
             sizes = {side: list(self._aligned_faces[side].values())[0].size
                      for side in self._aligned_faces}
             if len(set(sizes.values())) > 1:
                 scale = sizes[side] / sizes[lm_side]
                 landmarks = {key: lms * scale for key, lms in landmarks.items()}
-            closest_hashes = self._cache_closest_hashes(filenames, batch_src_points, landmarks)
+            closest_matches = self._cache_closest_matches(filenames, batch_src_points, landmarks)
 
-        batch_dst_points = np.array([landmarks[choice(hsh)] for hsh in closest_hashes])
+        batch_dst_points = np.array([landmarks[choice(fname)] for fname in closest_matches])
         logger.trace("Returning: (batch_dst_points: %s)", batch_dst_points.shape)
         return batch_dst_points
 
-    def _cache_closest_hashes(self, filenames, batch_src_points, landmarks):
+    def _cache_closest_matches(self, filenames, batch_src_points, landmarks):
         """ Cache the nearest landmarks for this batch """
-        logger.trace("Caching closest hashes")
+        logger.trace("Caching closest matches")
         dst_landmarks = list(landmarks.items())
         dst_points = np.array([lm[1] for lm in dst_landmarks])
-        batch_closest_hashes = list()
+        batch_closest_matches = list()
 
         for filename, src_points in zip(filenames, batch_src_points):
             closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
-            closest_hashes = tuple(dst_landmarks[i][0] for i in closest)
-            self._cache["nearest_landmarks"][filename] = closest_hashes
-            batch_closest_hashes.append(closest_hashes)
-        logger.trace("Cached closest hashes")
-        return batch_closest_hashes
+            closest_matches = tuple(dst_landmarks[i][0] for i in closest)
+            self._cache["nearest_landmarks"][filename] = closest_matches
+            batch_closest_matches.append(closest_matches)
+        logger.trace("Cached closest matches")
+        return batch_closest_matches
 
 
 class ImageAugmentation():

@@ -62,6 +62,7 @@ Handles detected face objects and their associated masks.
    ~lib.align.detected_face.BlurMask
    ~lib.align.detected_face.DetectedFace
    ~lib.align.detected_face.Mask
+   ~lib.align.detected_face.update_legacy_png_header
 
 .. rubric:: Module
 

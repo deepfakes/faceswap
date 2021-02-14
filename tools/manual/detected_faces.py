@@ -20,7 +20,7 @@ from tqdm import tqdm
 from lib.align import Alignments, AlignedFace, DetectedFace
 from lib.gui.custom_widgets import PopupProgress
 from lib.gui.utils import FileHandler
-from lib.image import (SingleFrameLoader, ImagesLoader, ImagesSaver, encode_image_with_hash,
+from lib.image import (SingleFrameLoader, ImagesLoader, ImagesSaver, encode_image,
                        generate_thumbnail)
 from lib.multithreading import MultiThread
 from lib.utils import get_folder
@@ -370,12 +370,6 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         thread.check_and_raise_error()
         if not thread.is_alive():
             thread.join()
-            # Update hashes in alignments file.
-            progress_bar.update_title("Saving Alignments...")
-            self._alignments.backup()
-            self._alignments.save()
-            self._updated_frame_indices.clear()
-            self._tk_unsaved.set(False)
             progress_bar.stop()
             return
 
@@ -398,23 +392,29 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         """
         saver = ImagesSaver(str(get_folder(output_folder)), as_bytes=True)
         loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
+        extension = ".png"
+
         for frame_idx, (filename, image) in enumerate(loader.load()):
             logger.trace("Outputting frame: %s: %s", frame_idx, filename)
-            basename = os.path.basename(filename)
-            frame_name = os.path.splitext(basename)[0]
-            extension = ".png"
-            final_faces = []
+            src_filename = os.path.basename(filename)
+            frame_name = os.path.splitext(src_filename)[0]
             progress_queue.put(1)
+
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
                 output = "{}_{}{}".format(frame_name, str(face_idx), extension)
                 aligned = AlignedFace(face.landmarks_xy,
                                       image=image,
                                       centering="head",
                                       size=512)  # TODO user selectable size
-                face.hash, b_image = encode_image_with_hash(aligned.face, extension)
+                meta = dict(alignments=face.to_png_meta(),
+                            source=dict(alignments_version=self._alignments.version,
+                                        original_filename=output,
+                                        face_index=face_idx,
+                                        source_filename=src_filename,
+                                        source_is_video=self._globals.is_video))
+
+                b_image = encode_image(aligned.face, extension, metadata=meta)
                 saver.save(output, b_image)
-                final_faces.append(face.to_alignment())
-            self._alignments.data[basename]["faces"] = final_faces
         saver.close()
 
 

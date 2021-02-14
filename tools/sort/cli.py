@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 from lib.cli.args import FaceSwapArgs
-from lib.cli.actions import DirFullPaths, FileFullPaths, SaveFileFullPaths, Radio, Slider
+from lib.cli.actions import DirFullPaths, SaveFileFullPaths, Radio, Slider
 
 _HELPTEXT = "This command lets you sort images using various methods."
 
@@ -32,17 +32,6 @@ class SortArgs(FaceSwapArgs):
             group="data",
             help="Output directory for sorted aligned faces."))
         argument_list.append(dict(
-            opts=('-a', '--alignments'),
-            action=FileFullPaths,
-            filetypes="alignments",
-            type=str,
-            dest="alignments_path",
-            group="data",
-            help="Optional path to an alignments file. This is only used for the 'sort-by face' "
-                 "method. If not provided, the default location will be scanned. If the file "
-                 "still cannot be located, then the sorting process will analyze the full-head "
-                 "extract images, which will lead to vastly inferior results."))
-        argument_list.append(dict(
             opts=('-s', '--sort-by'),
             action=Radio,
             type=str,
@@ -55,8 +44,7 @@ class SortArgs(FaceSwapArgs):
                  "\nL|'blur': Sort faces by blurriness."
                  "\nL|'face': Use VGG Face to sort by face similarity. This uses a pairwise "
                  "clustering algorithm to check the distances between 512 features on every face "
-                 "in your set and order them appropriately. NB: You should provide an alignments "
-                 "file if using this method. Not doing so will lead to vastly inferior results."
+                 "in your set and order them appropriately."
                  "\nL|'face-cnn': Sort faces by their landmarks. You can adjust the threshold "
                  "with the '-t' (--ref_threshold) option."
                  "\nL|'face-cnn-dissim': Like 'face-cnn' but sorts by dissimilarity."

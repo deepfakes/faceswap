@@ -84,14 +84,6 @@ _DEFAULTS = dict(
         rounding=1,
         min_max=(0, 75),
         group="image augmentation"),
-    disable_warp=dict(
-        default=False,
-        info="Disable warp augmentation. Warping is integral to the Neural Network training. If "
-             "you decide to disable warping, you should only do so towards the end of a model's "
-             "training session.",
-        datatype=bool,
-        group="image augmentation",
-        fixed=False),
 
     color_lightness=dict(
         default=30,
