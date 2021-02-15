@@ -373,7 +373,7 @@ def read_image_meta(filename):
     if os.path.splitext(filename)[-1] != ".png":
         # Get the dimensions directly from the image for non-pngs
         logger.trace("Non png found. Loading file for dimensions: '%s'", filename)
-        img = cv2.imread("filename")
+        img = cv2.imread(filename)
         retval["height"], retval["width"] = img.shape[:2]
         return retval
     with open(filename, "rb") as infile:
