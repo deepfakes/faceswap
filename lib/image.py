@@ -392,8 +392,13 @@ def read_image_meta(filename):
                 retval["width"], retval["height"] = struct.unpack(">II", chunk)
                 length -= 8
             elif field == b"iTXt":
-                retval["itxt"] = eval(infile.read(length).split(b"\0\0\0\0\0", 1)[-1])
-                break
+                keyword, value = infile.read(length).split(b"\0", 1)
+                if keyword == b"faceswap":
+                    retval["itxt"] = eval(value[4:])
+                    break
+                else:
+                    logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", "ignore"))
+                    length = 0  # Reset marker for next chunk
             infile.seek(length + 4, 1)
     logger.trace("filename: %s, metadata: %s", filename, retval)
     return retval
@@ -526,14 +531,22 @@ def png_read_meta(png):
     task. OpenCV will not write any iTXt headers to the PNG file, so we make the assumption that
     the only iTXt header that exists is the one that Faceswap created for storing alignments.
     """
-    pointer = png.find(b"iTXt") - 4
-    if pointer < 0:
-        logger.trace("No metadata in png")
-        return None
-    length = struct.unpack(">I", png[pointer:pointer + 4])[0]
-    pointer += 8
-    data = png[pointer:pointer + length].split(b"\0\0\0\0\0", 1)[-1]
-    return eval(data)
+    retval = None
+    pointer = 0
+    while True:
+        pointer = png.find(b"iTXt", pointer) - 4
+        if pointer < 0:
+            logger.trace("No metadata in png")
+            break
+        length = struct.unpack(">I", png[pointer:pointer + 4])[0]
+        pointer += 8
+        keyword, value = png[pointer:pointer + length].split(b"\0", 1)
+        if keyword == b"faceswap":
+            retval = eval(value[4:])
+            break
+        logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", "ignore"))
+        pointer += length + 4
+    return retval
 
 
 def generate_thumbnail(image, size=96, quality=60):
