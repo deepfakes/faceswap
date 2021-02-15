@@ -1088,7 +1088,7 @@ class _TrainingAlignments():
         self._alignments_version = dict()
         self._image_sizes = {key: None for key in image_list}
         self._detected_faces = self._load_detected_faces(image_list)
-        self._update_legacy_facesets()
+        self._update_legacy_facesets(image_list)
 
         self._validity_check()
         self._aligned_faces = self._get_aligned_faces()
@@ -1190,9 +1190,16 @@ class _TrainingAlignments():
                    "your dataset".format(side.upper(), self._image_sizes[side], width))
             raise FaceswapError(msg)
 
-    def _update_legacy_facesets(self):
+    def _update_legacy_facesets(self, image_list):
         """ Update the png header data for legacy face sets that do not contain the meta data in
         the exif header.
+
+        Parameters
+        ----------
+        image_list: dict
+            The file paths for the images to be trained on for each side. The dictionary should
+            contain 2 keys ("a" and "b") with the values being a list of full paths corresponding
+            to each side.
         """
         if self._validate_metadata(output_warning=False):
             logger.debug("All faces contain valid header information")
@@ -1219,9 +1226,18 @@ class _TrainingAlignments():
                         leave=False):
                     result = future.result()
                     if result:
+                        filename = images[future]
+                        if os.path.splitext(filename)[-1].lower() != ".png":
+                            # Update the image list to point at newly created png
+                            del png_meta[filename]
+                            image_list[side].remove(filename)
+
+                            filename = os.path.splitext(filename)[0] + ".png"
+                            image_list[side].append(filename)
+
                         detected_face = DetectedFace()
                         detected_face.from_png_meta(future.result()["alignments"])
-                        png_meta[images[future]] = detected_face
+                        png_meta[filename] = detected_face
 
     def _get_alignments_path(self, side):
         """ Obtain the path to an alignments file for the given training side.
