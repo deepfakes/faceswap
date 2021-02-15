@@ -371,6 +371,8 @@ def read_image_meta(filename):
     """
     retval = dict()
     if os.path.splitext(filename)[-1] != ".png":
+        logger.trace("Non png found. Not scanning metadata: '%s'", filename)
+        return retval
         raise ValueError(f"Only png files are supported for reading exif data. ({filename})")
     with open(filename, "rb") as infile:
         chunk = infile.read(8)

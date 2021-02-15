@@ -1217,9 +1217,11 @@ class _TrainingAlignments():
                         desc="Updating legacy training images ({})".format(side.upper()),
                         total=len(filenames),
                         leave=False):
-                    detected_face = DetectedFace()
-                    detected_face.from_png_meta(future.result())
-                    png_meta[images[future]] = detected_face
+                    result = future.result()
+                    if result:
+                        detected_face = DetectedFace()
+                        detected_face.from_png_meta(future.result()["alignments"])
+                        png_meta[images[future]] = detected_face
 
     def _get_alignments_path(self, side):
         """ Obtain the path to an alignments file for the given training side.
@@ -1302,6 +1304,9 @@ class _TrainingAlignments():
         for side, valid in all_valid.items():
             if valid:
                 continue
+            if all(val is None for val in self._detected_faces[side].values()):
+                raise FaceswapError("There is no valid training data for side '{}'. Re-check your "
+                                    "data and try again.".format(side.upper()))
             invalid = [filename
                        for filename, meta in self._detected_faces[side].items() if not meta]
 
