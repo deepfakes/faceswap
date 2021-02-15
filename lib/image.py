@@ -370,7 +370,7 @@ def read_image_meta(filename):
     >>> faceswap_info = metadata["itxt"]
     """
     retval = dict()
-    if os.path.splitext(filename)[-1] != ".png":
+    if os.path.splitext(filename)[-1].lower() != ".png":
         # Get the dimensions directly from the image for non-pngs
         logger.trace("Non png found. Loading file for dimensions: '%s'", filename)
         img = cv2.imread(filename)
