@@ -371,9 +371,11 @@ def read_image_meta(filename):
     """
     retval = dict()
     if os.path.splitext(filename)[-1] != ".png":
-        logger.trace("Non png found. Not scanning metadata: '%s'", filename)
+        # Get the dimensions directly from the image for non-pngs
+        logger.trace("Non png found. Loading file for dimensions: '%s'", filename)
+        img = cv2.imread("filename")
+        retval["height"], retval["width"] = img.shape[:2]
         return retval
-        raise ValueError(f"Only png files are supported for reading exif data. ({filename})")
     with open(filename, "rb") as infile:
         chunk = infile.read(8)
         if chunk != b"\x89PNG\r\n\x1a\n":
