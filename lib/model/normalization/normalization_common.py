@@ -9,6 +9,14 @@ from keras import initializers, regularizers, constraints
 from keras import backend as K
 from keras.utils import get_custom_objects
 
+from lib.utils import get_backend
+
+
+if get_backend() == "amd":
+    from keras.backend import normalize_data_format  # pylint:disable=ungrouped-imports
+else:
+    from tensorflow.python.keras.utils.conv_utils import normalize_data_format
+
 
 class InstanceNormalization(Layer):
     """Instance normalization layer (Lei Ba et al, 2016, Ulyanov et al., 2016).
@@ -352,7 +360,7 @@ class GroupNormalization(Layer):
         self.beta_regularizer = regularizers.get(beta_regularizer)
         self.epsilon = epsilon
         self.group = group
-        self.data_format = K.normalize_data_format(data_format)
+        self.data_format = normalize_data_format(data_format)
 
         self.supports_masking = True
 

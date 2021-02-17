@@ -26,6 +26,7 @@
 !lib/gui
 !lib/gui/.cache/preview
 !lib/gui/.cache/icons
+!lib/model/*
 !scripts
 !plugins/
 !plugins/*
