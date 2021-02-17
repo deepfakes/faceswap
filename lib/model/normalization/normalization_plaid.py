@@ -232,6 +232,9 @@ class RMSNormalization(Layer):
     successful in NLP-based model. In some cases, LayerNorm has become an essential component
     to enable model optimization, such as in the SOTA NMT model Transformer.
 
+    RMSNorm simplifies LayerNorm by removing the mean-centering operation, or normalizing layer
+    activations with RMS statistic.
+
     Parameters
     ----------
     axis: int
@@ -254,7 +257,7 @@ class RMSNormalization(Layer):
         - RMS Normalization - https://arxiv.org/abs/1910.07467
         - Official implementation - https://github.com/bzhangGo/rmsnorm
     """
-    def __init__(self, axis=-1, epsilon=1e-8, partial=-1.0, bias=False, **kwargs):
+    def __init__(self, axis=-1, epsilon=1e-8, partial=0.0, bias=False, **kwargs):
         self.scale = None
         self.offset = 0
         super().__init__(**kwargs)
