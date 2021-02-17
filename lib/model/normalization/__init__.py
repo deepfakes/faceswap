@@ -2,9 +2,9 @@
 """ Conditional imports depending on whether the AMD version is installed or not """
 
 from lib.utils import get_backend
+from .normalization_common import *
 
-from .normalization import *
 if get_backend() == "amd":
-    from . import losses_plaid as losses
+    from .normalization_plaid import *
 else:
-    from . import losses_tf as losses
+    from .normalization_tf import *

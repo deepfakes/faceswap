@@ -11,7 +11,7 @@ from keras import Input, Model, backend as K
 
 from numpy.testing import assert_allclose
 
-from lib.model import layers, normalization
+from lib.model import layers
 from lib.utils import get_backend
 from tests.utils import has_arg
 
@@ -51,8 +51,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
     weights = layer.get_weights()
     layer.set_weights(weights)
 
-    if isinstance(layer, (layers.ReflectionPadding2D, normalization.InstanceNormalization)):
-        layer.build(input_shape)
+    layer.build(input_shape)
     expected_output_shape = layer.compute_output_shape(input_shape)
 
     # test in functional API

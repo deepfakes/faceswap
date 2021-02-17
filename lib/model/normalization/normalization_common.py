@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-""" Normalization methods for faceswap.py. """
+""" Normalization methods for faceswap.py common to both Plaid and Tensorflow Backends """
 
 import sys
 import inspect
@@ -96,7 +96,7 @@ class InstanceNormalization(Layer):
         if (self.axis is not None) and (ndim == 2):
             raise ValueError("Cannot specify axis for rank 1 tensor")
 
-        self.input_spec = InputSpec(ndim=ndim)
+        self.input_spec = InputSpec(ndim=ndim)  # pylint:disable=attribute-defined-outside-init
 
         if self.axis is None:
             shape = (1,)
@@ -119,7 +119,7 @@ class InstanceNormalization(Layer):
                                         constraint=self.beta_constraint)
         else:
             self.beta = None
-        self.built = True
+        self.built = True  # pylint:disable=attribute-defined-outside-init
 
     def call(self, inputs, training=None):  # pylint:disable=arguments-differ,unused-argument
         """This is where the layer's logic lives.
@@ -185,7 +185,7 @@ class InstanceNormalization(Layer):
             "beta_constraint": constraints.serialize(self.beta_constraint),
             "gamma_constraint": constraints.serialize(self.gamma_constraint)
         }
-        base_config = super(InstanceNormalization, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
@@ -241,9 +241,9 @@ class AdaInstanceNormalization(Layer):
                              'but the layer received an input with shape ' +
                              str(input_shape[0]) + '.')
 
-        super(AdaInstanceNormalization, self).build(input_shape)
+        super().build(input_shape)
 
-    def call(self, inputs, training=None):  # pylint:disable=unused-argument
+    def call(self, inputs, training=None):  # pylint:disable=unused-argument,arguments-differ
         """This is where the layer's logic lives.
 
         Parameters
@@ -289,10 +289,10 @@ class AdaInstanceNormalization(Layer):
             'center': self.center,
             'scale': self.scale
         }
-        base_config = super(AdaInstanceNormalization, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self, input_shape):  # pylint:disable=no-self-use
         """ Calculate the output shape from this layer.
 
         Parameters
@@ -344,7 +344,7 @@ class GroupNormalization(Layer):
                  beta_regularizer=None, epsilon=1e-6, group=32, data_format=None, **kwargs):
         self.beta = None
         self.gamma = None
-        super(GroupNormalization, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.axis = axis if isinstance(axis, (list, tuple)) else [axis]
         self.gamma_init = initializers.get(gamma_init)
         self.beta_init = initializers.get(beta_init)
@@ -365,7 +365,8 @@ class GroupNormalization(Layer):
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        self.input_spec = [InputSpec(shape=input_shape)]
+        input_spec = [InputSpec(shape=input_shape)]
+        self.input_spec = input_spec  # pylint:disable=attribute-defined-outside-init
         shape = [1 for _ in input_shape]
         if self.data_format == 'channels_last':
             channel_axis = -1
@@ -383,9 +384,9 @@ class GroupNormalization(Layer):
                                     initializer=self.beta_init,
                                     regularizer=self.beta_regularizer,
                                     name='beta')
-        self.built = True
+        self.built = True  # pylint:disable=attribute-defined-outside-init
 
-    def call(self, inputs, mask=None):  # pylint: disable=unused-argument
+    def call(self, inputs, mask=None):  # pylint:disable=unused-argument,arguments-differ
         """This is where the layer's logic lives.
 
         Parameters
@@ -479,7 +480,7 @@ class GroupNormalization(Layer):
                   'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
                   'beta_regularizer': regularizers.serialize(self.gamma_regularizer),
                   'group': self.group}
-        base_config = super(GroupNormalization, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
