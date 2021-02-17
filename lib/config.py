@@ -10,6 +10,8 @@ from collections import OrderedDict
 from configparser import ConfigParser
 from importlib import import_module
 
+from lib.utils import full_path_split
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -63,6 +65,49 @@ class FaceswapConfig():
                           info="sect_1 option_1 information")
         """
         raise NotImplementedError
+
+    def _defaults_from_plugin(self, plugin_folder):
+        """ Scan the given plugins folder for config defaults.py files and update the
+        default configuration.
+
+        Parameters
+        ----------
+        plugin_folder: str
+            The folder to scan for plugins
+        """
+        for dirpath, _, filenames in os.walk(plugin_folder):
+            default_files = [fname for fname in filenames if fname.endswith("_defaults.py")]
+            if not default_files:
+                continue
+            base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
+            # Can't use replace as there is a bug on some Windows installs that lowers some paths
+            import_path = ".".join(full_path_split(dirpath[len(base_path):])[1:])
+            plugin_type = import_path.split(".")[-1]
+            for filename in default_files:
+                self._load_defaults_from_module(filename, import_path, plugin_type)
+
+    def _load_defaults_from_module(self, filename, module_path, plugin_type):
+        """ Load the plugin's defaults module, extract defaults and add to default configuration.
+
+        Parameters
+        ----------
+        filename: str
+            The filename to load the defaults from
+        module_path: str
+            The path to load the module from
+        plugin_type: str
+            The type of plugin that the defaults are being loaded for
+        """
+        logger.debug("Adding defaults: (filename: %s, module_path: %s, plugin_type: %s",
+                     filename, module_path, plugin_type)
+        module = os.path.splitext(filename)[0]
+        section = ".".join((plugin_type, module.replace("_defaults", "")))
+        logger.debug("Importing defaults module: %s.%s", module_path, module)
+        mod = import_module("{}.{}".format(module_path, module))
+        self.add_section(title=section, info=mod._HELPTEXT)  # pylint:disable=protected-access
+        for key, val in mod._DEFAULTS.items():  # pylint:disable=protected-access
+            self.add_item(section=section, title=key, **val)
+        logger.debug("Added defaults: %s", section)
 
     @property
     def config_dict(self):
