@@ -25,7 +25,7 @@ class Config(FaceswapConfig):
             if not default_files:
                 continue
             base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
-            import_path = ".".join(full_path_split(dirpath.replace(base_path, ""))[1:])
+            import_path = ".".join(full_path_split(os.path.splitdrive(dirpath)[1].replace(os.path.splitdrive(base_path)[1], ""))[1:])
             plugin_type = import_path.split(".")[-1]
             for filename in default_files:
                 self.load_module(filename, import_path, plugin_type)
