@@ -8,6 +8,7 @@ import os
 import struct
 import sys
 
+from ast import literal_eval
 from bisect import bisect
 from concurrent import futures
 from zlib import crc32
@@ -394,7 +395,7 @@ def read_image_meta(filename):
             elif field == b"iTXt":
                 keyword, value = infile.read(length).split(b"\0", 1)
                 if keyword == b"faceswap":
-                    retval["itxt"] = eval(value[4:])
+                    retval["itxt"] = literal_eval(value[4:].decode("utf-8"))
                     break
                 else:
                     logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", "ignore"))
@@ -542,7 +543,7 @@ def png_read_meta(png):
         pointer += 8
         keyword, value = png[pointer:pointer + length].split(b"\0", 1)
         if keyword == b"faceswap":
-            retval = eval(value[4:])
+            retval = literal_eval(value[4:].decode("utf-8"))
             break
         logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", "ignore"))
         pointer += length + 4
