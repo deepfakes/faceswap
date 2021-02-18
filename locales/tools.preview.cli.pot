@@ -1,0 +1,47 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2021-02-18 23:09-0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=cp1252\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+
+
+#: tools/preview/cli.py:14
+msgid "This command allows you to preview swaps to tweak convert settings."
+msgstr ""
+
+#: tools/preview/cli.py:23
+msgid ""
+"Preview tool\n"
+"Allows you to configure your convert settings with a live preview"
+msgstr ""
+
+#: tools/preview/cli.py:33 tools/preview/cli.py:42 tools/preview/cli.py:49
+msgid "data"
+msgstr ""
+
+#: tools/preview/cli.py:35
+msgid "Input directory or video. Either a directory containing the image files you wish to process or path to a video file."
+msgstr ""
+
+#: tools/preview/cli.py:44
+msgid "Path to the alignments file for the input, if not at the default location"
+msgstr ""
+
+#: tools/preview/cli.py:51
+msgid "Model directory. A directory containing the trained model you wish to process."
+msgstr ""
+
+#: tools/preview/cli.py:58
+msgid "Swap the model. Instead of A -> B, swap B -> A"
+msgstr ""
+

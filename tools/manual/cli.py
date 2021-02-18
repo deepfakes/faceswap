@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 """ The Command Line Arguments for the Manual Editor tool. """
+import gettext
+
 from lib.cli.args import FaceSwapArgs, DirOrFileFullPaths, FileFullPaths
 
-_HELPTEXT = ("This command lets you perform various actions on frames, "
-             "faces and alignments files using visual tools.")
+
+# LOCALES
+_LANG = gettext.translation("tools.manual.cli", localedir="locales", fallback=True)
+_ = _LANG.gettext
+
+
+_HELPTEXT = _("This command lets you perform various actions on frames, "
+              "faces and alignments files using visual tools.")
 
 
 class ManualArgs(FaceSwapArgs):
@@ -12,8 +20,8 @@ class ManualArgs(FaceSwapArgs):
     @staticmethod
     def get_info():
         """ Obtain the information about what the Manual Tool does. """
-        return ("A tool to perform various actions on frames, faces and alignments files using "
-                "visual tools")
+        return _("A tool to perform various actions on frames, faces and alignments files using "
+                 "visual tools")
 
     @staticmethod
     def get_argument_list():
@@ -24,33 +32,33 @@ class ManualArgs(FaceSwapArgs):
             action=FileFullPaths,
             filetypes="alignments",
             type=str,
-            group="data",
+            group=_("data"),
             dest="alignments_path",
-            help="Path to the alignments file for the input, if not at the default location"))
+            help=_("Path to the alignments file for the input, if not at the default location")))
         argument_list.append(dict(
             opts=("-fr", "--frames"),
             action=DirOrFileFullPaths,
             filetypes="video",
             required=True,
-            group="data",
-            help="Video file or directory containing source frames that faces were extracted "
-                 "from."))
+            group=_("data"),
+            help=_("Video file or directory containing source frames that faces were extracted "
+                   "from.")))
         argument_list.append(dict(
             opts=("-t", "--thumb-regen"),
             action="store_true",
             dest="thumb_regen",
             default=False,
-            group="options",
-            help="Force regeneration of the low resolution jpg thumbnails in the alignments "
-                 "file."))
+            group=_("options"),
+            help=_("Force regeneration of the low resolution jpg thumbnails in the alignments "
+                   "file.")))
         argument_list.append(dict(
             opts=("-s", "--single-process"),
             action="store_true",
             dest="single_process",
             default=False,
-            group="options",
-            help="The process attempts to speed up generation of thumbnails by extracting from "
-                 "the video in parallel threads. For some videos, this causes the caching "
-                 "process to hang. If this happens, then set this option to generate the "
-                 "thumbnails in a slower, but more stable single thread."))
+            group=_("options"),
+            help=_("The process attempts to speed up generation of thumbnails by extracting from "
+                   "the video in parallel threads. For some videos, this causes the caching "
+                   "process to hang. If this happens, then set this option to generate the "
+                   "thumbnails in a slower, but more stable single thread.")))
         return argument_list
