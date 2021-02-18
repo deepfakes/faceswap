@@ -291,7 +291,7 @@ class Extract():  # pylint:disable=too-few-public-methods
                         source=dict(alignments_version=self._alignments.version,
                                     original_filename=output_filename,
                                     face_index=idx,
-                                    source_filename=extract_media.filename,
+                                    source_filename=os.path.basename(extract_media.filename),
                                     source_is_video=self._images.is_video))
             image = encode_image(face.aligned.face, extension, metadata=meta)
 
