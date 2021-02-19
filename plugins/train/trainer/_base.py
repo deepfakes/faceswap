@@ -1279,7 +1279,7 @@ class _TrainingAlignments():
         Ensure that each side has a full compliment of metadata.
         """
         invalid = [side.upper()
-                   for side, vers in self._alignments_version.items().items()
+                   for side, vers in self._alignments_version.items()
                    if len(vers) > 1 and any(v < 2 for v in vers) and any(v > 1 for v in vers)]
 
         if invalid:
