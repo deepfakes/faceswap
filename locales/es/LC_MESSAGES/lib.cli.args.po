@@ -5,24 +5,24 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: \n"
-"POT-Creation-Date: 2021-02-18 11:58-0000\n"
-"PO-Revision-Date: 2021-02-18 18:41+0000\n"
+"POT-Creation-Date: 2021-02-18 23:45-0000\n"
+"PO-Revision-Date: 2021-02-19 00:11+0000\n"
+"Last-Translator: \n"
 "Language-Team: \n"
+"Language: es\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: pygettext.py 1.5\n"
 "X-Generator: Poedit 2.4.2\n"
-"Last-Translator: \n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"Language: es\n"
 
-#: lib/cli/args.py:172 lib/cli/args.py:182 lib/cli/args.py:190
-#: lib/cli/args.py:200
+#: lib/cli/args.py:177 lib/cli/args.py:187 lib/cli/args.py:195
+#: lib/cli/args.py:205
 msgid "Global Options"
 msgstr "Opciones Globales"
 
-#: lib/cli/args.py:173
+#: lib/cli/args.py:178
 msgid ""
 "R|Exclude GPUs from use by Faceswap. Select the number(s) which correspond "
 "to any GPU(s) that you do not wish to be made available to Faceswap. "
@@ -34,12 +34,12 @@ msgstr ""
 "con Faceswap. Marcar todas las GPUs forzará a Faceswap a usar sólo la CPU,\n"
 "L|{}"
 
-#: lib/cli/args.py:183
+#: lib/cli/args.py:188
 msgid ""
 "Optionally overide the saved config with the path to a custom config file."
 msgstr "Usar un fichero alternativo de configuración, almacenado en esta ruta."
 
-#: lib/cli/args.py:191
+#: lib/cli/args.py:196
 msgid ""
 "Log level. Stick with INFO or VERBOSE unless you need to file an error "
 "report. Be careful with TRACE as it will generate a lot of data"
@@ -47,18 +47,18 @@ msgstr ""
 "Nivel de registro. Dejarlo en INFO o VERBOSE, a menos que necesite informar "
 "de un error. Tenga en cuenta que TRACE generará muchísima información"
 
-#: lib/cli/args.py:201
+#: lib/cli/args.py:206
 msgid "Path to store the logfile. Leave blank to store in the faceswap folder"
 msgstr ""
 "Ruta para almacenar el fichero de registro. Dejarlo en blanco para "
 "almacenarlo en la carpeta pde instalación de faceswap"
 
-#: lib/cli/args.py:294 lib/cli/args.py:303 lib/cli/args.py:311
-#: lib/cli/args.py:622 lib/cli/args.py:631
+#: lib/cli/args.py:299 lib/cli/args.py:308 lib/cli/args.py:316
+#: lib/cli/args.py:627 lib/cli/args.py:636
 msgid "Data"
 msgstr "Datos"
 
-#: lib/cli/args.py:295
+#: lib/cli/args.py:300
 msgid ""
 "Input directory or video. Either a directory containing the image files you "
 "wish to process or path to a video file. NB: This should be the source video/"
@@ -68,12 +68,12 @@ msgstr ""
 "imagen que desea procesar o la ruta a un archivo de vídeo. NB: Debe ser el "
 "vídeo/los fotogramas de origen, NO las caras de origen."
 
-#: lib/cli/args.py:304
+#: lib/cli/args.py:309
 msgid "Output directory. This is where the converted files will be saved."
 msgstr ""
 "Directorio de salida. Aquí es donde se guardarán los archivos convertidos."
 
-#: lib/cli/args.py:312
+#: lib/cli/args.py:317
 msgid ""
 "Optional path to an alignments file. Leave blank if the alignments file is "
 "at the default location."
@@ -81,13 +81,19 @@ msgstr ""
 "Ruta opcional a un archivo de alineaciones. Dejar en blanco si el archivo de "
 "alineaciones está en la ubicación por defecto."
 
-#: lib/cli/args.py:360 lib/cli/args.py:376 lib/cli/args.py:388
-#: lib/cli/args.py:420 lib/cli/args.py:438 lib/cli/args.py:450
-#: lib/cli/args.py:641 lib/cli/args.py:666 lib/cli/args.py:693
+#: lib/cli/args.py:340
+msgid ""
+"Extract faces from image or video sources.\n"
+"Extraction plugins can be configured in the 'Settings' Menu"
+msgstr ""
+
+#: lib/cli/args.py:365 lib/cli/args.py:381 lib/cli/args.py:393
+#: lib/cli/args.py:425 lib/cli/args.py:443 lib/cli/args.py:455
+#: lib/cli/args.py:646 lib/cli/args.py:671 lib/cli/args.py:698
 msgid "Plugins"
 msgstr "Extensiones"
 
-#: lib/cli/args.py:361
+#: lib/cli/args.py:366
 msgid ""
 "R|Detector to use. Some of these have configurable settings in '/config/"
 "extract.ini' or 'Settings > Configure Extract 'Plugins':\n"
@@ -110,7 +116,7 @@ msgstr ""
 "detectar más caras y tiene menos falsos positivos que otros detectores "
 "basados en GPU, pero uso muchos más recursos."
 
-#: lib/cli/args.py:377
+#: lib/cli/args.py:382
 msgid ""
 "R|Aligner to use.\n"
 "L|cv2-dnn: A CPU only landmark detector. Faster, less resource intensive, "
@@ -122,7 +128,7 @@ msgstr ""
 "pero es menos preciso. Elegir este si necesita rapidez y no usar la GPU.\n"
 "L|fan: El mejor alineador. Rápido en la GPU, y lento en la CPU."
 
-#: lib/cli/args.py:389
+#: lib/cli/args.py:394
 msgid ""
 "R|Additional Masker(s) to use. The masks generated here will all take up GPU "
 "RAM. You can select none, one or multiple masks, but the extraction may take "
@@ -153,10 +159,9 @@ msgstr ""
 "todas RAM de la GPU. Puede seleccionar una, varias o ninguna máscaras, pero "
 "la extracción tardará más cuanto más marque. Las máscaras Extended y "
 "Components son siempre generadas durante la extracción.\n"
-"L|vgg-clear: Máscara diseñada para proporcionar una segmentación "
-"inteligente de rostros principalmente frontales y libres de obstrucciones. "
-"Los rostros de perfil y las obstrucciones pueden dar lugar a un rendimiento "
-"inferior.\n"
+"L|vgg-clear: Máscara diseñada para proporcionar una segmentación inteligente "
+"de rostros principalmente frontales y libres de obstrucciones. Los rostros "
+"de perfil y las obstrucciones pueden dar lugar a un rendimiento inferior.\n"
 "L|vgg-obstructed: Máscara diseñada para proporcionar una segmentación "
 "inteligente de rostros principalmente frontales. El modelo de la máscara ha "
 "sido entrenado específicamente para reconocer algunas obstrucciones faciales "
@@ -178,7 +183,7 @@ msgstr ""
 "referencia y la máscara se extiende hacia arriba en la frente.\n"
 "(eg: `-M unet-dfl vgg-clear`, `--masker vgg-obstructed`)"
 
-#: lib/cli/args.py:421
+#: lib/cli/args.py:426
 msgid ""
 "R|Performing normalization can help the aligner better align faces with "
 "difficult lighting conditions at an extraction speed cost. Different methods "
@@ -194,12 +199,14 @@ msgstr ""
 "caras con condiciones de iluminación difíciles a un coste de velocidad de "
 "extracción. Diferentes métodos darán diferentes resultados en diferentes "
 "conjuntos. NB: Esto no afecta a la cara de salida, sólo a la entrada del "
-"alineador.\nL|none: No realice la normalización en la cara.\nL|clahe: "
-"Realice la ecualización adaptativa del histograma con contraste limitado en "
-"el rostro.\nL|hist: Iguala los histogramas de los canales RGB.\nL|mean: "
-"Normalizar los colores de la cara a la media."
+"alineador.\n"
+"L|none: No realice la normalización en la cara.\n"
+"L|clahe: Realice la ecualización adaptativa del histograma con contraste "
+"limitado en el rostro.\n"
+"L|hist: Iguala los histogramas de los canales RGB.\n"
+"L|mean: Normalizar los colores de la cara a la media."
 
-#: lib/cli/args.py:439
+#: lib/cli/args.py:444
 msgid ""
 "The number of times to re-feed the detected face into the aligner. Each time "
 "the face is re-fed into the aligner the bounding box is adjusted by a small "
@@ -216,7 +223,7 @@ msgstr ""
 "más veces se vuelva a introducir la cara en el alineador, menos "
 "microfluctuaciones se producirán, pero la extracción será más larga."
 
-#: lib/cli/args.py:451
+#: lib/cli/args.py:456
 msgid ""
 "If a face isn't found, rotate the images to try to find a face. Can find "
 "more faces at the cost of extraction speed. Pass in a single number to use "
@@ -228,13 +235,13 @@ msgstr ""
 "un solo número para usar incrementos de ese tamaño hasta 360, o pase una "
 "lista de números para enumerar exactamente qué ángulos comprobar."
 
-#: lib/cli/args.py:463 lib/cli/args.py:473 lib/cli/args.py:486
-#: lib/cli/args.py:500 lib/cli/args.py:730 lib/cli/args.py:744
-#: lib/cli/args.py:757 lib/cli/args.py:771
+#: lib/cli/args.py:468 lib/cli/args.py:478 lib/cli/args.py:491
+#: lib/cli/args.py:505 lib/cli/args.py:735 lib/cli/args.py:749
+#: lib/cli/args.py:762 lib/cli/args.py:776
 msgid "Face Processing"
 msgstr "Proceso de Caras"
 
-#: lib/cli/args.py:464
+#: lib/cli/args.py:469
 msgid ""
 "Filters out faces detected below this size. Length, in pixels across the "
 "diagonal of the bounding box. Set to 0 for off"
@@ -243,7 +250,7 @@ msgstr ""
 "a lo largo de la diagonal del cuadro delimitador. Establecer a 0 para "
 "desactivar"
 
-#: lib/cli/args.py:474 lib/cli/args.py:745
+#: lib/cli/args.py:479 lib/cli/args.py:750
 msgid ""
 "Optionally filter out people who you do not wish to process by passing in an "
 "image of that person. Should be a front portrait with a single person in the "
@@ -257,7 +264,7 @@ msgstr ""
 "uso del filtro de caras disminuirá significativamente la velocidad de "
 "extracción y no se puede garantizar su precisión."
 
-#: lib/cli/args.py:487 lib/cli/args.py:758
+#: lib/cli/args.py:492 lib/cli/args.py:763
 msgid ""
 "Optionally select people you wish to process by passing in an image of that "
 "person. Should be a front portrait with a single person in the image. "
@@ -271,7 +278,7 @@ msgstr ""
 "del filtro facial disminuirá significativamente la velocidad de extracción y "
 "no se puede garantizar su precisión."
 
-#: lib/cli/args.py:501 lib/cli/args.py:772
+#: lib/cli/args.py:506 lib/cli/args.py:777
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
 "recognition. Lower values are stricter. NB: Using face filter will "
@@ -283,12 +290,12 @@ msgstr ""
 "NB: El uso del filtro facial disminuirá significativamente la velocidad de "
 "extracción y no se puede garantizar su precisión."
 
-#: lib/cli/args.py:512 lib/cli/args.py:524 lib/cli/args.py:536
-#: lib/cli/args.py:548
+#: lib/cli/args.py:517 lib/cli/args.py:529 lib/cli/args.py:541
+#: lib/cli/args.py:553
 msgid "output"
 msgstr "salida"
 
-#: lib/cli/args.py:513
+#: lib/cli/args.py:518
 msgid ""
 "The output size of extracted faces. Make sure that the model you intend to "
 "train supports your required size. This will only need to be changed for hi-"
@@ -298,7 +305,7 @@ msgstr ""
 "pretende entrenar admite el tamaño deseado. Esto sólo tendrá que ser "
 "cambiado para los modelos de alta resolución."
 
-#: lib/cli/args.py:525
+#: lib/cli/args.py:530
 msgid ""
 "Extract every 'nth' frame. This option will skip frames when extracting "
 "faces. For example a value of 1 will extract faces from every frame, a value "
@@ -308,7 +315,7 @@ msgstr ""
 "extraer las caras. Por ejemplo, un valor de 1 extraerá las caras de cada "
 "fotograma, un valor de 10 extraerá las caras de cada 10 fotogramas."
 
-#: lib/cli/args.py:537
+#: lib/cli/args.py:542
 msgid ""
 "Automatically save the alignments file after a set amount of frames. By "
 "default the alignments file is only saved at the end of the extraction "
@@ -324,18 +331,18 @@ msgstr ""
 "ADVERTENCIA: No interrumpa el script al escribir el archivo porque podría "
 "corromperse. Poner a 0 para desactivar"
 
-#: lib/cli/args.py:549
+#: lib/cli/args.py:554
 msgid "Draw landmarks on the ouput faces for debugging purposes."
 msgstr ""
 "Dibujar puntos de referencia en las caras de salida para fines de depuración."
 
-#: lib/cli/args.py:555 lib/cli/args.py:564 lib/cli/args.py:572
-#: lib/cli/args.py:579 lib/cli/args.py:784 lib/cli/args.py:795
-#: lib/cli/args.py:803 lib/cli/args.py:822 lib/cli/args.py:828
+#: lib/cli/args.py:560 lib/cli/args.py:569 lib/cli/args.py:577
+#: lib/cli/args.py:584 lib/cli/args.py:789 lib/cli/args.py:800
+#: lib/cli/args.py:808 lib/cli/args.py:827 lib/cli/args.py:833
 msgid "settings"
 msgstr "ajustes"
 
-#: lib/cli/args.py:556
+#: lib/cli/args.py:561
 msgid ""
 "Don't run extraction in parallel. Will run each part of the extraction "
 "process separately (one after the other) rather than all at the smae time. "
@@ -345,7 +352,7 @@ msgstr ""
 "extracción por separado (una tras otra) en lugar de hacerlo todo al mismo "
 "tiempo. Útil si la VRAM es escasa."
 
-#: lib/cli/args.py:565
+#: lib/cli/args.py:570
 msgid ""
 "Skips frames that have already been extracted and exist in the alignments "
 "file"
@@ -353,19 +360,25 @@ msgstr ""
 "Omite los fotogramas que ya han sido extraídos y que existen en el archivo "
 "de alineaciones"
 
-#: lib/cli/args.py:573
+#: lib/cli/args.py:578
 msgid "Skip frames that already have detected faces in the alignments file"
 msgstr ""
 "Omitir los fotogramas que ya tienen caras detectadas en el archivo de "
 "alineaciones"
 
-#: lib/cli/args.py:580
+#: lib/cli/args.py:585
 msgid "Skip saving the detected faces to disk. Just create an alignments file"
 msgstr ""
 "No guardar las caras detectadas en el disco. Crear sólo un archivo de "
 "alineaciones"
 
-#: lib/cli/args.py:623
+#: lib/cli/args.py:607
+msgid ""
+"Swap the original faces in a source video/images to your final faces.\n"
+"Conversion plugins can be configured in the 'Settings' Menu"
+msgstr ""
+
+#: lib/cli/args.py:628
 msgid ""
 "Only required if converting from images to video. Provide The original video "
 "that the source frames were extracted from (for extracting the fps and "
@@ -375,7 +388,7 @@ msgstr ""
 "original del que se extrajeron los fotogramas de origen (para extraer los "
 "fps y el audio)."
 
-#: lib/cli/args.py:632
+#: lib/cli/args.py:637
 msgid ""
 "Model directory. The directory containing the trained model you wish to use "
 "for conversion."
@@ -383,7 +396,7 @@ msgstr ""
 "Directorio del modelo. El directorio que contiene el modelo entrenado que "
 "desea utilizar para la conversión."
 
-#: lib/cli/args.py:642
+#: lib/cli/args.py:647
 msgid ""
 "R|Performs color adjustment to the swapped face. Some of these options have "
 "configurable settings in '/config/convert.ini' or 'Settings > Configure "
@@ -423,7 +436,7 @@ msgstr ""
 "colores. Generalmente no da resultados muy satisfactorios.\n"
 "L|none: No realice el ajuste de color."
 
-#: lib/cli/args.py:667
+#: lib/cli/args.py:672
 msgid ""
 "R|Masker to use. NB: The mask you require must exist within the alignments "
 "file. You can add additional masks with the Mask Tool.\n"
@@ -473,7 +486,7 @@ msgstr ""
 "descripción. Los rostros de perfil pueden dar lugar a un rendimiento "
 "inferior."
 
-#: lib/cli/args.py:694
+#: lib/cli/args.py:699
 msgid ""
 "R|The plugin to use to output the converted images. The writers are "
 "configurable in '/config/convert.ini' or 'Settings > Configure Convert "
@@ -499,11 +512,11 @@ msgstr ""
 "L|pillow: [images] Más lento que opencv, pero tiene más opciones y soporta "
 "más formatos."
 
-#: lib/cli/args.py:713 lib/cli/args.py:720 lib/cli/args.py:814
+#: lib/cli/args.py:718 lib/cli/args.py:725 lib/cli/args.py:819
 msgid "Frame Processing"
 msgstr "Proceso de fotogramas"
 
-#: lib/cli/args.py:714
+#: lib/cli/args.py:719
 msgid ""
 "Scale the final output frames by this amount. 100%% will output the frames "
 "at source dimensions. 50%% at half size 200%% at double size"
@@ -512,7 +525,7 @@ msgstr ""
 "a los fotogramas a las dimensiones de origen. 50%% a la mitad de tamaño. 200%"
 "% al doble de tamaño"
 
-#: lib/cli/args.py:721
+#: lib/cli/args.py:726
 msgid ""
 "Frame ranges to apply transfer to e.g. For frames 10 to 50 and 90 to 100 use "
 "--frame-ranges 10-50 90-100. Frames falling outside of the selected range "
@@ -526,7 +539,7 @@ msgstr ""
 "imágenes, ¡los nombres de los archivos deben terminar con el número de "
 "fotograma!"
 
-#: lib/cli/args.py:731
+#: lib/cli/args.py:736
 msgid ""
 "If you have not cleansed your alignments file, then you can filter out faces "
 "by defining a folder here that contains the faces extracted from your input "
@@ -542,7 +555,7 @@ msgstr ""
 "especificada. Si se deja en blanco, se convertirán todas las caras que "
 "existan en el archivo de alineaciones."
 
-#: lib/cli/args.py:785
+#: lib/cli/args.py:790
 msgid ""
 "The maximum number of parallel processes for performing conversion. "
 "Converting images is system RAM heavy so it is possible to run out of memory "
@@ -559,7 +572,7 @@ msgstr ""
 "procesos que los disponibles en su sistema. Si 'singleprocess' está "
 "habilitado, este ajuste será ignorado."
 
-#: lib/cli/args.py:796
+#: lib/cli/args.py:801
 msgid ""
 "[LEGACY] This only needs to be selected if a legacy model is being loaded or "
 "if there are multiple models in the model folder"
@@ -567,7 +580,7 @@ msgstr ""
 "[LEGACY] Sólo es necesario seleccionar esta opción si se está cargando un "
 "modelo heredado si hay varios modelos en la carpeta de modelos"
 
-#: lib/cli/args.py:804
+#: lib/cli/args.py:809
 msgid ""
 "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
 "alignments file for your destination video. However, if you wish you can "
@@ -582,7 +595,7 @@ msgstr ""
 "de baja calidad. Si se encuentra un archivo de alineaciones, esta opción "
 "será ignorada."
 
-#: lib/cli/args.py:815
+#: lib/cli/args.py:820
 msgid ""
 "When used with --frame-ranges outputs the unchanged frames that are not "
 "processed instead of discarding them."
@@ -590,21 +603,28 @@ msgstr ""
 "Cuando se usa con --frame-ranges, la salida incluye los fotogramas no "
 "procesados en vez de descartarlos."
 
-#: lib/cli/args.py:823
+#: lib/cli/args.py:828
 msgid "Swap the model. Instead converting from of A -> B, converts B -> A"
 msgstr ""
 "Intercambiar el modelo. En vez de convertir de A a B, convierte de B a A"
 
-#: lib/cli/args.py:829
+#: lib/cli/args.py:834
 msgid "Disable multiprocessing. Slower but less resource intensive."
 msgstr "Desactiva el multiproceso. Es más lento, pero usa menos recursos."
 
-#: lib/cli/args.py:864 lib/cli/args.py:875 lib/cli/args.py:884
-#: lib/cli/args.py:895
+#: lib/cli/args.py:850
+msgid ""
+"Train a model on extracted original (A) and swap (B) faces.\n"
+"Training models can take a long time. Anything from 24hrs to over a week\n"
+"Model plugins can be configured in the 'Settings' Menu"
+msgstr ""
+
+#: lib/cli/args.py:869 lib/cli/args.py:880 lib/cli/args.py:889
+#: lib/cli/args.py:900
 msgid "faces"
 msgstr "caras"
 
-#: lib/cli/args.py:865
+#: lib/cli/args.py:870
 msgid ""
 "Input directory. A directory containing training images for face A. This is "
 "the original face, i.e. the face that you want to remove and replace with "
@@ -614,7 +634,7 @@ msgstr ""
 "para la cara A. Esta es la cara original, es decir, la cara que se quiere "
 "eliminar y sustituir por la cara B."
 
-#: lib/cli/args.py:876
+#: lib/cli/args.py:881
 msgid ""
 "DEPRECATED - This option will be removed in a future update. Path to "
 "alignments file for training set A. Defaults to <input-A>/alignments.json if "
@@ -624,7 +644,7 @@ msgstr ""
 "archivo de alineaciones para el conjunto de entrenamiento A. Por defecto es "
 "<input-A>/alignments.json si no se proporciona."
 
-#: lib/cli/args.py:885
+#: lib/cli/args.py:890
 msgid ""
 "Input directory. A directory containing training images for face B. This is "
 "the swap face, i.e. the face that you want to place onto the head of person "
@@ -634,7 +654,7 @@ msgstr ""
 "para la cara B. Esta es la cara de intercambio, es decir, la cara que se "
 "quiere colocar en la cabeza de la persona A."
 
-#: lib/cli/args.py:896
+#: lib/cli/args.py:901
 msgid ""
 "DEPRECATED - This option will be removed in a future update. Path to "
 "alignments file for training set B. Defaults to <input-B>/alignments.json if "
@@ -644,11 +664,11 @@ msgstr ""
 "archivo de alineaciones para el conjunto de entrenamiento B. Por defecto es "
 "<input-B>/alignments.json si no se proporciona."
 
-#: lib/cli/args.py:904 lib/cli/args.py:916
+#: lib/cli/args.py:909 lib/cli/args.py:921
 msgid "model"
 msgstr "modelo"
 
-#: lib/cli/args.py:905
+#: lib/cli/args.py:910
 msgid ""
 "Model directory. This is where the training data will be stored. You should "
 "always specify a new folder for new models. If starting a new model, select "
@@ -662,7 +682,7 @@ msgstr ""
 "carpeta que no exista (que se creará). Si continúa entrenando un modelo "
 "existente, especifique la ubicación del modelo existente."
 
-#: lib/cli/args.py:917
+#: lib/cli/args.py:922
 msgid ""
 "R|Select which trainer to use. Trainers can be configured from the Settings "
 "menu or the config folder.\n"
@@ -707,12 +727,12 @@ msgstr ""
 "recursos (se necesita una GPU con una buena cantidad de VRAM). Bueno para "
 "los detalles, pero más susceptible a las diferencias de color."
 
-#: lib/cli/args.py:944 lib/cli/args.py:956 lib/cli/args.py:967
-#: lib/cli/args.py:1053
+#: lib/cli/args.py:949 lib/cli/args.py:961 lib/cli/args.py:972
+#: lib/cli/args.py:1058
 msgid "training"
 msgstr "entrenamiento"
 
-#: lib/cli/args.py:945
+#: lib/cli/args.py:950
 msgid ""
 "Batch size. This is the number of images processed through the model for "
 "each side per iteration. NB: As the model is fed 2 sides at a time, the "
@@ -725,7 +745,7 @@ msgstr ""
 "momento es el doble del número que se establece aquí. Los lotes más grandes "
 "requieren más RAM de la GPU."
 
-#: lib/cli/args.py:957
+#: lib/cli/args.py:962
 msgid ""
 "Length of training in iterations. This is only really used for automation. "
 "There is no 'correct' number of iterations a model should be trained for. "
@@ -740,22 +760,22 @@ msgstr ""
 "automáticamente en un número determinado de iteraciones, puede establecer "
 "ese valor aquí."
 
-#: lib/cli/args.py:968
+#: lib/cli/args.py:973
 msgid ""
 "Use the Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."
 msgstr ""
 "Utilice la estrategia de distribución en espejo de Tensorflow para entrenar "
 "en múltiples GPUs."
 
-#: lib/cli/args.py:978 lib/cli/args.py:988
+#: lib/cli/args.py:983 lib/cli/args.py:993
 msgid "Saving"
 msgstr "Guardar"
 
-#: lib/cli/args.py:979
+#: lib/cli/args.py:984
 msgid "Sets the number of iterations between each model save."
 msgstr "Establece el número de iteraciones entre cada guardado del modelo."
 
-#: lib/cli/args.py:989
+#: lib/cli/args.py:994
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
@@ -763,11 +783,11 @@ msgstr ""
 "Establece el número de iteraciones antes de guardar una copia de seguridad "
 "del modelo en su estado actual. Establece 0 para que esté desactivado."
 
-#: lib/cli/args.py:996 lib/cli/args.py:1007 lib/cli/args.py:1018
+#: lib/cli/args.py:1001 lib/cli/args.py:1012 lib/cli/args.py:1023
 msgid "timelapse"
 msgstr "intervalo"
 
-#: lib/cli/args.py:997
+#: lib/cli/args.py:1002
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -781,7 +801,7 @@ msgstr ""
 "para crear el timelapse. También debe suministrar un parámetro --timelapse-"
 "output y un parámetro --timelapse-input-B."
 
-#: lib/cli/args.py:1008
+#: lib/cli/args.py:1013
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -795,7 +815,7 @@ msgstr ""
 "para crear el timelapse. También debe suministrar un parámetro --timelapse-"
 "output y un parámetro --timelapse-input-A."
 
-#: lib/cli/args.py:1019
+#: lib/cli/args.py:1024
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -807,24 +827,24 @@ msgstr ""
 "Si se suministran las carpetas de entrada pero no la carpeta de salida, se "
 "guardará por defecto en la carpeta del modelo /timelapse/"
 
-#: lib/cli/args.py:1031 lib/cli/args.py:1038 lib/cli/args.py:1045
+#: lib/cli/args.py:1036 lib/cli/args.py:1043 lib/cli/args.py:1050
 msgid "preview"
 msgstr "previsualización"
 
-#: lib/cli/args.py:1032
+#: lib/cli/args.py:1037
 msgid ""
 "Percentage amount to scale the preview by. 100%% is the model output size."
 msgstr ""
 "Cantidad porcentual para escalar la vista previa. 100%% es el tamaño de "
 "salida del modelo."
 
-#: lib/cli/args.py:1039
+#: lib/cli/args.py:1044
 msgid "Show training preview output. in a separate window."
 msgstr ""
 "Mostrar la salida de la vista previa del entrenamiento. en una ventana "
 "separada."
 
-#: lib/cli/args.py:1046
+#: lib/cli/args.py:1051
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
@@ -832,7 +852,7 @@ msgstr ""
 "Escribe el resultado del entrenamiento en un archivo. La imagen se "
 "almacenará en la raíz de su carpeta FaceSwap."
 
-#: lib/cli/args.py:1054
+#: lib/cli/args.py:1059
 msgid ""
 "Disables TensorBoard logging. NB: Disabling logs means that you will not be "
 "able to use the graph or analysis for this session in the GUI."
@@ -840,12 +860,12 @@ msgstr ""
 "Desactiva el registro de TensorBoard. NB: Desactivar los registros significa "
 "que no podrá utilizar el gráfico o el análisis de esta sesión en la GUI."
 
-#: lib/cli/args.py:1061 lib/cli/args.py:1070 lib/cli/args.py:1079
-#: lib/cli/args.py:1088
+#: lib/cli/args.py:1066 lib/cli/args.py:1075 lib/cli/args.py:1084
+#: lib/cli/args.py:1093
 msgid "augmentation"
 msgstr "aumento"
 
-#: lib/cli/args.py:1062
+#: lib/cli/args.py:1067
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
@@ -855,7 +875,7 @@ msgstr ""
 "conjunto de caras opuestas en lugar de deformar la cara al azar. Esta es la "
 "forma 'dfaker' de hacer la deformación."
 
-#: lib/cli/args.py:1071
+#: lib/cli/args.py:1076
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
@@ -866,7 +886,7 @@ msgstr ""
 "general, esto debería dejarse sin efecto, excepto durante el 'entrenamiento "
 "de ajuste'."
 
-#: lib/cli/args.py:1080
+#: lib/cli/args.py:1085
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
@@ -876,7 +896,7 @@ msgstr ""
 "diferencias de color entre los conjuntos A y B, con un mayor coste de tiempo "
 "de entrenamiento. Activa esta opción para desactivar el aumento de color."
 
-#: lib/cli/args.py:1089
+#: lib/cli/args.py:1094
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "
@@ -889,6 +909,6 @@ msgstr ""
 "esta opción desde el principio, es probable que arruine el modelo y se "
 "obtengan resultados terribles."
 
-#: lib/cli/args.py:1114
+#: lib/cli/args.py:1119
 msgid "Output to Shell console instead of GUI console"
 msgstr "Salida a la consola Shell en lugar de la consola GUI"
