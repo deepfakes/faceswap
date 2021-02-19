@@ -1275,11 +1275,13 @@ class _TrainingAlignments():
     def _validity_check(self):
         """ Check the validity of the finally loaded data.
 
-        Ensure that each side has consistent alignments versions.
+        Ensure that each side contains alignments data that was extracted with the same centering.
         Ensure that each side has a full compliment of metadata.
         """
         invalid = [side.upper()
-                   for side, version in self._alignments_version.items() if len(version) > 1]
+                   for side, vers in self._alignments_version.items().items()
+                   if len(vers) > 1 and any(v < 2 for v in vers) and any(v > 1 for v in vers)]
+
         if invalid:
             raise FaceswapError("Mixing legacy and full head extracted facesets is not supported. "
                                 "The following side(s) contain a mix of extracted face "
