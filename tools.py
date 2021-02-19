@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ The master tools.py script """
+import gettext
 import os
 import sys
 
@@ -8,11 +9,17 @@ from importlib import import_module
 # Importing the various tools
 from lib.cli.args import FullHelpArgumentParser
 
+
+# LOCALES
+_LANG = gettext.translation("tools", localedir="locales", fallback=True)
+_ = _LANG.gettext
+
+
 # Python version check
 if sys.version_info[0] < 3:
-    raise Exception("This program requires at least python3.2")
-if sys.version_info[0] == 3 and sys.version_info[1] < 2:
-    raise Exception("This program requires at least python3.2")
+    raise Exception("This program requires at least python3.7")
+if sys.version_info[0] == 3 and sys.version_info[1] < 7:
+    raise Exception("This program requires at least python3.7")
 
 
 def bad_args(*args):  # pylint:disable=unused-argument
@@ -36,10 +43,8 @@ def _get_cli_opts():
 
 
 if __name__ == "__main__":
-    _TOOLS_WARNING = "Please backup your data and/or test the tool you want "
-    _TOOLS_WARNING += "to use with a smaller data set to make sure you "
-    _TOOLS_WARNING += "understand how it works."
-    print(_TOOLS_WARNING)
+    print(_("Please backup your data and/or test the tool you want to use with a smaller data set "
+            "to make sure you understand how it works."))
 
     PARSER = FullHelpArgumentParser()
     SUBPARSER = PARSER.add_subparsers()

@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """ The master faceswap.py script """
+import gettext
 import sys
 
-from lib.cli import args
+from lib.cli import args as cli_args
 from lib.config import generate_configs
+
+
+# LOCALES
+_LANG = gettext.translation("faceswap", localedir="locales", fallback=True)
+_ = _LANG.gettext
+
 
 if sys.version_info[0] < 3:
     raise Exception("This program requires at least python3.7")
@@ -11,12 +18,12 @@ if sys.version_info[0] == 3 and sys.version_info[1] < 7:
     raise Exception("This program requires at least python3.7")
 
 
-_PARSER = args.FullHelpArgumentParser()
+_PARSER = cli_args.FullHelpArgumentParser()
 
 
 def _bad_args(*args):  # pylint:disable=unused-argument
     """ Print help to console when bad arguments are provided. """
-    print(args)
+    print(cli_args)
     _PARSER.print_help()
     sys.exit(0)
 
@@ -33,12 +40,12 @@ def _main():
     generate_configs()
 
     subparser = _PARSER.add_subparsers()
-    args.ExtractArgs(subparser, "extract", "Extract the faces from pictures")
-    args.TrainArgs(subparser, "train", "This command trains the model for the two faces A and B")
-    args.ConvertArgs(subparser,
-                     "convert",
-                     "Convert a source image to a new one with the face swapped")
-    args.GuiArgs(subparser, "gui", "Launch the Faceswap Graphical User Interface")
+    cli_args.ExtractArgs(subparser, "extract", _("Extract the faces from pictures or a video"))
+    cli_args.TrainArgs(subparser, "train", _("Train a model for the two faces A and B"))
+    cli_args.ConvertArgs(subparser,
+                         "convert",
+                         _("Convert source pictures or video to a new one with the face swapped"))
+    cli_args.GuiArgs(subparser, "gui", _("Launch the Faceswap Graphical User Interface"))
     _PARSER.set_defaults(func=_bad_args)
     arguments = _PARSER.parse_args()
     arguments.func(arguments)

@@ -5,8 +5,11 @@
 !*.inf
 !*.keep
 !*.md
+!*.mo
 !*.nsi
 !*.png
+!*.po
+!*.pot
 !*.py
 !*.rst
 !*.sh
@@ -21,6 +24,9 @@
 !docs/full
 !docs/_static
 !config/
+!locales/
+!locales/*
+!locales/*/LC_MESSAGES
 !lib/
 !lib/*
 !lib/gui
