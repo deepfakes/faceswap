@@ -138,12 +138,12 @@ class Alignments(AlignmentsBase):
             logger.warning("Skip Existing/Skip Faces selected, but no alignments file found!")
             return data
 
-        data = self._serializer.load(self.file)
+        data = super()._load()
 
         if skip_faces:
             # Remove items from alignments that have no faces so they will
             # be re-detected
-            del_keys = [key for key, val in data.items() if not val]
+            del_keys = [key for key, val in data.items() if not val["faces"]]
             logger.debug("Frames with no faces selected for redetection: %s", len(del_keys))
             for key in del_keys:
                 if key in data:
