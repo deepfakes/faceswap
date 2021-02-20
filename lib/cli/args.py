@@ -688,7 +688,9 @@ class ConvertArgs(ExtractConvertArgs):
                    "\nL|unet-dfl: Mask designed to provide smart segmentation of mostly frontal "
                    "faces. The mask model has been trained by community members and will need "
                    "testing for further description. Profile faces may result in sub-par "
-                   "performance.")))
+                   "performance."
+                   "\nL|predicted: If the 'Learn Mask' option was enabled during training, this "
+                   "will use the mask that was created by the trained model.")))
         argument_list.append(dict(
             opts=("-w", "--writer"),
             action=Radio,
