@@ -1349,6 +1349,9 @@ class _TrainingAlignments():
             If at least one face in the training data does not contain the selected mask type
         """
         mask_type = self._config["mask_type"]
+        if mask_type is None:
+            logger.debug("No mask selected. Not validating")
+            return
         invalid = {side: [filename for filename, detected_face in faces.items()
                           if mask_type not in detected_face.mask]
                    for side, faces in self._detected_faces.items()}
