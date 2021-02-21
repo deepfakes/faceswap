@@ -614,7 +614,8 @@ class Mask():
         roi = np.array([center - crop_size // 2, center + crop_size // 2]).ravel()
 
         self._sub_crop["size"] = crop_size
-        self._sub_crop["slice_in"] = [slice(max(roi[1], 0), roi[3]), slice(max(roi[0], 0), roi[2])]
+        self._sub_crop["slice_in"] = [slice(max(roi[1], 0), max(roi[3], 0)),
+                                      slice(max(roi[0], 0), max(roi[2], 0))]
         self._sub_crop["slice_out"] = [slice(max(roi[1] * -1, 0),
                                              crop_size - max(0, roi[3] - self.stored_size)),
                                        slice(max(roi[0] * -1, 0),
