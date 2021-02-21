@@ -4,17 +4,17 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
+"Project-Id-Version: faceswap.spanish\n"
 "POT-Creation-Date: 2021-02-18 23:45-0000\n"
-"PO-Revision-Date: 2021-02-19 00:11+0000\n"
+"PO-Revision-Date: 2021-02-19 17:37+0000\n"
 "Last-Translator: \n"
-"Language-Team: \n"
+"Language-Team: tokafondo\n"
 "Language: es\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 2.4.2\n"
+"X-Generator: Poedit 2.3\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: lib/cli/args.py:177 lib/cli/args.py:187 lib/cli/args.py:195
@@ -86,6 +86,8 @@ msgid ""
 "Extract faces from image or video sources.\n"
 "Extraction plugins can be configured in the 'Settings' Menu"
 msgstr ""
+"Extrae caras de fuentes de imagen o video.\n"
+"Los plugins de extracción pueden ser configuradas en el menú de 'Ajustes'"
 
 #: lib/cli/args.py:365 lib/cli/args.py:381 lib/cli/args.py:393
 #: lib/cli/args.py:425 lib/cli/args.py:443 lib/cli/args.py:455
@@ -377,6 +379,10 @@ msgid ""
 "Swap the original faces in a source video/images to your final faces.\n"
 "Conversion plugins can be configured in the 'Settings' Menu"
 msgstr ""
+"Cambia las caras originales de un vídeo/imágenes de origen por las caras "
+"finales.\n"
+"Los plugins de conversión pueden ser configurados en el menú \"Configuración"
+"\""
 
 #: lib/cli/args.py:628
 msgid ""
@@ -618,6 +624,11 @@ msgid ""
 "Training models can take a long time. Anything from 24hrs to over a week\n"
 "Model plugins can be configured in the 'Settings' Menu"
 msgstr ""
+"Entrene un modelo con las caras originales (A) e intercambiadas (B) "
+"extraídas.\n"
+"El entrenamiento de los modelos puede llevar mucho tiempo. Desde 24 horas "
+"hasta más de una semana.\n"
+"Los plugins de los modelos pueden configurarse en el menú \"Ajustes\""
 
 #: lib/cli/args.py:869 lib/cli/args.py:880 lib/cli/args.py:889
 #: lib/cli/args.py:900
