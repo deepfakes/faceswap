@@ -479,6 +479,7 @@ class PoseEstimate():
         self._camera_matrix = self._get_camera_matrix()
         self._rotation, self._translation = self._solve_pnp(landmarks)
         self._offset = self._get_offset()
+        self._pitch_yaw = None
 
     @property
     def xyz_2d(self):
@@ -499,6 +500,28 @@ class PoseEstimate():
         from the center of the face (between the eyes) or center of the head (middle of skull)
         rather than the nose area. """
         return self._offset
+
+    @property
+    def pitch(self):
+        """ float: The pitch of the aligned face in eular angles """
+        if not self._pitch_yaw:
+            self._get_pitch_yaw()
+        return self._pitch_yaw[0]
+
+    @property
+    def yaw(self):
+        """ float: The yaw of the aligned face in eular angles """
+        if not self._pitch_yaw:
+            self._get_pitch_yaw()
+        return self._pitch_yaw[1]
+
+    def _get_pitch_yaw(self):
+        """ Obtain the yaw and pitch from the :attr:`_rotation` in eular angles. """
+        proj_matrix = np.zeros((3, 4), dtype="float32")
+        proj_matrix[:3, :3] = cv2.Rodrigues(self._rotation)[0]
+        euler = cv2.decomposeProjectionMatrix(proj_matrix)[-1]
+        self._pitch_yaw = (euler[0][0], euler[1][0])
+        logger.trace("yaw_pitch: %s", self._pitch_yaw)
 
     @classmethod
     def _get_camera_matrix(cls):
