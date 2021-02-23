@@ -552,7 +552,7 @@ class Alignments():
         Parameters
         ----------
         filter_dict: dict
-            Dictionary of source filenames ask key with a list of face indices to filter as value.
+            Dictionary of source filenames as key with a list of face indices to filter as value.
         filter_out: bool, optional
             ``True`` if faces should be removed from :attr:`data` when there is a corresponding
             match in the given filter_dict. ``False`` if faces should be kept in :attr:`data` when

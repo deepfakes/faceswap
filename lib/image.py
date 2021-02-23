@@ -7,6 +7,7 @@ import subprocess
 import os
 import struct
 import sys
+import tempfile
 
 from ast import literal_eval
 from bisect import bisect
@@ -446,6 +447,76 @@ def read_image_meta_batch(filenames):
             yield retval
 
 
+def pack_to_itxt(metadata):
+    """ Pack the given metadata dictionary to a PNG iTXt header field.
+
+    Parameters
+    ----------
+    metadata: dict or bytes
+        The dictionary to write to the header. Can be pre-encoded as utf-8.
+
+    Returns
+    -------
+    bytes
+        A byte encoded PNG iTXt field, including chunk header and CRC
+    """
+    if not isinstance(metadata, bytes):
+        metadata = str(metadata).encode("utf-8", "strict")
+    key = "faceswap".encode("latin-1", "strict")
+
+    chunk = key + b"\0\0\0\0\0" + metadata
+    crc = struct.pack(">I", crc32(chunk, crc32(b"iTXt")) & 0xFFFFFFFF)
+    length = struct.pack(">I", len(chunk))
+    retval = length + b"iTXt" + chunk + crc
+    return retval
+
+
+def update_existing_metadata(filename, metadata):
+    """ Update the png header metadata for an existing .png extracted face file on the filesystem.
+
+    Parameters
+    ----------
+    filename: str
+        The full path to the face to be updated
+    metadata: dict or bytes
+        The dictionary to write to the header. Can be pre-encoded as utf-8.
+    """
+
+    with tempfile.NamedTemporaryFile(dir=os.path.dirname(filename),
+                                     delete=False) as tmp, open(filename, "rb") as png:
+        chunk = png.read(8)
+        if chunk != b"\x89PNG\r\n\x1a\n":
+            raise ValueError(f"Invalid header found in png: {filename}")
+        tmp.write(chunk)
+        while True:
+            chunk = png.read(8)
+            length, field = struct.unpack(">I4s", chunk)
+            logger.trace("Read chunk: (chunk: %s, length: %s, field: %s", chunk, length, field)
+
+            if field == b"IEND":  # End of PNG
+                logger.trace("Closing png")
+                tmp.write(chunk)
+                break
+
+            if field != b"iTXt":  # Write chunk straight out to tmp file
+                logger.trace("Copying existing chunk")
+                tmp.write(chunk + png.read(length + 4))  # Header + CRC
+                continue
+
+            keyword, value = png.read(length).split(b"\0", 1)
+            if keyword != b"faceswap":
+                # Write existing non fs-iTXt data + CRC
+                logger.trace("Copying non-faceswap iTXt chunk: %s", keyword)
+                tmp.write(keyword + b"\0" + value + png.read(4))
+                continue
+
+            logger.trace("Updating faceswap iTXt chunk")
+            tmp.write(pack_to_itxt(metadata))
+            png.seek(4, 1)  # Skip old CRC
+
+    os.replace(tmp.name, filename)
+
+
 def encode_image(image, extension, metadata=None):
     """ Encode an image.
 
@@ -499,17 +570,8 @@ def png_write_meta(png, data):
     PNG Specification: https://www.w3.org/TR/2003/REC-PNG-20031110/
 
     """
-    if not isinstance(data, bytes):
-        data = str(data).encode("utf-8", "strict")
-    key = "faceswap".encode("latin-1", "strict")
-
     split = png.find(b"IDAT") - 4
-    header, image = png[:split], png[split:]
-
-    chunk = key + b"\0\0\0\0\0" + data
-    crc = struct.pack(">I", crc32(chunk, crc32(b"iTXt")) & 0xFFFFFFFF)
-    length = struct.pack(">I", len(chunk))
-    retval = header + length + b"iTXt" + chunk + crc + image
+    retval = png[:split] + pack_to_itxt(data) + png[split:]
     return retval
 
 

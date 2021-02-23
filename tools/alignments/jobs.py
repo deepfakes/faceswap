@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from lib.align import DetectedFace, _EXTRACT_RATIOS
 from lib.align.alignments import _VERSION
-from lib.image import encode_image, generate_thumbnail, ImagesSaver
+from lib.image import encode_image, generate_thumbnail, ImagesSaver, update_existing_metadata
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .media import ExtractedFaces, Faces, Frames
@@ -662,6 +662,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         logger.info("[REMOVE FACES FROM ALIGNMENTS]")  # Tidy up cli output
 
         frame_face_indices = self._items.items
+
         if not frame_face_indices:
             logger.error("No matching faces found in your faces folder. This would remove all "
                          "faces from your alignments file. Process aborted.")
@@ -670,12 +671,43 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         pre_face_count = self._alignments.faces_count
         self._alignments.filter_faces(frame_face_indices, filter_out=False)
         del_count = pre_face_count - self._alignments.faces_count
-
         if del_count == 0:
             logger.info("No changes made to alignments file. Exiting")
             return
 
         logger.info("%s alignment(s) were removed from alignments file", del_count)
+
+        # PNG Header Updates
+        updated_headers = 0
+        for file_info in tqdm(self._items.file_list_sorted, desc="Updating PNG Headers"):
+            frame = file_info["source_filename"]
+            face_index = file_info["face_index"]
+            new_index = frame_face_indices[frame].index(face_index)
+
+            if new_index == face_index:  # face index has not changed
+                continue
+            fullpath = os.path.join(self._items.folder, file_info["current_filename"])
+            logger.debug("Updating png header for '%s': face index from %s to %s",
+                         fullpath, face_index, new_index)
+
+            # Update file_list_sorted for rename task
+            orig_filename = "{}_{}.png".format(os.path.splitext(frame)[0], new_index)
+            file_info["face_index"] = new_index
+            file_info["original_filename"] = orig_filename
+
+            face = DetectedFace()
+            face.from_alignment(self._alignments.get_faces_in_frame(frame)[new_index])
+            meta = dict(alignments=face.to_png_meta(),
+                        source=dict(alignments_version=file_info["alignments_version"],
+                                    original_filename=orig_filename,
+                                    face_index=new_index,
+                                    source_filename=frame,
+                                    source_is_video=file_info["source_is_video"]))
+            update_existing_metadata(fullpath, meta)
+            updated_headers += 1
+
+        logger.info("%s Extracted face(s) had their header information updated", updated_headers)
+
         self._alignments.save()
 
         rename = Rename(self._alignments, None, self._items)
