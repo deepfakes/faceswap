@@ -495,7 +495,8 @@ def update_existing_metadata(filename, metadata):
 
             if field == b"IEND":  # End of PNG
                 logger.trace("Closing png")
-                tmp.write(chunk)
+                crc = struct.pack(">I", crc32(field))
+                tmp.write(chunk + crc)
                 break
 
             if field != b"iTXt":  # Write chunk straight out to tmp file
