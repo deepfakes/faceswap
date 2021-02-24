@@ -424,7 +424,7 @@ class AlignedFace():
         """
         with self._cache["cropped_roi"][1]:
             if centering not in self._cache["cropped_roi"][0]:
-                offset = self.pose.offset.get(centering, np.float32((0, 0)))  # legacy = 0,0
+                offset = self.pose.offset.get(centering, np.float32((0, 0)))  # legacy = 0.0
                 offset -= self.pose.offset["head"]
                 offset *= (self._head_size - (self._head_size * _EXTRACT_RATIOS["head"]))
 
@@ -447,11 +447,12 @@ class AlignedFace():
         with self._cache["cropped_slices"][1]:
             if not self._cache["cropped_slices"][0].get(self._centering):
                 roi = self.get_cropped_roi(self._centering)
-                head_size = self._head_size
                 slice_in = [slice(max(roi[1], 0), max(roi[3], 0)),
                             slice(max(roi[0], 0), max(roi[2], 0))]
-                slice_out = [slice(max(roi[1] * -1, 0), self._size - max(0, roi[3] - head_size)),
-                             slice(max(roi[0] * -1, 0), self._size - max(0, roi[2] - head_size))]
+                slice_out = [slice(max(roi[1] * -1, 0),
+                                   self._size - min(self._size, max(0, roi[3] - self._head_size))),
+                             slice(max(roi[0] * -1, 0),
+                                   self._size - min(self._size, max(0, roi[2] - self._head_size)))]
                 self._cache["cropped_slices"][0][self._centering] = {"in": slice_in,
                                                                      "out": slice_out}
                 logger.trace("centering: %s, cropped_slices: %s",
