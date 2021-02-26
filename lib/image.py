@@ -7,7 +7,6 @@ import subprocess
 import os
 import struct
 import sys
-import tempfile
 
 from ast import literal_eval
 from bisect import bisect
@@ -482,24 +481,24 @@ def update_existing_metadata(filename, metadata):
         The dictionary to write to the header. Can be pre-encoded as utf-8.
     """
 
-    with tempfile.NamedTemporaryFile(dir=os.path.dirname(filename),
-                                     delete=False) as tmp, open(filename, "rb") as png:
+    tmp_filename = filename + "~"
+    with open(filename, "rb") as png, open(tmp_filename, "wb") as tmp:
         chunk = png.read(8)
         if chunk != b"\x89PNG\r\n\x1a\n":
             raise ValueError(f"Invalid header found in png: {filename}")
         tmp.write(chunk)
+
         while True:
             chunk = png.read(8)
             length, field = struct.unpack(">I4s", chunk)
-            logger.trace("Read chunk: (chunk: %s, length: %s, field: %s", chunk, length, field)
+            logger.trace("Read chunk: (chunk: %s, length: %s, field: %s)", chunk, length, field)
 
-            if field == b"IEND":  # End of PNG
-                logger.trace("Closing png")
-                crc = struct.pack(">I", crc32(field))
-                tmp.write(chunk + crc)
+            if field == b"IDAT":  # Write out all remaining data
+                logger.trace("Writing image data and closing png")
+                tmp.write(chunk + png.read())
                 break
 
-            if field != b"iTXt":  # Write chunk straight out to tmp file
+            if field != b"iTXt":  # Write non iTXt chunk straight out
                 logger.trace("Copying existing chunk")
                 tmp.write(chunk + png.read(length + 4))  # Header + CRC
                 continue
@@ -515,7 +514,7 @@ def update_existing_metadata(filename, metadata):
             tmp.write(pack_to_itxt(metadata))
             png.seek(4, 1)  # Skip old CRC
 
-    os.replace(tmp.name, filename)
+    os.replace(tmp_filename, filename)
 
 
 def encode_image(image, extension, metadata=None):

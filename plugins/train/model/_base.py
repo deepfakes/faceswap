@@ -516,7 +516,16 @@ class _IO():
             logger.error("Model could not be found in folder '%s'. Exiting", self._model_dir)
             sys.exit(1)
 
-        model = load_model(self._filename, compile=False)
+        try:
+            model = load_model(self._filename, compile=False)
+        except RuntimeError as err:
+            if "unable to get link info" in str(err).lower():
+                msg = (f"Unable to load the model from '{self._filename}'. This may be a "
+                       "temporary error but most likely means that your model has corrupted.\n"
+                       "You can try to load the model again but if the problem persists you "
+                       "should use the Restore Tool to restore your model from backup.")
+                raise FaceswapError(msg)
+            raise err
         logger.info("Loaded model from disk: '%s'", self._filename)
         return model
 

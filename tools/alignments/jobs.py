@@ -661,15 +661,13 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         folder. """
         logger.info("[REMOVE FACES FROM ALIGNMENTS]")  # Tidy up cli output
 
-        frame_face_indices = self._items.items
-
-        if not frame_face_indices:
+        if not self._items.items:
             logger.error("No matching faces found in your faces folder. This would remove all "
                          "faces from your alignments file. Process aborted.")
             return
 
         pre_face_count = self._alignments.faces_count
-        self._alignments.filter_faces(frame_face_indices, filter_out=False)
+        self._alignments.filter_faces(self._items.items, filter_out=False)
         del_count = pre_face_count - self._alignments.faces_count
         if del_count == 0:
             logger.info("No changes made to alignments file. Exiting")
@@ -677,15 +675,30 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
 
         logger.info("%s alignment(s) were removed from alignments file", del_count)
 
-        # PNG Header Updates
-        updated_headers = 0
-        for file_info in tqdm(self._items.file_list_sorted, desc="Updating PNG Headers"):
+        self._update_png_headers()
+        self._alignments.save()
+
+        rename = Rename(self._alignments, None, self._items)
+        rename.process()
+
+    def _update_png_headers(self):
+        """ Update the EXIF iTXt field of any face PNGs that have had their face index changed.
+
+        Notes
+        -----
+        This could be quicker if parellizing in threads, however, Windows (at least) does not seem
+        to like this and has a tendency to throw permission errors, so this remains single threaded
+        for now.
+        """
+        to_update = [  # Items whose face index has changed
+            x for x in self._items.file_list_sorted
+            if x["face_index"] != self._items.items[x["source_filename"]].index(x["face_index"])]
+
+        for file_info in tqdm(to_update, desc="Updating PNG Headers", leave=False):
             frame = file_info["source_filename"]
             face_index = file_info["face_index"]
-            new_index = frame_face_indices[frame].index(face_index)
+            new_index = self._items.items[frame].index(face_index)
 
-            if new_index == face_index:  # face index has not changed
-                continue
             fullpath = os.path.join(self._items.folder, file_info["current_filename"])
             logger.debug("Updating png header for '%s': face index from %s to %s",
                          fullpath, face_index, new_index)
@@ -704,14 +717,8 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
                                     source_filename=frame,
                                     source_is_video=file_info["source_is_video"]))
             update_existing_metadata(fullpath, meta)
-            updated_headers += 1
 
-        logger.info("%s Extracted face(s) had their header information updated", updated_headers)
-
-        self._alignments.save()
-
-        rename = Rename(self._alignments, None, self._items)
-        rename.process()
+        logger.info("%s Extracted face(s) had their header information updated", len(to_update))
 
 
 class Rename():  # pylint:disable=too-few-public-methods
