@@ -141,7 +141,7 @@ class TrainerBase():
         penalized_loss = self._model.config["penalized_mask_loss"]
 
         alignments = _TrainingAlignments(self._model, self._images)
-        # Update centering if it has been changed by legacy facesets in TrainingAlignments
+        # Update centering if it has been changed by legacy face sets in TrainingAlignments
         self._config["centering"] = self._model.config["centering"]
         retval = dict(aligned_faces=alignments.aligned_faces,
                       versions=alignments.versions)
@@ -1242,7 +1242,7 @@ class _TrainingAlignments():
     def _get_alignments_path(self, side):
         """ Obtain the path to an alignments file for the given training side.
 
-        Used for updating legacy facesets to contain the meta information within the image header
+        Used for updating legacy face sets to contain the meta information within the image header
 
         Parameters
         ----------
@@ -1361,6 +1361,8 @@ class _TrainingAlignments():
                    "select a mask type that exists within your face data, or generate the "
                    "required masks with the Mask Tool.".format(mask_type))
             for side, filenames in invalid.items():
+                if not filenames:
+                    continue
                 available = set(mask
                                 for det_face in self._detected_faces[side].values()
                                 for mask in det_face.mask)

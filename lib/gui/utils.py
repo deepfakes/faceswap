@@ -222,7 +222,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         dict:
             The default file extension for each file type
         """
-        defaults = {key: val[0][1].replace("*", "")
+        defaults = {key: next(ext for ext in val[0][1].split(" ")).replace("*", "")
                     for key, val in self._filetypes.items()}
         defaults["default"] = None
         defaults["video"] = ".mp4"
@@ -254,7 +254,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         if self._handletype.lower() in (
                 "open", "save", "filename", "filename_multi", "savefilename"):
             kwargs["filetypes"] = self._filetypes[filetype]
-            if self._defaults.get(filetype, None):
+            if self._defaults.get(filetype):
                 kwargs['defaultextension'] = self._defaults[filetype]
         if self._handletype.lower() == "save":
             kwargs["mode"] = "w"
@@ -566,7 +566,7 @@ class Images():
         Returns
         -------
         bool
-            ``True`` if images were succesfully loaded to cache otherwise ``False``
+            ``True`` if images were successfully loaded to cache otherwise ``False``
         """
         logger.debug("Number image_files: %s, frame_dims: %s, thumbnail_size: %s",
                      len(image_files), frame_dims, thumbnail_size)
