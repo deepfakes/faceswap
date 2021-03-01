@@ -196,7 +196,7 @@ class KResizeImages(Layer):
 
     Parameters
     ----------
-    size: int, optional
+    size: int or float, optional
         The scale to upsample to. Default: `2`
     interpolation: ["nearest", "bilinear"], optional
         The interpolation to use. Default: `"nearest"`
@@ -223,11 +223,20 @@ class KResizeImages(Layer):
         tensor
             A tensor or list/tuple of tensors
         """
-        return K.resize_images(inputs,
-                               self.size,
-                               self.size,
-                               "channels_last",
-                               interpolation=self.interpolation)
+        if isinstance(self.size, int):
+            retval = K.resize_images(inputs,
+                                     self.size,
+                                     self.size,
+                                     "channels_last",
+                                     interpolation=self.interpolation)
+        else:
+            # Arbitrary resizing
+            size = int(round(K.int_shape(inputs)[1] * self.size))
+            if get_backend() != "amd":
+                retval = tf.image.resize(inputs, (size, size), method=self.interpolation)
+            else:
+                raise NotImplementedError
+            return retval
 
     def compute_output_shape(self, input_shape):
         """Computes the output shape of the layer.
