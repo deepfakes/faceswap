@@ -41,7 +41,10 @@ class _State():
             self._scan_for_configs()
         logger.debug("name: %s", name)
         if self._popup is not None:
-            logger.info("Popup already open. Returning: %s", _POPUP)
+            logger.debug("Restoring existing popup")
+            self._popup.update()
+            self._popup.deiconify()
+            self._popup.lift()
             return
         self._popup = _ConfigurePlugins(name, self._configs)
 
@@ -93,7 +96,7 @@ class _State():
 
 
 _STATE = _State()
-open_popup = _STATE.open_popup
+open_popup = _STATE.open_popup  # pylint:disable=invalid-name
 
 
 class _ConfigurePlugins(tk.Toplevel):
