@@ -236,7 +236,7 @@ class KResizeImages(Layer):
                 retval = tf.image.resize(inputs, (size, size), method=self.interpolation)
             else:
                 raise NotImplementedError
-            return retval
+        return retval
 
     def compute_output_shape(self, input_shape):
         """Computes the output shape of the layer.
