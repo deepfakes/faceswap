@@ -174,20 +174,24 @@ class Model(ModelBase):
 
         var_xy = Upscale2xBlock(512,
                                 scale_factor=self.upscale_ratio,
-                                activation="leakyrelu",
+                                activation=None,
                                 fast=False)(var_xy)
         var_x = var_xy
 
+        var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(512, use_bias=True)(var_x)
         var_x = ResidualBlock(512, use_bias=False)(var_x)
         var_x = ResidualBlock(512, use_bias=False)(var_x)
         var_x = Upscale2xBlock(dec_b_complexity, activation=None, fast=False)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(dec_b_complexity, use_bias=True)(var_x)
         var_x = ResidualBlock(dec_b_complexity, use_bias=False)(var_x)
         var_x = BatchNormalization()(var_x)
         var_x = Upscale2xBlock(dec_b_complexity // 2, activation=None, fast=False)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(dec_b_complexity // 2, use_bias=True)(var_x)
         var_x = Upscale2xBlock(dec_b_complexity // 4, activation=None, fast=False)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(dec_b_complexity // 4, use_bias=False)(var_x)
         var_x = BatchNormalization()(var_x)
         var_x = Upscale2xBlock(dec_b_complexity // 8, activation="leakyrelu", fast=False)(var_x)
@@ -198,6 +202,7 @@ class Model(ModelBase):
 
         if self.config.get("learn_mask", False):
             var_y = var_xy  # mask decoder
+            var_y = LeakyReLU(alpha=0.1)(var_y)
 
             var_y = Upscale2xBlock(mask_complexity, activation="leakyrelu", fast=False)(var_y)
             var_y = Upscale2xBlock(mask_complexity // 2, activation="leakyrelu", fast=False)(var_y)

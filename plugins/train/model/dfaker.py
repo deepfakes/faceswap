@@ -5,7 +5,7 @@ import logging
 import sys
 
 from keras.initializers import RandomNormal
-from keras.layers import Input
+from keras.layers import Input, LeakyReLU
 
 from lib.model.nn_blocks import Conv2DOutput, UpscaleBlock, ResidualBlock
 from .original import Model as OriginalModel, KerasModel
@@ -32,12 +32,16 @@ class Model(OriginalModel):
 
         if self._output_size == 256:
             var_x = UpscaleBlock(1024, activation=None)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
             var_x = ResidualBlock(1024, kernel_initializer=self.kernel_initializer)(var_x)
         var_x = UpscaleBlock(512, activation=None)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(512, kernel_initializer=self.kernel_initializer)(var_x)
         var_x = UpscaleBlock(256, activation=None)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(256, kernel_initializer=self.kernel_initializer)(var_x)
         var_x = UpscaleBlock(128, activation=None)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
         var_x = ResidualBlock(128, kernel_initializer=self.kernel_initializer)(var_x)
         var_x = UpscaleBlock(64, activation="leakyrelu")(var_x)
         var_x = Conv2DOutput(3, 5, name="face_out_{}".format(side))(var_x)

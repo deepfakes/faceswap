@@ -68,8 +68,9 @@ def _get_default_initializer(initializer):
     ----------
     initializer: :class:`keras.initializers.Initializer` or None
         The initializer that has been passed into the model. If this value is ``None`` then a
-        default initializer will be returned based on the configuration choices, otherwise
-        the given initializer will be returned.
+        default initializer will be set to 'he_uniform'. If Convolutional Aware initialization
+        has been enabled, then any passed through initializer will be replaced with the
+        Convolutional Aware initializer.
 
     Returns
     -------
@@ -77,12 +78,15 @@ def _get_default_initializer(initializer):
         The kernel initializer to use for this convolutional layer. Either the original given
         initializer, he_uniform or convolutional aware (if selected in config options)
     """
-    if initializer is None:
-        retval = ConvolutionAware() if _CONFIG["conv_aware_init"] else he_uniform()
-        logger.debug("Set default kernel_initializer: %s", retval)
+    if _CONFIG["conv_aware_init"]:
+        retval = ConvolutionAware()
+    elif initializer is None:
+        retval = he_uniform()
     else:
         retval = initializer
         logger.debug("Using model supplied initializer: %s", retval)
+    logger.debug("Set default kernel_initializer: (original: %s current: %s)", initializer, retval)
+
     return retval
 
 
@@ -553,8 +557,8 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
 
 
 class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
-    """ Upscale block that uses the Keras Backend function resize_images to perform the upscaling
-    Similar in methodolgy to the :class:`Upscale2xBlock`
+    """ Upscale block that uses the Keras Backend function resize_images to perform the up scaling
+    Similar in methodology to the :class:`Upscale2xBlock`
 
     Adds reflection padding if it has been selected by the user, and other post-processing
     if requested by the plugin.
@@ -675,7 +679,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         Tensor
             The output tensor from the Upscale Layer
         """
-        var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_0".format(self._name))(inputs)
+        var_x = inputs
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
                                         kernel_size=self._kernel_size,

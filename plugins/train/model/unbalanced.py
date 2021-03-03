@@ -4,7 +4,7 @@
         code sample + contributions """
 
 from keras.initializers import RandomNormal
-from keras.layers import Dense, Flatten, Input, Reshape, SpatialDropout2D
+from keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 from ._base import ModelBase, KerasModel
@@ -105,12 +105,15 @@ class Model(ModelBase):
             var_x = UpscaleBlock(decoder_complexity // 8, activation="leakyrelu", **kwargs)(var_x)
         else:
             var_x = UpscaleBlock(decoder_complexity, activation=None, **kwargs)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
             var_x = ResidualBlock(decoder_complexity,
                                   kernel_initializer=self.kernel_initializer)(var_x)
             var_x = UpscaleBlock(decoder_complexity, activation=None, **kwargs)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
             var_x = ResidualBlock(decoder_complexity,
                                   kernel_initializer=self.kernel_initializer)(var_x)
             var_x = UpscaleBlock(decoder_complexity // 2, activation=None, **kwargs)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
             var_x = ResidualBlock(decoder_complexity // 2,
                                   kernel_initializer=self.kernel_initializer)(var_x)
             var_x = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu", **kwargs)(var_x)
