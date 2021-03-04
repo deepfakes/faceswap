@@ -407,6 +407,7 @@ class _Feeder():
         generator = TrainingDataGenerator(input_size,
                                           output_shapes,
                                           self._model.coverage_ratio,
+                                          self._model.color_order,
                                           not self._model.command_line_arguments.no_augment_color,
                                           self._model.command_line_arguments.no_flip,
                                           self._model.command_line_arguments.no_warp,
@@ -794,6 +795,13 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("side: '%s', number of sample arrays: %s, prediction.shapes: %s)",
                      side, len(samples), [pred.shape for pred in predictions])
         full, faces = samples[:2]
+
+        if self._model.color_order.lower() == "rgb":  # Switch color order for RGB model display
+            full = full[..., ::-1]
+            faces = faces[..., ::-1]
+            predictions = [pred[..., ::-1] if pred.shape[-1] == 3 else pred
+                           for pred in predictions]
+
         full = self._process_full(side, full, predictions[0].shape[1], (0, 0, 255))
         images = [faces] + predictions
         if self._display_mask:

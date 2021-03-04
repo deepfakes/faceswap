@@ -98,6 +98,7 @@ class ModelBase():
 
         self.input_shape = None  # Must be set within the plugin after initializing
         self.trainer = "original"  # Override for plugin specific trainer
+        self.color_order = "bgr"  # Override for plugin specific image color channel order
 
         self._args = arguments
         self._is_predict = predict
@@ -650,7 +651,7 @@ class _Settings():
         self._set_tf_settings(allow_growth, arguments.exclude_gpus)
 
         use_mixed_precision = not is_predict and mixed_precision and get_backend() == "nvidia"
-        # Mixed precision moved out of experimental in tf 2.4
+        # Mixed precision moved out of experimental in tensorflow 2.4
         if use_mixed_precision and self._tf_version[0] == 2 and self._tf_version[1] < 4:
             self._mixed_precision = tf.keras.mixed_precision.experimental
         elif use_mixed_precision:
@@ -688,7 +689,8 @@ class _Settings():
         :class:`tf.keras.mixed_precision.loss_scale_optimizer.LossScaleOptimizer`
             The original optimizer with loss scaling applied
         """
-        # tf versions < 2.4 had different kwargs where scaling needs to be explicitly defined
+        # tensorflow versions < 2.4 had different kwargs where scaling needs to be explicitly
+        # defined
         vers = self._tf_version
         kwargs = dict(loss_scale="dynamic") if vers[0] == 2 and vers[1] < 4 else dict()
         logger.debug("tf version: %s, kwargs: %s", vers, kwargs)
@@ -769,7 +771,7 @@ class _Settings():
 
         if exclude_gpus and self._tf_version[0] == 2 and self._tf_version[1] == 2:
             # TODO remove this hacky fix to disable mixed precision compatibility testing when
-            # tf 2.2 support dropped
+            # tensorflow 2.2 support dropped
             # pylint:disable=import-outside-toplevel,protected-access,import-error
             from tensorflow.python.keras.mixed_precision.experimental import \
                 device_compatibility_check
@@ -1454,7 +1456,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
                         next_input = inbound_layer
 
                     if get_backend() == "amd" and isinstance(next_input, list):
-                        # tf.keras and keras 2.2 behave differently for layer inputs
+                        # tensorflow.keras and keras 2.2 behave differently for layer inputs
                         layer_inputs.extend(next_input)
                     else:
                         layer_inputs.append(next_input)

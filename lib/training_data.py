@@ -37,6 +37,8 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         The ratio of the training image to be trained on. Dictates how much of the image will be
         cropped out. E.G: a coverage ratio of 0.625 will result in cropping a 160px box from a
         256px image (:math:`256 * 0.625 = 160`).
+    color_order: ["rgb", "bgr"]
+        The color order that the model expects as input
     augment_color: bool
         ``True`` if color is to be augmented, otherwise ``False``
     no_flip: bool
@@ -77,18 +79,19 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         The configuration `dict` generated from :file:`config.train.ini` containing the trainer
         plugin configuration options.
     """
-    def __init__(self, model_input_size, model_output_shapes, coverage_ratio, augment_color,
-                 no_flip, no_warp, warp_to_landmarks, alignments, config):
+    def __init__(self, model_input_size, model_output_shapes, coverage_ratio, color_order,
+                 augment_color, no_flip, no_warp, warp_to_landmarks, alignments, config):
         logger.debug("Initializing %s: (model_input_size: %s, model_output_shapes: %s, "
-                     "coverage_ratio: %s, augment_color: %s, no_flip: %s, no_warp: %s, "
-                     "warp_to_landmarks: %s, alignments: %s, config: %s)",
+                     "coverage_ratio: %s, color_order: %s, augment_color: %s, no_flip: %s, "
+                     "no_warp: %s, warp_to_landmarks: %s, alignments: %s, config: %s)",
                      self.__class__.__name__, model_input_size, model_output_shapes,
-                     coverage_ratio, augment_color, no_flip, no_warp, warp_to_landmarks,
-                     list(alignments.keys()), config)
+                     coverage_ratio, color_order, augment_color, no_flip, no_warp,
+                     warp_to_landmarks, list(alignments.keys()), config)
         self._config = config
         self._model_input_size = model_input_size
         self._model_output_shapes = model_output_shapes
         self._coverage_ratio = coverage_ratio
+        self._color_order = color_order.lower()
         self._augment_color = augment_color
         self._no_flip = no_flip
         self._warp_to_landmarks = warp_to_landmarks
@@ -238,6 +241,10 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
         batch = self._processing.transform(batch)
         if not self._no_flip:
             batch = self._processing.random_flip(batch)
+
+        # Switch color order for RGB models
+        if self._color_order == "rgb":
+            batch = batch[..., [2, 1, 0, 3]]
 
         # Add samples to output if this is for display
         if self._processing.is_display:
