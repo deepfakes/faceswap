@@ -356,9 +356,11 @@ class TensorBoardLogs():
                 # tf2.3 stopped respecting loss names in tensorboard callback so rewrite
                 lbl_split = tag.replace("batch_", "").replace("_loss", "").split("_")
                 if lbl_split[-1] in ("a", "b"):
-                    lbl = "face_{}".format(lbl_split[-1])
+                    lbl = f"face_{lbl_split[-1]}"
+                elif "both" in lbl_split:  # Combined decoders don't get face names
+                    lbl = f"face_{'b' if lbl_split[-1] == '1' else 'a'}"
                 else:
-                    lbl = "mask_{}".format(lbl_split[-2])
+                    lbl = f"mask_{lbl_split[-2]}"  # TODO may not work for combined decoders
                 if lbl not in labels:
                     labels.append(lbl)
 
