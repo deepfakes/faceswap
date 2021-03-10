@@ -2,6 +2,7 @@
 """ Pop-up Graph launched from the Analysis tab of the Faceswap GUI """
 
 import csv
+import gettext
 import logging
 import tkinter as tk
 from tkinter import ttk
@@ -13,6 +14,10 @@ from .stats import Calculations, Session
 from .utils import FileHandler, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class SessionPopUp(tk.Toplevel):
@@ -183,7 +188,7 @@ class SessionPopUp(tk.Toplevel):
                 continue
 
             text = loss_key.replace("_", " ").title()
-            helptext = "Display {}".format(text)
+            helptext = _("Display {}").format(text)
 
             var = tk.BooleanVar()
             var.set(True)
@@ -334,28 +339,28 @@ class SessionPopUp(tk.Toplevel):
         hlp = ""
         action = action.lower()
         if action == "reload":
-            hlp = "Refresh graph"
+            hlp = _("Refresh graph")
         elif action == "save":
-            hlp = "Save display data to csv"
+            hlp = _("Save display data to csv")
         elif action == "avgiterations":
-            hlp = "Number of data points to sample for rolling average"
+            hlp = _("Number of data points to sample for rolling average")
         elif action == "smoothamount":
-            hlp = "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing"
+            hlp = _("Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing")
         elif action == "outliers":
-            hlp = "Flatten data points that fall more than 1 standard " \
-                  "deviation from the mean to the mean value."
+            hlp = _("Flatten data points that fall more than 1 standard deviation from the mean "
+                    "to the mean value.")
         elif action == "avg":
-            hlp = "Display rolling average of the data"
+            hlp = _("Display rolling average of the data")
         elif action == "smoothed":
-            hlp = "Smooth the data"
+            hlp = _("Smooth the data")
         elif action == "raw":
-            hlp = "Display raw data"
+            hlp = _("Display raw data")
         elif action == "trend":
-            hlp = "Display polynormal data trend"
+            hlp = _("Display polynormal data trend")
         elif action == "display":
-            hlp = "Set the data to display"
+            hlp = _("Set the data to display")
         elif action == "scale":
-            hlp = "Change y-axis scale"
+            hlp = _("Change y-axis scale")
         return hlp
 
     def _compile_display_data(self):

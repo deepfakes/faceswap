@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ The frame viewer section of the manual tool GUI """
+import gettext
 import logging
 import tkinter as tk
 from tkinter import ttk, TclError
@@ -16,6 +17,10 @@ from .editor import (BoundingBox, ExtractBox, Landmarks, Mask,  # noqa pylint:di
                      Mesh, View)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
@@ -69,14 +74,14 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _helptext(self):
         """ dict: {`name`: `help text`} Helptext lookup for navigation buttons """
         return dict(
-            play="Play/Pause (SPACE)",
-            beginning="Go to First Frame (HOME)",
-            prev="Go to Previous Frame (Z)",
-            next="Go to Next Frame (X)",
-            end="Go to Last Frame (END)",
-            extract="Extract the faces to a folder... (Ctrl+E)",
-            save="Save the Alignments file (Ctrl+S)",
-            mode="Filter Frames to only those Containing the Selected Item (F)")
+            play=_("Play/Pause (SPACE)"),
+            beginning=_("Go to First Frame (HOME)"),
+            prev=_("Go to Previous Frame (Z)"),
+            next=_("Go to Next Frame (X)"),
+            end=_("Go to Last Frame (END)"),
+            extract=_("Extract the faces to a folder... (Ctrl+E)"),
+            save=_("Save the Alignments file (Ctrl+S)"),
+            mode=_("Filter Frames to only those Containing the Selected Item (F)"))
 
     @property
     def _btn_action(self):
@@ -310,11 +315,11 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _helptext(self):
         """ dict: `button key`: `button helptext`. The help text to display for each button. """
         inverse_keybindings = {val: key for key, val in self.key_bindings.items()}
-        retval = dict(View="View alignments",
-                      BoundingBox="Bounding box editor",
-                      ExtractBox="Location editor",
-                      Mask="Mask editor",
-                      Landmarks="Landmark point editor")
+        retval = dict(View=_("View alignments"),
+                      BoundingBox=_("Bounding box editor"),
+                      ExtractBox=_("Location editor"),
+                      Mask=_("Mask editor"),
+                      Landmarks=_("Landmark point editor"))
         for item in retval:
             retval[item] += " ({})".format(inverse_keybindings[item])
         return retval
@@ -400,13 +405,13 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             if action == "reload":
                 icon = "reload3"
                 cmd = lambda f=tk_frame_index: self._det_faces.revert_to_saved(f.get())  # noqa
-                helptext = "Revert to saved Alignments ({})".format(lookup[action][1])
+                helptext = _("Revert to saved Alignments ({})").format(lookup[action][1])
             else:
                 icon = action
                 direction = action.replace("copy_", "")
                 cmd = lambda f=tk_frame_index, d=direction: self._det_faces.update.copy(  # noqa
                     f.get(), d)
-                helptext = "Copy {} Alignments ({})".format(*lookup[action])
+                helptext = _("Copy {} Alignments ({})").format(*lookup[action])
             state = ["!disabled"] if action == "copy_next" else ["disabled"]
             button = ttk.Button(frame,
                                 image=get_images().icons[icon],

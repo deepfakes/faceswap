@@ -3,6 +3,7 @@
 
 from collections import OrderedDict
 from configparser import ConfigParser
+import gettext
 import logging
 import os
 import sys
@@ -15,6 +16,11 @@ from .custom_widgets import Tooltip
 from .utils import get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
+
 _POPUP = []
 _CONFIG_FILES = []
 _CONFIGS = dict()
@@ -198,14 +204,14 @@ class _ConfigurePlugins(tk.Toplevel):
                              width=10,
                              command=lambda: self._opts_frame.reset(page_only=True))
 
-        Tooltip(btn_cls, text="Close without saving", wraplength=720)
-        Tooltip(btn_save, text="Save this page's config", wraplength=720)
-        Tooltip(btn_rst, text="Reset this page's config to default values", wraplength=720)
+        Tooltip(btn_cls, text=_("Close without saving"), wraplength=720)
+        Tooltip(btn_save, text=_("Save this page's config"), wraplength=720)
+        Tooltip(btn_rst, text=_("Reset this page's config to default values"), wraplength=720)
         Tooltip(btn_saveall,
-                text="Save all settings for the currently selected config",
+                text=_("Save all settings for the currently selected config"),
                 wraplength=720)
         Tooltip(btn_rstall,
-                text="Reset all settings for the currently selected config to default values",
+                text=_("Reset all settings for the currently selected config to default values"),
                 wraplength=720)
 
         btn_cls.pack(padx=2, side=tk.RIGHT)

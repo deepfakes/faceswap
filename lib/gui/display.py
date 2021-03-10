@@ -6,6 +6,7 @@ here. Further optional tabs will also be displayed depending on the currently ex
 task. """
 
 import logging
+import gettext
 import tkinter as tk
 from tkinter import ttk
 
@@ -14,6 +15,10 @@ from .display_command import GraphDisplay, PreviewExtract, PreviewTrain
 from .utils import get_config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
@@ -63,7 +68,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
                 continue    # Not yet implemented
             if tab == "analysis":
                 helptext = {"stats":
-                            "Summary statistics for each training session"}
+                            _("Summary statistics for each training session")}
                 frame = Analysis(self, tab, helptext)
             else:
                 frame = self._add_frame()
@@ -105,8 +110,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
 
         """
         logger.debug("Build extract tabs")
-        helptext = ("Updates preview from output every 5 "
-                    "seconds to limit disk contention")
+        helptext = _("Preview updates every 5 seconds")
         PreviewExtract(self, "preview", helptext, 5000, command)
         logger.debug("Built extract tabs")
 
@@ -115,10 +119,10 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         logger.debug("Build train tabs")
         for tab in ("graph", "preview"):
             if tab == "graph":
-                helptext = "Graph showing Loss vs Iterations"
+                helptext = _("Graph showing Loss vs Iterations")
                 GraphDisplay(self, "graph", helptext, 5000)
             elif tab == "preview":
-                helptext = "Training preview. Updated on every save iteration"
+                helptext = _("Training preview. Updated on every save iteration")
                 PreviewTrain(self, "preview", helptext, 1000)
         logger.debug("Built train tabs")
 

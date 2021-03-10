@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-02-18 23:09-0000\n"
+"POT-Creation-Date: 2021-03-10 16:51-0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -15,33 +15,58 @@ msgstr ""
 "Generated-By: pygettext.py 1.5\n"
 
 
-#: tools/preview/cli.py:14
+#: ./tools/preview\cli.py:13
 msgid "This command allows you to preview swaps to tweak convert settings."
 msgstr ""
 
-#: tools/preview/cli.py:23
+#: ./tools/preview\cli.py:22
 msgid ""
 "Preview tool\n"
 "Allows you to configure your convert settings with a live preview"
 msgstr ""
 
-#: tools/preview/cli.py:33 tools/preview/cli.py:42 tools/preview/cli.py:49
+#: ./tools/preview\cli.py:32 ./tools/preview\cli.py:41
+#: ./tools/preview\cli.py:48
 msgid "data"
 msgstr ""
 
-#: tools/preview/cli.py:35
+#: ./tools/preview\cli.py:34
 msgid "Input directory or video. Either a directory containing the image files you wish to process or path to a video file."
 msgstr ""
 
-#: tools/preview/cli.py:44
+#: ./tools/preview\cli.py:43
 msgid "Path to the alignments file for the input, if not at the default location"
 msgstr ""
 
-#: tools/preview/cli.py:51
+#: ./tools/preview\cli.py:50
 msgid "Model directory. A directory containing the trained model you wish to process."
 msgstr ""
 
-#: tools/preview/cli.py:58
+#: ./tools/preview\cli.py:57
 msgid "Swap the model. Instead of A -> B, swap B -> A"
+msgstr ""
+
+#: ./tools/preview\preview.py:1303
+msgid "Save full config"
+msgstr ""
+
+#: ./tools/preview\preview.py:1306
+msgid "Reset full config to default values"
+msgstr ""
+
+#: ./tools/preview\preview.py:1309
+msgid "Reset full config to saved values"
+msgstr ""
+
+#: ./tools/preview\preview.py:1453
+msgid "Save {} config"
+msgstr ""
+
+#: ./tools/preview\preview.py:1456
+msgid "Reset {} config to default values"
+msgstr ""
+
+#: ./tools/preview\preview.py:1459
+msgid "Reset {} config to saved values"
 msgstr ""
 

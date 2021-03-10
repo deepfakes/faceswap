@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Tool to preview swaps and tweak configuration prior to running a convert """
 
+import gettext
 import logging
 import random
 import tkinter as tk
@@ -31,6 +32,10 @@ from plugins.plugin_loader import PluginLoader
 from plugins.convert._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("tools.preview", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
@@ -1296,13 +1301,13 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
-                text = "Save full config"
+                text = _("Save full config")
                 action = self._config_tools.save_config
             elif utl == "clear":
-                text = "Reset full config to default values"
+                text = _("Reset full config to default values")
                 action = self._config_tools.reset_config_to_default
             elif utl == "reload":
-                text = "Reset full config to saved values"
+                text = _("Reset full config to saved values")
                 action = self._config_tools.reset_config_to_saved
 
             btnutl = ttk.Button(frame,
@@ -1446,13 +1451,13 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
-                text = "Save {} config".format(title)
+                text = _("Save {} config").format(title)
                 action = parent.config_tools.save_config
             elif utl == "clear":
-                text = "Reset {} config to default values".format(title)
+                text = _("Reset {} config to default values").format(title)
                 action = parent.config_tools.reset_config_to_default
             elif utl == "reload":
-                text = "Reset {} config to saved values".format(title)
+                text = _("Reset {} config to saved values").format(title)
                 action = parent.config_tools.reset_config_to_saved
 
             btnutl = ttk.Button(btn_frame,

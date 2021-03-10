@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Display Page parent classes for display section of the Faceswap GUI """
 
+import gettext
 import logging
 import tkinter as tk
 from tkinter import ttk
@@ -9,6 +10,10 @@ from .custom_widgets import Tooltip
 from .utils import get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
@@ -230,7 +235,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
                              command=self.save_items)
         btnsave.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnsave,
-                text="Save {}(s) to file".format(self.tabname),
+                text=_("Save {}(s) to file").format(self.tabname),
                 wraplength=200)
 
     def add_option_enable(self):
@@ -242,7 +247,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
                                     command=self.on_chkenable_change)
         chkenable.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
         Tooltip(chkenable,
-                text="Enable or disable {} display".format(self.tabname),
+                text=_("Enable or disable {} display").format(self.tabname),
                 wraplength=200)
 
     def save_items(self):

@@ -6,7 +6,7 @@ from lib.cli.args import FaceSwapArgs, DirOrFileFullPaths, FileFullPaths
 
 
 # LOCALES
-_LANG = gettext.translation("tools.manual.cli", localedir="locales", fallback=True)
+_LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 

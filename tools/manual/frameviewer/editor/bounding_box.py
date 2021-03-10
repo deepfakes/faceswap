@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Bounding Box Editor for the manual adjustments tool """
 
+import gettext
 import platform
 from functools import partial
 
@@ -8,6 +9,11 @@ import numpy as np
 
 from lib.gui.custom_widgets import RightClickMenu
 from ._base import ControlPanelOption, Editor, logger
+
+
+# LOCALES
+_LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class BoundingBox(Editor):
@@ -24,15 +30,15 @@ class BoundingBox(Editor):
     """
     def __init__(self, canvas, detected_faces):
         self._tk_aligner = None
-        self._right_click_menu = RightClickMenu(["Delete Face"],
+        self._right_click_menu = RightClickMenu([_("Delete Face")],
                                                 [self._delete_current_face],
                                                 ["Del"])
-        control_text = ("Bounding Box Editor\nEdit the bounding box being fed into the aligner "
-                        "to recalculate the landmarks.\n\n"
-                        " - Grab the corner anchors to resize the bounding box.\n"
-                        " - Click and drag the bounding box to relocate.\n"
-                        " - Click in empty space to create a new bounding box.\n"
-                        " - Right click a bounding box to delete a face.")
+        control_text = _("Bounding Box Editor\nEdit the bounding box being fed into the aligner "
+                         "to recalculate the landmarks.\n\n"
+                         " - Grab the corner anchors to resize the bounding box.\n"
+                         " - Click and drag the bounding box to relocate.\n"
+                         " - Click in empty space to create a new bounding box.\n"
+                         " - Right click a bounding box to delete a face.")
         key_bindings = {"<Delete>": self._delete_current_face}
         super().__init__(canvas, detected_faces,
                          control_text=control_text, key_bindings=key_bindings)
@@ -61,9 +67,9 @@ class BoundingBox(Editor):
             choices=["cv2-dnn", "FAN"],
             default="FAN",
             is_radio=True,
-            helptext="Aligner to use. FAN will obtain better alignments, but cv2-dnn can be "
-                     "useful if FAN cannot get decent alignments and you want to set a base to "
-                     "edit from.")
+            helptext=_("Aligner to use. FAN will obtain better alignments, but cv2-dnn can be "
+                       "useful if FAN cannot get decent alignments and you want to set a base to "
+                       "edit from."))
         self._tk_aligner = align_ctl.tk_var
         self._add_control(align_ctl)
 
@@ -74,15 +80,15 @@ class BoundingBox(Editor):
             choices=["none", "clahe", "hist", "mean"],
             default="hist",
             is_radio=True,
-            helptext="Normalization method to use for feeding faces to the aligner. This can help "
-                     "the aligner better align faces with difficult lighting conditions. "
-                     "Different methods will yield different results on different sets. NB: This "
-                     "does not impact the output face, just the input to the aligner."
-                     "\n\tnone: Don't perform normalization on the face."
-                     "\n\tclahe: Perform Contrast Limited Adaptive Histogram Equalization on the "
-                     "face."
-                     "\n\thist: Equalize the histograms on the RGB channels."
-                     "\n\tmean: Normalize the face colors to the mean.")
+            helptext=_("Normalization method to use for feeding faces to the aligner. This can "
+                       "help the aligner better align faces with difficult lighting conditions. "
+                       "Different methods will yield different results on different sets. NB: "
+                       "This does not impact the output face, just the input to the aligner."
+                       "\n\tnone: Don't perform normalization on the face."
+                       "\n\tclahe: Perform Contrast Limited Adaptive Histogram Equalization on "
+                       "the face."
+                       "\n\thist: Equalize the histograms on the RGB channels."
+                       "\n\tmean: Normalize the face colors to the mean."))
         var = norm_ctl.tk_var
         var.trace("w",
                   lambda *e, v=var: self._det_faces.extractor.set_normalization_method(v.get()))

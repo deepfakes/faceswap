@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Mask Editor for the manual adjustments tool """
+import gettext
 import tkinter as tk
 
 import numpy as np
@@ -7,6 +8,10 @@ import cv2
 from PIL import Image, ImageTk
 
 from ._base import ControlPanelOption, Editor, logger
+
+# LOCALES
+_LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class Mask(Editor):
@@ -25,11 +30,11 @@ class Mask(Editor):
         self._meta = []
         self._tk_faces = []
         self._internal_size = 512
-        control_text = ("Mask Editor\nEdit the mask."
-                        "\n - NB: For Landmark based masks (e.g. components/extended) it is "
-                        "better to make sure the landmarks are correct rather than editing the "
-                        "mask directly. Any change to the landmarks after editing the mask will "
-                        "override your manual edits.")
+        control_text = _("Mask Editor\nEdit the mask."
+                         "\n - NB: For Landmark based masks (e.g. components/extended) it is "
+                         "better to make sure the landmarks are correct rather than editing the "
+                         "mask directly. Any change to the landmarks after editing the mask will "
+                         "override your manual edits.")
         key_bindings = {"[": lambda *e, i=False: self._adjust_brush_radius(increase=i),
                         "]": lambda *e, i=True: self._adjust_brush_radius(increase=i)}
         super().__init__(canvas, detected_faces,
@@ -67,9 +72,10 @@ class Mask(Editor):
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
         and Zoom. """
-        self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
-        self._add_action("draw", "draw", "Draw Tool", group="paint", hotkey="D")
-        self._add_action("erase", "erase", "Erase Tool", group="paint", hotkey="E")
+        self._add_action("magnify", "zoom", _("Magnify/Demagnify the View"),
+                         group=None, hotkey="M")
+        self._add_action("draw", "draw", _("Draw Tool"), group="paint", hotkey="D")
+        self._add_action("erase", "erase", _("Erase Tool"), group="paint", hotkey="E")
         self._actions["magnify"]["tk_var"].trace("w", lambda *e: self._globals.tk_update.set(True))
 
     def _add_controls(self):
@@ -88,21 +94,21 @@ class Mask(Editor):
                                              choices=masks,
                                              default=default,
                                              is_radio=True,
-                                             helptext="Select which mask to edit"))
+                                             helptext=_("Select which mask to edit")))
         self._add_control(ControlPanelOption("Brush Size",
                                              int,
                                              group="Brush",
                                              min_max=(1, 100),
                                              default=10,
                                              rounding=1,
-                                             helptext="Set the brush size. ([ - decrease, "
-                                                      "] - increase)"))
+                                             helptext=_("Set the brush size. ([ - decrease, "
+                                                        "] - increase)")))
         self._add_control(ControlPanelOption("Cursor Color",
                                              str,
                                              group="Brush",
                                              choices="colorchooser",
                                              default="#ffffff",
-                                             helptext="Select the brush cursor color."))
+                                             helptext=_("Select the brush cursor color.")))
 
     def _set_tk_mask_change_callback(self):
         """ Add a trace to change the displayed mask on a mask type change. """

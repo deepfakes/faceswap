@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Command specific tabs of Display Frame of the Faceswap GUI """
 import datetime
+import gettext
 import logging
 import os
 import tkinter as tk
@@ -16,6 +17,10 @@ from .control_helper import set_slider_rounding
 from .utils import FileHandler, get_config, get_images, preview_trigger
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
@@ -86,7 +91,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                                 command=preview_trigger().set)
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
-                text="Preview updates at every model save. Click to refresh now.",
+                text=_("Preview updates at every model save. Click to refresh now."),
                 wraplength=200)
         logger.debug("Added refresh option")
 
@@ -253,7 +258,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                                 command=lambda: tk_var.set(True))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
-                text="Graph updates at every model save. Click to refresh now.",
+                text=_("Graph updates at every model save. Click to refresh now."),
                 wraplength=200)
         logger.debug("Added refresh option")
 
@@ -267,7 +272,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             text="Raw",
             command=lambda v=tk_var: self._display_data_callback("raw", v))
         chkbtn.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
-        Tooltip(chkbtn, text="Display the raw loss data", wraplength=200)
+        Tooltip(chkbtn, text=_("Display the raw loss data"), wraplength=200)
 
     def _add_option_smoothed(self):
         """ Add check-button to hide/display smoothed data """
@@ -279,14 +284,14 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             text="Smoothed",
             command=lambda v=tk_var: self._display_data_callback("smoothed", v))
         chkbtn.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
-        Tooltip(chkbtn, text="Display the smoothed loss data", wraplength=200)
+        Tooltip(chkbtn, text=_("Display the smoothed loss data"), wraplength=200)
 
     def _add_option_smoothing(self):
         """ Add a slider to adjust the smoothing amount """
         logger.debug("Adding Smoothing Slider")
         tk_var = self.vars["smoothgraph"]
         min_max = (0, 0.999)
-        hlp = "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing."
+        hlp = _("Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing.")
 
         ctl_frame = ttk.Frame(self.optsframe)
         ctl_frame.pack(padx=2, side=tk.RIGHT)
@@ -316,7 +321,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         logger.debug("Adding Iterations Slider")
         tk_var = self.vars["display_iterations"]
         min_max = (0, 100000)
-        hlp = "Set the number of iterations to display. 0 displays the full session."
+        hlp = _("Set the number of iterations to display. 0 displays the full session.")
 
         ctl_frame = ttk.Frame(self.optsframe)
         ctl_frame.pack(padx=2, side=tk.RIGHT)

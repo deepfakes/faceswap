@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ The Faces Viewer Frame and Canvas for Faceswap's Manual Tool. """
 import colorsys
+import gettext
 import logging
 import platform
 import tkinter as tk
@@ -17,6 +18,10 @@ from lib.image import hex_to_rgb, rgb_to_hex
 from .viewport import Viewport
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class FacesFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
@@ -155,8 +160,8 @@ class FacesActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def _helptext(self):
         """ dict: `button key`: `button helptext`. The help text to display for each button. """
         inverse_keybindings = {val: key for key, val in self.key_bindings.items()}
-        retval = dict(mesh="Display the landmarks mesh",
-                      mask="Display the mask")
+        retval = dict(mesh=_("Display the landmarks mesh"),
+                      mask=_("Display the mask"))
         for item in retval:
             retval[item] += " ({})".format(inverse_keybindings[item])
         return retval

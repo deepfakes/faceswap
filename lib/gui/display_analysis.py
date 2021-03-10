@@ -2,6 +2,7 @@
 """ Analysis tab of Display Frame of the Faceswap GUI """
 
 import csv
+import gettext
 import logging
 import os
 import tkinter as tk
@@ -14,6 +15,10 @@ from .stats import Session
 from .utils import FileHandler, get_config, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
@@ -334,13 +339,13 @@ class _Options():  # pylint:disable=too-few-public-methods
         logger.debug("Setting help")
         hlp = ""
         if button_type == "reload":
-            hlp = "Load/Refresh stats for the currently training session"
+            hlp = _("Load/Refresh stats for the currently training session")
         elif button_type == "clear":
-            hlp = "Clear currently displayed session stats"
+            hlp = _("Clear currently displayed session stats")
         elif button_type == "save":
-            hlp = "Save session stats to csv"
+            hlp = _("Save session stats to csv")
         elif button_type == "load":
-            hlp = "Load saved session stats"
+            hlp = _("Load saved session stats")
         return hlp
 
     def _add_training_callback(self):

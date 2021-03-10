@@ -2,6 +2,7 @@
 """ The command frame for Faceswap GUI """
 
 import logging
+import gettext
 import tkinter as tk
 from tkinter import ttk
 
@@ -10,6 +11,10 @@ from .custom_widgets import Tooltip
 from .utils import get_images, get_config
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
@@ -175,7 +180,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                             command=lambda: tk_vars["generate"].set(var_value))
         btngen.pack(side=tk.LEFT, padx=5)
         Tooltip(btngen,
-                text="Output command line options to the console",
+                text=_("Output command line options to the console"),
                 wraplength=200)
 
         btnact = ttk.Button(actframe,
@@ -186,7 +191,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                             command=lambda: tk_vars["action"].set(var_value))
         btnact.pack(side=tk.LEFT, fill=tk.X, expand=True)
         Tooltip(btnact,
-                text="Run the {} script".format(self.title),
+                text=_("Run the {} script").format(self.title),
                 wraplength=200)
         actionbtns[self.command] = btnact
 

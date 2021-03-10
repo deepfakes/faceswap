@@ -1,0 +1,213 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2021-03-10 15:35-0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=cp1252\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+
+
+#: ./lib/gui/command.py:180
+msgid "Output command line options to the console"
+msgstr ""
+
+#: ./lib/gui/command.py:191
+msgid "Run the {} script"
+msgstr ""
+
+#: ./lib/gui/display.py:69
+msgid "Summary statistics for each training session"
+msgstr ""
+
+#: ./lib/gui/display.py:111
+msgid "Preview updates every 5 seconds"
+msgstr ""
+
+#: ./lib/gui/display.py:120
+msgid "Graph showing Loss vs Iterations"
+msgstr ""
+
+#: ./lib/gui/display.py:123
+msgid "Training preview. Updated on every save iteration"
+msgstr ""
+
+#: ./lib/gui/display_analysis.py:340
+msgid "Load/Refresh stats for the currently training session"
+msgstr ""
+
+#: ./lib/gui/display_analysis.py:342
+msgid "Clear currently displayed session stats"
+msgstr ""
+
+#: ./lib/gui/display_analysis.py:344
+msgid "Save session stats to csv"
+msgstr ""
+
+#: ./lib/gui/display_analysis.py:346
+msgid "Load saved session stats"
+msgstr ""
+
+#: ./lib/gui/display_command.py:91
+msgid "Preview updates at every model save. Click to refresh now."
+msgstr ""
+
+#: ./lib/gui/display_command.py:258
+msgid "Graph updates at every model save. Click to refresh now."
+msgstr ""
+
+#: ./lib/gui/display_command.py:272
+msgid "Display the raw loss data"
+msgstr ""
+
+#: ./lib/gui/display_command.py:284
+msgid "Display the smoothed loss data"
+msgstr ""
+
+#: ./lib/gui/display_command.py:291
+msgid "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing."
+msgstr ""
+
+#: ./lib/gui/display_command.py:321
+msgid "Set the number of iterations to display. 0 displays the full session."
+msgstr ""
+
+#: ./lib/gui/display_page.py:235
+msgid "Save {}(s) to file"
+msgstr ""
+
+#: ./lib/gui/display_page.py:247
+msgid "Enable or disable {} display"
+msgstr ""
+
+#: ./lib/gui/menu.py:30
+msgid "faceswap.dev - Guides and Forum"
+msgstr ""
+
+#: ./lib/gui/menu.py:31
+msgid "Patreon - Support this project"
+msgstr ""
+
+#: ./lib/gui/menu.py:32
+msgid "Discord - The FaceSwap Discord server"
+msgstr ""
+
+#: ./lib/gui/menu.py:33
+msgid "Github - Our Source Code"
+msgstr ""
+
+#: ./lib/gui/menu.py:524
+msgid "Configure {} settings..."
+msgstr ""
+
+#: ./lib/gui/menu.py:532
+msgid "Project"
+msgstr ""
+
+#: ./lib/gui/menu.py:532
+msgid "currently selected Task"
+msgstr ""
+
+#: ./lib/gui/menu.py:534
+msgid "Reload {} from disk"
+msgstr ""
+
+#: ./lib/gui/menu.py:536
+msgid "Create a new {}..."
+msgstr ""
+
+#: ./lib/gui/menu.py:538
+msgid "Reset {} to default"
+msgstr ""
+
+#: ./lib/gui/menu.py:540
+msgid "Save {}"
+msgstr ""
+
+#: ./lib/gui/menu.py:542
+msgid "Save {} as..."
+msgstr ""
+
+#: ./lib/gui/menu.py:546
+msgid " from a task or project file"
+msgstr ""
+
+#: ./lib/gui/menu.py:547
+msgid "Load {}..."
+msgstr ""
+
+#: ./lib/gui/popup_configure.py:205
+msgid "Close without saving"
+msgstr ""
+
+#: ./lib/gui/popup_configure.py:206
+msgid "Save this page's config"
+msgstr ""
+
+#: ./lib/gui/popup_configure.py:207
+msgid "Reset this page's config to default values"
+msgstr ""
+
+#: ./lib/gui/popup_configure.py:209
+msgid "Save all settings for the currently selected config"
+msgstr ""
+
+#: ./lib/gui/popup_configure.py:212
+msgid "Reset all settings for the currently selected config to default values"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:188
+msgid "Display {}"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:339
+msgid "Refresh graph"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:341
+msgid "Save display data to csv"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:343
+msgid "Number of data points to sample for rolling average"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:345
+msgid "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:347
+msgid "Flatten data points that fall more than 1 standard deviation from the mean to the mean value."
+msgstr ""
+
+#: ./lib/gui/popup_session.py:350
+msgid "Display rolling average of the data"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:352
+msgid "Smooth the data"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:354
+msgid "Display raw data"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:356
+msgid "Display polynormal data trend"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:358
+msgid "Set the data to display"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:360
+msgid "Change y-axis scale"
+msgstr ""
+

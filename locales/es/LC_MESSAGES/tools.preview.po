@@ -62,3 +62,27 @@ msgstr ""
 msgid "Swap the model. Instead of A -> B, swap B -> A"
 msgstr ""
 "Intercambiar el modelo. En lugar de convertir A en B, convierte B en A"
+
+#: ./tools/preview\preview.py:1303
+msgid "Save full config"
+msgstr ""
+
+#: ./tools/preview\preview.py:1306
+msgid "Reset full config to default values"
+msgstr ""
+
+#: ./tools/preview\preview.py:1309
+msgid "Reset full config to saved values"
+msgstr ""
+
+#: ./tools/preview\preview.py:1453
+msgid "Save {} config"
+msgstr ""
+
+#: ./tools/preview\preview.py:1456
+msgid "Reset {} config to default values"
+msgstr ""
+
+#: ./tools/preview\preview.py:1459
+msgid "Reset {} config to saved values"
+msgstr ""

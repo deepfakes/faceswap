@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """ Landmarks Editor and Landmarks Mesh viewer for the manual adjustments tool """
+import gettext
 import numpy as np
 
 from lib.align import AlignedFace
 from ._base import Editor, logger
+
+# LOCALES
+_LANG = gettext.translation("tools.manual", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 
 class Landmarks(Editor):
@@ -19,9 +24,9 @@ class Landmarks(Editor):
         The _detected_faces data for this manual session
     """
     def __init__(self, canvas, detected_faces):
-        control_text = ("Landmark Point Editor\nEdit the individual landmark points.\n\n"
-                        " - Click and drag individual points to relocate.\n"
-                        " - Draw a box to select multiple points to relocate.")
+        control_text = _("Landmark Point Editor\nEdit the individual landmark points.\n\n"
+                         " - Click and drag individual points to relocate.\n"
+                         " - Draw a box to select multiple points to relocate.")
         self._selection_box = canvas.create_rectangle(0, 0, 0, 0,
                                                       dash=(2, 4),
                                                       state="hidden",
@@ -36,7 +41,8 @@ class Landmarks(Editor):
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Point, Select
         and Zoom. """
-        self._add_action("magnify", "zoom", "Magnify/Demagnify the View", group=None, hotkey="M")
+        self._add_action("magnify", "zoom", _("Magnify/Demagnify the View"),
+                         group=None, hotkey="M")
         self._actions["magnify"]["tk_var"].trace("w", self._toggle_zoom)
 
     # CALLBACKS

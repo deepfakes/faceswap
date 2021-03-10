@@ -5,9 +5,8 @@ import gettext
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths
 
-
 # LOCALES
-_LANG = gettext.translation("tools.preview.cli", localedir="locales", fallback=True)
+_LANG = gettext.translation("tools.preview", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 

@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ The Menu Bars for faceswap GUI """
 
+import gettext
 import locale
 import logging
 import os
@@ -20,15 +21,18 @@ from .popup_configure import open_popup
 from .custom_widgets import Tooltip
 from .utils import get_config, get_images
 
-_RESOURCES = [("faceswap.dev - Guides and Forum", "https://www.faceswap.dev"),
-              ("Patreon - Support this project", "https://www.patreon.com/faceswap"),
-              ("Discord - The FaceSwap Discord server", "https://discord.gg/VasFUAy"),
-              ("Github - Our Source Code", "https://github.com/deepfakes/faceswap")]
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 _WORKING_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
 
-
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+_RESOURCES = [(_("faceswap.dev - Guides and Forum"), "https://www.faceswap.dev"),
+              (_("Patreon - Support this project"), "https://www.patreon.com/faceswap"),
+              (_("Discord - The FaceSwap Discord server"), "https://discord.gg/VasFUAy"),
+              (_("Github - Our Source Code"), "https://github.com/deepfakes/faceswap")]
 
 
 class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
@@ -520,7 +524,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
                 image=get_images().icons[btntype],
                 command=lambda n=name: open_popup(name=n))
             btn.pack(side=tk.LEFT, anchor=tk.W)
-            hlp = "Configure {} settings...".format(name.title())
+            hlp = _("Configure {} settings...").format(name.title())
             Tooltip(btn, text=hlp, wraplength=200)
 
     @staticmethod
@@ -528,22 +532,22 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Set the helptext for option buttons """
         logger.debug("Setting help")
         hlp = ""
-        task = "currently selected Task" if btntype[-1] == "2" else "Project"
+        task = _("currently selected Task") if btntype[-1] == "2" else _("Project")
         if btntype.startswith("reload"):
-            hlp = "Reload {} from disk".format(task)
+            hlp = _("Reload {} from disk").format(task)
         if btntype == "new":
-            hlp = "Create a new {}...".format(task)
+            hlp = _("Create a new {}...").format(task)
         if btntype.startswith("clear"):
-            hlp = "Reset {} to default".format(task)
+            hlp = _("Reset {} to default").format(task)
         elif btntype.startswith("save") and "_" not in btntype:
-            hlp = "Save {}".format(task)
+            hlp = _("Save {}").format(task)
         elif btntype.startswith("save_as"):
-            hlp = "Save {} as...".format(task)
+            hlp = _("Save {} as...").format(task)
         elif btntype.startswith("load"):
             msg = task
             if msg.endswith("Task"):
-                msg += " from a task or project file"
-            hlp = "Load {}...".format(msg)
+                msg += _(" from a task or project file")
+            hlp = _("Load {}...").format(msg)
         return hlp
 
     def _group_separator(self):
