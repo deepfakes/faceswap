@@ -139,7 +139,7 @@ class RollingBuffer(collections.deque):
             The log messages to write to the rolling buffer
         """
         for line in buffer.rstrip().splitlines():
-            self.append(line + "\n")
+            self.append(f"{line}\n")
 
 
 class TqdmHandler(logging.StreamHandler):
@@ -238,7 +238,7 @@ def _file_handler(loglevel, log_file, log_format, command):
         filename += "_gui.log" if command == "gui" else ".log"
 
     should_rotate = os.path.isfile(filename)
-    log_file = RotatingFileHandler(filename, backupCount=1)
+    log_file = RotatingFileHandler(filename, backupCount=1, encoding="utf-8")
     if should_rotate:
         log_file.doRollover()
     log_file.setFormatter(log_format)
@@ -328,19 +328,19 @@ def crash_log():
     str
         The filename of the file that contains the crash report
     """
-    original_traceback = traceback.format_exc()
+    original_traceback = traceback.format_exc().encode("utf-8")
     path = os.path.dirname(os.path.realpath(sys.argv[0]))
     filename = os.path.join(path, datetime.now().strftime("crash_report.%Y.%m.%d.%H%M%S%f.log"))
-    freeze_log = list(_DEBUG_BUFFER)
+    freeze_log = [line.encode("utf-8") for line in _DEBUG_BUFFER]
     try:
         from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
     except Exception:  # pylint:disable=broad-except
         sysinfo = ("\n\nThere was an error importing System Information from lib.sysinfo. This is "
                    "probably a bug which should be fixed:\n{}".format(traceback.format_exc()))
-    with open(filename, "w") as outfile:
+    with open(filename, "wb") as outfile:
         outfile.writelines(freeze_log)
         outfile.write(original_traceback)
-        outfile.write(sysinfo)
+        outfile.write(sysinfo.encode("utf-8"))
     return filename
 
 
