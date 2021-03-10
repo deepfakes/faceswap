@@ -962,11 +962,19 @@ class Predict():
             The swapped faces for the given batch
         """
         logger.trace("Predicting: Batchsize: %s", len(feed_faces))
+
+        if self._model.color_order.lower() == "rgb":
+            feed_faces = feed_faces[..., ::-1]
+
         feed = [feed_faces]
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
 
         predicted = self._model.model.predict(feed, batch_size=batch_size)
         predicted = predicted if isinstance(predicted, list) else [predicted]
+
+        if self._model.color_order.lower() == "rgb":
+            predicted[0] = predicted[0][..., ::-1]
+
         logger.trace("Output shape(s): %s", [predict.shape for predict in predicted])
 
         # Only take last output(s)
