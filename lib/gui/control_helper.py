@@ -474,11 +474,9 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             is_master = group == "_master"
             opts_frame = self.optsframe.subframe
             if is_master:
-                group_frame = ttk.Frame(opts_frame, name=group.lower())
+                group_frame = ttk.Frame(opts_frame)
             else:
-                group_frame = ttk.LabelFrame(opts_frame,
-                                             text="" if is_master else group.title(),
-                                             name=group.lower())
+                group_frame = ttk.LabelFrame(opts_frame, text="" if is_master else group.title())
 
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
@@ -522,7 +520,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         if subgroup is None:
             return subgroup
         if subgroup not in self._sub_group_frames:
-            sub_frame = ttk.Frame(parent, name="subgroup_{}".format(subgroup))
+            sub_frame = ttk.Frame(parent)
             self._sub_group_frames[subgroup] = AutoFillContainer(sub_frame,
                                                                  self.option_columns,
                                                                  self.option_columns)
