@@ -44,17 +44,17 @@
 _HELPTEXT = "Original Faceswap Model."
 
 
-_DEFAULTS = {
-    "lowmem": {
-        "default": False,
-        "info": "Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
-                "NB: Models with a changed lowmem mode are not compatible with each other.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "settings",
-    },
-}
+_DEFAULTS = dict(
+    lowmem=dict(
+        default=False,
+        info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
+             "NB: Models with a changed lowmem mode are not compatible with each other.",
+        datatype=bool,
+        rounding=None,
+        min_max=None,
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+        group="settings",
+    ),
+)

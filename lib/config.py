@@ -6,6 +6,7 @@
 import logging
 import os
 import sys
+import textwrap
 from collections import OrderedDict
 from configparser import ConfigParser
 from importlib import import_module
@@ -126,7 +127,20 @@ class FaceswapConfig():
         return conf
 
     def get(self, section, option):
-        """ Return a config item in it's correct format """
+        """ Return a config item in it's correct format.
+
+        Parameters
+        ----------
+        section: str
+            The configuration section currently being processed
+        option: str
+            The configuration option currently being processed
+
+        Returns
+        -------
+        varies
+            The selected configuration option in the correct data format
+        """
         logger.debug("Getting config item: (section: '%s', option: '%s')", section, option)
         datatype = self.defaults[section][option]["type"]
         if datatype == bool:
@@ -135,12 +149,42 @@ class FaceswapConfig():
             func = self.config.getint
         elif datatype == float:
             func = self.config.getfloat
+        elif datatype == list:
+            func = self._parse_list
         else:
             func = self.config.get
         retval = func(section, option)
         if isinstance(retval, str) and retval.lower() == "none":
             retval = None
         logger.debug("Returning item: (type: %s, value: %s)", datatype, retval)
+        return retval
+
+    def _parse_list(self, section, option):
+        """ Parse options that are stored as lists in the config file. These can be space or
+        comma-separated items in the config file. They will be returned as a list of strings,
+        regardless of what the final data type should be, so conversion from strings to other
+        formats should be done explicitly within the retrieving code.
+
+        Parameters
+        ----------
+        section: str
+            The configuration section currently being processed
+        option: str
+            The configuration option currently being processed
+
+        Returns
+        -------
+        list
+            List of `str` selected items for the config choice.
+        """
+        raw_option = self.config.get(section, option)
+        if not raw_option:
+            logger.debug("No options selected, returning empty list")
+            return []
+        delimiter = "," if "," in raw_option else None
+        retval = [opt.strip().lower() for opt in raw_option.split(delimiter)]
+        logger.debug("Processed raw option '%s' to list %s for section '%s', option '%s'",
+                     raw_option, retval, section, option)
         return retval
 
     def get_config_file(self, configfile):
@@ -179,6 +223,9 @@ class FaceswapConfig():
             For str values choices can be set to validate input and create a combo box
             in the GUI
 
+            For list values, choices must be provided, and a multi-option select box will
+            be created
+
             is_radio is to indicate to the GUI that it should display Radio Buttons rather than
             combo boxes for multiple choice options.
 
@@ -199,16 +246,17 @@ class FaceswapConfig():
         choices = list() if not choices else choices
 
         if None in (section, title, default, info):
-            raise ValueError("Default config items must have a section, "
-                             "title, defult and  "
+            raise ValueError("Default config items must have a section, title, defult and "
                              "information text")
         if not self.defaults.get(section, None):
             raise ValueError("Section does not exist: {}".format(section))
-        if datatype not in (str, bool, float, int):
+        if datatype not in (str, bool, float, int, list):
             raise ValueError("'datatype' must be one of str, bool, float or "
                              "int: {} - {}".format(section, title))
         if datatype in (float, int) and (rounding is None or min_max is None):
             raise ValueError("'rounding' and 'min_max' must be set for numerical options")
+        if isinstance(datatype, list) and not choices:
+            raise ValueError("'choices' must be defined for list based configuration items")
         if not isinstance(choices, (list, tuple)):
             raise ValueError("'choices' must be a list or tuple")
 
@@ -228,7 +276,10 @@ class FaceswapConfig():
         """ Add extra helptext info from parameters """
         helptext += "\n"
         if not fixed:
-            helptext += "\nThis option can be updated for existing models."
+            helptext += "\nThis option can be updated for existing models.\n"
+        if datatype == list:
+            helptext += ("\nIf selecting multiple options then each option should be separated "
+                         "by a space or a comma (e.g. item1, item2, item3)\n")
         if choices:
             helptext += "\nChoose from: {}".format(choices)
         elif datatype == bool:
@@ -257,7 +308,7 @@ class FaceswapConfig():
             logger.debug("Adding section: '%s')", section)
             self.insert_config_section(section, items["helptext"])
             for item, opt in items.items():
-                logger.debug("Adding option: (item: '%s', opt: '%s'", item, opt)
+                logger.debug("Adding option: (item: '%s', opt: '%s')", item, opt)
                 if item == "helptext":
                     continue
                 self.insert_config_item(section,
@@ -271,6 +322,7 @@ class FaceswapConfig():
         logger.debug("Inserting section: (section: '%s', helptext: '%s', config: '%s')",
                      section, helptext, config)
         config = self.config if config is None else config
+        config.optionxform = str
         helptext = self.format_help(helptext, is_section=True)
         config.add_section(section)
         config.set(section, helptext)
@@ -282,6 +334,7 @@ class FaceswapConfig():
         logger.debug("Inserting item: (section: '%s', item: '%s', default: '%s', helptext: '%s', "
                      "config: '%s')", section, item, default, option["helptext"], config)
         config = self.config if config is None else config
+        config.optionxform = str
         helptext = option["helptext"]
         helptext = self.format_help(helptext, is_section=False)
         config.set(section, helptext)
@@ -292,7 +345,15 @@ class FaceswapConfig():
     def format_help(helptext, is_section=False):
         """ Format comments for default ini file """
         logger.debug("Formatting help: (helptext: '%s', is_section: '%s')", helptext, is_section)
-        helptext = '# {}'.format(helptext.replace("\n", "\n# "))
+        formatted = ""
+        for hlp in helptext.split("\n"):
+            subsequent_indent = "\t\t" if hlp.startswith("\t") else ""
+            hlp = f"\t- {hlp[1:].strip()}" if hlp.startswith("\t") else hlp
+            formatted += textwrap.fill(hlp,
+                                       100,
+                                       tabsize=4,
+                                       subsequent_indent=subsequent_indent) + "\n"
+        helptext = '# {}'.format(formatted[:-1].replace("\n", "\n# "))  # Strip last newline
         if is_section:
             helptext = helptext.upper()
         else:
@@ -308,9 +369,8 @@ class FaceswapConfig():
     def save_config(self):
         """ Save a config file """
         logger.info("Updating config at: '%s'", self.configfile)
-        f_cfgfile = open(self.configfile, "w")
-        self.config.write(f_cfgfile)
-        f_cfgfile.close()
+        with open(self.configfile, "w") as f_cfgfile:
+            self.config.write(f_cfgfile)
         logger.debug("Updated config at: '%s'", self.configfile)
 
     def validate_config(self):
@@ -353,15 +413,26 @@ class FaceswapConfig():
             for item, opt in items.items():
                 if item == "helptext" or not opt["choices"]:
                     continue
-                opt_value = self.config.get(section, item)
-                if opt_value.lower() == "none" and any(choice.lower() == "none"
-                                                       for choice in opt["choices"]):
-                    continue
-                if opt_value not in opt["choices"]:
-                    default = str(opt["default"])
-                    logger.warning("'%s' is not a valid config choice for '%s': '%s'. Defaulting "
-                                   "to: '%s'", opt_value, section, item, default)
-                    self.config.set(section, item, default)
+                if opt["type"] == list:  # Multi-select items
+                    opt_value = self._parse_list(section, item)
+                    if not opt_value:  # No option selected
+                        continue
+                    if not all(val in opt["choices"] for val in opt_value):
+                        invalid = [val for val in opt_value if val not in opt["choices"]]
+                        valid = ", ".join(val for val in opt_value if val in opt["choices"])
+                        logger.warning("The option(s) %s are not valid selections for '%s': '%s'. "
+                                       "setting to: '%s'", invalid, section, item, valid)
+                        self.config.set(section, item, valid)
+                else:  # Single-select items
+                    opt_value = self.config.get(section, item)
+                    if opt_value.lower() == "none" and any(choice.lower() == "none"
+                                                           for choice in opt["choices"]):
+                        continue
+                    if opt_value not in opt["choices"]:
+                        default = str(opt["default"])
+                        logger.warning("'%s' is not a valid config choice for '%s': '%s'. "
+                                       "Defaulting to: '%s'", opt_value, section, item, default)
+                        self.config.set(section, item, default)
         logger.debug("Checked config choices")
 
     def check_config_change(self):
@@ -382,8 +453,14 @@ class FaceswapConfig():
         return False
 
     def handle_config(self):
-        """ Handle the config """
-        logger.debug("Handling config")
+        """ Handle the config.
+
+        Checks whether a config file exists for this section. If not then a default is created.
+
+        Configuration choices are then loaded and validated
+        """
+        logger.debug("Handling config: (section: %s, configfile: '%s')",
+                     self.section, self.configfile)
         if not self.check_exists():
             self.create_default()
         self.load_config()

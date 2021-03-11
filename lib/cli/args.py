@@ -951,6 +951,17 @@ class TrainArgs(FaceSwapArgs):
                    "that would be created by the chosen plugin and configuration settings is "
                    "displayed.")))
         argument_list.append(dict(
+            opts=("-f", "--freeze"),
+            action="store_true",
+            dest="freeze",
+            default=False,
+            group=_("model"),
+            help=_("Freeze the weights of the model. Freezing weights means that some of the "
+                   "parameters in the model will no longer continue to learn, but those that are "
+                   "not frozen will continue to learn. For most models, this will freeze the "
+                   "encoder, but some models may have configuration options for freezing other "
+                   "layers.")))
+        argument_list.append(dict(
             opts=("-bs", "--batch-size"),
             action=Slider,
             min_max=(1, 256),

@@ -415,6 +415,10 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                         continue
                     initial_value = conf.config_dict[option]
                     initial_value = "none" if initial_value is None else initial_value
+                    if params["type"] == list and isinstance(initial_value, list):
+                        # Split multi-select lists into space separated strings for tk variables
+                        initial_value = " ".join(initial_value)
+
                     retval[key]["options"][option] = ControlPanelOption(
                         title=option,
                         dtype=params["type"],
@@ -423,6 +427,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                         initial_value=initial_value,
                         choices=params["choices"],
                         is_radio=params["gui_radio"],
+                        is_multi_option=params["type"] == list,
                         rounding=params["rounding"],
                         min_max=params["min_max"],
                         helptext=params["helptext"])
@@ -611,6 +616,8 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                                  new_opt, ".".join([section, item]))
                 helptext = config.format_help(options["helptext"], is_section=False)
                 new_config.set(section, helptext)
+                if options["type"] == list:  # Comma seperate multi select options
+                    new_opt = ", ".join(new_opt if isinstance(new_opt, list) else new_opt.split())
                 new_config.set(section, item, str(new_opt))
         config.config = new_config
         config.save_config()

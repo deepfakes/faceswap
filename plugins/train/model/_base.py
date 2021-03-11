@@ -392,11 +392,30 @@ class ModelBase():
             optimizer = self._settings.loss_scale_optimizer(optimizer)
         if get_backend() == "amd":
             self._rewrite_plaid_outputs()
+        self._freeze_weights()
         self._loss.configure(self._model)
         self._model.compile(optimizer=optimizer, loss=self._loss.functions)
-        if not self._is_predict:
-            self._state.add_session_loss_names(self._loss.names)
+        self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self._model)
+
+    def _freeze_weights(self):
+        """ If freeze has been selected in the cli arguments, then freeze those models indicated
+        in the plugin's configuration. """
+        if not self._args.freeze:
+            logger.debug("Freeze weights deselected. Not freezing")
+            return
+
+        # Standardized config for freezing weights of other layers in model is `freeze-layers`
+        to_freeze = self.config.get("freeze_layers")
+        to_freeze = to_freeze if to_freeze else ["encoder"]
+        for layer in self._model.layers:
+            if isinstance(layer, KModel) and layer.name in to_freeze:
+                logger.info("Freezing weights for '%s' in model '%s'", layer.name, self.name)
+                layer.trainable = False
+                to_freeze.remove(layer.name)
+        if to_freeze:
+            logger.warning("The following layers were set to be frozen but do not exist in the "
+                           "model: %s", to_freeze)
 
     def _rewrite_plaid_outputs(self):
         """ Rewrite the output names for models using the PlaidML (Keras 2.2.4) backend

@@ -5,8 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-03-11 01:27-0000\n"
-"PO-Revision-Date: 2021-03-11 01:32+0000\n"
+"POT-Creation-Date: 2021-03-11 13:22-0000\n"
+"PO-Revision-Date: 2021-03-11 13:24+0000\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es\n"
@@ -680,6 +680,7 @@ msgstr ""
 "<input-B>/alignments.json si no se proporciona."
 
 #: lib/cli/args.py:911 lib/cli/args.py:923 lib/cli/args.py:948
+#: lib/cli/args.py:958
 msgid "model"
 msgstr "modelo"
 
@@ -754,12 +755,26 @@ msgstr ""
 "muestra un resumen del modelo que crearía el complemento elegido y los "
 "ajustes de configuración."
 
-#: lib/cli/args.py:961 lib/cli/args.py:973 lib/cli/args.py:984
-#: lib/cli/args.py:1070
+#: lib/cli/args.py:959
+msgid ""
+"Freeze the weights of the model. Freezing weights means that some of the "
+"parameters in the model will no longer continue to learn, but those that are "
+"not frozen will continue to learn. For most models, this will freeze the "
+"encoder, but some models may have configuration options for freezing other "
+"layers."
+msgstr ""
+"Congele los pesos del modelo. Congelar pesos significa que algunos de los "
+"parámetros del modelo ya no seguirán aprendiendo, pero los que no están "
+"congelados seguirán aprendiendo. Para la mayoría de los modelos, esto "
+"congelará el codificador, pero algunos modelos pueden tener opciones de "
+"configuración para congelar otras capas."
+
+#: lib/cli/args.py:972 lib/cli/args.py:984 lib/cli/args.py:995
+#: lib/cli/args.py:1081
 msgid "training"
 msgstr "entrenamiento"
 
-#: lib/cli/args.py:962
+#: lib/cli/args.py:973
 msgid ""
 "Batch size. This is the number of images processed through the model for "
 "each side per iteration. NB: As the model is fed 2 sides at a time, the "
@@ -772,7 +787,7 @@ msgstr ""
 "momento es el doble del número que se establece aquí. Los lotes más grandes "
 "requieren más RAM de la GPU."
 
-#: lib/cli/args.py:974
+#: lib/cli/args.py:985
 msgid ""
 "Length of training in iterations. This is only really used for automation. "
 "There is no 'correct' number of iterations a model should be trained for. "
@@ -787,22 +802,22 @@ msgstr ""
 "automáticamente en un número determinado de iteraciones, puede establecer "
 "ese valor aquí."
 
-#: lib/cli/args.py:985
+#: lib/cli/args.py:996
 msgid ""
 "Use the Tensorflow Mirrored Distrubution Strategy to train on multiple GPUs."
 msgstr ""
 "Utilice la estrategia de distribución en espejo de Tensorflow para entrenar "
 "en múltiples GPUs."
 
-#: lib/cli/args.py:995 lib/cli/args.py:1005
+#: lib/cli/args.py:1006 lib/cli/args.py:1016
 msgid "Saving"
 msgstr "Guardar"
 
-#: lib/cli/args.py:996
+#: lib/cli/args.py:1007
 msgid "Sets the number of iterations between each model save."
 msgstr "Establece el número de iteraciones entre cada guardado del modelo."
 
-#: lib/cli/args.py:1006
+#: lib/cli/args.py:1017
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
@@ -810,11 +825,11 @@ msgstr ""
 "Establece el número de iteraciones antes de guardar una copia de seguridad "
 "del modelo en su estado actual. Establece 0 para que esté desactivado."
 
-#: lib/cli/args.py:1013 lib/cli/args.py:1024 lib/cli/args.py:1035
+#: lib/cli/args.py:1024 lib/cli/args.py:1035 lib/cli/args.py:1046
 msgid "timelapse"
 msgstr "intervalo"
 
-#: lib/cli/args.py:1014
+#: lib/cli/args.py:1025
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -828,7 +843,7 @@ msgstr ""
 "para crear el timelapse. También debe suministrar un parámetro --timelapse-"
 "output y un parámetro --timelapse-input-B."
 
-#: lib/cli/args.py:1025
+#: lib/cli/args.py:1036
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -842,7 +857,7 @@ msgstr ""
 "para crear el timelapse. También debe suministrar un parámetro --timelapse-"
 "output y un parámetro --timelapse-input-A."
 
-#: lib/cli/args.py:1036
+#: lib/cli/args.py:1047
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -854,24 +869,24 @@ msgstr ""
 "Si se suministran las carpetas de entrada pero no la carpeta de salida, se "
 "guardará por defecto en la carpeta del modelo /timelapse/"
 
-#: lib/cli/args.py:1048 lib/cli/args.py:1055 lib/cli/args.py:1062
+#: lib/cli/args.py:1059 lib/cli/args.py:1066 lib/cli/args.py:1073
 msgid "preview"
 msgstr "previsualización"
 
-#: lib/cli/args.py:1049
+#: lib/cli/args.py:1060
 msgid ""
 "Percentage amount to scale the preview by. 100%% is the model output size."
 msgstr ""
 "Cantidad porcentual para escalar la vista previa. 100%% es el tamaño de "
 "salida del modelo."
 
-#: lib/cli/args.py:1056
+#: lib/cli/args.py:1067
 msgid "Show training preview output. in a separate window."
 msgstr ""
 "Mostrar la salida de la vista previa del entrenamiento. en una ventana "
 "separada."
 
-#: lib/cli/args.py:1063
+#: lib/cli/args.py:1074
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
@@ -879,7 +894,7 @@ msgstr ""
 "Escribe el resultado del entrenamiento en un archivo. La imagen se "
 "almacenará en la raíz de su carpeta FaceSwap."
 
-#: lib/cli/args.py:1071
+#: lib/cli/args.py:1082
 msgid ""
 "Disables TensorBoard logging. NB: Disabling logs means that you will not be "
 "able to use the graph or analysis for this session in the GUI."
@@ -887,12 +902,12 @@ msgstr ""
 "Desactiva el registro de TensorBoard. NB: Desactivar los registros significa "
 "que no podrá utilizar el gráfico o el análisis de esta sesión en la GUI."
 
-#: lib/cli/args.py:1078 lib/cli/args.py:1087 lib/cli/args.py:1096
-#: lib/cli/args.py:1105
+#: lib/cli/args.py:1089 lib/cli/args.py:1098 lib/cli/args.py:1107
+#: lib/cli/args.py:1116
 msgid "augmentation"
 msgstr "aumento"
 
-#: lib/cli/args.py:1079
+#: lib/cli/args.py:1090
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
@@ -902,7 +917,7 @@ msgstr ""
 "conjunto de caras opuestas en lugar de deformar la cara al azar. Esta es la "
 "forma 'dfaker' de hacer la deformación."
 
-#: lib/cli/args.py:1088
+#: lib/cli/args.py:1099
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
@@ -913,7 +928,7 @@ msgstr ""
 "general, esto debería dejarse sin efecto, excepto durante el 'entrenamiento "
 "de ajuste'."
 
-#: lib/cli/args.py:1097
+#: lib/cli/args.py:1108
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
@@ -923,7 +938,7 @@ msgstr ""
 "diferencias de color entre los conjuntos A y B, con un mayor coste de tiempo "
 "de entrenamiento. Activa esta opción para desactivar el aumento de color."
 
-#: lib/cli/args.py:1106
+#: lib/cli/args.py:1117
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "
@@ -936,6 +951,6 @@ msgstr ""
 "esta opción desde el principio, es probable que arruine el modelo y se "
 "obtengan resultados terribles."
 
-#: lib/cli/args.py:1131
+#: lib/cli/args.py:1142
 msgid "Output to Shell console instead of GUI console"
 msgstr "Salida a la consola Shell en lugar de la consola GUI"
