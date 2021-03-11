@@ -941,6 +941,16 @@ class TrainArgs(FaceSwapArgs):
                    "will require a GPU with a fair amount of VRAM). Good for details, but more "
                    "susceptible to color differences.")))
         argument_list.append(dict(
+            opts=("-su", "--summary"),
+            action="store_true",
+            dest="summary",
+            default=False,
+            group=_("model"),
+            help=_("Output a summary of the model and exit. If a model folder is provided then a "
+                   "summary of the saved model is displayed. Otherwise a summary of the model "
+                   "that would be created by the chosen plugin and configuration settings is "
+                   "displayed.")))
+        argument_list.append(dict(
             opts=("-bs", "--batch-size"),
             action=Slider,
             min_max=(1, 256),

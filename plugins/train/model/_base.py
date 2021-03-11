@@ -254,6 +254,7 @@ class ModelBase():
         Finally, a model summary is outputted to the logger at verbose level.
         """
         self._update_legacy_models()
+        is_summary = hasattr(self._args, "summary") and self._args.summary
         with self._settings.strategy_scope():
             if self._io.model_exists:
                 model = self._io._load()  # pylint:disable=protected-access
@@ -266,7 +267,7 @@ class ModelBase():
                 self._validate_input_shape()
                 inputs = self._get_inputs()
                 self._model = self.build_model(inputs)
-            if not self._is_predict:
+            if not is_summary and not self._is_predict:
                 self._compile_model()
             self._output_summary()
 
@@ -356,10 +357,14 @@ class ModelBase():
 
     def _output_summary(self):
         """ Output the summary of the model and all sub-models to the verbose logger. """
-        self._model.summary(print_fn=lambda x: logger.verbose("%s", x))
+        if hasattr(self._args, "summary") and self._args.summary:
+            print_fn = None  # Print straight to stdout
+        else:
+            print_fn = lambda x: logger.verbose("%s", x)  # print to logger
+        self._model.summary(print_fn=print_fn)
         for layer in self._model.layers:
             if isinstance(layer, KModel):
-                layer.summary(print_fn=lambda x: logger.verbose("%s", x))
+                layer.summary(print_fn=print_fn)
 
     def save(self):
         """ Save the model to disk.
