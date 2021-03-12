@@ -951,9 +951,9 @@ class TrainArgs(FaceSwapArgs):
                    "that would be created by the chosen plugin and configuration settings is "
                    "displayed.")))
         argument_list.append(dict(
-            opts=("-f", "--freeze"),
+            opts=("-f", "--freeze-weights"),
             action="store_true",
-            dest="freeze",
+            dest="freeze_weights",
             default=False,
             group=_("model"),
             help=_("Freeze the weights of the model. Freezing weights means that some of the "

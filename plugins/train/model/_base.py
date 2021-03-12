@@ -271,6 +271,31 @@ class ModelBase():
                 self._compile_model()
             self._output_summary()
 
+    def _get_all_sub_models(self, model, models=None):
+        """ For a given model, return all sub-models that occur (recursively) as children.
+
+        Parameters
+        ----------
+        model: :class:`keras.models.Model`
+            A Keras model to scan for sub models
+        models: `None`
+            Do not provide this parameter. It is used for recursion
+
+        Returns
+        -------
+        list
+            A list of all :class:`keras.models.Model`s found within the given model. The provided
+            model will always be returned in the first position
+        """
+        if models is None:
+            models = [model]
+        else:
+            models.append(model)
+        for layer in model.layers:
+            if isinstance(layer, KModel):
+                self._get_all_sub_models(layer, models=models)
+        return models
+
     def _update_legacy_models(self):
         """ Load weights from legacy split models into new unified model, archiving old model files
         to a new folder. """
@@ -361,10 +386,8 @@ class ModelBase():
             print_fn = None  # Print straight to stdout
         else:
             print_fn = lambda x: logger.verbose("%s", x)  # print to logger
-        self._model.summary(print_fn=print_fn)
-        for layer in self._model.layers:
-            if isinstance(layer, KModel):
-                layer.summary(print_fn=print_fn)
+        for model in self._get_all_sub_models(self._model):
+            model.summary(print_fn=print_fn)
 
     def save(self):
         """ Save the model to disk.
@@ -401,15 +424,14 @@ class ModelBase():
     def _freeze_weights(self):
         """ If freeze has been selected in the cli arguments, then freeze those models indicated
         in the plugin's configuration. """
-        if not self._args.freeze:
+        if not self._args.freeze_weights:
             logger.debug("Freeze weights deselected. Not freezing")
             return
 
-        # Standardized config for freezing weights of other layers in model is `freeze-layers`
-        to_freeze = self.config.get("freeze_layers")
-        to_freeze = to_freeze if to_freeze else ["encoder"]
-        for layer in self._model.layers:
-            if isinstance(layer, KModel) and layer.name in to_freeze:
+        to_freeze = self.config.get("freeze_layers")  # Standardized config for freezing weights
+        to_freeze = to_freeze if to_freeze else ["encoder"]  # No plugin config
+        for layer in self._get_all_sub_models(self._model):
+            if layer.name in to_freeze:
                 logger.info("Freezing weights for '%s' in model '%s'", layer.name, self.name)
                 layer.trainable = False
                 to_freeze.remove(layer.name)
