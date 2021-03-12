@@ -64,6 +64,32 @@ def KerasModel(inputs, outputs, name):  # pylint:disable=invalid-name
     return KModel(inputs, outputs, name=name)
 
 
+def _get_all_sub_models(model, models=None):
+    """ For a given model, return all sub-models that occur (recursively) as children.
+
+    Parameters
+    ----------
+    model: :class:`keras.models.Model`
+        A Keras model to scan for sub models
+    models: `None`
+        Do not provide this parameter. It is used for recursion
+
+    Returns
+    -------
+    list
+        A list of all :class:`keras.models.Model`s found within the given model. The provided
+        model will always be returned in the first position
+    """
+    if models is None:
+        models = [model]
+    else:
+        models.append(model)
+    for layer in model.layers:
+        if isinstance(layer, KModel):
+            _get_all_sub_models(layer, models=models)
+    return models
+
+
 class ModelBase():
     """ Base class that all model plugins should inherit from.
 
@@ -271,31 +297,6 @@ class ModelBase():
                 self._compile_model()
             self._output_summary()
 
-    def _get_all_sub_models(self, model, models=None):
-        """ For a given model, return all sub-models that occur (recursively) as children.
-
-        Parameters
-        ----------
-        model: :class:`keras.models.Model`
-            A Keras model to scan for sub models
-        models: `None`
-            Do not provide this parameter. It is used for recursion
-
-        Returns
-        -------
-        list
-            A list of all :class:`keras.models.Model`s found within the given model. The provided
-            model will always be returned in the first position
-        """
-        if models is None:
-            models = [model]
-        else:
-            models.append(model)
-        for layer in model.layers:
-            if isinstance(layer, KModel):
-                self._get_all_sub_models(layer, models=models)
-        return models
-
     def _update_legacy_models(self):
         """ Load weights from legacy split models into new unified model, archiving old model files
         to a new folder. """
@@ -386,7 +387,7 @@ class ModelBase():
             print_fn = None  # Print straight to stdout
         else:
             print_fn = lambda x: logger.verbose("%s", x)  # print to logger
-        for model in self._get_all_sub_models(self._model):
+        for model in _get_all_sub_models(self._model):
             model.summary(print_fn=print_fn)
 
     def save(self):
@@ -415,29 +416,15 @@ class ModelBase():
             optimizer = self._settings.loss_scale_optimizer(optimizer)
         if get_backend() == "amd":
             self._rewrite_plaid_outputs()
-        self._freeze_weights()
+
+        weights = _Weights(self)
+        weights.load(self._io.model_exists)
+        weights.freeze()
+
         self._loss.configure(self._model)
         self._model.compile(optimizer=optimizer, loss=self._loss.functions)
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self._model)
-
-    def _freeze_weights(self):
-        """ If freeze has been selected in the cli arguments, then freeze those models indicated
-        in the plugin's configuration. """
-        if not self._args.freeze_weights:
-            logger.debug("Freeze weights deselected. Not freezing")
-            return
-
-        to_freeze = self.config.get("freeze_layers")  # Standardized config for freezing weights
-        to_freeze = to_freeze if to_freeze else ["encoder"]  # No plugin config
-        for layer in self._get_all_sub_models(self._model):
-            if layer.name in to_freeze:
-                logger.info("Freezing weights for '%s' in model '%s'", layer.name, self.name)
-                layer.trainable = False
-                to_freeze.remove(layer.name)
-        if to_freeze:
-            logger.warning("The following layers were set to be frozen but do not exist in the "
-                           "model: %s", to_freeze)
 
     def _rewrite_plaid_outputs(self):
         """ Rewrite the output names for models using the PlaidML (Keras 2.2.4) backend
@@ -885,6 +872,186 @@ class _Settings():
         retval = nullcontext() if self._strategy is None else self._strategy.scope()
         logger.debug("Using strategy scope: %s", retval)
         return retval
+
+
+class _Weights():
+    """ Handling of freezing and loading model weights
+
+    Parameters
+    ----------
+    plugin: :class:`Model`
+        The parent plugin class that owns the IO functions.
+    """
+    def __init__(self, plugin):
+        logger.debug("Initializing %s: (plugin: %s)", self.__class__.__name__, plugin)
+        self._model = plugin.model
+        self._name = plugin.name
+        self._do_freeze = plugin._args.freeze_weights
+        self._weights_file = self._check_weights_file(plugin._args.load_weights)
+
+        freeze_layers = plugin.config.get("freeze_layers")  # Standardized config for freezing
+        load_layers = plugin.config.get("loading_layers")  # Standardized config for loading
+        self._freeze_layers = freeze_layers if freeze_layers else ["encoder"]  # No plugin config
+        self._load_layers = load_layers if load_layers else ["encoder"]  # No plugin config
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @classmethod
+    def _check_weights_file(cls, weights_file):
+        """ Validate that we have a valid path to a .h5 file.
+
+        Parameters
+        ----------
+        weights_file: str
+            The full path to a weights file
+
+        Returns
+        -------
+        str
+            The full path to a weights file
+        """
+        if not weights_file:
+            logger.debug("No weights file selected.")
+            return None
+
+        msg = ""
+        if not os.path.exists(weights_file):
+            msg = "Load weights selected, but the path '%s' does not exist."
+        elif not os.path.splitext(weights_file)[-1].lower() == ".h5":
+            msg = "Load weights selected, but the path '%s' is not a valid Keras model (.h5) file."
+
+        if msg:
+            msg += " Please check and try again."
+            logger.error(msg)
+
+        logger.verbose("Using weights file: %s", weights_file)
+        return weights_file
+
+    def freeze(self):
+        """ If freeze has been selected in the cli arguments, then freeze those models indicated
+        in the plugin's configuration. """
+        if not self._do_freeze:
+            logger.debug("Freeze weights deselected. Not freezing")
+            return
+
+        for layer in _get_all_sub_models(self._model):
+            if layer.name in self._freeze_layers:
+                logger.info("Freezing weights for '%s' in model '%s'", layer.name, self._name)
+                layer.trainable = False
+                self._freeze_layers.remove(layer.name)
+        if self._freeze_layers:
+            logger.warning("The following layers were set to be frozen but do not exist in the "
+                           "model: %s", self._freeze_layers)
+
+    def load(self, model_exists):
+        """ Load weights for newly created models, or output warning for pre-existing models.
+
+        Parameters
+        ----------
+        model_exists: bool
+            ``True`` if a model pre-exists and is being resumed, ``False`` if this is a new model
+        """
+        if not self._weights_file:
+            logger.debug("No weights file provided. Not loading weights.")
+            return
+        if model_exists and self._weights_file:
+            logger.warning("Ignoring weights file '%s' as this model is resuming.",
+                           self._weights_file)
+            return
+
+        weights_models = self._get_weights_model()
+        all_models = _get_all_sub_models(self._model)
+
+        for model_name in self._load_layers:
+            sub_model = next((lyr for lyr in all_models if lyr.name == model_name), None)
+            sub_weights = next((lyr for lyr in weights_models if lyr.name == model_name), None)
+
+            if not sub_model or not sub_weights:
+                msg = f"Skipping layer {model_name} as not in "
+                msg += "current_model." if not sub_model else f"weights '{self._weights_file}.'"
+                logger.warning(msg)
+                continue
+
+            logger.info("Loading weights for layer '%s'", model_name)
+            skipped_ops = 0
+            loaded_ops = 0
+            for layer in sub_model.layers:
+                success = self._load_layer_weights(layer, sub_weights, model_name)
+                if success == 0:
+                    skipped_ops += 1
+                elif success == 1:
+                    loaded_ops += 1
+
+        del weights_models
+
+        if loaded_ops == 0:
+            raise FaceswapError(f"No weights were succesfully loaded from your weights file: "
+                                f"'{self._weights_file}'. Please check and try again.")
+        if skipped_ops > 0:
+            logger.warning("%s weight(s) were unable to be loaded for your model. This is most "
+                           "likely because the weights you are trying to load were trained with "
+                           "different settings than you have set for your current model.",
+                           skipped_ops)
+
+    def _get_weights_model(self):
+        """ Obtain a list of all sub-models contained within the weights model.
+
+        Returns
+        -------
+        list
+            List of all models contained within the .h5 file
+
+        Raises
+        ------
+        FaceswapError
+            In the event of a failure to load the weights, or the weights belonging to a different
+            model
+        """
+        retval = _get_all_sub_models(load_model(self._weights_file, compile=False))
+        if not retval:
+            raise FaceswapError(f"Error loading weights file {self._weights_file}.")
+
+        if retval[0].name != self._name:
+            raise FaceswapError(f"You are attempting to load weights from a '{retval[0].name}' "
+                                f"model into a '{self._name}' model. This is not supported.")
+        return retval
+
+    def _load_layer_weights(self, layer, sub_weights, model_name):
+        """ Load the weights for a single layer.
+
+        Parameters
+        ----------
+        layer: :class:`keras.layers.Layer`
+            The layer to set the weights for
+        sub_weights: list
+            The list of layers in the weights model to load weights from
+        model_name: str
+            The name of the current sub-model that is having it's weights loaded
+
+        Returns
+        -------
+        int
+            `-1` if the layer has no weights to load. `0` if weights loading was unsuccessful. `1`
+            if weights loading was successful
+        """
+        old_weights = layer.get_weights()
+        if not old_weights:
+            logger.debug("Skipping layer without weights: %s", layer.name)
+            return -1
+
+        layer_weights = next((lyr for lyr in sub_weights.layers if lyr.name == layer.name), None)
+        if not layer_weights:
+            logger.warning("The weights file '%s' for layer '%s' does not contain weights for "
+                           "'%s'. Skipping", self._weights_file, model_name, layer.name)
+            return 0
+
+        new_weights = layer_weights.get_weights()
+        if old_weights[0].shape != new_weights[0].shape:
+            logger.warning("The weights for layer '%s' are of incompatible shapes. Skipping.",
+                           layer.name)
+            return 0
+        logger.verbose("Setting weights for '%s'", layer.name)
+        layer.set_weights(layer_weights.get_weights())
+        return 1
 
 
 class _Optimizer():  # pylint:disable=too-few-public-methods

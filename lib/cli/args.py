@@ -915,6 +915,22 @@ class TrainArgs(FaceSwapArgs):
                    "created). If continuing to train an existing model, specify the location of "
                    "the existing model.")))
         argument_list.append(dict(
+            opts=("-l", "--load-weights"),
+            action=FileFullPaths,
+            filetypes="model",
+            dest="load_weights",
+            required=False,
+            group=_("model"),
+            help=_("R|Load the weights from a pre-existing model into a newly created model. "
+                   "For most models this will load weights from the Encoder of the given model "
+                   "into the encoder of the newly created model. Some plugins may have specific "
+                   "configuration options allowing you to load weights from other layers. Weights "
+                   "will only be loaded when creating a new model. This option will be ignored if "
+                   "you are resuming an existing model. Generally you will also want to 'freeze-"
+                   "weights' whilst the rest of your model catches up with your Encoder.\n"
+                   "NB: Weights can only be loaded from models of the same plugin as you intend "
+                   "to train.")))
+        argument_list.append(dict(
             opts=("-t", "--trainer"),
             action=Radio,
             type=str.lower,

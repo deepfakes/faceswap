@@ -147,30 +147,31 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     def _filetypes(self):
         """ dict: The accepted extensions for each file type for opening/saving """
         all_files = ("All files", "*.*")
-        filetypes = {"default": (all_files,),
-                     "alignments": [("Faceswap Alignments", "*.fsa"),
-                                    all_files],
-                     "config_project": [("Faceswap Project files", "*.fsw"), all_files],
-                     "config_task": [("Faceswap Task files", "*.fst"), all_files],
-                     "config_all": [("Faceswap Project and Task files", "*.fst *.fsw"), all_files],
-                     "csv": [("Comma separated values", "*.csv"), all_files],
-                     "image": [("Bitmap", "*.bmp"),
-                               ("JPG", "*.jpeg *.jpg"),
-                               ("PNG", "*.png"),
-                               ("TIFF", "*.tif *.tiff"),
-                               all_files],
-                     "ini": [("Faceswap config files", "*.ini"), all_files],
-                     "state": [("State files", "*.json"), all_files],
-                     "log": [("Log files", "*.log"), all_files],
-                     "video": [("Audio Video Interleave", "*.avi"),
-                               ("Flash Video", "*.flv"),
-                               ("Matroska", "*.mkv"),
-                               ("MOV", "*.mov"),
-                               ("MP4", "*.mp4"),
-                               ("MPEG", "*.mpeg *.mpg *.ts *.vob"),
-                               ("WebM", "*.webm"),
-                               ("Windows Media Video", "*.wmv"),
-                               all_files]}
+        filetypes = dict(
+            default=(all_files,),
+            alignments=[("Faceswap Alignments", "*.fsa"), all_files],
+            config_project=[("Faceswap Project files", "*.fsw"), all_files],
+            config_task=[("Faceswap Task files", "*.fst"), all_files],
+            config_all=[("Faceswap Project and Task files", "*.fst *.fsw"), all_files],
+            csv=[("Comma separated values", "*.csv"), all_files],
+            image=[("Bitmap", "*.bmp"),
+                   ("JPG", "*.jpeg *.jpg"),
+                   ("PNG", "*.png"),
+                   ("TIFF", "*.tif *.tiff"),
+                   all_files],
+            ini=[("Faceswap config files", "*.ini"), all_files],
+            model=[("Keras model files", "*.h5"), all_files],
+            state=[("State files", "*.json"), all_files],
+            log=[("Log files", "*.log"), all_files],
+            video=[("Audio Video Interleave", "*.avi"),
+                   ("Flash Video", "*.flv"),
+                   ("Matroska", "*.mkv"),
+                   ("MOV", "*.mov"),
+                   ("MP4", "*.mp4"),
+                   ("MPEG", "*.mpeg *.mpg *.ts *.vob"),
+                   ("WebM", "*.webm"),
+                   ("Windows Media Video", "*.wmv"),
+                   all_files])
 
         # Add in multi-select options and upper case extensions for Linux
         for key in filetypes:
@@ -190,28 +191,22 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     def _contexts(self):
         """dict: Mapping of commands, actions and their corresponding file dialog for context
         handle types. """
-        return {
-            "effmpeg": {
-                "input": {
-                    "extract": "filename",
-                    "gen-vid": "dir",
-                    "get-fps": "filename",
-                    "get-info": "filename",
-                    "mux-audio": "filename",
-                    "rescale": "filename",
-                    "rotate": "filename",
-                    "slice": "filename"},
-                "output": {
-                    "extract": "dir",
-                    "gen-vid": "savefilename",
-                    "get-fps": "nothing",
-                    "get-info": "nothing",
-                    "mux-audio": "savefilename",
-                    "rescale": "savefilename",
-                    "rotate": "savefilename",
-                    "slice": "savefilename"}
-                }
-            }
+        return dict(effmpeg=dict(input={"extract": "filename",
+                                        "gen-vid": "dir",
+                                        "get-fps": "filename",
+                                        "get-info": "filename",
+                                        "mux-audio": "filename",
+                                        "rescale": "filename",
+                                        "rotate": "filename",
+                                        "slice": "filename"},
+                                 output={"extract": "dir",
+                                         "gen-vid": "savefilename",
+                                         "get-fps": "nothing",
+                                         "get-info": "nothing",
+                                         "mux-audio": "savefilename",
+                                         "rescale": "savefilename",
+                                         "rotate": "savefilename",
+                                         "slice": "savefilename"}))
 
     def _set_defaults(self):
         """ Set the default file type for the file dialog. Generally the first found file type
@@ -1053,15 +1048,15 @@ class Config():
         analysis_folder = tk.StringVar()
         analysis_folder.set(None)
 
-        tk_vars = {"display": display,
-                   "runningtask": runningtask,
-                   "istraining": istraining,
-                   "action": actioncommand,
-                   "generate": generatecommand,
-                   "consoleclear": consoleclear,
-                   "refreshgraph": refreshgraph,
-                   "updatepreview": updatepreview,
-                   "analysis_folder": analysis_folder}
+        tk_vars = dict(display=display,
+                       runningtask=runningtask,
+                       istraining=istraining,
+                       action=actioncommand,
+                       generate=generatecommand,
+                       consoleclear=consoleclear,
+                       refreshgraph=refreshgraph,
+                       updatepreview=updatepreview,
+                       analysis_folder=analysis_folder)
         logger.debug(tk_vars)
         return tk_vars
 
