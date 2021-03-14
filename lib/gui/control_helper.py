@@ -359,6 +359,10 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
     header_text: str, optional
         If provided, will place an information box at the top of the control
         panel with these contents.
+    style: str, optional
+        The name of the style to use for the control panel. Styles are configured when TkInter
+        initializes. The style name is the common prefix prior to the widget name. Default:
+        ``None`` (use the OS style)
     blank_nones: bool, optional
         How the control panel should handle None values. If set to True then None values will be
         converted to empty strings. Default: False
@@ -369,12 +373,12 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def __init__(self, parent, options,  # pylint:disable=too-many-arguments
                  label_width=20, columns=1, max_columns=4, option_columns=4, header_text=None,
-                 blank_nones=True, scrollbar=True):
+                 style=None, blank_nones=True, scrollbar=True):
         logger.debug("Initializing %s: (parent: '%s', options: %s, label_width: %s, columns: %s, "
-                     "max_columns: %s, option_columns: %s, header_text: %s, blank_nones: %s, "
-                     "scrollbar: %s)",
+                     "max_columns: %s, option_columns: %s, header_text: %s, style: %s, "
+                     "blank_nones: %s, scrollbar: %s)",
                      self.__class__.__name__, parent, options, label_width, columns, max_columns,
-                     option_columns, header_text, blank_nones, scrollbar)
+                     option_columns, header_text, style, blank_nones, scrollbar)
         super().__init__(parent)
 
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -387,6 +391,8 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.option_columns = option_columns
 
         self.header_text = header_text
+        self._style = "" if style is None else f"{style}."
+
         self.group_frames = dict()
         self._sub_group_frames = dict()
 
@@ -455,6 +461,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
                                  label_width=self.label_width,
                                  checkbuttons_frame=group_frame["chkbtns"],
                                  option_columns=self.option_columns,
+                                 style=self._style,
                                  blank_nones=blank_nones)
             if group_frame["chkbtns"].items > 0:
                 group_frame["chkbtns"].parent.pack(side=tk.BOTTOM, fill=tk.X, anchor=tk.NW)
@@ -492,7 +499,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
                 group_frame = ttk.Frame(opts_frame)
                 retval = group_frame
             else:
-                group_frame = ToggledFrame(opts_frame, text=group.title())
+                group_frame = ToggledFrame(opts_frame, text=group.title(), theme=self._style)
                 retval = group_frame.sub_frame
                 retval.config(highlightbackground="#176087",
                               highlightcolor="#176087",
@@ -531,8 +538,11 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             if is_master then check buttons will be placed in a LabelFrame
             otherwise in a standard frame """
         logger.debug("Add Options CheckButtons Frame")
-        chk_frame = ttk.Frame(frame, name="chkbuttons", style="CPanel.TFrame")
-        holder = AutoFillContainer(chk_frame, self.option_columns, self.option_columns)
+        chk_frame = ttk.Frame(frame, name="chkbuttons", style=f"{self._style}TFrame")
+        holder = AutoFillContainer(chk_frame,
+                                   self.option_columns,
+                                   self.option_columns,
+                                   style=self._style)
         logger.debug("Added Options CheckButtons Frame")
         return holder
 
@@ -540,23 +550,39 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         if subgroup is None:
             return subgroup
         if subgroup not in self._sub_group_frames:
-            sub_frame = ttk.Frame(parent, style="CPanel.TFrame")
+            sub_frame = ttk.Frame(parent, style=f"{self._style}TFrame")
             self._sub_group_frames[subgroup] = AutoFillContainer(sub_frame,
                                                                  self.option_columns,
-                                                                 self.option_columns)
+                                                                 self.option_columns,
+                                                                 style=self._style)
             sub_frame.pack(anchor=tk.W, expand=True, fill=tk.X)
             logger.debug("Added Subgroup Frame: %s", subgroup)
         return self._sub_group_frames[subgroup]
 
 
 class AutoFillContainer():
-    """ A container object that auto-fills columns """
-    def __init__(self, parent, initial_columns, max_columns):
+    """ A container object that auto-fills columns.
+
+    Parameters
+    ----------
+    parent: :class:`ttk.Frame`
+        The parent widget that holds this container
+    initial_columns: int
+        The initial number of columns that this container should display
+    max_columns: int
+        The maximum number of column that this container is permitted to display
+    style: str, optional
+        The name of the style to use for the control panel. Styles are configured when TkInter
+        initializes. The style name is the common prefix prior to the widget name. Default:
+        empty string (use the OS style)
+    """
+    def __init__(self, parent, initial_columns, max_columns, style=""):
         logger.debug("Initializing: %s: (parent: %s, initial_columns: %s, max_columns: %s)",
                      self.__class__.__name__, parent, initial_columns, max_columns)
         self.max_columns = max_columns
         self.columns = initial_columns
         self.parent = parent
+        self._style = style
 #        self.columns = min(columns, self.max_columns)
         self.single_column_width = self.scale_column_width(288, 9)
         self.max_width = self.max_columns * self.single_column_width
@@ -598,7 +624,7 @@ class AutoFillContainer():
         subframes = []
         for idx in range(self.max_columns):
             name = "af_subframe_{}".format(idx)
-            subframe = ttk.Frame(self.parent, name=name)
+            subframe = ttk.Frame(self.parent, name=name, style=f"{self._style}TFrame")
             if idx < self.columns:
                 # Only pack visible columns
                 subframe.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N, expand=True, fill=tk.X)
@@ -853,21 +879,26 @@ class ControlBuilder():
     checkbuttons_frame: tkinter.frame
         If a check-button frame is passed in, then check-buttons will be placed in this frame
         rather than the main options frame
+    style: str
+        The name of the style to use for the control panel. Styles are configured when TkInter
+        initializes. The style name is the common prefix prior to the widget name. Provide an empty
+        string to use the OS style
     blank_nones: bool
         Sets selected values to an empty string rather than None if this is true.
     """
     def __init__(self, parent, option, option_columns,  # pylint: disable=too-many-arguments
-                 label_width, checkbuttons_frame, blank_nones):
+                 label_width, checkbuttons_frame, style, blank_nones):
         logger.debug("Initializing %s: (parent: %s, option: %s, option_columns: %s, "
-                     "label_width: %s, checkbuttons_frame: %s, blank_nones: %s)",
+                     "label_width: %s, checkbuttons_frame: %s, style: %s, blank_nones: %s)",
                      self.__class__.__name__, parent, option, option_columns, label_width,
-                     checkbuttons_frame, blank_nones)
+                     checkbuttons_frame, style, blank_nones)
 
         self.option = option
         self.option_columns = option_columns
         self.helpset = False
         self.label_width = label_width
         self.filebrowser = None
+        self._style = style
 
         self.frame = self.control_frame(parent)
         self.chkbtns = checkbuttons_frame
@@ -880,7 +911,9 @@ class ControlBuilder():
     def control_frame(self, parent):
         """ Frame to hold control and it's label """
         logger.debug("Build control frame")
-        frame = ttk.Frame(parent, name="fr_{}".format(self.option.name), style="CPanel.TFrame")
+        frame = ttk.Frame(parent,
+                          name="fr_{}".format(self.option.name),
+                          style=f"{self._style}TFrame")
         frame.pack(fill=tk.X)
         logger.debug("Built control frame")
         return frame
@@ -908,7 +941,7 @@ class ControlBuilder():
                         text=self.option.title,
                         width=self.label_width,
                         anchor=tk.W,
-                        style="CPanel.TLabel")
+                        style=f"{self._style}TLabel")
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         if self.option.helptext is not None:
             _get_tooltip(lbl, text=self.option.helptext, wraplength=600)
@@ -953,11 +986,14 @@ class ControlBuilder():
         ctl = ttk.LabelFrame(self.frame,
                              text=self.option.title,
                              name="{}_labelframe".format(option_type),
-                             style="CPanel.TLabelframe")
-        holder = AutoFillContainer(ctl, self.option_columns, self.option_columns)
+                             style=f"{self._style}TLabelframe")
+        holder = AutoFillContainer(ctl,
+                                   self.option_columns,
+                                   self.option_columns,
+                                   style=self._style)
         for choice in self.option.choices:
             ctl = ttk.Radiobutton if option_type == "radio" else MultiOption
-            style = f"CPanel.T{'Radiobutton' if option_type == 'radio' else 'Checkbutton'}"
+            style = f"{self._style}T{'Radiobutton' if option_type == 'radio' else 'Checkbutton'}"
             ctl = ctl(holder.subframe,
                       text=choice.replace("_", " ").title(),
                       value=choice,
@@ -1097,7 +1133,7 @@ class ControlBuilder():
                         text=self.option.title,
                         width=self.label_width,
                         anchor=tk.W,
-                        style="CPanel.TLabel")
+                        style=f"{self._style}TLabel")
         lbl.pack(padx=2, pady=5, side=tk.RIGHT, anchor=tk.N)
         frame.pack(side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
@@ -1122,7 +1158,7 @@ class ControlBuilder():
                                   variable=self.option.tk_var,
                                   text=self.option.title,
                                   name=self.option.name,
-                                  style="CPanel.TCheckbutton")
+                                  style=f"{self._style}TCheckbutton")
         _get_tooltip(ctl, text=self.option.helptext, wraplength=600)
         ctl.pack(side=tk.TOP, anchor=tk.W, fill=tk.X)
         logger.debug("Added control checkframe: '%s'", self.option.name)
@@ -1193,7 +1229,13 @@ class FileBrowser():
             img = get_images().icons[lbl]
             action = getattr(self, "ask_" + browser)
             cmd = partial(action, filepath=self.tk_var, filetypes=self.filetypes)
-            fileopn = ttk.Button(frame, image=img, command=cmd)
+            fileopn = tk.Button(frame,
+                                image=img,
+                                command=cmd,
+                                relief=tk.SOLID,
+                                bd=1,
+                                bg="#FFFFFF",
+                                cursor="hand2")
             _add_command(fileopn.cget("command"), cmd)
             fileopn.pack(padx=0, side=tk.RIGHT)
             _get_tooltip(fileopn, text=self.helptext[lbl], wraplength=600)

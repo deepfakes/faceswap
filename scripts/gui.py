@@ -54,21 +54,26 @@ class FaceswapGui(tk.Tk):
     def set_styles(self):
         """ Set global custom styles """
         gui_style = ttk.Style()
-        gui_style.configure('H1.TLabel',
-                            font=(self._config.default_font[0],
-                                  self._config.default_font[1] + 4,
-                                  "bold"))
-        gui_style.configure('H2.TLabel',
-                            font=(self._config.default_font[0],
-                                  self._config.default_font[1] + 2,
-                                  "bold"))
+        font = self._config.default_font
+        gui_style.configure('H1.TLabel', font=(font[0], font[1] + 4, "bold"))
+        gui_style.configure('H2.TLabel', font=(font[0], font[1] + 2, "bold"))
 
-        gui_style.configure("CPanel.TLabel", background="#FFFFFF")
-        gui_style.configure("CPanel.TFrame", background="#FFFFFF")
-        gui_style.configure("CPanel.TLabelframe", background="#FFFFFF")
-        gui_style.configure('CPanel.TLabelframe.Label', background="#FFFFFF", foreground="#176087")
-        gui_style.configure("CPanel.TCheckbutton", background="#FFFFFF")
-        gui_style.configure("CPanel.TRadiobutton", background="#FFFFFF")
+        # Control and settings panel styles
+        for _type in ("CPanel", "SPanel"):
+            # Common control panel items
+            for lbl in ["TLabel", "TFrame", "TLabelframe", "TCheckbutton", "TRadiobutton"]:
+                gui_style.configure(f"CPanel.{lbl}", background="#FFFFFF")
+                gui_style.configure(f"SPanel.{lbl}", background="#FFFFFF")
+
+            # Specific items
+            color = "#176087" if _type == "CPanel" else "#9B1D20"
+            gui_style.configure(f"{_type}.TLabelframe.Label",
+                                background="#FFFFFF",
+                                foreground=color)
+            gui_style.configure(f"{_type}.Groupheader.TLabel",
+                                background=color,
+                                foreground="#FFFFFF",
+                                font=(font[0], font[1], "bold"))
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """

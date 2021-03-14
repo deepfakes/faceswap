@@ -135,7 +135,8 @@ class CommandTab(ttk.Frame):  # pylint:disable=too-many-ancestors
                      label_width=16,
                      option_columns=3,
                      columns=1,
-                     header_text=options.get("helptext", None))
+                     header_text=options.get("helptext", None),
+                     style="CPanel")
         self.add_frame_separator()
         ActionFrame(self)
         logger.debug("Built Tab: '%s'", self.command)

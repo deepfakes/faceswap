@@ -240,7 +240,7 @@ class SessionPopUp(tk.Toplevel):
                                         min_max=min_max,
                                         helptext=self._set_help(item))
             self._vars[item] = slider.tk_var
-            ControlBuilder(frame, slider, 1, 19, None, True)
+            ControlBuilder(frame, slider, 1, 19, None, "", True)
         logger.debug("Built Sliders")
 
     def _opts_buttons(self, frame):

@@ -485,7 +485,6 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
         key: str
             The lookup key to the settings cache
         """
-        panel_kwargs = dict(columns=1, max_columns=1, option_columns=4, blank_nones=False)
         info = self._config_cpanel_dict.get(key, None)
         if info is None:
             logger.debug("key '%s' does not exist in options. Creating links page.", key)
@@ -494,7 +493,11 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
             self._cache[key] = ControlPanel(self,
                                             list(info["options"].values()),
                                             header_text=info["helptext"],
-                                            **panel_kwargs)
+                                            columns=1,
+                                            max_columns=1,
+                                            option_columns=4,
+                                            style="SPanel",
+                                            blank_nones=False)
 
     def _create_links_page(self, key):
         """ For headings which don't have settings, build a links page to the subsections.
@@ -616,7 +619,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                                  new_opt, ".".join([section, item]))
                 helptext = config.format_help(options["helptext"], is_section=False)
                 new_config.set(section, helptext)
-                if options["type"] == list:  # Comma seperate multi select options
+                if options["type"] == list:  # Comma separated multi select options
                     new_opt = ", ".join(new_opt if isinstance(new_opt, list) else new_opt.split())
                 new_config.set(section, item, str(new_opt))
         config.config = new_config

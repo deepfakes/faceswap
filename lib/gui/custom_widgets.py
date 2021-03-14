@@ -898,23 +898,18 @@ class ToggledFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     ----------
     text: str
         The text to appear in the Toggle Frame header
+    theme: str, optional
+        The theme to use for the panel header. Default: `"CPanel"`
     subframe_style: str, optional
         The name of the ttk Style to use for the sub frame. Default: ``None``
     toggle_var: :class:`tk.BooleanVar`, optional
         If provided, this variable will control the expanded (``True``) and minimized (``False``)
         state of the widget. Set to None to create the variable internally. Default: ``None``
     """
-    def __init__(self, parent, *args, text="", toggle_var=None, **kwargs):
-        logger.debug("Initializing %s: (parent: %s, text: %s, toggle_var: %s)",
-                     self.__class__.__name__, parent, text, toggle_var)
+    def __init__(self, parent, *args, text="", theme="CPanel", toggle_var=None, **kwargs):
+        logger.debug("Initializing %s: (parent: %s, text: %s, theme: %s, toggle_var: %s)",
+                     self.__class__.__name__, parent, text, theme, toggle_var)
         super().__init__(parent, *args, **kwargs)
-        style = ttk.Style()
-        font = get_config().default_font
-        style.configure('GroupHeader.TLabel',
-                        background="#176087",
-                        foreground="#FFFFFF",
-                        font=(font[0], font[1], "bold"))
-
         self._text = text
 
         if toggle_var:
@@ -925,7 +920,9 @@ class ToggledFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._icon_var = tk.StringVar()
         self._icon_var.set("-" if self.is_expanded else "+")
 
-        self._build_header()
+        theme = "CPanel" if not theme else theme
+        theme = theme[:-1] if theme[-1] == "." else theme
+        self._build_header(theme)
 
         self.sub_frame = tk.Frame(self, name="toggledframe_subframe", highlightthickness=1, bd=0)
         if self.is_expanded:
@@ -938,22 +935,25 @@ class ToggledFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ bool: ``True`` if the Toggle Frame is expanded. ``False`` if it is minimized. """
         return self._toggle_var.get()
 
-    def _build_header(self):
+    def _build_header(self, theme):
         """ The Header row. Contains the title text and is made clickable to expand and contract
-        the sub-frame. """
+        the sub-frame.
 
+        Parameters
+        theme: str
+            The theme to use for the panel header
+        """
         header_frame = ttk.Frame(self, name="toggledframe_header")
 
         text_label = ttk.Label(header_frame,
                                name="toggledframe_headerlbl",
                                text=self._text,
-                               style="GroupHeader.TLabel",
+                               style=f"{theme}.Groupheader.TLabel",
                                cursor="hand2")
-
         toggle_button = ttk.Label(header_frame,
                                   name="toggledframe_headerbtn",
                                   textvariable=self._icon_var,
-                                  style="GroupHeader.TLabel",
+                                  style=f"{theme}.Groupheader.TLabel",
                                   cursor="hand2",
                                   width=2)
         text_label.bind("<Button-1>", self._toggle)
