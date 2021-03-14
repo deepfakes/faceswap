@@ -38,6 +38,7 @@ class AlignmentsArgs(FaceSwapArgs):
             type=str,
             choices=("draw", "extract", "missing-alignments", "missing-frames", "multi-faces",
                      "no-faces", "remove-faces", "rename", "sort", "spatial"),
+            group=_("processing"),
             required=True,
             help=_("R|Choose which action you want to perform. NB: All actions require an "
                    "alignments file (-a) to be passed in."
@@ -65,6 +66,19 @@ class AlignmentsArgs(FaceSwapArgs):
                    "(EXPERIMENTAL!)").format(frames_dir, frames_and_faces_dir, output_opts,
                                              faces_dir, frames_or_faces_dir)))
         argument_list.append(dict(
+            opts=("-o", "--output"),
+            action=Radio,
+            type=str,
+            choices=("console", "file", "move"),
+            group=_("processing"),
+            default="console",
+            help=_("R|How to output discovered items ('faces' and 'frames' only):"
+                   "\nL|'console': Print the list of frames to the screen. (DEFAULT)"
+                   "\nL|'file': Output the list of frames to a text file (stored within the "
+                   "source directory)."
+                   "\nL|'move': Move the discovered items to a sub-folder within the source "
+                   "directory.")))
+        argument_list.append(dict(
             opts=("-a", "--alignments_file"),
             action=FileFullPaths,
             dest="alignments_file",
@@ -87,19 +101,6 @@ class AlignmentsArgs(FaceSwapArgs):
             filetypes="video",
             group=_("data"),
             help=_("Directory containing source frames that faces were extracted from.")))
-        argument_list.append(dict(
-            opts=("-o", "--output"),
-            action=Radio,
-            type=str,
-            choices=("console", "file", "move"),
-            group=_("processing"),
-            default="console",
-            help=_("R|How to output discovered items ('faces' and 'frames' only):"
-                   "\nL|'console': Print the list of frames to the screen. (DEFAULT)"
-                   "\nL|'file': Output the list of frames to a text file (stored within the "
-                   "source directory)."
-                   "\nL|'move': Move the discovered items to a sub-folder within the source "
-                   "directory.")))
         argument_list.append(dict(
             opts=("-een", "--extract-every-n"),
             type=int,
