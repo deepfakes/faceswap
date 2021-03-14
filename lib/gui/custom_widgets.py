@@ -158,7 +158,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     def _build_console(self):
         """ Build and place the console  and add stdout/stderr redirection """
         logger.debug("Build console")
-        self._console.config(width=100, height=6, bg="gray90", fg="black")
+        self._console.config(width=100, height=6, bg="#CDD3D5", fg="black")
         self._console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(self, command=self._console.yview)

@@ -396,7 +396,13 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.group_frames = dict()
         self._sub_group_frames = dict()
 
-        self._canvas = tk.Canvas(self, bd=0, highlightthickness=0)
+        canvas_kwargs = dict(bd=0, highlightthickness=0)
+        if self._style == "CPanel.":
+            canvas_kwargs["bg"] = "#CDD3D5"
+        if self._style == "SPanel.":
+            canvas_kwargs["bg"] = "#DAD2D8"
+
+        self._canvas = tk.Canvas(self, **canvas_kwargs)
         self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.mainframe, self.optsframe = self.get_opts_frame()
@@ -413,34 +419,27 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def get_opts_frame(self):
         """ Return an auto-fill container for the options inside a main frame """
-        mainframe = ttk.Frame(self._canvas)
+        style = f"Holder.{self._style}"
+        mainframe = ttk.Frame(self._canvas, style=f"{style}TFrame")
         if self.header_text is not None:
             self.add_info(mainframe)
-        optsframe = ttk.Frame(mainframe, name="opts_frame")
+        optsframe = ttk.Frame(mainframe, name="opts_frame", style=f"{style}TFrame")
         optsframe.pack(expand=True, fill=tk.BOTH)
-        holder = AutoFillContainer(optsframe, self.columns, self.max_columns)
+        holder = AutoFillContainer(optsframe, self.columns, self.max_columns, style=style)
         logger.debug("Opts frames: '%s'", holder)
         return mainframe, holder
 
     def add_info(self, frame):
         """ Plugin information """
-        gui_style = ttk.Style()
-        gui_style.configure('White.TFrame', background='#FFFFFF')
-        gui_style.configure('InfoHeader.TLabel',
-                            background='#FFFFFF',
-                            font=get_config().default_font + ("bold", ))
-        gui_style.configure('InfoBody.TLabel',
-                            background='#FFFFFF')
-
-        info_frame = ttk.Frame(frame, style='White.TFrame', relief=tk.SOLID)
-        info_frame.pack(fill=tk.X, side=tk.TOP, expand=True, padx=10, pady=10)
-        label_frame = ttk.Frame(info_frame, style='White.TFrame')
+        info_frame = ttk.Frame(frame, style=f"{self._style}TFrame", relief=tk.SOLID)
+        info_frame.pack(fill=tk.X, side=tk.TOP, expand=True, padx=10, pady=(10, 0))
+        label_frame = ttk.Frame(info_frame, style=f"{self._style}TFrame")
         label_frame.pack(padx=5, pady=5, fill=tk.X, expand=True)
         for idx, line in enumerate(self.header_text.splitlines()):
             if not line:
                 continue
-            style = "InfoHeader.TLabel" if idx == 0 else "InfoBody.TLabel"
-            info = ttk.Label(label_frame, text=line, style=style, anchor=tk.W)
+            style = f"InfoHeader.{self._style}" if idx == 0 else f"InfoBody.{self._style}"
+            info = ttk.Label(label_frame, text=line, style=f"{style}TLabel", anchor=tk.W)
             info.bind("<Configure>", self._adjust_wraplength)
             info.pack(fill=tk.X, padx=0, pady=0, expand=True, side=tk.TOP)
 
@@ -1237,7 +1236,7 @@ class FileBrowser():
                                 bg="#FFFFFF",
                                 cursor="hand2")
             _add_command(fileopn.cget("command"), cmd)
-            fileopn.pack(padx=0, side=tk.RIGHT)
+            fileopn.pack(padx=1, side=tk.RIGHT)
             _get_tooltip(fileopn, text=self.helptext[lbl], wraplength=600)
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",
                          action, self.filetypes)

@@ -62,10 +62,13 @@ class FaceswapGui(tk.Tk):
         for _type in ("CPanel", "SPanel"):
             # Common control panel items
             for lbl in ["TLabel", "TFrame", "TLabelframe", "TCheckbutton", "TRadiobutton"]:
-                gui_style.configure(f"CPanel.{lbl}", background="#FFFFFF")
-                gui_style.configure(f"SPanel.{lbl}", background="#FFFFFF")
+                gui_style.configure(f"{_type}.{lbl}", background="#FFFFFF")
 
-            # Specific items
+            # Background colors
+            color = "#CDD3D5" if _type == "CPanel" else "#DAD2D8"
+            gui_style.configure(f"Holder.{_type}.TFrame", background=color)
+
+            # Highlight Colors
             color = "#176087" if _type == "CPanel" else "#9B1D20"
             gui_style.configure(f"{_type}.TLabelframe.Label",
                                 background="#FFFFFF",
@@ -74,6 +77,12 @@ class FaceswapGui(tk.Tk):
                                 background=color,
                                 foreground="#FFFFFF",
                                 font=(font[0], font[1], "bold"))
+
+            # Control Panel Info Box
+            gui_style.configure(f"InfoHeader.{_type}.TLabel",
+                                background='#FFFFFF',
+                                font=(font[0], font[1], "bold"))
+            gui_style.configure(f"InfoBody.{_type}.TLabel", background="#FFFFFF")
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """

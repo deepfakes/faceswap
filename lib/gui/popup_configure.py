@@ -287,8 +287,9 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
         fix_map = lambda o: [elm for elm in style.map("Treeview", query_opt=o)  # noqa
                              if elm[:2] != ("!disabled", "!selected")]
         style.map("Treeview", foreground=fix_map("foreground"), background=fix_map("background"))
+        style.map('Treeview', background=[('selected', '#9B1D20')])
         # Remove the Borders
-        style.configure("ConfigNav.Treeview", bd=0)
+        style.configure("ConfigNav.Treeview", bd=0, background="#F0F0F0")
         style.layout("ConfigNav.Treeview", [('ConfigNav.Treeview.treearea', {'sticky': 'nswe'})])
 
     def _build_tree(self, parent, configurations, name):
