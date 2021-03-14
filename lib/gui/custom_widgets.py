@@ -886,3 +886,97 @@ class PopupProgress(tk.Toplevel):
         """
         self._lbl_title.config(text=title)
         self._lbl_title.update_idletasks()
+
+
+class ToggledFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
+    """ A collapsible and expandable frame.
+
+    The frame contains a header given in the text argument, and adds an expand contract button.
+    Clicking on the header will expand and contract the sub-frame below
+
+    Parameters
+    ----------
+    text: str
+        The text to appear in the Toggle Frame header
+    subframe_style: str, optional
+        The name of the ttk Style to use for the sub frame. Default: ``None``
+    toggle_var: :class:`tk.BooleanVar`, optional
+        If provided, this variable will control the expanded (``True``) and minimized (``False``)
+        state of the widget. Set to None to create the variable internally. Default: ``None``
+    """
+    def __init__(self, parent, *args, text="", toggle_var=None, **kwargs):
+        logger.debug("Initializing %s: (parent: %s, text: %s, toggle_var: %s)",
+                     self.__class__.__name__, parent, text, toggle_var)
+        super().__init__(parent, *args, **kwargs)
+        style = ttk.Style()
+        font = get_config().default_font
+        style.configure('GroupHeader.TLabel',
+                        background="#176087",
+                        foreground="#FFFFFF",
+                        font=(font[0], font[1], "bold"))
+
+        self._text = text
+
+        if toggle_var:
+            self._toggle_var = toggle_var
+        else:
+            self._toggle_var = tk.BooleanVar()
+            self._toggle_var.set(1)
+        self._icon_var = tk.StringVar()
+        self._icon_var.set("-" if self.is_expanded else "+")
+
+        self._build_header()
+
+        self.sub_frame = tk.Frame(self, name="toggledframe_subframe", highlightthickness=1, bd=0)
+        if self.is_expanded:
+            self.sub_frame.pack(fill=tk.X, expand=True)
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def is_expanded(self):
+        """ bool: ``True`` if the Toggle Frame is expanded. ``False`` if it is minimized. """
+        return self._toggle_var.get()
+
+    def _build_header(self):
+        """ The Header row. Contains the title text and is made clickable to expand and contract
+        the sub-frame. """
+
+        header_frame = ttk.Frame(self, name="toggledframe_header")
+
+        text_label = ttk.Label(header_frame,
+                               name="toggledframe_headerlbl",
+                               text=self._text,
+                               style="GroupHeader.TLabel",
+                               cursor="hand2")
+
+        toggle_button = ttk.Label(header_frame,
+                                  name="toggledframe_headerbtn",
+                                  textvariable=self._icon_var,
+                                  style="GroupHeader.TLabel",
+                                  cursor="hand2",
+                                  width=2)
+        text_label.bind("<Button-1>", self._toggle)
+        toggle_button.bind("<Button-1>", self._toggle)
+
+        text_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        toggle_button.pack(side=tk.RIGHT)
+        header_frame.pack(fill=tk.X, expand=True)
+
+    def _toggle(self, event):  # pylint:disable=unused-argument
+        """ Toggle the sub-frame between contracted or expanded, and update the toggle icon
+        appropriately.
+
+        Parameters
+        ----------
+        event: tkinter event
+            Required but unused
+         """
+        if self.is_expanded:
+            self.sub_frame.forget()
+            self._icon_var.set("+")
+            self._toggle_var.set(0)
+        else:
+            self.sub_frame.pack(fill=tk.X, expand=True)
+            self._icon_var.set("-")
+            self._toggle_var.set(1)

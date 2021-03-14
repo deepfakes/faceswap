@@ -54,7 +54,6 @@ class FaceswapGui(tk.Tk):
     def set_styles(self):
         """ Set global custom styles """
         gui_style = ttk.Style()
-        gui_style.configure('TLabelframe.Label', foreground="#0046D5", relief=tk.SOLID)
         gui_style.configure('H1.TLabel',
                             font=(self._config.default_font[0],
                                   self._config.default_font[1] + 4,
@@ -63,6 +62,13 @@ class FaceswapGui(tk.Tk):
                             font=(self._config.default_font[0],
                                   self._config.default_font[1] + 2,
                                   "bold"))
+
+        gui_style.configure("CPanel.TLabel", background="#FFFFFF")
+        gui_style.configure("CPanel.TFrame", background="#FFFFFF")
+        gui_style.configure("CPanel.TLabelframe", background="#FFFFFF")
+        gui_style.configure('CPanel.TLabelframe.Label', background="#FFFFFF", foreground="#176087")
+        gui_style.configure("CPanel.TCheckbutton", background="#FFFFFF")
+        gui_style.configure("CPanel.TRadiobutton", background="#FFFFFF")
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """

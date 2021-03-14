@@ -10,7 +10,7 @@ from functools import partial
 
 from _tkinter import Tcl_Obj, TclError
 
-from .custom_widgets import ContextMenu, MultiOption, Tooltip
+from .custom_widgets import ContextMenu, MultiOption, ToggledFrame, Tooltip
 from .utils import FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -467,7 +467,22 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.debug("Added Config Frame")
 
     def get_group_frame(self, group):
-        """ Return a new group frame """
+        """ Return a group frame.
+
+        If a group frame has already been created for the given group, then it will be returned,
+        otherwise it will be created and returned.
+
+        Parameters
+        ----------
+        group: str
+            The name of the group to obtain the group frame for
+
+        Returns
+        -------
+        :class:`ttk.Frame` or :class:`ToggledFrame`
+            If this is a 'master' group frame then returns a standard frame. If this is any
+            other group, then will return the ToggledFrame for that group
+        """
         group = group.lower()
         if self.group_frames.get(group, None) is None:
             logger.debug("Creating new group frame for: %s", group)
@@ -475,13 +490,18 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             opts_frame = self.optsframe.subframe
             if is_master:
                 group_frame = ttk.Frame(opts_frame)
+                retval = group_frame
             else:
-                group_frame = ttk.LabelFrame(opts_frame, text="" if is_master else group.title())
+                group_frame = ToggledFrame(opts_frame, text=group.title())
+                retval = group_frame.sub_frame
+                retval.config(highlightbackground="#176087",
+                              highlightcolor="#176087",
+                              background="#FFFFFF")
 
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
-            self.group_frames[group] = dict(frame=group_frame,
-                                            chkbtns=self.checkbuttons_frame(group_frame))
+            self.group_frames[group] = dict(frame=retval,
+                                            chkbtns=self.checkbuttons_frame(retval))
         group_frame = self.group_frames[group]
         return group_frame
 
@@ -511,7 +531,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             if is_master then check buttons will be placed in a LabelFrame
             otherwise in a standard frame """
         logger.debug("Add Options CheckButtons Frame")
-        chk_frame = ttk.Frame(frame, name="chkbuttons")
+        chk_frame = ttk.Frame(frame, name="chkbuttons", style="CPanel.TFrame")
         holder = AutoFillContainer(chk_frame, self.option_columns, self.option_columns)
         logger.debug("Added Options CheckButtons Frame")
         return holder
@@ -520,7 +540,7 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         if subgroup is None:
             return subgroup
         if subgroup not in self._sub_group_frames:
-            sub_frame = ttk.Frame(parent)
+            sub_frame = ttk.Frame(parent, style="CPanel.TFrame")
             self._sub_group_frames[subgroup] = AutoFillContainer(sub_frame,
                                                                  self.option_columns,
                                                                  self.option_columns)
@@ -620,7 +640,8 @@ class AutoFillContainer():
         return True
 
     def compile_widget_config(self):
-        """ Compile all children recursively in correct order if not already compiled """
+        """ Compile all children recursively in correct order if not already compiled and add
+        to :attr:`_widget_config` """
         zipped = zip_longest(*(subframe.winfo_children() for subframe in self.subframes))
         children = [child for group in zipped for child in group if child is not None]
         self._widget_config = [{"class": child.__class__,
@@ -632,35 +653,85 @@ class AutoFillContainer():
                                 "config": self.config_cleaner(child),
                                 "children": self.get_all_children_config(child, []),
                                 # Some children have custom kwargs, so keep dicts in sync
-                                "custom_kwargs": dict()}
+                                "custom_kwargs": self._custom_kwargs(child)}
                                for idx, child in enumerate(children)]
         logger.debug("Compiled AutoFillContainer children: %s", self._widget_config)
 
+    @classmethod
+    def _custom_kwargs(cls, widget):
+        """ For custom widgets some custom arguments need to be passed from the old widget to the
+        newly created widget.
+
+        Parameters
+        ----------
+        widget: tkinter widget
+            The widget to be checked for custom keyword arguments
+
+        Returns
+        -------
+        dict
+            The custom keyword arguments required for recreating the given widget
+        """
+        retval = dict()
+        if widget.__class__.__name__ == "MultiOption":
+            retval = dict(value=widget._value,  # pylint:disable=protected-access
+                          variable=widget._master_variable)  # pylint:disable=protected-access
+        elif widget.__class__.__name__ == "ToggledFrame":
+            # Toggled Frames need to have their variable tracked
+            retval = dict(text=widget._text,  # pylint:disable=protected-access
+                          toggle_var=widget._toggle_var)  # pylint:disable=protected-access
+        return retval
+
     def get_all_children_config(self, widget, child_list):
-        """ Return all children, recursively, of given widget """
+        """ Return all children, recursively, of given widget.
+
+        Parameters
+        ----------
+        widget: tkinter widget
+            The widget to recursively obtain the configurations of each child
+        child_list: list
+            The list of child configurations already collected
+
+        Returns
+        -------
+        list
+            The list of configurations for all recursive children of the given widget
+         """
+        unpack = set()
         for child in widget.winfo_children():
-            if child.winfo_ismapped():
-                id_ = str(child)
-                if child.__class__.__name__ == "MultiOption":
-                    # MultiOption checkbox groups are a custom object with additional parameter
-                    # requirements.
-                    custom_kwargs = dict(
-                        value=child._value,  # pylint:disable=protected-access
-                        variable=child._master_variable)  # pylint:disable=protected-access
-                else:
-                    custom_kwargs = dict()
+            # Hidden Toggle Frame boxes need to be mapped
+            if child.winfo_ismapped() or "toggledframe_subframe" in str(child):
+                not_mapped = not child.winfo_ismapped()
+                # ToggleFrame is a custom widget that creates it's own children and handles
+                # bindings on the headers, to auto-hide the contents. To ensure that all child
+                # information (specifically pack information) can be collected, we need to pack
+                # any hidden sub-frames. These are then hidden again once collected.
+                if not_mapped and (child.winfo_name() == "toggledframe_subframe" or
+                                   child.winfo_name() == "chkbuttons"):
+                    child.pack(fill=tk.X, expand=True)
+                    child.update_idletasks()  # Updates the packing info of children
+                    unpack.add(child)
+
+                if child.winfo_name().startswith("toggledframe_header"):
+                    # Headers should be entirely handled by parent widget
+                    continue
 
                 child_list.append({
                     "class": child.__class__,
-                    "id": id_,
-                    "tooltip": _RECREATE_OBJECTS["tooltips"].get(id_, None),
-                    "rc_menu": _RECREATE_OBJECTS["contextmenus"].get(str(id_), None),
+                    "id": str(child),
+                    "tooltip": _RECREATE_OBJECTS["tooltips"].get(str(child), None),
+                    "rc_menu": _RECREATE_OBJECTS["contextmenus"].get(str(child), None),
                     "pack_info": self.pack_config_cleaner(child),
                     "name": child.winfo_name(),
                     "config": self.config_cleaner(child),
                     "parent": child.winfo_parent(),
-                    "custom_kwargs": custom_kwargs})
+                    "custom_kwargs": self._custom_kwargs(child)})
             self.get_all_children_config(child, child_list)
+
+        # Re-hide any toggle frames that were expanded
+        for hide in unpack:
+            hide.pack_forget()
+            hide.update_idletasks()
         return child_list
 
     @staticmethod
@@ -677,6 +748,9 @@ class AutoFillContainer():
             # Some keys default to "" but tkinter doesn't like to set config to this value
             # so skip them to use default value.
             if key in ("anchor", "justify", "compound") and val == "":
+                continue
+            # Following keys cannot be defined after widget is created:
+            if key in ("colormap", "container", "visual"):
                 continue
             val = str(val) if isinstance(val, Tcl_Obj) else val
             # Return correct command from master command dict
@@ -708,8 +782,21 @@ class AutoFillContainer():
                 subframe.pack_forget()
 
     def pack_widget_clones(self, widget_dicts, old_children=None, new_children=None):
-        """ Widgets cannot be given a new parent so we need to clone
-            them and then pack the new widget """
+        """ Recursively pass through the list of widgets creating clones and packing all
+        children.
+
+        Widgets cannot be given a new parent so we need to clone them and then pack the
+        new widgets.
+
+        Parameters
+        ----------
+        widget_dicts: list
+            List of dictionaries, in appearance order, of widget information for cloning widgets
+        old_childen: list, optional
+            Used for recursion. Leave at ``None``
+        new_childen: list, optional
+            Used for recursion. Leave at ``None``
+        """
         for widget_dict in widget_dicts:
             logger.debug("Cloning widget: %s", widget_dict)
             old_children = [] if old_children is None else old_children
@@ -733,6 +820,15 @@ class AutoFillContainer():
                 rc_menu.__init__(widget=clone)
                 rc_menu.cm_bind()
             clone.pack(**widget_dict["pack_info"])
+
+            # Handle ToggledFrame sub-frames. If the parent is not set to expanded, then we need to
+            # hide the sub-frame
+            if clone.winfo_name() == "toggledframe_subframe":
+                toggle_frame = clone.nametowidget(clone.winfo_parent())
+                if not toggle_frame.is_expanded:
+                    logger.debug("Hiding minimized toggle box: %s", clone)
+                    clone.pack_forget()
+
             old_children.append(widget_dict["id"])
             new_children.append(clone)
             if widget_dict.get("children", None) is not None:
@@ -784,7 +880,7 @@ class ControlBuilder():
     def control_frame(self, parent):
         """ Frame to hold control and it's label """
         logger.debug("Build control frame")
-        frame = ttk.Frame(parent, name="fr_{}".format(self.option.name))
+        frame = ttk.Frame(parent, name="fr_{}".format(self.option.name), style="CPanel.TFrame")
         frame.pack(fill=tk.X)
         logger.debug("Built control frame")
         return frame
@@ -808,7 +904,11 @@ class ControlBuilder():
     def build_control_label(self):
         """ Label for control """
         logger.debug("Build control label: (option: '%s')", self.option.name)
-        lbl = ttk.Label(self.frame, text=self.option.title, width=self.label_width, anchor=tk.W)
+        lbl = ttk.Label(self.frame,
+                        text=self.option.title,
+                        width=self.label_width,
+                        anchor=tk.W,
+                        style="CPanel.TLabel")
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         if self.option.helptext is not None:
             _get_tooltip(lbl, text=self.option.helptext, wraplength=600)
@@ -852,20 +952,23 @@ class ControlBuilder():
         help_intro, help_items = self._get_multi_help_items(self.option.helptext)
         ctl = ttk.LabelFrame(self.frame,
                              text=self.option.title,
-                             name="{}_labelframe".format(option_type))
+                             name="{}_labelframe".format(option_type),
+                             style="CPanel.TLabelframe")
         holder = AutoFillContainer(ctl, self.option_columns, self.option_columns)
         for choice in self.option.choices:
             ctl = ttk.Radiobutton if option_type == "radio" else MultiOption
+            style = f"CPanel.T{'Radiobutton' if option_type == 'radio' else 'Checkbutton'}"
             ctl = ctl(holder.subframe,
                       text=choice.replace("_", " ").title(),
                       value=choice,
-                      variable=self.option.tk_var)
+                      variable=self.option.tk_var,
+                      style=style)
             if choice.lower() in help_items:
                 self.helpset = True
                 helptext = help_items[choice.lower()]
                 helptext = "{}\n\n - {}".format(helptext, help_intro)
                 _get_tooltip(ctl, text=helptext, wraplength=600)
-            ctl.pack(anchor=tk.W)
+            ctl.pack(anchor=tk.W, fill=tk.X)
             logger.debug("Added %s option %s", option_type, choice)
         return holder.parent
 
@@ -990,7 +1093,11 @@ class ControlBuilder():
                        height=round(int(12 * get_config().scaling_factor)))
         ctl.bind("<Button-1>", lambda *e, c=ctl, t=self.option.title: self._ask_color(c, t))
         ctl.pack(side=tk.LEFT, anchor=tk.W)
-        lbl = ttk.Label(frame, text=self.option.title, width=self.label_width, anchor=tk.W)
+        lbl = ttk.Label(frame,
+                        text=self.option.title,
+                        width=self.label_width,
+                        anchor=tk.W,
+                        style="CPanel.TLabel")
         lbl.pack(padx=2, pady=5, side=tk.RIGHT, anchor=tk.N)
         frame.pack(side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
@@ -1014,9 +1121,10 @@ class ControlBuilder():
         ctl = self.option.control(chkframe,
                                   variable=self.option.tk_var,
                                   text=self.option.title,
-                                  name=self.option.name)
+                                  name=self.option.name,
+                                  style="CPanel.TCheckbutton")
         _get_tooltip(ctl, text=self.option.helptext, wraplength=600)
-        ctl.pack(side=tk.TOP, anchor=tk.W)
+        ctl.pack(side=tk.TOP, anchor=tk.W, fill=tk.X)
         logger.debug("Added control checkframe: '%s'", self.option.name)
         return ctl
 
