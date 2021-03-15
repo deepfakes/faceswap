@@ -23,7 +23,7 @@ class FaceswapGui(tk.Tk):
         self._init_args = dict(debug=debug)
         self._config = self.initialize_globals()
         self.set_fonts()
-        self.set_styles()
+        self._cache = self.set_styles()
         self._config.set_geometry(1200, 640, self._config.user_config_dict["fullscreen"])
 
         self.wrapper = ProcessWrapper()
@@ -53,6 +53,7 @@ class FaceswapGui(tk.Tk):
 
     def set_styles(self):
         """ Set global custom styles """
+        cache = []
         gui_style = ttk.Style()
         font = self._config.default_font
         gui_style.configure('H1.TLabel', font=(font[0], font[1] + 4, "bold"))
@@ -83,6 +84,9 @@ class FaceswapGui(tk.Tk):
                                 background='#FFFFFF',
                                 font=(font[0], font[1], "bold"))
             gui_style.configure(f"InfoBody.{_type}.TLabel", background="#FFFFFF")
+
+            # Scale widgets
+            gui_style.configure(f"{_type}.Horizontal.TScale", background="#FFFFFF")
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """

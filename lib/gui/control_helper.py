@@ -1054,7 +1054,10 @@ class ControlBuilder():
                       d_type=self.option.dtype,
                       round_to=self.option.rounding,
                       min_max=self.option.min_max)
-        ctl = ttk.Scale(self.frame, variable=self.option.tk_var, command=cmd)
+        ctl = ttk.Scale(self.frame,
+                        variable=self.option.tk_var,
+                        command=cmd,
+                        style=f"{self._style}Horizontal.TScale")
         _add_command(ctl.cget("command"), cmd)
         rc_menu = _get_contextmenu(tbox)
         rc_menu.cm_bind()
