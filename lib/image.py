@@ -381,8 +381,8 @@ def read_image_meta(filename):
         try:
             chunk = infile.read(8)
         except PermissionError:
-            logger.error(f"PermissionError while reading {filename}")
-        if b"\x89PNG\r\n\x1a\n" != chunk:
+            raise PermissionError(f"PermissionError while reading: {filename}")
+        if chunk  != b"\x89PNG\r\n\x1a\n":
             raise ValueError(f"Invalid header found in png: {filename}")
         while True:
             chunk = infile.read(8)
