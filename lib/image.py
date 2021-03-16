@@ -378,8 +378,11 @@ def read_image_meta(filename):
         retval["height"], retval["width"] = img.shape[:2]
         return retval
     with open(filename, "rb") as infile:
-        chunk = infile.read(8)
-        if chunk != b"\x89PNG\r\n\x1a\n":
+        try:
+            chunk = infile.read(8)
+        except PermissionError:
+            logger.error(f"PermissionError while reading {filename}")
+        if b"\x89PNG\r\n\x1a\n" != chunk:
             raise ValueError(f"Invalid header found in png: {filename}")
         while True:
             chunk = infile.read(8)
