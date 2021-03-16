@@ -45,36 +45,37 @@ _HELPTEXT = ("A lightweight, high resolution Dfaker variant "
              "(Adapted from https://github.com/dfaker/df)")
 
 
-_DEFAULTS = {
-    "features": {
-        "default": "best",
-        "info": "Higher settings will allow learning more features such as tatoos, piercing,"
-                "\nand wrinkles."
-                "\nStrongly affects VRAM usage.",
-        "datatype": str,
-        "choices": ["lowmem", "fair", "best"],
-        "gui_radio": True,
-        "fixed": True,
-    },
-    "details": {
-        "default": "good",
-        "info": "Defines detail fidelity. Lower setting can appear 'rugged' while 'good' "
-                "might take onger time to train."
-                "\nAffects VRAM usage.",
-        "datatype": str,
-        "choices": ["fast", "good"],
-        "gui_radio": True,
-        "fixed": True,
-    },
-    "output_size": {
-        "default": 256,
-        "info": "Output image resolution (in pixels).\nBe aware that larger resolution will "
-                "increase VRAM requirements.\nNB: Must be either 128, 256, or 384.",
-        "datatype": int,
-        "rounding": 128,
-        "min_max": (128, 384),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-}
+_DEFAULTS = dict(
+    features=dict(
+        default="best",
+        info="Higher settings will allow learning more features such as tatoos, piercing and "
+             "wrinkles.\nStrongly affects VRAM usage.",
+        datatype=str,
+        choices=["lowmem", "fair", "best"],
+        group="settings",
+        gui_radio=True,
+        fixed=True,
+    ),
+    details=dict(
+        default="good",
+        info="Defines detail fidelity. Lower setting can appear 'rugged' while 'good' might take "
+             "a longer time to train.\nAffects VRAM usage.",
+        datatype=str,
+        choices=["fast", "good"],
+        group="settings",
+        gui_radio=True,
+        fixed=True,
+    ),
+    output_size=dict(
+        default=256,
+        info="Output image resolution (in pixels).\nBe aware that larger resolution will increase "
+             "VRAM requirements.\nNB: Must be either 128, 256, or 384.",
+        datatype=int,
+        rounding=128,
+        min_max=(128, 384),
+        choices=[],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+)

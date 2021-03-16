@@ -169,7 +169,7 @@ class _ConfigurePlugins(tk.Toplevel):
         lbl_header = ttk.Label(lbl_frame,
                                textvariable=self._tk_vars["header"],
                                anchor=tk.W,
-                               style=".SPanel.Header1.TLabel")
+                               style="SPanel.Header1.TLabel")
         lbl_header.pack(fill=tk.X, expand=True, side=tk.LEFT)
 
         sep = ttk.Frame(header_frame, height=2, relief=tk.RIDGE)
@@ -285,13 +285,20 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
         """
         theme = get_config().user_theme["settings_popup"]
         style = ttk.Style()
+
+        # Fix a bug in Tree-view that doesn't show alternate foreground on selection
         fix_map = lambda o: [elm for elm in style.map("Treeview", query_opt=o)  # noqa
                              if elm[:2] != ("!disabled", "!selected")]
-        style.map("Treeview", foreground=fix_map("foreground"), background=fix_map("background"))
-        style.map('Treeview', background=[('selected', theme["header_color"])])
+
         # Remove the Borders
         style.configure("ConfigNav.Treeview", bd=0, background="#F0F0F0")
         style.layout("ConfigNav.Treeview", [('ConfigNav.Treeview.treearea', {'sticky': 'nswe'})])
+
+        # Set colors
+        style.map("ConfigNav.Treeview",
+                  foreground=fix_map("foreground"),
+                  background=fix_map("background"))
+        style.map('ConfigNav.Treeview', background=[('selected', theme["header_color"])])
 
     def _build_tree(self, parent, configurations, name):
         """ Build the configuration pop-up window.
