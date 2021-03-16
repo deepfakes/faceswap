@@ -4,10 +4,10 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
+"Project-Id-Version: faceswap.spanish\n"
 "POT-Creation-Date: 2021-03-10 15:35-0000\n"
-"PO-Revision-Date: 2021-03-16 18:15+0000\n"
-"Language-Team: \n"
+"PO-Revision-Date: 2021-03-16 18:40+0000\n"
+"Language-Team: tokafondo\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -123,7 +123,7 @@ msgstr "Proyecto"
 
 #: lib/gui/menu.py:532
 msgid "currently selected Task"
-msgstr "Tarea actualmente seleccionada"
+msgstr "tarea actualmente seleccionada"
 
 #: lib/gui/menu.py:534
 msgid "Reload {} from disk"
@@ -147,7 +147,7 @@ msgstr "Guardar {} como..."
 
 #: lib/gui/menu.py:546
 msgid " from a task or project file"
-msgstr "de un archivo de tarea o proyecto"
+msgstr " de un archivo de tarea o proyecto"
 
 #: lib/gui/menu.py:547
 msgid "Load {}..."
@@ -195,7 +195,7 @@ msgstr "Número de puntos de datos a muestrear para la media móvil"
 msgid "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing"
 msgstr ""
 "Establezca la cantidad de regularización. 0 es sin regularización, 0,99 es "
-"máxima regularización."
+"máxima regularización"
 
 #: lib/gui/popup_session.py:347
 msgid ""
