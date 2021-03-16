@@ -169,7 +169,7 @@ class _ConfigurePlugins(tk.Toplevel):
         lbl_header = ttk.Label(lbl_frame,
                                textvariable=self._tk_vars["header"],
                                anchor=tk.W,
-                               style="H1.TLabel")
+                               style=".SPanel.Header1.TLabel")
         lbl_header.pack(fill=tk.X, expand=True, side=tk.LEFT)
 
         sep = ttk.Frame(header_frame, height=2, relief=tk.RIDGE)
@@ -283,11 +283,12 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         We also set some default styles for our tree view.
         """
+        theme = get_config().user_theme["settings_popup"]
         style = ttk.Style()
         fix_map = lambda o: [elm for elm in style.map("Treeview", query_opt=o)  # noqa
                              if elm[:2] != ("!disabled", "!selected")]
         style.map("Treeview", foreground=fix_map("foreground"), background=fix_map("background"))
-        style.map('Treeview', background=[('selected', '#9B1D20')])
+        style.map('Treeview', background=[('selected', theme["header_color"])])
         # Remove the Borders
         style.configure("ConfigNav.Treeview", bd=0, background="#F0F0F0")
         style.layout("ConfigNav.Treeview", [('ConfigNav.Treeview.treearea', {'sticky': 'nswe'})])
@@ -439,7 +440,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
         """ Build the dynamic header text. """
         header_frame = ttk.Frame(self)
         var = tk.StringVar()
-        lbl = ttk.Label(header_frame, textvariable=var, anchor=tk.W, style="H2.TLabel")
+        lbl = ttk.Label(header_frame, textvariable=var, anchor=tk.W, style="SPanel.Header2.TLabel")
         lbl.pack(fill=tk.X, expand=True, side=tk.TOP)
         header_frame.pack(fill=tk.X, padx=5, pady=(5, 0), side=tk.TOP)
         self._vars["header"] = var
@@ -522,7 +523,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
             lbl = ttk.Label(frame,
                             text=link.replace("_", " ").title(),
                             anchor=tk.W,
-                            foreground="blue",
+                            foreground=get_config().user_theme["settings_popup"]["header_color"],
                             cursor="hand2")
             lbl.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(0, 5))
             bind = "{}|{}".format(key, link)

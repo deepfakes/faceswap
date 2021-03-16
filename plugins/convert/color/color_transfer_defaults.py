@@ -49,35 +49,35 @@ _HELPTEXT = (
 )
 
 
-_DEFAULTS = {
-    "clip": {
-        "default": True,
-        "info": "Should components of L*a*b* image be scaled by np.clip before converting "
-                "back to BGR color space?\nIf False then components will be min-max scaled "
-                "appropriately.\nClipping will keep target image brightness truer to the "
-                "input.\nScaling will adjust image brightness to avoid washed out portions in "
-                "the resulting color transfer that can be caused by clipping.",
-        "datatype": bool,
-        "group": "method",
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "preserve_paper": {
-        "default": True,
-        "info": "Should color transfer strictly follow methodology layed out in original "
-                "paper?\nThe method does not always produce aesthetically pleasing results.\n"
-                "If False then L*a*b* components will be scaled using the reciprocal of the "
-                "scaling factor proposed in the paper. This method seems to produce more "
-                "consistently aesthetically pleasing results.",
-        "datatype": bool,
-        "group": "method",
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-}
+_DEFAULTS = dict(
+    clip=dict(
+        default=True,
+        info="Should components of L*a*b* image be scaled by np.clip before converting back to "
+             "BGR color space?\nIf False then components will be min-max scaled appropriately.\n"
+             "Clipping will keep target image brightness truer to the input.\nScaling will adjust "
+             "image brightness to avoid washed out portions in the resulting color transfer that "
+             "can be caused by clipping.",
+        datatype=bool,
+        group="method",
+        rounding=None,
+        min_max=None,
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+    ),
+    preserve_paper=dict(
+        default=True,
+        info="Should color transfer strictly follow methodology layed out in original paper?\nThe "
+             "method does not always produce aesthetically pleasing results.\nIf False then "
+             "L*a*b* components will be scaled using the reciprocal of the scaling factor "
+             "proposed in the paper. This method seems to produce more consistently aesthetically "
+             "pleasing results.",
+        datatype=bool,
+        group="method",
+        rounding=None,
+        min_max=None,
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+    ),
+)

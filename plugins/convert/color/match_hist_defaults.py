@@ -44,17 +44,17 @@
 _HELPTEXT = "Options for matching the histograms between the source and destination faces"
 
 
-_DEFAULTS = {
-    "threshold": {
-        "default": 99.0,
-        "info": "Adjust the threshold for histogram matching. Can reduce extreme colors "
-                "leaking in by filtering out colors at the extreme ends of the histogram "
-                "spectrum.",
-        "datatype": float,
-        "rounding": 1,
-        "min_max": (90.0, 100.0),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    }
-}
+_DEFAULTS = dict(
+    threshold=dict(
+        default=99.0,
+        info="Adjust the threshold for histogram matching. Can reduce extreme colors leaking in "
+             "by filtering out colors at the extreme ends of the histogram spectrum.",
+        datatype=float,
+        rounding=1,
+        min_max=(90.0, 100.0),
+        choices=[],
+        gui_radio=False,
+        group="settings",
+        fixed=True,
+    )
+)

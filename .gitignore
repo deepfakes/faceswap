@@ -32,6 +32,8 @@
 !lib/gui
 !lib/gui/.cache/preview
 !lib/gui/.cache/icons
+!lib/gui/.cache/themes
+!lib/gui/.cache/themes/*.json
 !lib/model/*
 !scripts
 !plugins/

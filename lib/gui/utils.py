@@ -6,13 +6,15 @@ import platform
 import sys
 import tkinter as tk
 
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 from threading import Event, Thread
 from queue import Queue
 
 import numpy as np
 
 from PIL import Image, ImageDraw, ImageTk
+
+from lib.serializer import get_serializer
 
 from ._config import Config as UserConfig
 from .project import Project, Tasks
@@ -809,6 +811,8 @@ class Config():
             status_bar=statusbar,
             command_notebook=None)  # set in command.py
         self._user_config = UserConfig(None)
+        self._style = _Style(self.default_font, root)
+        self._user_theme = self._style.user_theme
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # Constants
@@ -895,6 +899,11 @@ class Config():
     def user_config_dict(self):
         """ dict: The GUI config in dict form. """
         return self._user_config.config_dict
+
+    @property
+    def user_theme(self):
+        """ dict: The GUI theme selection options. """
+        return self._user_theme
 
     @property
     def default_font(self):
@@ -1102,6 +1111,164 @@ class Config():
             self.root.geometry("{}x{}+80+80".format(str(initial_dimensions[0]),
                                                     str(initial_dimensions[1])))
         logger.debug("Geometry: %sx%s", *initial_dimensions)
+
+
+class _Style():  # pylint:disable=too-few-public-methods
+    """ Set the overarching theme and customize widgets"""
+    def __init__(self, default_font, root):
+        self._image_cache = []
+        self._root = root
+        self._font = default_font
+        default = os.path.join(PATHCACHE, "themes", "default.json")
+        self._user_theme = get_serializer("json").load(default)
+        self._style = ttk.Style()
+        self._set_styles()
+
+    @property
+    def user_theme(self):
+        """ dict: The currently selected user theme. """
+        return self._user_theme
+
+    def _config_settings_group(self):
+        """ Configures the style of the control panel entry boxes. Used for inputting Faceswap
+        options or controlling plugin settings. """
+        self._config_settings_group_common()
+        self._config_settings_group_unique()
+
+    def _config_settings_group_common(self):
+        """ Configures the group items that remain consistent, regardless of section. """
+        # Info Box
+        theme = self._user_theme["group_box"]
+        self._style.configure("InfoHeader.TFrame", background=theme["background"])
+        self._style.configure("InfoHeader.TLabel",
+                              background=theme["background"],
+                              foreground=theme["font_color"],
+                              font=(self._font[0], self._font[1], "bold"))
+        self._style.configure("InfoBody.TLabel",
+                              background=theme["background"],
+                              foreground=theme["font_color"])
+
+        # Background and Foreground of widgets and labels
+        for lbl in ["TLabel", "TFrame", "TLabelframe", "TCheckbutton", "TRadiobutton",
+                    "TLabelframe.Label"]:
+            self._style.configure(f"Group.{lbl}",
+                                  background=theme["background"],
+                                  foreground=theme["font_color"])
+        # Combobox
+        self._config_settings_group_common_combobox()
+
+    def _config_settings_group_common_combobox(self):
+        """ Combo-boxes are fairly complex to style. """
+        theme = self._user_theme["group_box"]
+        # Create a clone from clam theme
+        self._style.element_create("Group.TCombobox.field", "from", "clam")
+        # Set a layout so we can access required params
+        self._style.layout("Group.TCombobox", [
+            ("Group.TCombobox.field", {
+                "children": [
+                    ("Combobox.downarrow", {"side": "right", "sticky": "ns"}),
+                    ("Combobox.padding", {
+                        "expand": "1",
+                        "sticky": "nswe",
+                        "children": [("Combobox.focus", {
+                            "expand": "1",
+                            "sticky": "nswe",
+                            "children": [("Combobox.textarea", {"sticky": "nswe"})]})]})],
+                "sticky": "nswe"})])
+
+        # Foreground
+        self._style.configure("Group.TCombobox", foreground=theme["font_color"])
+        self._style.configure("Group.TCombobox", selectforeground=theme["font_color"])
+        # Background
+        self._style.configure("Group.TCombobox", background=theme["background"])
+        self._style.configure("Group.TCombobox", selectbackground=theme["background"])
+        self._style.map("Group.TCombobox", fieldbackground=[("readonly", theme["background"])])
+        self._style.configure("Group.TCombobox", fieldbackground=theme["background"])
+
+    def _config_settings_group_unique(self):
+        """ Configures the group items that change depending on section. These are the section
+        highlight colors.
+
+        These are the header labels on Label Frames, the Group header boxes and the slider color.
+        """
+        # Control and settings panel styles
+        for section in ("control_panel", "settings_popup"):
+            key = "CPanel" if section == "control_panel" else "SPanel"
+            theme = self._user_theme[section]
+
+            # Background colors
+            self._style.configure(f"{key}.Holder.TFrame", background=theme["secondary_color"])
+
+            # Highlight Colors
+            self._style.configure(f"{key}.Group.TLabelframe.Label",
+                                  foreground=theme["header_color"])
+            self._style.configure(f"{key}.Groupheader.TLabel",
+                                  background=theme["header_color"],
+                                  foreground=self._user_theme["group_box"]["background"],
+                                  font=(self._font[0], self._font[1], "bold"))
+
+            self._config_settings_group_slider(key, theme)
+
+    @classmethod
+    def _set_img_color(cls, img, color):
+        """Change color of PhotoImage image."""
+        pixel_line = "{" + " ".join(color for i in range(img.width())) + "}"
+        pixels = " ".join(pixel_line for i in range(img.height()))
+        img.put(pixels)
+
+    def _config_settings_group_slider(self, key, theme):
+        """ Take a copy of the default ttk.Scale widget and replace the slider element with a
+        version we can control the color and shape of.
+
+        Parameters
+        ----------
+        key: str
+            The section that the slider will belong to
+        theme: dict
+            The user configuration theme options
+        """
+        self._image_cache.extend([tk.PhotoImage(width=10, height=25),
+                                  tk.PhotoImage(width=10, height=25)])
+        img_slider, img_slider_alt = self._image_cache[-2:]
+        self._set_img_color(img_slider, theme["tertiary_color"])
+        self._set_img_color(img_slider_alt, theme["header_color"])
+
+        self._style.element_create(f"{key}.Horizontal.Scale.trough", "from", "alt")
+        self._style.element_create(f"{key}.Horizontal.Scale.slider",
+                                   "image",
+                                   img_slider,
+                                   ("active", img_slider_alt))
+
+        self._style.layout(
+            f"{key}.Horizontal.TScale",
+            [(f"{key}.Scale.focus", {
+                "expand": "1",
+                "sticky": "nswe",
+                "children": [
+                    (f"{key}.Horizontal.Scale.trough", {
+                        "expand": "1",
+                        "sticky": "nswe",
+                        "children": [
+                            (f"{key}.Horizontal.Scale.track", {"sticky": "we"}),
+                            (f"{key}.Horizontal.Scale.slider", {"side": "left", "sticky": ""})
+                            ]
+                        })
+                ]
+            })])
+
+        self._style.configure(f"{key}.Horizontal.TScale",
+                              background=self._user_theme["group_box"]["background"],
+                              groovewidth=4,
+                              troughcolor=self._user_theme["group_box"]["background"])
+
+    def _set_styles(self):
+        """ Configure widget theme and styles """
+        self._config_settings_group()
+        # Settings Popup
+        self._style.configure("SPanel.Header1.TLabel",
+                              font=(self._font[0], self._font[1] + 4, "bold"))
+        self._style.configure("SPanel.Header2.TLabel",
+                              font=(self._font[0], self._font[1] + 2, "bold"))
 
 
 class LongRunningTask(Thread):

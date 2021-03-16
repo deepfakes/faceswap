@@ -243,7 +243,10 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         logger.debug("Initializing %s: (parent: %s, tk_globals: %s, tk_action_vars: %s, "
                      "detected_faces: %s, display_frame: %s, event: %s)", self.__class__.__name__,
                      parent, tk_globals, tk_action_vars, detected_faces, display_frame, event)
-        super().__init__(parent, bd=0, highlightthickness=0, bg="#bcbcbc")
+        super().__init__(parent,
+                         bd=0,
+                         highlightthickness=0,
+                         bg=get_config().user_theme["control_panel"]["secondary_color"])
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._sizes = dict(tiny=32, small=64, medium=96, large=128, extralarge=192)
 

@@ -52,6 +52,7 @@ _DEFAULTS = dict(
         rounding=None,
         min_max=None,
         choices=["avi", "flv", "mkv", "mov", "mp4", "mpeg", "webm"],
+        group="codec",
         gui_radio=True,
     ),
     codec=dict(
@@ -63,6 +64,7 @@ _DEFAULTS = dict(
         rounding=None,
         min_max=None,
         choices=["libx264", "libx265"],
+        group="codec",
         gui_radio=True,
     ),
     crf=dict(
