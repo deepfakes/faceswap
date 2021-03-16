@@ -2,13 +2,13 @@ FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu16.04
 
 #install python3.8
 RUN apt-get update
-RUN apt install software-properties-common -y
+RUN apt-get install software-properties-common -y
 RUN add-apt-repository ppa:deadsnakes/ppa -y
 RUN apt-get update
-RUN apt install python3.8 -y 
-RUN apt install python3.8-distutils -y
-RUN apt install python3.8-tk -y
-RUN apt install curl -y
+RUN apt-get install python3.8 -y 
+RUN apt-get install python3.8-distutils -y
+RUN apt-get install python3.8-tk -y
+RUN apt-get install curl -y
 RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
 RUN python3.8 get-pip.py
 RUN rm get-pip.py
