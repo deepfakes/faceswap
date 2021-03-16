@@ -1152,7 +1152,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             Whether the model was trained with a mask
         """
         cp_options = self._get_control_panel_options(defaults, available_masks, has_predicted_mask)
-        panel_kwargs = dict(blank_nones=False, label_width=10)
+        panel_kwargs = dict(blank_nones=False, label_width=10, style="CPanel")
         ControlPanel(parent, cp_options, header_text=None, **panel_kwargs)
 
     def _get_control_panel_options(self, defaults, available_masks, has_predicted_mask):
@@ -1182,6 +1182,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                            default=defaults[opt],
                                            initial_value=defaults[opt],
                                            choices=choices,
+                                           group="Command Line Choices",
                                            is_radio=False)
             self._tk_vars[opt] = cp_option.tk_var
             cp_options.append(cp_option)
@@ -1417,7 +1418,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             The section/plugin key for these configuration options
         """
         logger.debug("Add Config Frame")
-        panel_kwargs = dict(columns=2, option_columns=2, blank_nones=False)
+        panel_kwargs = dict(columns=2, option_columns=2, blank_nones=False, style="CPanel")
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         cp_options = [opt for key, opt in self._options.items() if key != "helptext"]

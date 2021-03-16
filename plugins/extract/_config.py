@@ -26,7 +26,7 @@ class Config(FaceswapConfig):
         section = "global"
         self.add_section(title=section, info="Options that apply to all extraction plugins")
         self.add_item(
-            section=section, title="allow_growth", datatype=bool, default=False,
+            section=section, title="allow_growth", datatype=bool, default=False, group="settings",
             info="[Nvidia Only]. Enable the Tensorflow GPU `allow_growth` configuration option. "
                  "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
                  "but can lead to higher VRAM fragmentation and slower performance. Should only "

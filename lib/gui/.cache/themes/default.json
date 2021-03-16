@@ -1,0 +1,22 @@
+{   
+    "group_box": {
+        "background": "#FFFFFF",
+        "font_color": "#000000",
+        "input_color": "#FFFFFF",
+        "input_font": "#000000"        
+    },
+    "control_panel": {
+        "header_color": "#176087",
+        "secondary_color": "#CDD3D5",
+        "tertiary_color": "#75929C"
+    },
+    "settings_popup": {
+        "header_color": "#9B1D20",
+        "secondary_color": "#DAD2D8",
+        "tertiary_color": "#B090A8"
+    },
+    "console": {
+        "background_color": "#CDD3D5",
+        "foreground_color": "#000000"
+    } 
+}

@@ -56,6 +56,7 @@ _DEFAULTS = dict(
         min_max=None,
         choices=["gaussian", "normalized", "none"],
         gui_radio=True,
+        group="Blending type",
         fixed=True,
     ),
     distance=dict(

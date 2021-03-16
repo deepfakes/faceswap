@@ -2,7 +2,6 @@
 """ The optional GUI for faceswap """
 
 import logging
-import platform
 import sys
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -24,7 +23,6 @@ class FaceswapGui(tk.Tk):
         self._init_args = dict(debug=debug)
         self._config = self.initialize_globals()
         self.set_fonts()
-        self.set_styles()
         self._config.set_geometry(1200, 640, self._config.user_config_dict["fullscreen"])
 
         self.wrapper = ProcessWrapper()
@@ -51,44 +49,6 @@ class FaceswapGui(tk.Tk):
         for font in ("TkDefaultFont", "TkHeadingFont", "TkMenuFont"):
             tk.font.nametofont(font).configure(family=self._config.default_font[0],
                                                size=self._config.default_font[1])
-
-    def set_styles(self):
-        """ Set global custom styles """
-        gui_style = ttk.Style()
-        font = self._config.default_font
-        gui_style.configure('H1.TLabel', font=(font[0], font[1] + 4, "bold"))
-        gui_style.configure('H2.TLabel', font=(font[0], font[1] + 2, "bold"))
-
-        # Control and settings panel styles
-        for _type in ("CPanel", "SPanel"):
-            # Common control panel items
-            for lbl in ["TLabel", "TFrame", "TLabelframe", "TCheckbutton", "TRadiobutton"]:
-                gui_style.configure(f"{_type}.{lbl}", background="#FFFFFF")
-
-            # Background colors
-            color = "#CDD3D5" if _type == "CPanel" else "#DAD2D8"
-            gui_style.configure(f"Holder.{_type}.TFrame", background=color)
-
-            # Highlight Colors
-            color = "#176087" if _type == "CPanel" else "#9B1D20"
-            gui_style.configure(f"{_type}.TLabelframe.Label",
-                                background="#FFFFFF",
-                                foreground=color)
-            gui_style.configure(f"{_type}.Groupheader.TLabel",
-                                background=color,
-                                foreground="#FFFFFF",
-                                font=(font[0], font[1], "bold"))
-
-            # Control Panel Info Box
-            gui_style.configure(f"InfoHeader.{_type}.TLabel",
-                                background='#FFFFFF',
-                                font=(font[0], font[1], "bold"))
-            gui_style.configure(f"InfoBody.{_type}.TLabel", background="#FFFFFF")
-
-            # Scale widgets
-            gui_style.configure(f"{_type}.Horizontal.TScale",
-                                background="#FFFFFF" if platform.system() == "Windows" else color,
-                                troughcolor="#FFFFFF")
 
     def build_gui(self, rebuild=False):
         """ Build the GUI """

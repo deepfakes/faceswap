@@ -44,51 +44,51 @@
 _HELPTEXT = "Options for outputting converted frames to an animated gif."
 
 
-_DEFAULTS = {
-    "fps": {
-        "default": 25,
-        "info": "Frames per Second.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (1, 60),
-        "choices": [],
-        "group": "settings",
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "loop": {
-        "default": 0,
-        "info": "The number of iterations. Set to 0 to loop indefinitely.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 100),
-        "choices": [],
-        "group": "settings",
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "palettesize": {
-        "default": "256",
-        "info": "The number of colors to quantize the image to. Is rounded to the nearest "
-                "power of two.",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": ["2", "4", "8", "16", "32", "64", "128", "256"],
-        "group": "settings",
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "subrectangles": {
-        "default": False,
-        "info": "If True, will try and optimize the GIF by storing only the rectangular parts "
-                "of each frame that change with respect to the previous.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "group": "settings",
-        "gui_radio": False,
-        "fixed": True,
-    },
-}
+_DEFAULTS = dict(
+    fps=dict(
+        default=25,
+        info="Frames per Second.",
+        datatype=int,
+        rounding=1,
+        min_max=(1, 60),
+        choices=[],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+    loop=dict(
+        default=0,
+        info="The number of iterations. Set to 0 to loop indefinitely.",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 100),
+        choices=[],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+    palettesize=dict(
+        default="256",
+        info="The number of colors to quantize the image to. Is rounded to the nearest power of "
+             "two.",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["2", "4", "8", "16", "32", "64", "128", "256"],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+    subrectangles=dict(
+        default=False,
+        info="If True, will try and optimize the GIF by storing only the rectangular parts of "
+             "each frame that change with respect to the previous.",
+        datatype=bool,
+        rounding=None,
+        min_max=None,
+        choices=[],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+)

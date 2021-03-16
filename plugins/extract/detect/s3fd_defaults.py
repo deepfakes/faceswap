@@ -60,6 +60,7 @@ _DEFAULTS = {
         rounding=5,
         min_max=(25, 100),
         choices=[],
+        group="settings",
         gui_radio=False,
         fixed=True,
     ),
@@ -74,6 +75,7 @@ _DEFAULTS = {
         rounding=1,
         min_max=(1, 64),
         choices=[],
+        group="settings",
         gui_radio=False,
         fixed=True,
     )

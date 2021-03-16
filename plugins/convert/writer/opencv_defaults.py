@@ -48,57 +48,58 @@ _HELPTEXT = (
 )
 
 
-_DEFAULTS = {
-    "format": {
-        "default": "png",
-        "info": "Image format to use:"
-                "\n\t bmp: Windows bitmap"
-                "\n\t jpg: JPEG format"
-                "\n\t jp2: JPEG 2000 format"
-                "\n\t png: Portable Network Graphics"
-                "\n\t ppm: Portable Pixmap Format",
-        "datatype": str,
-        "rounding": None,
-        "min_max": None,
-        "choices": ["bmp", "jpg", "jp2", "png", "ppm"],
-        "gui_radio": True,
-        "fixed": True,
-    },
-    "draw_transparent": {
-        "default": False,
-        "info": "Place the swapped face on a transparent layer rather than the original frame."
-                "\nNB: This is only compatible with images saved in png format. If an "
-                "incompatible format is selected then the image will be saved as a png.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "group": "settings",
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "jpg_quality": {
-        "default": 75,
-        "info": "[jpg only] Set the jpg quality. 1 is worst 95 is best. Higher quality leads "
-                "to larger file sizes.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (1, 95),
-        "choices": [],
-        "group": "compression",
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "png_compress_level": {
-        "default": 3,
-        "info": "[png only] ZLIB compression level, 1 gives best speed, 9 gives best "
-                "compression, 0 gives no compression at all.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (0, 9),
-        "choices": [],
-        "group": "compression",
-        "gui_radio": False,
-        "fixed": True,
-    },
-}
+_DEFAULTS = dict(
+    format=dict(
+        default="png",
+        info="Image format to use:"
+             "\n\t bmp: Windows bitmap"
+             "\n\t jpg: JPEG format"
+             "\n\t jp2: JPEG 2000 format"
+             "\n\t png: Portable Network Graphics"
+             "\n\t ppm: Portable Pixmap Format",
+        datatype=str,
+        rounding=None,
+        min_max=None,
+        choices=["bmp", "jpg", "jp2", "png", "ppm"],
+        group="format",
+        gui_radio=True,
+        fixed=True,
+    ),
+    draw_transparent=dict(
+        default=False,
+        info="Place the swapped face on a transparent layer rather than the original frame.\nNB: "
+             "This is only compatible with images saved in png format. If an incompatible format "
+             "is selected then the image will be saved as a png.",
+        datatype=bool,
+        rounding=None,
+        min_max=None,
+        choices=[],
+        group="format",
+        gui_radio=False,
+        fixed=True,
+    ),
+    jpg_quality=dict(
+        default=75,
+        info="[jpg only] Set the jpg quality. 1 is worst 95 is best. Higher quality leads to "
+             "larger file sizes.",
+        datatype=int,
+        rounding=1,
+        min_max=(1, 95),
+        choices=[],
+        group="compression",
+        gui_radio=False,
+        fixed=True,
+    ),
+    png_compress_level=dict(
+        default=3,
+        info="[png only] ZLIB compression level, 1 gives best speed, 9 gives best compression, 0 "
+             "gives no compression at all.",
+        datatype=int,
+        rounding=1,
+        min_max=(0, 9),
+        choices=[],
+        group="compression",
+        gui_radio=False,
+        fixed=True,
+    ),
+)

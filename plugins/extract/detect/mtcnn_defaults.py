@@ -51,72 +51,75 @@ _HELPTEXT = (
 
 
 _DEFAULTS = {
-    "minsize": {
-        "default": 20,
-        "info": "The minimum size of a face (in pixels) to be accepted as a positive match.\n"
-                "Lower values use significantly more VRAM and will detect more false "
-                "positives.",
-        "datatype": int,
-        "rounding": 10,
-        "min_max": (20, 1000),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "threshold_1": {
-        "default": 0.6,
-        "info": "First stage threshold for face detection. This stage obtains face "
-                "candidates.",
-        "datatype": float,
-        "rounding": 2,
-        "min_max": (0.1, 0.9),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "threshold_2": {
-        "default": 0.7,
-        "info": "Second stage threshold for face detection. This stage refines face "
-                "candidates.",
-        "datatype": float,
-        "rounding": 2,
-        "min_max": (0.1, 0.9),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "threshold_3": {
-        "default": 0.7,
-        "info": "Third stage threshold for face detection. This stage further refines face "
-                "candidates.",
-        "datatype": float,
-        "rounding": 2,
-        "min_max": (0.1, 0.9),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "scalefactor": {
-        "default": 0.709,
-        "info": "The scale factor for the image pyramid.",
-        "datatype": float,
-        "rounding": 3,
-        "min_max": (0.1, 0.9),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    },
-    "batch-size": {
-        "default": 8,
-        "info": "The batch size to use. To a point, higher batch sizes equal better performance, "
-                "but setting it too high can harm performance.\n"
-                "\n\tNvidia users: If the batchsize is set higher than the your GPU can "
-                "accomodate then this will automatically be lowered.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (1, 64),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-    }
+    "minsize": dict(
+        default=20,
+        info="The minimum size of a face (in pixels) to be accepted as a positive match.\nLower "
+             "values use significantly more VRAM and will detect more false positives.",
+        datatype=int,
+        rounding=10,
+        min_max=(20, 1000),
+        choices=[],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+    "scalefactor": dict(
+        default=0.709,
+        info="The scale factor for the image pyramid.",
+        datatype=float,
+        rounding=3,
+        min_max=(0.1, 0.9),
+        choices=[],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+    "batch-size": dict(
+        default=8,
+        info="The batch size to use. To a point, higher batch sizes equal better performance, but "
+             "setting it too high can harm performance.\n"
+             "\n\tNvidia users: If the batchsize is set higher than the your GPU can accomodate "
+             "then this will automatically be lowered.",
+        datatype=int,
+        rounding=1,
+        min_max=(1, 64),
+        choices=[],
+        group="settings",
+        gui_radio=False,
+        fixed=True,
+    ),
+    "threshold_1": dict(
+        default=0.6,
+        info="First stage threshold for face detection. This stage obtains face candidates.",
+        datatype=float,
+        rounding=2,
+        min_max=(0.1, 0.9),
+        choices=[],
+        group="threshold",
+        gui_radio=False,
+        fixed=True,
+    ),
+    "threshold_2": dict(
+        default=0.7,
+        info="Second stage threshold for face detection. This stage refines face candidates.",
+        datatype=float,
+        rounding=2,
+        min_max=(0.1, 0.9),
+        choices=[],
+        group="threshold",
+        gui_radio=False,
+        fixed=True,
+    ),
+    "threshold_3": dict(
+        default=0.7,
+        info="Third stage threshold for face detection. This stage further refines face "
+             "candidates.",
+        datatype=float,
+        rounding=2,
+        min_max=(0.1, 0.9),
+        choices=[],
+        group="threshold",
+        gui_radio=False,
+        fixed=True,
+    ),
 }
