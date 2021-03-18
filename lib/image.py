@@ -378,9 +378,14 @@ def read_image_meta(filename):
         retval["height"], retval["width"] = img.shape[:2]
         return retval
     with open(filename, "rb") as infile:
-        chunk = infile.read(8)
+        try:
+            chunk = infile.read(8)
+        except PermissionError:
+            raise PermissionError(f"PermissionError while reading: {filename}")
+
         if chunk != b"\x89PNG\r\n\x1a\n":
             raise ValueError(f"Invalid header found in png: {filename}")
+
         while True:
             chunk = infile.read(8)
             length, field = struct.unpack(">I4s", chunk)
