@@ -557,9 +557,20 @@ class _IO():
                 msg = (f"Unable to load the model from '{self._filename}'. This may be a "
                        "temporary error but most likely means that your model has corrupted.\n"
                        "You can try to load the model again but if the problem persists you "
-                       "should use the Restore Tool to restore your model from backup.")
+                       "should use the Restore Tool to restore your model from backup.\n"
+                       f"Original error: {str(err)}")
                 raise FaceswapError(msg)
             raise err
+        except KeyError as err:
+            if "unable to open object" in str(err).lower():
+                msg = (f"Unable to load the model from '{self._filename}'. This may be a "
+                       "temporary error but most likely means that your model has corrupted.\n"
+                       "You can try to load the model again but if the problem persists you "
+                       "should use the Restore Tool to restore your model from backup.\n"
+                       f"Original error: {str(err)}")
+                raise FaceswapError(msg)
+            raise err
+
         logger.info("Loaded model from disk: '%s'", self._filename)
         return model
 

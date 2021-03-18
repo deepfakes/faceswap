@@ -131,7 +131,6 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         The Console's parent widget
     debug: bool
         ``True`` if console output should not be directed to this widget otherwise ``False``
-
     """
 
     def __init__(self, parent, debug):
@@ -152,7 +151,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _set_console_clear_var_trace(self):
-        """ Set a trace on the consoleclear tkinter variable to trigger :func:`_clear` """
+        """ Set a trace on the console clear tkinter variable to trigger :func:`_clear` """
         logger.debug("Set clear trace")
         self._console_clear.trace("w", self._clear)
 
@@ -913,7 +912,10 @@ class ToggledFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     def __init__(self, parent, *args, text="", theme="CPanel", toggle_var=None, **kwargs):
         logger.debug("Initializing %s: (parent: %s, text: %s, theme: %s, toggle_var: %s)",
                      self.__class__.__name__, parent, text, theme, toggle_var)
-        super().__init__(parent, *args, **kwargs)
+
+        theme = "CPanel" if not theme else theme
+        theme = theme[:-1] if theme[-1] == "." else theme
+        super().__init__(parent, *args, style=f"{theme}.Group.TFrame", **kwargs)
         self._text = text
 
         if toggle_var:
@@ -924,11 +926,10 @@ class ToggledFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._icon_var = tk.StringVar()
         self._icon_var.set("-" if self.is_expanded else "+")
 
-        theme = "CPanel" if not theme else theme
-        theme = theme[:-1] if theme[-1] == "." else theme
         self._build_header(theme)
 
-        self.sub_frame = tk.Frame(self, name="toggledframe_subframe", highlightthickness=1, bd=0)
+        self.sub_frame = ttk.Frame(self, style=f"{theme}.Subframe.Group.TFrame", padding=1)
+
         if self.is_expanded:
             self.sub_frame.pack(fill=tk.X, expand=True)
 
