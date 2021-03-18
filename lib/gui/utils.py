@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageTk
 
 from lib.serializer import get_serializer
+from lib.utils import FaceswapError
 
 from ._config import Config as UserConfig
 from .project import Project, Tasks
@@ -1114,9 +1115,9 @@ class Config():
 
 
 class _Style():  # pylint:disable=too-few-public-methods
-    """ Set the overarching theme and customize widgets"""
+    """ Set the overarching theme and customize widgets. """
     def __init__(self, default_font, root):
-        self._image_cache = []
+        self._images = _TkImage()
         self._root = root
         self._font = default_font
         default = os.path.join(PATHCACHE, "themes", "default.json")
@@ -1129,92 +1130,92 @@ class _Style():  # pylint:disable=too-few-public-methods
         """ dict: The currently selected user theme. """
         return self._user_theme
 
+    def _set_styles(self):
+        """ Configure widget theme and styles """
+        self._config_settings_group()
+        # Settings Popup
+        self._style.configure("SPanel.Header1.TLabel",
+                              font=(self._font[0], self._font[1] + 4, "bold"))
+        self._style.configure("SPanel.Header2.TLabel",
+                              font=(self._font[0], self._font[1] + 2, "bold"))
+
     def _config_settings_group(self):
         """ Configures the style of the control panel entry boxes. Used for inputting Faceswap
         options or controlling plugin settings. """
-        self._config_settings_group_common()
-        self._config_settings_group_unique()
+        theme = self._user_theme["group_panel"]
+        for panel_type in ("CPanel", "SPanel"):
+            if panel_type == "SPanel":  # Merge in Settings Panel overrides
+                theme = {**theme, **self._user_theme["group_settings"]}
+            self._style.configure(f"{panel_type}.Holder.TFrame",
+                                  background=theme["panel_background"])
+            # Header Colors on option/group controls
+            self._style.configure(f"{panel_type}.Group.TLabelframe.Label",
+                                  foreground=theme["header_color"])
+            self._style.configure(f"{panel_type}.Groupheader.TLabel",
+                                  background=theme["header_color"],
+                                  foreground=theme["header_font"],
+                                  font=(self._font[0], self._font[1], "bold"))
+            # Widgets and specific areas
+            self._group_panel_widgets(panel_type, theme)
+            self._group_panel_infoheader(panel_type, theme)
+            self._config_settings_group_slider(panel_type, theme)
+            self._config_settings_group_scrollbar(panel_type, theme)
+            self._config_settings_group_combobox(panel_type, theme)
 
-    def _config_settings_group_common(self):
-        """ Configures the group items that remain consistent, regardless of section. """
-        # Info Box
-        theme = self._user_theme["group_box"]
-        self._style.configure("InfoHeader.TFrame", background=theme["background"])
-        self._style.configure("InfoHeader.TLabel",
-                              background=theme["background"],
-                              foreground=theme["font_color"],
+    def _group_panel_infoheader(self, key, theme):
+        """ Set the theme for the information header box that appears at the top of each group
+        panel
+
+        Parameters
+        ----------
+        key: str
+            The section that the slider will belong to
+        theme: dict
+            The user configuration theme options
+        """
+        self._style.element_create(f"{key}.InfoHeader.Frame.border", "from", "alt")
+        self._style.layout(f"{key}.InfoHeader.TFrame",
+                           [(f"{key}.InfoHeader.Frame.border", {"sticky": "nswe"})])
+        self._style.configure(f"{key}.InfoHeader.TFrame",
+                              background=theme["info_color"],
+                              relief=tk.SOLID,
+                              borderwidth=1,
+                              bordercolor=theme["info_border"])
+
+        self._style.configure(f"{key}.InfoHeader.TLabel",
+                              background=theme["info_color"],
+                              foreground=theme["info_font"],
                               font=(self._font[0], self._font[1], "bold"))
-        self._style.configure("InfoBody.TLabel",
-                              background=theme["background"],
-                              foreground=theme["font_color"])
+        self._style.configure(f"{key}.InfoBody.TLabel",
+                              background=theme["info_color"],
+                              foreground=theme["info_font"])
+
+    def _group_panel_widgets(self, key, theme):
+        """ Configure the foreground and background colors of common widgets.
+
+        Parameters
+        ----------
+        key: str
+            The section that the slider will belong to
+        theme: dict
+            The user configuration theme options
+        """
+        # Put a border on a group's sub-frame
+        self._style.element_create(f"{key}.Subframe.Group.Frame.border", "from", "alt")
+        self._style.layout(f"{key}.Subframe.Group.TFrame",
+                           [(f"{key}.Subframe.Group.Frame.border", {"sticky": "nswe"})])
+        self._style.configure(f"{key}.Subframe.Group.TFrame",
+                              background=theme["group_background"],
+                              relief=tk.SOLID,
+                              borderwidth=1,
+                              bordercolor=theme["group_border"])
 
         # Background and Foreground of widgets and labels
         for lbl in ["TLabel", "TFrame", "TLabelframe", "TCheckbutton", "TRadiobutton",
                     "TLabelframe.Label"]:
-            self._style.configure(f"Group.{lbl}",
-                                  background=theme["background"],
-                                  foreground=theme["font_color"])
-        # Combobox
-        self._config_settings_group_common_combobox()
-
-    def _config_settings_group_common_combobox(self):
-        """ Combo-boxes are fairly complex to style. """
-        theme = self._user_theme["group_box"]
-        # Create a clone from clam theme
-        self._style.element_create("Group.TCombobox.field", "from", "clam")
-        # Set a layout so we can access required params
-        self._style.layout("Group.TCombobox", [
-            ("Group.TCombobox.field", {
-                "children": [
-                    ("Combobox.downarrow", {"side": "right", "sticky": "ns"}),
-                    ("Combobox.padding", {
-                        "expand": "1",
-                        "sticky": "nswe",
-                        "children": [("Combobox.focus", {
-                            "expand": "1",
-                            "sticky": "nswe",
-                            "children": [("Combobox.textarea", {"sticky": "nswe"})]})]})],
-                "sticky": "nswe"})])
-
-        # Foreground
-        self._style.configure("Group.TCombobox", foreground=theme["font_color"])
-        self._style.configure("Group.TCombobox", selectforeground=theme["font_color"])
-        # Background
-        self._style.configure("Group.TCombobox", background=theme["background"])
-        self._style.configure("Group.TCombobox", selectbackground=theme["background"])
-        self._style.map("Group.TCombobox", fieldbackground=[("readonly", theme["background"])])
-        self._style.configure("Group.TCombobox", fieldbackground=theme["background"])
-
-    def _config_settings_group_unique(self):
-        """ Configures the group items that change depending on section. These are the section
-        highlight colors.
-
-        These are the header labels on Label Frames, the Group header boxes and the slider color.
-        """
-        # Control and settings panel styles
-        for section in ("control_panel", "settings_popup"):
-            key = "CPanel" if section == "control_panel" else "SPanel"
-            theme = self._user_theme[section]
-
-            # Background colors
-            self._style.configure(f"{key}.Holder.TFrame", background=theme["secondary_color"])
-
-            # Highlight Colors
-            self._style.configure(f"{key}.Group.TLabelframe.Label",
-                                  foreground=theme["header_color"])
-            self._style.configure(f"{key}.Groupheader.TLabel",
-                                  background=theme["header_color"],
-                                  foreground=self._user_theme["group_box"]["background"],
-                                  font=(self._font[0], self._font[1], "bold"))
-
-            self._config_settings_group_slider(key, theme)
-
-    @classmethod
-    def _set_img_color(cls, img, color):
-        """Change color of PhotoImage image."""
-        pixel_line = "{" + " ".join(color for i in range(img.width())) + "}"
-        pixels = " ".join(pixel_line for i in range(img.height()))
-        img.put(pixels)
+            self._style.configure(f"{key}.Group.{lbl}",
+                                  background=theme["group_background"],
+                                  foreground=theme["group_font"])
 
     def _config_settings_group_slider(self, key, theme):
         """ Take a copy of the default ttk.Scale widget and replace the slider element with a
@@ -1227,11 +1228,8 @@ class _Style():  # pylint:disable=too-few-public-methods
         theme: dict
             The user configuration theme options
         """
-        self._image_cache.extend([tk.PhotoImage(width=10, height=25),
-                                  tk.PhotoImage(width=10, height=25)])
-        img_slider, img_slider_alt = self._image_cache[-2:]
-        self._set_img_color(img_slider, theme["tertiary_color"])
-        self._set_img_color(img_slider_alt, theme["header_color"])
+        img_slider = self._images.get_image((10, 25), theme["control_color"])
+        img_slider_alt = self._images.get_image((10, 25), theme["control_active"])
 
         self._style.element_create(f"{key}.Horizontal.Scale.trough", "from", "alt")
         self._style.element_create(f"{key}.Horizontal.Scale.slider",
@@ -1257,18 +1255,273 @@ class _Style():  # pylint:disable=too-few-public-methods
             })])
 
         self._style.configure(f"{key}.Horizontal.TScale",
-                              background=self._user_theme["group_box"]["background"],
+                              background=self._user_theme["group_panel"]["group_background"],
                               groovewidth=4,
-                              troughcolor=self._user_theme["group_box"]["background"])
+                              troughcolor=self._user_theme["group_panel"]["group_background"])
 
-    def _set_styles(self):
-        """ Configure widget theme and styles """
-        self._config_settings_group()
-        # Settings Popup
-        self._style.configure("SPanel.Header1.TLabel",
-                              font=(self._font[0], self._font[1] + 4, "bold"))
-        self._style.configure("SPanel.Header2.TLabel",
-                              font=(self._font[0], self._font[1] + 2, "bold"))
+    def _config_settings_group_scrollbar(self, key, theme):
+        """ Create a custom scroll bar widget so we can control the colors.
+
+        Parameters
+        ----------
+        key: str
+            The section that the slider will belong to
+        theme: dict
+            The user configuration theme options
+        """
+        images = dict()
+        backgrounds = dict(normal=theme["control_color"],
+                           disabled=theme["control_disabled"],
+                           active=theme["control_active"])
+        foregrounds = dict(normal=theme["control_disabled"],
+                           disabled=theme["control_color"],
+                           active=theme["control_disabled"])
+        borders = dict(normal=theme["header_color"],
+                       disabled=theme["control_color"],
+                       active=theme["header_color"])
+
+        for state in ("normal", "disabled", "active"):
+            # Create arrow and slider widgets for each state
+            img_args = ((16, 16), backgrounds[state])
+            for dir_ in ("up", "down"):
+                images[f"img_{dir_}_{state}"] = self._images.get_image(
+                    *img_args,
+                    foreground=foregrounds[state],
+                    pattern="arrow",
+                    direction=dir_,
+                    thickness=4,
+                    border_width=1,
+                    border_color=borders[state])
+            images[f"img_thumb_{state}"] = self._images.get_image(*img_args,
+                                                                  border_width=1,
+                                                                  border_color=borders[state])
+
+        for element in ("thumb", "uparrow", "downarrow"):
+            # Create the elements with the new images
+            lookup = element.replace("arrow", "")
+            args = (f"{key}.Vertical.Scrollbar.{element}",
+                    "image",
+                    images[f"img_{lookup}_normal"],
+                    ("disabled", images[f"img_{lookup}_disabled"]),
+                    ("pressed !disabled", images[f"img_{lookup}_active"]),
+                    ("active !disabled", images[f"img_{lookup}_active"]))
+            kwargs = dict(border=1, sticky="ns") if element == "thumb" else dict()
+            self._style.element_create(*args, **kwargs)
+
+        # Get a configurable trough
+        self._style.element_create(f"{key}.Vertical.Scrollbar.trough", "from", "clam")
+
+        self._style.layout(
+            f"{key}.Vertical.TScrollbar",
+            [(f"{key}.Vertical.Scrollbar.trough", {
+                "sticky": "ns",
+                "children": [
+                    (f"{key}.Vertical.Scrollbar.uparrow", {"side": "top", "sticky": ""}),
+                    (f"{key}.Vertical.Scrollbar.downarrow", {"side": "bottom", "sticky": ""}),
+                    (f"{key}.Vertical.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})
+                ]
+            })])
+        self._style.configure(f"{key}.Vertical.TScrollbar",
+                              troughcolor=theme["scrollbar_trough"],
+                              bordercolor=theme["scrollbar_border"],
+                              troughrelief=tk.SOLID,
+                              troughborderwidth=1)
+
+    def _config_settings_group_combobox(self, key, theme):
+        """ Combo-boxes are fairly complex to style.
+
+        Parameters
+        ----------
+        key: str
+            The section that the slider will belong to
+        theme: dict
+            The user configuration theme options
+        """
+        # All the stock down arrow images are bad
+        images = dict()
+        for state in ("active", "normal"):
+            images[f"arrow_{state}"] = self._images.get_image(
+                (20, 20),
+                theme["control_color"] if state == "normal" else theme["control_active"],
+                foreground=theme["control_disabled"],
+                pattern="arrow",
+                thickness=2,
+                border_width=1,
+                border_color=theme["header_color"])
+
+        self._style.element_create(f"{key}.Combobox.downarrow",
+                                   "image",
+                                   images["arrow_normal"],
+                                   ("active", images["arrow_active"]),
+                                   ("pressed", images["arrow_active"]),
+                                   sticky="e",
+                                   width=20)
+
+        # None of the themes give us the border control we need, so create an image
+        box = self._images.get_image((16, 16),
+                                     theme["group_background"],
+                                     border_width=1,
+                                     border_color=theme["group_font"])
+        self._style.element_create(f"{key}.Combobox.field",
+                                   "image",
+                                   box,
+                                   border=1,
+                                   padding=(6, 0, 0, 0))
+
+        # Set a layout so we can access required params
+        self._style.layout(f"{key}.TCombobox", [
+            (f"{key}.Combobox.field", {
+                "children": [
+                    (f"{key}.Combobox.downarrow", {"side": "right", "sticky": "ns"}),
+                    (f"{key}.Combobox.padding", {
+                        "expand": "1",
+                        "sticky": "nswe",
+                        "children": [(f"{key}.Combobox.focus", {
+                            "expand": "1",
+                            "sticky": "nswe",
+                            "children": [(f"{key}.Combobox.textarea", {"sticky": "nswe"})]})]})],
+                "sticky": "nswe"})])
+
+
+class _TkImage():  # pylint:disable=too-few-public-methods
+    """ Create a tk image for a given pattern and shape.
+    """
+    def __init__(self):
+        self._cache = []  # We need to keep a reference to every image created
+
+    # Numpy array patterns
+    @classmethod
+    def _get_solid(cls, dimensions):
+        """ Return a solid background color pattern.
+
+        Parameters
+        ----------
+        dimensions: tuple
+            The (`width`, `height`) of the desired tk image
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            A 2D, UINT8 array of shape (height, width) of all zeros
+        """
+        return np.zeros((dimensions[1], dimensions[0]), dtype="uint8")
+
+    @classmethod
+    def _get_arrow(cls, dimensions, thickness, direction):
+        """ Return a background color with a "v" arrow in foreground color
+
+        Parameters
+        ----------
+        dimensions: tuple
+            The (`width`, `height`) of the desired tk image
+        thickness: int
+            The thickness of the pattern to be drawn
+        direction: ["left", "up", "right", "down"]
+            The direction that the pattern should be facing
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            A 2D, UINT8 array of shape (height, width) of all zeros
+        """
+        square_size = min(dimensions[1], dimensions[0])
+        if square_size < 16 or any(dim % 2 != 0 for dim in dimensions):
+            raise FaceswapError("For arrow image, the minimum size across any axis must be 8 and "
+                                "dimensions must all be divisible by 2")
+        crop_size = (square_size // 16) * 16
+        draw_rows = int(6 * crop_size / 16)
+        start_row = dimensions[1] // 2 - draw_rows // 2
+        initial_indent = (2 * (crop_size // 16) + (dimensions[0] - crop_size) // 2)
+
+        retval = np.zeros((dimensions[1], dimensions[0]), dtype="uint8")
+        for i in range(start_row, start_row + draw_rows):
+            indent = initial_indent + i - start_row
+            join = (min(indent + thickness, dimensions[0] // 2),
+                    max(dimensions[0] - indent - thickness, dimensions[0] // 2))
+            retval[i, np.r_[indent:join[0], join[1]:dimensions[0] - indent]] = 1
+        if direction in ("right", "left"):
+            retval = np.rot90(retval)
+        if direction in ("up", "left"):
+            retval = np.flip(retval)
+        return retval
+
+    def get_image(self,
+                  dimensions,
+                  background,
+                  foreground=None,
+                  pattern="solid",
+                  border_width=0,
+                  border_color=None,
+                  thickness=2,
+                  direction="down"):
+        """ Obtain a tk image.
+
+        Generates the requested image and stores in cache.
+
+        Parameters
+        ----------
+        dimensions: tuple
+            The (`width`, `height`) of the desired tk image
+        background: str
+            The hex code for the background (main) color
+        foreground: str, optional
+            The hex code for the background (secondary) color. If ``None`` is provided then a
+            solid background color image will be returned. Default: ``None``
+        pattern: ["solid", "arrow"], optional
+            The pattern to generate for the tk image. Default: `"solid"`
+        border_width: int, optional
+            The thickness of foreground border to apply. Default: 0
+        border_color: int, optional
+            The color of the border, if one is to be created. Default: ``None`` (use foreground
+            color)
+        thickness: int, optional
+            The thickness of the pattern to be drawn. Default: `2`
+        direction: ["left", "up", "right", "down"], optional
+            The direction that the pattern should be facing. Default: `"down"`
+        """
+        foreground = foreground if foreground else background
+        border_color = border_color if border_color else foreground
+
+        args = [dimensions]
+        if pattern.lower() == "arrow":
+            args.extend([thickness, direction])
+        if pattern.lower() == "border":
+            args.extend([thickness])
+        pattern = getattr(self, f"_get_{pattern.lower()}")(*args)
+
+        if border_width > 0:
+            border = np.ones_like(pattern) + 1
+            border[border_width:-border_width,
+                   border_width:-border_width] = pattern[border_width:-border_width,
+                                                         border_width:-border_width]
+            pattern = border
+
+        return self._create_photoimage(background, foreground, border_color, pattern)
+
+    def _create_photoimage(self, background, foreground, border, pattern):
+        """ Create a tkinter PhotoImage and populate it with the requested color pattern.
+
+        Parameters
+        ----------
+        background: str
+            The hex code for the background (main) color
+        foreground: str
+            The hex code for the foreground (secondary) color
+        border: str
+            The hex code for the border color
+        pattern: class:`numpy.ndarray`
+            The pattern for the final image with background colors marked as 0 and foreground
+            colors marked as 1
+        """
+        image = tk.PhotoImage(width=pattern.shape[1], height=pattern.shape[0])
+        self._cache.append(image)
+
+        pixels = "} {".join(" ".join(foreground
+                                     if pxl == 1 else border if pxl == 2 else background
+                                     for pxl in row)
+                            for row in pattern)
+        image.put("{" + pixels + "}")
+        return image
 
 
 class LongRunningTask(Thread):

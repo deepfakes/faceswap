@@ -246,7 +246,7 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         super().__init__(parent,
                          bd=0,
                          highlightthickness=0,
-                         bg=get_config().user_theme["control_panel"]["secondary_color"])
+                         bg=get_config().user_theme["group_panel"]["panel_background"])
         self.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, anchor=tk.E)
         self._sizes = dict(tiny=32, small=64, medium=96, large=128, extralarge=192)
 

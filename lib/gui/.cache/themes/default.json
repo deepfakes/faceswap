@@ -1,22 +1,79 @@
-{   
-    "group_box": {
-        "background": "#FFFFFF",
-        "font_color": "#000000",
-        "input_color": "#FFFFFF",
-        "input_font": "#000000"        
-    },
-    "control_panel": {
+{
+    "info": "Initial default theme configuration whilst migrating from default ttk OS widgets",
+    "group_panel": {
+        "info": {
+            "info1": "The 'group_panel' section are any section which contains items for user input, such as the left hand options panel in the main GUI or the Settings pop-up",
+            "info2": "Anything which uses a 'group_panel' will use the theme specified here as default. Panels can be overriden (see below).",
+
+            "panel_background": "The background color of the main panel that holds all of the group options.",
+
+            "info_color": "The background color of the information header box at the top of each control panel",
+            "info_font": "The color of the font inside the information header box at the top of each control panel",
+            "info_border": "The color of the border around the outside of the information header box at the top of each control panel",
+
+            "header_color": "The color to use for the option group boxes header backgrounds, the group box border and for labels on options groups.",
+            "header_font": "The color to use for the option group boxes header font.",
+            "group_background": "This is the color used for the background of each group of options, as well as the background color used for any label which resides inside a group box",
+            "group_font": "The font color used inside each group box for labels",
+
+            "control_color": "The color of controls (e.g. Slider knob, combo pull-down arrow, scrollbar slider + arrows etc.)",
+            "control_active": "Selected/hovered over color of controls (e.g. Slider knob, combo pull-down arrow, scrollbar slider + arrows etc.)",
+            "control_disabled": "The color of controls when they are disabled (specifically scrollbars when there is no page to scroll).",
+
+            "input_color": "The background color of input boxes (e.g. text entry)",
+            "input_font": "The font color of input boxes (e.g. text entry)",
+            "button_background": "The background color of buttons",
+
+            "scrollbar_border": "Border color of scrollbar",
+            "scrollbar_trough": "Trough color of scrollbar"
+            },
+        "panel_background": "#CDD3D5",
+
+        "info_color": "#FFFFFF",
+        "info_font": "#000000",
+        "info_border": "#000000",
+
         "header_color": "#176087",
-        "secondary_color": "#CDD3D5",
-        "tertiary_color": "#75929C"
+        "header_font": "#FFFFFF",
+        "group_background": "#FFFFFF",
+        "group_border": "#176087",
+        "group_font": "#000000",
+
+        "control_color": "#75929C",
+        "control_active": "#176087",
+        "control_disabled": "#CDD3D5",
+
+        "input_color": "#FFFFFF",
+        "input_font": "#000000",
+        "button_background": "#FFFFFF",
+
+        "scrollbar_border": "#176087",
+        "scrollbar_trough": "#CDD3D5"
     },
-    "settings_popup": {
+    "group_settings": {
+        "info": {"info1": "Override default colors for the settings pop-up. See 'group_panel' for allowable options",
+                 "info2": "Options same as 'group_panel' with the following additions:",
+
+                "tree_select": "The color of the selected item in the left hand nav frame",
+                "link_color": "The color of links on pages where there are no configuration options"
+                },
+        "panel_background": "#DAD2D8",
+
         "header_color": "#9B1D20",
-        "secondary_color": "#DAD2D8",
-        "tertiary_color": "#B090A8"
+        "group_border": "#9B1D20",
+
+        "control_color": "#B090A8",
+        "control_active": "#9B1D20",
+        "control_disabled": "#DAD2D8",
+
+        "scrollbar_border": "#9B1D20",
+        "scrollbar_trough": "#DAD2D8",
+
+        "tree_select": "#9B1D20",
+        "link_color": "#9B1D20"
     },
     "console": {
         "background_color": "#CDD3D5",
         "foreground_color": "#000000"
-    } 
+    }
 }

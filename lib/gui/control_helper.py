@@ -379,7 +379,8 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
                      "blank_nones: %s, scrollbar: %s)",
                      self.__class__.__name__, parent, options, label_width, columns, max_columns,
                      option_columns, header_text, style, blank_nones, scrollbar)
-        super().__init__(parent)
+        self._style = "" if style is None else f"{style}."
+        super().__init__(parent, style=f"{self._style}.Group.TFrame")
 
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
@@ -391,14 +392,14 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.option_columns = option_columns
 
         self.header_text = header_text
-        self._style = "" if style is None else f"{style}."
+        self._theme = get_config().user_theme["group_panel"]
+        if self._style.startswith("SPanel"):
+            self._theme = {**self._theme, **get_config().user_theme["group_settings"]}
 
         self.group_frames = dict()
         self._sub_group_frames = dict()
 
-        lookup = "settings_popup" if self._style.startswith("SPanel") else "control_panel"
-        theme = get_config().user_theme[lookup]
-        canvas_kwargs = dict(bd=0, highlightthickness=0, bg=theme["secondary_color"])
+        canvas_kwargs = dict(bd=0, highlightthickness=0, bg=self._theme["panel_background"])
 
         self._canvas = tk.Canvas(self, **canvas_kwargs)
         self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -429,14 +430,14 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def add_info(self, frame):
         """ Plugin information """
-        info_frame = ttk.Frame(frame, style="InfoHeader.TFrame", relief=tk.SOLID)
+        info_frame = ttk.Frame(frame, style=f"{self._style}InfoHeader.TFrame")
         info_frame.pack(fill=tk.X, side=tk.TOP, expand=True, padx=10, pady=(10, 0))
-        label_frame = ttk.Frame(info_frame, style="InfoHeader.TFrame")
+        label_frame = ttk.Frame(info_frame, style=f"{self._style}InfoHeader.TFrame")
         label_frame.pack(padx=5, pady=5, fill=tk.X, expand=True)
         for idx, line in enumerate(self.header_text.splitlines()):
             if not line:
                 continue
-            style = "InfoHeader" if idx == 0 else "InfoBody"
+            style = f"{self._style}InfoHeader" if idx == 0 else f"{self._style}InfoBody"
             info = ttk.Label(label_frame, text=line, style=f"{style}.TLabel", anchor=tk.W)
             info.bind("<Configure>", self._adjust_wraplength)
             info.pack(fill=tk.X, padx=0, pady=0, expand=True, side=tk.TOP)
@@ -488,22 +489,17 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             other group, then will return the ToggledFrame for that group
         """
         group = group.lower()
-        lookup = "settings_popup" if self._style.startswith("SPanel") else "control_panel"
-        theme = get_config().user_theme[lookup]
 
         if self.group_frames.get(group, None) is None:
             logger.debug("Creating new group frame for: %s", group)
             is_master = group == "_master"
             opts_frame = self.optsframe.subframe
             if is_master:
-                group_frame = ttk.Frame(opts_frame)
+                group_frame = ttk.Frame(opts_frame, style=f"{self._style}.Group.TFrame")
                 retval = group_frame
             else:
                 group_frame = ToggledFrame(opts_frame, text=group.title(), theme=self._style)
                 retval = group_frame.sub_frame
-                retval.config(highlightbackground=theme["header_color"],
-                              highlightcolor=theme["header_color"],
-                              background=theme["secondary_color"])
 
             group_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5, anchor=tk.NW)
 
@@ -515,7 +511,9 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
     def add_scrollbar(self):
         """ Add a scrollbar to the options frame """
         logger.debug("Add Config Scrollbar")
-        scrollbar = ttk.Scrollbar(self, command=self._canvas.yview)
+        scrollbar = ttk.Scrollbar(self,
+                                  command=self._canvas.yview,
+                                  style=f"{self._style}Vertical.TScrollbar")
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self._canvas.config(yscrollcommand=scrollbar.set)
         self.mainframe.bind("<Configure>", self.update_scrollbar)
@@ -538,11 +536,11 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
             if is_master then check buttons will be placed in a LabelFrame
             otherwise in a standard frame """
         logger.debug("Add Options CheckButtons Frame")
-        chk_frame = ttk.Frame(frame, name="chkbuttons", style="Group.TFrame")
+        chk_frame = ttk.Frame(frame, name="chkbuttons", style=f"{self._style}Group.TFrame")
         holder = AutoFillContainer(chk_frame,
                                    self.option_columns,
                                    self.option_columns,
-                                   style="Group.")
+                                   style=f"{self._style}Group.")
         logger.debug("Added Options CheckButtons Frame")
         return holder
 
@@ -550,11 +548,11 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         if subgroup is None:
             return subgroup
         if subgroup not in self._sub_group_frames:
-            sub_frame = ttk.Frame(parent, style="Group.TFrame")
+            sub_frame = ttk.Frame(parent, style=f"{self._style}Group.TFrame")
             self._sub_group_frames[subgroup] = AutoFillContainer(sub_frame,
                                                                  self.option_columns,
                                                                  self.option_columns,
-                                                                 style="Group.")
+                                                                 style=f"{self._style}Group.")
             sub_frame.pack(anchor=tk.W, expand=True, fill=tk.X)
             logger.debug("Added Subgroup Frame: %s", subgroup)
         return self._sub_group_frames[subgroup]
@@ -900,6 +898,9 @@ class ControlBuilder():
         self.filebrowser = None
         # Default to Control Panel Style
         self._style = style = style if style else "CPanel."
+        self._theme = get_config().user_theme["group_panel"]
+        if self._style.startswith("SPanel"):
+            self._theme = {**self._theme, **get_config().user_theme["group_settings"]}
 
         self.frame = self.control_frame(parent)
         self.chkbtns = checkbuttons_frame
@@ -914,7 +915,7 @@ class ControlBuilder():
         logger.debug("Build control frame")
         frame = ttk.Frame(parent,
                           name="fr_{}".format(self.option.name),
-                          style="Group.TFrame")
+                          style=f"{self._style}Group.TFrame")
         frame.pack(fill=tk.X)
         logger.debug("Built control frame")
         return frame
@@ -942,7 +943,7 @@ class ControlBuilder():
                         text=self.option.title,
                         width=self.label_width,
                         anchor=tk.W,
-                        style="Group.TLabel")
+                        style=f"{self._style}Group.TLabel")
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         if self.option.helptext is not None:
             _get_tooltip(lbl, text=self.option.helptext, wraplength=600)
@@ -991,14 +992,14 @@ class ControlBuilder():
         holder = AutoFillContainer(ctl,
                                    self.option_columns,
                                    self.option_columns,
-                                   style="Group.")
+                                   style=f"{self._style}Group.")
         for choice in self.option.choices:
             if option_type == "radio":
                 ctl = ttk.Radiobutton
-                style = "Group.TRadiobutton"
+                style = f"{self._style}Group.TRadiobutton"
             else:
                 ctl = MultiOption
-                style = "Group.TCheckbutton"
+                style = f"{self._style}Group.TCheckbutton"
 
             ctl = ctl(holder.subframe,
                       text=choice.replace("_", " ").title(),
@@ -1048,7 +1049,6 @@ class ControlBuilder():
                      self.option.rounding, self.option.min_max)
         validate = self.slider_check_int if self.option.dtype == int else self.slider_check_float
         vcmd = (self.frame.register(validate))
-        theme = get_config().user_theme["group_box"]
         tbox = tk.Entry(self.frame,
                         width=8,
                         textvariable=self.option.tk_var,
@@ -1056,9 +1056,9 @@ class ControlBuilder():
                         font=get_config().default_font,
                         validate="all",
                         validatecommand=(vcmd, "%P"),
-                        bg=theme["input_color"],
-                        fg=theme["input_font"],
-                        highlightbackground=theme["input_font"],
+                        bg=self._theme["input_color"],
+                        fg=self._theme["input_font"],
+                        highlightbackground=self._theme["input_font"],
                         highlightthickness=1,
                         bd=0)
         tbox.pack(padx=(0, 5), side=tk.RIGHT)
@@ -1118,14 +1118,13 @@ class ControlBuilder():
                                            self.option.sysbrowser,
                                            self._style)
 
-        theme = get_config().user_theme["group_box"]
         if self.option.control == tk.Entry:
             ctl = self.option.control(self.frame,
                                       textvariable=self.option.tk_var,
                                       font=get_config().default_font,
-                                      bg=theme["input_color"],
-                                      fg=theme["input_font"],
-                                      highlightbackground=theme["input_font"],
+                                      bg=self._theme["input_color"],
+                                      fg=self._theme["input_font"],
+                                      highlightbackground=self._theme["input_font"],
                                       highlightthickness=1,
                                       bd=0)
         else:  # Combobox
@@ -1133,16 +1132,14 @@ class ControlBuilder():
                                       textvariable=self.option.tk_var,
                                       font=get_config().default_font,
                                       state="readonly",
-                                      style="Group.TCombobox")
+                                      style=f"{self._style}TCombobox")
 
             # Style for combo list boxes needs to be set directly on widget as no style parameter
-            key = "settings_popup" if self._style.startswith("SPanel") else "control_panel"
-            select_key = get_config().user_theme[key]
             cmd = f"[ttk::combobox::PopdownWindow {ctl}].f.l configure -"
-            ctl.tk.eval(f"{cmd}foreground {theme['font_color']}")
-            ctl.tk.eval(f"{cmd}background {theme['background']}")
-            ctl.tk.eval(f"{cmd}selectforeground {select_key['header_color']}")
-            ctl.tk.eval(f"{cmd}selectbackground {select_key['secondary_color']}")
+            ctl.tk.eval(f"{cmd}foreground {self._theme['input_font']}")
+            ctl.tk.eval(f"{cmd}background {self._theme['input_color']}")
+            ctl.tk.eval(f"{cmd}selectforeground {self._theme['control_active']}")
+            ctl.tk.eval(f"{cmd}selectbackground {self._theme['control_disabled']}")
 
         rc_menu = _get_contextmenu(ctl)
         rc_menu.cm_bind()
@@ -1158,7 +1155,7 @@ class ControlBuilder():
         """ Clickable label holding the currently selected color """
         logger.debug("Add control to Options Frame: (widget: '%s', control: %s, choices: %s)",
                      self.option.name, self.option.control, self.option.choices)
-        frame = ttk.Frame(self.frame, style="Group.TFrame")
+        frame = ttk.Frame(self.frame, style=f"{self._style}Group.TFrame")
         ctl = tk.Frame(frame,
                        bg=self.option.default,
                        bd=2,
@@ -1172,7 +1169,7 @@ class ControlBuilder():
                         text=self.option.title,
                         width=self.label_width,
                         anchor=tk.W,
-                        style="Group.TLabel")
+                        style=f"{self._style}Group.TLabel")
         lbl.pack(padx=2, pady=5, side=tk.RIGHT, anchor=tk.N)
         frame.pack(side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
@@ -1197,7 +1194,7 @@ class ControlBuilder():
                                   variable=self.option.tk_var,
                                   text=self.option.title,
                                   name=self.option.name,
-                                  style="Group.TCheckbutton")
+                                  style=f"{self._style}Group.TCheckbutton")
         _get_tooltip(ctl, text=self.option.helptext, wraplength=600)
         ctl.pack(side=tk.TOP, anchor=tk.W, fill=tk.X)
         logger.debug("Added control checkframe: '%s'", self.option.name)
@@ -1250,7 +1247,7 @@ class FileBrowser():
     def add_browser_buttons(self):
         """ Add correct file browser button for control """
         logger.debug("Adding browser buttons: (sysbrowser: %s", self.browser)
-        frame = ttk.Frame(self.frame, style="Group.TFrame")
+        frame = ttk.Frame(self.frame, style=f"{self._style}Group.TFrame")
         frame.pack(side=tk.RIGHT, padx=(0, 5))
 
         for browser in self.browser:
@@ -1275,7 +1272,7 @@ class FileBrowser():
                                 command=cmd,
                                 relief=tk.SOLID,
                                 bd=1,
-                                bg=get_config().user_theme["group_box"]["background"],
+                                bg=get_config().user_theme["group_panel"]["button_background"],
                                 cursor="hand2")
             _add_command(fileopn.cget("command"), cmd)
             fileopn.pack(padx=1, side=tk.RIGHT)
