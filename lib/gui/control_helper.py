@@ -57,14 +57,18 @@ def set_slider_rounding(value, var, d_type, round_to, min_max):
         The variable to set the value for
     d_type: [:class:`int`, :class:`float`]
         The type of value that is stored in :attr:`var`
-    round_to: int
-        If :attr:`dtype` is :class:`float` then this is the decimal place rounding for :attr:`var`.
-        If :attr:`dtype` is :class:`int` then this is the number of steps between each increment
-        for :attr:`var`
+    round_to: int or list
+        If :attr:`d_type` is :class:`float` then this is the decimal place rounding for
+        :attr:`var`. If :attr:`d_type` is :class:`int` then this is the number of steps between
+        each increment for :attr:`var`. If a list is provided, then this must be a list of
+        discreet values that are of the correct :attr:`d_type`.
     min_max: tuple (`int`, `int`)
         The (``min``, ``max``) values that this slider accepts
     """
-    if d_type == float:
+    if isinstance(round_to, list):
+        # Lock to nearest item
+        var.set(min(round_to, key=lambda x: abs(x-float(value))))
+    elif d_type == float:
         var.set(round(float(value), round_to))
     else:
         steps = range(min_max[0], min_max[1] + round_to, round_to)
