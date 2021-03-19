@@ -257,12 +257,12 @@ class Sort():
                        "alignments file to generate this data.")
                 raise FaceswapError(msg)
             alignments = metadata["alignments"]
-            alignedFace = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
-                               image=image,
-                               centering="legacy",
-                               is_aligned=True)
+            aligned_face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
+                                       image=image,
+                                       centering="legacy",
+                                       is_aligned=True)
             filenames.append(filename)
-            yaws.append(alignedFace.pose.yaw)
+            yaws.append(aligned_face.pose.yaw)
 
         logger.info("Sorting...")
         matched_list = list(zip(filenames, yaws))
