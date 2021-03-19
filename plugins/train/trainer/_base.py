@@ -307,8 +307,10 @@ class TrainerBase():
     def _collate_and_store_loss(self, loss):
         """ Collate the loss into totals for each side.
 
-        The losses are then into a total for each side. Loss totals are added to
+        The losses are summed into a total for each side. Loss totals are added to
         :attr:`model.state._history` to track the loss drop per save iteration for backup purposes.
+
+        If NaN protection is enabled, Checks for NaNs and raises an error if detected.
 
         Parameters
         ----------
@@ -319,7 +321,18 @@ class TrainerBase():
         -------
         list
             List of 2 ``floats`` which is the total loss for each side
+
+        Raises
+        ------
+        FaceswapError
+            If a NaN is detected, a :class:`FaceswapError` will be raised
         """
+        # NaN protection
+        if self._config["nan_protection"] and not all(np.isfinite(val) for val in loss):
+            logger.critical("NaN Detected. Loss: %s", loss)
+            raise FaceswapError("A NaN was detected and you have NaN protection enabled. Training "
+                                "has been terminated.")
+
         split = len(loss) // 2
         combined_loss = [sum(loss[:split]), sum(loss[split:])]
         self._model.add_history(combined_loss)

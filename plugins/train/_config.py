@@ -108,7 +108,7 @@ class Config(FaceswapConfig):
                  "that is based on adaptive estimation of first-order and second-order moments."
                  "\n\t nadam - Adaptive Moment Optimization with Nesterov Momentum. Much like "
                  "Adam but uses a different formula for calculating momentum."
-                 "\n\t rms-prop - Root Mean Square Propogation. Maintains a moving (discounted) "
+                 "\n\t rms-prop - Root Mean Square Propagation. Maintains a moving (discounted) "
                  "average of the square of the gradients. Divides the gradient by the root of "
                  "this average.")
         self.add_item(
@@ -125,6 +125,24 @@ class Config(FaceswapConfig):
                  "are too large might result in model crashes and the inability of the model to "
                  "find the best solution. Values that are too small might be unable to escape "
                  "from dead-ends and find the best global minimum.")
+        self.add_item(
+            section=section,
+            title="epsilon_exponent",
+            datatype=int,
+            default=-7,
+            min_max=(-10, 0),
+            rounding=1,
+            fixed=False,
+            group="optimizer",
+            info="The epsilon adds a small constant to weight updates to attempt to avoid 'divide "
+                 "by zero' errors. Generally this option should be left at default value, however "
+                 "if you are getting 'NaN' loss values, and have been unable to resolve the issue "
+                 "any other way (for example, increasing batch size, or lowering learning rate, "
+                 "then raising the epsilon can lead to a more stable model. It may, however, come "
+                 "at the cost of slower training and a less accurate final result.\n"
+                 "NB: The value given here is the 'exponent' to the epsilon. For example, "
+                 "choosing '-7' will set the epsilon to 1e-7. Choosing '-3' will set the epsilon "
+                 "to 0.001 (1e-3).")
         self.add_item(
             section=section,
             title="reflect_padding",
@@ -163,6 +181,17 @@ class Config(FaceswapConfig):
                  "because they have Tensor Cores. Older GPUs offer no math performance benefit "
                  "for using mixed precision, however memory and bandwidth savings can enable some "
                  "speedups. Generally RTX GPUs and later will offer the most benefit.")
+        self.add_item(
+            section=section,
+            title="nan_protection",
+            datatype=bool,
+            default=True,
+            group="network",
+            info="If a 'NaN' is generated in the model, this means that the model has corrupted "
+                 "and the model is likely to start deteriorating from this point on. Enabling NaN "
+                 "protection will stop training immediately in the event of a NaN. The last save "
+                 "will not contain the NaN, so you may still be able to rescue your model.",
+            fixed=False)
         self.add_item(
             section=section,
             title="convert_batchsize",
@@ -213,8 +242,8 @@ class Config(FaceswapConfig):
                  "a median, it can potentially ignore some infrequent image types in the dataset."
                  "\n\t MSE - Mean squared error will guide reconstructions of each pixel "
                  "towards its average value in the training dataset. As an avg, it will be "
-                 "suspectible to outliers and typically produces slightly blurrier results."
-                 "\n\t LogCosh - log(cosh(x)) acts similiar to MSE for small errors and to "
+                 "susceptible to outliers and typically produces slightly blurrier results."
+                 "\n\t LogCosh - log(cosh(x)) acts similar to MSE for small errors and to "
                  "MAE for large errors. Like MSE, it is very stable and prevents overshoots "
                  "when errors are near zero. Like MAE, it is robust to outliers. NB: Due to a bug "
                  "in PlaidML, this loss does not work on AMD cards."
@@ -228,12 +257,12 @@ class Config(FaceswapConfig):
                  "statistics of an image. Potentially delivers more realistic looking images."
                  "\n\t GMSD - Gradient Magnitude Similarity Deviation seeks to match "
                  "the global standard deviation of the pixel to pixel differences between two "
-                 "images. Similiar in approach to SSIM. NB: This loss does not currently work on "
+                 "images. Similar in approach to SSIM. NB: This loss does not currently work on "
                  "AMD cards."
                  "\n\t Pixel_Gradient_Difference - Instead of minimizing the difference between "
                  "the absolute value of each pixel in two reference images, compute the pixel to "
                  "pixel spatial difference in each image and then minimize that difference "
-                 "between two images. Allows for large color shifts,but maintains the structure "
+                 "between two images. Allows for large color shifts, but maintains the structure "
                  "of the image.")
         self.add_item(
             section=section,
@@ -247,8 +276,8 @@ class Config(FaceswapConfig):
                  "towards its median value in the training dataset. Robust to outliers but as "
                  "a median, it can potentially ignore some infrequent image types in the dataset."
                  "\n\t MSE - Mean squared error will guide reconstructions of each pixel "
-                 "towards its average value in the training dataset. As an avg, it will be "
-                 "suspectible to outliers and typically produces slightly blurrier results.")
+                 "towards its average value in the training dataset. As an average, it will be "
+                 "susceptible to outliers and typically produces slightly blurrier results.")
         self.add_item(
             section=section,
             title="l2_reg_term",
@@ -307,7 +336,7 @@ class Config(FaceswapConfig):
             default=True,
             group="loss",
             info="Image loss function is weighted by mask presence. For areas of "
-                 "the image without the facial mask, reconstuction errors will be "
+                 "the image without the facial mask, reconstruction errors will be "
                  "ignored while the masked face area is prioritized. May increase "
                  "overall quality by focusing attention on the core face area.")
         self.add_item(

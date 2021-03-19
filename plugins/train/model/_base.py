@@ -386,7 +386,8 @@ class ModelBase():
         if hasattr(self._args, "summary") and self._args.summary:
             print_fn = None  # Print straight to stdout
         else:
-            print_fn = lambda x: logger.verbose("%s", x)  # print to logger
+            # print to logger
+            print_fn = lambda x: logger.verbose("%s", x)  # noqa
         for model in _get_all_sub_models(self._model):
             model.summary(print_fn=print_fn)
 
@@ -411,6 +412,7 @@ class ModelBase():
         optimizer = _Optimizer(self.config["optimizer"],
                                self.config["learning_rate"],
                                self.config.get("clipnorm", False),
+                               10 ** int(self.config["epsilon_exponent"]),
                                self._args).optimizer
         if self._settings.use_mixed_precision:
             optimizer = self._settings.loss_scale_optimizer(optimizer)
@@ -1076,20 +1078,22 @@ class _Optimizer():  # pylint:disable=too-few-public-methods
         The selected learning rate to use
     clipnorm: bool
         Whether to clip gradients to avoid exploding/vanishing gradients
+    epsilon: float
+        The value to use for the epsilon of the optimizer
     arguments: :class:`argparse.Namespace`
         The arguments that were passed to the train or convert process as generated from
         Faceswap's command line arguments
     """
-    def __init__(self, optimizer, learning_rate, clipnorm, arguments):
+    def __init__(self, optimizer, learning_rate, clipnorm, epsilon, arguments):
         logger.debug("Initializing %s: (optimizer: %s, learning_rate: %s, clipnorm: %s, "
-                     "arguments: %s", self.__class__.__name__, optimizer, learning_rate, clipnorm,
-                     arguments)
+                     "epsilon: %s, arguments: %s)", self.__class__.__name__,
+                     optimizer, learning_rate, clipnorm, epsilon, arguments)
         optimizers = {"adam": Adam, "nadam": Nadam, "rms-prop": RMSprop}
         self._optimizer = optimizers[optimizer]
 
-        base_kwargs = {"adam": dict(beta_1=0.5, beta_2=0.99),
-                       "nadam": dict(beta_1=0.5, beta_2=0.99),
-                       "rms-prop": dict()}
+        base_kwargs = {"adam": dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon),
+                       "nadam": dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon),
+                       "rms-prop": dict(epsilon=epsilon)}
         self._kwargs = base_kwargs[optimizer]
 
         self._configure(learning_rate, clipnorm, arguments)
