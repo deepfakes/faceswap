@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "POT-Creation-Date: 2021-02-18 23:09-0000\n"
-"PO-Revision-Date: 2021-02-19 18:03+0000\n"
+"PO-Revision-Date: 2021-03-19 14:28+0000\n"
 "Language-Team: tokafondo\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -63,26 +63,26 @@ msgid "Swap the model. Instead of A -> B, swap B -> A"
 msgstr ""
 "Intercambiar el modelo. En lugar de convertir A en B, convierte B en A"
 
-#: ./tools/preview\preview.py:1303
+#: tools/preview\preview.py:1303
 msgid "Save full config"
-msgstr ""
+msgstr "Guardar la configuración completa"
 
-#: ./tools/preview\preview.py:1306
+#: tools/preview\preview.py:1306
 msgid "Reset full config to default values"
-msgstr ""
+msgstr "Restablecer la configuración completa a los valores por defecto"
 
-#: ./tools/preview\preview.py:1309
+#: tools/preview\preview.py:1309
 msgid "Reset full config to saved values"
-msgstr ""
+msgstr "Restablecer la configuración completa a los valores guardados"
 
-#: ./tools/preview\preview.py:1453
+#: tools/preview\preview.py:1453
 msgid "Save {} config"
-msgstr ""
+msgstr "Guardar la configuración de {}"
 
-#: ./tools/preview\preview.py:1456
+#: tools/preview\preview.py:1456
 msgid "Reset {} config to default values"
-msgstr ""
+msgstr "Restablecer la configuración completa de {} a los valores por defecto"
 
-#: ./tools/preview\preview.py:1459
+#: tools/preview\preview.py:1459
 msgid "Reset {} config to saved values"
-msgstr ""
+msgstr "Restablecer la configuración completa de {} a los valores guardados"
