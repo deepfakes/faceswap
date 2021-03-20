@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-03-10 16:44-0000\n"
+"POT-Creation-Date: 2021-03-20 13:45+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -185,6 +185,14 @@ msgstr ""
 
 #: ./tools/manual/frameviewer\frame.py:322
 msgid "Landmark point editor"
+msgstr ""
+
+#: ./tools/manual/frameviewer\frame.py:397
+msgid "Next"
+msgstr ""
+
+#: ./tools/manual/frameviewer\frame.py:397
+msgid "Previous"
 msgstr ""
 
 #: ./tools/manual/frameviewer\frame.py:408

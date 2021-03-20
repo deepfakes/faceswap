@@ -394,7 +394,7 @@ class ActionsFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_static_buttons(self):
         """ Add the buttons to copy alignments from previous and next frames """
-        lookup = dict(copy_prev=("Previous", "C"), copy_next=("Next", "V"), reload=("", "R"))
+        lookup = dict(copy_prev=(_("Previous"), "C"), copy_next=(_("Next"), "V"), reload=("", "R"))
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.Y)
         sep = ttk.Frame(frame, height=2, relief=tk.RIDGE)

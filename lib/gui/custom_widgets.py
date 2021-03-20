@@ -540,8 +540,6 @@ class Tooltip:  # pylint:disable=too-few-public-methods
     ----------
     widget: tkinter object
         The widget to apply the tool-tip to
-    background: str, optional
-        The hex code for the background color. Default:'#FFFFEA'
     pad: tuple, optional
         (left, top, right, bottom) padding for the tool-tip. Default: (5, 3, 5, 3)
     text: str, optional
@@ -565,7 +563,7 @@ class Tooltip:  # pylint:disable=too-few-public-methods
     Adapted from StackOverflow: http://stackoverflow.com/questions/3221956 and
     http://www.daniweb.com/programming/software-development/code/484591/a-tooltip-class-for-tkinter
     """
-    def __init__(self, widget, *, background="#FFFFEA", pad=(5, 3, 5, 3), text="widget info",
+    def __init__(self, widget, *, pad=(5, 3, 5, 3), text="widget info",
                  text_variable=None, waittime=400, wraplength=250):
 
         self._waittime = waittime  # in milliseconds, originally 500
@@ -576,7 +574,7 @@ class Tooltip:  # pylint:disable=too-few-public-methods
         self._widget.bind("<Enter>", self._on_enter)
         self._widget.bind("<Leave>", self._on_leave)
         self._widget.bind("<ButtonPress>", self._on_leave)
-        self._background = background
+        self._theme = get_config().user_theme["tooltip"]
         self._pad = pad
         self._ident = None
         self._topwidget = None
@@ -647,7 +645,6 @@ class Tooltip:  # pylint:disable=too-few-public-methods
 
             return x_1, y_1
 
-        background = self._background
         pad = self._pad
         widget = self._widget
 
@@ -663,7 +660,10 @@ class Tooltip:  # pylint:disable=too-few-public-methods
         self._topwidget.wm_overrideredirect(True)
 
         win = tk.Frame(self._topwidget,
-                       background=background,
+                       background=self._theme["background_color"],
+                       highlightbackground=self._theme["border_color"],
+                       highlightcolor=self._theme["border_color"],
+                       highlightthickness=1,
                        borderwidth=0)
 
         text = self._text
@@ -672,7 +672,8 @@ class Tooltip:  # pylint:disable=too-few-public-methods
         label = tk.Label(win,
                          text=text,
                          justify=tk.LEFT,
-                         background=background,
+                         background=self._theme["background_color"],
+                         foreground=self._theme["font_color"],
                          relief=tk.SOLID,
                          borderwidth=0,
                          wraplength=self._wraplength)
