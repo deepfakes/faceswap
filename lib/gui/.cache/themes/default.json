@@ -75,5 +75,10 @@
     "console": {
         "background_color": "#CDD3D5",
         "foreground_color": "#000000"
+    },
+    "tooltip": {
+        "background_color": "#FFFFEA",
+        "border_color": "#FFFFEA",
+        "font_color": "#000000"
     }
 }
