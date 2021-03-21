@@ -95,7 +95,7 @@ def extract_args(detector, aligner, in_path, out_path, args=None):
 def train_args(model, model_path, faces, alignments, iterations=5, batchsize=8, extra_args=""):
     """ Train command """
     py_exe = sys.executable
-    args = "%s faceswap.py train -A %s -ala %s -B %s -alb %s -m %s -t %s -bs %i -it %s %s" % (
+    args = "%s faceswap.py train -A %s -B %s -m %s -t %s -bs %i -it %s %s" % (
         py_exe, faces, alignments, faces,
         alignments, model_path, model, batchsize, iterations, extra_args
     )
