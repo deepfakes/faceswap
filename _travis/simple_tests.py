@@ -96,8 +96,7 @@ def train_args(model, model_path, faces, alignments, iterations=5, batchsize=8, 
     """ Train command """
     py_exe = sys.executable
     args = "%s faceswap.py train -A %s -B %s -m %s -t %s -bs %i -it %s %s" % (
-        py_exe, faces, alignments, faces,
-        alignments, model_path, model, batchsize, iterations, extra_args
+        py_exe, faces, faces, model_path, model, batchsize, iterations, extra_args
     )
     return args.split()
 
