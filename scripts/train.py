@@ -10,6 +10,7 @@ from time import sleep
 
 import cv2
 
+from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
 from lib.utils import (get_folder, get_image_paths, FaceswapError, _image_extensions)
@@ -53,7 +54,7 @@ class Train():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_images(self):
-        """ Check the image folders exist and contains images and obtain image paths.
+        """ Check the image folders exist and contains valid extracted faces. Obtain image paths.
 
         Returns
         -------
@@ -69,13 +70,23 @@ class Train():  # pylint:disable=too-few-public-methods
                 logger.error("Error: '%s' does not exist", image_dir)
                 sys.exit(1)
 
-            images[side] = get_image_paths(image_dir)
+            images[side] = get_image_paths(image_dir, ".png")
             if not images[side]:
                 logger.error("Error: '%s' contains no images", image_dir)
                 sys.exit(1)
+            # Validate the first image is a detected face
+            test_image = next(img for img in images[side])
+            meta = read_image_meta(test_image)
+            logger.debug("Test file: (filename: %s, metadata: %s)", test_image, meta)
+            if "itxt" not in meta or "alignments" not in meta["itxt"]:
+                logger.error("The input folder '%s' contains images that are not extracted faces.",
+                             image_dir)
+                logger.error("You can only train a model on faces generated from Faceswap's "
+                             "extract process. Please check your sources and try again.")
+                sys.exit(1)
 
-        logger.info("Model A Directory: %s", self._args.input_a)
-        logger.info("Model B Directory: %s", self._args.input_b)
+            logger.info("Model %s Directory: '%s' (%s images)",
+                        side.upper(), image_dir, len(images[side]))
         logger.debug("Got image paths: %s", [(key, str(len(val)) + " images")
                                              for key, val in images.items()])
         self._validate_image_counts(images)

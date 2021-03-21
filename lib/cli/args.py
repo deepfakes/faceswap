@@ -873,17 +873,6 @@ class TrainArgs(FaceSwapArgs):
                    "the original face, i.e. the face that you want to remove and replace with "
                    "face B.")))
         argument_list.append(dict(
-            opts=("-ala", "--alignments-A"),
-            action=FileFullPaths,
-            filetypes='alignments',
-            type=str,
-            dest="alignments_path_a",
-            default=None,
-            group=_("faces"),
-            help=_("DEPRECATED - This option will be removed in a future update. Path to "
-                   "alignments file for training set A. Defaults to <input-A>/alignments.json if "
-                   "not provided.")))
-        argument_list.append(dict(
             opts=("-B", "--input-B"),
             action=DirFullPaths,
             dest="input_b",
@@ -892,17 +881,6 @@ class TrainArgs(FaceSwapArgs):
             help=_("Input directory. A directory containing training images for face B. This is "
                    "the swap face, i.e. the face that you want to place onto the head of person "
                    "A.")))
-        argument_list.append(dict(
-            opts=("-alb", "--alignments-B"),
-            action=FileFullPaths,
-            filetypes='alignments',
-            type=str,
-            dest="alignments_path_b",
-            default=None,
-            group=_("faces"),
-            help=_("DEPRECATED - This option will be removed in a future update. Path to "
-                   "alignments file for training set B. Defaults to <input-B>/alignments.json if "
-                   "not provided.")))
         argument_list.append(dict(
             opts=("-m", "--model-dir"),
             action=DirFullPaths,

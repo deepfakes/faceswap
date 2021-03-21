@@ -161,13 +161,15 @@ def get_folder(path, make_folder=True):
     return output_dir
 
 
-def get_image_paths(directory):
+def get_image_paths(directory, extension=None):
     """ Obtain a list of full paths that reside within a folder.
 
     Parameters
     ----------
     directory: str
         The folder that contains the images to be returned
+    extension: str
+        The specific image extensions that should be returned
 
     Returns
     -------
@@ -175,7 +177,7 @@ def get_image_paths(directory):
         The list of full paths to the images contained within the given folder
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    image_extensions = _image_extensions
+    image_extensions = _image_extensions if extension is None else [extension]
     dir_contents = list()
 
     if not os.path.exists(directory):
