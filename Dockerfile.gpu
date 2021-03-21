@@ -1,7 +1,8 @@
-FROM nvidia/cuda:10.1-cudnn7-devel-ubuntu16.04
+FROM nvidia/cuda:11.0.3-cudnn8-devel-ubuntu18.04
 
 #install python3.8
 RUN apt-get update
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt install software-properties-common -y
 RUN add-apt-repository ppa:deadsnakes/ppa -y
 RUN apt-get update
