@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Helper functions and classes for GUI controls """
+import gettext
 import logging
 import re
 
@@ -14,6 +15,10 @@ from .custom_widgets import ContextMenu, MultiOption, ToggledFrame, Tooltip
 from .utils import FileHandler, get_config, get_images
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+# LOCALES
+_LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 # We store Tooltips, ContextMenus and Commands globally when they are created
 # Because we need to add them back to newly cloned widgets (they are not easily accessible from
@@ -1226,15 +1231,15 @@ class FileBrowser():
     @property
     def helptext(self):
         """ Dict containing tooltip text for buttons """
-        retval = dict(folder="Select a folder...",
-                      load="Select a file...",
-                      load2="Select a file...",
-                      picture="Select a folder of images...",
-                      video="Select a video...",
-                      model="Select a model folder...",
-                      multi_load="Select one or more files...",
-                      context="Select a file or folder...",
-                      save_as="Select a save location...")
+        retval = dict(folder=_("Select a folder..."),
+                      load=_("Select a file..."),
+                      load2=_("Select a file..."),
+                      picture=_("Select a folder of images..."),
+                      video=_("Select a video..."),
+                      model=_("Select a model folder..."),
+                      multi_load=_("Select one or more files..."),
+                      context=_("Select a file or folder..."),
+                      save_as=_("Select a save location..."))
         return retval
 
     @staticmethod

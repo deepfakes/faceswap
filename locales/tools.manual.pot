@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-03-20 13:45+0000\n"
+"POT-Creation-Date: 2021-03-22 18:31+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -55,6 +55,12 @@ msgstr ""
 msgid "Display the mask"
 msgstr ""
 
+#: ./tools/manual/frameviewer\editor\_base.py:627
+#: ./tools/manual/frameviewer\editor\landmarks.py:44
+#: ./tools/manual/frameviewer\editor\mask.py:75
+msgid "Magnify/Demagnify the View"
+msgstr ""
+
 #: ./tools/manual/frameviewer\editor\bounding_box.py:33
 #: ./tools/manual/frameviewer\editor\extract_box.py:32
 msgid "Delete Face"
@@ -101,11 +107,6 @@ msgid ""
 "\n"
 " - Click and drag individual points to relocate.\n"
 " - Draw a box to select multiple points to relocate."
-msgstr ""
-
-#: ./tools/manual/frameviewer\editor\landmarks.py:44
-#: ./tools/manual/frameviewer\editor\mask.py:75
-msgid "Magnify/Demagnify the View"
 msgstr ""
 
 #: ./tools/manual/frameviewer\editor\mask.py:33

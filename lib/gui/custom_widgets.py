@@ -161,26 +161,28 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._console.config(width=100,
                              height=6,
                              bg=self._theme["background_color"],
-                             fg=self._theme["foreground_color"])
-        self._console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
+                             fg=self._theme["stdout_color"])
 
-        scrollbar = ttk.Scrollbar(self, command=self._console.yview)
-        scrollbar.pack(side=tk.LEFT, fill="y")
+        scrollbar = ttk.Scrollbar(self,
+                                  command=self._console.yview,
+                                  style="Console.Vertical.TScrollbar")
         self._console.configure(yscrollcommand=scrollbar.set)
 
+        scrollbar.pack(side=tk.RIGHT, fill="y")
+        self._console.pack(side=tk.LEFT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self._redirect_console()
         logger.debug("Built console")
 
     def _add_tags(self):
         """ Add tags to text widget to color based on output """
         logger.debug("Adding text color tags")
-        self._console.tag_config("default", foreground="#1E1E1E")
-        self._console.tag_config("stderr", foreground="#E25056")
-        self._console.tag_config("info", foreground="#2B445E")
-        self._console.tag_config("verbose", foreground="#008140")
-        self._console.tag_config("warning", foreground="#F77B00")
-        self._console.tag_config("critical", foreground="red")
-        self._console.tag_config("error", foreground="red")
+        self._console.tag_config("default", foreground=self._theme["stdout_color"])
+        self._console.tag_config("stderr", foreground=self._theme["stderr_color"])
+        self._console.tag_config("info", foreground=self._theme["info_color"])
+        self._console.tag_config("verbose", foreground=self._theme["verbose_color"])
+        self._console.tag_config("warning", foreground=self._theme["warning_color"])
+        self._console.tag_config("critical", foreground=self._theme["critical_color"])
+        self._console.tag_config("error", foreground=self._theme["error_color"])
 
     def _redirect_console(self):
         """ Redirect stdout/stderr to console Text Box """

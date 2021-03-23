@@ -5,7 +5,11 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
+<<<<<<< HEAD
 "POT-Creation-Date: 2021-03-20 13:45+0000\n"
+=======
+"POT-Creation-Date: 2021-03-22 18:31+0000\n"
+>>>>>>> bc9482aa70759149758308efd0cf6ee5682ccafa
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -13,7 +17,11 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+<<<<<<< HEAD
 "X-Generator: Poedit 2.3\n"
+=======
+"X-Generator: Poedit 2.4.2\n"
+>>>>>>> bc9482aa70759149758308efd0cf6ee5682ccafa
 
 #: tools/manual/cli.py:13
 msgid ""
@@ -81,6 +89,15 @@ msgstr "Mostrar la malla de puntos de referencia"
 #: tools/manual/faceviewer\frame.py:164
 msgid "Display the mask"
 msgstr "Mostrar la máscara"
+<<<<<<< HEAD
+=======
+
+#: tools/manual/frameviewer\editor\_base.py:627
+#: tools/manual/frameviewer\editor\landmarks.py:44
+#: tools/manual/frameviewer\editor\mask.py:75
+msgid "Magnify/Demagnify the View"
+msgstr "Ampliar/Reducir la vista"
+>>>>>>> bc9482aa70759149758308efd0cf6ee5682ccafa
 
 #: tools/manual/frameviewer\editor\bounding_box.py:33
 #: tools/manual/frameviewer\editor\extract_box.py:32
@@ -173,11 +190,14 @@ msgstr ""
 "\n"
 " - Haga clic y arrastre los puntos individuales para reubicarlos.\n"
 " - Dibuje un cuadro para seleccionar varios puntos para reubicarlos."
+<<<<<<< HEAD
 
 #: tools/manual/frameviewer\editor\landmarks.py:44
 #: tools/manual/frameviewer\editor\mask.py:75
 msgid "Magnify/Demagnify the View"
 msgstr "Ampliar/Reducir la vista"
+=======
+>>>>>>> bc9482aa70759149758308efd0cf6ee5682ccafa
 
 #: tools/manual/frameviewer\editor\mask.py:33
 msgid ""
@@ -270,11 +290,19 @@ msgstr "Editor de puntos de referencia"
 
 #: tools/manual/frameviewer\frame.py:397
 msgid "Next"
+<<<<<<< HEAD
 msgstr "siguiente"
 
 #: tools/manual/frameviewer\frame.py:397
 msgid "Previous"
 msgstr "anterior"
+=======
+msgstr "Siguiente"
+
+#: tools/manual/frameviewer\frame.py:397
+msgid "Previous"
+msgstr "Anterior"
+>>>>>>> bc9482aa70759149758308efd0cf6ee5682ccafa
 
 #: tools/manual/frameviewer\frame.py:408
 msgid "Revert to saved Alignments ({})"

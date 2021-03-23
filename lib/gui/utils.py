@@ -1138,6 +1138,15 @@ class _Style():  # pylint:disable=too-few-public-methods
                               font=(self._font[0], self._font[1] + 4, "bold"))
         self._style.configure("SPanel.Header2.TLabel",
                               font=(self._font[0], self._font[1] + 2, "bold"))
+        # Console
+        theme = self._user_theme["console"]
+        console_sbar = {area: tuple(theme[f"scrollbar_{area}_{state}"]
+                                    for state in ("normal", "disabled", "active"))
+                        for area in ("background", "foreground", "border")}
+        self._get_custom_scrollbar("Console",
+                                   console_sbar,
+                                   theme["scrollbar_trough"],
+                                   theme["scrollbar_border"])
 
     def _config_settings_group(self):
         """ Configures the style of the control panel entry boxes. Used for inputting Faceswap
@@ -1159,7 +1168,19 @@ class _Style():  # pylint:disable=too-few-public-methods
             self._group_panel_widgets(panel_type, theme)
             self._group_panel_infoheader(panel_type, theme)
             self._config_settings_group_slider(panel_type, theme)
-            self._config_settings_group_scrollbar(panel_type, theme)
+            sbar_theme = dict(background=(theme["control_color"],
+                                          theme["control_disabled"],
+                                          theme["control_active"]),
+                              foreground=(theme["control_disabled"],
+                                          theme["control_color"],
+                                          theme["control_disabled"]),
+                              border=(theme["header_color"],
+                                      theme["control_color"],
+                                      theme["header_color"]))
+            self._get_custom_scrollbar(panel_type,
+                                       sbar_theme,
+                                       theme["scrollbar_trough"],
+                                       theme["scrollbar_border"])
             self._config_settings_group_combobox(panel_type, theme)
 
     def _group_panel_infoheader(self, key, theme):
@@ -1259,7 +1280,7 @@ class _Style():  # pylint:disable=too-few-public-methods
                               groovewidth=4,
                               troughcolor=self._user_theme["group_panel"]["group_background"])
 
-    def _config_settings_group_scrollbar(self, key, theme):
+    def _get_custom_scrollbar(self, key, theme, trough, border):
         """ Create a custom scroll bar widget so we can control the colors.
 
         Parameters
@@ -1267,34 +1288,33 @@ class _Style():  # pylint:disable=too-few-public-methods
         key: str
             The section that the slider will belong to
         theme: dict
-            The user configuration theme options
+            The theme options for a scroll bar. The dict should contain the keys: `background`,
+            `foreground`, `border`, with each item containing a tuple of the colors for the states
+            `normal`, `disabled` and `active` respectively
+        trough: str
+            The hex code for the scrollbar trough color
+        border: str
+            The hex code for the scrollbar border color
         """
+        logger.debug("Creating scrollbar: (key: %s, theme: %s, trough: %s, border: %s)",
+                     key, theme, trough, border)
         images = dict()
-        backgrounds = dict(normal=theme["control_color"],
-                           disabled=theme["control_disabled"],
-                           active=theme["control_active"])
-        foregrounds = dict(normal=theme["control_disabled"],
-                           disabled=theme["control_color"],
-                           active=theme["control_disabled"])
-        borders = dict(normal=theme["header_color"],
-                       disabled=theme["control_color"],
-                       active=theme["header_color"])
-
-        for state in ("normal", "disabled", "active"):
+        for idx, state in enumerate(("normal", "disabled", "active")):
             # Create arrow and slider widgets for each state
-            img_args = ((16, 16), backgrounds[state])
+            img_args = ((16, 16), theme["background"][idx])
             for dir_ in ("up", "down"):
                 images[f"img_{dir_}_{state}"] = self._images.get_image(
                     *img_args,
-                    foreground=foregrounds[state],
+                    foreground=theme["foreground"][idx],
                     pattern="arrow",
                     direction=dir_,
                     thickness=4,
                     border_width=1,
-                    border_color=borders[state])
-            images[f"img_thumb_{state}"] = self._images.get_image(*img_args,
-                                                                  border_width=1,
-                                                                  border_color=borders[state])
+                    border_color=theme["border"][idx])
+            images[f"img_thumb_{state}"] = self._images.get_image(
+                *img_args,
+                border_width=1,
+                border_color=theme["border"][idx])
 
         for element in ("thumb", "uparrow", "downarrow"):
             # Create the elements with the new images
@@ -1322,8 +1342,8 @@ class _Style():  # pylint:disable=too-few-public-methods
                 ]
             })])
         self._style.configure(f"{key}.Vertical.TScrollbar",
-                              troughcolor=theme["scrollbar_trough"],
-                              bordercolor=theme["scrollbar_border"],
+                              troughcolor=trough,
+                              bordercolor=border,
                               troughrelief=tk.SOLID,
                               troughborderwidth=1)
 

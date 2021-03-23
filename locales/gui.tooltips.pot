@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-03-10 15:35-0000\n"
+"POT-Creation-Date: 2021-03-22 18:37+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -15,199 +15,235 @@ msgstr ""
 "Generated-By: pygettext.py 1.5\n"
 
 
-#: ./lib/gui/command.py:180
+#: ./lib/gui/command.py:184
 msgid "Output command line options to the console"
 msgstr ""
 
-#: ./lib/gui/command.py:191
+#: ./lib/gui/command.py:195
 msgid "Run the {} script"
 msgstr ""
 
-#: ./lib/gui/display.py:69
+#: ./lib/gui/control_helper.py:1234
+msgid "Select a folder..."
+msgstr ""
+
+#: ./lib/gui/control_helper.py:1235 ./lib/gui/control_helper.py:1236
+msgid "Select a file..."
+msgstr ""
+
+#: ./lib/gui/control_helper.py:1237
+msgid "Select a folder of images..."
+msgstr ""
+
+#: ./lib/gui/control_helper.py:1238
+msgid "Select a video..."
+msgstr ""
+
+#: ./lib/gui/control_helper.py:1239
+msgid "Select a model folder..."
+msgstr ""
+
+#: ./lib/gui/control_helper.py:1240
+msgid "Select one or more files..."
+msgstr ""
+
+#: ./lib/gui/control_helper.py:1241
+msgid "Select a file or folder..."
+msgstr ""
+
+#: ./lib/gui/control_helper.py:1242
+msgid "Select a save location..."
+msgstr ""
+
+#: ./lib/gui/display.py:71
 msgid "Summary statistics for each training session"
 msgstr ""
 
-#: ./lib/gui/display.py:111
+#: ./lib/gui/display.py:113
 msgid "Preview updates every 5 seconds"
 msgstr ""
 
-#: ./lib/gui/display.py:120
+#: ./lib/gui/display.py:122
 msgid "Graph showing Loss vs Iterations"
 msgstr ""
 
-#: ./lib/gui/display.py:123
+#: ./lib/gui/display.py:125
 msgid "Training preview. Updated on every save iteration"
 msgstr ""
 
-#: ./lib/gui/display_analysis.py:340
+#: ./lib/gui/display_analysis.py:342
 msgid "Load/Refresh stats for the currently training session"
 msgstr ""
 
-#: ./lib/gui/display_analysis.py:342
+#: ./lib/gui/display_analysis.py:344
 msgid "Clear currently displayed session stats"
 msgstr ""
 
-#: ./lib/gui/display_analysis.py:344
+#: ./lib/gui/display_analysis.py:346
 msgid "Save session stats to csv"
 msgstr ""
 
-#: ./lib/gui/display_analysis.py:346
+#: ./lib/gui/display_analysis.py:348
 msgid "Load saved session stats"
 msgstr ""
 
-#: ./lib/gui/display_command.py:91
+#: ./lib/gui/display_command.py:94
 msgid "Preview updates at every model save. Click to refresh now."
 msgstr ""
 
-#: ./lib/gui/display_command.py:258
+#: ./lib/gui/display_command.py:261
 msgid "Graph updates at every model save. Click to refresh now."
 msgstr ""
 
-#: ./lib/gui/display_command.py:272
+#: ./lib/gui/display_command.py:275
 msgid "Display the raw loss data"
 msgstr ""
 
-#: ./lib/gui/display_command.py:284
+#: ./lib/gui/display_command.py:287
 msgid "Display the smoothed loss data"
 msgstr ""
 
-#: ./lib/gui/display_command.py:291
+#: ./lib/gui/display_command.py:294
 msgid "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing."
 msgstr ""
 
-#: ./lib/gui/display_command.py:321
+#: ./lib/gui/display_command.py:324
 msgid "Set the number of iterations to display. 0 displays the full session."
 msgstr ""
 
-#: ./lib/gui/display_page.py:235
+#: ./lib/gui/display_page.py:238
 msgid "Save {}(s) to file"
 msgstr ""
 
-#: ./lib/gui/display_page.py:247
+#: ./lib/gui/display_page.py:250
 msgid "Enable or disable {} display"
 msgstr ""
 
-#: ./lib/gui/menu.py:30
+#: ./lib/gui/menu.py:32
 msgid "faceswap.dev - Guides and Forum"
 msgstr ""
 
-#: ./lib/gui/menu.py:31
+#: ./lib/gui/menu.py:33
 msgid "Patreon - Support this project"
 msgstr ""
 
-#: ./lib/gui/menu.py:32
+#: ./lib/gui/menu.py:34
 msgid "Discord - The FaceSwap Discord server"
 msgstr ""
 
-#: ./lib/gui/menu.py:33
+#: ./lib/gui/menu.py:35
 msgid "Github - Our Source Code"
 msgstr ""
 
-#: ./lib/gui/menu.py:524
+#: ./lib/gui/menu.py:527
 msgid "Configure {} settings..."
 msgstr ""
 
-#: ./lib/gui/menu.py:532
+#: ./lib/gui/menu.py:535
 msgid "Project"
 msgstr ""
 
-#: ./lib/gui/menu.py:532
+#: ./lib/gui/menu.py:535
 msgid "currently selected Task"
 msgstr ""
 
-#: ./lib/gui/menu.py:534
+#: ./lib/gui/menu.py:537
 msgid "Reload {} from disk"
 msgstr ""
 
-#: ./lib/gui/menu.py:536
+#: ./lib/gui/menu.py:539
 msgid "Create a new {}..."
 msgstr ""
 
-#: ./lib/gui/menu.py:538
+#: ./lib/gui/menu.py:541
 msgid "Reset {} to default"
 msgstr ""
 
-#: ./lib/gui/menu.py:540
+#: ./lib/gui/menu.py:543
 msgid "Save {}"
 msgstr ""
 
-#: ./lib/gui/menu.py:542
+#: ./lib/gui/menu.py:545
 msgid "Save {} as..."
 msgstr ""
 
-#: ./lib/gui/menu.py:546
+#: ./lib/gui/menu.py:549
 msgid " from a task or project file"
 msgstr ""
 
-#: ./lib/gui/menu.py:547
+#: ./lib/gui/menu.py:550
 msgid "Load {}..."
 msgstr ""
 
-#: ./lib/gui/popup_configure.py:205
+#: ./lib/gui/popup_configure.py:209
 msgid "Close without saving"
 msgstr ""
 
-#: ./lib/gui/popup_configure.py:206
+#: ./lib/gui/popup_configure.py:210
 msgid "Save this page's config"
 msgstr ""
 
-#: ./lib/gui/popup_configure.py:207
+#: ./lib/gui/popup_configure.py:211
 msgid "Reset this page's config to default values"
 msgstr ""
 
-#: ./lib/gui/popup_configure.py:209
+#: ./lib/gui/popup_configure.py:213
 msgid "Save all settings for the currently selected config"
 msgstr ""
 
-#: ./lib/gui/popup_configure.py:212
+#: ./lib/gui/popup_configure.py:216
 msgid "Reset all settings for the currently selected config to default values"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:188
+#: ./lib/gui/popup_configure.py:538
+msgid "Select a plugin to configure:"
+msgstr ""
+
+#: ./lib/gui/popup_session.py:191
 msgid "Display {}"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:339
+#: ./lib/gui/popup_session.py:342
 msgid "Refresh graph"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:341
+#: ./lib/gui/popup_session.py:344
 msgid "Save display data to csv"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:343
+#: ./lib/gui/popup_session.py:346
 msgid "Number of data points to sample for rolling average"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:345
+#: ./lib/gui/popup_session.py:348
 msgid "Set the smoothing amount. 0 is no smoothing, 0.99 is maximum smoothing"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:347
+#: ./lib/gui/popup_session.py:350
 msgid "Flatten data points that fall more than 1 standard deviation from the mean to the mean value."
 msgstr ""
 
-#: ./lib/gui/popup_session.py:350
+#: ./lib/gui/popup_session.py:353
 msgid "Display rolling average of the data"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:352
+#: ./lib/gui/popup_session.py:355
 msgid "Smooth the data"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:354
+#: ./lib/gui/popup_session.py:357
 msgid "Display raw data"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:356
+#: ./lib/gui/popup_session.py:359
 msgid "Display polynormal data trend"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:358
+#: ./lib/gui/popup_session.py:361
 msgid "Set the data to display"
 msgstr ""
 
-#: ./lib/gui/popup_session.py:360
+#: ./lib/gui/popup_session.py:363
 msgid "Change y-axis scale"
 msgstr ""
 

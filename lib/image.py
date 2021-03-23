@@ -305,7 +305,7 @@ def read_image(filename, raise_error=False, with_metadata=False):
     return retval
 
 
-def read_image_batch(filenames):
+def read_image_batch(filenames, with_metadata=False):
     """ Load a batch of images from the given file locations.
 
     Leverages multi-threading to load multiple images from disk at the same time leading to vastly
@@ -315,6 +315,10 @@ def read_image_batch(filenames):
     ----------
     filenames: list
         A list of ``str`` full paths to the images to be loaded.
+    with_metadata: bool, optional
+        Only returns a value if the images loaded are extracted Faceswap faces. If ``True`` then
+        returns the Faceswap metadata stored with in a Face images .png exif header.
+        Default: ``False``
 
     Returns
     -------
@@ -333,9 +337,12 @@ def read_image_batch(filenames):
     logger.trace("Requested batch: '%s'", filenames)
     executor = futures.ThreadPoolExecutor()
     with executor:
-        images = {executor.submit(read_image, filename, raise_error=True): filename
+        images = {executor.submit(read_image, filename,
+                                  raise_error=True, with_metadata=with_metadata): filename
                   for filename in filenames}
         batch = [None for _ in range(len(filenames))]
+        if with_metadata:
+            meta = [None for _ in range(len(filenames))]
         # There is no guarantee that the same filename will not be passed through multiple times
         # (and when shuffle is true this can definitely happen), so we can't just call
         # filenames.index().
@@ -343,10 +350,17 @@ def read_image_batch(filenames):
                                      if fname == filename]
                           for filename in set(filenames)}
         for future in futures.as_completed(images):
-            batch[return_indices[images[future]].pop()] = future.result()
+            return_idx = return_indices[images[future]].pop()
+            if with_metadata:
+                batch[return_idx], meta[return_idx] = future.result()
+            else:
+                batch[return_idx] = future.result()
+
     batch = np.array(batch)
-    logger.trace("Returning images: (filenames: %s, batch shape: %s)", filenames, batch.shape)
-    return batch
+    retval = (batch, meta) if with_metadata else batch
+    logger.trace("Returning images: (filenames: %s, batch shape: %s, with_metadata: %s)",
+                 filenames, batch.shape, with_metadata)
+    return retval
 
 
 def read_image_meta(filename):

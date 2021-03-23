@@ -535,7 +535,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
         if not links:
             return frame
 
-        header_lbl = ttk.Label(frame, text="Select a plugin to configure:")
+        header_lbl = ttk.Label(frame, text=_("Select a plugin to configure:"))
         header_lbl.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(5, 10))
         for link in sorted(links):
             lbl = ttk.Label(frame,
