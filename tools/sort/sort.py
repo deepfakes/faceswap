@@ -32,8 +32,7 @@ class Sort():
         self.changes = None
         self.serializer = None
         self._vgg_face = None
-        # TODO set this as FacesLoader in init. Need to move all processes to use it
-        self._loader = None
+        self._loader = FacesLoader(self._args.input_dir)
 
     def process(self):
         """ Main processing function of the sort tool """
@@ -110,7 +109,7 @@ class Sort():
         logger.info("Finding landmarks in images...")
         # TODO thread the put to queue so we don't have to put and get at the same time
         # Or even better, set up a proper background loader from disk (i.e. use lib.image.ImageIO)
-        for idx, feed in enumerate(tqdm(feed_list, desc="Aligning...", file=sys.stdout)):
+        for idx, feed in enumerate(tqdm(feed_list, desc="Aligning", file=sys.stdout)):
             extractor.input_queue.put(feed)
             landmarks[idx] = next(extractor.detected_faces()).detected_faces[0].landmarks_xy
 
@@ -122,7 +121,7 @@ class Sort():
         filename_list = self.find_images(self._args.input_dir)
         with futures.ThreadPoolExecutor() as executor:
             image_list = list(tqdm(executor.map(read_image, filename_list),
-                                   desc="Loading Images...",
+                                   desc="Loading Images",
                                    file=sys.stdout,
                                    total=len(filename_list)))
 
@@ -155,24 +154,23 @@ class Sort():
     def sort_blur(self):
         """ Sort by blur amount """
         logger.info("Sorting by estimated image blur...")
-        filename_list, image_list = self._get_images()
 
-        logger.info("Estimating blur...")
-        blurs = [self.estimate_blur(img) for img in image_list]
-
+        # TODO We have metadata here, so we can mask the face for blur estimate
+        blurs = [(filename, self.estimate_blur(image))
+                 for filename, image, _ in tqdm(self._loader.load(),
+                                                desc="Estimating blur",
+                                                total=self._loader.count,
+                                                leave=False)]
         logger.info("Sorting...")
-        matched_list = list(zip(filename_list, blurs))
-        img_list = sorted(matched_list, key=operator.itemgetter(1), reverse=True)
-        return img_list
+        return sorted(blurs, key=lambda x: x[1], reverse=True)
 
     def sort_face(self):
         """ Sort by identity similarity """
         logger.info("Sorting by identity similarity...")
-        self._loader = FacesLoader(self._args.input_dir)  # TODO This should be set in init
         filenames = []
         preds = []
         for filename, image, metadata in tqdm(self._loader.load(),
-                                              desc="Classifying Faces...",
+                                              desc="Classifying Faces",
                                               total=self._loader.count,
                                               leave=False):
             if not metadata:
@@ -204,7 +202,7 @@ class Sort():
 
         logger.info("Comparing landmarks and sorting...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1), desc="Comparing...", file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing", file=sys.stdout):
             min_score = float("inf")
             j_min_score = i + 1
             for j in range(i + 1, img_list_len):
@@ -226,7 +224,7 @@ class Sort():
 
         logger.info("Comparing landmarks...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1), desc="Comparing...", file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing", file=sys.stdout):
             score_total = 0
             for j in range(i + 1, img_list_len):
                 if i == j:
@@ -243,11 +241,10 @@ class Sort():
     def sort_face_yaw(self):
         """ Sort by estimated face yaw angle """
         logger.info("Sorting by estimated face yaw angle..")
-        self._loader = FacesLoader(self._args.input_dir)  # TODO This should be set in init
         filenames = []
         yaws = []
         for filename, image, metadata in tqdm(self._loader.load(),
-                                              desc="Classifying Faces...",
+                                              desc="Classifying Faces",
                                               total=self._loader.count,
                                               leave=False):
             if not metadata:
@@ -272,20 +269,21 @@ class Sort():
     def sort_hist(self):
         """ Sort by image histogram similarity """
         logger.info("Sorting by histogram similarity...")
-        filename_list, image_list = self._get_images()
-        distance = cv2.HISTCMP_BHATTACHARYYA
 
-        logger.info("Calculating histograms...")
-        histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
-        img_list = list(zip(filename_list, histograms))
+        # TODO We have metadata here, so we can mask the face for hist sorting
+        img_list = [(filename, cv2.calcHist([image], [0], None, [256], [0, 256]))
+                    for filename, image, _ in tqdm(self._loader.load(),
+                                                   desc="Calculating histograms",
+                                                   total=self._loader.count,
+                                                   leave=False)]
 
         logger.info("Comparing histograms and sorting...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len - 1), desc="Comparing", file=sys.stdout):
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing histograms", file=sys.stdout):
             min_score = float("inf")
             j_min_score = i + 1
             for j in range(i + 1, img_list_len):
-                score = cv2.compareHist(img_list[i][1], img_list[j][1], distance)
+                score = cv2.compareHist(img_list[i][1], img_list[j][1], cv2.HISTCMP_BHATTACHARYYA)
                 if score < min_score:
                     min_score = score
                     j_min_score = j
@@ -295,27 +293,27 @@ class Sort():
     def sort_hist_dissim(self):
         """ Sort by image histogram dissimilarity """
         logger.info("Sorting by histogram dissimilarity...")
-        filename_list, image_list = self._get_images()
-        scores = np.zeros(len(filename_list), dtype='float32')
-        distance = cv2.HISTCMP_BHATTACHARYYA
 
-        logger.info("Calculating histograms...")
-        histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
-        img_list = list(list(items) for items in zip(filename_list, histograms, scores))
+        # TODO We have metadata here, so we can mask the face for hist sorting
+        img_list = [[filename, cv2.calcHist([image], [0], None, [256], [0, 256]), 0.0]
+                    for filename, image, _ in tqdm(self._loader.load(),
+                                                   desc="Calculating histograms",
+                                                   total=self._loader.count,
+                                                   leave=False)]
 
-        logger.info("Comparing histograms...")
         img_list_len = len(img_list)
-        for i in tqdm(range(0, img_list_len), desc="Comparing", file=sys.stdout):
+        for i in tqdm(range(0, img_list_len), desc="Comparing histograms", file=sys.stdout):
             score_total = 0
             for j in range(0, img_list_len):
                 if i == j:
                     continue
-                score_total += cv2.compareHist(img_list[i][1], img_list[j][1], distance)
+                score_total += cv2.compareHist(img_list[i][1],
+                                               img_list[j][1],
+                                               cv2.HISTCMP_BHATTACHARYYA)
             img_list[i][2] = score_total
 
         logger.info("Sorting...")
-        img_list = sorted(img_list, key=operator.itemgetter(2), reverse=True)
-        return img_list
+        return sorted(img_list, key=lambda x: x[2], reverse=True)
 
     def sort_color(self):
         """ Score by channel average intensity """
@@ -341,6 +339,32 @@ class Sort():
         matched_list = list(zip(filename_list, scores[:, channel_to_sort]))
         sorted_file_img_list = sorted(matched_list, key=operator.itemgetter(1), reverse=True)
         return sorted_file_img_list
+
+    def sort_size(self):
+        """ Sort the faces by largest face (in original frame) to smallest """
+        logger.info("Sorting by original face size...")
+        img_list = []
+        for filename, image, metadata in tqdm(self._loader.load(),
+                                              desc="Calculating face sizes",
+                                              total=self._loader.count,
+                                              leave=False):
+            if not metadata:
+                msg = ("The images to be sorted do not contain alignment data. Images must have "
+                       "been generated by Faceswap's Extract process.\nIf you are sorting an "
+                       "older faceset, then you should re-extract the faces from your source "
+                       "alignments file to generate this data.")
+                raise FaceswapError(msg)
+            alignments = metadata["alignments"]
+            aligned_face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
+                                       image=image,
+                                       centering="legacy",
+                                       is_aligned=True)
+            roi = aligned_face.original_roi
+            size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
+            img_list.append((filename, size))
+
+        logger.info("Sorting...")
+        return sorted(img_list, key=lambda x: x[1], reverse=True)
 
     # Methods for grouping
     def group_blur(self, img_list):

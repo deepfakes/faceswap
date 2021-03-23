@@ -5,17 +5,17 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-02-18 23:02-0000\n"
-"PO-Revision-Date: 2021-02-20 17:18+0000\n"
+"POT-Creation-Date: 2021-03-23 15:33+0000\n"
+"PO-Revision-Date: 2021-03-23 15:36+0000\n"
+"Last-Translator: \n"
 "Language-Team: tokafondo\n"
+"Language: es_ES\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 2.3\n"
-"Last-Translator: \n"
+"X-Generator: Poedit 2.4.2\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"Language: es_ES\n"
 
 #: tools/sort/cli.py:14
 msgid "This command lets you sort images using various methods."
@@ -38,11 +38,11 @@ msgstr "Directorio de entrada de caras alineadas."
 msgid "Output directory for sorted aligned faces."
 msgstr "Directorio de salida para las caras alineadas ordenadas."
 
-#: tools/sort/cli.py:49 tools/sort/cli.py:89
+#: tools/sort/cli.py:50 tools/sort/cli.py:93
 msgid "sort settings"
 msgstr "ajustes de ordenación"
 
-#: tools/sort/cli.py:51
+#: tools/sort/cli.py:52
 msgid ""
 "R|Sort by method. Choose how images are sorted. \n"
 "L|'blur': Sort faces by blurriness.\n"
@@ -67,7 +67,11 @@ msgid ""
 "L|'color-orange': Sort images by the average intensity of the converted Co "
 "color channel. Orange images will be ranked first and blue images will be "
 "last.\n"
-"Default: hist"
+"L|'size': Sort images by their size in the original frame. Faces closer to "
+"the camera and from higher resolution sources will be sorted first, whilst "
+"faces further from the camera and from lower resolution sources will be "
+"sorted last.\n"
+"Default: face"
 msgstr ""
 "R|Método de ordenación. Elige cómo se ordenan las imágenes. \n"
 "L|'blur': Ordena las caras por desenfoque.\n"
@@ -92,14 +96,18 @@ msgstr ""
 "L|'color-orange': Ordena las imágenes por la intensidad media del canal de "
 "color Co. Las imágenes naranjas serán clasificadas primero y las azules "
 "serán las últimas.\n"
-"Por defecto: hist"
+"L|'size': Ordena las imágenes por su tamaño en el marco original. Los "
+"rostros más cercanos a la cámara y de fuentes de mayor resolución se "
+"ordenarán primero, mientras que los rostros más alejados de la cámara y de "
+"fuentes de menor resolución se ordenarán en último lugar.\n"
+"Por defecto: face"
 
-#: tools/sort/cli.py:78 tools/sort/cli.py:105 tools/sort/cli.py:117
-#: tools/sort/cli.py:128
+#: tools/sort/cli.py:82 tools/sort/cli.py:109 tools/sort/cli.py:121
+#: tools/sort/cli.py:132
 msgid "output"
 msgstr "salida"
 
-#: tools/sort/cli.py:79
+#: tools/sort/cli.py:83
 msgid ""
 "Keeps the original files in the input directory. Be careful when using this "
 "with rename grouping and no specified output directory as this would keep "
@@ -110,7 +118,7 @@ msgstr ""
 "de salida, ya que esto mantendría los archivos originales y renombrados en "
 "el mismo directorio."
 
-#: tools/sort/cli.py:91
+#: tools/sort/cli.py:95
 msgid ""
 "Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' and 'hist' methods. The lower the value the more discriminating the "
@@ -131,7 +139,7 @@ msgstr ""
 "podría resultar en la creación de muchos directorios. Por defecto: 'face-"
 "cnn' = 7.2, 'hist' = 0.3"
 
-#: tools/sort/cli.py:106
+#: tools/sort/cli.py:110
 msgid ""
 "R|Default: rename.\n"
 "L|'folders': files are sorted using the -s/--sort-by method, then they are "
@@ -145,7 +153,7 @@ msgstr ""
 "L|'rename': los archivos se ordenan utilizando el método -s/--sort-by y "
 "luego se renombran."
 
-#: tools/sort/cli.py:119
+#: tools/sort/cli.py:123
 msgid ""
 "Group by method. When -fp/--final-processing by folders choose the how the "
 "images are grouped after sorting. Default: hist"
@@ -153,7 +161,7 @@ msgstr ""
 "Método de agrupamiento. Elija la forma de agrupar las imágenes, en el caso "
 "de hacerlo por carpetas, después de la clasificación. Por defecto: hist"
 
-#: tools/sort/cli.py:130
+#: tools/sort/cli.py:134
 msgid ""
 "Integer value. Number of folders that will be used to group by blur and face-"
 "yaw. For blur folder 0 will be the least blurry, while the last folder will "
@@ -174,11 +182,11 @@ msgstr ""
 "uniformemente en el número de carpetas, las imágenes restantes se colocan en "
 "la última carpeta. Valor por defecto: 5"
 
-#: tools/sort/cli.py:141 tools/sort/cli.py:151
+#: tools/sort/cli.py:145 tools/sort/cli.py:155
 msgid "settings"
 msgstr "ajustes"
 
-#: tools/sort/cli.py:143
+#: tools/sort/cli.py:147
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -190,7 +198,7 @@ msgstr ""
 "se especifica ningún archivo de registro con '--log-file', se creará un "
 "archivo 'sort_log.json' en el directorio de entrada."
 
-#: tools/sort/cli.py:154
+#: tools/sort/cli.py:158
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "

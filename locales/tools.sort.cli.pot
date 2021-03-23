@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-02-18 23:02-0000\n"
+"POT-Creation-Date: 2021-03-23 15:33+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -35,11 +35,11 @@ msgstr ""
 msgid "Output directory for sorted aligned faces."
 msgstr ""
 
-#: tools/sort/cli.py:49 tools/sort/cli.py:89
+#: tools/sort/cli.py:50 tools/sort/cli.py:93
 msgid "sort settings"
 msgstr ""
 
-#: tools/sort/cli.py:51
+#: tools/sort/cli.py:52
 msgid ""
 "R|Sort by method. Choose how images are sorted. \n"
 "L|'blur': Sort faces by blurriness.\n"
@@ -53,46 +53,47 @@ msgid ""
 "L|'color-luma': Sort images by the average intensity of the converted Y color channel. Bright lighting and oversaturated images will be ranked first.\n"
 "L|'color-green': Sort images by the average intensity of the converted Cg color channel. Green images will be ranked first and red images will be last.\n"
 "L|'color-orange': Sort images by the average intensity of the converted Co color channel. Orange images will be ranked first and blue images will be last.\n"
-"Default: hist"
+"L|'size': Sort images by their size in the original frame. Faces closer to the camera and from higher resolution sources will be sorted first, whilst faces further from the camera and from lower resolution sources will be sorted last.\n"
+"Default: face"
 msgstr ""
 
-#: tools/sort/cli.py:78 tools/sort/cli.py:105 tools/sort/cli.py:117
-#: tools/sort/cli.py:128
+#: tools/sort/cli.py:82 tools/sort/cli.py:109 tools/sort/cli.py:121
+#: tools/sort/cli.py:132
 msgid "output"
 msgstr ""
 
-#: tools/sort/cli.py:79
+#: tools/sort/cli.py:83
 msgid "Keeps the original files in the input directory. Be careful when using this with rename grouping and no specified output directory as this would keep the original and renamed files in the same directory."
 msgstr ""
 
-#: tools/sort/cli.py:91
+#: tools/sort/cli.py:95
 msgid "Float value. Minimum threshold to use for grouping comparison with 'face-cnn' and 'hist' methods. The lower the value the more discriminating the grouping is. Leaving -1.0 will allow the program set the default value automatically. For face-cnn 7.2 should be enough, with 4 being very discriminating. For hist 0.3 should be enough, with 0.2 being very discriminating. Be careful setting a value that's too low in a directory with many images, as this could result in a lot of directories being created. Defaults: face-cnn 7.2, hist 0.3"
 msgstr ""
 
-#: tools/sort/cli.py:106
+#: tools/sort/cli.py:110
 msgid ""
 "R|Default: rename.\n"
 "L|'folders': files are sorted using the -s/--sort-by method, then they are organized into folders using the -g/--group-by grouping method.\n"
 "L|'rename': files are sorted using the -s/--sort-by then they are renamed."
 msgstr ""
 
-#: tools/sort/cli.py:119
+#: tools/sort/cli.py:123
 msgid "Group by method. When -fp/--final-processing by folders choose the how the images are grouped after sorting. Default: hist"
 msgstr ""
 
-#: tools/sort/cli.py:130
+#: tools/sort/cli.py:134
 msgid "Integer value. Number of folders that will be used to group by blur and face-yaw. For blur folder 0 will be the least blurry, while the last folder will be the blurriest. For face-yaw the number of bins is by how much 180 degrees is divided. So if you use 18, then each folder will be a 10 degree increment. Folder 0 will contain faces looking the most to the left whereas the last folder will contain the faces looking the most to the right. If the number of images doesn't divide evenly into the number of bins, the remaining images get put in the last bin. Default value: 5"
 msgstr ""
 
-#: tools/sort/cli.py:141 tools/sort/cli.py:151
+#: tools/sort/cli.py:145 tools/sort/cli.py:155
 msgid "settings"
 msgstr ""
 
-#: tools/sort/cli.py:143
+#: tools/sort/cli.py:147
 msgid "Logs file renaming changes if grouping by renaming, or it logs the file copying/movement if grouping by folders. If no log file is specified  with '--log-file', then a 'sort_log.json' file will be created in the input directory."
 msgstr ""
 
-#: tools/sort/cli.py:154
+#: tools/sort/cli.py:158
 msgid "Specify a log file to use for saving the renaming or grouping information. If specified extension isn't 'json' or 'yaml', then json will be used as the serializer, with the supplied filename. Default: sort_log.json"
 msgstr ""
 
