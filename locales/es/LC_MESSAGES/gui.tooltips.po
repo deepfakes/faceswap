@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "POT-Creation-Date: 2021-03-10 15:35-0000\n"
-"PO-Revision-Date: 2021-03-16 18:40+0000\n"
+"PO-Revision-Date: 2021-03-23 00:06+0000\n"
 "Language-Team: tokafondo\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -39,8 +39,7 @@ msgstr "Gráfico mostrando Pérdida contra iteraciones"
 
 #: lib/gui/display.py:123
 msgid "Training preview. Updated on every save iteration"
-msgstr ""
-"Previsualización del entrenamiento. Actualizado en cada iteración de guardado"
+msgstr "Previsualización del entrenamiento. Se actualiza en cada guardado"
 
 #: lib/gui/display_analysis.py:340
 msgid "Load/Refresh stats for the currently training session"
