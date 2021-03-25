@@ -110,6 +110,16 @@ stats module
    :undoc-members:
    :show-inheritance:
 
+theme module
+============
+
+.. rubric:: Module
+
+.. automodule:: lib.gui.theme
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 utils module
 ============
 

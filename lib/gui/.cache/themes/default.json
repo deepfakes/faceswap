@@ -73,11 +73,19 @@
 		"tree_select": "#9B1D20",
 		"link_color": "#9B1D20"
 	},
+	"command_tabs": {
+		"frame_border": "#176087",
+		"tab_color": "#CDD3D5",
+		"tab_selected": "#75929C",
+		"tab_hover": "#176087"
+	},
 	"console": {
 		"info": {
 			"info1": "The colors of the console output box",
 
 			"background_color": "The background color of the console output",
+			"border_color": "The color of the border around the console box and scrollbar",
+
 			"stdout_color": "The text color for standard print message output (non Faceswap Logging messages)",
 			"stderr_color": "The text color for messages that are printed to sterr (non Faceswap Logging messages)",
             "info_color": "The text color for Faceswap INFO log messages",
@@ -94,6 +102,8 @@
             "scrollbar_border_<state>": "The border color of the up/down buttons and the slider of the scrollbar, for active (pressed/hovered), normal and disabled (no scrollbar required)"
 		},
 		"background_color": "#CDD3D5",
+		"border_color": "#176087",
+
 		"stdout_color": "#172c87",
 		"stderr_color": "#78162f",
         "info_color": "#176087",

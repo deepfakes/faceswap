@@ -240,7 +240,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
          """
         logger.debug("Loading session")
         if full_path is None:
-            full_path = FileHandler("filename", "state").retfile
+            full_path = FileHandler("filename", "state").return_file
             if not full_path:
                 return
         self._clear_session()
@@ -276,7 +276,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             logger.debug("No summary data loaded. Nothing to save")
             print("No summary data loaded. Nothing to save")
             return
-        savefile = FileHandler("save", "csv").retfile
+        savefile = FileHandler("save", "csv").return_file
         if not savefile:
             logger.debug("No save file. Returning")
             return
@@ -322,7 +322,7 @@ class _Options():  # pylint:disable=too-few-public-methods
                              command=cmd)
             btn.pack(padx=2, side=tk.RIGHT)
             hlp = self._set_help(btntype)
-            Tooltip(btn, text=hlp, wraplength=200)
+            Tooltip(btn, text=hlp, wrap_length=200)
             buttons[btntype] = btn
         logger.debug("buttons: %s", buttons)
         return buttons
@@ -444,7 +444,7 @@ class StatsData(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._tree.configure(yscrollcommand=self._scrollbar.set)
         self._tree.tag_configure("total", background="black", foreground="white")
         self._tree.bind("<ButtonRelease-1>", self._select_item)
-        Tooltip(self._tree, text=helptext, wraplength=200)
+        Tooltip(self._tree, text=helptext, wrap_length=200)
         return self._tree_columns()
 
     def _tree_columns(self):

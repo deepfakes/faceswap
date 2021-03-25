@@ -134,7 +134,7 @@ class SessionPopUp(tk.Toplevel):
             self._vars[item.lower().strip()] = var
 
             hlp = self._set_help(item)
-            Tooltip(cmbframe, text=hlp, wraplength=200)
+            Tooltip(cmbframe, text=hlp, wrap_length=200)
 
             cmb.pack(fill=tk.X, side=tk.RIGHT)
             lblcmb.pack(padx=(0, 2), side=tk.LEFT)
@@ -166,7 +166,7 @@ class SessionPopUp(tk.Toplevel):
 
             ctl = ttk.Checkbutton(frame, variable=var, text=text)
             hlp = self._set_help(item)
-            Tooltip(ctl, text=hlp, wraplength=200)
+            Tooltip(ctl, text=hlp, wrap_length=200)
             ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
 
         logger.debug("Built Check Buttons")
@@ -203,7 +203,7 @@ class SessionPopUp(tk.Toplevel):
                 section_added = True
 
             ctl = ttk.Checkbutton(frame, variable=var, text=text)
-            Tooltip(ctl, text=helptext, wraplength=200)
+            Tooltip(ctl, text=helptext, wrap_length=200)
             ctl.pack(side=tk.TOP, padx=5, pady=5, anchor=tk.W)
 
         self._vars["loss_keys"] = lk_vars
@@ -264,7 +264,7 @@ class SessionPopUp(tk.Toplevel):
                              image=get_images().icons[btntype],
                              command=cmd)
             hlp = self._set_help(btntype)
-            Tooltip(btn, text=hlp, wraplength=200)
+            Tooltip(btn, text=hlp, wrap_length=200)
             btn.pack(padx=2, side=tk.RIGHT)
 
         lblstatus.pack(side=tk.LEFT, anchor=tk.W, fill=tk.X, expand=True)
@@ -289,7 +289,7 @@ class SessionPopUp(tk.Toplevel):
     def _option_button_save(self):
         """ Action for save button press. """
         logger.debug("Saving File")
-        savefile = FileHandler("save", "csv").retfile
+        savefile = FileHandler("save", "csv").return_file
         if not savefile:
             logger.debug("Save Cancelled")
             return

@@ -26,14 +26,14 @@ _ = _LANG.gettext
 _RECREATE_OBJECTS = dict(tooltips=dict(), commands=dict(), contextmenus=dict())
 
 
-def _get_tooltip(widget, text=None, text_variable=None, wraplength=600):
+def _get_tooltip(widget, text=None, text_variable=None, wrap_length=600):
     """ Store the tooltip layout and widget id in _TOOLTIPS and return a tooltip """
     _RECREATE_OBJECTS["tooltips"][str(widget)] = {"text": text,
                                                   "text_variable": text_variable,
-                                                  "wraplength": wraplength}
-    logger.debug("Adding to tooltips dict: (widget: %s. text: '%s', wraplength: %s)",
-                 widget, text, wraplength)
-    return Tooltip(widget, text=text, text_variable=text_variable, wraplength=wraplength)
+                                                  "wrap_length": wrap_length}
+    logger.debug("Adding to tooltips dict: (widget: %s. text: '%s', wrap_length: %s)",
+                 widget, text, wrap_length)
+    return Tooltip(widget, text=text, text_variable=text_variable, wrap_length=wrap_length)
 
 
 def _get_contextmenu(widget):
@@ -955,7 +955,7 @@ class ControlBuilder():
                         style=f"{self._style}Group.TLabel")
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         if self.option.helptext is not None:
-            _get_tooltip(lbl, text=self.option.helptext, wraplength=600)
+            _get_tooltip(lbl, text=self.option.helptext, wrap_length=600)
         logger.debug("Built control label: (widget: '%s', title: '%s'",
                      self.option.name, self.option.title)
 
@@ -975,7 +975,7 @@ class ControlBuilder():
         if self.option.control != ttk.Checkbutton:
             ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
             if self.option.helptext is not None and not self.helpset:
-                tooltip_kwargs = dict(text=self.option.helptext, wraplength=600)
+                tooltip_kwargs = dict(text=self.option.helptext, wrap_length=600)
                 if self.option.sysbrowser is not None:
                     tooltip_kwargs["text_variable"] = self.option.tk_var
                 _get_tooltip(ctl, **tooltip_kwargs)
@@ -1019,7 +1019,7 @@ class ControlBuilder():
                 self.helpset = True
                 helptext = help_items[choice.lower()]
                 helptext = "{}\n\n - {}".format(helptext, help_intro)
-                _get_tooltip(ctl, text=helptext, wraplength=600)
+                _get_tooltip(ctl, text=helptext, wrap_length=600)
             ctl.pack(anchor=tk.W, fill=tk.X)
             logger.debug("Added %s option %s", option_type, choice)
         return holder.parent
@@ -1182,7 +1182,7 @@ class ControlBuilder():
         lbl.pack(padx=2, pady=5, side=tk.RIGHT, anchor=tk.N)
         frame.pack(side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
-            _get_tooltip(lbl, text=self.option.helptext, wraplength=600)
+            _get_tooltip(lbl, text=self.option.helptext, wrap_length=600)
         logger.debug("Added control to Options Frame: %s", self.option.name)
         return ctl
 
@@ -1204,7 +1204,7 @@ class ControlBuilder():
                                   text=self.option.title,
                                   name=self.option.name,
                                   style=f"{self._style}Group.TCheckbutton")
-        _get_tooltip(ctl, text=self.option.helptext, wraplength=600)
+        _get_tooltip(ctl, text=self.option.helptext, wrap_length=600)
         ctl.pack(side=tk.TOP, anchor=tk.W, fill=tk.X)
         logger.debug("Added control checkframe: '%s'", self.option.name)
         return ctl
@@ -1285,7 +1285,7 @@ class FileBrowser():
                                 cursor="hand2")
             _add_command(fileopn.cget("command"), cmd)
             fileopn.pack(padx=1, side=tk.RIGHT)
-            _get_tooltip(fileopn, text=self.helptext[lbl], wraplength=600)
+            _get_tooltip(fileopn, text=self.helptext[lbl], wrap_length=600)
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",
                          action, self.filetypes)
 
@@ -1305,7 +1305,7 @@ class FileBrowser():
             that will store the path to a directory.
             :param filetypes: Unused argument to allow
             filetypes to be given in ask_load(). """
-        dirname = FileHandler("dir", filetypes).retfile
+        dirname = FileHandler("dir", filetypes).return_file
         if dirname:
             logger.debug(dirname)
             filepath.set(dirname)
@@ -1313,7 +1313,7 @@ class FileBrowser():
     @staticmethod
     def ask_load(filepath, filetypes):
         """ Pop-up to get path to a file """
-        filename = FileHandler("filename", filetypes).retfile
+        filename = FileHandler("filename", filetypes).return_file
         if filename:
             logger.debug(filename)
             filepath.set(filename)
@@ -1321,7 +1321,7 @@ class FileBrowser():
     @staticmethod
     def ask_multi_load(filepath, filetypes):
         """ Pop-up to get path to a file """
-        filenames = FileHandler("filename_multi", filetypes).retfile
+        filenames = FileHandler("filename_multi", filetypes).return_file
         if filenames:
             final_names = " ".join("\"{}\"".format(fname) for fname in filenames)
             logger.debug(final_names)
@@ -1330,7 +1330,7 @@ class FileBrowser():
     @staticmethod
     def ask_save(filepath, filetypes=None):
         """ Pop-up to get path to save a new file """
-        filename = FileHandler("savefilename", filetypes).retfile
+        filename = FileHandler("save_filename", filetypes).return_file
         if filename:
             logger.debug(filename)
             filepath.set(filename)
@@ -1349,7 +1349,7 @@ class FileBrowser():
                                filetypes,
                                command=self.command,
                                action=selected_action,
-                               variable=selected_variable).retfile
+                               variable=selected_variable).return_file
         if filename:
             logger.debug(filename)
             filepath.set(filename)

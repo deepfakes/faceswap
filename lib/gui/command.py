@@ -83,7 +83,7 @@ class CommandNotebook(ttk.Notebook):  # pylint:disable=too-many-ancestors
                 hlp = "Run the {} script".format(cmd.title())
             logger.debug("Updated Action Button: '%s'", ttl)
             btnact.config(text=ttl, image=img)
-            Tooltip(btnact, text=hlp, wraplength=200)
+            Tooltip(btnact, text=hlp, wrap_length=200)
 
     def _set_modified_vars(self):
         """ Set the tkinter variable for each tab to indicate whether contents
@@ -182,7 +182,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         btngen.pack(side=tk.LEFT, padx=5)
         Tooltip(btngen,
                 text=_("Output command line options to the console"),
-                wraplength=200)
+                wrap_length=200)
 
         btnact = ttk.Button(actframe,
                             image=get_images().icons["start"],
@@ -193,7 +193,7 @@ class ActionFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         btnact.pack(side=tk.LEFT, fill=tk.X, expand=True)
         Tooltip(btnact,
                 text=_("Run the {} script").format(self.title),
-                wraplength=200)
+                wrap_length=200)
         actionbtns[self.command] = btnact
 
         logger.debug("Added action buttons: '%s'", self.title)

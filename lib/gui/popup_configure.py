@@ -206,15 +206,15 @@ class _ConfigurePlugins(tk.Toplevel):
                              width=10,
                              command=lambda: self._opts_frame.reset(page_only=True))
 
-        Tooltip(btn_cls, text=_("Close without saving"), wraplength=720)
-        Tooltip(btn_save, text=_("Save this page's config"), wraplength=720)
-        Tooltip(btn_rst, text=_("Reset this page's config to default values"), wraplength=720)
+        Tooltip(btn_cls, text=_("Close without saving"), wrap_length=720)
+        Tooltip(btn_save, text=_("Save this page's config"), wrap_length=720)
+        Tooltip(btn_rst, text=_("Reset this page's config to default values"), wrap_length=720)
         Tooltip(btn_saveall,
                 text=_("Save all settings for the currently selected config"),
-                wraplength=720)
+                wrap_length=720)
         Tooltip(btn_rstall,
                 text=_("Reset all settings for the currently selected config to default values"),
-                wraplength=720)
+                wrap_length=720)
 
         btn_cls.pack(padx=2, side=tk.RIGHT)
         btn_save.pack(padx=2, side=tk.RIGHT)

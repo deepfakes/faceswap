@@ -62,7 +62,7 @@ class ProcessWrapper():
             return
         category, command = self.tk_vars["generate"].get().split(",")
         args = self.build_args(category, command=command, generate=True)
-        self.tk_vars["consoleclear"].set(True)
+        self.tk_vars["console_clear"].set(True)
         logger.debug(" ".join(args))
         print(" ".join(args))
         self.tk_vars["generate"].set(None)
@@ -71,7 +71,7 @@ class ProcessWrapper():
         """ Prepare the environment for execution """
         logger.debug("Preparing for execution")
         self.tk_vars["runningtask"].set(True)
-        self.tk_vars["consoleclear"].set(True)
+        self.tk_vars["console_clear"].set(True)
         if self.command == "train":
             self.tk_vars["istraining"].set(True)
         print("Loading...")

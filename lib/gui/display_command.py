@@ -48,7 +48,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         preview = self.subnotebook_add_page(self.tabname, widget=None)
         lblpreview = ttk.Label(preview, image=get_images().previewoutput[1])
         lblpreview.pack(side=tk.TOP, anchor=tk.NW)
-        Tooltip(lblpreview, text=self.helptext, wraplength=200)
+        Tooltip(lblpreview, text=self.helptext, wrap_length=200)
 
     def update_child(self):
         """ Update the preview image on the label """
@@ -58,7 +58,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler("dir", None).retfile
+        location = FileHandler("dir", None).return_file
         if not location:
             return
         filename = "extract_convert_preview"
@@ -92,7 +92,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
                 text=_("Preview updates at every model save. Click to refresh now."),
-                wraplength=200)
+                wrap_length=200)
         logger.debug("Added refresh option")
 
     def display_item_set(self):
@@ -126,7 +126,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         logger.debug("Adding child")
         preview = PreviewTrainCanvas(self.subnotebook, name)
         preview = self.subnotebook_add_page(name, widget=preview)
-        Tooltip(preview, text=self.helptext, wraplength=200)
+        Tooltip(preview, text=self.helptext, wrap_length=200)
         self.vars["modified"].set(get_images().previewtrain[name][2])
 
     def update_child(self, tab_id, name):
@@ -139,7 +139,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def save_items(self):
         """ Open save dialogue and save preview """
-        location = FileHandler("dir", None).retfile
+        location = FileHandler("dir", None).return_file
         if not location:
             return
         for preview in self.subnotebook.children.values():
@@ -195,9 +195,9 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
 
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
-    def __init__(self, parent, tab_name, helptext, waittime, command=None):
+    def __init__(self, parent, tab_name, helptext, wait_time, command=None):
         self._trace_vars = dict()
-        super().__init__(parent, tab_name, helptext, waittime, command)
+        super().__init__(parent, tab_name, helptext, wait_time, command)
 
     def set_vars(self):
         """ Add graphing specific variables to the default variables.
@@ -259,7 +259,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
                 text=_("Graph updates at every model save. Click to refresh now."),
-                wraplength=200)
+                wrap_length=200)
         logger.debug("Added refresh option")
 
     def _add_option_raw(self):
@@ -272,7 +272,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             text="Raw",
             command=lambda v=tk_var: self._display_data_callback("raw", v))
         chkbtn.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
-        Tooltip(chkbtn, text=_("Display the raw loss data"), wraplength=200)
+        Tooltip(chkbtn, text=_("Display the raw loss data"), wrap_length=200)
 
     def _add_option_smoothed(self):
         """ Add check-button to hide/display smoothed data """
@@ -284,7 +284,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             text="Smoothed",
             command=lambda v=tk_var: self._display_data_callback("smoothed", v))
         chkbtn.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
-        Tooltip(chkbtn, text=_("Display the smoothed loss data"), wraplength=200)
+        Tooltip(chkbtn, text=_("Display the smoothed loss data"), wrap_length=200)
 
     def _add_option_smoothing(self):
         """ Add a slider to adjust the smoothing amount """
@@ -313,7 +313,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         for item in (tbox, ctl):
             Tooltip(item,
                     text=hlp,
-                    wraplength=200)
+                    wrap_length=200)
         logger.debug("Added Smoothing Slider")
 
     def _add_option_iterations(self):
@@ -343,7 +343,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         for item in (tbox, ctl):
             Tooltip(item,
                     text=hlp,
-                    wraplength=200)
+                    wrap_length=200)
         logger.debug("Added Iterations Slider")
 
     def display_item_set(self):
@@ -435,11 +435,11 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         graph = TrainingGraph(self.subnotebook, data, "Loss")
         graph.build()
         graph = self.subnotebook_add_page(name, widget=graph)
-        Tooltip(graph, text=self.helptext, wraplength=200)
+        Tooltip(graph, text=self.helptext, wrap_length=200)
 
     def save_items(self):
         """ Open save dialogue and save graphs """
-        graphlocation = FileHandler("dir", None).retfile
+        graphlocation = FileHandler("dir", None).return_file
         if not graphlocation:
             return
         for graph in self.subnotebook.children.values():
