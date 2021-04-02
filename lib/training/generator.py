@@ -211,9 +211,20 @@ class _Cache():
                 if self._partial_load:  # Faces already loaded for Warp-to-landmarks
                     detected_face = self._cache[key]["detected_face"]
                 else:
-                    detected_face = self._add_aligned_face(filename,
-                                                           meta["alignments"],
-                                                           batch.shape[1])
+                    try:
+                        detected_face = self._add_aligned_face(filename,
+                                                               meta["alignments"],
+                                                               batch.shape[1])
+                    except IndexError:
+                        logger.error("You have hit a bug being actively tracked by the devs")
+                        logger.error("Please provide the crash report so that they can diagnose.")
+                        logger.debug("Error: filename: %s, needs_cache: %s, meta: %s",
+                                     filename, needs_cache, meta)
+                        logger.debug("Error: Batch shape: %s", batch.shape)
+                        if len(batch.shape) == 1:
+                            logger.debug("Mismatch batch shapes? Shapes: %s",
+                                         [b.shape for b in batch])
+                        raise
 
                 self._add_mask(filename, detected_face)
                 for area in ("eye", "mouth"):
