@@ -334,7 +334,7 @@ class AlignedFace():
             ``None`` if no image has been provided.
         """
         if image is None:
-            logger.debug("_extract_face called without a loaded image. Returning empty face.")
+            logger.trace("_extract_face called without a loaded image. Returning empty face.")
             return None
 
         if self._is_aligned and self._centering != "head":  # Crop out the sub face from full head

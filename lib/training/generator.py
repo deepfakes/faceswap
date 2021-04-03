@@ -201,6 +201,14 @@ class _Cache():
 
             batch, metadata = read_image_batch(filenames, with_metadata=True)
 
+            if len(batch.shape) == 1:
+                folder = os.path.dirname(filenames[0])
+                details = [f"{key} ({img.shape[1]}px)" for key, img in zip(keys, batch)]
+                msg = (f"There are mismatched image sizes in the folder '{folder}'. All training "
+                       "images for each side must have the same dimensions.\nThe batch that "
+                       f"failed contains the following files:\n{details}.")
+                raise FaceswapError(msg)
+
             # Populate items into cache
             for filename in needs_cache:
                 key = os.path.basename(filename)
@@ -211,20 +219,9 @@ class _Cache():
                 if self._partial_load:  # Faces already loaded for Warp-to-landmarks
                     detected_face = self._cache[key]["detected_face"]
                 else:
-                    try:
-                        detected_face = self._add_aligned_face(filename,
-                                                               meta["alignments"],
-                                                               batch.shape[1])
-                    except IndexError:
-                        logger.error("You have hit a bug being actively tracked by the devs")
-                        logger.error("Please provide the crash report so that they can diagnose.")
-                        logger.debug("Error: filename: %s, needs_cache: %s, meta: %s",
-                                     filename, needs_cache, meta)
-                        logger.debug("Error: Batch shape: %s", batch.shape)
-                        if len(batch.shape) == 1:
-                            logger.debug("Mismatch batch shapes? Shapes: %s",
-                                         [b.shape for b in batch])
-                        raise
+                    detected_face = self._add_aligned_face(filename,
+                                                           meta["alignments"],
+                                                           batch.shape[1])
 
                 self._add_mask(filename, detected_face)
                 for area in ("eye", "mouth"):
