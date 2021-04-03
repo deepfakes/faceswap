@@ -220,7 +220,7 @@ class FaceswapControl():
                     if "[preview updated]" in output.strip().lower():
                         self.wrapper.tk_vars["updatepreview"].set(True)
                         continue
-                print(output.strip())
+                print(output.rstrip())
         returncode = self.process.poll()
         message = self.set_final_status(returncode)
         self.wrapper.terminate(message)
