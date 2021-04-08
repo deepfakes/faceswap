@@ -379,11 +379,26 @@ class TensorBoardLogs():
         except ValueError as err:
             # When collecting live loss, the current batch may not be completely populated
             # Carry over the last loss to the next collection
+
             if "setting an array element with a sequence" in str(err):
-                carry_over = loss[-1]
-                logger.debug("Carrying over data: (carry_over: %s, new loss: %s)",
-                             carry_over, loss[:-1])
-                loss = np.array(loss[:-1], dtype="float32")
+                # TODO Remove this debug code when this bug has been tracked and fixed
+                debug = dict(step=step,
+                             type=type(loss),
+                             len=len(loss),
+                             loss=loss,
+                             carry_over=carry_over,
+                             labels=labels)
+                try:
+                    carry_over = loss[-1]
+                    logger.debug("Carrying over data: (carry_over: %s, new loss: %s)",
+                                 carry_over, loss[:-1])
+                    loss = np.array(loss[:-1], dtype="float32")
+                except:
+                    msg = ("You have hit a bug that is being actively tracked by the developers.\n"
+                           "Graphing will no longer work for the current training session.\n"
+                           "Please provide the following information to the developers so that "
+                           f"they can look to fix this bug: {debug}")
+                    raise ValueError(msg)
             else:
                 raise
 
