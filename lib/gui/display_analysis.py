@@ -11,7 +11,7 @@ from tkinter import ttk
 from .custom_widgets import Tooltip
 from .display_page import DisplayPage
 from .popup_session import SessionPopUp
-from .stats import Session
+from .analysis import Session
 from .utils import FileHandler, get_config, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -209,7 +209,7 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
 
         Parameters
         ----------
-        session: :class:`lib.gui.stats.Session`
+        session: :class:`lib.gui.analysis.Session`
             The session object to generate the summary for
         """
         return session.full_summary

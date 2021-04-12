@@ -10,16 +10,15 @@ import logging
 import time
 import os
 import warnings
-import zlib
 
 from math import ceil
 from threading import Event
 
 import numpy as np
-import tensorflow as tf
-from tensorflow.python.framework import errors_impl as tf_errors
-from tensorflow.core.util import event_pb2
+
 from lib.serializer import get_serializer
+
+from .event_reader import TensorBoardLogs
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,7 +26,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class GlobalSession():
     """ Holds information about a loaded or current training session by accessing a model's state
     file and Tensorboard logs. This class should not be accessed directly, rather through
-    :attr:`lib.stats.Session`
+    :attr:`lib.gui.analysis.Session`
     """
     def __init__(self):
         logger.debug("Initializing %s", self.__class__.__name__)
@@ -111,7 +110,7 @@ class GlobalSession():
 
         if self._model_dir == model_folder and self._model_name == model_name:
             if is_training:
-                self._tb_logs.refresh_log_filenames()
+                self._tb_logs.set_training(is_training)
                 self._load_state_file()
                 self._is_training = True
             logger.debug("Requested session is already loaded. Not initializing: (model_folder: "
@@ -123,7 +122,8 @@ class GlobalSession():
         self._model_name = model_name
         self._load_state_file()
         self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir,
-                                                     "{}_logs".format(self._model_name)))
+                                                     "{}_logs".format(self._model_name)),
+                                        is_training)
 
         self._summary = SessionsSummary(self)
         logger.debug("Initialized session. Session_IDS: %s", self.session_ids)
@@ -131,6 +131,7 @@ class GlobalSession():
     def stop_training(self):
         """ Clears the internal training flag. To be called when training completes. """
         self._is_training = False
+        self._tb_logs.set_training(False)
 
     def clear(self):
         """ Clear the currently loaded session. """
@@ -165,7 +166,7 @@ class GlobalSession():
         if self._is_training:
             self._is_querying.set()
 
-        loss_dict = self._tb_logs.get_loss(session_id=session_id, is_training=self._is_training)
+        loss_dict = self._tb_logs.get_loss(session_id=session_id)
         if session_id is None:
             retval = dict()
             for key in sorted(loss_dict):
@@ -173,7 +174,7 @@ class GlobalSession():
                     retval.setdefault(loss_key, []).extend(loss)
             retval = {key: np.array(val, dtype="float32") for key, val in retval.items()}
         else:
-            retval = loss_dict[session_id]
+            retval = loss_dict.get(session_id, dict())
 
         if self._is_training:
             self._is_querying.clear()
@@ -200,7 +201,7 @@ class GlobalSession():
         if self._is_training:
             self._is_querying.set()
 
-        retval = self._tb_logs.get_timestamps(session_id=session_id, is_training=self._is_training)
+        retval = self._tb_logs.get_timestamps(session_id=session_id)
         if session_id is not None:
             retval = retval[session_id]
 
@@ -242,336 +243,7 @@ class GlobalSession():
         return retval
 
 
-Session = GlobalSession()
-
-
-class TensorBoardLogs():
-    """ Parse data from TensorBoard logs.
-
-    Process the input logs folder and stores the individual filenames per session.
-
-    Caches timestamp and loss data on request and returns this data from the cache.
-
-    Parameters
-    ----------
-    logs_folder: str
-        The folder that contains the Tensorboard log files
-    """
-    def __init__(self, logs_folder):
-        self._folder_base = logs_folder
-        self._log_filenames = self._get_log_filenames()
-        self._cache = dict()
-        self._training_iterator = None
-        self._training_rollover = dict()
-
-    @property
-    def session_ids(self):
-        """ list: Sorted list of integers of available session ids. """
-        return list(sorted(self._log_filenames))
-
-    def _get_log_filenames(self):
-        """ Get the TensorBoard log filenames for all existing sessions.
-
-        Returns
-        -------
-        dict
-            The full path of each log file for each training session that has been run
-        """
-        logger.debug("Loading log filenames. base_dir: '%s'", self._folder_base)
-        log_filenames = dict()
-        for dirpath, _, filenames in os.walk(self._folder_base):
-            if not any(filename.startswith("events.out.tfevents") for filename in filenames):
-                continue
-            logfiles = [filename for filename in filenames
-                        if filename.startswith("events.out.tfevents")]
-            # Take the last log file, in case of previous crash
-            logfile = os.path.join(dirpath, sorted(logfiles)[-1])
-            session = os.path.split(os.path.split(dirpath)[0])[1]
-            session = session[session.rfind("_") + 1:]
-            if not session.isdigit():
-                logger.warning("Unable to load session data for model")
-                return log_filenames
-            session = int(session)
-            log_filenames[session] = logfile
-        logger.debug("logfiles: %s", log_filenames)
-        return log_filenames
-
-    def _cache_data(self, session_id, is_training=False):
-        """ Cache TensorBoard logs for the given session ID on first access.
-
-        Populates :attr:`_cache` with timestamps and loss data.
-
-        If this is a training session and the data is being queried for the training session ID
-        then get the latest available data and append to the cache
-
-        Parameters
-        -------
-        session_id: int
-            The session ID to cache the data for
-        is_training: bool, optional
-            ``True`` if a current training session is running otherwise ``False``.
-            Default: ``False``
-        """
-        labels = []
-        step = []
-        loss = []
-        timestamps = []
-        last_step = -1
-        carry_over = None
-        live_data = is_training and session_id == max(self._log_filenames)
-
-        if live_data:
-            iterator = self._get_latest_live()
-        else:
-            iterator = tf.compat.v1.io.tf_record_iterator(self._log_filenames[session_id])
-
-        try:
-            for record in iterator:
-                event = event_pb2.Event.FromString(record)
-                if not event.summary.value or not event.summary.value[0].tag.startswith("batch_"):
-                    continue
-
-                if last_step == -1:
-                    last_step = event.step if live_data else 0
-
-                if live_data and self._cache[session_id].get("carry_over"):
-                    step = self._cache[session_id]["carry_over"]
-                    logger.debug("Retrieving carried over data: %s", step)
-                    self._cache[session_id]["carry_over"] = None
-
-                if event.step != last_step:
-                    if last_step != 0:
-                        loss.append(step)
-                    step = []
-                    last_step = event.step
-
-                summary = event.summary.value[0]
-                tag = summary.tag
-
-                # Pre tf2.3 totals were "batch_total"
-                if tag in ("batch_loss", "batch_total"):
-                    timestamps.append(event.wall_time)
-                    continue
-
-                # tf2.3 stopped respecting loss names in tensorboard callback so rewrite
-                lbl_split = tag.replace("batch_", "").replace("_loss", "").split("_")
-                if lbl_split[-1] in ("a", "b"):
-                    lbl = f"face_{lbl_split[-1]}"
-                elif "both" in lbl_split:  # Combined decoders don't get face names
-                    lbl = f"face_{'b' if lbl_split[-1] == '1' else 'a'}"
-                else:
-                    lbl = f"mask_{lbl_split[-2]}"  # TODO may not work for combined decoders
-                if lbl not in labels:
-                    labels.append(lbl)
-
-                step.append(summary.simple_value)
-
-        except tf_errors.DataLossError as err:
-            logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
-                           "The totals do not include this session. Original error message: "
-                           "'%s'", session_id, str(err))
-
-        if step:
-            loss.append(step)
-
-        try:
-            loss = np.array(loss, dtype="float32")
-        except ValueError as err:
-            # When collecting live loss, the current batch may not be completely populated
-            # Carry over the last loss to the next collection
-
-            if "setting an array element with a sequence" in str(err):
-                # TODO Remove this debug code when this bug has been tracked and fixed
-                debug = dict(step=step,
-                             type=type(loss),
-                             len=len(loss),
-                             loss=loss,
-                             carry_over=carry_over,
-                             labels=labels)
-                try:
-                    carry_over = loss[-1]
-                    logger.debug("Carrying over data: (carry_over: %s, new loss: %s)",
-                                 carry_over, loss[:-1])
-                    loss = np.array(loss[:-1], dtype="float32")
-                except:
-                    msg = ("You have hit a bug that is being actively tracked by the developers.\n"
-                           "Graphing will no longer work for the current training session.\n"
-                           "Please provide the following information to the developers so that "
-                           f"they can look to fix this bug: {debug}")
-                    raise ValueError(msg)
-            else:
-                raise
-
-        timestamps = np.array(timestamps, dtype="float64")
-        logger.debug("Caching session id: %s, labels: %s, loss: %s, timestamps: %s",
-                     session_id, labels, loss.shape, timestamps.shape)
-
-        if live_data and session_id in self._cache:
-            self._add_latest_data_to_cache(session_id, loss, timestamps)
-        else:
-            self._cache[session_id] = dict(labels=labels,
-                                           loss=zlib.compress(loss),
-                                           loss_shape=loss.shape,
-                                           timestamps=zlib.compress(timestamps),
-                                           timestamps_shape=timestamps.shape)
-        if carry_over:
-            self._cache[session_id]["carry_over"] = carry_over
-
-    def _get_latest_live(self):
-        """ Obtain the latest event logs for live training data and add to the cache """
-        if self._training_iterator is None:
-            training_session_id = self.session_ids[-1]
-            filename = self._log_filenames[training_session_id]
-            self._training_iterator = tf.compat.v1.io.tf_record_iterator(filename)
-            logger.debug("Set live training iterator %s for session_id: %s",
-                         self._training_iterator, training_session_id)
-
-        i = 0
-        while True:
-            try:
-                yield next(self._training_iterator)
-                i += 1
-            except StopIteration:
-                logger.debug("End of data reached")
-                break
-            except tf.errors.DataLossError as err:
-                # Truncated records are ignored. The iterator holds the offset, so the record will
-                # be completed at the next call.
-                logger.debug("Truncated record. Original Error: %s", err)
-                break
-        logger.debug("Collected %s records from live log file", i)
-
-    def _add_latest_data_to_cache(self, session_id, loss, timestamps):
-        """ Append the latest received live training data to the cached data.
-
-        Parameters
-        ----------
-        session_id: int
-            The training session ID to update the cache for
-        loss: :class:`numpy.ndarray`
-            The latest loss values returned from the iterator
-        timestamps: :class:`numpy.ndarray`
-            The latest time stamps returned from the iterator
-        """
-        if not np.any(loss) and not np.any(timestamps):
-            logger.debug("No new live data to cache.")
-            return
-
-        logger.debug("Adding live data to cache: (loss: %s, timestamps: %s)",
-                     loss.shape, timestamps.shape)
-
-        cache = self._cache[session_id]
-
-        past_loss = np.frombuffer(zlib.decompress(cache["loss"]),
-                                  dtype="float32").reshape(cache["loss_shape"])
-        new_loss = np.concatenate((past_loss, loss))
-        cache["loss_shape"] = new_loss.shape
-        cache["loss"] = zlib.compress(new_loss)
-        del past_loss
-
-        past_timestamps = np.frombuffer(zlib.decompress(cache["timestamps"]),
-                                        dtype="float64").reshape(cache["timestamps_shape"])
-        new_timestamps = np.concatenate((past_timestamps, timestamps))
-        cache["timestamps_shape"] = new_timestamps.shape
-        cache["timestamps"] = zlib.compress(new_timestamps)
-        del past_timestamps
-
-    def _from_cache(self, session_id=None, is_training=False):
-        """ Get the session data from the cache.
-
-        If the request data does not exist in the cache, then populate it.
-
-        Parameters
-        ----------
-        session_id: int, optional
-            The Session ID to return the data for. Set to ``None`` to return all session
-            data. Default ``None`
-        is_training: bool, optional
-            ``True`` if a current training session is running otherwise ``False``.
-            Default: ``False``
-
-        Returns
-        -------
-        dict
-            The session id(s) as key, with the event data as value
-        """
-        if session_id is not None and session_id not in self._cache:
-            self._cache_data(session_id)
-        elif is_training and session_id == self.session_ids[-1]:
-            self._cache_data(session_id, is_training=is_training)
-        elif session_id is None and not all(idx in self._cache for idx in self._log_filenames):
-            for sess in self._log_filenames:
-                if sess not in self._cache:
-                    self._cache_data(sess)
-
-        if session_id is None:
-            return self._cache
-        return {session_id: self._cache[session_id]}
-
-    def get_loss(self, session_id=None, is_training=False):
-        """ Read the loss from the TensorBoard event logs
-
-        Parameters
-        ----------
-        session_id: int, optional
-            The Session ID to return the loss for. Set to ``None`` to return all session
-            losses. Default ``None``
-        is_training: bool, optional
-            ``True`` if a current training session is running otherwise ``False``.
-            Default: ``False``
-
-        Returns
-        -------
-        dict
-            The session id(s) as key, with a further dictionary as value containing the loss name
-            and list of loss values for each step
-        """
-        logger.debug("Getting loss: (session_id: %s)", session_id)
-        retval = dict()
-        for sess, info in self._from_cache(session_id, is_training).items():
-            arr = np.frombuffer(zlib.decompress(info["loss"]),
-                                dtype="float32").reshape(info["loss_shape"])
-            for idx, title in enumerate(info["labels"]):
-                retval.setdefault(sess, dict())[title] = arr[:, idx]
-        logger.debug({key: {k: v.shape for k, v in val.items()}
-                      for key, val in retval.items()})
-        return retval
-
-    def get_timestamps(self, session_id=None, is_training=False):
-        """ Read the timestamps from the TensorBoard logs.
-
-        As loss timestamps are slightly different for each loss, we collect the timestamp from the
-        `batch_loss` key.
-
-        Parameters
-        ----------
-        session_id: int, optional
-            The Session ID to return the timestamps for. Set to ``None`` to return all session
-            timestamps. Default ``None``
-        is_training: bool, optional
-            ``True`` if a current training session is running otherwise ``False``.
-            Default: ``False``
-
-        Returns
-        -------
-        dict
-            The session id(s) as key with list of timestamps per step as value
-        """
-
-        logger.debug("Getting timestamps: (session_id: %s, is_training: %s)",
-                     session_id, is_training)
-        retval = {sess: np.frombuffer(zlib.decompress(info["timestamps"]),
-                                      dtype="float64").reshape(info["timestamps_shape"])
-                  for sess, info in self._from_cache(session_id, is_training).items()}
-        logger.debug({k: v.shape for k, v in retval.items()})
-        return retval
-
-    def refresh_log_filenames(self):
-        """ Refresh the log file list in :attr:`_log_filenames`.
-
-        Called when a training session is loaded, to add the latest log filename to the list.
-        """
-        self._log_filenames = self._get_log_filenames()
+_SESSION = GlobalSession()
 
 
 class SessionsSummary():  # pylint:disable=too-few-public-methods
@@ -633,10 +305,10 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
                               iterations=timestamps.shape[0] if np.any(timestamps) else 0)
                 for sess_id, timestamps in self._session.get_timestamps(None).items()}
 
-        elif Session.is_training:
+        elif _SESSION.is_training:
             logger.debug("Updating summary time stamps for training session")
 
-            session_id = Session.session_ids[-1]
+            session_id = _SESSION.session_ids[-1]
             latest = self._session.get_timestamps(session_id)
 
             self._time_stats[session_id] = dict(
@@ -872,7 +544,7 @@ class Calculations():
     def refresh(self):
         """ Refresh the stats """
         logger.debug("Refreshing")
-        if not Session.is_loaded:
+        if not _SESSION.is_loaded:
             logger.warning("Session data is not initialized. Not refreshing")
             return None
         self._iterations = 0
@@ -939,7 +611,7 @@ class Calculations():
         iterations = set()
 
         if self._display.lower() == "loss":
-            loss_dict = Session.get_loss(self._session_id)
+            loss_dict = _SESSION.get_loss(self._session_id)
             for loss_name, loss in loss_dict.items():
                 if loss_name not in self._loss_keys:
                     continue
@@ -1021,7 +693,7 @@ class Calculations():
             The training rate for each iteration of the selected session
         """
         logger.debug("Calculating rate")
-        retval = (Session.batch_sizes[self._session_id] * 2) / np.diff(Session.get_timestamps(
+        retval = (_SESSION.batch_sizes[self._session_id] * 2) / np.diff(_SESSION.get_timestamps(
             self._session_id))
         logger.debug("Calculated rate: Item_count: %s", len(retval))
         return retval
@@ -1041,8 +713,8 @@ class Calculations():
         each session's rate calculation.
         """
         logger.debug("Calculating totals rate")
-        batchsizes = Session.batch_sizes
-        total_timestamps = Session.get_timestamps(None)
+        batchsizes = _SESSION.batch_sizes
+        total_timestamps = _SESSION.get_timestamps(None)
         rate = list()
         for sess_id in sorted(total_timestamps.keys()):
             batchsize = batchsizes[sess_id]
@@ -1106,7 +778,7 @@ class Calculations():
         :class:`numpy.ndarray`
             The smoothed data
         """
-        return ExponentialMovingAverage(data, self._args["smooth_amount"])()
+        return _ExponentialMovingAverage(data, self._args["smooth_amount"])()
 
     @classmethod
     def _calc_trend(cls, data):
@@ -1134,7 +806,7 @@ class Calculations():
         return trend
 
 
-class ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
+class _ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
     """ Reshapes data before calculating exponential moving average, then iterates once over the
     rows to calculate the offset without precision issues.
 

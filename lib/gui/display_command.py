@@ -12,7 +12,7 @@ from tkinter import ttk
 from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
 from .custom_widgets import Tooltip
-from .stats import Calculations, Session
+from .analysis import Calculations, Session
 from .control_helper import set_slider_rounding
 from .utils import FileHandler, get_config, get_images, preview_trigger
 

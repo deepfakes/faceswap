@@ -11,7 +11,7 @@ from time import time
 
 import psutil
 
-from .stats import Session
+from .analysis import Session
 from .utils import get_config, get_images, LongRunningTask, preview_trigger
 
 if os.name == "nt":
@@ -88,8 +88,8 @@ class ProcessWrapper():
     def build_args(self, category, command=None, generate=False):
         """ Build the faceswap command and arguments list.
 
-        If training, pass the model folder and name to the training :class:`lib.gui.stats.Session`
-        for the GUI.
+        If training, pass the model folder and name to the training
+        :class:`lib.gui.analysis.Session` for the GUI.
         """
         logger.debug("Build cli arguments: (category: %s, command: %s, generate: %s)",
                      category, command, generate)

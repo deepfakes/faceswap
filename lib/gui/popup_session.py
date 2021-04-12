@@ -10,7 +10,7 @@ from tkinter import ttk
 from .control_helper import ControlBuilder, ControlPanelOption
 from .custom_widgets import Tooltip
 from .display_graph import SessionGraph
-from .stats import Calculations, Session
+from .analysis import Calculations, Session
 from .utils import FileHandler, get_images, LongRunningTask
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -419,11 +419,11 @@ class SessionPopUp(tk.Toplevel):
         Parameters
         ----------
         kwargs: dict
-            The keyword arguments to pass to `lib.gui.stats.Calculations`
+            The keyword arguments to pass to `lib.gui.analysis.Calculations`
 
         Returns
         -------
-        :class:`lib.gui.stats.Calculations`
+        :class:`lib.gui.analysis.Calculations`
             The summarized results for the given session
         """
         return Calculations(**kwargs)
