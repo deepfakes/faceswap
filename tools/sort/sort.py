@@ -39,10 +39,10 @@ class Sort():
 
         # Setting default argument values that cannot be set by argparse
 
-        # Set output dir to the same value as input dir
+        # Set output folder to the same value as input folder
         # if the user didn't specify it.
         if self._args.output_dir is None:
-            logger.verbose("No output directory provided. Using input dir as output dir.")
+            logger.verbose("No output directory provided. Using input folder as output folder.")
             self._args.output_dir = self._args.input_dir
 
         # Assigning default threshold values based on grouping method
@@ -155,12 +155,11 @@ class Sort():
         """ Sort by blur amount """
         logger.info("Sorting by estimated image blur...")
 
-        # TODO We have metadata here, so we can mask the face for blur estimate
-        blurs = [(filename, self.estimate_blur(image))
-                 for filename, image, _ in tqdm(self._loader.load(),
-                                                desc="Estimating blur",
-                                                total=self._loader.count,
-                                                leave=False)]
+        blurs = [(filename, self.estimate_blur(image, metadata))
+                 for filename, image, metadata in tqdm(self._loader.load(),
+                                                       desc="Estimating blur",
+                                                       total=self._loader.count,
+                                                       leave=False)]
         logger.info("Sorting...")
         return sorted(blurs, key=lambda x: x[1], reverse=True)
 
@@ -674,12 +673,38 @@ class Sort():
             break
         return result
 
-    @staticmethod
-    def estimate_blur(image):
+    @classmethod
+    def estimate_blur(cls, image, metadata=None):
+        """ Estimate the amount of blur an image has with the variance of the Laplacian.
+        Normalize by pixel number to offset the effect of image size on pixel gradients & variance.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The face image to calculate blur for
+        metadata: dict, optional
+            The metadata for the face image or ``None`` if no metadata is available. If metadata is
+            provided the face will be masked by the "components" mask prior to calculating blur.
+            Default:``None``
+
+        Returns
+        -------
+        float
+            The estimated blur score for the face
         """
-        Estimate the amount of blur an image has with the variance of the Laplacian.
-        Normalize by pixel number to offset the effect of image size on pixel gradients & variance
-        """
+        if metadata is not None:
+            alignments = metadata["alignments"]
+            det_face = DetectedFace()
+            det_face.from_png_meta(alignments)
+            aln_face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
+                                   image=image,
+                                   centering="legacy",
+                                   size=256,
+                                   is_aligned=True)
+            mask = det_face.mask["components"]
+            mask.set_sub_crop(aln_face.pose.offset["face"] * -1)
+            mask = cv2.resize(mask.mask, (256, 256), interpolation=cv2.INTER_CUBIC)[..., None]
+            image = np.minimum(aln_face.face, mask)
         if image.ndim == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)
