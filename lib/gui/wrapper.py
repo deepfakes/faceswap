@@ -138,11 +138,11 @@ class ProcessWrapper():
         self.tk_vars["runningtask"].set(False)
         if self.task.command == "train":
             self.tk_vars["istraining"].set(False)
+            Session.stop_training()
         self.statusbar.stop()
         self.statusbar.message.set(message)
         self.tk_vars["display"].set(None)
         get_images().delete_preview()
-        Session.stop_training()
         preview_trigger().clear()
         self.command = None
         logger.debug("Terminated Faceswap processes")
