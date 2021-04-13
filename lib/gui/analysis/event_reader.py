@@ -496,7 +496,10 @@ class TensorBoardLogs():
         retval = dict()
         for idx in [session_id] if session_id else self.session_ids:
             self._check_cache(idx)
-            retval[idx] = self._cache.get_data(idx, "timestamps")[idx]["timestamps"]
+            data = self._cache.get_data(idx, "timestamps")
+            if not data:
+                continue
+            retval[idx] = data[idx]["timestamps"]
         logger.debug({k: v.shape for k, v in retval.items()})
         return retval
 
