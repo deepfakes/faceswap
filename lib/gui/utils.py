@@ -585,7 +585,16 @@ class Images():
             width, height = img.size
             scaling = thumbnail_size / max(width, height)
             logger.debug("image width: %s, height: %s, scaling: %s", width, height, scaling)
-            img = img.resize((int(width * scaling), int(height * scaling)))
+
+            try:
+                img = img.resize((int(width * scaling), int(height * scaling)))
+            except OSError as err:
+                # Image only gets loaded when we call a method, so may error on partial loads
+                logger.debug("OS Error resizing preview image: '%s'. Original error: %s",
+                             fname, err)
+                dropped_files.append(fname)
+                continue
+
             if img.size[0] != img.size[1]:
                 # Pad to square
                 new_img = Image.new("RGB", (thumbnail_size, thumbnail_size))

@@ -131,7 +131,8 @@ class GlobalSession():
     def stop_training(self):
         """ Clears the internal training flag. To be called when training completes. """
         self._is_training = False
-        self._tb_logs.set_training(False)
+        if self._tb_logs is not None:
+            self._tb_logs.set_training(False)
 
     def clear(self):
         """ Clear the currently loaded session. """

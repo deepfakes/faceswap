@@ -10,6 +10,8 @@ import tensorflow as tf
 from tensorflow.core.util import event_pb2
 from tensorflow.python.framework import errors_impl as tf_errors
 
+from lib.serializer import get_serializer
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -256,35 +258,19 @@ class _Cache():
         """
         loss = list(loss)
         timestamps = list(timestamps)
-        ids = sorted(data)
 
-        if not all(len(step) == length_loss for step in loss):
-            indices = [loss.index(step) for step in loss if len(step) != length_loss]
-            logger.debug("Truncated loss found. loss count: %s, truncated indices: %s",
-                         len(loss), indices)
-            for idx in reversed(indices):  # Backwards so we can delete indices and still traverse
-                if is_live:
-                    self._set_carry_over(ids[idx], data[ids[idx]])
-                logger.debug("Removing truncated loss: (timestamp: %s, loss: %s)",
-                             timestamps[idx], loss[idx])
-                del loss[idx]
-                del timestamps[idx]
+        if len(loss[-1]) != length_loss:
+            logger.debug("Truncated loss found. loss count: %s", len(loss))
+            idx = sorted(data)[-1]
+            if is_live:
+                logger.debug("Setting carried over data: %s", data)
+                self._carry_over[idx] = data[idx]
+            logger.debug("Removing truncated loss: (timestamp: %s, loss: %s)",
+                         timestamps[-1], loss[-1])
+            del loss[-1]
+            del timestamps[-1]
 
         return timestamps, loss
-
-    def _set_carry_over(self, index, data):
-        """ For live data, set carried over data from a partial Tensorflow Event read to
-        :attr:`_carry_over`
-
-        Parameters
-        -------
-        index: int
-            The step index to carry over data for
-        data: dict
-            The raw partially read Tensorflow event log data
-        """
-        logger.debug("Setting carried over data: %s", data)
-        self._carry_over[index] = data
 
     def _add_latest_live(self, session_id, loss, timestamps):
         """ Append the latest received live training data to the cached data.
@@ -569,9 +555,12 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         try:
             for record in self._iterator:
                 event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
-                if not event.summary.value or not event.summary.value[0].tag.startswith("batch_"):
+                if not event.summary.value:
                     continue
-                data[event.step] = self._process_event(event, data.get(event.step, dict()))
+                if event.summary.value[0].tag == "keras":
+                    self._parse_outputs(event)
+                if event.summary.value[0].tag.startswith("batch_"):
+                    data[event.step] = self._process_event(event, data.get(event.step, dict()))
 
         except tf_errors.DataLossError as err:
             logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
@@ -580,7 +569,38 @@ class _EventParser():  # pylint:disable=too-few-public-methods
 
         self._cache.cache_data(session_id, data, self._loss_labels, is_live=self._live_data)
 
-    def _process_event(self, event, step):
+    def _parse_outputs(self, event):
+        """ Parse the outputs from the stored model structure for mapping loss names to
+        model outputs.
+
+        Loss names are added to :attr:`_loss_labels`
+
+        Parameters
+        ----------
+        event: :class:`tensorflow.core.util.event_pb2`
+            The event data containing the keras model structure to be parsed
+        """
+        serializer = get_serializer("json")
+        struct = event.summary.value[0].tensor.string_val[0]
+        outputs = np.array(serializer.unmarshal(struct)["config"]["output_layers"])
+        logger.debug("Obtained model outputs: %s, shape: %s", outputs, outputs.shape)
+        if outputs.ndim == 2:  # Insert extra dimension for non learn mask models
+            outputs = np.expand_dims(outputs, axis=1)
+            logger.debug("Expanded dimensions for non-learn_mask model. outputs: %s, shape: %s",
+                         outputs, outputs.shape)
+        for side_outputs, side in zip(outputs, ("a", "b")):
+            logger.debug("side: '%s', outputs: '%s'", side, side_outputs)
+            for idx in range(len(side_outputs)):
+                # First output is always face. Subsequent outputs are masks
+                loss_name = f"face_{side}" if idx == 0 else f"mask_{side}"
+                loss_name = loss_name if idx < 2 else f"{loss_name}_{idx}"
+                if loss_name not in self._loss_labels:
+                    logger.debug("Adding loss name: '%s'", loss_name)
+                    self._loss_labels.append(loss_name)
+        logger.debug("Collated loss labels: %s", self._loss_labels)
+
+    @classmethod
+    def _process_event(cls, event, step):
         """ Process a single Tensorflow event.
 
         Adds timestamp to the step `dict` if a total loss value is received, process the labels for
@@ -602,26 +622,5 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         if summary.tag in ("batch_loss", "batch_total"):  # Pre tf2.3 totals were "batch_total"
             step["timestamp"] = event.wall_time
             return step
-        self._process_label(summary.tag)
         step.setdefault("loss", list()).append(summary.simple_value)
         return step
-
-    def _process_label(self, label):
-        """ Check if the incoming loss label exists in :attr:`_loss_labels` and if not, add it.
-
-        Parameters
-        ----------
-        label: str
-            The label for the currently processing loss event
-        """
-        # tf2.3 stopped respecting loss names in tensorboard callback so rewrite
-        lbl_split = label.replace("batch_", "").replace("_loss", "").split("_")
-        if lbl_split[-1] in ("a", "b"):
-            lbl = f"face_{lbl_split[-1]}"
-        elif "both" in lbl_split:  # Combined decoders don't get face names
-            lbl = f"face_{'b' if lbl_split[-1] == '1' else 'a'}"
-        else:
-            lbl = f"mask_{lbl_split[-2]}"  # TODO may not work for combined decoders
-        if lbl not in self._loss_labels:
-            logger.debug("Adding loss label: (original: '%s', rewritten: '%s')", label, lbl)
-            self._loss_labels.append(lbl)
