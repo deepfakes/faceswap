@@ -134,6 +134,7 @@ class _Cache():
         logger.debug("Initialising: %s: (session_ids: %s)", self.__class__.__name__, session_ids)
         self._data = {idx: None for idx in session_ids}
         self._carry_over = dict()
+        self._loss_labels = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def is_cached(self, session_id):
@@ -161,7 +162,11 @@ class _Cache():
             logger.debug("No data to cache")
             return
 
-        timestamps, loss = self._to_numpy(data, len(labels), is_live)
+        if labels:
+            logger.debug("Setting loss labels: %s", labels)
+            self._loss_labels = labels
+
+        timestamps, loss = self._to_numpy(data, is_live)
 
         if not is_live or (is_live and session_id not in self._data):
             self._data[session_id] = dict(labels=labels,
@@ -172,7 +177,7 @@ class _Cache():
         else:
             self._add_latest_live(session_id, loss, timestamps)
 
-    def _to_numpy(self, data, length_loss, is_live):
+    def _to_numpy(self, data, is_live):
         """ Extract each individual step data into separate numpy arrays for loss and timestamps.
 
         Timestamps are stored float64 as the extra accuracy is needed for correct timings. Arrays
@@ -183,8 +188,6 @@ class _Cache():
         ----------
         data: dict
             The incoming tensorflow event data in dictionary form per step
-        length_loss: int
-            The number of loss items that should appear for each step
         is_live: bool, optional
             ``True`` if the data to be cached is from a live training session otherwise ``False``.
             Default: ``False``
@@ -202,7 +205,7 @@ class _Cache():
 
         times, loss = zip(*[(data[idx].get("timestamp"), data[idx].get("loss", []))
                             for idx in sorted(data)])
-        times, loss = self._process_data(data, times, loss, length_loss, is_live)
+        times, loss = self._process_data(data, times, loss, is_live)
 
         times, loss = (np.array(times, dtype="float64"), np.array(loss, dtype="float32"))
 
@@ -228,7 +231,7 @@ class _Cache():
             update.setdefault("loss", []).extend(carry_over.get("loss", []))
             logger.debug("Merged carry over data: %s", update)
 
-    def _process_data(self, data, timestamps, loss, length_loss, is_live):
+    def _process_data(self, data, timestamps, loss, is_live):
         """ Process live update data.
 
         Live data requires different processing as often we will only have partial data for the
@@ -244,8 +247,6 @@ class _Cache():
             The raw timestamps for for the latest live query, including any partial reads
         loss: tuple
             The raw loss for for the latest live query, including any partial reads
-        length_loss: int
-            The number of loss items that should appear for each step
         is_live: bool
             ``True`` if the data to be cached is from a live training session otherwise ``False``.
 
@@ -259,11 +260,11 @@ class _Cache():
         loss = list(loss)
         timestamps = list(timestamps)
 
-        if len(loss[-1]) != length_loss:
+        if len(loss[-1]) != len(self._loss_labels):
             logger.debug("Truncated loss found. loss count: %s", len(loss))
             idx = sorted(data)[-1]
             if is_live:
-                logger.debug("Setting carried over data: %s", data)
+                logger.debug("Setting carried over data: %s", data[idx])
                 self._carry_over[idx] = data[idx]
             logger.debug("Removing truncated loss: (timestamp: %s, loss: %s)",
                          timestamps[-1], loss[-1])
