@@ -762,7 +762,8 @@ class Sort():
             Use Fourier Transform to analyze the frequency characteristics of the masked
             face using 2D Discrete Fourier Transform (DFT) filter to find the frequency domain.
             A mean value is assigned to the magnitude spectrum and returns a blur score.
-
+            Adapted from https://www.pyimagesearch.com/2020/06/15/
+            opencv-fast-fourier-transform-fft-for-blur-detection-in-images-and-video-streams/
         metadata: dict, optional
             The metadata for the face image or ``None`` if no metadata is available. If metadata is
             provided the face will be masked by the "components" mask prior to calculating blur.
