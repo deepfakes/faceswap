@@ -787,20 +787,18 @@ class Sort():
             mask.set_sub_crop(aln_face.pose.offset["face"] * -1)
             mask = cv2.resize(mask.mask, (256, 256), interpolation=cv2.INTER_CUBIC)[..., None]
             image = np.minimum(aln_face.face, mask)
-            size = 60
         if image.ndim == 3:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            height, width = image.shape
-            c_height, c_width = (int(height / 2.0), int(width / 2.0))
-            fft = np.fft.fft2(image)
-            fft_shift = np.fft.fftshift(fft)
-            fft_shift[c_height - size:c_height + size, c_width - size:c_width + size] = 0
-            ifft_shift = np.fft.ifftshift(fft_shift)
-            shift_back = np.fft.ifft2(ifft_shift)
-            magnitude = 20 * np.log(np.abs(shift_back))
-            score = np.mean(magnitude)
-            # print("[score] {}".format(score))
-            return score
+        height, width = image.shape
+        c_height, c_width = (int(height / 2.0), int(width / 2.0))
+        fft = np.fft.fft2(image)
+        fft_shift = np.fft.fftshift(fft)
+        fft_shift[c_height - 75:c_height + 75, c_width - 75:c_width + 75] = 0
+        ifft_shift = np.fft.ifftshift(fft_shift)
+        shift_back = np.fft.ifft2(ifft_shift)
+        magnitude = np.log(np.abs(shift_back))
+        score = np.mean(magnitude)
+        return score
 
     @staticmethod
     def calc_landmarks_face_pitch(flm):
