@@ -123,7 +123,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     A Read only text box for displaying the output from stdout/stderr.
 
     All handling is internal to this method. To clear the console, the stored tkinter variable in
-    :attr:`~lib.gui.Config.tk_vars` ``consoleclear`` should be triggered.
+    :attr:`~lib.gui.Config.tk_vars` ``console_clear`` should be triggered.
 
     Parameters
     ----------
@@ -136,18 +136,18 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
     def __init__(self, parent, debug):
         logger.debug("Initializing %s: (parent: %s, debug: %s)",
                      self.__class__.__name__, parent, debug)
-        super().__init__(parent)
-        self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
-                  fill=tk.BOTH, expand=True)
+        super().__init__(parent, relief=tk.SOLID, padding=1, style="Console.TFrame")
         self._theme = get_config().user_theme["console"]
-        self._console = _ReadOnlyText(self)
+        self._console = _ReadOnlyText(self, relief=tk.FLAT)
         rc_menu = ContextMenu(self._console)
         rc_menu.cm_bind()
-        self._console_clear = get_config().tk_vars['consoleclear']
+        self._console_clear = get_config().tk_vars['console_clear']
         self._set_console_clear_var_trace()
         self._debug = debug
         self._build_console()
         self._add_tags()
+        self.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=(2, 0),
+                  fill=tk.BOTH, expand=True)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _set_console_clear_var_trace(self):
@@ -320,7 +320,7 @@ class _WidgetRedirector:
                                self.widget._w)  # pylint:disable=protected-access
 
     def close(self):
-        "Unregister operations and revert redirection created by .__init__."
+        "de-register operations and revert redirection created by .__init__."
         for operation in list(self._operations):
             self.unregister(operation)
         widget = self.widget
@@ -371,7 +371,7 @@ class _WidgetRedirector:
 
         Note that if a registered function is called, the operation is not
         passed through to Tk.  Apply the function returned by self.register()
-        to *args to accomplish that.  For an example, see colorizer.py.
+        to *args to accomplish that.
 
         """
         op_ = self._operations.get(operation)
@@ -387,30 +387,30 @@ class _OriginalCommand:
     """Callable for original tk command that has been redirected.
 
     Returned by .register; can be used in the function registered.
-    redir = WidgetRedirector(text)
+    redirect = WidgetRedirector(text)
     def my_insert(*args):
         print("insert", args)
         original_insert(*args)
-    original_insert = redir.register("insert", my_insert)
+    original_insert = redirect.register("insert", my_insert)
     """
 
-    def __init__(self, redir, operation):
+    def __init__(self, redirect, operation):
         """Create .tk_call and .orig_and_operation for .__call__ method.
 
-        .redir and .operation store the input args for __repr__.
-        .tk and .orig copy attributes of .redir (probably not needed).
+        .redirect and .operation store the input args for __repr__.
+        .tk and .orig copy attributes of .redirect (probably not needed).
         """
-        self.redir = redir
+        self.redirect = redirect
         self.operation = operation
-        self.tk_ = redir.tk_  # redundant with self.redir
-        self.orig = redir.orig  # redundant with self.redir
+        self.tk_ = redirect.tk_  # redundant with self.redirect
+        self.orig = redirect.orig  # redundant with self.redirect
         # These two could be deleted after checking recipient code.
-        self.tk_call = redir.tk_.call
-        self.orig_and_operation = (redir.orig, operation)
+        self.tk_call = redirect.tk_.call
+        self.orig_and_operation = (redirect.orig, operation)
 
     def __repr__(self):
         return "%s(%r, %r)" % (self.__class__.__name__,
-                               self.redir, self.operation)
+                               self.redirect, self.operation)
 
     def __call__(self, *args):
         return self.tk_call(self.orig_and_operation + args)
@@ -549,9 +549,9 @@ class Tooltip:  # pylint:disable=too-few-public-methods
     text_variable: :class:`tkinter.strVar`, optional
         The text variable to use for dynamic help text. Appended after the contents of :attr:`text`
         if provided. Default: ``None``
-    waittime: int, optional
+    wait_time: int, optional
         The time in milliseconds to wait before showing the tool-tip. Default: 400
-    wraplength: int, optional
+    wrap_length: int, optional
         The text length for each line before wrapping. Default: 250
 
     Example
@@ -566,10 +566,10 @@ class Tooltip:  # pylint:disable=too-few-public-methods
     http://www.daniweb.com/programming/software-development/code/484591/a-tooltip-class-for-tkinter
     """
     def __init__(self, widget, *, pad=(5, 3, 5, 3), text="widget info",
-                 text_variable=None, waittime=400, wraplength=250):
+                 text_variable=None, wait_time=400, wrap_length=250):
 
-        self._waittime = waittime  # in milliseconds, originally 500
-        self._wraplength = wraplength  # in pixels, originally 180
+        self._waittime = wait_time  # in milliseconds, originally 500
+        self.wrap_length = wrap_length  # in pixels, originally 180
         self._widget = widget
         self._text = text
         self._text_variable = text_variable
@@ -678,7 +678,7 @@ class Tooltip:  # pylint:disable=too-few-public-methods
                          foreground=self._theme["font_color"],
                          relief=tk.SOLID,
                          borderwidth=0,
-                         wraplength=self._wraplength)
+                         wraplength=self.wrap_length)
 
         label.grid(padx=(pad[0], pad[2]),
                    pady=(pad[1], pad[3]),

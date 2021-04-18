@@ -347,7 +347,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     @staticmethod
     def clear_console():
         """ Clear the console window """
-        get_config().tk_vars["consoleclear"].set(True)
+        get_config().tk_vars["console_clear"].set(True)
 
     def output_sysinfo(self):
         """ Output system information to console """
@@ -475,7 +475,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
                              command=lambda fn=cmd, kw=kwargs: fn(**kw))
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = self.set_help(btntype)
-            Tooltip(btn, text=hlp, wraplength=200)
+            Tooltip(btn, text=hlp, wrap_length=200)
 
     def _task_btns(self):
         frame = ttk.Frame(self._btn_frame)
@@ -495,7 +495,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
                 command=lambda fn=cmd, kw=kwargs: fn(**kw))
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = self.set_help(btntype)
-            Tooltip(btn, text=hlp, wraplength=200)
+            Tooltip(btn, text=hlp, wrap_length=200)
 
     @staticmethod
     def _loader_and_kwargs(btntype):
@@ -525,7 +525,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
                 command=lambda n=name: open_popup(name=n))
             btn.pack(side=tk.LEFT, anchor=tk.W)
             hlp = _("Configure {} settings...").format(name.title())
-            Tooltip(btn, text=hlp, wraplength=200)
+            Tooltip(btn, text=hlp, wrap_length=200)
 
     @staticmethod
     def set_help(btntype):

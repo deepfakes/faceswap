@@ -67,7 +67,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
                 button = self._Button(btnframe, text=text, file=image_file,
                                       command=getattr(self, callback))
                 if tooltip_text is not None:
-                    Tooltip(button, text=tooltip_text, wraplength=200)
+                    Tooltip(button, text=tooltip_text, wrap_length=200)
 
         self.message = tk.StringVar(master=self)
         self._message_label = ttk.Label(master=self, textvariable=self.message)

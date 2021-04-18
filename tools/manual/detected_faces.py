@@ -342,7 +342,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         """
         dirname = FileHandler("dir", None,
                               initial_folder=os.path.dirname(self._input_location),
-                              title="Select output folder...").retfile
+                              title="Select output folder...").return_file
         if not dirname:
             return
         logger.debug(dirname)

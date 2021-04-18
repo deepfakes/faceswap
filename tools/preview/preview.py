@@ -1315,7 +1315,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                 image=img,
                                 command=action)
             btnutl.pack(padx=2, side=tk.RIGHT)
-            Tooltip(btnutl, text=text, wraplength=200)
+            Tooltip(btnutl, text=text, wrap_length=200)
         logger.debug("Added util buttons")
 
 
@@ -1465,5 +1465,5 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                 image=img,
                                 command=lambda cmd=action: cmd(config_key))
             btnutl.pack(padx=2, side=tk.RIGHT)
-            Tooltip(btnutl, text=text, wraplength=200)
+            Tooltip(btnutl, text=text, wrap_length=200)
         logger.debug("Added util buttons")

@@ -148,7 +148,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
 
         if filename is None:
             logger.debug("Popping file handler")
-            cfgfile = self._file_handler("open", handler).retfile
+            cfgfile = self._file_handler("open", handler).return_file
             if not cfgfile:
                 logger.debug("No filename given")
                 return False
@@ -209,7 +209,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         opts = self._options.get(command, None)
         retval = {command: opts}
         if not opts:
-            self._config.tk_vars["consoleclear"].set(True)
+            self._config.tk_vars["console_clear"].set(True)
             logger.info("No  %s section found in file", command)
             retval = None
         logger.debug(retval)
@@ -385,7 +385,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         cfgfile = self._file_handler("save",
                                      "config_{}".format(session_type),
                                      title=title,
-                                     initial_folder=self._dirname).retfile
+                                     initial_folder=self._dirname).return_file
         if not cfgfile:
             logger.debug("No filename provided. session_type: '%s'", session_type)
             return False
@@ -851,7 +851,7 @@ class Project(_GuiSession):
         cfgfile = self._file_handler("save",
                                      "config_project",
                                      title="New Project...",
-                                     initial_folder=self._basename).retfile
+                                     initial_folder=self._basename).return_file
         if not cfgfile:
             logger.debug("No filename selected")
             return

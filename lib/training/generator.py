@@ -201,6 +201,14 @@ class _Cache():
 
             batch, metadata = read_image_batch(filenames, with_metadata=True)
 
+            if len(batch.shape) == 1:
+                folder = os.path.dirname(filenames[0])
+                details = [f"{key} ({img.shape[1]}px)" for key, img in zip(keys, batch)]
+                msg = (f"There are mismatched image sizes in the folder '{folder}'. All training "
+                       "images for each side must have the same dimensions.\nThe batch that "
+                       f"failed contains the following files:\n{details}.")
+                raise FaceswapError(msg)
+
             # Populate items into cache
             for filename in needs_cache:
                 key = os.path.basename(filename)

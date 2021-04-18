@@ -167,12 +167,12 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
 class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     """ Parent Context Sensitive Display Tab """
 
-    def __init__(self, parent, tab_name, helptext, waittime, command=None):
-        logger.debug("%s: OptionalPage args: (waittime: %s, command: %s)",
-                     self.__class__.__name__, waittime, command)
+    def __init__(self, parent, tab_name, helptext, wait_time, command=None):
+        logger.debug("%s: OptionalPage args: (wait_time: %s, command: %s)",
+                     self.__class__.__name__, wait_time, command)
         DisplayPage.__init__(self, parent, tab_name, helptext)
 
-        self._waittime = waittime
+        self._waittime = wait_time
         self.command = command
         self.display_item = None
 
@@ -236,7 +236,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         btnsave.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnsave,
                 text=_("Save {}(s) to file").format(self.tabname),
-                wraplength=200)
+                wrap_length=200)
 
     def add_option_enable(self):
         """ Add check-button to enable/disable page """
@@ -248,7 +248,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         chkenable.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
         Tooltip(chkenable,
                 text=_("Enable or disable {} display").format(self.tabname),
-                wraplength=200)
+                wrap_length=200)
 
     def save_items(self):
         """ Save items. Override for display specific saving """

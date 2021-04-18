@@ -1,3 +1,6 @@
+#!/usr/bin python3
+""" The Faceswap GUI """
+
 from lib.gui.command import CommandNotebook
 from lib.gui.custom_widgets import ConsoleOut, StatusBar
 from lib.gui.display import DisplayNotebook
