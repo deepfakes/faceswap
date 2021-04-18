@@ -169,10 +169,10 @@ class Sort():
         logger.info("Sorting by estimated fft filtered image blur...")
 
         fft_blurs = [(filename, self.estimate_blur_fft(image, metadata))
-                     for filename, image, metadata in tqdm(self._loader.load(),
-                                                           desc="Estimating fft filtered blur score",
-                                                           total=self._loader.count,
-                                                           leave=False)]
+                 for filename, image, metadata in tqdm(self._loader.load(),
+                                                        desc="Estimating fft filtered blur score",
+                                                        total=self._loader.count,
+                                                        leave=False)]
         logger.info("Sorting...")
         return sorted(fft_blurs, key=lambda x: x[1], reverse=True)
 
