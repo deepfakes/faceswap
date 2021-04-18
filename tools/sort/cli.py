@@ -43,7 +43,7 @@ class SortArgs(FaceSwapArgs):
             opts=('-s', '--sort-by'),
             action=Radio,
             type=str,
-            choices=("blur", "face", "face-cnn", "face-cnn-dissim", "face-yaw", "hist",
+            choices=("blur", "blur-fft", "face", "face-cnn", "face-cnn-dissim", "face-yaw", "hist",
                      "hist-dissim", "color-gray", "color-luma", "color-green", "color-orange",
                      "size"),
             dest='sort_method',
@@ -51,6 +51,7 @@ class SortArgs(FaceSwapArgs):
             default="face",
             help=_("R|Sort by method. Choose how images are sorted. "
                    "\nL|'blur': Sort faces by blurriness."
+                   "\nL|'blur-fft': Sort faces by fft filtered blur score."
                    "\nL|'face': Use VGG Face to sort by face similarity. This uses a pairwise "
                    "clustering algorithm to check the distances between 512 features on every "
                    "face in your set and order them appropriately."
@@ -70,10 +71,7 @@ class SortArgs(FaceSwapArgs):
                    "\nL|'color-orange': Sort images by the average intensity of the converted Co "
                    "color channel. Orange images will be ranked first and blue images will be "
                    "last."
-                   "\nL|'size': Sort images by their size in the original frame. Faces closer to "
-                   "the camera and from higher resolution sources will be sorted first, whilst "
-                   "faces further from the camera and from lower resolution sources will be "
-                   "sorted last.\nDefault: face")))
+                   "\nDefault: hist")))
         argument_list.append(dict(
             opts=('-k', '--keep'),
             action='store_true',
@@ -116,7 +114,7 @@ class SortArgs(FaceSwapArgs):
             opts=('-g', '--group-by'),
             action=Radio,
             type=str,
-            choices=("blur", "face-cnn", "face-yaw", "hist"),
+            choices=("blur", "blur-fft", "face-cnn", "face-yaw", "hist"),
             dest='group_method',
             group=_("output"),
             default="hist",
