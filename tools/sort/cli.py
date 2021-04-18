@@ -43,7 +43,7 @@ class SortArgs(FaceSwapArgs):
             opts=('-s', '--sort-by'),
             action=Radio,
             type=str,
-            choices=("blur", "fft-blur", "face", "face-cnn", "face-cnn-dissim", "face-yaw", "hist",
+            choices=("blur", "blur-fft", "face", "face-cnn", "face-cnn-dissim", "face-yaw", "hist",
                      "hist-dissim", "color-gray", "color-luma", "color-green", "color-orange",
                      "size"),
             dest='sort_method',
