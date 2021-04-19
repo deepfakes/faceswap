@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class Sort():
     """ Sorts folders of faces based on input criteria """
     # pylint: disable=no-member
+
     def __init__(self, arguments):
         self._args = arguments
         self.changes = None
@@ -162,6 +163,18 @@ class Sort():
                                                        leave=False)]
         logger.info("Sorting...")
         return sorted(blurs, key=lambda x: x[1], reverse=True)
+
+    def sort_blur_fft(self):
+        """ Sort by fft filtered blur amount with fft"""
+        logger.info("Sorting by estimated fft filtered image blur...")
+
+        fft_blurs = [(filename, self.estimate_blur_fft(image, metadata))
+                     for filename, image, metadata in tqdm(self._loader.load(),
+                                                           desc="Estimating fft blur score",
+                                                           total=self._loader.count,
+                                                           leave=False)]
+        logger.info("Sorting...")
+        return sorted(fft_blurs, key=lambda x: x[1], reverse=True)
 
     def sort_face(self):
         """ Sort by identity similarity """
@@ -390,6 +403,30 @@ class Sort():
 
         return bins
 
+    def group_blur_fft(self, img_list):
+        """ Group into bins by fft blur score"""
+        # Starting the binning process
+        num_bins = self._args.num_bins
+
+        # The last bin will get all extra images if it's
+        # not possible to distribute them evenly
+        num_per_bin = len(img_list) // num_bins
+        remainder = len(img_list) % num_bins
+
+        logger.info("Grouping by fft blur score...")
+        bins = [[] for _ in range(num_bins)]
+        idx = 0
+        for i in range(num_bins):
+            for _ in range(num_per_bin):
+                bins[i].append(img_list[idx][0])
+                idx += 1
+
+        # If remainder is 0, nothing gets added to the last bin.
+        for i in range(1, remainder + 1):
+            bins[-1].append(img_list[-i][0])
+
+        return bins
+
     def group_face_cnn(self, img_list):
         """ Group into bins by CNN face similarity """
         logger.info("Grouping by face-cnn similarity...")
@@ -598,6 +635,10 @@ class Sort():
             filename_list, image_list = self._get_images()
             blurs = [self.estimate_blur(img) for img in image_list]
             temp_list = list(zip(filename_list, blurs))
+        if group_method == 'group_blur_fft':
+            filename_list, image_list = self._get_images()
+            fft_blurs = [self.estimate_blur_fft(img) for img in image_list]
+            temp_list = list(zip(filename_list, fft_blurs))
         elif group_method == 'group_face_cnn':
             filename_list, image_list, landmarks = self._get_landmarks()
             temp_list = list(zip(filename_list, landmarks))
@@ -709,6 +750,54 @@ class Sort():
             image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         blur_map = cv2.Laplacian(image, cv2.CV_32F)
         score = np.var(blur_map) / np.sqrt(image.shape[0] * image.shape[1])
+        return score
+
+    @classmethod
+    def estimate_blur_fft(cls, image, metadata=None):
+        """ Estimate the amount of blur a fft filtered image has.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            Use Fourier Transform to analyze the frequency characteristics of the masked
+            face using 2D Discrete Fourier Transform (DFT) filter to find the frequency domain.
+            A mean value is assigned to the magnitude spectrum and returns a blur score.
+            Adapted from https://www.pyimagesearch.com/2020/06/15/
+            opencv-fast-fourier-transform-fft-for-blur-detection-in-images-and-video-streams/
+        metadata: dict, optional
+            The metadata for the face image or ``None`` if no metadata is available. If metadata is
+            provided the face will be masked by the "components" mask prior to calculating blur.
+            Default:``None``
+
+        Returns
+        -------
+        float
+            The estimated fft blur score for the face
+        """
+        if metadata is not None:
+            alignments = metadata["alignments"]
+            det_face = DetectedFace()
+            det_face.from_png_meta(alignments)
+            aln_face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
+                                   image=image,
+                                   centering="legacy",
+                                   size=256,
+                                   is_aligned=True)
+            mask = det_face.mask["components"]
+            mask.set_sub_crop(aln_face.pose.offset["face"] * -1)
+            mask = cv2.resize(mask.mask, (256, 256), interpolation=cv2.INTER_CUBIC)[..., None]
+            image = np.minimum(aln_face.face, mask)
+        if image.ndim == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        height, width = image.shape
+        c_height, c_width = (int(height / 2.0), int(width / 2.0))
+        fft = np.fft.fft2(image)
+        fft_shift = np.fft.fftshift(fft)
+        fft_shift[c_height - 75:c_height + 75, c_width - 75:c_width + 75] = 0
+        ifft_shift = np.fft.ifftshift(fft_shift)
+        shift_back = np.fft.ifft2(ifft_shift)
+        magnitude = np.log(np.abs(shift_back))
+        score = np.mean(magnitude)
         return score
 
     @staticmethod

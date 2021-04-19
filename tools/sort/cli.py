@@ -43,7 +43,7 @@ class SortArgs(FaceSwapArgs):
             opts=('-s', '--sort-by'),
             action=Radio,
             type=str,
-            choices=("blur", "face", "face-cnn", "face-cnn-dissim", "face-yaw", "hist",
+            choices=("blur", "blur-fft", "face", "face-cnn", "face-cnn-dissim", "face-yaw", "hist",
                      "hist-dissim", "color-gray", "color-luma", "color-green", "color-orange",
                      "size"),
             dest='sort_method',
@@ -51,6 +51,7 @@ class SortArgs(FaceSwapArgs):
             default="face",
             help=_("R|Sort by method. Choose how images are sorted. "
                    "\nL|'blur': Sort faces by blurriness."
+                   "\nL|'blur-fft': Sort faces by fft filtered blurriness."
                    "\nL|'face': Use VGG Face to sort by face similarity. This uses a pairwise "
                    "clustering algorithm to check the distances between 512 features on every "
                    "face in your set and order them appropriately."
@@ -116,7 +117,7 @@ class SortArgs(FaceSwapArgs):
             opts=('-g', '--group-by'),
             action=Radio,
             type=str,
-            choices=("blur", "face-cnn", "face-yaw", "hist"),
+            choices=("blur", "blur-fft", "face-cnn", "face-yaw", "hist"),
             dest='group_method',
             group=_("output"),
             default="hist",
