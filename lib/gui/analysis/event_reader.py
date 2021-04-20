@@ -131,7 +131,7 @@ class _Cache():
         List of `ints` pertaining to the session ids that exist in the Tensorflow events folder
     """
     def __init__(self, session_ids):
-        logger.debug("Initialising: %s: (session_ids: %s)", self.__class__.__name__, session_ids)
+        logger.debug("Initializing: %s: (session_ids: %s)", self.__class__.__name__, session_ids)
         self._data = {idx: None for idx in session_ids}
         self._carry_over = dict()
         self._loss_labels = []
@@ -168,7 +168,7 @@ class _Cache():
 
         timestamps, loss = self._to_numpy(data, is_live)
 
-        if not is_live or (is_live and session_id not in self._data):
+        if not is_live or (is_live and not self._data.get(session_id, None)):
             self._data[session_id] = dict(labels=labels,
                                           loss=zlib.compress(loss),
                                           loss_shape=loss.shape,
@@ -222,7 +222,12 @@ class _Cache():
         data: dict
             The latest raw data dictionary
         """
+        logger.debug("Carry over keys: %s, data keys: %s", list(self._carry_over), list(data))
         for key in list(self._carry_over):
+            if key not in data:
+                logger.debug("Carry over found for item %s which does not exist in current "
+                             "data: %s. Skipping.", key, list(data))
+                continue
             carry_over = self._carry_over.pop(key)
             update = data[key]
             logger.debug("Merging carry over data: %s in to %s", carry_over, update)
@@ -359,10 +364,17 @@ class TensorBoardLogs():
         ``True`` if the events are being read whilst Faceswap is training otherwise ``False``
     """
     def __init__(self, logs_folder, is_training):
-        self._is_training = is_training
-        self._log_files = _LogFiles(logs_folder)
-        self._cache = _Cache(self.session_ids)
+        logger.debug("Initializing: %s: (logs_folder: %s, is_training: %s)",
+                     self.__class__.__name__, logs_folder, is_training)
+        self._is_training = False
         self._training_iterator = None
+
+        self._log_files = _LogFiles(logs_folder)
+        self.set_training(is_training)
+
+        self._cache = _Cache(self.session_ids)
+
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
     def session_ids(self):
@@ -381,6 +393,7 @@ class TensorBoardLogs():
             session otherwise ``False``
         """
         if self._is_training == is_training:
+            logger.debug("Training flag already set to %s. Returning", is_training)
             return
 
         logger.debug("Setting is_training to %s", is_training)

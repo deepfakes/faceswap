@@ -306,8 +306,10 @@ class _Cache():
             a legacy face set/centering mismatch. ``False`` if the cache is being reset because it
             has detected a reset flag from the opposite cache.
         """
-        logger.warning("You are using legacy extracted faces but have selected '%s' centering "
-                       "which is incompatible. Switching centering to 'legacy'", self._centering)
+        if set_flag:
+            logger.warning("You are using legacy extracted faces but have selected '%s' centering "
+                           "which is incompatible. Switching centering to 'legacy'",
+                           self._centering)
         self._config["centering"] = "legacy"
         self._centering = "legacy"
         self._cache = {key: dict(cached=False) for key in self._cache}
@@ -377,7 +379,7 @@ class _Cache():
                 "You have selected the mask type '{}' but at least one face does not contain the "
                 "selected mask.\nThe face that failed was: '{}'\nThe masks that exist for this "
                 "face are: {}".format(
-                    self._config["mask_type"], filename, list(detected_face.mask.keys)))
+                    self._config["mask_type"], filename, list(detected_face.mask)))
 
         key = os.path.basename(filename)
         mask = detected_face.mask[self._config["mask_type"]]
