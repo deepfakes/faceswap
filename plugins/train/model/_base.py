@@ -944,8 +944,6 @@ class _Weights():
         in the plugin's configuration. """
         # Blanket unfreeze layers, as checking the value of :attr:`layer.trainable` appears to
         # return ``True`` even when the weights have been frozen
-        # TODO this may cause some issues with some keras-app models that are meant to have some
-        # frozen layers
         for layer in _get_all_sub_models(self._model):
             layer.trainable = True
 

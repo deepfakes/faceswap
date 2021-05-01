@@ -1045,9 +1045,10 @@ class ControlBuilder():
         intro = ""
         if any(line.startswith(" - ") for line in all_help):
             intro = all_help[0]
-        retval = (intro, {re.sub(r'[^A-Za-z0-9\-]+', '',
-                                 line.split()[1].lower()): " ".join(line.split()[1:])
-                          for line in all_help if line.startswith(" - ")})
+        retval = (intro,
+                  {re.sub(r"[^A-Za-z0-9\-\_]+", "",
+                          line.split()[1].lower()): " ".join(line.replace("_", " ").split()[1:])
+                   for line in all_help if line.startswith(" - ")})
         logger.debug("help items: %s", retval)
         return retval
 
