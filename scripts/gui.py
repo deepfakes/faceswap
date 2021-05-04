@@ -168,9 +168,9 @@ class FaceswapGui(tk.Tk):
         confirmtxt = "Processes are still running.\n\nAre you sure you want to exit?"
         if not messagebox.askokcancel("Close", confirmtxt, default="cancel", icon="warning"):
             logger.debug("Close Cancelled")
-            return True
+            return False
         logger.debug("Close confirmed")
-        return False
+        return True
 
 
 class Gui():  # pylint: disable=too-few-public-methods
