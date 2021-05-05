@@ -129,8 +129,11 @@ class _Cache():
     def aligned_landmarks(self):
         """ dict: The filename as key, aligned landmarks as value """
         if self._aligned_landmarks is None:
-            self._aligned_landmarks = {key: val["aligned_face"].landmarks
-                                       for key, val in self._cache.items()}
+            with self._lock:
+                # For Warp-To-Landmarks a race condition can occur where this is referenced from
+                # the opposite side prior to it being populated, so block on a lock.
+                self._aligned_landmarks = {key: val["aligned_face"].landmarks
+                                           for key, val in self._cache.items()}
         return self._aligned_landmarks
 
     @property
