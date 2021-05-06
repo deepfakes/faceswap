@@ -645,7 +645,7 @@ class TrainingDataGenerator():  # pylint:disable=too-few-public-methods
 
         # Switch color order for RGB models
         if self._color_order == "rgb":
-            batch = batch[..., [2, 1, 0, 3]]
+            batch[..., :3] = batch[..., [2, 1, 0]]
 
         # Add samples to output if this is for display
         if self._processing.is_display:
