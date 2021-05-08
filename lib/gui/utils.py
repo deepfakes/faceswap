@@ -106,6 +106,9 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     initial_folder: str, optional
         The folder to initially open with the file dialog. If `None` then tkinter will decide.
         Default: ``None``
+    initial_file: str, optional
+        The filename to set with the file dialog. If `None` then tkinter no initial filename is.
+        specified. Default: ``None``
     command: str, optional
         Required for context handling file dialog, otherwise unused. Default: ``None``
     action: str, optional
@@ -127,16 +130,17 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     '/path/to/selected/video.mp4'
     """
 
-    def __init__(self, handle_type, file_type, title=None, initial_folder=None, command=None,
-                 action=None, variable=None):
+    def __init__(self, handle_type, file_type, title=None, initial_folder=None, initial_file=None,
+                 command=None, action=None, variable=None):
         logger.debug("Initializing %s: (handle_type: '%s', file_type: '%s', title: '%s', "
-                     "initial_folder: '%s, 'command: '%s', action: '%s', variable: %s)",
-                     self.__class__.__name__, handle_type, file_type, title, initial_folder,
-                     command, action, variable)
+                     "initial_folder: '%s', initial_file: '%s', command: '%s', action: '%s', "
+                     "variable: %s)", self.__class__.__name__, handle_type, file_type, title,
+                     initial_folder, initial_file, command, action, variable)
         self._handletype = handle_type
         self._defaults = self._set_defaults()
         self._kwargs = self._set_kwargs(title,
                                         initial_folder,
+                                        initial_file,
                                         file_type,
                                         command,
                                         action,
@@ -161,6 +165,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                    ("TIFF", "*.tif *.tiff"),
                    all_files],
             ini=[("Faceswap config files", "*.ini"), all_files],
+            json=[("JSON file", "*.json"), all_files],
             model=[("Keras model files", "*.h5"), all_files],
             state=[("State files", "*.json"), all_files],
             log=[("Log files", "*.log"), all_files],
@@ -226,17 +231,39 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         logger.debug(defaults)
         return defaults
 
-    def _set_kwargs(self, title, initialdir, filetype, command, action, variable=None):
+    def _set_kwargs(self, title, initial_folder, initial_file, file_type, command, action,
+                    variable=None):
         """ Generate the required kwargs for the requested file dialog browser.
+
+        Parameters
+        ----------
+        title: str
+            The title to display on the file dialog. If `None` then the default title will be used.
+        initial_folder: str
+            The folder to initially open with the file dialog. If `None` then tkinter will decide.
+        initial_file: str
+            The filename to set with the file dialog. If `None` then tkinter no initial filename
+            is.
+        file_type: ['default', 'alignments', 'config_project', 'config_task', 'config_all', \
+                    'csv',  'image', 'ini', 'state', 'log', 'video']
+            The type of file that this dialog is for. `default` allows selection of any files.
+            Other options limit the file type selection
+        command: str
+            Required for context handling file dialog, otherwise unused.
+        action: str
+            Required for context handling file dialog, otherwise unused.
+        variable: :class:`tkinter.StringVar`, optional
+            Required for context handling file dialog, otherwise unused. The variable to associate
+            with this file dialog. Default: ``None``
 
         Returns
         -------
         dict:
             The key word arguments for the file dialog to be launched
         """
-        logger.debug("Setting Kwargs: (title: %s, initialdir: %s, filetype: '%s', "
-                     "command: '%s': action: '%s', variable: '%s')",
-                     title, initialdir, filetype, command, action, variable)
+        logger.debug("Setting Kwargs: (title: %s, initial_folder: %s, initial_file: '%s', "
+                     "file_type: '%s', command: '%s': action: '%s', variable: '%s')",
+                     title, initial_folder, initial_file, file_type, command, action, variable)
         kwargs = dict()
         if self._handletype.lower() == "context":
             self._set_context_handletype(command, action, variable)
@@ -244,14 +271,17 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         if title is not None:
             kwargs["title"] = title
 
-        if initialdir is not None:
-            kwargs["initialdir"] = initialdir
+        if initial_folder is not None:
+            kwargs["initialdir"] = initial_folder
+
+        if initial_file is not None:
+            kwargs["initialfile"] = initial_file
 
         if self._handletype.lower() in (
                 "open", "save", "filename", "filename_multi", "save_filename"):
-            kwargs["filetypes"] = self._filetypes[filetype]
-            if self._defaults.get(filetype):
-                kwargs['defaultextension'] = self._defaults[filetype]
+            kwargs["filetypes"] = self._filetypes[file_type]
+            if self._defaults.get(file_type):
+                kwargs['defaultextension'] = self._defaults[file_type]
         if self._handletype.lower() == "save":
             kwargs["mode"] = "w"
         if self._handletype.lower() == "open":
@@ -308,9 +338,9 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         logger.debug("Popping Filename browser")
         return filedialog.askopenfilenames(**self._kwargs)
 
-    def _savefilename(self):
+    def _save_filename(self):
         """ Get a save file location. """
-        logger.debug("Popping SaveFilename browser")
+        logger.debug("Popping Save Filename browser")
         return filedialog.asksaveasfilename(**self._kwargs)
 
     @staticmethod

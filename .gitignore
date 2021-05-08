@@ -43,3 +43,15 @@
 !tools/
 !tools/**/
 !tools/**/*.py
+
+# GUI Plugin Presets
+!lib/gui/**/presets/train/model_phaze_a_dfaker_preset.json
+!lib/gui/**/presets/train/model_phaze_a_dfl-h128_preset.json
+!lib/gui/**/presets/train/model_phaze_a_dfl-sae-df_preset.json
+!lib/gui/**/presets/train/model_phaze_a_dfl-sae-liae_preset.json
+!lib/gui/**/presets/train/model_phaze_a_dfl-saehd-df_preset.json
+!lib/gui/**/presets/train/model_phaze_a_dfl-saehd-liae_preset.json
+!lib/gui/**/presets/train/model_phaze_a_iae_preset.json
+!lib/gui/**/presets/train/model_phaze_a_lightweight_preset.json
+!lib/gui/**/presets/train/model_phaze_a_original_preset.json
+!lib/gui/**/presets/train/model_phaze_a_stojo_preset.json
