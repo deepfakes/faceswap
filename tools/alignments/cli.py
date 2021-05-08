@@ -86,8 +86,7 @@ class AlignmentsArgs(FaceSwapArgs):
             group=_("data"),
             required=True,
             filetypes="alignments",
-            help=_("Full path to the alignments file to be processed. If merging alignments, then "
-                   "multiple files can be selected, space separated")))
+            help=_("Full path to the alignments file to be processed.")))
         argument_list.append(dict(
             opts=("-fc", "-faces_folder"),
             action=DirFullPaths,

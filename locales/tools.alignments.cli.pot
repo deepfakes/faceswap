@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-02-18 23:43-0000\n"
+"POT-Creation-Date: 2021-05-08 11:34+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -45,7 +45,11 @@ msgstr ""
 msgid " Use the output option (-o) to process results."
 msgstr ""
 
-#: tools/alignments/cli.py:42
+#: tools/alignments/cli.py:41 tools/alignments/cli.py:73
+msgid "processing"
+msgstr ""
+
+#: tools/alignments/cli.py:43
 msgid ""
 "R|Choose which action you want to perform. NB: All actions require an alignments file (-a) to be passed in.\n"
 "L|'draw': Draw landmarks on frames in the selected folder/video. A subfolder will be created within the frames folder to hold the output.{0}\n"
@@ -60,33 +64,29 @@ msgid ""
 "L|'spatial': Perform spatial and temporal filtering to smooth alignments (EXPERIMENTAL!)"
 msgstr ""
 
-#: tools/alignments/cli.py:72 tools/alignments/cli.py:81
-#: tools/alignments/cli.py:88
-msgid "data"
-msgstr ""
-
 #: tools/alignments/cli.py:75
-msgid "Full path to the alignments file to be processed. If merging alignments, then multiple files can be selected, space separated"
-msgstr ""
-
-#: tools/alignments/cli.py:82
-msgid "Directory containing extracted faces."
-msgstr ""
-
-#: tools/alignments/cli.py:89
-msgid "Directory containing source frames that faces were extracted from."
-msgstr ""
-
-#: tools/alignments/cli.py:95
-msgid "processing"
-msgstr ""
-
-#: tools/alignments/cli.py:97
 msgid ""
 "R|How to output discovered items ('faces' and 'frames' only):\n"
 "L|'console': Print the list of frames to the screen. (DEFAULT)\n"
 "L|'file': Output the list of frames to a text file (stored within the source directory).\n"
 "L|'move': Move the discovered items to a sub-folder within the source directory."
+msgstr ""
+
+#: tools/alignments/cli.py:86 tools/alignments/cli.py:94
+#: tools/alignments/cli.py:101
+msgid "data"
+msgstr ""
+
+#: tools/alignments/cli.py:89
+msgid "Full path to the alignments file to be processed."
+msgstr ""
+
+#: tools/alignments/cli.py:95
+msgid "Directory containing extracted faces."
+msgstr ""
+
+#: tools/alignments/cli.py:102
+msgid "Directory containing source frames that faces were extracted from."
 msgstr ""
 
 #: tools/alignments/cli.py:111 tools/alignments/cli.py:121
