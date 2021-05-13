@@ -4,17 +4,16 @@
 Architecture and Pre-Trained Model ported from PyTorch to Keras by TorzDF from
 https://github.com/zllrunning/face-parsing.PyTorch
 """
-
+import cv2
 from keras import backend as K
-from keras.layers import (Activation, Add, AveragePooling2D, BatchNormalization, Concatenate,
-                          Conv2D, Input, MaxPooling2D, Multiply, UpSampling2D, ZeroPadding2D)
+from keras.layers import (Activation, Add, BatchNormalization, Concatenate, Conv2D,
+                          GlobalAveragePooling2D, Input, MaxPooling2D, Multiply, Reshape,
+                          UpSampling2D, ZeroPadding2D)
 
 import numpy as np
+
 from lib.model.session import KSession
 from ._base import Masker, logger
-
-_NAME_TRACKER = set()
-_DIM_IDX = 2 if K.image_data_format() == "channels_first" else 1
 
 
 class Mask(Masker):
@@ -43,14 +42,50 @@ class Mask(Masker):
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
-        batch["feed"] = np.array([feed.face[..., :3]
-                                  for feed in batch["feed_faces"]], dtype="float32") / 255.0
+        mean = (0.485, 0.456, 0.406)
+        std = (0.229, 0.224, 0.225)
+
+        batch["feed"] = ((np.array([feed.face[..., :3]
+                                    for feed in batch["feed_faces"]],
+                                   dtype="float32") / 255.0) - mean) / std
         logger.trace("feed shape: %s", batch["feed"].shape)
         return batch
 
     def predict(self, batch):
         """ Run model to get predictions """
-        batch["prediction"] = self.model.predict(batch["feed"])
+        # batch["prediction"] = self.model.predict(batch["feed"])[0]
+        # pred = self.model.predict(batch["feed"])[0].argmax(-1).astype("uint8")
+        pred = self.model.predict(batch["feed"])[0]
+        pred = pred.argmax(-1).astype("uint8")
+        part_colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0],
+                       [255, 0, 85], [255, 0, 170],
+                       [0, 255, 0], [85, 255, 0], [170, 255, 0],
+                       [0, 255, 85], [0, 255, 170],
+                       [0, 0, 255], [85, 0, 255], [170, 0, 255],
+                       [0, 85, 255], [0, 170, 255],
+                       [255, 255, 0], [255, 255, 85], [255, 255, 170],
+                       [255, 0, 255], [255, 85, 255], [255, 170, 255],
+                       [0, 255, 255], [85, 255, 255], [170, 255, 255]]
+
+        test = np.array([feed.face[..., :3].copy()
+                         for feed in batch["feed_faces"]]).copy().astype("uint8")[..., 2::-1]
+        pred_col = np.zeros((*pred.shape, 3)) + 255
+
+        num_of_class = np.max(pred, axis=(1, 2))
+        for idx, (img, _cls) in enumerate(zip(pred, num_of_class)):
+            for pi in range(1, _cls + 1):
+                index = np.where(pred[idx] == pi)
+                pred_col[idx, index[0], index[1], :] = part_colors[pi]
+
+        pred_col = pred_col.astype("uint8")
+        for idx, (img, col) in enumerate(zip(test, pred_col)):
+            test[idx] = cv2.addWeighted(img, 0.4, col, 0.6, 0)
+
+        for idx, img in enumerate(test):
+            cv2.imshow(f"img{idx}", img)
+        cv2.waitKey()
+
+        exit(0)
         return batch
 
     def process_output(self, batch):
@@ -82,6 +117,9 @@ class Mask(Masker):
 # SOFTWARE.
 
 
+_NAME_TRACKER = set()
+
+
 def _get_name(name, start_idx=1):
     i = start_idx
     while True:
@@ -92,8 +130,10 @@ def _get_name(name, start_idx=1):
     _NAME_TRACKER.add(retval)
     return retval
 
+
 class ConvBn():
-    def __init__(self, filters, kernel_size=3, strides=1, padding=1, activation=True, prefix="", start_idx=1):
+    def __init__(self, filters,
+                 kernel_size=3, strides=1, padding=1, activation=True, prefix="", start_idx=1):
         self._filters = filters
         self._kernel_size = kernel_size
         self._strides = strides
@@ -108,9 +148,11 @@ class ConvBn():
             var_x = ZeroPadding2D(self._padding,
                                   name=_get_name(f"{self._prefix}zeropad",
                                                  start_idx=self._start_idx))(var_x)
+        padding = "valid" if self._padding != -1 else "same"
         var_x = Conv2D(self._filters,
                        self._kernel_size,
                        strides=self._strides,
+                       padding=padding,
                        use_bias=False,
                        name=_get_name(f"{self._prefix}conv", start_idx=self._start_idx))(var_x)
         var_x = BatchNormalization(epsilon=1e-5,
@@ -121,6 +163,7 @@ class ConvBn():
                                name=_get_name(f"{self._prefix}relu",
                                               start_idx=self._start_idx))(var_x)
         return var_x
+
 
 class ResNet18():
     def __init__(self):
@@ -139,8 +182,7 @@ class ResNet18():
                               use_bias=False,
                               name=_get_name(f"{name}", start_idx=0))(shortcut)
             shortcut = BatchNormalization(epsilon=1e-5,
-                                          name=_get_name(f"{name}",
-                                          start_idx=0))(shortcut)
+                                          name=_get_name(f"{name}", start_idx=0))(shortcut)
 
         var_x = Add(name=f"{prefix}.add")([res, shortcut])
         var_x = Activation("relu", name=f"{prefix}.relu")(var_x)
@@ -164,20 +206,22 @@ class ResNet18():
 
         return feat8, feat16, feat32
 
+
 class AttentionRefinementModule():
     def __init__(self, filters):
         self._filters = filters
 
-    def __call__(self, inputs):
-        prefix = f"cp.arm{K.int_shape(inputs)[2]}"
-        feat = ConvBn(self._filters, prefix=f"{prefix}.conv", start_idx=-1)(inputs)
-        atten = AveragePooling2D(pool_size=K.int_shape(feat)[_DIM_IDX:_DIM_IDX + 2],
-                                 name=f"{prefix}.avgpool")(feat)
+    def __call__(self, inputs, feats):
+        prefix = f"cp.arm{feats}"
+        feat = ConvBn(self._filters, prefix=f"{prefix}.conv", start_idx=-1, padding=-1)(inputs)
+        atten = GlobalAveragePooling2D(name=f"{prefix}.avgpool")(feat)
+        atten = Reshape((1, 1, K.int_shape(atten)[-1]))(atten)
         atten = Conv2D(self._filters, 1, use_bias=False, name=f"{prefix}.conv_atten")(atten)
         atten = BatchNormalization(epsilon=1e-5, name=f"{prefix}.bn_atten")(atten)
         atten = Activation("sigmoid", name=f"{prefix}.sigmoid")(atten)
         var_x = Multiply(name=f"{prefix}.mul")([feat, atten])
         return var_x
+
 
 class ContextPath():
     def __init__(self):
@@ -186,23 +230,24 @@ class ContextPath():
     def __call__(self, inputs):
         feat8, feat16, feat32 = self._resnet(inputs)
 
-        avg = AveragePooling2D(pool_size=K.int_shape(feat32)[_DIM_IDX:_DIM_IDX + 2],
-                               name="cp.avgpool")(feat32)
+        avg = GlobalAveragePooling2D(name="cp.avgpool")(feat32)
+        avg = Reshape((1, 1, K.int_shape(avg)[-1]))(avg)
         avg = ConvBn(128, kernel_size=1, padding=0, prefix="cp.conv_avg", start_idx=-1)(avg)
-        avg_up = UpSampling2D(size=K.int_shape(feat32)[_DIM_IDX:_DIM_IDX + 2],
-                              name="cp.upsample")(avg)
 
-        feat32 = AttentionRefinementModule(128)(feat32)
+        avg_up = UpSampling2D(size=K.int_shape(feat32)[1:3], name="cp.upsample")(avg)
+
+        feat32 = AttentionRefinementModule(128)(feat32, 32)
         feat32 = Add(name="cp.add")([feat32, avg_up])
         feat32 = UpSampling2D(name="cp.upsample1")(feat32)
-        feat32 = ConvBn(128, kernel_size=1, prefix="cp.conv_head32", start_idx=-1)(feat32)
+        feat32 = ConvBn(128, kernel_size=3, prefix="cp.conv_head32", start_idx=-1)(feat32)
 
-        feat16 = AttentionRefinementModule(128)(feat16)
+        feat16 = AttentionRefinementModule(128)(feat16, 16)
         feat16 = Add(name="cp.add2")([feat16, feat32])
         feat16 = UpSampling2D(name="cp.upsample2")(feat16)
-        feat16 = ConvBn(128, kernel_size=1, prefix="cp.conv_head16", start_idx=-1)(feat16)
+        feat16 = ConvBn(128, kernel_size=3, prefix="cp.conv_head16", start_idx=-1)(feat16)
 
         return feat8, feat16, feat32
+
 
 class FeatureFusionModule():
     def __init__(self, filters):
@@ -216,8 +261,8 @@ class FeatureFusionModule():
                       prefix="ffm.convblk",
                       start_idx=-1)(feat)
 
-        atten = AveragePooling2D(pool_size=K.int_shape(feat)[_DIM_IDX:_DIM_IDX + 2],
-                                 name="ffm.avgpool")(feat)
+        atten = GlobalAveragePooling2D(name="ffm.avgpool")(feat)
+        atten = Reshape((1, 1, K.int_shape(atten)[-1]))(atten)
         atten = Conv2D(self._filters // 4, 1, use_bias=False, name="ffm.conv1")(atten)
         atten = Activation("relu", name="ffm.relu")(atten)
         atten = Conv2D(self._filters, 1, use_bias=False, name="ffm.conv2")(atten)
@@ -266,12 +311,12 @@ class BiSeNet(KSession):
         super().__init__("BiSeNet Face Parsing",
                          model_path,
                          allow_growth=allow_growth,
-                         exclude_gpus=exclude_gpus)        
+                         exclude_gpus=exclude_gpus)
         self._input_size = input_size
         self._num_classes = num_classes
         self._cp = ContextPath()
         self.define_model(self._model_definition)
-        self.load_model_weights()        
+        self.load_model_weights()
 
     def _model_definition(self):
         """ Definition of the VGG Obstructed Model.
@@ -291,10 +336,10 @@ class BiSeNet(KSession):
         feat_out16 = BiSeNetOutput(64, self._num_classes, label="16")(feat_cp8)
         feat_out32 = BiSeNetOutput(64, self._num_classes, label="32")(feat_cp16)
 
-        height, width = K.int_shape(input_)[_DIM_IDX:_DIM_IDX + 2]
-        f_h, f_w = K.int_shape(feat_out)[_DIM_IDX:_DIM_IDX + 2]
-        f_h16, f_w16 = K.int_shape(feat_out16)[_DIM_IDX:_DIM_IDX + 2]
-        f_h32, f_w32 = K.int_shape(feat_out32)[_DIM_IDX:_DIM_IDX + 2]
+        height, width = K.int_shape(input_)[1:3]
+        f_h, f_w = K.int_shape(feat_out)[1:3]
+        f_h16, f_w16 = K.int_shape(feat_out16)[1:3]
+        f_h32, f_w32 = K.int_shape(feat_out32)[1:3]
 
         feat_out = UpSampling2D(size=(height // f_h, width // f_w),
                                 interpolation="bilinear")(feat_out)
