@@ -206,7 +206,9 @@ class _Cache():
 
             if len(batch.shape) == 1:
                 folder = os.path.dirname(filenames[0])
-                details = [f"{key} ({img.shape[1]}px)" for key, img in zip(keys, batch)]
+                details = [
+                    f"{key} ({img.shape[1]}px)" if isinstance(img, np.ndarray) else type(img)
+                    for key, img in zip(keys, batch)]
                 msg = (f"There are mismatched image sizes in the folder '{folder}'. All training "
                        "images for each side must have the same dimensions.\nThe batch that "
                        f"failed contains the following files:\n{details}.")
