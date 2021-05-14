@@ -234,7 +234,7 @@ class ImageAugmentation():
 
         batch_random = np.random.rand(self._batchsize)
         indices = np.where(batch_random < self._config.get("color_clahe_chance", 50) / 100)[0]
-        if not indices:
+        if not np.any(indices):
             return batch
 
         grid_bases = np.rint(np.random.uniform(0,
