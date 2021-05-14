@@ -233,7 +233,9 @@ class ImageAugmentation():
         base_contrast = self._constants["clahe_base_contrast"]
 
         batch_random = np.random.rand(self._batchsize)
-        indices = np.where(batch_random > self._config.get("color_clahe_chance", 50) / 100)[0]
+        indices = np.where(batch_random < self._config.get("color_clahe_chance", 50) / 100)[0]
+        if not indices:
+            return batch
 
         grid_bases = np.rint(np.random.uniform(0,
                                                self._config.get("color_clahe_max_size", 4),
