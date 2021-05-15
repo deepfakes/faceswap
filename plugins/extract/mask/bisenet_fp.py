@@ -30,6 +30,7 @@ class Mask(Masker):
         self.vram_per_batch = 64
         self.batchsize = self.config["batch-size"]
         self._segment_indices = self._get_segment_indices()
+        self._storage_centering = "head" if self.config["include_hair"] else "face"
 
     def _get_segment_indices(self):
         """ Obtain the segment indices to include within the face mask area based on user
@@ -64,12 +65,9 @@ class Mask(Masker):
                              self.input_size,
                              19)
         
-        for i in range(10):
-            print(i, end="\r")
-            placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
-                                   dtype="float32")
-            self.model.predict(placeholder)
-        exit(0)
+        placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
+                                dtype="float32")
+        self.model.predict(placeholder)
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
