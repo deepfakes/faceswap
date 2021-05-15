@@ -25,9 +25,9 @@ class Mask(Masker):
         self.name = "BiSeNet - Face Parsing"
         self.input_size = 512
         self.color_format = "RGB"
-        self.vram = 3424  # TODO
-        self.vram_warnings = 256  # TODO
-        self.vram_per_batch = 80  # TODO
+        self.vram = 2304
+        self.vram_warnings = 256
+        self.vram_per_batch = 64
         self.batchsize = self.config["batch-size"]
         self._segment_indices = self._get_segment_indices()
 
@@ -63,9 +63,13 @@ class Mask(Masker):
                              self._exclude_gpus,
                              self.input_size,
                              19)
-        placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
-                               dtype="float32")
-        self.model.predict(placeholder)
+        
+        for i in range(10):
+            print(i, end="\r")
+            placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
+                                   dtype="float32")
+            self.model.predict(placeholder)
+        exit(0)
 
     def process_input(self, batch):
         """ Compile the detected faces for prediction """
