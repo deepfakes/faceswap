@@ -4,13 +4,13 @@
 Architecture and Pre-Trained Model ported from PyTorch to Keras by TorzDF from
 https://github.com/zllrunning/face-parsing.PyTorch
 """
-import cv2
+
+import numpy as np
+
 from keras import backend as K
 from keras.layers import (Activation, Add, BatchNormalization, Concatenate, Conv2D,
                           GlobalAveragePooling2D, Input, MaxPooling2D, Multiply, Reshape,
                           UpSampling2D, ZeroPadding2D)
-
-import numpy as np
 
 from lib.model.session import KSession
 from ._base import Masker, logger
@@ -29,6 +29,33 @@ class Mask(Masker):
         self.vram_warnings = 256  # TODO
         self.vram_per_batch = 80  # TODO
         self.batchsize = self.config["batch-size"]
+        self._segment_indices = self._get_segment_indices()
+
+    def _get_segment_indices(self):
+        """ Obtain the segment indices to include within the face mask area based on user
+        configuration settings.
+
+        Returns
+        -------
+        list
+            The segment indices to include within the face mask area
+
+        Notes
+        -----
+        Model segment indices:
+        0: background, 1: skin, 2: left brow, 3: right brow, 4: left eye, 5: right eye, 6: glasses
+        7: left ear, 8: right ear, 9: earings, 10: nose, 11: mouth, 12: upper lip, 13: lower_lip,
+        14: neck, 15: neck ?, 16: cloth, 17: hair, 18: hat
+        """
+        retval = [1, 2, 3, 4, 5, 10, 11, 12, 13]
+        if self.config["include_glasses"]:
+            retval.append(6)
+        if self.config["include_ears"]:
+            retval.extend([7, 8, 9])
+        if self.config["include_hair"]:
+            retval.append(17)
+        logger.debug("Selected segment indices: %s", retval)
+        return retval
 
     def init_model(self):
         self.model = BiSeNet(self.model_path,
@@ -53,43 +80,13 @@ class Mask(Masker):
 
     def predict(self, batch):
         """ Run model to get predictions """
-        # batch["prediction"] = self.model.predict(batch["feed"])[0]
-        # pred = self.model.predict(batch["feed"])[0].argmax(-1).astype("uint8")
-        pred = self.model.predict(batch["feed"])[0]
-        pred = pred.argmax(-1).astype("uint8")
-        part_colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0],
-                       [255, 0, 85], [255, 0, 170],
-                       [0, 255, 0], [85, 255, 0], [170, 255, 0],
-                       [0, 255, 85], [0, 255, 170],
-                       [0, 0, 255], [85, 0, 255], [170, 0, 255],
-                       [0, 85, 255], [0, 170, 255],
-                       [255, 255, 0], [255, 255, 85], [255, 255, 170],
-                       [255, 0, 255], [255, 85, 255], [255, 170, 255],
-                       [0, 255, 255], [85, 255, 255], [170, 255, 255]]
-
-        test = np.array([feed.face[..., :3].copy()
-                         for feed in batch["feed_faces"]]).copy().astype("uint8")[..., 2::-1]
-        pred_col = np.zeros((*pred.shape, 3)) + 255
-
-        num_of_class = np.max(pred, axis=(1, 2))
-        for idx, (img, _cls) in enumerate(zip(pred, num_of_class)):
-            for pi in range(1, _cls + 1):
-                index = np.where(pred[idx] == pi)
-                pred_col[idx, index[0], index[1], :] = part_colors[pi]
-
-        pred_col = pred_col.astype("uint8")
-        for idx, (img, col) in enumerate(zip(test, pred_col)):
-            test[idx] = cv2.addWeighted(img, 0.4, col, 0.6, 0)
-
-        for idx, img in enumerate(test):
-            cv2.imshow(f"img{idx}", img)
-        cv2.waitKey()
-
-        exit(0)
+        batch["prediction"] = self.model.predict(batch["feed"])[0]
         return batch
 
     def process_output(self, batch):
         """ Compile found faces for output """
+        pred = batch["prediction"].argmax(-1).astype("uint8")
+        batch["prediction"] = np.isin(pred, self._segment_indices).astype("float32")
         return batch
 
 # BiSeNet Face-Parsing Model

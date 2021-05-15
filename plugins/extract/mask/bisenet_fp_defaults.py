@@ -62,6 +62,24 @@ _DEFAULTS = {
         choices=[],
         group="settings",
         gui_radio=False,
-        fixed=True,
-    )
+        fixed=True),
+    "include_ears": dict(
+        default=False,
+        info="Whether to include ears within the face mask.",
+        datatype=bool,
+        group="settings"
+    ),
+    "include_hair": dict(
+        default=False,
+        info="Whether to include hair within the face mask.",
+        datatype=bool,
+        group="settings"
+    ),
+    "include_glasses": dict(
+        default=True,
+        info="Whether to include glasses within the face mask. NB: excluding glasses will mask "
+             "out the lenses as well as the frames.",
+        datatype=bool,
+        group="settings"
+    ),
 }
