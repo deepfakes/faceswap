@@ -392,8 +392,8 @@ class _Cache():
         mask.set_blur_and_threshold(blur_kernel=self._config["mask_blur_kernel"],
                                     threshold=self._config["mask_threshold"])
 
-        if self._extract_version > 1.0 and self._centering == "legacy":
-            mask.set_sub_crop(self._cache[key]["aligned_face"].pose.offset["face"] * -1)
+        mask.set_sub_crop(self._cache[key]["aligned_face"].pose.offset[mask.stored_centering] * -1,
+                          self._centering)
 
         logger.trace("Caching mask for: %s", filename)
         self._cache[key]["mask"] = mask

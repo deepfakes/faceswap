@@ -163,8 +163,7 @@ class Mask():  # pylint:disable=too-few-public-methods
                     logger.warning("Legacy faces discovered. These faces will be updated")
                     log_once = True
                 metadata = update_legacy_png_header(filename, self._alignments)
-                if not metadata:
-                    # Face not found
+                if not metadata:  # Face not found
                     self._counts["skip"] += 1
                     logger.warning("Legacy face not found in alignments file. This face has not "
                                    "been updated: '%s'", filename)
@@ -175,8 +174,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             alignment = self._alignments.get_faces_in_frame(frame_name)
             if not alignment or face_index > len(alignment) - 1:
                 self._counts["skip"] += 1
-                logger.warning("Skipping Face not found in alignments file. skipping: '%s'",
-                               filename)
+                logger.warning("Skipping Face not found in alignments file: '%s'", filename)
                 continue
             alignment = alignment[face_index]
             self._counts["face"] += 1
@@ -419,11 +417,11 @@ class Mask():  # pylint:disable=too-few-public-methods
             if self._input_is_faces:
                 face = AlignedFace(detected_face.landmarks_xy,
                                    image=detected_face.image,
-                                   centering="face",
+                                   centering=mask.stored_centering,
                                    size=detected_face.image.shape[0],
                                    is_aligned=True).face
             else:
-                centering = "legacy" if self._alignments.version == 1.0 else "face"
+                centering = "legacy" if self._alignments.version == 1.0 else mask.stored_centering
                 detected_face.load_aligned(detected_face.image, centering=centering)
                 face = detected_face.aligned.face
             mask = cv2.resize(detected_face.mask[self._mask_type].mask,

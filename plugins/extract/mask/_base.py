@@ -67,6 +67,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self._plugin_type = "mask"
         self._image_is_aligned = image_is_aligned
         self._storage_name = self.__module__.split(".")[-1].replace("_", "-")
+        self._storage_centering = "face"  # Centering to store the mask at
         self._storage_size = 128  # Size to store masks at. Leave this at default
         self._faces_per_filename = dict()  # Tracking for recompiling face batches
         self._rollover = None  # Items that are rolled over from the previous batch in get_batch
@@ -122,7 +123,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             for f_idx, face in enumerate(item.detected_faces):
                 feed_face = AlignedFace(face.landmarks_xy,
                                         image=item.get_image_copy(self.color_format),
-                                        centering="face",
+                                        centering=self._storage_centering,
                                         size=self.input_size,
                                         coverage_ratio=self.coverage_ratio,
                                         dtype="float32",
@@ -224,7 +225,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                           mask,
                           feed_face.adjusted_matrix,
                           feed_face.interpolators[1],
-                          storage_size=self._storage_size)
+                          storage_size=self._storage_size,
+                          storage_centering=self._storage_centering)
         del batch["feed_faces"]
 
         logger.trace("Item out: %s", {key: val.shape if isinstance(val, np.ndarray) else val
