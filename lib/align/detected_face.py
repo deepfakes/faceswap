@@ -112,7 +112,8 @@ class DetectedFace():
         """int: Bottom point (in pixels) of face detection bounding box within the parent image """
         return self.y + self.h
 
-    def add_mask(self, name, mask, affine_matrix, interpolator, storage_size=128):
+    def add_mask(self, name, mask, affine_matrix, interpolator,
+                 storage_size=128, storage_centering="face"):
         """ Add a :class:`Mask` to this detected face
 
         The mask should be the original output from  :mod:`plugins.extract.mask`
@@ -133,15 +134,19 @@ class DetectedFace():
             The CV2 interpolator required to transform this mask to it's original frame.
         storage_size, int (optional):
             The size the mask is to be stored at. Default: 128
+        storage_centering, str (optional):
+            The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
+            Default: `"face"`
         """
-        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, interpolator: %s)",
-                     name, mask.shape, affine_matrix, interpolator)
-        fsmask = Mask(storage_size=storage_size)
+        logger.trace("name: '%s', mask shape: %s, affine_matrix: %s, interpolator: %s, "
+                     "storage_size: %s, storage_centering: %s)", name, mask.shape, affine_matrix,
+                     interpolator, storage_size, storage_centering)
+        fsmask = Mask(storage_size=storage_size, storage_centering=storage_centering)
         fsmask.add(mask, affine_matrix, interpolator)
         self.mask[name] = fsmask
 
     def get_landmark_mask(self, size, area,
-                          aligned=True, centering="head", dilation=0, blur_kernel=0, as_zip=False):
+                          aligned=True, centering="face", dilation=0, blur_kernel=0, as_zip=False):
         """ Obtain a single channel mask based on the face's landmark points.
 
         Parameters
@@ -437,14 +442,22 @@ class Mask():
     ----------
     storage_size: int, optional
         The size (in pixels) that the mask should be stored at. Default: 128.
+    storage_centering, str (optional):
+        The centering to store the mask at. One of `"legacy"`, `"face"`, `"head"`.
+        Default: `"face"`
 
     Attributes
     ----------
     stored_size: int
         The size, in pixels, of the stored mask across its height and width.
+    stored_centering: str
+        The centering that the mask is stored at. One of `"legacy"`, `"face"`, `"head"`
     """
-    def __init__(self, storage_size=128):
+    def __init__(self, storage_size=128, storage_centering="face"):
+        logger.trace("Initializing: %s (storage_size: %s, storage_centering: %s)",
+                     self.__class__.__name__, storage_size, storage_centering)
         self.stored_size = storage_size
+        self.stored_centering = storage_centering
 
         self._mask = None
         self._affine_matrix = None
@@ -455,6 +468,7 @@ class Mask():
         self._threshold = 0.0
         self._sub_crop = dict(size=None, slice_in=[], slice_out=[])
         self.set_blur_and_threshold()
+        logger.trace("Initialized: %s", self.__class__.__name__)
 
     @property
     def mask(self):
@@ -590,7 +604,7 @@ class Mask():
             self._blur["passes"] = blur_passes
         self._threshold = (threshold / 100.0) * 255.0
 
-    def set_sub_crop(self, offset):
+    def set_sub_crop(self, offset, centering):
         """ Set the internal crop area of the mask to be returned.
 
         This impacts the returned mask from :attr:`mask` if the requested mask is required for
@@ -600,17 +614,21 @@ class Mask():
         ----------
         offset: :class:`numpy.ndarray`
             The (x, y) offset from the center point to return the mask for
+        centering: str
+            The centering to set the sub crop area for. One of `"legacy"`, `"face"`. `"head"`
 
         Notes
         -----
-        All masks are currently stored with `face` centering and all crops are for 'legacy`
-        centering. This may change in future
+        All crops are for 'legacy` centering. This may change in future
         """
-        src_size = self.stored_size - (self.stored_size * _EXTRACT_RATIOS["face"])
+        if centering == self.stored_centering:
+            return
+
+        src_size = self.stored_size - (self.stored_size * _EXTRACT_RATIOS[self.stored_centering])
         offset *= ((self.stored_size - (src_size / 2)) / 2)
         center = np.rint(offset + self.stored_size / 2).astype("int32")
 
-        crop_size = get_centered_size("face", "legacy", self.stored_size)
+        crop_size = get_centered_size(self.stored_centering, centering, self.stored_size)
         roi = np.array([center - crop_size // 2, center + crop_size // 2]).ravel()
 
         self._sub_crop["size"] = crop_size
@@ -654,10 +672,10 @@ class Mask():
         -------
         dict:
             The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
-            ``affine_matrix``, ``interpolator``, ``stored_size``
+            ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
         retval = dict()
-        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size", "stored_centering"):
             retval[key] = getattr(self, self._attr_name(key))
         logger.trace({k: v if k != "mask" else type(v) for k, v in retval.items()})
         return retval
@@ -669,10 +687,10 @@ class Mask():
         -------
         dict:
             The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
-            ``affine_matrix``, ``interpolator``, ``stored_size``
+            ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
         retval = dict()
-        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size", "stored_centering"):
             val = getattr(self, self._attr_name(key))
             if isinstance(val, np.ndarray):
                 retval[key] = val.tolist()
@@ -688,9 +706,9 @@ class Mask():
         ----------
         mask_dict: dict
             A dictionary stored in an alignments file containing the keys ``mask``,
-            ``affine_matrix``, ``interpolator``, ``stored_size``
+            ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
-        for key in ("mask", "affine_matrix", "interpolator", "stored_size"):
+        for key in ("mask", "affine_matrix", "interpolator", "stored_size", "stored_centering"):
             val = mask_dict[key]
             if key == "affine_matrix" and not isinstance(val, np.ndarray):
                 val = np.array(val, dtype="float64")
@@ -711,7 +729,7 @@ class Mask():
         attribute_name: str
             The attribute name for the given key for :class:`Mask`
         """
-        retval = "_{}".format(dict_key) if dict_key != "stored_size" else dict_key
+        retval = "_{}".format(dict_key) if not dict_key.startswith("stored") else dict_key
         logger.trace("dict_key: %s, attribute_name: %s", dict_key, retval)
         return retval
 

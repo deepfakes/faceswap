@@ -743,7 +743,7 @@ class Sort():
                                    size=256,
                                    is_aligned=True)
             mask = det_face.mask["components"]
-            mask.set_sub_crop(aln_face.pose.offset["face"] * -1)
+            mask.set_sub_crop(aln_face.pose.offset[mask.stored_centering] * -1, centering="legacy")
             mask = cv2.resize(mask.mask, (256, 256), interpolation=cv2.INTER_CUBIC)[..., None]
             image = np.minimum(aln_face.face, mask)
         if image.ndim == 3:
@@ -784,7 +784,7 @@ class Sort():
                                    size=256,
                                    is_aligned=True)
             mask = det_face.mask["components"]
-            mask.set_sub_crop(aln_face.pose.offset["face"] * -1)
+            mask.set_sub_crop(aln_face.pose.offset[mask.stored_centering] * -1, centering="legacy")
             mask = cv2.resize(mask.mask, (256, 256), interpolation=cv2.INTER_CUBIC)[..., None]
             image = np.minimum(aln_face.face, mask)
         if image.ndim == 3:

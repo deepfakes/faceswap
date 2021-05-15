@@ -28,7 +28,7 @@ class Mask(Adjustment):
         self._coverage_ratio = coverage_ratio
 
     def process(self, detected_face, sub_crop_offset,    # pylint:disable=arguments-differ
-                predicted_mask=None,):
+                centering, predicted_mask=None,):
         """ Obtain the requested mask type and perform any defined mask manipulations.
 
         Parameters
@@ -37,6 +37,8 @@ class Mask(Adjustment):
             The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
         sub_crop_offset: :class:`numpy.ndarray`, optional
             The (x, y) offset to crop the mask from the center point.
+        centering: [`"legacy"`, `"face"`, `"head"`]
+            The centering to obtain the mask for
         predicted_mask: :class:`numpy.ndarray`, optional
             The predicted mask as output from the Faceswap Model, if the model was trained
             with a mask, otherwise ``None``. Default: ``None``.
@@ -48,14 +50,14 @@ class Mask(Adjustment):
         raw_mask: :class:`numpy.ndarray`
             The mask with no erosion/dilation applied
         """
-        mask = self._get_mask(detected_face, predicted_mask, sub_crop_offset)
+        mask = self._get_mask(detected_face, predicted_mask, centering, sub_crop_offset)
         raw_mask = mask.copy()
         if not self.skip and self._do_erode:
             mask = self._erode(mask)
         logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
         return mask, raw_mask
 
-    def _get_mask(self, detected_face, predicted_mask, sub_crop_offset):
+    def _get_mask(self, detected_face, predicted_mask, centering, sub_crop_offset):
         """ Return the requested mask with any requested blurring applied.
 
         Parameters
@@ -65,6 +67,8 @@ class Mask(Adjustment):
         predicted_mask: :class:`numpy.ndarray`
             The predicted mask as output from the Faceswap Model if the model was trained
             with a mask, otherwise ``None``
+        centering: [`"legacy"`, `"face"`, `"head"`]
+            The centering to obtain the mask for
         sub_crop_offset: :class:`numpy.ndarray`
             The (x, y) offset to crop the mask from the center point. Set to `None` if the mask
             does not need to be offset for alternative centering
@@ -86,7 +90,7 @@ class Mask(Adjustment):
                                         blur_passes=self.config["passes"],
                                         threshold=self.config["threshold"])
             if np.any(sub_crop_offset):
-                mask.set_sub_crop(sub_crop_offset)
+                mask.set_sub_crop(sub_crop_offset, centering)
             mask = self._crop_to_coverage(mask.mask)
             mask_size = mask.shape[0]
             face_size = self.dummy.shape[0]
