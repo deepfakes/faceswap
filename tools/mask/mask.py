@@ -308,14 +308,14 @@ class Mask():  # pylint:disable=too-few-public-methods
             for extractor_output in self._extractor.detected_faces():
                 self._extractor_input_thread.check_and_raise_error()
                 updater(extractor_output)
-            self._extractor_input_thread.join()
             if self._counts["update"] != 0:
                 self._alignments.backup()
                 self._alignments.save()
             if self._input_is_faces:
                 self._faces_saver.close()
-        else:
-            self._extractor_input_thread.join()
+
+        self._extractor_input_thread.join()
+        if self._saver is not None:
             self._saver.close()
 
         if self._counts["skip"] != 0:
