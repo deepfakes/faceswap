@@ -12,7 +12,7 @@ from lib.serializer import get_serializer, get_serializer_from_filename
 from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_VERSION = 2.1
+_VERSION = 2.2
 
 
 # VERSION TRACKING
@@ -21,6 +21,7 @@ _VERSION = 2.1
 #       legacy extract
 # 2.1 - Alignments data to extracted face PNG header. SHA1 hashes of faces no longer calculated
 #       or stored in alignments file
+# 2.2 - Add support for differently centered masks (i.e. not all masks stored as face centering)
 
 class Alignments():
     """ The alignments file is a custom serialized ``.fsa`` file that holds information for each
@@ -619,7 +620,12 @@ class Alignments():
             logger.info("Updating legacy landmarks from list to numpy array")
             self._update_legacy_landmarks_list()
             updated = True
+        if self._version < 2.2:
+            logger.info("Updating legacy mask centering")
+            self._update_mask_centering()
+            updated = True
         if updated:
+            self._version = _VERSION
             self.save()
 
     # <File Format> #
@@ -750,6 +756,16 @@ class Alignments():
                     alignment["landmarks_xy"] = np.array(test, dtype="float32")
                     update_count += 1
         logger.debug("Updated landmarks_xy: %s", update_count)
+
+    # Masks not containing the stored_centering parameters. Prior to this implementation all masks
+    # were stored with face centering
+    def _update_mask_centering(self):
+        update_count = 0
+        for val in self._data.values():
+            for alignment in val["faces"]:
+                for mask in alignment["mask"].values():
+                    mask["stored_centering"] = "face"
+        logger.debug("Updated legacy mask centering: %s", update_count)
 
 
 class Thumbnails():
