@@ -625,6 +625,7 @@ class Alignments():
             self._update_mask_centering()
             updated = True
         if updated:
+            self._version = _VERSION
             self.save()
 
     # <File Format> #
