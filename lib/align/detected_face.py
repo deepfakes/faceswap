@@ -709,7 +709,8 @@ class Mask():
             ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
         for key in ("mask", "affine_matrix", "interpolator", "stored_size", "stored_centering"):
-            val = mask_dict[key]
+            val = mask_dict.get(key)
+            val = "face" if key == "stored_centering" and val is None else val
             if key == "affine_matrix" and not isinstance(val, np.ndarray):
                 val = np.array(val, dtype="float64")
             setattr(self, self._attr_name(key), val)
