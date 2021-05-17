@@ -50,6 +50,8 @@ class Mask(Adjustment):
         raw_mask: :class:`numpy.ndarray`
             The mask with no erosion/dilation applied
         """
+        logger.trace("detected_face: %s, sub_crop_offset: %s, centering: '%s', predicted_mask: %s",
+                     detected_face, sub_crop_offset, centering, predicted_mask is not None)
         mask = self._get_mask(detected_face, predicted_mask, centering, sub_crop_offset)
         raw_mask = mask.copy()
         if not self.skip and self._do_erode:

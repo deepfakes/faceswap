@@ -163,6 +163,7 @@ class Converter():
                     logger.error("Failed to convert image: '%s'. Reason: %s",
                                  item["filename"], str(err))
                     image = item["image"]
+                    logger.trace("Convert error traceback:", exc_info=True)
                     # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
                     # import sys ; import traceback
                     # exc_info = sys.exc_info() ; traceback.print_exception(*exc_info)
@@ -323,7 +324,8 @@ class Converter():
             crop_offset = reference_face.pose.offset[mask_centering] * -1
         else:
             crop_offset = np.array((0, 0))
-        mask, raw_mask = self._adjustments["mask"].run(detected_face, crop_offset, predicted_mask)
+        mask, raw_mask = self._adjustments["mask"].run(detected_face, crop_offset, mask_centering,
+                                                       predicted_mask=predicted_mask)
         if new_face.shape[2] == 4:
             logger.trace("Combining mask with alpha channel box mask")
             new_face[:, :, -1] = np.minimum(new_face[:, :, -1], mask.squeeze())
