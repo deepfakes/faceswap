@@ -395,6 +395,9 @@ class ExtractArgs(ExtractConvertArgs):
                    "RAM. You can select none, one or multiple masks, but the extraction may take "
                    "longer the more you select. NB: The Extended and Components (landmark based) "
                    "masks are automatically generated on extraction."
+                   "\nL|bisenet-fp: Relatively lightweight NN based mask that provides more "
+                   "refined control over the area to be masked including full head masking "
+                   "(configurable in mask settings)."
                    "\nL|vgg-clear: Mask designed to provide smart segmentation of mostly frontal "
                    "faces clear of obstructions. Profile faces and obstructions may result in "
                    "sub-par performance."
@@ -667,11 +670,20 @@ class ConvertArgs(ExtractConvertArgs):
             type=str.lower,
             dest="mask_type",
             default="extended",
-            choices=PluginLoader.get_available_extractors("mask", add_none=True) + ["predicted"],
+            choices=PluginLoader.get_available_extractors("mask",
+                                                          add_none=True,
+                                                          extend_plugin=True) + ["predicted"],
             group=_("Plugins"),
             help=_("R|Masker to use. NB: The mask you require must exist within the alignments "
                    "file. You can add additional masks with the Mask Tool."
                    "\nL|none: Don't use a mask."
+                   "\nL|bisenet-fp-face: Relatively lightweight NN based mask that provides more "
+                   "refined control over the area to be masked (configurable in mask settings). "
+                   "Use this version of bisenet-fp if your model is trained with 'face' or "
+                   "'legacy' centering."
+                   "\nL|bisenet-fp-head: Relatively lightweight NN based mask that provides more "
+                   "refined control over the area to be masked (configurable in mask settings). "
+                   "Use this version of bisenet-fp if your model is trained with 'head' centering."
                    "\nL|components: Mask designed to provide facial segmentation based on the "
                    "positioning of landmark locations. A convex hull is constructed around the "
                    "exterior of the landmarks to create a mask."

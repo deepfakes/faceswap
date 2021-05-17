@@ -164,7 +164,7 @@ class PluginLoader():
         return getattr(module, ttl)
 
     @staticmethod
-    def get_available_extractors(extractor_type, add_none=False):
+    def get_available_extractors(extractor_type, add_none=False, extend_plugin=False):
         """ Return a list of available extractors of the given type
 
         Parameters
@@ -173,6 +173,14 @@ class PluginLoader():
             The type of extractor to return the plugins for
         add_none: bool, optional
             Append "none" to the list of returned plugins. Default: False
+        extend_plugin: bool, optional
+            Some plugins have configuration options that mean that multiple 'pseudo-plugins'
+            can be generated based on their settings. An example of this is the bisenet-fp mask
+            which, whilst selected as 'bisenet-fp' can be stored as 'bisenet-fp-face' and
+            'bisenet-fp-head' depending on whether hair has been included in the mask or not.
+            ``True`` will generate each pseudo-plugin, ``False`` will generate the original
+            plugin name. Default: ``False``
+
         Returns
         -------
         list:
@@ -181,11 +189,16 @@ class PluginLoader():
         extractpath = os.path.join(os.path.dirname(__file__),
                                    "extract",
                                    extractor_type)
-        extractors = sorted(item.name.replace(".py", "").replace("_", "-")
-                            for item in os.scandir(extractpath)
-                            if not item.name.startswith("_")
-                            and not item.name.endswith("defaults.py")
-                            and item.name.endswith(".py"))
+        extractors = [item.name.replace(".py", "").replace("_", "-")
+                      for item in os.scandir(extractpath)
+                      if not item.name.startswith("_")
+                      and not item.name.endswith("defaults.py")
+                      and item.name.endswith(".py")]
+        if extend_plugin and extractor_type == "mask" and "bisenet-fp" in extractors:
+            extractors.remove("bisenet-fp")
+            extractors.extend(["bisenet-fp-face", "bisenet-fp-head"])
+
+        extractors = sorted(extractors)
         if add_none:
             extractors.insert(0, "none")
         return extractors
