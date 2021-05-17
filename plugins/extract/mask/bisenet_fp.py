@@ -30,7 +30,10 @@ class Mask(Masker):
         self.vram_per_batch = 64
         self.batchsize = self.config["batch-size"]
         self._segment_indices = self._get_segment_indices()
+
         self._storage_centering = "head" if self.config["include_hair"] else "face"
+        # Separate storage for face and head masks
+        self._storage_name = f"{self._storage_name}_{self._storage_centering}"
 
     def _get_segment_indices(self):
         """ Obtain the segment indices to include within the face mask area based on user
