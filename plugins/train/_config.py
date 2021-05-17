@@ -35,7 +35,7 @@ class Config(FaceswapConfig):
             datatype=str,
             gui_radio=True,
             default="face",
-            choices=["face", "legacy"],
+            choices=["face", "head", "legacy"],
             fixed=True,
             group="face",
             info="How to center the training image. The extracted images are centered on the "
@@ -44,6 +44,11 @@ class Config(FaceswapConfig):
                  "will be cropped from the aligned images."
                  "\n\tface: Centers the training image on the center of the face, adjusting for "
                  "pitch and yaw."
+                 "\n\thead: Centers the training image on the center of the head, adjusting for "
+                 "pitch and yaw. NB: You should only select head centering if you intend to "
+                 "include the full head (including hair) in the final swap. This may give mixed "
+                 "results. Additionally, it is only worth choosing head centering if you are "
+                 "training with a mask that includes the hair (e.g. BiSeNet-FP-Head)."
                  "\n\tlegacy: The 'original' extraction technique. Centers the training image "
                  "near the tip of the nose with no adjustment. Can result in the edges of the "
                  "face appearing outside of the training area.")
@@ -60,12 +65,13 @@ class Config(FaceswapConfig):
                  "model's scope to a zoomed-in central area while higher amounts can include the "
                  "entire face. A trade-off exists between lower amounts given more detail "
                  "versus higher amounts avoiding noticeable swap transitions. For 'Face' "
-                 "centering you will want to leave this above 75%. Sensible values for 'Legacy' "
+                 "centering you will want to leave this above 75%. For Head centering you will "
+                 "most likely want to set this to 100%. Sensible values for 'Legacy' "
                  "centering are:"
-                 "\n\t62.5%% spans from eyebrow to eyebrow."
-                 "\n\t75.0%% spans from temple to temple."
-                 "\n\t87.5%% spans from ear to ear."
-                 "\n\t100.0%% is a mugshot.")
+                 "\n\t62.5% spans from eyebrow to eyebrow."
+                 "\n\t75.0% spans from temple to temple."
+                 "\n\t87.5% spans from ear to ear."
+                 "\n\t100.0% is a mugshot.")
 
         self.add_item(
             section=section,
@@ -344,7 +350,8 @@ class Config(FaceswapConfig):
             title="mask_type",
             datatype=str,
             default="extended",
-            choices=PluginLoader.get_available_extractors("mask", add_none=True),
+            choices=PluginLoader.get_available_extractors("mask",
+                                                          add_none=True, extend_plugin=True),
             group="mask",
             gui_radio=True,
             info="The mask to be used for training. If you have selected 'Learn Mask' or "
@@ -353,6 +360,13 @@ class Config(FaceswapConfig):
                  "exist in the alignments file then it will be generated prior to training "
                  "commencing."
                  "\n\tnone: Don't use a mask."
+                 "\n\tbisenet-fp-face: Relatively lightweight NN based mask that provides more "
+                 "refined control over the area to be masked (configurable in mask settings). "
+                 "Use this version of bisenet-fp if your model is trained with 'face' or "
+                 "'legacy' centering."
+                 "\n\tbisenet-fp-head: Relatively lightweight NN based mask that provides more "
+                 "refined control over the area to be masked (configurable in mask settings). "
+                 "Use this version of bisenet-fp if your model is trained with 'head' centering."
                  "\n\tcomponents: Mask designed to provide facial segmentation based on the "
                  "positioning of landmark locations. A convex hull is constructed around the "
                  "exterior of the landmarks to create a mask."

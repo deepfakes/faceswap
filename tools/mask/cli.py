@@ -61,6 +61,9 @@ class MaskArgs(FaceSwapArgs):
             default="extended",
             group=_("process"),
             help=_("R|Masker to use."
+                   "\nL|bisenet-fp: Relatively lightweight NN based mask that provides more "
+                   "refined control over the area to be masked including full head masking "
+                   "(configurable in mask settings)."
                    "\nL|components: Mask designed to provide facial segmentation based on the "
                    "positioning of landmark locations. A convex hull is constructed around the "
                    "exterior of the landmarks to create a mask."

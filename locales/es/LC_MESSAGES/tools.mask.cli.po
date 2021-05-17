@@ -5,17 +5,17 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-02-18 23:14-0000\n"
-"PO-Revision-Date: 2021-02-21 16:50+0000\n"
+"POT-Creation-Date: 2021-05-17 18:17+0100\n"
+"PO-Revision-Date: 2021-05-17 18:18+0100\n"
+"Last-Translator: \n"
 "Language-Team: tokafondo\n"
+"Language: es_ES\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 2.4.2\n"
-"Last-Translator: \n"
+"X-Generator: Poedit 2.4.3\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"Language: es_ES\n"
 
 #: tools/mask/cli.py:15
 msgid "This command lets you generate masks for existing alignments."
@@ -59,13 +59,16 @@ msgstr ""
 "L|faces: La entrada es una carpeta que contiene caras extraídas.\n"
 "L|frames: La entrada es una carpeta que contiene fotogramas o es un vídeo"
 
-#: tools/mask/cli.py:62 tools/mask/cli.py:87
+#: tools/mask/cli.py:62 tools/mask/cli.py:90
 msgid "process"
 msgstr "proceso"
 
 #: tools/mask/cli.py:63
 msgid ""
 "R|Masker to use.\n"
+"L|bisenet-fp: Relatively lightweight NN based mask that provides more "
+"refined control over the area to be masked including full head masking "
+"(configurable in mask settings).\n"
 "L|components: Mask designed to provide facial segmentation based on the "
 "positioning of landmark locations. A convex hull is constructed around the "
 "exterior of the landmarks to create a mask.\n"
@@ -86,6 +89,9 @@ msgid ""
 "performance."
 msgstr ""
 "R|Máscara a utilizar.\n"
+"L|bisenet-fp: Máscara relativamente ligera basada en NN que proporciona un "
+"control más refinado sobre el área a enmascarar, incluido el enmascaramiento "
+"completo de la cabeza (configurable en la configuración de la máscara).\n"
 "L|components: Máscara diseñada para proporcionar una segmentación facial "
 "basada en la posición de los puntos de referencia. Se construye un casco "
 "convexo alrededor del exterior de los puntos de referencia para crear una "
@@ -108,7 +114,7 @@ msgstr ""
 "descripción. Los rostros de perfil pueden dar lugar a un rendimiento "
 "inferior."
 
-#: tools/mask/cli.py:88
+#: tools/mask/cli.py:91
 msgid ""
 "R|Whether to update all masks in the alignments files, only those faces that "
 "do not already have a mask of the given `mask type` or just to output the "
@@ -128,12 +134,12 @@ msgstr ""
 "L|output: No actualiza las máscaras, sólo las emite para su revisión en la "
 "carpeta de salida dada."
 
-#: tools/mask/cli.py:101 tools/mask/cli.py:108 tools/mask/cli.py:121
-#: tools/mask/cli.py:134 tools/mask/cli.py:143
+#: tools/mask/cli.py:104 tools/mask/cli.py:111 tools/mask/cli.py:124
+#: tools/mask/cli.py:137 tools/mask/cli.py:146
 msgid "output"
 msgstr "salida"
 
-#: tools/mask/cli.py:102
+#: tools/mask/cli.py:105
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
@@ -141,7 +147,7 @@ msgstr ""
 "Ubicación de salida opcional. Si se proporciona, se obtendrá una vista "
 "previa de las máscaras creadas en la carpeta indicada."
 
-#: tools/mask/cli.py:112
+#: tools/mask/cli.py:115
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -154,7 +160,7 @@ msgstr ""
 "redondeará al siguiente número impar. NB: Sólo afecta a la vista previa de "
 "salida. Si se ajusta a 0, se desactiva"
 
-#: tools/mask/cli.py:125
+#: tools/mask/cli.py:128
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
@@ -165,7 +171,7 @@ msgstr ""
 "más a la máscara. NB: Sólo afecta a la vista previa de salida. Si se ajusta "
 "a 0, se desactiva"
 
-#: tools/mask/cli.py:135
+#: tools/mask/cli.py:138
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -180,7 +186,7 @@ msgstr ""
 "enmascarada.\n"
 "L|mask: Sólo emite la máscara como una imagen de un solo canal."
 
-#: tools/mask/cli.py:144
+#: tools/mask/cli.py:147
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."
