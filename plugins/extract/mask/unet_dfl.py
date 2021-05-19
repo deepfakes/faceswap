@@ -30,6 +30,7 @@ class Mask(Masker):
         self.vram_warnings = 256
         self.vram_per_batch = 80
         self.batchsize = self.config["batch-size"]
+        self._storage_centering = "legacy"
 
     def init_model(self):
         self.model = KSession(self.name,

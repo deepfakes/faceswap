@@ -275,7 +275,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         str:
             The suffix to be appended to the output filename
         """
-        sfx = "{}_mask_preview_".format(self._mask_type)
+        sfx = "mask_preview_"
         sfx += "face_" if not arguments.full_frame or self._input_is_faces else "frame_"
         sfx += "{}.png".format(arguments.output_type)
         return sfx
@@ -383,35 +383,45 @@ class Mask():  # pylint:disable=too-few-public-methods
         detected_face: `lib.FacesDetect.detected_face`
             A detected_face object for a face
         """
-        filename = os.path.join(self._saver.location, "{}_{}_{}".format(
-            os.path.splitext(frame)[0],
-            idx,
-            self._output["suffix"]))
+        if self._update_type == "output" and self._mask_type == "bisenet-fp":
+            mask_types = [f"{self._mask_type}_{area}" for area in ("face", "head")]
+        else:
+            mask_types = [self._mask_type]
 
-        if detected_face.mask is None or detected_face.mask.get(self._mask_type, None) is None:
+        if detected_face.mask is None or not any(mask in detected_face.mask
+                                                 for mask in mask_types):
             logger.warning("Mask type '%s' does not exist for frame '%s' index %s. Skipping",
                            self._mask_type, frame, idx)
             return
-        image = self._create_image(detected_face)
-        logger.trace("filename: '%s', image_shape: %s", filename, image.shape)
-        self._saver.save(filename, image)
 
-    def _create_image(self, detected_face):
+        for mask_type in mask_types:
+            filename = os.path.join(self._saver.location, "{}_{}_{}".format(
+                os.path.splitext(frame)[0],
+                idx,
+                f"{mask_type}_{self._output['suffix']}"))
+            image = self._create_image(detected_face, mask_type)
+            logger.trace("filename: '%s', image_shape: %s", filename, image.shape)
+            self._saver.save(filename, image)
+
+    def _create_image(self, detected_face, mask_type):
         """ Create a mask preview image for saving out to disk
 
         Parameters
         ----------
         detected_face: `lib.FacesDetect.detected_face`
             A detected_face object for a face
+        mask_type: str
+            The stored mask type name to create the image for
 
         Returns
-        numpy.ndarray:
+        -------
+        :class:`numpy.ndarray`:
             A preview image depending on the output type in one of the following forms:
               - Containing 3 sub images: The original face, the masked face and the mask
               - The mask only
               - The masked face
         """
-        mask = detected_face.mask[self._mask_type]
+        mask = detected_face.mask[mask_type]
         mask.set_blur_and_threshold(**self._output["opts"])
         if not self._output["full_frame"] or self._input_is_faces:
             if self._input_is_faces:
@@ -422,9 +432,9 @@ class Mask():  # pylint:disable=too-few-public-methods
                                    is_aligned=True).face
             else:
                 centering = "legacy" if self._alignments.version == 1.0 else mask.stored_centering
-                detected_face.load_aligned(detected_face.image, centering=centering)
+                detected_face.load_aligned(detected_face.image, centering=centering, force=True)
                 face = detected_face.aligned.face
-            mask = cv2.resize(detected_face.mask[self._mask_type].mask,
+            mask = cv2.resize(detected_face.mask[mask_type].mask,
                               (face.shape[1], face.shape[0]),
                               interpolation=cv2.INTER_CUBIC)[..., None]
         else:
