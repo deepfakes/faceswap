@@ -577,8 +577,9 @@ class PoseEstimate():
         :class:`numpy.ndarray`
             The x, y offset of the new center from the old center.
         """
+        offset = dict(legacy=np.array([0.0, 0.0]))
         points = dict(head=(0, 0, -2.3), face=(0, -1.5, 4.2))
-        offset = dict()
+
         for key, pnts in points.items():
             center = cv2.projectPoints(np.float32([pnts]),
                                        self._rotation,

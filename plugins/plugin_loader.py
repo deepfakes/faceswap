@@ -196,7 +196,7 @@ class PluginLoader():
                       and item.name.endswith(".py")]
         if extend_plugin and extractor_type == "mask" and "bisenet-fp" in extractors:
             extractors.remove("bisenet-fp")
-            extractors.extend(["bisenet-fp-face", "bisenet-fp-head"])
+            extractors.extend(["bisenet-fp_face", "bisenet-fp_head"])
 
         extractors = sorted(extractors)
         if add_none:
