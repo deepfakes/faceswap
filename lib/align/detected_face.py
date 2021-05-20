@@ -616,10 +616,6 @@ class Mask():
             The (x, y) offset from the center point to return the mask for
         centering: str
             The centering to set the sub crop area for. One of `"legacy"`, `"face"`. `"head"`
-
-        Notes
-        -----
-        All crops are for 'legacy` centering. This may change in future
         """
         if centering == self.stored_centering:
             return

@@ -320,11 +320,9 @@ class Converter():
         """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
         mask_centering = detected_face.mask[self._args.mask_type].stored_centering
-        if self._centering != mask_centering:
-            crop_offset = reference_face.pose.offset[mask_centering] * -1
-        else:
-            crop_offset = np.array((0, 0))
-        mask, raw_mask = self._adjustments["mask"].run(detected_face, crop_offset, mask_centering,
+        crop_offset = (reference_face.pose.offset[self._centering] -
+                       reference_face.pose.offset[mask_centering])
+        mask, raw_mask = self._adjustments["mask"].run(detected_face, crop_offset, self._centering,
                                                        predicted_mask=predicted_mask)
         if new_face.shape[2] == 4:
             logger.trace("Combining mask with alpha channel box mask")
