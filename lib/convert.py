@@ -142,6 +142,7 @@ class Converter():
         """
         logger.debug("Starting convert process. (in_queue: %s, out_queue: %s)",
                      in_queue, out_queue)
+        log_once = False
         while True:
             items = in_queue.get()
             if items == "EOF":
@@ -163,7 +164,10 @@ class Converter():
                     logger.error("Failed to convert image: '%s'. Reason: %s",
                                  item["filename"], str(err))
                     image = item["image"]
-                    logger.trace("Convert error traceback:", exc_info=True)
+
+                    loglevel = logger.trace if log_once else logger.warning
+                    loglevel("Convert error traceback:", exc_info=True)
+                    log_once = True
                     # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
                     # import sys ; import traceback
                     # exc_info = sys.exc_info() ; traceback.print_exception(*exc_info)
@@ -319,7 +323,10 @@ class Converter():
             The swapped face with the requested mask added to the Alpha channel
         """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
-        mask_centering = detected_face.mask[self._args.mask_type].stored_centering
+        if self._args.mask_type != "none":
+            mask_centering = detected_face.mask[self._args.mask_type].stored_centering
+        else:
+            mask_centering = "face"  # Unused but requires a valid value
         crop_offset = (reference_face.pose.offset[self._centering] -
                        reference_face.pose.offset[mask_centering])
         mask, raw_mask = self._adjustments["mask"].run(detected_face, crop_offset, self._centering,
