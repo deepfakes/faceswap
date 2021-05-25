@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """ Custom Optimizers for TensorFlow 2.x/tf.keras """
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import inspect
+import sys
+
 import tensorflow as tf
+from keras.utils import get_custom_objects
 
 
 class AdaBelief(tf.keras.optimizers.Optimizer):
@@ -67,7 +70,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
     >>> new_optimizer = tf.keras.optimizers.deserialize(config,
     ...                                                 custom_objects=dict(AdaBelief=AdaBelief))
 
-    Example of warmup:
+    Example of warm up:
 
     >>> opt = AdaBelief(lr=1e-3, total_steps=10000, warmup_proportion=0.1, min_lr=1e-5)
 
@@ -147,7 +150,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         Parameters
         ----------
         var_list: list
-            List of tf variables to create slots for
+            List of tensorflow variables to create slots for
         """
         for var in var_list:
             self.add_slot(var, "m")
@@ -158,9 +161,9 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
     def set_weights(self, weights):
         """ Set the weights of the optimizer.
 
-        The weights of an optimizer are its state (ie, variables). This function takes the weight
+        The weights of an optimizer are its state (IE, variables). This function takes the weight
         values associated with this optimizer as a list of Numpy arrays. The first value is always
-        the iterations count of the optimizer, followed by the optimizer's state variables in the
+        the iterations count of the optimizer, followed by the optimizers state variables in the
         order they are created. The passed values are used to set the new state of the optimizer.
 
         Parameters
@@ -180,7 +183,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         Parameters
         ----------
         var_dtype: str
-            The data type to to set up weight decau for
+            The data type to to set up weight decay for
 
         Returns
         -------
@@ -363,8 +366,8 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         """ Returns the config of the optimizer.
 
         An optimizer config is a Python dictionary (serializable) containing the configuration of
-        an optimizer. The same optimizer can be reinstantiated later (without any saved state) from
-        this configuration.
+        an optimizer. The same optimizer can be re-instantiated later (without any saved state)
+        from this configuration.
 
         Returns
         -------
@@ -385,3 +388,9 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
                            warmup_proportion=self._serialize_hyperparameter("warmup_proportion"),
                            min_lr=self._serialize_hyperparameter("min_lr")))
         return config
+
+
+# Update layers into Keras custom objects
+for name, obj in inspect.getmembers(sys.modules[__name__]):
+    if inspect.isclass(obj) and obj.__module__ == __name__:
+        get_custom_objects().update({name: obj})

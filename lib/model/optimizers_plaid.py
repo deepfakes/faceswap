@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """ Custom Optimizers for PlaidML/Keras 2.2. """
+import inspect
+import sys
 
 from keras import backend as K
 from keras.optimizers import Optimizer
+from keras.utils import get_custom_objects
 
 
 class AdaBelief(Optimizer):
@@ -81,7 +84,7 @@ class AdaBelief(Optimizer):
         ----------
         loss: list
             The loss to update
-        parans: list
+        params: list
             The variables
         """
         grads = self.get_gradients(loss, params)
@@ -129,8 +132,8 @@ class AdaBelief(Optimizer):
         """ Returns the config of the optimizer.
 
         An optimizer config is a Python dictionary (serializable) containing the configuration of
-        an optimizer. The same optimizer can be reinstantiated later (without any saved state) from
-        this configuration.
+        an optimizer. The same optimizer can be re-instantiated later (without any saved state)
+        from this configuration.
 
         Returns
         -------
@@ -145,3 +148,9 @@ class AdaBelief(Optimizer):
                       weight_decay=self.weight_decay)
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+
+# Update layers into Keras custom objects
+for name, obj in inspect.getmembers(sys.modules[__name__]):
+    if inspect.isclass(obj) and obj.__module__ == __name__:
+        get_custom_objects().update({name: obj})

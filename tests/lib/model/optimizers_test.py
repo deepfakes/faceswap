@@ -47,6 +47,7 @@ def _test_optimizer(optimizer, target=0.75):
     config = k_optimizers.serialize(optimizer)
     optim = k_optimizers.deserialize(config)
     new_config = k_optimizers.serialize(optim)
+    config["class_name"] = config["class_name"].lower()
     new_config["class_name"] = new_config["class_name"].lower()
     assert config == new_config
 
@@ -82,4 +83,4 @@ def test_adam(dummy):  # pylint:disable=unused-argument
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
 def test_adabelief(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """
-    _test_optimizer(optimizers.AdaBelief(), target=0.6)
+    _test_optimizer(optimizers.AdaBelief(), target=0.5)
