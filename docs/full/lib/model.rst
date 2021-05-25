@@ -112,6 +112,25 @@ model.normalization module
    :undoc-members:
    :show-inheritance:
 
+model.optimizers module
+-----------------------
+
+The optimizers listed here are generated from the docstrings in :mod:`lib.model.optimizers_tf`, however
+the functions are excactly the same for :mod:`lib.model.optimizers_plaid`. The correct optimizers module will
+be imported as :mod:`lib.model.optimizers` depending on the backend in use.
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~lib.model.optimizers_tf.AdaBelief
+
+.. automodule:: lib.model.optimizers_tf
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 model.session module
 ---------------------
 
