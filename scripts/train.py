@@ -47,6 +47,7 @@ class Train():  # pylint:disable=too-few-public-methods
                                                  "lib", "gui", ".cache", ".preview_trigger")
         self._stop = False
         self._save_now = False
+        self._toggle_preview_mask = False
         self._refresh_preview = False
         self._preview_buffer = dict()
         self._lock = Lock()
@@ -321,6 +322,10 @@ class Train():  # pylint:disable=too-few-public-methods
                 logger.debug("Stop received. Terminating")
                 break
 
+            if self._toggle_preview_mask:
+                trainer.toggle_mask()
+                self._toggle_preview_mask = False
+
             if self._refresh_preview and viewer is not None:
                 if self._args.redirect_gui:
                     print("\n")
@@ -394,6 +399,11 @@ class Train():  # pylint:disable=too-few-public-methods
                 if is_preview and cv_key == ord("r"):
                     print("\n")
                     logger.info("Refresh preview requested")
+                    self._refresh_preview = True
+                if is_preview and cv_key == ord("t"):
+                    print("\n")
+                    logger.info("Toggle mask display requested")
+                    self._toggle_preview_mask = True
                     self._refresh_preview = True
 
                 # Console Monitor

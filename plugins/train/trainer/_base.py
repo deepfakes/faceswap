@@ -144,6 +144,10 @@ class TrainerBase():
         logger.verbose("Enabled TensorBoard Logging")
         return tensorboard
 
+    def toggle_mask(self):
+        logger.info("Flipping mask display")
+        self._samples.toggle_mask_display()
+
     def train_one_step(self, viewer, timelapse_kwargs):
         """ Running training on a batch of images for each side.
 
@@ -606,6 +610,11 @@ class _Samples():  # pylint:disable=too-few-public-methods
         self._coverage_ratio = coverage_ratio
         self._scaling = scaling
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def toggle_mask_display(self):
+        if not (self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]):
+            return
+        self._display_mask = not self._display_mask
 
     def show_sample(self):
         """ Compile a preview image.
