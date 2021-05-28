@@ -1229,33 +1229,54 @@ class LongRunningTask(Thread):
 
 
 class PreviewTrigger():
-    """ Trigger to indicate to underlying Faceswap process that the preview image should
+    """ Triggers to indicate to underlying Faceswap process that the preview image should
     be updated.
 
     Writes a file to the cache folder that is picked up by the main process.
     """
     def __init__(self):
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._trigger_file = os.path.join(PATHCACHE, ".preview_trigger")
-        logger.debug("Initialized: %s (trigger_file: %s)",
-                     self.__class__.__name__, self._trigger_file)
+        self._trigger_files = dict(update=os.path.join(PATHCACHE, ".preview_trigger"),
+                                   mask_toggle=os.path.join(PATHCACHE, ".preview_mask_toggle"))
+        logger.debug("Initialized: %s (trigger_files: %s)",
+                     self.__class__.__name__, self._trigger_files)
 
-    def set(self):
-        """ Place the trigger file into the cache folder """
-        if not os.path.isfile(self._trigger_file):
-            with open(self._trigger_file, "w"):
+    def set(self, trigger_type):
+        """ Place the trigger file into the cache folder
+
+        Parameters
+        ----------
+        trigger_type: ["update", "mask_toggle"]
+            The type of action to trigger. 'update': Full preview update. 'mask_toggle': toggle
+            mask on and off
+         """
+        trigger = self._trigger_files[trigger_type]
+        if not os.path.isfile(trigger):
+            with open(trigger, "w"):
                 pass
-            logger.debug("Set preview update trigger: %s", self._trigger_file)
+            logger.debug("Set preview trigger: %s", trigger)
 
-    def clear(self):
-        """ Remove the trigger file from the cache folder """
-        if os.path.isfile(self._trigger_file):
-            os.remove(self._trigger_file)
-            logger.debug("Removed preview update trigger: %s", self._trigger_file)
+    def clear(self, trigger_type=None):
+        """ Remove the trigger file from the cache folder.
+
+        Parameters
+        ----------
+        trigger_type: ["update", "mask_toggle", ``None``], optional
+            The trigger to clear. 'update': Full preview update. 'mask_toggle': toggle mask on
+            and off. ``None`` - clear all triggers. Default: ``None``
+        """
+        if trigger_type is None:
+            triggers = list(self._trigger_files.values())
+        else:
+            triggers = [self._trigger_files[trigger_type]]
+        for trigger in triggers:
+            if os.path.isfile(trigger):
+                os.remove(trigger)
+                logger.debug("Removed preview trigger: %s", trigger)
 
 
 def preview_trigger():
-    """ Set the global preview trigger if it has not always been set and return.
+    """ Set the global preview trigger if it has not already been set and return.
 
     Returns
     -------
