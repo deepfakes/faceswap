@@ -80,20 +80,33 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def add_options(self):
         """ Add the additional options """
-        self.add_option_refresh()
+        self._add_option_refresh()
+        self._add_option_mask_toggle()
         super().add_options()
 
-    def add_option_refresh(self):
+    def _add_option_refresh(self):
         """ Add refresh button to refresh preview immediately """
         logger.debug("Adding refresh option")
         btnrefresh = ttk.Button(self.optsframe,
                                 image=get_images().icons["reload"],
-                                command=preview_trigger().set)
+                                command=lambda x="update": preview_trigger().set(x))
         btnrefresh.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnrefresh,
                 text=_("Preview updates at every model save. Click to refresh now."),
                 wrap_length=200)
         logger.debug("Added refresh option")
+
+    def _add_option_mask_toggle(self):
+        """ Add button to toggle mask display on and off """
+        logger.debug("Adding mask toggle option")
+        btntoggle = ttk.Button(self.optsframe,
+                               image=get_images().icons["mask2"],
+                               command=lambda x="mask_toggle": preview_trigger().set(x))
+        btntoggle.pack(padx=2, side=tk.RIGHT)
+        Tooltip(btntoggle,
+                text=_("Click to toggle mask overlay on and off."),
+                wrap_length=200)
+        logger.debug("Added mask toggle option")
 
     def display_item_set(self):
         """ Load the latest preview if available """

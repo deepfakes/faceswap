@@ -29,7 +29,7 @@ class FaceswapGui(tk.Tk):
         self.objects = dict()
 
         get_images().delete_preview()
-        preview_trigger().clear()
+        preview_trigger().clear(trigger_type=None)
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.build_gui()
         self._last_session = LastSession(self._config)
@@ -149,7 +149,7 @@ class FaceswapGui(tk.Tk):
 
         self._last_session.save()
         get_images().delete_preview()
-        preview_trigger().clear()
+        preview_trigger().clear(trigger_type=None)
         self.quit()
         logger.debug("Closed GUI")
         sys.exit(0)

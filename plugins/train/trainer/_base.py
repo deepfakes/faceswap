@@ -145,7 +145,7 @@ class TrainerBase():
         return tensorboard
 
     def toggle_mask(self):
-        logger.info("Flipping mask display")
+        """ Toggle the mask overlay on or off based on user input. """
         self._samples.toggle_mask_display()
 
     def train_one_step(self, viewer, timelapse_kwargs):
@@ -232,7 +232,8 @@ class TrainerBase():
             samples = self._samples.show_sample()
             if samples is not None:
                 viewer(samples,
-                       "Training - 'S': Save Now. 'R': Refresh Preview. 'ENTER': Save and Quit")
+                       "Training - 'S': Save Now. 'R': Refresh Preview. 'M': Toggle Mask. "
+                       "'ENTER': Save and Quit")
 
         if do_timelapse:
             self._timelapse.output_timelapse(timelapse_kwargs)
@@ -612,9 +613,13 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def toggle_mask_display(self):
+        """ Toggle the mask overlay on or off depending on user input. """
         if not (self._model.config["learn_mask"] or self._model.config["penalized_mask_loss"]):
             return
-        self._display_mask = not self._display_mask
+        display_mask = not self._display_mask
+        print("\n")  # Break to not garble loss output
+        logger.info("Toggling mask display %s...", "on" if display_mask else "off")
+        self._display_mask = display_mask
 
     def show_sample(self):
         """ Compile a preview image.

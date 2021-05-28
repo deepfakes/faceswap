@@ -43,8 +43,10 @@ class Train():  # pylint:disable=too-few-public-methods
 
         self._images = self._get_images()
         self._timelapse = self._set_timelapse()
-        self._gui_preview_trigger = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])),
-                                                 "lib", "gui", ".cache", ".preview_trigger")
+        gui_cache = os.path.join(
+            os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
+        self._gui_triggers = dict(update=os.path.join(gui_cache, ".preview_trigger"),
+                                  mask_toggle=os.path.join(gui_cache, ".preview_mask_toggle"))
         self._stop = False
         self._save_now = False
         self._toggle_preview_mask = False
@@ -312,6 +314,11 @@ class Train():  # pylint:disable=too-few-public-methods
             logger.trace("Training iteration: %s", iteration)
             save_iteration = iteration % self._args.save_interval == 0 or iteration == 1
 
+            if self._toggle_preview_mask:
+                trainer.toggle_mask()
+                self._toggle_preview_mask = False
+                self._refresh_preview = True
+
             if save_iteration or self._save_now or self._refresh_preview:
                 viewer = display_func
             else:
@@ -322,17 +329,15 @@ class Train():  # pylint:disable=too-few-public-methods
                 logger.debug("Stop received. Terminating")
                 break
 
-            if self._toggle_preview_mask:
-                trainer.toggle_mask()
-                self._toggle_preview_mask = False
-
             if self._refresh_preview and viewer is not None:
-                if self._args.redirect_gui:
+                if self._args.redirect_gui:  # Remove any gui trigger files following an update
                     print("\n")
                     logger.info("[Preview Updated]")
-                    if os.path.isfile(self._gui_preview_trigger):
-                        logger.debug("Removing gui trigger file: %s", self._gui_preview_trigger)
-                        os.remove(self._gui_preview_trigger)
+                    for filename in self._gui_triggers.values():
+                        if os.path.isfile(filename):
+                            logger.debug("Removing gui trigger file: %s", filename)
+                            os.remove(filename)
+
                 self._refresh_preview = False
 
             if save_iteration:
@@ -400,11 +405,10 @@ class Train():  # pylint:disable=too-few-public-methods
                     print("\n")
                     logger.info("Refresh preview requested")
                     self._refresh_preview = True
-                if is_preview and cv_key == ord("t"):
+                if is_preview and cv_key == ord("m"):
                     print("\n")
-                    logger.info("Toggle mask display requested")
+                    logger.verbose("Toggle mask display requested")
                     self._toggle_preview_mask = True
-                    self._refresh_preview = True
 
                 # Console Monitor
                 if keypress.kbhit():
@@ -418,7 +422,10 @@ class Train():  # pylint:disable=too-few-public-methods
 
                 # GUI Preview trigger update monitor
                 if self._args.redirect_gui:
-                    if not preview_trigger_set and os.path.isfile(self._gui_preview_trigger):
+                    if os.path.isfile(self._gui_triggers["mask_toggle"]):
+                        self._toggle_preview_mask = True
+
+                    if not preview_trigger_set and os.path.isfile(self._gui_triggers["update"]):
                         print("\n")
                         logger.info("Refresh preview requested")
                         self._refresh_preview = True
