@@ -383,7 +383,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         detected_face: `lib.FacesDetect.detected_face`
             A detected_face object for a face
         """
-        if self._update_type == "output" and self._mask_type == "bisenet-fp":
+        if self._mask_type == "bisenet-fp":
             mask_types = [f"{self._mask_type}_{area}" for area in ("face", "head")]
         else:
             mask_types = [self._mask_type]
@@ -395,6 +395,9 @@ class Mask():  # pylint:disable=too-few-public-methods
             return
 
         for mask_type in mask_types:
+            if mask_type not in detected_face.mask:
+                # If extracting bisenet-fp mask, then skip versions which don't exist
+                continue
             filename = os.path.join(self._saver.location, "{}_{}_{}".format(
                 os.path.splitext(frame)[0],
                 idx,

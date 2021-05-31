@@ -143,7 +143,7 @@ class ProcessWrapper():
         self.statusbar.message.set(message)
         self.tk_vars["display"].set(None)
         get_images().delete_preview()
-        preview_trigger().clear()
+        preview_trigger().clear(trigger_type=None)
         self.command = None
         logger.debug("Terminated Faceswap processes")
         print("Process exited.")

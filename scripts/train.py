@@ -43,10 +43,13 @@ class Train():  # pylint:disable=too-few-public-methods
 
         self._images = self._get_images()
         self._timelapse = self._set_timelapse()
-        self._gui_preview_trigger = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])),
-                                                 "lib", "gui", ".cache", ".preview_trigger")
+        gui_cache = os.path.join(
+            os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
+        self._gui_triggers = dict(update=os.path.join(gui_cache, ".preview_trigger"),
+                                  mask_toggle=os.path.join(gui_cache, ".preview_mask_toggle"))
         self._stop = False
         self._save_now = False
+        self._toggle_preview_mask = False
         self._refresh_preview = False
         self._preview_buffer = dict()
         self._lock = Lock()
@@ -311,6 +314,11 @@ class Train():  # pylint:disable=too-few-public-methods
             logger.trace("Training iteration: %s", iteration)
             save_iteration = iteration % self._args.save_interval == 0 or iteration == 1
 
+            if self._toggle_preview_mask:
+                trainer.toggle_mask()
+                self._toggle_preview_mask = False
+                self._refresh_preview = True
+
             if save_iteration or self._save_now or self._refresh_preview:
                 viewer = display_func
             else:
@@ -322,12 +330,9 @@ class Train():  # pylint:disable=too-few-public-methods
                 break
 
             if self._refresh_preview and viewer is not None:
-                if self._args.redirect_gui:
+                if self._args.redirect_gui:  # Remove any gui trigger files following an update
                     print("\n")
                     logger.info("[Preview Updated]")
-                    if os.path.isfile(self._gui_preview_trigger):
-                        logger.debug("Removing gui trigger file: %s", self._gui_preview_trigger)
-                        os.remove(self._gui_preview_trigger)
                 self._refresh_preview = False
 
             if save_iteration:
@@ -350,12 +355,10 @@ class Train():  # pylint:disable=too-few-public-methods
         bool
             ``True`` if there has been an error in the background thread otherwise ``False``
         """
-        is_preview = self._args.preview
-        preview_trigger_set = False
         logger.debug("Launching Monitor")
         logger.info("===================================================")
         logger.info("  Starting")
-        if is_preview:
+        if self._args.preview:
             logger.info("  Using live preview")
         logger.info("  Press '%s' to save and quit",
                     "Stop" if self._args.redirect_gui or self._args.colab else "ENTER")
@@ -367,7 +370,7 @@ class Train():  # pylint:disable=too-few-public-methods
         err = False
         while True:
             try:
-                if is_preview:
+                if self._args.preview:
                     with self._lock:
                         for name, image in self._preview_buffer.items():
                             cv2.imshow(name, image)  # pylint: disable=no-member
@@ -384,17 +387,8 @@ class Train():  # pylint:disable=too-few-public-methods
                     break
 
                 # Preview Monitor
-                if is_preview and (cv_key == ord("\n") or cv_key == ord("\r")):
-                    logger.debug("Exit requested")
+                if not self._preview_monitor(cv_key):
                     break
-                if is_preview and cv_key == ord("s"):
-                    print("\n")
-                    logger.info("Save requested")
-                    self._save_now = True
-                if is_preview and cv_key == ord("r"):
-                    print("\n")
-                    logger.info("Refresh preview requested")
-                    self._refresh_preview = True
 
                 # Console Monitor
                 if keypress.kbhit():
@@ -407,16 +401,7 @@ class Train():  # pylint:disable=too-few-public-methods
                         self._save_now = True
 
                 # GUI Preview trigger update monitor
-                if self._args.redirect_gui:
-                    if not preview_trigger_set and os.path.isfile(self._gui_preview_trigger):
-                        print("\n")
-                        logger.info("Refresh preview requested")
-                        self._refresh_preview = True
-                        preview_trigger_set = True
-
-                    if preview_trigger_set and not self._refresh_preview:
-                        logger.debug("Resetting GUI preview trigger")
-                        preview_trigger_set = False
+                self._process_gui_triggers()
 
                 sleep(1)
             except KeyboardInterrupt:
@@ -425,6 +410,62 @@ class Train():  # pylint:disable=too-few-public-methods
         keypress.set_normal_term()
         logger.debug("Closed Monitor")
         return err
+
+    def _preview_monitor(self, key_press):
+        """ Monitors keyboard presses on the pop-up OpenCV Preview Window.
+
+        Parameters
+        ----------
+        key_press: str
+            The key press received from OpenCV or ``None`` if no press received
+
+        Returns
+        -------
+        bool
+            ``True`` if the process should continue training. ``False`` if an exit has been
+            requested and process should terminate
+        """
+        if not self._args.preview:
+            return True
+
+        if key_press == ord("\n") or key_press == ord("\r"):
+            logger.debug("Exit requested")
+            return False
+
+        if key_press == ord("s"):
+            print("\n")
+            logger.info("Save requested")
+            self._save_now = True
+        if key_press == ord("r"):
+            print("\n")
+            logger.info("Refresh preview requested")
+            self._refresh_preview = True
+        if key_press == ord("m"):
+            print("\n")
+            logger.verbose("Toggle mask display requested")
+            self._toggle_preview_mask = True
+
+        return True
+
+    def _process_gui_triggers(self):
+        """ Check whether a file drop has occurred from the GUI to manually update the preview. """
+        if not self._args.redirect_gui:
+            return
+
+        parent_flags = dict(mask_toggle="_toggle_preview_mask", update="_refresh_preview")
+        for trigger in ("mask_toggle", "update"):
+            filename = self._gui_triggers[trigger]
+            if os.path.isfile(filename):
+                logger.debug("GUI Trigger received for: '%s'", trigger)
+
+                logger.debug("Removing gui trigger file: %s", filename)
+                os.remove(filename)
+
+                if trigger == "update":
+                    print("\n")
+                    logger.info("Refresh preview requested")
+
+                setattr(self, parent_flags[trigger], True)
 
     def _show(self, image, name=""):
         """ Generate the preview and write preview file output.

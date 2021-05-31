@@ -24,7 +24,7 @@ from keras.optimizers import Adam, Nadam, RMSprop
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
-from lib.model import losses
+from lib.model import losses, optimizers
 from lib.model.nn_blocks import set_config as set_nnblock_config
 from lib.utils import get_backend, FaceswapError
 from plugins.train._config import Config
@@ -1093,13 +1093,12 @@ class _Optimizer():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (optimizer: %s, learning_rate: %s, clipnorm: %s, "
                      "epsilon: %s, arguments: %s)", self.__class__.__name__,
                      optimizer, learning_rate, clipnorm, epsilon, arguments)
-        optimizers = {"adam": Adam, "nadam": Nadam, "rms-prop": RMSprop}
-        self._optimizer = optimizers[optimizer]
-
-        base_kwargs = {"adam": dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon),
-                       "nadam": dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon),
-                       "rms-prop": dict(epsilon=epsilon)}
-        self._kwargs = base_kwargs[optimizer]
+        valid_optimizers = {"adabelief": (optimizers.AdaBelief,
+                                          dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
+                            "adam": (Adam, dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
+                            "nadam": (Nadam, dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
+                            "rms-prop": (RMSprop, dict(epsilon=epsilon))}
+        self._optimizer, self._kwargs = valid_optimizers[optimizer]
 
         self._configure(learning_rate, clipnorm, arguments)
         logger.verbose("Using %s optimizer", optimizer.title())

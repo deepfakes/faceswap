@@ -52,18 +52,13 @@ class Convert():  # pylint:disable=too-few-public-methods
         self._patch_threads = None
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
         self._alignments = Alignments(self._args, False, self._images.is_video)
-        if self._alignments.version == 1.0:
-            logger.error("The alignments file format has been updated since the given alignments "
-                         "file was generated. You need to update the file to proceed.")
-            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
-            sys.exit(1)
+        self._validate()
 
         self._opts = OptionalActions(self._args, self._images.file_list, self._alignments)
 
         self._add_queues()
         self._disk_io = DiskIO(self._alignments, self._images, arguments)
         self._predictor = Predict(self._disk_io.load_queue, self._queue_size, arguments)
-        self._validate()
         get_folder(self._args.output_dir)
 
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
@@ -107,6 +102,7 @@ class Convert():  # pylint:disable=too-few-public-methods
         Ensure that certain cli selections are valid and won't result in an error. Checks:
             * If frames have been passed in with video output, ensure user supplies reference
             video.
+            * If "on-the-fly" and an NN mask is selected, output warning and switch to 'extended'
             * If a mask-type is selected, ensure it exists in the alignments file.
             * If a predicted mask-type is selected, ensure model has been trained with a mask
             otherwise attempt to select first available masks, otherwise raise error.
@@ -117,12 +113,26 @@ class Convert():  # pylint:disable=too-few-public-methods
             If an invalid selection has been found.
 
         """
+        if self._alignments.version == 1.0:
+            logger.error("The alignments file format has been updated since the given alignments "
+                         "file was generated. You need to update the file to proceed.")
+            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
+            sys.exit(1)
+
         if (self._args.writer == "ffmpeg" and
                 not self._images.is_video and
                 self._args.reference_video is None):
             raise FaceswapError("Output as video selected, but using frames as input. You must "
                                 "provide a reference video ('-ref', '--reference-video').")
-        if (self._args.mask_type not in ("none", "predicted") and
+
+        if (self._args.on_the_fly and
+                self._args.mask_type not in ("none", "extended", "components")):
+            logger.warning("You have selected an incompatible mask type ('%s') for On-The-Fly "
+                           "conversion. Switching to 'extended'", self._args.mask_type)
+            self._args.mask_type = "extended"
+
+        if (not self._args.on_the_fly and
+                self._args.mask_type not in ("none", "predicted") and
                 not self._alignments.mask_is_valid(self._args.mask_type)):
             msg = ("You have selected the Mask Type `{}` but at least one face does not have this "
                    "mask stored in the Alignments File.\nYou should generate the required masks "
@@ -131,6 +141,7 @@ class Convert():  # pylint:disable=too-few-public-methods
                    "{}".format(self._args.mask_type, self._alignments.faces_count,
                                self._alignments.mask_summary))
             raise FaceswapError(msg)
+
         if self._args.mask_type == "predicted" and not self._predictor.has_predicted_mask:
             available_masks = [k for k, v in self._alignments.mask_summary.items()
                                if k != "none" and v == self._alignments.faces_count]
@@ -387,7 +398,7 @@ class DiskIO():
                        "video with Extract first for superior results.")
         extractor = Extractor(detector="cv2-dnn",
                               aligner="cv2-dnn",
-                              masker="none",
+                              masker=self._args.mask_type,
                               multiprocess=True,
                               rotate_images=None,
                               min_size=20)

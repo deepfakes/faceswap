@@ -11,6 +11,7 @@ from keras.models import Sequential
 import numpy as np
 from numpy.testing import assert_allclose
 
+from lib.model import optimizers
 from lib.utils import get_backend
 
 from tests.utils import generate_test_data, to_categorical
@@ -46,6 +47,7 @@ def _test_optimizer(optimizer, target=0.75):
     config = k_optimizers.serialize(optimizer)
     optim = k_optimizers.deserialize(config)
     new_config = k_optimizers.serialize(optim)
+    config["class_name"] = config["class_name"].lower()
     new_config["class_name"] = new_config["class_name"].lower()
     assert config == new_config
 
@@ -74,5 +76,11 @@ def _test_optimizer(optimizer, target=0.75):
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
 def test_adam(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """
-    _test_optimizer(k_optimizers.Adam(), target=0.6)
-    _test_optimizer(k_optimizers.Adam(decay=1e-3), target=0.6)
+    _test_optimizer(k_optimizers.Adam(), target=0.5)
+    _test_optimizer(k_optimizers.Adam(decay=1e-3), target=0.5)
+
+
+@pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
+def test_adabelief(dummy):  # pylint:disable=unused-argument
+    """ Test for custom Adam optimizer """
+    _test_optimizer(optimizers.AdaBelief(), target=0.5)

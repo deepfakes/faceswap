@@ -502,7 +502,7 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         for idx, face in enumerate(extract_media.detected_faces):
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)
             # Landmarks
-            for (pos_x, pos_y) in face.aligned.landmarks:
+            for (pos_x, pos_y) in face.aligned.landmarks.astype("int32"):
                 cv2.circle(face.aligned.face, (pos_x, pos_y), 1, (0, 255, 255), -1)
             # Pose
             center = tuple(np.int32((face.aligned.size / 2, face.aligned.size / 2)))

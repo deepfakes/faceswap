@@ -235,12 +235,14 @@ class GlobalSession():
             The loss keys for the given session. If ``None`` is passed as session_id then a unique
             list of all loss keys for all sessions is returned
         """
+        loss_keys = {sess_id: list(logs.keys())
+                     for sess_id, logs in self._tb_logs.get_loss(session_id=session_id).items()}
         if session_id is None:
             retval = list(set(loss_key
-                              for session in self._state["sessions"].values()
-                              for loss_key in session["loss_names"]))
+                              for session in loss_keys.values()
+                              for loss_key in session))
         else:
-            retval = self._state["sessions"][str(session_id)]["loss_names"]
+            retval = loss_keys[session_id]
         return retval
 
 

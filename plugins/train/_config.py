@@ -108,8 +108,13 @@ class Config(FaceswapConfig):
             gui_radio=True,
             group="optimizer",
             default="adam",
-            choices=["adam", "nadam", "rms-prop"],
+            choices=["adabelief", "adam", "nadam", "rms-prop"],
             info="The optimizer to use."
+                 "\n\t adabelief - Adapting Stepsizes by the Belief in Observed Gradients. An "
+                 "optimizer with the aim to converge faster, generalize better and remain more "
+                 "stable. (https://arxiv.org/abs/2010.07468). NB: Epsilon for AdaBelief needs to "
+                 "be set to a smaller value than other Optimizers. Generally setting the 'Epsilon "
+                 "Exponent' to around '-16' should work."
                  "\n\t adam - Adaptive Moment Optimization. A stochastic gradient descent method "
                  "that is based on adaptive estimation of first-order and second-order moments."
                  "\n\t nadam - Adaptive Moment Optimization with Nesterov Momentum. Much like "
@@ -136,16 +141,19 @@ class Config(FaceswapConfig):
             title="epsilon_exponent",
             datatype=int,
             default=-7,
-            min_max=(-10, 0),
+            min_max=(-20, 0),
             rounding=1,
             fixed=False,
             group="optimizer",
             info="The epsilon adds a small constant to weight updates to attempt to avoid 'divide "
-                 "by zero' errors. Generally this option should be left at default value, however "
-                 "if you are getting 'NaN' loss values, and have been unable to resolve the issue "
-                 "any other way (for example, increasing batch size, or lowering learning rate, "
-                 "then raising the epsilon can lead to a more stable model. It may, however, come "
-                 "at the cost of slower training and a less accurate final result.\n"
+                 "by zero' errors. Unless you are using the AdaBelief Optimizer, then Generally "
+                 "this option should be left at default value, For AdaBelief, setting this to "
+                 "around '-16' should work.\n"
+                 "In all instances if you are getting 'NaN' loss values, and have been unable to "
+                 "resolve the issue any other way (for example, increasing batch size, or "
+                 "lowering learning rate), then raising the epsilon can lead to a more stable "
+                 "model. It may, however, come at the cost of slower training and a less accurate "
+                 "final result.\n"
                  "NB: The value given here is the 'exponent' to the epsilon. For example, "
                  "choosing '-7' will set the epsilon to 1e-7. Choosing '-3' will set the epsilon "
                  "to 0.001 (1e-3).")
