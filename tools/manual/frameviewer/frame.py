@@ -694,12 +694,16 @@ class FrameViewer(tk.Canvas):  # pylint:disable=too-many-ancestors
         """
         if not self._globals.tk_update.get():
             return
+        zoomed_centering = self.active_editor.zoomed_centering
         self._image.refresh(self.active_editor.view_mode)
         to_display = sorted([self.selected_action] + self.editor_display[self.selected_action])
         self._hide_additional_faces()
         for editor in to_display:
             self._editors[editor].update_annotation()
         self._bind_unbind_keys()
+        if zoomed_centering != self.active_editor.zoomed_centering:
+            # Refresh the image if editor annotation has changed the zoom centering of the image
+            self._image.refresh(self.active_editor.view_mode)
         self._globals.tk_update.set(False)
         self.update_idletasks()
 

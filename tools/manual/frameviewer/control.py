@@ -110,7 +110,7 @@ class Navigation():
 
     def _get_safe_frame_index(self):
         """ Obtain the current frame position from the tk_transport_index variable in
-        a safe manner (i.e. handle for non-numerics)
+        a safe manner (i.e. handle for non-numeric)
 
         Returns
         -------
@@ -184,6 +184,7 @@ class BackgroundImage():  # pylint:disable=too-few-public-methods
                                                 image=self._tk_frame,
                                                 anchor=tk.CENTER,
                                                 tags="main_image")
+        self._zoomed_centering = "face"
 
     @property
     def _current_view_mode(self):
@@ -212,8 +213,10 @@ class BackgroundImage():  # pylint:disable=too-few-public-methods
         view_mode: ["frame", "face"]
             The currently active editor's selected view mode.
         """
-        if view_mode == self._current_view_mode:
+        if view_mode == self._current_view_mode and (
+                self._canvas.active_editor.zoomed_centering == self._zoomed_centering):
             return
+        self._zoomed_centering = self._canvas.active_editor.zoomed_centering
         logger.trace("Switching background image from '%s' to '%s'",
                      self._current_view_mode, view_mode)
         img = getattr(self, "_tk_{}".format(view_mode))
@@ -257,7 +260,7 @@ class BackgroundImage():  # pylint:disable=too-few-public-methods
             det_face = self._det_faces.current_faces[frame_idx][face_idx]
             face = AlignedFace(det_face.landmarks_xy,
                                image=self._globals.current_frame["image"],
-                               centering="face",
+                               centering=self._zoomed_centering,
                                size=size).face
         logger.trace("face shape: %s", face.shape)
         return face[..., 2::-1]

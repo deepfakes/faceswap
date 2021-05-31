@@ -36,6 +36,7 @@ class Editor():
     def __init__(self, canvas, detected_faces, control_text="", key_bindings=None):
         logger.debug("Initializing %s: (canvas: '%s', detected_faces: %s, control_text: %s)",
                      self.__class__.__name__, canvas, detected_faces, control_text)
+        self.zoomed_centering = "face"  # Override for different zoomed centering per editor
         self._canvas = canvas
         self._globals = canvas._globals
         self._det_faces = detected_faces

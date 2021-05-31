@@ -96,16 +96,41 @@ class Viewport():
             The type of mask to overlay onto the face
         """
         logger.debug("Toggling mask annotations to: %s. mask_type: %s", state, mask_type)
-        for (frame_idx, face_idx), det_faces in zip(
+        for (frame_idx, face_idx), det_face in zip(
                 self._objects.visible_grid[:2].transpose(1, 2, 0).reshape(-1, 2),
                 self._objects.visible_faces.flatten()):
             if frame_idx == -1:
                 continue
+
             key = "_".join([str(frame_idx), str(face_idx)])
-            mask = None if state == "hidden" else det_faces.mask.get(mask_type, None)
-            mask = mask if mask is None else mask.mask.squeeze()
+            mask = None if state == "hidden" else self._obtain_mask(det_face, mask_type)
             self._tk_faces[key].update_mask(mask)
         self.update()
+
+    @classmethod
+    def _obtain_mask(cls, detected_face, mask_type):
+        """ Obtain the mask for the correct "face" centering that is used in the thumbnail display.
+
+        Parameters
+        -----------
+        detected_face: :class:`lib.align.DetectedFace`
+            The Detected Face object to obtain the mask for
+        mask_type: str
+            The type of mask to obtain
+
+        Returns
+        -------
+        :class:`numpy.ndarray` or ``None``
+            The single channel mask of requested mask type, if it exists, otherwise ``None``
+        """
+        mask = detected_face.mask.get(mask_type)
+        if not mask:
+            return None
+        if mask.stored_centering != "face":
+            face = AlignedFace(detected_face.landmarks_xy)
+            mask.set_sub_crop(face.pose.offset["face"] - face.pose.offset[mask.stored_centering],
+                              centering="face")
+        return mask.mask.squeeze()
 
     def reset(self):
         """ Reset all the cached objects on a face size change. """
@@ -245,8 +270,7 @@ class Viewport():
         """
         get_mask = (self._canvas.optional_annotations["mask"] or
                     (is_active and self.selected_editor == "mask"))
-        mask = face.mask.get(self._canvas.selected_mask, None) if get_mask else None
-        mask = mask if mask is None else mask.mask.squeeze()
+        mask = self._obtain_mask(face, self._canvas.selected_mask) if get_mask else None
         tk_face = TKFace(image, size=self.face_size, mask=mask)
         logger.trace("face: %s, tk_face: %s", face, tk_face)
         return tk_face
