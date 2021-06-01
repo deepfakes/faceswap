@@ -202,8 +202,8 @@ class BackgroundImage():  # pylint:disable=too-few-public-methods
             The currently active editor's selected view mode.
         """
         self._switch_image(view_mode)
-        getattr(self, "_update_tk_{}".format(self._current_view_mode))()
         logger.trace("Updating background frame")
+        getattr(self, "_update_tk_{}".format(self._current_view_mode))()
 
     def _switch_image(self, view_mode):
         """ Switch the image between the full frame image and the zoomed face image.

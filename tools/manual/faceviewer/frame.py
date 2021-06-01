@@ -650,7 +650,8 @@ class Grid():
         labels = np.array((self._raw_indices["frame"] + padding,
                            self._raw_indices["face"] + padding),
                           dtype="int").reshape((2, rows, columns))
-        logger.debug(labels.shape)
+        logger.debug("face-count: %s, columns: %s, rows: %s, remainder: %s, padding: %s, labels "
+                     "shape: %s", face_count, columns, rows, remainder, padding, labels.shape)
         return labels
 
     def _get_display_faces(self):

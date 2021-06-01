@@ -53,11 +53,18 @@ class Manual(tk.Tk):
                                              extractor)
 
         video_meta_data = self._detected_faces.video_meta_data
-        loader = FrameLoader(self._globals, arguments.frames, video_meta_data)
+        valid_meta = all(val is not None for val in video_meta_data.values())
 
-        self._detected_faces.load_faces()
+        loader = FrameLoader(self._globals, arguments.frames, video_meta_data)
+        if valid_meta:  # Load the faces whilst other threads complete if we have valid meta data
+            self._detected_faces.load_faces()
+
         self._containers = self._create_containers()
-        self._wait_for_threads(extractor, loader, video_meta_data)
+        self._wait_for_threads(extractor, loader, valid_meta)
+        if not valid_meta:
+            # Load the faces after other threads complete if meta data required updating
+            self._detected_faces.load_faces()
+
         self._generate_thumbs(arguments.frames, arguments.thumb_regen, arguments.single_process)
 
         self._display = DisplayFrame(self._containers["top"],
@@ -99,7 +106,7 @@ class Manual(tk.Tk):
             sys.exit(1)
         logger.debug("Test input file '%s' does not contain Faceswap header data", test_file)
 
-    def _wait_for_threads(self, extractor, loader, video_meta_data):
+    def _wait_for_threads(self, extractor, loader, valid_meta):
         """ The :class:`Aligner` and :class:`FramesLoader` are launched in background threads.
         Wait for them to be initialized prior to proceeding.
 
@@ -109,8 +116,9 @@ class Manual(tk.Tk):
             The extraction pipeline for the Manual Tool
         loader: :class:`FramesLoader`
             The frames loader for the Manual Tool
-        video_meta_data: dict
-            The video meta data that exists within the alignments file
+        valid_meta: bool
+            Whether the input video had valid meta-data on import, or if it had to be created.
+            ``True`` if valid meta data existed previously, ``False`` if it needed to be created
 
         Notes
         -----
@@ -129,7 +137,7 @@ class Manual(tk.Tk):
             sleep(1)
 
         extractor.link_faces(self._detected_faces)
-        if any(val is None for val in video_meta_data.values()):
+        if not valid_meta:
             logger.debug("Saving video meta data to alignments file")
             self._detected_faces.save_video_meta_data(**loader.video_meta_data)
 

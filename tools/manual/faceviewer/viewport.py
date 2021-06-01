@@ -658,8 +658,11 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         coords = (int(self._canvas.canvasx(pnts[0])), int(self._canvas.canvasy(pnts[1])))
         face = self._viewport.face_from_point(*coords)
         frame_idx, face_idx = face[:2]
-        is_zoomed = self._globals.is_zoomed
 
+        if frame_idx == self._current_frame_index and face_idx == self._current_face_index:
+            return
+
+        is_zoomed = self._globals.is_zoomed
         if (-1 in face or (frame_idx == self._globals.frame_index
                            and (not is_zoomed or
                                 (is_zoomed and face_idx == self._globals.tk_face_index.get())))):
@@ -668,6 +671,8 @@ class HoverBox():  # pylint:disable=too-few-public-methods
             self._current_frame_index = None
             self._current_face_index = None
             return
+
+        logger.debug("Viewport hover: frame_idx: %s, face_idx: %s", frame_idx, face_idx)
 
         self._canvas.config(cursor="hand2")
         self._highlight(face[2:])
@@ -698,6 +703,8 @@ class HoverBox():  # pylint:disable=too-few-public-methods
         """
         frame_id = self._current_frame_index
         is_zoomed = self._globals.is_zoomed
+        logger.debug("Face clicked. Global frame index: %s, Current frame_id: %s, is_zoomed: %s",
+                     self._globals.frame_index, frame_id, is_zoomed)
         if frame_id is None or (frame_id == self._globals.frame_index and not is_zoomed):
             return
         face_idx = self._current_face_index if is_zoomed else 0
