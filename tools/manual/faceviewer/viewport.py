@@ -190,8 +190,10 @@ class Viewport():
 
                 tk_face = self.get_tk_face(frame_idx, face_idx, face)
                 self._canvas.itemconfig(image_id, image=tk_face.photo)
+
                 if (self._canvas.optional_annotations["mesh"]
-                        or frame_idx == self._active_frame.frame_index):
+                        or frame_idx == self._active_frame.frame_index
+                        or refresh_annotations):
                     landmarks = self.get_landmarks(frame_idx, face_idx, face, top_left,
                                                    refresh=refresh_annotations)
                     self._locate_mesh(mesh_ids, landmarks)
