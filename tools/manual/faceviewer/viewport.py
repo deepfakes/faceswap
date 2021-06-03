@@ -177,11 +177,11 @@ class Viewport():
                               self._objects.visible_faces):
             for (frame_idx, face_idx, pnt_x, pnt_y), image_id, mesh_ids, face in zip(*collection):
                 top_left = np.array((pnt_x, pnt_y))
-                if frame_idx == self._active_frame.frame_index:
+                if frame_idx == self._active_frame.frame_index and not refresh_annotations:
                     logger.trace("Skipping active frame: %s", frame_idx)
                     continue
                 if frame_idx == -1:
-                    logger.debug("Blanking non-existant face")
+                    logger.trace("Blanking non-existant face")
                     self._canvas.itemconfig(image_id, image="")
                     for area in mesh_ids.values():
                         for mesh_id in area:
