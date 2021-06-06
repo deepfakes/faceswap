@@ -709,7 +709,7 @@ class FaceUpdate():
             The center point of the Landmark's Extract Box
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
-        rot_mat = cv2.getRotationMatrix2D(tuple(center), angle, 1.)
+        rot_mat = cv2.getRotationMatrix2D(tuple(center.astype("float32")), angle, 1.)
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
         face.mask = self._extractor.get_masks(frame_index, face_index)

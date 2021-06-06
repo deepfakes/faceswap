@@ -472,10 +472,9 @@ class Mask():
 
     @property
     def mask(self):
-        """ numpy.ndarray: The mask at the size of :attr:`stored_size` with any requested blurring
-        and threshold amount applied."""
-        dims = (self.stored_size, self.stored_size, 1)
-        mask = np.frombuffer(decompress(self._mask), dtype="uint8").reshape(dims)
+        """ numpy.ndarray: The mask at the size of :attr:`stored_size` with any requested blurring,
+        threshold amount and centering applied."""
+        mask = self.stored_mask
         if self._threshold != 0.0 or self._blur["kernel"] != 0:
             mask = mask.copy()
         if self._threshold != 0.0:
@@ -492,6 +491,15 @@ class Mask():
             out[slice_out[0], slice_out[1], :] = mask[slice_in[0], slice_in[1], :]
             mask = out
         logger.trace("mask shape: %s", mask.shape)
+        return mask
+
+    @property
+    def stored_mask(self):
+        """ :class:`numpy.ndarray`: The mask at the size of :attr:`stored_size` as it is stored
+        (i.e. with no blurring/centering applied). """
+        dims = (self.stored_size, self.stored_size, 1)
+        mask = np.frombuffer(decompress(self._mask), dtype="uint8").reshape(dims)
+        logger.trace("stored mask shape: %s", mask.shape)
         return mask
 
     @property
@@ -888,7 +896,8 @@ def update_legacy_png_header(filename, alignments):
         The image file to update
     alignments: :class:`lib.align.alignments.Alignments`
         The alignments data the contains the information to store in the image header. This must be
-        a v2.0 or less alignments file as later versions no longer store the face hash (unrequired)
+        a v2.0 or less alignments file as later versions no longer store the face hash (not
+        required)
 
     Returns
     -------

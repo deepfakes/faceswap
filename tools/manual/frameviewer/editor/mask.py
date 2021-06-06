@@ -170,12 +170,14 @@ class Mask(Editor):
             return
 
         logger.debug("Defining meta information for face: %s", face_index)
-        scale = self._internal_size / mask.mask.shape[0]
+        scale = self._internal_size / mask.stored_size
         self._set_full_frame_meta(mask, scale)
         dims = (self._internal_size, self._internal_size)
-        self._meta.setdefault("mask", []).append(cv2.resize(mask.mask,
+        self._meta.setdefault("mask", []).append(cv2.resize(mask.stored_mask,
                                                             dims,
                                                             interpolation=cv2.INTER_CUBIC))
+        if self.zoomed_centering != mask.stored_centering:
+            self.zoomed_centering = mask.stored_centering
 
     def _set_full_frame_meta(self, mask, mask_scale):
         """ Sets the meta information for displaying the mask in full frame mode.
