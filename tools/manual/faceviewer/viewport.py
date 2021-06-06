@@ -168,9 +168,6 @@ class Viewport():
             return
         self._discard_tk_faces()
 
-        if self._canvas.optional_annotations["mesh"]:  # Display any hidden end of row meshes
-            self._canvas.itemconfig("viewport_mesh", state="normal")
-
         for collection in zip(self._objects.visible_grid.transpose(1, 2, 0),
                               self._objects.images,
                               self._objects.meshes,
@@ -442,6 +439,9 @@ class VisibleObjects():
 
     def update(self):
         """ Load and unload thumbnails in the visible area of the faces viewer. """
+        if self._canvas.optional_annotations["mesh"]:  # Display any hidden end of row meshes
+            self._canvas.itemconfig("viewport_mesh", state="normal")
+
         self._visible_grid, self._visible_faces = self._grid.visible_area
         if (isinstance(self._images, np.ndarray) and isinstance(self._visible_grid, np.ndarray)
                 and self._visible_grid.shape[-1] != self._images.shape[-1]):

@@ -269,7 +269,8 @@ class FacesViewer(tk.Canvas):   # pylint:disable=too-many-ancestors
         """ int: The currently selected thumbnail size in pixels """
         scaling = get_config().scaling_factor
         size = self._sizes[self._globals.tk_faces_size.get().lower().replace(" ", "")]
-        return int(round(size * scaling))
+        scaled = size * scaling
+        return int(round(scaled / 2) * 2)
 
     @property
     def viewport(self):
