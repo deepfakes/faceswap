@@ -24,6 +24,7 @@ class Navigation():
     """
     def __init__(self, display_frame):
         logger.debug("Initializing %s", self.__class__.__name__)
+        self._display_frame = display_frame
         self._globals = display_frame._globals
         self._det_faces = display_frame._det_faces
         self._nav = display_frame._nav
@@ -37,19 +38,23 @@ class Navigation():
         return self._nav["scale"].cget("to") + 1
 
     def nav_scale_callback(self, *args, reset_progress=True):  # pylint:disable=unused-argument
-        """ Adjust transport slider scale for different filters.
+        """ Adjust transport slider scale for different filters. Hide or display optional filter
+        controls.
 
         Returns
         -------
         bool
             ``True`` if the navigation scale has been updated otherwise ``False``
         """
+        self._display_frame.pack_threshold_slider()
         if reset_progress:
             self.stop_playback()
         frame_count = self._det_faces.filter.count
         if self._current_nav_frame_count == frame_count:
             logger.trace("Filtered count has not changed. Returning")
             return False
+        if self._globals.tk_filter_mode.get() == "Misaligned Faces":
+            self._det_faces.tk_face_count_changed.set(True)
         max_frame = max(0, frame_count - 1)
         logger.debug("Filtered frame count has changed. Updating from %s to %s",
                      self._current_nav_frame_count, frame_count)

@@ -310,6 +310,7 @@ class Viewport():
                                   size=self.face_size)
             landmarks = dict(polygon=[], line=[])
             for area, val in self._landmark_mapping.items():
+                # pylint:disable=unsubscriptable-object
                 points = aligned.landmarks[val[0]:val[1]] + top_left
                 shape = "polygon" if area.endswith("eye") or area.startswith("mouth") else "line"
                 landmarks[shape].append(points)
@@ -908,6 +909,8 @@ class ActiveFrame():
                     self._assets["meshes"],
                     self._assets["boxes"],
                     self._assets["faces"])):
+            if det_face is None:
+                continue
             top_left = np.array(self._canvas.coords(image_id))
             coords = (*top_left, *top_left + self._size)
             tk_face = self._viewport.get_tk_face(self.frame_index, face_idx, det_face)

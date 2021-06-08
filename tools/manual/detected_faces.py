@@ -266,6 +266,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             for item in self._alignments.data[key]["faces"]:
                 face = DetectedFace()
                 face.from_alignment(item, with_thumb=True)
+                face.load_aligned(None)
+                _ = face.aligned.average_distance  # cache the distances
                 this_frame_faces.append(face)
             self._frame_faces.append(this_frame_faces)
 
@@ -306,6 +308,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
 
         for detected_face, face in zip(faces, alignments):
             detected_face.from_alignment(face, with_thumb=True)
+            detected_face.load_aligned(None, force=True)
+            _ = detected_face.aligned.average_distance  # cache the distances
 
         self._updated_frame_indices.remove(frame_index)
         if not self._updated_frame_indices:
@@ -390,18 +394,17 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         progress_queue: :class:`queue.Queue`
             The queue to place incremental counts to for updating the GUI's progress bar
         """
-        saver = ImagesSaver(str(get_folder(output_folder)), as_bytes=True)
-        loader = ImagesLoader(self._input_location, count=self._alignments.frames_count)
-        extension = ".png"
+        _io = dict(saver=ImagesSaver(str(get_folder(output_folder)), as_bytes=True),
+                   loader=ImagesLoader(self._input_location, count=self._alignments.frames_count))
 
-        for frame_idx, (filename, image) in enumerate(loader.load()):
+        for frame_idx, (filename, image) in enumerate(_io["loader"].load()):
             logger.trace("Outputting frame: %s: %s", frame_idx, filename)
             src_filename = os.path.basename(filename)
             frame_name = os.path.splitext(src_filename)[0]
             progress_queue.put(1)
 
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
-                output = "{}_{}{}".format(frame_name, str(face_idx), extension)
+                output = "{}_{}{}".format(frame_name, str(face_idx), ".png")
                 aligned = AlignedFace(face.landmarks_xy,
                                       image=image,
                                       centering="head",
@@ -413,9 +416,9 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                                         source_filename=src_filename,
                                         source_is_video=self._globals.is_video))
 
-                b_image = encode_image(aligned.face, extension, metadata=meta)
-                saver.save(output, b_image)
-        saver.close()
+                b_image = encode_image(aligned.face, ".png", metadata=meta)
+                _io["saver"].save(output, b_image)
+        _io["saver"].close()
 
 
 class Filter():
@@ -435,6 +438,16 @@ class Filter():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
+    def _filter_distance(self):
+        """ float: The currently selected distance when Misaligned Faces filter is selected. """
+        try:
+            retval = self._globals.tk_filter_distance.get()
+        except tk.TclError:
+            # Suppress error when distance box is empty
+            retval = 0
+        return retval / 100.
+
+    @property
     def count(self):
         """ int: The number of frames that meet the filter criteria returned by
         :attr:`~tools.manual.manual.TkGlobals.filter_mode`. """
@@ -445,6 +458,10 @@ class Filter():
             retval = sum(1 for fcount in face_count_per_index if fcount != 0)
         elif self._globals.filter_mode == "Multiple Faces":
             retval = sum(1 for fcount in face_count_per_index if fcount > 1)
+        elif self._globals.filter_mode == "Misaligned Faces":
+            distance = self._filter_distance
+            retval = sum(1 for frame in self._detected_faces.current_faces
+                         if any(face.aligned.average_distance > distance for face in frame))
         else:
             retval = len(face_count_per_index)
         logger.trace("filter mode: %s, frame count: %s", self._globals.filter_mode, retval)
@@ -456,15 +473,15 @@ class Filter():
         displayed face. """
         frame_indices = []
         face_indices = []
-        if self._globals.filter_mode != "No Faces":
-            for frame_idx, face_count in enumerate(self._detected_faces.face_count_per_index):
-                if face_count <= 1 and self._globals.filter_mode == "Multiple Faces":
-                    continue
-                for face_idx in range(face_count):
-                    frame_indices.append(frame_idx)
-                    face_indices.append(face_idx)
-        logger.trace("frame_indices: %s, face_indices: %s", frame_indices, face_indices)
+        face_counts = self._detected_faces.face_count_per_index  # Copy to avoid recalculations
+
+        for frame_idx in self.frames_list:
+            for face_idx in range(face_counts[frame_idx]):
+                frame_indices.append(frame_idx)
+                face_indices.append(face_idx)
+
         retval = dict(frame=frame_indices, face=face_indices)
+        logger.trace("frame_indices: %s, face_indices: %s", frame_indices, face_indices)
         return retval
 
     @property
@@ -478,6 +495,10 @@ class Filter():
             retval = [idx for idx, count in enumerate(face_count_per_index) if count > 1]
         elif self._globals.filter_mode == "Has Face(s)":
             retval = [idx for idx, count in enumerate(face_count_per_index) if count != 0]
+        elif self._globals.filter_mode == "Misaligned Faces":
+            distance = self._filter_distance
+            retval = [idx for idx, frame in enumerate(self._detected_faces.current_faces)
+                      if any(face.aligned.average_distance > distance for face in frame)]
         else:
             retval = range(len(face_count_per_index))
         logger.trace("filter mode: %s, number_frames: %s", self._globals.filter_mode, len(retval))
@@ -646,7 +667,7 @@ class FaceUpdate():
             aligned = AlignedFace(face.landmarks_xy,
                                   centering="face",
                                   size=min(self._globals.frame_display_dims))
-            landmark = aligned.landmarks[landmark_index]
+            landmark = aligned.landmarks[landmark_index]  # pylint:disable=unsubscriptable-object
             landmark += (shift_x, shift_y)
             matrix = aligned.adjusted_matrix
             matrix = cv2.invertAffineTransform(matrix)
@@ -661,7 +682,6 @@ class FaceUpdate():
                     face.landmarks_xy[idx] = lmk
         else:
             face.landmarks_xy[landmark_index] += (shift_x, shift_y)
-        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._globals.tk_update.set(True)
 
     def landmarks(self, frame_index, face_index, shift_x, shift_y):
@@ -689,7 +709,6 @@ class FaceUpdate():
         face.x += shift_x
         face.y += shift_y
         face.landmarks_xy += (shift_x, shift_y)
-        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._globals.tk_update.set(True)
 
     def landmarks_rotate(self, frame_index, face_index, angle, center):
@@ -712,7 +731,6 @@ class FaceUpdate():
         rot_mat = cv2.getRotationMatrix2D(tuple(center.astype("float32")), angle, 1.)
         face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
                                           rot_mat).squeeze()
-        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._globals.tk_update.set(True)
 
     def landmarks_scale(self, frame_index, face_index, scale, center):
@@ -733,7 +751,6 @@ class FaceUpdate():
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
         face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
-        face.mask = self._extractor.get_masks(frame_index, face_index)
         self._globals.tk_update.set(True)
 
     def mask(self, frame_index, face_index, mask, mask_type):
@@ -782,12 +799,24 @@ class FaceUpdate():
             # No previous/next frame available
             return
         logger.debug("Copying alignments from frame %s to frame: %s", idx, frame_index)
-        faces.extend(deepcopy(self._faces_at_frame_index(idx)))
+
+        # aligned_face cannot be deep copied, so remove and recreate
+        to_copy = self._faces_at_frame_index(idx)
+        for face in to_copy:
+            face.aligned = None
+        copied = deepcopy(to_copy)
+
+        for old_face, new_face in zip(to_copy, copied):
+            old_face.load_aligned(None)
+            new_face.load_aligned(None)
+
+        faces.extend(copied)
         self._tk_face_count_changed.set(True)
         self._globals.tk_update.set(True)
 
     def post_edit_trigger(self, frame_index, face_index):
-        """ Update the jpg thumbnail and the viewport thumbnail on a face edit.
+        """ Update the jpg thumbnail, the viewport thumbnail, the landmark masks and the aligned
+        face on a face edit.
 
         Parameters
         ----------
@@ -797,11 +826,16 @@ class FaceUpdate():
             The face index within the frame
         """
         face = self._frame_faces[frame_index][face_index]
+        face.load_aligned(None, force=True)  # Update average distance
+        face.mask = self._extractor.get_masks(frame_index, face_index)
+
         aligned = AlignedFace(face.landmarks_xy,
                               image=self._globals.current_frame["image"],
                               centering="head",
                               size=96)
         face.thumbnail = generate_thumbnail(aligned.face, size=96)
+        if self._globals.filter_mode == "Misaligned Faces":
+            self._detected_faces.tk_face_count_changed.set(True)
         self._tk_edited.set(True)
 
 

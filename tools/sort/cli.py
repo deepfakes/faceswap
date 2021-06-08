@@ -43,15 +43,17 @@ class SortArgs(FaceSwapArgs):
             opts=('-s', '--sort-by'),
             action=Radio,
             type=str,
-            choices=("blur", "blur-fft", "face", "face-cnn", "face-cnn-dissim", "face-yaw", "hist",
-                     "hist-dissim", "color-gray", "color-luma", "color-green", "color-orange",
-                     "size"),
+            choices=("blur", "blur-fft", "distance", "face", "face-cnn", "face-cnn-dissim",
+                     "face-yaw", "hist", "hist-dissim", "color-gray", "color-luma", "color-green",
+                     "color-orange", "size"),
             dest='sort_method',
             group=_("sort settings"),
             default="face",
             help=_("R|Sort by method. Choose how images are sorted. "
                    "\nL|'blur': Sort faces by blurriness."
                    "\nL|'blur-fft': Sort faces by fft filtered blurriness."
+                   "\nL|'distance' Sort faces by the estimated distance of the alignments from an "
+                   "'average' face. This can be useful for eliminating misaligned faces."
                    "\nL|'face': Use VGG Face to sort by face similarity. This uses a pairwise "
                    "clustering algorithm to check the distances between 512 features on every "
                    "face in your set and order them appropriately."

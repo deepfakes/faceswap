@@ -422,9 +422,9 @@ class TkGlobals():
             The variable name as key, the variable as value
         """
         retval = dict()
-        for name in ("frame_index", "transport_index", "face_index"):
+        for name in ("frame_index", "transport_index", "face_index", "filter_distance"):
             var = tk.IntVar()
-            var.set(0)
+            var.set(10 if name == "filter_distance" else 0)
             retval[name] = var
         for name in ("update", "update_active_viewport", "is_zoomed"):
             var = tk.BooleanVar()
@@ -502,6 +502,12 @@ class TkGlobals():
         """ :class:`tkinter.StringVar`: The variable holding the currently selected navigation
         filter mode. """
         return self._tk_vars["filter_mode"]
+
+    @property
+    def tk_filter_distance(self):
+        """ :class:`tkinter.DoubleVar`: The variable holding the currently selected threshold
+        distance for misaligned filter mode. """
+        return self._tk_vars["filter_distance"]
 
     @property
     def tk_faces_size(self):

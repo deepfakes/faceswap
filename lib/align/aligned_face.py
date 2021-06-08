@@ -262,6 +262,18 @@ class AlignedFace():
         return self._cache["landmarks"][0]
 
     @property
+    def normalized_landmarks(self):
+        """ :class:`numpy.ndarray`: The 68 point facial landmarks normalized to 0.0 - 1.0 as
+        aligned by Umeyama. """
+        with self._cache["landmarks_normalized"][1]:
+            if self._cache["landmarks_normalized"][0] is None:
+                lms = np.expand_dims(self._frame_landmarks, axis=1)
+                lms = cv2.transform(lms, self._matrices["legacy"], lms.shape).squeeze()
+                logger.trace("normalized landmarks: %s", lms)
+                self._cache["landmarks_normalized"][0] = lms
+        return self._cache["landmarks_normalized"][0]
+
+    @property
     def interpolators(self):
         """ tuple: (`interpolator` and `reverse interpolator`) for the :attr:`adjusted matrix`. """
         with self._cache["interpolators"][1]:
@@ -270,6 +282,18 @@ class AlignedFace():
                 logger.trace("interpolators: %s", interpolators)
                 self._cache["interpolators"][0] = interpolators
         return self._cache["interpolators"][0]
+
+    @property
+    def average_distance(self):
+        """ float: The average distance of the core landmarks (18-67) from the mean face that was
+        used for aligning the image. """
+        with self._cache["average_distance"][1]:
+            if self._cache["average_distance"][0] is None:
+                # pylint:disable=unsubscriptable-object
+                average_distance = np.mean(np.abs(self.normalized_landmarks[17:] - _MEAN_FACE))
+                logger.trace("average_distance: %s", average_distance)
+                self._cache["average_distance"][0] = average_distance
+        return self._cache["average_distance"][0]
 
     @classmethod
     def _set_cache(cls):
@@ -286,6 +310,8 @@ class AlignedFace():
         return dict(pose=[None, Lock()],
                     original_roi=[None, Lock()],
                     landmarks=[None, Lock()],
+                    landmarks_normalized=[None, Lock()],
+                    average_distance=[None, Lock()],
                     adjusted_matrix=[None, Lock()],
                     interpolators=[None, Lock()],
                     head_size=[dict(), Lock()],

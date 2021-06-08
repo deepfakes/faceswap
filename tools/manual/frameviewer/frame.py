@@ -42,6 +42,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self._globals = tk_globals
         self._det_faces = detected_faces
+        self._optional_widgets = dict()
 
         self._actions_frame = ActionsFrame(self)
         main_frame = ttk.Frame(self)
@@ -81,7 +82,9 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             end=_("Go to Last Frame (END)"),
             extract=_("Extract the faces to a folder... (Ctrl+E)"),
             save=_("Save the Alignments file (Ctrl+S)"),
-            mode=_("Filter Frames to only those Containing the Selected Item (F)"))
+            mode=_("Filter Frames to only those Containing the Selected Item (F)"),
+            distance=_("Set the distance from an 'average face' to be considered misaligned. "
+                       "Higher distances are more restrictive"))
 
     @property
     def _btn_action(self):
@@ -131,13 +134,11 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
     @property
     def _filter_modes(self):
         """ list: The filter modes combo box values """
-        return ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces"]
+        return ["All Frames", "Has Face(s)", "No Faces", "Multiple Faces", "Misaligned Faces"]
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
-        self._globals.tk_transport_index.trace("w", self._set_frame_index)
         max_frame = self._globals.frame_count - 1
-
         frame = ttk.Frame(self._transport_frame)
 
         frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 5))
@@ -163,6 +164,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                         to=max_frame,
                         command=cmd)
         nav.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._globals.tk_transport_index.trace("w", self._set_frame_index)
         return dict(entry=tbox, scale=nav, label=lbl)
 
     def _set_frame_index(self, *args):  # pylint:disable=unused-argument
@@ -195,9 +197,10 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                 wgt = ttk.Button(frame, image=icons[icon], command=self._btn_action[action])
                 wgt.state(state)
             else:
-                wgt = self._add_filter_mode_combo(frame)
+                wgt = self._add_filter_section(frame)
             wgt.pack(side=side, padx=padx)
-            Tooltip(wgt, text=self._helptext[action])
+            if action != "mode":
+                Tooltip(wgt, text=self._helptext[action])
             buttons[action] = wgt
         logger.debug("Transport buttons: %s", buttons)
         return buttons
@@ -207,8 +210,33 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._navigation.tk_is_playing.trace("w", self._play)
         self._det_faces.tk_unsaved.trace("w", self._toggle_save_state)
 
+    def _add_filter_section(self, frame):
+        """ Add the section that holds the filter mode combo and any optional filter widgets
+
+        Parameters
+        ----------
+        frame: :class:`tkinter.ttk.Frame`
+            The Frame that holds the filter section
+
+        Returns
+        -------
+        :class:`tkinter.ttk.Frame`
+            The filter section frame
+        """
+        filter_frame = ttk.Frame(frame)
+        self._add_filter_mode_combo(filter_frame)
+        self._add_filter_threshold_slider(filter_frame)
+        filter_frame.pack(side=tk.RIGHT)
+        return filter_frame
+
     def _add_filter_mode_combo(self, frame):
-        """ Add the navigation mode combo box to the transport frame """
+        """ Add the navigation mode combo box to the filter frame.
+
+        Parameters
+        ----------
+        frame: :class:`tkinter.ttk.Frame`
+            The Filter Frame that holds the filter combo box
+        """
         self._globals.tk_filter_mode.set("All Frames")
         self._globals.tk_filter_mode.trace("w", self._navigation.nav_scale_callback)
         nav_frame = ttk.Frame(frame)
@@ -220,7 +248,52 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
             state="readonly",
             values=self._filter_modes)
         combo.pack(side=tk.RIGHT)
-        return nav_frame
+        Tooltip(nav_frame, text=self._helptext["mode"])
+        nav_frame.pack(side=tk.RIGHT)
+
+    def _add_filter_threshold_slider(self, frame):
+        """ Add the optional filter threshold slider for misaligned filter to the filter frame.
+
+        Parameters
+        ----------
+        frame: :class:`tkinter.ttk.Frame`
+            The Filter Frame that holds the filter threshold slider
+        """
+        slider_frame = ttk.Frame(frame)
+        tk_var = self._globals.tk_filter_distance
+
+        min_max = (5, 20)
+        ctl_frame = ttk.Frame(slider_frame)
+        ctl_frame.pack(padx=2, side=tk.RIGHT)
+
+        lbl = ttk.Label(ctl_frame, text="Distance:", anchor=tk.W)
+        lbl.pack(side=tk.LEFT, anchor=tk.N, expand=True)
+
+        tbox = ttk.Entry(ctl_frame, width=6, textvariable=tk_var, justify=tk.RIGHT)
+        tbox.pack(padx=(0, 5), side=tk.RIGHT)
+
+        ctl = ttk.Scale(
+            ctl_frame,
+            variable=tk_var,
+            command=lambda val, var=tk_var, dt=int, rn=1, mm=min_max:
+            set_slider_rounding(val, var, dt, rn, mm))
+        ctl["from_"] = min_max[0]
+        ctl["to"] = min_max[1]
+        ctl.pack(padx=5, fill=tk.X, expand=True)
+        for item in (tbox, ctl):
+            Tooltip(item,
+                    text=self._helptext["distance"],
+                    wrap_length=200)
+        tk_var.trace("w", self._navigation.nav_scale_callback)
+        self._optional_widgets["distance_slider"] = slider_frame
+
+    def pack_threshold_slider(self):
+        """ Display or hide the threshold slider depending on the current filter mode. For
+        misaligned faces filter, display the slider. Hide for all other filters. """
+        if self._globals.tk_filter_mode.get() == "Misaligned Faces":
+            self._optional_widgets["distance_slider"].pack(side=tk.LEFT)
+        else:
+            self._optional_widgets["distance_slider"].pack_forget()
 
     def cycle_filter_mode(self):
         """ Cycle the navigation mode combo entry """

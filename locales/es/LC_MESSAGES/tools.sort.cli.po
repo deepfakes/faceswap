@@ -5,8 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-03-23 15:33+0000\n"
-"PO-Revision-Date: 2021-03-23 15:36+0000\n"
+"POT-Creation-Date: 2021-06-07 12:34+0100\n"
+"PO-Revision-Date: 2021-06-07 12:38+0100\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 2.4.2\n"
+"X-Generator: Poedit 2.4.3\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: tools/sort/cli.py:14
@@ -38,7 +38,7 @@ msgstr "Directorio de entrada de caras alineadas."
 msgid "Output directory for sorted aligned faces."
 msgstr "Directorio de salida para las caras alineadas ordenadas."
 
-#: tools/sort/cli.py:50 tools/sort/cli.py:93
+#: tools/sort/cli.py:50 tools/sort/cli.py:96
 msgid "sort settings"
 msgstr "ajustes de ordenación"
 
@@ -46,6 +46,9 @@ msgstr "ajustes de ordenación"
 msgid ""
 "R|Sort by method. Choose how images are sorted. \n"
 "L|'blur': Sort faces by blurriness.\n"
+"L|'blur-fft': Sort faces by fft filtered blurriness.\n"
+"L|'distance' Sort faces by the estimated distance of the alignments from an "
+"'average' face. This can be useful for eliminating misaligned faces.\n"
 "L|'face': Use VGG Face to sort by face similarity. This uses a pairwise "
 "clustering algorithm to check the distances between 512 features on every "
 "face in your set and order them appropriately.\n"
@@ -75,6 +78,10 @@ msgid ""
 msgstr ""
 "R|Método de ordenación. Elige cómo se ordenan las imágenes. \n"
 "L|'blur': Ordena las caras por desenfoque.\n"
+"L|'blur-fft': Ordena las caras por fft filtrado desenfoque.\n"
+"L|'distance' Ordene las caras por la distancia estimada de las alineaciones "
+"desde una cara \"promedio\". Esto puede resultar útil para eliminar caras "
+"desalineadas.\n"
 "L|'face': Utiliza VGG Face para ordenar por similitud de caras. Esto utiliza "
 "un algoritmo de agrupación por pares para comprobar las distancias entre 512 "
 "características en cada cara en su conjunto y ordenarlos adecuadamente.\n"
@@ -102,12 +109,12 @@ msgstr ""
 "fuentes de menor resolución se ordenarán en último lugar.\n"
 "Por defecto: face"
 
-#: tools/sort/cli.py:82 tools/sort/cli.py:109 tools/sort/cli.py:121
-#: tools/sort/cli.py:132
+#: tools/sort/cli.py:85 tools/sort/cli.py:112 tools/sort/cli.py:124
+#: tools/sort/cli.py:135
 msgid "output"
 msgstr "salida"
 
-#: tools/sort/cli.py:83
+#: tools/sort/cli.py:86
 msgid ""
 "Keeps the original files in the input directory. Be careful when using this "
 "with rename grouping and no specified output directory as this would keep "
@@ -118,7 +125,7 @@ msgstr ""
 "de salida, ya que esto mantendría los archivos originales y renombrados en "
 "el mismo directorio."
 
-#: tools/sort/cli.py:95
+#: tools/sort/cli.py:98
 msgid ""
 "Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' and 'hist' methods. The lower the value the more discriminating the "
@@ -139,7 +146,7 @@ msgstr ""
 "podría resultar en la creación de muchos directorios. Por defecto: 'face-"
 "cnn' = 7.2, 'hist' = 0.3"
 
-#: tools/sort/cli.py:110
+#: tools/sort/cli.py:113
 msgid ""
 "R|Default: rename.\n"
 "L|'folders': files are sorted using the -s/--sort-by method, then they are "
@@ -153,7 +160,7 @@ msgstr ""
 "L|'rename': los archivos se ordenan utilizando el método -s/--sort-by y "
 "luego se renombran."
 
-#: tools/sort/cli.py:123
+#: tools/sort/cli.py:126
 msgid ""
 "Group by method. When -fp/--final-processing by folders choose the how the "
 "images are grouped after sorting. Default: hist"
@@ -161,7 +168,7 @@ msgstr ""
 "Método de agrupamiento. Elija la forma de agrupar las imágenes, en el caso "
 "de hacerlo por carpetas, después de la clasificación. Por defecto: hist"
 
-#: tools/sort/cli.py:134
+#: tools/sort/cli.py:137
 msgid ""
 "Integer value. Number of folders that will be used to group by blur and face-"
 "yaw. For blur folder 0 will be the least blurry, while the last folder will "
@@ -182,11 +189,11 @@ msgstr ""
 "uniformemente en el número de carpetas, las imágenes restantes se colocan en "
 "la última carpeta. Valor por defecto: 5"
 
-#: tools/sort/cli.py:145 tools/sort/cli.py:155
+#: tools/sort/cli.py:148 tools/sort/cli.py:158
 msgid "settings"
 msgstr "ajustes"
 
-#: tools/sort/cli.py:147
+#: tools/sort/cli.py:150
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -198,7 +205,7 @@ msgstr ""
 "se especifica ningún archivo de registro con '--log-file', se creará un "
 "archivo 'sort_log.json' en el directorio de entrada."
 
-#: tools/sort/cli.py:158
+#: tools/sort/cli.py:161
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "
