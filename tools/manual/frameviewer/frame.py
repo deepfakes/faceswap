@@ -135,7 +135,6 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
 
     def _add_nav(self):
         """ Add the slider to navigate through frames """
-        self._globals.tk_transport_index.trace("w", self._set_frame_index)
         max_frame = self._globals.frame_count - 1
 
         frame = ttk.Frame(self._transport_frame)
@@ -163,6 +162,7 @@ class DisplayFrame(ttk.Frame):  # pylint:disable=too-many-ancestors
                         to=max_frame,
                         command=cmd)
         nav.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._globals.tk_transport_index.trace("w", self._set_frame_index)
         return dict(entry=tbox, scale=nav, label=lbl)
 
     def _set_frame_index(self, *args):  # pylint:disable=unused-argument
