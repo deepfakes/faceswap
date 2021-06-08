@@ -1,4 +1,5 @@
 # deepfakes_faceswap
+
 <p align="center">
   <a href="https://faceswap.dev"><img src="https://i.imgur.com/zHvjHnb.png"></img></a>
 <br />FaceSwap is a tool that utilizes deep learning to recognize and swap faces in pictures and videos.
@@ -56,7 +57,7 @@ Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
 ## FaceSwap has ethical uses.
 
-When faceswapping was first developed and published, the technology was groundbreaking, it was a huge step in AI development. It was also completely ignored outside of academia because the code was confusing and fragmentary. It required a thorough understanding of complicated AI techniques and took a lot of effort to figure it out. Until one individual brought it together into a single, cohesive collection. It ran, it worked, and as is so often the way with new technology emerging on the internet, it was immediately used to create inappropriate content. Despite the inappropriate uses the software was given originally, it was the first AI code that anyone could download, run and learn by experimentation without having a Ph.D. in math, computer theory, psychology, and more. Before "deepfakes" these techniques were like black magic, only practiced by those who could understand all of the inner workings as described in esoteric and endlessly complicated books and papers.
+When faceswapping was first developed and published, the technology was groundbreaking. It was a huge step in AI development. It was also completely ignored outside of academia because the code was confusing and fragmentary. It required a thorough understanding of complicated AI techniques and took a lot of effort to figure it out. Until one individual brought it together into a single, cohesive collection. It ran, it worked, and as is so often the way with new technology emerging on the internet, it was immediately used to create inappropriate content. Despite the inappropriate uses the software was the first AI code that anyone could download, run and learn by experimentation without having a Ph.D. in math, computer theory, psychology, and more. Before "deepfakes" these techniques were like black magic, only practiced by those who could understand all of the inner workings as described in esoteric and endlessly complicated books and papers.
 
 "Deepfakes" changed all that and anyone could participate in AI development. To us, developers, the release of this code opened up a fantastic learning opportunity. It allowed us to build on ideas developed by others, collaborate with a variety of skilled coders, experiment with AI whilst learning new skills and ultimately contribute towards an emerging technology which will only see more mainstream use as it progresses.
 
@@ -72,36 +73,43 @@ We are not trying to denigrate celebrities or to demean anyone. We are programme
 We are very troubled by the fact that FaceSwap can be used for unethical and disreputable things. However, we support the development of tools and techniques that can be used ethically as well as provide education and experience in AI for anyone who wants to learn it hands-on. We will take a zero tolerance approach to anyone using this software for any unethical purposes and will actively discourage any such uses.
 
 # How To setup and run the project
+
 FaceSwap is a Python program that will run on multiple Operating Systems including Windows, Linux, and MacOS.
 
 See [INSTALL.md](INSTALL.md) for full installation instructions. You will need a modern GPU with CUDA support for best performance. AMD GPUs are partially supported.
 
 # Overview
+
 The project has multiple entry points. You will have to:
- - Gather photos and/or videos
- - **Extract** faces from your raw photos
- - **Train** a model on the faces extracted from the photos/videos
- - **Convert** your sources with the model
+
+- Gather photos and/or videos
+- **Extract** faces from your raw photos
+- **Train** a model on the faces extracted from the photos/videos
+- **Convert** your sources with the model
 
 Check out [USAGE.md](USAGE.md) for more detailed instructions.
 
 ## Extract
+
 From your setup folder, run `python faceswap.py extract`. This will take photos from `src` folder and extract faces into `extract` folder.
 
 ## Train
+
 From your setup folder, run `python faceswap.py train`. This will take photos from two folders containing pictures of both faces and train a model that will be saved inside the `models` folder.
 
 ## Convert
+
 From your setup folder, run `python faceswap.py convert`. This will take photos from `original` folder and apply new faces into `modified` folder.
 
 ## GUI
+
 Alternatively, you can run the GUI by running `python faceswap.py gui`
 
 # General notes:
+
 - All of the scripts mentioned have `-h`/`--help` options with arguments that they will accept. You're smart, you can figure out how this works, right?!
 
-NB: there is a conversion tool for video. This can be accessed by running `python tools.py effmpeg -h`. Alternatively, you can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to the video.
-
+NB: There is a conversion tool for video. This can be accessed by running `python tools.py effmpeg -h`. Alternatively, you can use [ffmpeg](https://www.ffmpeg.org) to convert video into photos, process images, and convert images back to the video.
 
 **Some tips:**
 
@@ -109,24 +117,32 @@ Reusing existing models will train much faster than starting from nothing.
 If there is not enough training data, start with someone who looks similar, then switch the data.
 
 # Help I need support!
+
 ## Discord Server
+
 Your best bet is to join the [FaceSwap Discord server](https://discord.gg/FC54sYg) where there are plenty of users willing to help. Please note that, like this repo, this is a SFW Server!
 
 ## FaceSwap Forum
+
 Alternatively, you can post questions in the [FaceSwap Forum](https://faceswap.dev/forum). Please do not post general support questions in this repo as they are liable to be deleted without response.
 
 # Donate
+
 The developers work tirelessly to improve and develop FaceSwap. Many hours have been put in to provide the software as it is today, but this is an extremely time-consuming process with no financial reward. If you enjoy using the software, please consider donating to the devs, so they can spend more time implementing improvements.
 
 ## Patreon
+
 The best way to support us is through our Patreon page:
 
 [![become-a-patron](https://c5.patreon.com/external/logo/become_a_patron_button.png)](https://www.patreon.com/bePatron?u=23238350)
 
 ## One time Donations
+
 Alternatively you can give a one off donation to any of our Devs:
+
 ### @torzdf
- There is very little FaceSwap code that hasn't been touched by torzdf. He is responsible for implementing the GUI, FAN aligner, MTCNN detector and porting the Villain, DFL-H128 and DFaker models to FaceSwap, as well as significantly improving many areas of the code.
+
+There is very little FaceSwap code that hasn't been touched by torzdf. He is responsible for implementing the GUI, FAN aligner, MTCNN detector and porting the Villain, DFL-H128 and DFaker models to FaceSwap, as well as significantly improving many areas of the code.
 
 **Bitcoin:** bc1qpm22suz59ylzk0j7qk5e4c7cnkjmve2rmtrnc6
 
@@ -137,6 +153,7 @@ Alternatively you can give a one off donation to any of our Devs:
 **Paypal:** [![torzdf](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=JZ8PP3YE9J62L)
 
 ### @andenixa
+
 Creator of the Unbalanced and OHR models, as well as expanding various capabilities within the training process. Andenixa is currently working on new models and will take requests for donations.
 
 **Paypal:** [![andenixa](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=NRVLQYGS6NWTU)
@@ -144,54 +161,64 @@ Creator of the Unbalanced and OHR models, as well as expanding various capabilit
 # How to contribute
 
 ## For people interested in the generative models
- - Go to the 'faceswap-model' to discuss/suggest/commit alternatives to the current algorithm.
+
+- Go to the 'faceswap-model' to discuss/suggest/commit alternatives to the current algorithm.
 
 ## For devs
- - Read this README entirely
- - Fork the repo
- - Play with it
- - Check issues with the 'dev' tag
- - For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvements
+
+- Read this README entirely
+- Fork the repo
+- Play with it
+- Check issues with the 'dev' tag
+- For devs more interested in computer vision and openCV, look at issues with the 'opencv' tag. Also feel free to add your own alternatives/improvements.
 
 ## For non-dev advanced users
- - Read this README entirely
- - Clone the repo
- - Play with it
- - Check issues with the 'advuser' tag
- - Also go to the '[faceswap Forum](https://faceswap.dev/forum)' and help others.
+
+- Read this README entirely
+- Clone the repo
+- Play with it
+- Check issues with the 'advuser' tag
+- Also go to the '[faceswap Forum](https://faceswap.dev/forum)' and help others.
 
 ## For end-users
- - Get the code here and play with it if you can
- - You can also go to the [faceswap Forum](https://faceswap.dev/forum) and help or get help from others.
- - Be patient. This is a relatively new technology for developers as well. Much effort is already being put into making this program easy to use for the average user. It just takes time!
- - **Notice** Any issue related to running the code has to be opened in the [faceswap Forum](https://faceswap.dev/forum)!
+
+- Get the code here and play with it if you can
+- You can also go to the [faceswap Forum](https://faceswap.dev/forum) and help or get help from others.
+- Be patient. This is a relatively new technology for developers as well. Much effort is already being put into making this program easy to use for the average user. It just takes time!
+- **Notice** Any issue related to running the code has to be opened in the [faceswap Forum](https://faceswap.dev/forum)!
 
 ## For haters
+
 Sorry, no time for that.
 
 # About github.com/deepfakes
 
 ## What is this repo?
+
 It is a community repository for active users.
 
 ## Why this repo?
+
 The joshua-wu repo seems not active. Simple bugs like missing _http://_ in front of urls have not been solved since days.
 
 ## Why is it named 'deepfakes' if it is not /u/deepfakes?
- 1. Because a typosquat would have happened sooner or later as project grows
- 2. Because we wanted to recognize the original author
- 3. Because it will better federate contributors and users
+
+1.  Because a typosquat would have happened sooner or later as project grows
+2.  Because we wanted to recognize the original author
+3.  Because it will better federate contributors and users
 
 ## What if /u/deepfakes feels bad about that?
+
 This is a friendly typosquat, and it is fully dedicated to the project. If /u/deepfakes wants to take over this repo/user and drive the project, he is welcomed to do so (Raise an issue, and he will be contacted on Reddit). Please do not send /u/deepfakes messages for help with the code you find here.
 
 # About machine learning
 
 ## How does a computer know how to recognize/shape faces? How does machine learning work? What is a neural network?
+
 It's complicated. Here's a good video that makes the process understandable:
 [![How Machines Learn](https://img.youtube.com/vi/R9OHn5ZF4Uo/0.jpg)](https://www.youtube.com/watch?v=R9OHn5ZF4Uo)
 
-Here's a slightly more in depth video that tries to explain the basic functioning of a neural network:
+Here's a slightly more in-depth video that tries to explain the basic functioning of a neural network:
 [![How Machines Learn](https://img.youtube.com/vi/aircAruvnKk/0.jpg)](https://www.youtube.com/watch?v=aircAruvnKk)
 
 tl;dr: training data + trial and error
