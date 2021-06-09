@@ -664,7 +664,7 @@ class Sort():
             filename_list, image_list = self._get_images()
             blurs = [self.estimate_blur(img) for img in image_list]
             temp_list = list(zip(filename_list, blurs))
-        if group_method == 'group_blur_fft':
+        elif group_method == 'group_blur_fft':
             filename_list, image_list = self._get_images()
             fft_blurs = [self.estimate_blur_fft(img) for img in image_list]
             temp_list = list(zip(filename_list, fft_blurs))
