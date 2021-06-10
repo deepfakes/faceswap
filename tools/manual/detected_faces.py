@@ -447,7 +447,7 @@ class Filter():
         retval = (
             filter_mode == "All Frames" or
             (filter_mode == "No Faces" and not frame_faces) or
-            (filter_mode == "Has Faces" and frame_faces) or
+            (filter_mode == "Has Face(s)" and frame_faces) or
             (filter_mode == "Multiple Faces" and len(frame_faces) > 1) or
             (filter_mode == "Misaligned Faces" and any(face.aligned.average_distance > distance
              for face in frame_faces)))
