@@ -96,6 +96,8 @@ class Extractor():
         # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
         # for queue) at each point. Adding more just stacks RAM with no speed benefit.
         self._queue_size = 1
+        # TODO Calculate scaling for more plugins than currently exist in _parallel_scaling
+        self._scaling_fallback = 0.4
         self._vram_stats = self._get_vram_stats()
         self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
         self._align = self._load_align(aligner, configfile, normalize_method, re_feed)
@@ -298,7 +300,7 @@ class Extractor():
         logger.debug("VRAM requirements: %s. Plugins requiring VRAM: %s",
                      vrams, vram_required_count)
         retval = (sum(vrams.values()) *
-                  self._parallel_scaling[vram_required_count])
+                  self._parallel_scaling.get(vram_required_count, self._scaling_fallback))
         logger.debug("Total VRAM required: %s", retval)
         return retval
 
@@ -478,7 +480,7 @@ class Extractor():
         for phase in self._flow:
             num_plugins = len([p for p in current_phase if self._vram_per_phase[p] > 0])
             num_plugins += 1 if self._vram_per_phase[phase] > 0 else 0
-            scaling = self._parallel_scaling[num_plugins]
+            scaling = self._parallel_scaling.get(num_plugins, self._scaling_fallback)
             required = sum(self._vram_per_phase[p] for p in current_phase + [phase]) * scaling
             logger.debug("Num plugins for phase: %s, scaling: %s, vram required: %s",
                          num_plugins, scaling, required)
@@ -583,8 +585,8 @@ class Extractor():
         batch_required = sum([plugin.vram_per_batch * plugin.batchsize
                               for plugin in self._active_plugins])
         gpu_plugins = [p for p in self._current_phase if self._vram_per_phase[p] > 0]
-        plugins_required = sum([self._vram_per_phase[p]
-                                for p in gpu_plugins]) * self._parallel_scaling[len(gpu_plugins)]
+        scaling = self._parallel_scaling.get(len(gpu_plugins), self._scaling_fallback)
+        plugins_required = sum([self._vram_per_phase[p] for p in gpu_plugins]) * scaling
         if plugins_required + batch_required <= self._vram_stats["vram_free"]:
             logger.debug("Plugin requirements within threshold: (plugins_required: %sMB, "
                          "vram_free: %sMB)", plugins_required, self._vram_stats["vram_free"])
