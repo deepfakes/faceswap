@@ -449,7 +449,7 @@ class VisibleObjects():
 
         self._visible_grid, self._visible_faces = self._grid.visible_area
         if (isinstance(self._images, np.ndarray) and isinstance(self._visible_grid, np.ndarray)
-                and self._visible_grid.shape[-1] != self._images.shape[-1]):
+                and self._visible_grid.shape[1:] != self._images.shape):
             self._reset_viewport()
 
         required_rows = self._visible_grid.shape[1] if self._grid.is_valid else 0
