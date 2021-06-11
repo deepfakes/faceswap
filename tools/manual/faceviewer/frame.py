@@ -530,7 +530,8 @@ class Grid():
         height = self.dimensions[1]
         visible = (max(0, floor(height * self._canvas.yview()[0]) - self._face_size),
                    ceil(height * self._canvas.yview()[1]))
-        logger.trace("visible: %s", visible)
+        logger.trace("height: %s, yview: %s, face_size: %s, visible: %s",
+                     height, self._canvas.yview(), self._face_size, visible)
         y_points = self._grid[3, :, 1]
         top = np.searchsorted(y_points, visible[0], side="left")
         bottom = np.searchsorted(y_points, visible[1], side="right")

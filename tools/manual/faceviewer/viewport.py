@@ -192,7 +192,7 @@ class Viewport():
                         or frame_idx == self._active_frame.frame_index
                         or refresh_annotations):
                     landmarks = self.get_landmarks(frame_idx, face_idx, face, top_left,
-                                                   refresh=refresh_annotations)
+                                                   refresh=True)
                     self._locate_mesh(mesh_ids, landmarks)
 
     def _discard_tk_faces(self):
@@ -351,7 +351,7 @@ class Viewport():
             If the given coordinates are not over a face, then the frame and face indices will be
             -1
         """
-        if point_x > self._grid.dimensions[0]:
+        if not self._grid.is_valid or point_x > self._grid.dimensions[0]:
             retval = np.array((-1, -1, -1, -1))
         else:
             x_idx = np.searchsorted(self._objects.visible_grid[2, 0, :], point_x, side="left") - 1
@@ -436,7 +436,11 @@ class VisibleObjects():
     def _top_left(self):
         """ :class:`numpy.ndarray`: The canvas (`x`, `y`) position of the face currently in the
         viewable area's top left position. """
-        return np.array(self._canvas.coords(self._images[0][0]), dtype="int")
+        if self._images is None or not np.any(self._images):
+            retval = [0, 0]
+        else:
+            retval = self._canvas.coords(self._images[0][0])
+        return np.array(retval, dtype="int")
 
     def update(self):
         """ Load and unload thumbnails in the visible area of the faces viewer. """
@@ -446,33 +450,42 @@ class VisibleObjects():
         self._visible_grid, self._visible_faces = self._grid.visible_area
         if (isinstance(self._images, np.ndarray) and isinstance(self._visible_grid, np.ndarray)
                 and self._visible_grid.shape[-1] != self._images.shape[-1]):
-            self._recycle_objects()
+            self._reset_viewport()
 
         required_rows = self._visible_grid.shape[1] if self._grid.is_valid else 0
         existing_rows = len(self._images)
         logger.trace("existing_rows: %s. required_rows: %s", existing_rows, required_rows)
 
         if existing_rows > required_rows:
-            for image_id, mesh_ids in zip(self._images[required_rows: existing_rows].flatten(),
-                                          self._meshes[required_rows: existing_rows].flatten()):
-                logger.trace("Hiding image id: %s", image_id)
-                self._canvas.itemconfig(image_id, image="")
-                for ids in mesh_ids.values():
-                    for mesh_id in ids:
-                        self._canvas.itemconfig(mesh_id, state="hidden")
-
+            self._remove_rows(existing_rows, required_rows)
         if existing_rows < required_rows:
             self._add_rows(existing_rows, required_rows)
 
         self._shift()
 
-    def _recycle_objects(self):
-        """  On a column count change, place all existing objects into the recycle bin so that
-        they can be used for the new grid shape and reset the objects size to the new size. """
+    def _reset_viewport(self):
+        """ Reset all objects in the viewport on a column count change. Reset the viewport size
+        to the newly specified face size. """
+        logger.debug("Resetting Viewport")
         self._size = self._viewport.face_size
         images = self._images.flatten().tolist()
         meshes = self._meshes.flatten().tolist()
+        self._recycle_objects(images, meshes)
+        self._images = []
+        self._meshes = []
 
+    def _recycle_objects(self, images, meshes):
+        """ Reset the visible property and position of the given objects and add to the recycle
+        bin.
+
+        Parameters
+        ---------
+        images: list
+            List of image_ids to be recycled
+        meshes: list
+            List of dictionaries containing the mesh annotation ids to be recycled
+        """
+        logger.debug("Recycling objects: (images: %s, meshes: %s)", len(images), len(meshes))
         for image_id in images:
             self._canvas.itemconfig(image_id, image="")
             self._canvas.coords(image_id, 0, 0)
@@ -486,8 +499,24 @@ class VisibleObjects():
         self._recycled["meshes"].extend(meshes)
         logger.trace("Recycled objects: %s", self._recycled)
 
-        self._images = []
-        self._meshes = []
+    def _remove_rows(self, existing_rows, required_rows):
+        """ Remove and recycle rows from the viewport that are not in the view area.
+
+        Parameters
+        ----------
+        existing_rows: int
+            The number of existing rows within the viewport
+        required_rows: int
+            The number of rows required by the viewport
+        """
+        logger.debug("Removing rows from viewport: (existing_rows: %s, required_rows: %s)",
+                     existing_rows, required_rows)
+        self._recycle_objects(self._images[required_rows: existing_rows].flatten().tolist(),
+                              self._meshes[required_rows: existing_rows].flatten().tolist())
+        self._images = self._images[:required_rows]
+        self._meshes = self._meshes[:required_rows]
+        logger.trace("self._images: %s, self._meshes: %s",
+                     self._images.shape, self._meshes.shape)
 
     def _add_rows(self, existing_rows, required_rows):
         """ Add rows to the viewport.
@@ -499,12 +528,14 @@ class VisibleObjects():
         required_rows: int
             The number of rows required by the viewport
         """
+        logger.debug("Adding rows to viewport: (existing_rows: %s, required_rows: %s)",
+                     existing_rows, required_rows)
         columns = self._grid.columns_rows[0]
         if not isinstance(self._images, np.ndarray):
             base_coords = [(col * self._size, 0) for col in range(columns)]
         else:
             base_coords = [self._canvas.coords(item_id) for item_id in self._images[0]]
-        logger.debug("existing rows: %s, required_rows: %s, base_coords: %s",
+        logger.trace("existing rows: %s, required_rows: %s, base_coords: %s",
                      existing_rows, required_rows, base_coords)
         images = []
         meshes = []
@@ -526,7 +557,7 @@ class VisibleObjects():
                          images.shape, meshes.shape)
             self._images = np.concatenate((self._images, images))
             self._meshes = np.concatenate((self._meshes, meshes))
-        logger.debug("self._images: %s, self._meshes: %s", self._images.shape, self._meshes.shape)
+        logger.trace("self._images: %s, self._meshes: %s", self._images.shape, self._meshes.shape)
 
     def _get_image(self, coordinates):
         """ Create or recycle a tkinter canvas image object with the given coordinates.
