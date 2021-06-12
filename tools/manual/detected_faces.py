@@ -608,6 +608,7 @@ class FaceUpdate():
         face_index = len(faces) - 1
 
         self.bounding_box(frame_index, face_index, pnt_x, width, pnt_y, height, aligner="cv2-dnn")
+        face.load_aligned(None)
         self._tk_face_count_changed.set(True)
 
     def delete(self, frame_index, face_index):
