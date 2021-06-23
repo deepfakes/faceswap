@@ -87,7 +87,7 @@ class DetectedFace():
         self.h = h  # pylint:disable=invalid-name
         self.landmarks_xy = landmarks_xy
         self.thumbnail = None
-        self.mask = dict() if mask is None else mask
+         self.mask = {} if mask is None else mask
 
         self.aligned = None
         logger.trace("Initialized %s", self.__class__.__name__)
@@ -259,7 +259,7 @@ class DetectedFace():
         self.aligned = None
 
         if alignment.get("mask", None) is not None:
-            self.mask = dict()
+            self.mask = {}
             for name, mask_dict in alignment["mask"].items():
                 self.mask[name] = Mask()
                 self.mask[name].from_dict(mask_dict)
@@ -298,7 +298,7 @@ class DetectedFace():
         self.y = alignment["y"]
         self.h = alignment["h"]
         self.landmarks_xy = np.array(alignment["landmarks_xy"], dtype="float32")
-        self.mask = dict()
+        self.mask = {}
         for name, mask_dict in alignment["mask"].items():
             self.mask[name] = Mask()
             self.mask[name].from_dict(mask_dict)
@@ -463,7 +463,7 @@ class Mask():
         self._affine_matrix = None
         self._interpolator = None
 
-        self._blur = dict()
+         self._blur = {}
         self._blur_kernel = 0
         self._threshold = 0.0
         self._sub_crop = dict(size=None, slice_in=[], slice_out=[])
@@ -678,7 +678,7 @@ class Mask():
             The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
             ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
-        retval = dict()
+         self._blur = {}
         for key in ("mask", "affine_matrix", "interpolator", "stored_size", "stored_centering"):
             retval[key] = getattr(self, self._attr_name(key))
         logger.trace({k: v if k != "mask" else type(v) for k, v in retval.items()})
@@ -693,7 +693,7 @@ class Mask():
             The :class:`Mask` for saving to an alignments file. Contains the keys ``mask``,
             ``affine_matrix``, ``interpolator``, ``stored_size``, ``stored_centering``
         """
-        retval = dict()
+        retval = {}
         for key in ("mask", "affine_matrix", "interpolator", "stored_size", "stored_centering"):
             val = getattr(self, self._attr_name(key))
             if isinstance(val, np.ndarray):
@@ -881,7 +881,7 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         return retval
 
 
-_HASHES_SEEN = dict()
+_HASHES_SEEN = {}
 
 
 def update_legacy_png_header(filename, alignments):
@@ -911,7 +911,7 @@ def update_legacy_png_header(filename, alignments):
     # effective enough
     folder = os.path.dirname(filename)
     if folder not in _HASHES_SEEN:
-        _HASHES_SEEN[folder] = dict()
+         _HASHES_SEEN[folder] = {}
     hashes_seen = _HASHES_SEEN[folder]
 
     in_image = read_image(filename, raise_error=True)
