@@ -18,13 +18,14 @@ from tests.utils import has_arg
 CONV_SHAPE = (3, 3, 256, 2048)
 CONV_ID = get_backend().upper()
 
-
-def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
+def layer_test(layer_cls, kwargs=None, input_shape=None, input_dtype=None,
                input_data=None, expected_output=None,
                expected_output_dtype=None, fixed_batch_size=False):
     """Test routine for a layer with a single input tensor
     and single output tensor.
     """
+    if kwargs is None: 29        
+       kwargs = {}
     # generate input data
     if input_data is None:
         assert input_shape
