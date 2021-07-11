@@ -719,7 +719,8 @@ class Sort():
             temp_list = list(zip(filename_list, histograms))
         elif group_method == 'group_black_pixels':
             filename_list, image_list = self._get_images()
-            black_pixels = [np.all(img == [0, 0, 0], axis=2).sum()/img.size*100*3 for img in image_list]
+            black_pixels = [np.ndarray.all(img == [0, 0, 0], axis=2).sum()/img.size*100*3
+                            for img in image_list]
             temp_list = list(zip(filename_list, black_pixels))
         else:
             raise ValueError("{} group_method not found.".format(group_method))

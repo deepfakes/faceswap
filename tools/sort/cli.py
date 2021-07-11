@@ -78,7 +78,8 @@ class SortArgs(FaceSwapArgs):
                    "faces further from the camera and from lower resolution sources will be "
                    "sorted last."
                    "\nL|'black-pixels': Sort images by their number of black pixels. Useful when "
-                   "faces are near borders and a large part of the image is black.\nDefault: face")))
+                   "faces are near borders and a large part of the image is black."
+                   "\nDefault: face")))
         argument_list.append(dict(
             opts=('-k', '--keep'),
             action='store_true',
@@ -136,16 +137,17 @@ class SortArgs(FaceSwapArgs):
             dest='num_bins',
             group=_("output"),
             default=5,
-            help=_("Integer value. Number of folders that will be used to group by blur, face-yaw "
-                   "and black-pixels. For blur folder 0 will be the least blurry, while the last "
-                   "folder will be the blurriest. For face-yaw the number of bins is by how much "
-                   "180 degrees is divided. So if you use 18, then each folder will be a 10 degree "
-                   "increment. Folder 0 will contain faces looking the most to the left whereas "
-                   "the last folder will contain the faces looking the most to the right. If the "
-                   "number of images doesn't divide evenly into the number of bins, the remaining "
-                   "images get put in the last bin. For black-pixels it represents the divider of "
-                   "the percentage of black pixels. For 10, first folder will have the faces with "
-                   "0 to 10% black pixels, second 11 to 20%, etc. Default value: 5")))
+            help=_("Integer value. Number of folders that will be used to group by blur, "
+                   "face-yaw and black-pixels. For blur folder 0 will be the least blurry, while "
+                   "the last folder will be the blurriest. For face-yaw the number of bins is by "
+                   "how much 180 degrees is divided. So if you use 18, then each folder will be "
+                   "a 10 degree increment. Folder 0 will contain faces looking the most to the "
+                   "left whereas the last folder will contain the faces looking the most to the "
+                   "right. If the number of images doesn't divide evenly into the number of "
+                   "bins, the remaining images get put in the last bin. For black-pixels it "
+                   "represents the divider of the percentage of black pixels. For 10, first "
+                   "folder will have the faces with 0 to 10% black pixels, second 11 to 20%, "
+                   "etc. Default value: 5")))
         argument_list.append(dict(
             opts=('-l', '--log-changes'),
             action='store_true',
