@@ -18,7 +18,7 @@ import numpy as np
 
 from tensorflow.python.framework import errors_impl as tf_errors
 
-from lib.align import AlignedFace
+from lib.align import AlignedFace, transform_image
 from lib.utils import get_backend, FaceswapError
 from plugins.extract._base import Extractor, ExtractMedia, logger
 
@@ -121,13 +121,34 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 self._queues["out"].put(item)
                 continue
             for f_idx, face in enumerate(item.detected_faces):
+
+                image = item.get_image_copy(self.color_format)
+                roi = np.ones((*item.image_size[:2], 1), dtype="float32")
+
+                if not self._image_is_aligned:
+                    # Add the ROI mask to image so we can get the ROI mask with a single warp
+                    image = np.concatenate([image, roi], axis=-1)
+
                 feed_face = AlignedFace(face.landmarks_xy,
-                                        image=item.get_image_copy(self.color_format),
+                                        image=image,
                                         centering=self._storage_centering,
                                         size=self.input_size,
                                         coverage_ratio=self.coverage_ratio,
                                         dtype="float32",
                                         is_aligned=self._image_is_aligned)
+
+                if not self._image_is_aligned:
+                    # Split roi mask from feed face alpha channel
+                    roi_mask = feed_face.face[..., 3]
+                    feed_face._face = feed_face.face[..., :3]  # pylint:disable=protected-access
+                else:
+                    # We have to do the warp here as AlignedFace did not perform it
+                    roi_mask = transform_image(roi,
+                                               feed_face.matrix,
+                                               feed_face.size,
+                                               padding=feed_face.padding)
+
+                batch.setdefault("roi_masks", []).append(roi_mask)
                 batch.setdefault("detected_faces", []).append(face)
                 batch.setdefault("feed_faces", []).append(feed_face)
                 batch.setdefault("filename", []).append(item.filename)
@@ -210,7 +231,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         ----------
         batch : dict
             The final ``dict`` from the `plugin` process. It must contain the `keys`:
-            ``detected_faces``, ``filename``, ``feed_faces``
+            ``detected_faces``, ``filename``, ``feed_faces``, ``roi_masks``
 
         Yields
         ------
@@ -218,9 +239,11 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             The :attr:`DetectedFaces` list will be populated for this class with the bounding
             boxes, landmarks and masks for the detected faces found in the frame.
         """
-        for mask, face, feed_face in zip(batch["prediction"],
-                                         batch["detected_faces"],
-                                         batch["feed_faces"]):
+        for mask, face, feed_face, roi_mask in zip(batch["prediction"],
+                                                   batch["detected_faces"],
+                                                   batch["feed_faces"],
+                                                   batch["roi_masks"]):
+            self._crop_out_of_bounds(mask, roi_mask)
             face.add_mask(self._storage_name,
                           mask,
                           feed_face.adjusted_matrix,
@@ -244,8 +267,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
             yield output
 
     # <<< PROTECTED ACCESS METHODS >>> #
-    @staticmethod
-    def _resize(image, target_size):
+    @classmethod
+    def _resize(cls, image, target_size):
         """ resize input and output of mask models appropriately """
         height, width, channels = image.shape
         image_size = max(height, width)
@@ -256,3 +279,19 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         resized = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=method)
         resized = resized if channels > 1 else resized[..., None]
         return resized
+
+    @classmethod
+    def _crop_out_of_bounds(cls, mask, roi_mask):
+        """ Un-mask any area of the predicted mask that falls outside of the original frame.
+
+        Parameters
+        ----------
+        masks: :class:`numpy.ndarray`
+            The predicted masks from the plugin
+        roi_mask: :class:`numpy.ndarray`
+            The roi mask. In frame is white, out of frame is black
+        """
+        if np.all(roi_mask):
+            return  # The whole of the face is within the frame
+        roi_mask = roi_mask[..., None] if mask.ndim == 3 else roi_mask
+        mask *= roi_mask

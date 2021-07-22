@@ -683,6 +683,7 @@ class ExtractMedia():
                      self.__class__.__name__, filename, image.shape, detected_faces)
         self._filename = filename
         self._image = image
+        self._image_shape = image.shape
         self._detected_faces = detected_faces
 
     @property
@@ -698,12 +699,12 @@ class ExtractMedia():
     @property
     def image_shape(self):
         """ tuple: The shape of the stored :attr:`image`. """
-        return self._image.shape
+        return self._image_shape
 
     @property
     def image_size(self):
         """ tuple: The (`height`, `width`) of the stored :attr:`image`. """
-        return self._image.shape[:2]
+        return self._image_shape[:2]
 
     @property
     def detected_faces(self):

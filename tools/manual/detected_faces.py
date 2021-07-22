@@ -414,7 +414,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                                         original_filename=output,
                                         face_index=face_idx,
                                         source_filename=src_filename,
-                                        source_is_video=self._globals.is_video))
+                                        source_is_video=self._globals.is_video,
+                                        source_frame_dims=image.shape[:2]))
 
                 b_image = encode_image(aligned.face, ".png", metadata=meta)
                 _io["saver"].save(output, b_image)

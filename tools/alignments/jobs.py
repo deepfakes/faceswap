@@ -535,7 +535,8 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     original_filename=output,
                                     face_index=idx,
                                     source_filename=filename,
-                                    source_is_video=self._frames.is_video))
+                                    source_is_video=self._frames.is_video,
+                                    source_frame_dims=image.shape[:2]))
             self._saver.save(output, encode_image(face.aligned.face, ".png", metadata=meta))
             if not self._arguments.large and self._is_legacy:
                 face.thumbnail = generate_thumbnail(face.aligned.face, size=96, quality=60)
@@ -715,7 +716,8 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
                                     original_filename=orig_filename,
                                     face_index=new_index,
                                     source_filename=frame,
-                                    source_is_video=file_info["source_is_video"]))
+                                    source_is_video=file_info["source_is_video"],
+                                    source_frame_dims=file_info.get("source_frame_dims")))
             update_existing_metadata(fullpath, meta)
 
         logger.info("%s Extracted face(s) had their header information updated", len(to_update))

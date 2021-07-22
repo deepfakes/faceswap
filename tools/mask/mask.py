@@ -168,7 +168,12 @@ class Mask():  # pylint:disable=too-few-public-methods
                     logger.warning("Legacy face not found in alignments file. This face has not "
                                    "been updated: '%s'", filename)
                     continue
-
+            if "source_frame_dims" not in metadata["source"]:
+                logger.error("The faces need to be re-extracted as at least some of them do not "
+                             "contain information required to correctly generate masks.")
+                logger.error("You can re-extract the face-set by using the Alignments Tool's "
+                             "Extract job.")
+                break
             frame_name = metadata["source"]["source_filename"]
             face_index = metadata["source"]["face_index"]
             alignment = self._alignments.get_faces_in_frame(frame_name)
@@ -188,6 +193,9 @@ class Mask():  # pylint:disable=too-few-public-methods
                 self._save(frame_name, face_index, detected_face)
             else:
                 media = ExtractMedia(filename, image, detected_faces=[detected_face])
+                # Hacky overload of ExtractMedia's shape parameter to apply the actual original
+                # frame dimension
+                media._image_shape = (*metadata["source"]["source_frame_dims"], 3)
                 setattr(media, "mask_tool_face_info", metadata["source"])  # TODO formalize
                 queue.put(media)
                 self._counts["update"] += 1
