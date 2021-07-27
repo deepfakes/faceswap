@@ -903,7 +903,7 @@ class _Weights():
         self._weights_file = self._check_weights_file(plugin._args.load_weights)
 
         freeze_layers = plugin.config.get("freeze_layers")  # Standardized config for freezing
-        load_layers = plugin.config.get("loading_layers")  # Standardized config for loading
+        load_layers = plugin.config.get("load_layers")  # Standardized config for loading
         self._freeze_layers = freeze_layers if freeze_layers else ["encoder"]  # No plugin config
         self._load_layers = load_layers if load_layers else ["encoder"]  # No plugin config
         logger.debug("Initialized %s", self.__class__.__name__)
