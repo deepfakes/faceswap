@@ -855,7 +855,7 @@ class GBlock():  # pylint:disable=too-few-public-methods
             if i == recursions - 1:
                 var_x = KConv2D(filters, 3, padding="same")(var_x)
 
-            var_x = AdaInstanceNormalization()([var_x, *styles])
+            var_x = AdaInstanceNormalization(dtype="float32")([var_x, *styles])
             var_x = Add()([var_x, noise])
             var_x = LeakyReLU(0.2)(var_x)
 
