@@ -407,6 +407,25 @@ class Sort():
         logger.info("Sorting...")
         return sorted(img_list, key=lambda x: x[1], reverse=True)
 
+    def sort_black_pixels(self):
+        """ Sort by percentage of black pixels """
+        logger.info("Sorting by percentage of black pixels...")
+
+        """ Calculate the sum of black pixels, get the percentage X 3 channels """
+        img_list = [(filename, np.ndarray.all(image == [0, 0, 0], axis=2).sum()/image.size*100*3)
+                    for filename, image, _ in tqdm(self._loader.load(),
+                                                   desc="Calculating black pixels",
+                                                   total=self._loader.count,
+                                                   leave=False)]
+        img_list_len = len(img_list)
+        for i in tqdm(range(0, img_list_len - 1), desc="Comparing black pixels", file=sys.stdout):
+            for j in range(0, img_list_len-i-1):
+                if img_list[j][1] > img_list[j+1][1]:
+                    temp = img_list[j]
+                    img_list[j] = img_list[j+1]
+                    img_list[j+1] = temp
+        return img_list
+
     # Methods for grouping
     def group_blur(self, img_list):
         """ Group into bins by blur """
@@ -522,6 +541,25 @@ class Sort():
         # If remainder is 0, nothing gets added to the last bin.
         for i in range(1, remainder + 1):
             bins[-1].append(img_list[-i][0])
+
+        return bins
+
+    def group_black_pixels(self, img_list):
+        """ Group into bins by percentage of black pixels
+        :type img_list: (str, float)
+        """
+        logger.info("Grouping by percentage of black pixels...")
+
+        # Starting the binning process
+        bins = [[] for _ in range(self._args.num_bins)]
+        # Get edges of bins from 0 to 100
+        bins_edges = self._near_split(100, self._args.num_bins)
+        # Get the proper bin number for each img order
+        img_bins = np.digitize([x[1] for x in img_list], bins_edges, right=True)
+
+        # Place imgs in bins
+        for i, b in enumerate(img_bins):
+            bins[b].append(img_list[i][0])
 
         return bins
 
@@ -679,10 +717,26 @@ class Sort():
             filename_list, image_list = self._get_images()
             histograms = [cv2.calcHist([img], [0], None, [256], [0, 256]) for img in image_list]
             temp_list = list(zip(filename_list, histograms))
+        elif group_method == 'group_black_pixels':
+            filename_list, image_list = self._get_images()
+            black_pixels = [np.ndarray.all(img == [0, 0, 0], axis=2).sum()/img.size*100*3
+                            for img in image_list]
+            temp_list = list(zip(filename_list, black_pixels))
         else:
             raise ValueError("{} group_method not found.".format(group_method))
 
         return self.splice_lists(img_list, temp_list)
+
+    @staticmethod
+    def _near_split(x, num_bins):
+        quotient, remainder = divmod(x, num_bins)
+        seps = [quotient + 1] * remainder + [quotient] * (num_bins - remainder)
+        uplimit = 0
+        bins = [0]
+        for n in seps:
+            bins.append(uplimit+n)
+            uplimit += n
+        return bins
 
     @staticmethod
     def _convert_color(imgs, same_size, method):
