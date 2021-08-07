@@ -5,7 +5,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-06-07 12:34+0100\n"
+"POT-Creation-Date: 2021-08-07 12:34+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -35,7 +35,7 @@ msgstr ""
 msgid "Output directory for sorted aligned faces."
 msgstr ""
 
-#: tools/sort/cli.py:50 tools/sort/cli.py:96
+#: tools/sort/cli.py:50 tools/sort/cli.py:99
 msgid "sort settings"
 msgstr ""
 
@@ -56,46 +56,47 @@ msgid ""
 "L|'color-green': Sort images by the average intensity of the converted Cg color channel. Green images will be ranked first and red images will be last.\n"
 "L|'color-orange': Sort images by the average intensity of the converted Co color channel. Orange images will be ranked first and blue images will be last.\n"
 "L|'size': Sort images by their size in the original frame. Faces closer to the camera and from higher resolution sources will be sorted first, whilst faces further from the camera and from lower resolution sources will be sorted last.\n"
+"L|'black-pixels': Sort images by their number of black pixels. Useful when faces are near borders and a large part of the image is black.\n"
 "Default: face"
 msgstr ""
 
-#: tools/sort/cli.py:85 tools/sort/cli.py:112 tools/sort/cli.py:124
-#: tools/sort/cli.py:135
+#: tools/sort/cli.py:88 tools/sort/cli.py:115 tools/sort/cli.py:127
+#: tools/sort/cli.py:138
 msgid "output"
 msgstr ""
 
-#: tools/sort/cli.py:86
+#: tools/sort/cli.py:89
 msgid "Keeps the original files in the input directory. Be careful when using this with rename grouping and no specified output directory as this would keep the original and renamed files in the same directory."
 msgstr ""
 
-#: tools/sort/cli.py:98
+#: tools/sort/cli.py:101
 msgid "Float value. Minimum threshold to use for grouping comparison with 'face-cnn' and 'hist' methods. The lower the value the more discriminating the grouping is. Leaving -1.0 will allow the program set the default value automatically. For face-cnn 7.2 should be enough, with 4 being very discriminating. For hist 0.3 should be enough, with 0.2 being very discriminating. Be careful setting a value that's too low in a directory with many images, as this could result in a lot of directories being created. Defaults: face-cnn 7.2, hist 0.3"
 msgstr ""
 
-#: tools/sort/cli.py:113
+#: tools/sort/cli.py:116
 msgid ""
 "R|Default: rename.\n"
 "L|'folders': files are sorted using the -s/--sort-by method, then they are organized into folders using the -g/--group-by grouping method.\n"
 "L|'rename': files are sorted using the -s/--sort-by then they are renamed."
 msgstr ""
 
-#: tools/sort/cli.py:126
+#: tools/sort/cli.py:129
 msgid "Group by method. When -fp/--final-processing by folders choose the how the images are grouped after sorting. Default: hist"
 msgstr ""
 
-#: tools/sort/cli.py:137
-msgid "Integer value. Number of folders that will be used to group by blur and face-yaw. For blur folder 0 will be the least blurry, while the last folder will be the blurriest. For face-yaw the number of bins is by how much 180 degrees is divided. So if you use 18, then each folder will be a 10 degree increment. Folder 0 will contain faces looking the most to the left whereas the last folder will contain the faces looking the most to the right. If the number of images doesn't divide evenly into the number of bins, the remaining images get put in the last bin. Default value: 5"
+#: tools/sort/cli.py:140
+msgid "Integer value. Number of folders that will be used to group by blur, face-yaw and black-pixels. For blur folder 0 will be the least blurry, while the last folder will be the blurriest. For face-yaw the number of bins is by how much 180 degrees is divided. So if you use 18, then each folder will be a 10 degree increment. Folder 0 will contain faces looking the most to the left whereas the last folder will contain the faces looking the most to the right. If the number of images doesn't divide evenly into the number of bins, the remaining images get put in the last bin. For black-pixels it represents the divider of the percentage of black pixels. For 10, first folder will have the faces with 0 to 10% black pixels, second 11 to 20%, etc. Default value: 5"
 msgstr ""
 
-#: tools/sort/cli.py:148 tools/sort/cli.py:158
+#: tools/sort/cli.py:154 tools/sort/cli.py:164
 msgid "settings"
 msgstr ""
 
-#: tools/sort/cli.py:150
+#: tools/sort/cli.py:156
 msgid "Logs file renaming changes if grouping by renaming, or it logs the file copying/movement if grouping by folders. If no log file is specified  with '--log-file', then a 'sort_log.json' file will be created in the input directory."
 msgstr ""
 
-#: tools/sort/cli.py:161
+#: tools/sort/cli.py:167
 msgid "Specify a log file to use for saving the renaming or grouping information. If specified extension isn't 'json' or 'yaml', then json will be used as the serializer, with the supplied filename. Default: sort_log.json"
 msgstr ""
 

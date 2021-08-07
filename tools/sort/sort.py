@@ -408,10 +408,11 @@ class Sort():
         return sorted(img_list, key=lambda x: x[1], reverse=True)
 
     def sort_black_pixels(self):
-        """ Sort by percentage of black pixels """
-        logger.info("Sorting by percentage of black pixels...")
+        """ Sort by percentage of black pixels
 
-        """ Calculate the sum of black pixels, get the percentage X 3 channels """
+         Calculates the sum of black pixels, get the percentage X 3 channels
+        """
+        logger.info("Sorting by percentage of black pixels...")
         img_list = [(filename, np.ndarray.all(image == [0, 0, 0], axis=2).sum()/image.size*100*3)
                     for filename, image, _ in tqdm(self._loader.load(),
                                                    desc="Calculating black pixels",
@@ -558,8 +559,8 @@ class Sort():
         img_bins = np.digitize([x[1] for x in img_list], bins_edges, right=True)
 
         # Place imgs in bins
-        for i, b in enumerate(img_bins):
-            bins[b].append(img_list[i][0])
+        for idx, _bin in enumerate(img_bins):
+            bins[_bin].append(img_list[idx][0])
 
         return bins
 
@@ -728,14 +729,28 @@ class Sort():
         return self.splice_lists(img_list, temp_list)
 
     @staticmethod
-    def _near_split(x, num_bins):
-        quotient, remainder = divmod(x, num_bins)
+    def _near_split(bin_range, num_bins):
+        """ Obtain the split for the given number of bins for the given range
+
+        Parameters
+        ----------
+        bin_range: int
+            The range of data to separate into bins
+        num_bins: int
+            The number of bins to create
+
+        Returns
+        -------
+        list
+            The split dividers for the given number of bins for the given range
+        """
+        quotient, remainder = divmod(bin_range, num_bins)
         seps = [quotient + 1] * remainder + [quotient] * (num_bins - remainder)
         uplimit = 0
         bins = [0]
-        for n in seps:
-            bins.append(uplimit+n)
-            uplimit += n
+        for sep in seps:
+            bins.append(uplimit + sep)
+            uplimit += sep
         return bins
 
     @staticmethod

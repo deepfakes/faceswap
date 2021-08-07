@@ -5,8 +5,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-06-07 12:34+0100\n"
-"PO-Revision-Date: 2021-06-07 12:38+0100\n"
+"POT-Creation-Date: 2021-08-07 12:34+0100\n"
+"PO-Revision-Date: 2021-08-07 12:38+0100\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
@@ -38,7 +38,7 @@ msgstr "Directorio de entrada de caras alineadas."
 msgid "Output directory for sorted aligned faces."
 msgstr "Directorio de salida para las caras alineadas ordenadas."
 
-#: tools/sort/cli.py:50 tools/sort/cli.py:96
+#: tools/sort/cli.py:50 tools/sort/cli.py:99
 msgid "sort settings"
 msgstr "ajustes de ordenación"
 
@@ -74,6 +74,8 @@ msgid ""
 "the camera and from higher resolution sources will be sorted first, whilst "
 "faces further from the camera and from lower resolution sources will be "
 "sorted last.\n"
+"L|'black-pixels': Sort images by their number of black pixels. Useful when "
+"faces are near borders and a large part of the image is black.\n"
 "Default: face"
 msgstr ""
 "R|Método de ordenación. Elige cómo se ordenan las imágenes. \n"
@@ -107,14 +109,17 @@ msgstr ""
 "rostros más cercanos a la cámara y de fuentes de mayor resolución se "
 "ordenarán primero, mientras que los rostros más alejados de la cámara y de "
 "fuentes de menor resolución se ordenarán en último lugar.\n"
+"\vL|'black-pixels': Ordene las imágenes por su número de píxeles negros. "
+"Útil cuando los rostros están cerca de los bordes y una gran parte de la "
+"imagen es negra .\n"
 "Por defecto: face"
 
-#: tools/sort/cli.py:85 tools/sort/cli.py:112 tools/sort/cli.py:124
-#: tools/sort/cli.py:135
+#: tools/sort/cli.py:88 tools/sort/cli.py:115 tools/sort/cli.py:127
+#: tools/sort/cli.py:138
 msgid "output"
 msgstr "salida"
 
-#: tools/sort/cli.py:86
+#: tools/sort/cli.py:89
 msgid ""
 "Keeps the original files in the input directory. Be careful when using this "
 "with rename grouping and no specified output directory as this would keep "
@@ -125,7 +130,7 @@ msgstr ""
 "de salida, ya que esto mantendría los archivos originales y renombrados en "
 "el mismo directorio."
 
-#: tools/sort/cli.py:98
+#: tools/sort/cli.py:101
 msgid ""
 "Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' and 'hist' methods. The lower the value the more discriminating the "
@@ -146,7 +151,7 @@ msgstr ""
 "podría resultar en la creación de muchos directorios. Por defecto: 'face-"
 "cnn' = 7.2, 'hist' = 0.3"
 
-#: tools/sort/cli.py:113
+#: tools/sort/cli.py:116
 msgid ""
 "R|Default: rename.\n"
 "L|'folders': files are sorted using the -s/--sort-by method, then they are "
@@ -160,7 +165,7 @@ msgstr ""
 "L|'rename': los archivos se ordenan utilizando el método -s/--sort-by y "
 "luego se renombran."
 
-#: tools/sort/cli.py:126
+#: tools/sort/cli.py:129
 msgid ""
 "Group by method. When -fp/--final-processing by folders choose the how the "
 "images are grouped after sorting. Default: hist"
@@ -168,16 +173,19 @@ msgstr ""
 "Método de agrupamiento. Elija la forma de agrupar las imágenes, en el caso "
 "de hacerlo por carpetas, después de la clasificación. Por defecto: hist"
 
-#: tools/sort/cli.py:137
+#: tools/sort/cli.py:140
 msgid ""
-"Integer value. Number of folders that will be used to group by blur and face-"
-"yaw. For blur folder 0 will be the least blurry, while the last folder will "
-"be the blurriest. For face-yaw the number of bins is by how much 180 degrees "
-"is divided. So if you use 18, then each folder will be a 10 degree "
-"increment. Folder 0 will contain faces looking the most to the left whereas "
-"the last folder will contain the faces looking the most to the right. If the "
-"number of images doesn't divide evenly into the number of bins, the "
-"remaining images get put in the last bin. Default value: 5"
+"Integer value. Number of folders that will be used to group by blur, face-"
+"yaw and black-pixels. For blur folder 0 will be the least blurry, while the "
+"last folder will be the blurriest. For face-yaw the number of bins is by how "
+"much 180 degrees is divided. So if you use 18, then each folder will be a 10 "
+"degree increment. Folder 0 will contain faces looking the most to the left "
+"whereas the last folder will contain the faces looking the most to the "
+"right. If the number of images doesn't divide evenly into the number of "
+"bins, the remaining images get put in the last bin. For black-pixels it "
+"represents the divider of the percentage of black pixels. For 10, first "
+"folder will have the faces with 0 to 10% black pixels, second 11 to 20%, "
+"etc. Default value: 5"
 msgstr ""
 "Valor entero. Número de carpetas que se utilizarán al agrupar por 'blur' y "
 "'face-yaw'. Para 'blur' la carpeta 0 será la menos borrosa, mientras que la "
@@ -187,13 +195,15 @@ msgstr ""
 "que miren más a la izquierda, mientras que la última carpeta contendrá las "
 "caras que miren más a la derecha. Si el número de imágenes no se divide "
 "uniformemente en el número de carpetas, las imágenes restantes se colocan en "
-"la última carpeta. Valor por defecto: 5"
+"la última carpeta. Para píxeles negros, representa el divisor del porcentaje "
+"de píxeles negros. Para 10, la primera carpeta tendrá las caras con 0 a 10% "
+"de píxeles negros, la segunda de 11 a 20%, etc. Valor por defecto: 5"
 
-#: tools/sort/cli.py:148 tools/sort/cli.py:158
+#: tools/sort/cli.py:154 tools/sort/cli.py:164
 msgid "settings"
 msgstr "ajustes"
 
-#: tools/sort/cli.py:150
+#: tools/sort/cli.py:156
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -205,7 +215,7 @@ msgstr ""
 "se especifica ningún archivo de registro con '--log-file', se creará un "
 "archivo 'sort_log.json' en el directorio de entrada."
 
-#: tools/sort/cli.py:161
+#: tools/sort/cli.py:167
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "
