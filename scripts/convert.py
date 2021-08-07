@@ -52,13 +52,18 @@ class Convert():  # pylint:disable=too-few-public-methods
         self._patch_threads = None
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)
         self._alignments = Alignments(self._args, False, self._images.is_video)
-        self._validate()
+        if self._alignments.version == 1.0:
+            logger.error("The alignments file format has been updated since the given alignments "
+                         "file was generated. You need to update the file to proceed.")
+            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
+            sys.exit(1)
 
         self._opts = OptionalActions(self._args, self._images.file_list, self._alignments)
 
         self._add_queues()
         self._disk_io = DiskIO(self._alignments, self._images, arguments)
         self._predictor = Predict(self._disk_io.load_queue, self._queue_size, arguments)
+        self._validate()
         get_folder(self._args.output_dir)
 
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
@@ -113,12 +118,6 @@ class Convert():  # pylint:disable=too-few-public-methods
             If an invalid selection has been found.
 
         """
-        if self._alignments.version == 1.0:
-            logger.error("The alignments file format has been updated since the given alignments "
-                         "file was generated. You need to update the file to proceed.")
-            logger.error("To do this run the 'Alignments Tool' > 'Extract' Job.")
-            sys.exit(1)
-
         if (self._args.writer == "ffmpeg" and
                 not self._images.is_video and
                 self._args.reference_video is None):
