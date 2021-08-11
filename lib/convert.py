@@ -323,7 +323,7 @@ class Converter():
             The swapped face with the requested mask added to the Alpha channel
         """
         logger.trace("Getting mask. Image shape: %s", new_face.shape)
-        if self._args.mask_type != "none":
+        if self._args.mask_type not in ("none", "predicted"):
             mask_centering = detected_face.mask[self._args.mask_type].stored_centering
         else:
             mask_centering = "face"  # Unused but requires a valid value
