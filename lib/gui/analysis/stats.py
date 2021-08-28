@@ -61,8 +61,10 @@ class GlobalSession():
     @property
     def batch_sizes(self):
         """ dict: The batch sizes for each session_id for the model. """
+        if self._state is None:
+            return dict()
         return {int(sess_id): sess["batchsize"]
-                for sess_id, sess in self._state["sessions"].items()}
+                for sess_id, sess in self._state.get("sessions", dict()).items()}
 
     @property
     def full_summary(self):
@@ -73,6 +75,8 @@ class GlobalSession():
     def logging_disabled(self):
         """ bool: ``True`` if logging is enabled for the currently training session otherwise
         ``False``. """
+        if self._state is None:
+            return True
         return self._state["sessions"][str(self.session_ids[-1])]["no_logs"]
 
     @property
@@ -136,7 +140,7 @@ class GlobalSession():
 
     def clear(self):
         """ Clear the currently loaded session. """
-        self._state = None
+        self._state = dict()
         self._model_dir = None
         self._model_name = None
 
@@ -774,7 +778,7 @@ class Calculations():
         Parameters
         ----------
         data: :class:`numpy.ndarray`
-            The data to smoothen
+            The data to smooth
 
         Returns
         -------

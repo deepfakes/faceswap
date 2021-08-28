@@ -249,7 +249,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         """
         for key, tk_var in self._modified_vars.items():
             if (command is None or command == key) and tk_var.get():
-                logger.debug("Reset modified state for: %s", command)
+                logger.debug("Reset modified state for: (command: %s key: %s)", command, key)
                 tk_var.set(False)
 
     # RECENT FILE HANDLING
@@ -727,7 +727,8 @@ class Project(_GuiSession):
             self._modified = self._project_modified
             self._update_root_title()
 
-    def load(self, *args, filename=None):  # pylint:disable=unused-argument
+    def load(self, *args,  # pylint:disable=unused-argument
+             filename=None,  last_session=False):
         """ Load a project from a saved ``.fsw`` project file.
 
         Parameters
@@ -737,8 +738,12 @@ class Project(_GuiSession):
         filename: str, optional
             If a filename is passed in, This will be used, otherwise a file handler will be
             launched to select the relevant file.
+        last_session: bool, optional
+            ``True`` if the project is being loaded from the last opened session ``False`` if the
+            project is being loaded directly from disk. Default: ``False``
         """
-        logger.debug("Loading project config: (filename: '%s')", filename)
+        logger.debug("Loading project config: (filename: '%s', last_session: %s)",
+                     filename, last_session)
         filename_set = self._set_filename(filename, sess_type="project")
 
         if not filename_set:
@@ -757,7 +762,8 @@ class Project(_GuiSession):
             self._handoff_legacy_task()
             return
 
-        self._set_options()
+        if not last_session:
+            self._set_options()  # Options will be set by last session. Don't set now
         self._update_tasks()
         self._add_to_recent()
         self._reset_modified_var()
@@ -994,29 +1000,16 @@ class LastSession(_GuiSession):
         loaded = self._load()
         if not loaded:
             return
-        needs_update = self._set_project()
-        if needs_update:
-            self._set_options()
+        self._set_project()
+        self._set_options()
 
     def _set_project(self):
-        """ Set the :class:`Project` if session is resuming from one.
-
-        Returns
-        -------
-        bool:
-            ``True`` If the GUI still needs to be updated from the last session, ``False`` if
-            the returned GUI state is the last session
-        """
+        """ Set the :class:`Project` if session is resuming from one. """
         if self._options.get("project", None) is None:
             logger.debug("No project stored")
-            retval = True
         else:
             logger.debug("Loading stored project")
-            self._config.project.load(filename=self._options["project"])
-            retval = self._cli_options != self._config.project.cli_options
-
-        logger.debug("Needs update: %s", retval)
-        return retval
+            self._config.project.load(filename=self._options["project"], last_session=True)
 
     def save(self):
         """ Save a snapshot of currently set GUI config options.
