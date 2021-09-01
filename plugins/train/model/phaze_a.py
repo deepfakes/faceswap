@@ -587,11 +587,11 @@ class Encoder():  # pylint:disable=too-few-public-methods
             #  Some models expect different scaling.
             logger.debug("Scaling to %s for '%s'", scaling, self._config["enc_architecture"])
             if scaling == (0, 255):
-                # models expecting inputs from 0-255.
+                # models expecting inputs from 0 to 255.
                 var_x = var_x * 255.
             if scaling == (-1, 1):
-                # models expecting inputs from -1-1.
-                var_x = var_x * (1. / 2.)
+                # models expecting inputs from -1 to 1.
+                var_x = var_x * 2.
                 var_x = var_x - 1.0
 
         var_x = self._get_encoder_model()(var_x)
