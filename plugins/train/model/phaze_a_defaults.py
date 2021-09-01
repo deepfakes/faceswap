@@ -142,7 +142,7 @@ _DEFAULTS = dict(
              "each variant is: b0: 224px, b1: 240px, b2: 260px, b3: 300px, b4: 380px, b5: 456px, "
              "b6: 528px, b7 600px. Ref: Rethinking Model Scaling for Convolutional Neural "
              "Networks (2020): https://arxiv.org/abs/1905.11946"
-             "\n\tfs_original: (32px - 320px). A configurable variant of the original facewap "
+             "\n\tfs_original: (32px - 160px). A configurable variant of the original facewap "
              "encoder. ImageNet weights cannot be loaded for this model. Additional parameters "
              "can be configured with the 'fs_enc' options. A version of this encoder is used in "
              "the following models: Original, Original (lowmem), Dfaker, DFL-H128, DFL-SAE, IAE, "
