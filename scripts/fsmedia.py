@@ -9,7 +9,6 @@ Holds optional pre/post processing functions for convert and extract.
 import logging
 import os
 import sys
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -604,7 +603,7 @@ class FaceFilter(PostProcessAction):
 
         logger.info("%s: %s", f_type.title(), f_args)
         filter_files = f_args if isinstance(f_args, list) else [f_args]
-        filter_files = list(filter(lambda fpath: Path(fpath).exists(), filter_files))
+        filter_files = list(filter(lambda fpath: os.path.exists(fpath), filter_files))
         if not filter_files:
             logger.warning("Face %s files were requested, but no files could be found. This "
                            "filter will not be applied.", f_type)

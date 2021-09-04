@@ -3,7 +3,6 @@
 
 tqdm==4.42
 psutil==5.7.0
-pathlib==1.0.1
 numpy==1.18.0
 opencv-python==4.1.2.30
 pillow==7.0.0

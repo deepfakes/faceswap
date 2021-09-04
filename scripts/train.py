@@ -144,29 +144,29 @@ class Train():  # pylint:disable=too-few-public-methods
                                 "(--timelapse-input-A, --timelapse-input-B and "
                                 "--timelapse-output).")
 
-        timelapse_output = str(get_folder(self._args.timelapse_output))
+        timelapse_output = get_folder(self._args.timelapse_output)
 
         for side in ("a", "b"):
-            folder = getattr(self._args, "timelapse_input_{}".format(side))
+            folder = getattr(self._args, f"timelapse_input_{side}")
             if folder is not None and not os.path.isdir(folder):
-                raise FaceswapError("The Timelapse path '{}' does not exist".format(folder))
+                raise FaceswapError(f"The Timelapse path '{folder}' does not exist")
 
-            training_folder = getattr(self._args, "input_{}".format(side))
+            training_folder = getattr(self._args, f"input_{side}")
             if folder == training_folder:
                 continue  # Time-lapse folder is training folder
 
             filenames = [fname for fname in os.listdir(folder)
                          if os.path.splitext(fname)[-1].lower() in _image_extensions]
             if not filenames:
-                raise FaceswapError("The Timelapse path '{}' does not contain any valid "
-                                    "images".format(folder))
+                raise FaceswapError(f"The Timelapse path '{folder}' does not contain any valid "
+                                    "images")
 
             # Time-lapse images must appear in the training set, as we need access to alignment and
             # mask info. Check filenames are there to save failing much later in the process.
             training_images = [os.path.basename(img) for img in self._images[side]]
             if not all(img in training_images for img in filenames):
-                raise FaceswapError("All images in the Timelapse folder '{}' must exist in the "
-                                    "training folder '{}'".format(folder, training_folder))
+                raise FaceswapError(f"All images in the Timelapse folder '{folder}' must exist in "
+                                    f"the training folder '{training_folder}'")
 
         kwargs = {"input_a": self._args.timelapse_input_a,
                   "input_b": self._args.timelapse_input_b,
@@ -260,7 +260,7 @@ class Train():  # pylint:disable=too-few-public-methods
             The requested model plugin
         """
         logger.debug("Loading Model")
-        model_dir = str(get_folder(self._args.model_dir))
+        model_dir = get_folder(self._args.model_dir)
         model = PluginLoader.get_model(self._args.trainer)(
             model_dir,
             self._args,

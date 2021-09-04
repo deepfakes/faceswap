@@ -38,8 +38,8 @@ class Extract():  # pylint:disable=too-few-public-methods
     def __init__(self, arguments):
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self._args = arguments
-        self._output_dir = None if self._args.skip_saving_faces else str(get_folder(
-            self._args.output_dir))
+        self._output_dir = None if self._args.skip_saving_faces else get_folder(
+            self._args.output_dir)
 
         logger.info("Output Directory: %s", self._args.output_dir)
         self._images = ImagesLoader(self._args.input_dir, fast_count=True)

@@ -945,7 +945,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
             The original headers duplicated by the number of columns
         """
         for side, header in headers.items():
-            duped = tuple([header for _ in range(columns)])
+            duped = tuple(header for _ in range(columns))
             headers[side] = np.concatenate(duped, axis=1)
             logger.debug("side: %s header.shape: %s", side, header.shape)
         return headers
@@ -996,8 +996,8 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Setting up time-lapse")
         if output is None:
-            output = str(get_folder(os.path.join(str(self._model.model_dir),
-                                                 "{}_timelapse".format(self._model.name))))
+            output = get_folder(os.path.join(str(self._model.model_dir),
+                                             f"{self._model.name}_timelapse"))
         self._output_file = str(output)
         logger.debug("Time-lapse output set to '%s'", self._output_file)
 

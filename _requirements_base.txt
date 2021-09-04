@@ -1,6 +1,5 @@
 tqdm>=4.42
 psutil>=5.7.0
-pathlib==1.0.1
 numpy>=1.18.0,<1.20.0
 opencv-python>=4.1.2.0
 pillow>=7.0.0
@@ -12,7 +11,7 @@ imageio>=2.8.0
 imageio-ffmpeg>=0.4.2
 ffmpy==0.2.3
 # Revert back to nvidia-ml-py3 when windows/system32 patch is implemented
-git+https://github.com/deepfakes/nvidia-ml-py3.git
+ git+https://github.com/deepfakes/nvidia-ml-py3.git
 #nvidia-ml-py3
 pywin32>=227 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"

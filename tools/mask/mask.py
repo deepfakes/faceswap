@@ -94,7 +94,7 @@ class Mask():  # pylint:disable=too-few-public-methods
                 sys.exit(0)
             logger.debug("No output provided. Not creating saver")
             return None
-        output_dir = str(get_folder(arguments.output, make_folder=True))
+        output_dir = get_folder(arguments.output, make_folder=True)
         logger.info("Saving preview masks to: '%s'", output_dir)
         saver = ImagesSaver(output_dir)
         logger.debug(saver)
@@ -404,7 +404,7 @@ class Mask():  # pylint:disable=too-few-public-methods
 
         for mask_type in mask_types:
             if mask_type not in detected_face.mask:
-                # If extracting bisenet-fp mask, then skip versions which don't exist
+                # If extracting bisenet mask, then skip versions which don't exist
                 continue
             filename = os.path.join(self._saver.location, "{}_{}_{}".format(
                 os.path.splitext(frame)[0],
