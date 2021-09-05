@@ -612,6 +612,14 @@ class Images():
                              fname, str(err))
                 dropped_files.append(fname)
                 continue
+            except Exception as err:  # pylint:disable=broad-except
+                # Swallow any issues with opening an image rather than spamming console
+                # Can happen when trying to read partially saved images
+                logger.debug("Error opening preview file: '%s'. Original error: %s",
+                             fname, str(err))
+                dropped_files.append(fname)
+                continue
+
             width, height = img.size
             scaling = thumbnail_size / max(width, height)
             logger.debug("image width: %s, height: %s, scaling: %s", width, height, scaling)
