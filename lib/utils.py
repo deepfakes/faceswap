@@ -10,7 +10,6 @@ import urllib
 import warnings
 import zipfile
 
-from pathlib import Path
 from re import finditer
 from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
@@ -146,19 +145,18 @@ def get_folder(path, make_folder=True):
 
     Returns
     -------
-    :class:`pathlib.Path` or `None`
+    str or `None`
         The path to the requested folder. If `make_folder` is set to ``False`` and the requested
         path does not exist, then ``None`` is returned
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("Requested path: '%s'", path)
-    output_dir = Path(path)
-    if not make_folder and not output_dir.exists():
+    if not make_folder and not os.path.isdir(path):
         logger.debug("%s does not exist", path)
         return None
-    output_dir.mkdir(parents=True, exist_ok=True)
-    logger.debug("Returning: '%s'", output_dir)
-    return output_dir
+    os.makedirs(path, exist_ok=True)
+    logger.debug("Returning: '%s'", path)
+    return path
 
 
 def get_image_paths(directory, extension=None):
@@ -189,8 +187,7 @@ def get_image_paths(directory, extension=None):
     logger.trace("Scanned Folder Contents: %s", dir_scanned)
 
     for chkfile in dir_scanned:
-        if any([chkfile.name.lower().endswith(ext)
-                for ext in image_extensions]):
+        if any(chkfile.name.lower().endswith(ext) for ext in image_extensions):
             logger.trace("Adding '%s' to image list", chkfile.path)
             dir_contents.append(chkfile.path)
 

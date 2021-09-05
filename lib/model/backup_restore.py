@@ -105,7 +105,7 @@ class Backup():
             logger.debug("Removing previously existing snapshot folder: '%s'", snapshot_dir)
             rmtree(snapshot_dir)
 
-        dst = str(get_folder(snapshot_dir))
+        dst = get_folder(snapshot_dir)
         for filename in os.listdir(self.model_dir):
             if not self._check_valid(filename, for_restore=False):
                 logger.debug("Not snapshotting file: '%s'", filename)

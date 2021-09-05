@@ -53,10 +53,10 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         Raises
         ------
         FaceswapError
-            If Tensorflow is not found, or is not between versions 2.2 and 2.4
+            If Tensorflow is not found, or is not between versions 2.2 and 2.6
         """
         min_ver = 2.2
-        max_ver = 2.4
+        max_ver = 2.6
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
             os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
@@ -65,15 +65,16 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         except ImportError as err:
             if "DLL load failed while importing" in str(err):
                 msg = (
-                    "A DLL library file failed to load. Make sure that you have Microsoft Visual "
+                    f"A DLL library file failed to load. Make sure that you have Microsoft Visual "
                     "C++ Redistributable (2015, 2017, 2019) installed for your machine from: "
-                    "https://support.microsoft.com/en-gb/help/2977003")
+                    "https://support.microsoft.com/en-gb/help/2977003. Original error: "
+                    f"{str(err)}")
             else:
                 msg = (
-                    "There was an error importing Tensorflow. This is most likely because you do "
+                    f"There was an error importing Tensorflow. This is most likely because you do "
                     "not have TensorFlow installed, or you are trying to run tensorflow-gpu on a "
                     "system without an Nvidia graphics card. Original import "
-                    "error: {}".format(str(err)))
+                    f"error: {str(err)}")
             self._handle_import_error(msg)
 
         tf_ver = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
@@ -126,9 +127,8 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             If tkinter cannot be imported
         """
         try:
-            # pylint: disable=unused-variable
             import tkinter  # noqa pylint: disable=unused-import,import-outside-toplevel
-        except ImportError:
+        except ImportError as err:
             logger.error("It looks like TkInter isn't installed for your OS, so the GUI has been "
                          "disabled. To enable the GUI please install the TkInter application. You "
                          "can try:")
@@ -139,7 +139,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             logger.info("Arch: sudo pacman -S tk")
             logger.info("CentOS/Redhat: sudo yum install tkinter")
             logger.info("Fedora: sudo dnf install python3-tkinter")
-            raise FaceswapError("TkInter not found")
+            raise FaceswapError("TkInter not found") from err
 
     @staticmethod
     def _check_display():

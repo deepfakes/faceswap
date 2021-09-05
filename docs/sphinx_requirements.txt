@@ -1,20 +1,19 @@
 # NB Do not install from this requirements file
 # It is for documentation purposes only
 
-tqdm==4.42
-psutil==5.7.0
-pathlib==1.0.1
+tqdm==4.62
+psutil==5.8.0
 numpy==1.18.0
-opencv-python==4.1.2.30
-pillow==7.0.0
-scikit-learn==0.22.0
+opencv-python==4.5.3.0
+pillow==8.3.1
+scikit-learn==0.24.2
 fastcluster==1.1.26
-matplotlib>3.0.3,<3.3.0
-imageio==2.8.0
-imageio-ffmpeg==0.4.2
+matplotlib>3.2.0,<3.3.0
+imageio==2.9.0
+imageio-ffmpeg==0.4.5
 ffmpy==0.2.3
 nvidia-ml-py3
-pywin32==227 ; sys_platform == "win32"
+pywin32==228 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
 plaidml-keras==0.7.0
 tensorflow==2.2.0

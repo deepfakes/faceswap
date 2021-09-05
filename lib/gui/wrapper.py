@@ -245,6 +245,9 @@ class FaceswapControl():
                 if self.command == "train" and output.startswith("Reading training images"):
                     print(output.strip(), file=sys.stdout)
                     continue
+                if os.name == "nt" and "Call to CreateProcess failed. Error code: 2" in output:
+                    # Suppress ptxas errors on Tensorflow for Windows
+                    logger.debug("Suppressed call to subprocess error: '%s'", output)
                 print(output.strip(), file=sys.stderr)
         logger.debug("Terminated stderr reader")
 

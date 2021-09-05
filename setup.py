@@ -15,13 +15,15 @@ from subprocess import CalledProcessError, run, PIPE, Popen
 from pkg_resources import parse_requirements, Requirement
 
 INSTALL_FAILED = False
-# Revisions of tensorflow GPU and cuda/cudnn requirements
-TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.4.0": ["10.1", "7.6"]}
+# Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
+# Tensorflow builds available from pypi
+TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.4.0": ["10.1", "7.6"],
+                           ">=2.4.0,<2.5.0": ["11.0", "8.0"],
+                           ">=2.5.0,<2.7.0": ["11.2", "8.1"]}
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
 CONDA_MAPPING = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
     "fastcluster": ("fastcluster", "conda-forge"),
-    "toposort": ("toposort", "conda-forge"),
     "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge")}
 
 
@@ -692,6 +694,7 @@ class Install():
     def install_python_packages(self):
         """ Install required pip packages """
         self.output.info("Installing Required Python Packages. This may take some time...")
+        conda_only = False
         for pkg, version in self.env.missing_packages:
             if self.env.is_conda:
                 pkg = CONDA_MAPPING.get(pkg, (pkg, None))
@@ -700,11 +703,26 @@ class Install():
             if version:
                 pkg = "{}{}".format(pkg, ",".join("".join(spec) for spec in version))
             if self.env.is_conda and not pkg.startswith("git"):
-                verbose = pkg.startswith("tensorflow") or self.env.updater
-                if self.conda_installer(pkg, verbose=verbose, channel=channel, conda_only=False):
-                    continue
                 if pkg.startswith("tensorflow-gpu"):
-                    self._tensorflow_dependency_install()
+                    # From TF 2.4 onwards, Anaconda Tensorflow becomes a mess. The version of 2.5
+                    # installed by Anaconda is compiled against an incorrect numpy version which
+                    # breaks Tensorflow. Coupled with this the versions of cudatoolkit and cudnn
+                    # available in the default Anaconda channel are not compatible with the
+                    # official PyPi versions of Tensorflow. With this in mind we will pull in the
+                    # required Cuda/cuDNN from conda-forge, and install Tensorflow with pip
+                    # TODO Revert to Conda if they get their act together
+
+                    # Rewrite tensorflow requirement to versions from highest available cuda/cudnn
+                    highest_cuda = sorted(TENSORFLOW_REQUIREMENTS.values())[-1]
+                    compat_tf = next(k for k, v in TENSORFLOW_REQUIREMENTS.items()
+                                     if v == highest_cuda)
+                    pkg = f"tensorflow-gpu{compat_tf}"
+                    conda_only = True
+
+                verbose = pkg.startswith("tensorflow") or self.env.updater
+                if self.conda_installer(pkg,
+                                        verbose=verbose, channel=channel, conda_only=conda_only):
+                    continue
             self.pip_installer(pkg)
 
     def install_conda_packages(self):
@@ -717,7 +735,6 @@ class Install():
     def conda_installer(self, package, channel=None, verbose=False, conda_only=False):
         """ Install a conda package """
         #  Packages with special characters need to be enclosed in double quotes
-        cuda_cudnn = None
         success = True
         condaexe = ["conda", "install", "-y"]
         if not verbose or self.env.updater:
@@ -725,26 +742,24 @@ class Install():
         if channel:
             condaexe.extend(["-c", channel])
 
-        # Windows TF2.3 doesn't pull in the Cuda toolkit, so we may as well be explicit
-        # TODO This is not a robust enough check if we have more than 1 tf version
-        if package.startswith("tensorflow-gpu"):  # Add toolkit
-            # TODO Remove this hack to lower the max supported TF version when TF2.4 can be
-            # installed by setup.py
-            package = package.replace("2.5.0", "2.4.0")
+        if package.startswith("tensorflow-gpu"):
+            # Here we will install the cuda/cudnn toolkits, currently only available from
+            # conda-forge, but fail tensorflow itself so that it can be handled by pip.
             specs = Requirement.parse(package).specs
             for key, val in TENSORFLOW_REQUIREMENTS.items():
                 req_specs = Requirement.parse("foobar" + key).specs
                 if all(item in req_specs for item in specs):
-                    cuda_cudnn = val
+                    cuda, cudnn = val
                     break
+            condaexe.extend(["-c", "conda-forge", f"cudatoolkit={cuda}", f"cudnn={cudnn}"])
+            package = "Cuda Toolkit"
+            success = False
 
-        if any(char in package for char in (" ", "<", ">", "*", "|")):
-            package = f"\"{package}\""
-        condaexe.append(package)
+        if package != "Cuda Toolkit":
+            if any(char in package for char in (" ", "<", ">", "*", "|")):
+                package = f"\"{package}\""
+            condaexe.append(package)
 
-        if cuda_cudnn is not None:
-            condaexe.extend([f"cudatoolkit={cuda_cudnn[0]}",
-                             f"cudnn={cuda_cudnn[1]}"])
         self.output.info("Installing {}".format(package.replace("\"", "")))
         shell = self.env.os_version[0] == "Windows"
         try:

@@ -107,7 +107,7 @@ class Convert():  # pylint:disable=too-few-public-methods
         Ensure that certain cli selections are valid and won't result in an error. Checks:
             * If frames have been passed in with video output, ensure user supplies reference
             video.
-            * If "on-the-fly" and an NN mask is selected, output warning and switch to 'extended'
+            * If "on-the-fly" and a Neural Network mask is selected, warn and switch to 'extended'
             * If a mask-type is selected, ensure it exists in the alignments file.
             * If a predicted mask-type is selected, ensure model has been trained with a mask
             otherwise attempt to select first available masks, otherwise raise error.
@@ -750,7 +750,7 @@ class Predict():
         logger.debug("Loading Model")
         model_dir = get_folder(self._args.model_dir, make_folder=False)
         if not model_dir:
-            raise FaceswapError("{} does not exist.".format(self._args.model_dir))
+            raise FaceswapError(f"{self._args.model_dir} does not exist.")
         trainer = self._get_model_name(model_dir)
         model = PluginLoader.get_model(trainer)(model_dir, self._args, predict=True)
         model.build()

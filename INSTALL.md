@@ -257,7 +257,6 @@ WARNING Tensorflow has no official prebuild for CUDA 9.1 currently.
 Are System Dependencies met? [y/N] y
 INFO    Installing Missing Python Packages...
 INFO    Installing tensorflow-gpu
-INFO    Installing pathlib==1.0.1
 ......
 INFO    Installing tqdm
 INFO    Installing matplotlib

@@ -394,7 +394,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         progress_queue: :class:`queue.Queue`
             The queue to place incremental counts to for updating the GUI's progress bar
         """
-        _io = dict(saver=ImagesSaver(str(get_folder(output_folder)), as_bytes=True),
+        _io = dict(saver=ImagesSaver(get_folder(output_folder), as_bytes=True),
                    loader=ImagesLoader(self._input_location, count=self._alignments.frames_count))
 
         for frame_idx, (filename, image) in enumerate(_io["loader"].load()):
