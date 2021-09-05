@@ -735,7 +735,6 @@ class Install():
     def conda_installer(self, package, channel=None, verbose=False, conda_only=False):
         """ Install a conda package """
         #  Packages with special characters need to be enclosed in double quotes
-        cuda_cudnn = None
         success = True
         condaexe = ["conda", "install", "-y"]
         if not verbose or self.env.updater:
@@ -750,11 +749,9 @@ class Install():
             for key, val in TENSORFLOW_REQUIREMENTS.items():
                 req_specs = Requirement.parse("foobar" + key).specs
                 if all(item in req_specs for item in specs):
-                    cuda_cudnn = val
+                    cuda, cudnn = val
                     break
-            condaexe.extend(["-c", "conda-forge",
-                             f"cudatoolkit={cuda_cudnn[0]}",
-                             f"cudnn={cuda_cudnn[1]}"])
+            condaexe.extend(["-c", "conda-forge", f"cudatoolkit={cuda}", f"cudnn={cudnn}"])
             package = "Cuda Toolkit"
             success = False
 
