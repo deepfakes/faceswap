@@ -11,6 +11,6 @@ imageio>=2.9.0
 imageio-ffmpeg>=0.4.5
 ffmpy==0.2.3
 # Exclude badly numbered Python2 version of nvidia-ml-py
-nvidia-ml-py">=11.450,<300"
+nvidia-ml-py>=11.450,<300
 pywin32>=228 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
