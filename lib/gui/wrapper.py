@@ -248,6 +248,7 @@ class FaceswapControl():
                 if os.name == "nt" and "Call to CreateProcess failed. Error code: 2" in output:
                     # Suppress ptxas errors on Tensorflow for Windows
                     logger.debug("Suppressed call to subprocess error: '%s'", output)
+                    continue
                 print(output.strip(), file=sys.stderr)
         logger.debug("Terminated stderr reader")
 
