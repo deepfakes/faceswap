@@ -277,7 +277,7 @@ def set_system_verbosity(log_level):
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     from lib.logger import get_loglevel  # pylint:disable=import-outside-toplevel
     numeric_level = get_loglevel(log_level)
-    log_level = "2" if numeric_level > 15 else "0"
+    log_level = "3" if numeric_level > 15 else "0"
     logger.debug("System Verbosity level: %s", log_level)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = log_level
     if log_level != '0':
