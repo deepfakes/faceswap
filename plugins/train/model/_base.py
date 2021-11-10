@@ -893,7 +893,7 @@ class _Weights():
     Parameters
     ----------
     plugin: :class:`Model`
-        The parent plugin class that owns the weights functions.
+        The parent plugin class that owns the IO functions.
     """
     def __init__(self, plugin):
         logger.debug("Initializing %s: (plugin: %s)", self.__class__.__name__, plugin)
@@ -928,14 +928,13 @@ class _Weights():
 
         msg = ""
         if not os.path.exists(weights_file):
-            msg = f"Load weights selected, but the path '{weights_file}' does not exist."
+            msg = "Load weights selected, but the path '%s' does not exist."
         elif not os.path.splitext(weights_file)[-1].lower() == ".h5":
-            msg = (f"Load weights selected, but the path '{weights_file}' is not a valid Keras "
-                   f"model (.h5) file.")
+            msg = "Load weights selected, but the path '%s' is not a valid Keras model (.h5) file."
 
         if msg:
             msg += " Please check and try again."
-            raise FaceswapError(msg)
+            logger.error(msg)
 
         logger.verbose("Using weights file: %s", weights_file)
         return weights_file

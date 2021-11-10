@@ -9,30 +9,19 @@ from keras.layers import Concatenate, Dense, Flatten, Input, LeakyReLU, Reshape
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 
-from ._base import ModelBase, KerasModel, logger
+from ._base import ModelBase, KerasModel
 
 
 class Model(ModelBase):
     """ SAE Model from DFL """
     def __init__(self, *args, **kwargs):
-
-        self._patch_weights_management(args[1])
-
         super().__init__(*args, **kwargs)
-
         self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
+        self.architecture = self.config["architecture"].lower()
         self.use_mask = self.config.get("learn_mask", False)
         self.multiscale_count = 3 if self.config["multiscale_decoder"] else 1
         self.encoder_dim = self.config["encoder_dims"]
         self.decoder_dim = self.config["decoder_dims"]
-
-    @property
-    def name(self):
-        """ str: The name of this model based on the plugin name. Overridden as DFL-SAE is
-        named differently depending on the architecture selected. """
-        basename = super().name
-        name = f"{basename}_{self.architecture}"
-        return name
 
     @property
     def ae_dims(self):
@@ -41,26 +30,6 @@ class Model(ModelBase):
         if retval == 0:
             retval = 256 if self.architecture == "liae" else 512
         return retval
-
-    def _patch_weights_management(self, arguments):
-        """ Patch in the correct encoder name into the config dictionary for freezing and loading
-        weights based on architecture.
-
-        Because of variable model name based on architecture, configfile needs to be loaded
-        prior to initializing parent
-
-        Parameters
-        ----------
-        arguments: :class:`argparse.Namespace`
-            The arguments that were passed to the train or convert process as generated from
-            Faceswap's command line arguments
-
-        """
-        self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
-        self.architecture = self.config["architecture"].lower()
-        self.config["freeze_layers"] = [f"encoder_{self.architecture}"]
-        self.config["load_layers"] = [f"encoder_{self.architecture}"]
-        logger.debug("Patched encoder layers to config: %s", self.config)
 
     def build_model(self, inputs):
         """ Build the DFL-SAE Model """
@@ -84,7 +53,7 @@ class Model(ModelBase):
                        self.decoder("b", enc_output_shape)(encoder_b)]
         autoencoder = KerasModel(inputs,
                                  outputs,
-                                 name=self.name)
+                                 name="{}_{}".format(self.name, self.architecture))
         return autoencoder
 
     def encoder_df(self):
@@ -164,12 +133,11 @@ class Model(ModelBase):
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """
-        name = "dfl_sae"
-        mappings = dict(df={"{}_encoder.h5".format(name): "encoder_df",
-                            "{}_decoder_A.h5".format(name): "decoder_a",
-                            "{}_decoder_B.h5".format(name): "decoder_b"},
-                        liae={"{}_encoder.h5".format(name): "encoder_liae",
-                              "{}_intermediate_B.h5".format(name): "intermediate_both",
-                              "{}_intermediate.h5".format(name): "intermediate_b",
-                              "{}_decoder.h5".format(name): "decoder_both"})
+        mappings = dict(df={"{}_encoder.h5".format(self.name): "encoder_df",
+                            "{}_decoder_A.h5".format(self.name): "decoder_a",
+                            "{}_decoder_B.h5".format(self.name): "decoder_b"},
+                        liae={"{}_encoder.h5".format(self.name): "encoder_liae",
+                              "{}_intermediate_B.h5".format(self.name): "intermediate_both",
+                              "{}_intermediate.h5".format(self.name): "intermediate_b",
+                              "{}_decoder.h5".format(self.name): "decoder_both"})
         return mappings[self.config["architecture"]]
