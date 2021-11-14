@@ -199,6 +199,12 @@ class ModelBase():
         return os.path.splitext(basename)[0].lower()
 
     @property
+    def model_name(self):
+        """ str: The name of the keras model. Generally this will be the same as :attr:`name`
+        but some plugins will override this when they contain multiple architectures """
+        return self.name
+
+    @property
     def output_shapes(self):
         """ list: A list of list of shape tuples for the outputs of the model with the batch
         dimension removed. The outer list contains 2 sub-lists (one for each side "a" and "b").
@@ -898,7 +904,7 @@ class _Weights():
     def __init__(self, plugin):
         logger.debug("Initializing %s: (plugin: %s)", self.__class__.__name__, plugin)
         self._model = plugin.model
-        self._name = plugin.name
+        self._name = plugin.model_name
         self._do_freeze = plugin._args.freeze_weights
         self._weights_file = self._check_weights_file(plugin._args.load_weights)
 
@@ -928,13 +934,14 @@ class _Weights():
 
         msg = ""
         if not os.path.exists(weights_file):
-            msg = "Load weights selected, but the path '%s' does not exist."
+            msg = f"Load weights selected, but the path '{weights_file}' does not exist."
         elif not os.path.splitext(weights_file)[-1].lower() == ".h5":
-            msg = "Load weights selected, but the path '%s' is not a valid Keras model (.h5) file."
+            msg = (f"Load weights selected, but the path '{weights_file}' is not a valid Keras "
+                   f"model (.h5) file.")
 
         if msg:
             msg += " Please check and try again."
-            logger.error(msg)
+            raise FaceswapError(msg)
 
         logger.verbose("Using weights file: %s", weights_file)
         return weights_file

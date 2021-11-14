@@ -264,7 +264,7 @@ class Model(ModelBase):
 
         # Create Autoencoder
         outputs = [decoders["a"], decoders["b"]]
-        autoencoder = KerasModel(inputs, outputs, name=self.name)
+        autoencoder = KerasModel(inputs, outputs, name=self.model_name)
         return autoencoder
 
     def _build_encoders(self, inputs):

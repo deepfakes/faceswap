@@ -55,7 +55,7 @@ class Model(ModelBase):
 
         outputs = [self.decoder_a()(encoder_a), decoder_b()(encoder_b)]
 
-        autoencoder = KerasModel(inputs, outputs, name=self.name)
+        autoencoder = KerasModel(inputs, outputs, name=self.model_name)
         return autoencoder
 
     def encoder(self):
