@@ -459,7 +459,7 @@ class Mask(Editor):
             self._drag_data["opacity"] = self._opacity
             self._get_cursor_shape_mark(
                 self._meta["mask"][face_idx],
-                self._drag_data["starting_location"],
+                np.array(((event.x, event.y), )),
                 face_idx)
             self._drag_callback = self._paint
 
