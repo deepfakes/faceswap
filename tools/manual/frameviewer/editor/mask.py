@@ -457,7 +457,10 @@ class Mask(Editor):
             self._drag_data["color"] = np.array(tuple(int(self._control_color[1:][i:i + 2], 16)
                                                       for i in (0, 2, 4)))
             self._drag_data["opacity"] = self._opacity
-            self._get_cursor_shape_mark(self._meta["mask"][face_idx], self._drag_data["starting_location"], face_idx)
+            self._get_cursor_shape_mark(
+                self._meta["mask"][face_idx],
+                self._drag_data["starting_location"],
+                face_idx)
             self._drag_callback = self._paint
 
     def _paint(self, event):
@@ -534,9 +537,13 @@ class Mask(Editor):
     def _get_cursor_shape_mark(self, img, location, face_idx):
         """ Draw object depending on the cursor shape selection. Defaults to circle.
 
-        :param img: Image to draw on (mask)
-        :param location: Cursor location coordinates that will be transformed to correct coordinates
-        :param face_idx: Face index
+        Parameters
+        ----------
+        img: Image to draw on (mask)
+        location: Cursor location coordinates that will be transformed to correct
+            coordinates
+        face_index: int
+            The index of the face within the current frame
         """
         points, scale = self._transform_points(face_idx, location)
         radius = int(round(self._brush_radius * scale))
