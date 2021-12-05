@@ -42,8 +42,9 @@ class Mask(Editor):
         # Bind control click for reverse painting
         self._canvas.bind("<Control-ButtonPress-1>", self._control_click)
         self._mask_type = self._set_tk_mask_change_callback()
+        self._cursor_shape = self._set_tk_cursor_shape_change_callback()
         self._mouse_location = [
-            self._canvas.create_oval(0, 0, 0, 0, outline="black", state="hidden"), False]
+            self._get_cursor_shape(), False]
 
     @property
     def _opacity(self):
@@ -68,6 +69,11 @@ class Mask(Editor):
     def _cursor_color(self):
         """ str: The hex code for the selected cursor color """
         return self._control_vars["brush"]["CursorColor"].get()
+
+    @property
+    def _cursor_shape_name(self):
+        """ str: The selected cursor shape """
+        return self._control_vars["display"]["CursorShape"].get()
 
     def _add_actions(self):
         """ Add the optional action buttons to the viewer. Current actions are Draw, Erase
@@ -109,12 +115,27 @@ class Mask(Editor):
                                              choices="colorchooser",
                                              default="#ffffff",
                                              helptext=_("Select the brush cursor color.")))
-
+        self._add_control(ControlPanelOption("Cursor Shape",
+                                             str,
+                                             group="Display",
+                                             choices=["Circle", "Rectangle"],
+                                             default="Circle",
+                                             is_radio=True,
+                                             helptext=_("Select a shape for masking cursor.")))
     def _set_tk_mask_change_callback(self):
         """ Add a trace to change the displayed mask on a mask type change. """
         var = self._control_vars["display"]["MaskType"]
         var.trace("w", lambda *e: self._on_mask_type_change())
         return var.get()
+
+    def _set_tk_cursor_shape_change_callback(self):
+        """ Add a trace to change the displayed cursor on a cursor shape type change. """
+        var = self._control_vars["display"]["CursorShape"]
+        var.trace("w", lambda *e: self._on_cursor_shape_change())
+        return var.get()
+
+    def _on_cursor_shape_change(self):
+        self._mouse_location[0] = self._get_cursor_shape()
 
     def _on_mask_type_change(self):
         """ Update the displayed mask on a mask type change """
@@ -436,6 +457,10 @@ class Mask(Editor):
             self._drag_data["color"] = np.array(tuple(int(self._control_color[1:][i:i + 2], 16)
                                                       for i in (0, 2, 4)))
             self._drag_data["opacity"] = self._opacity
+            self._get_cursor_shape_mark(
+                self._meta["mask"][face_idx],
+                np.array(((event.x, event.y), )),
+                face_idx)
             self._drag_callback = self._paint
 
     def _paint(self, event):
@@ -503,17 +528,44 @@ class Mask(Editor):
             return
         face_idx = self._mouse_location[1]
         location = np.array(((event.x, event.y), ))
-        color = 0 if self._edit_mode == "erase" else 255
-        # Reverse action on control click
-        color = abs(color - 255) if self._drag_data["control_click"] else color
         if np.array_equal(self._drag_data["starting_location"], location[0]):
-            points, scale = self._transform_points(face_idx, location)
-            brush_radius = int(round(self._brush_radius * scale))
-            cv2.circle(self._meta["mask"][face_idx], tuple(points), brush_radius, color,
-                       thickness=-1)
+            self._get_cursor_shape_mark(self._meta["mask"][face_idx], location, face_idx)
         self._mask_to_alignments(face_idx)
         self._drag_data = dict()
         self._update_cursor(event)
+
+    def _get_cursor_shape_mark(self, img, location, face_idx):
+        """ Draw object depending on the cursor shape selection. Defaults to circle.
+
+        Parameters
+        ----------
+        img: Image to draw on (mask)
+        location: Cursor location coordinates that will be transformed to correct
+            coordinates
+        face_index: int
+            The index of the face within the current frame
+        """
+        points, scale = self._transform_points(face_idx, location)
+        radius = int(round(self._brush_radius * scale))
+        color = 0 if self._edit_mode == "erase" else 255
+        # Reverse action on control click
+        color = abs(color - 255) if self._drag_data["control_click"] else color
+
+        if self._cursor_shape_name == "Rectangle":
+            point2 = points.copy()
+            points[0] = points[0] - radius
+            points[1] = points[1] - radius
+            point2[0] = point2[0] + radius
+            point2[1] = point2[1] + radius
+            cv2.rectangle(img, tuple(points), tuple(point2), color, -1)
+        else:
+            cv2.circle(img, tuple(points), radius, color, thickness=-1)
+
+    def _get_cursor_shape(self, x1=0, y1=0, x2=0, y2=0, outline="black", state="hidden"):
+        if self._cursor_shape_name == "Rectangle":
+            return self._canvas.create_rectangle(x1, y1, x2, y2, outline=outline, state=state)
+        else:
+            return self._canvas.create_oval(x1, y1, x2, y2, outline=outline, state=state)
 
     def _mask_to_alignments(self, face_index):
         """ Update the annotated mask to alignments.

@@ -9,7 +9,7 @@ from keras.layers import Concatenate, Dense, Flatten, Input, LeakyReLU, Reshape
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 
-from ._base import ModelBase, KerasModel
+from ._base import ModelBase, KerasModel, logger
 
 
 class Model(ModelBase):
@@ -23,6 +23,13 @@ class Model(ModelBase):
         self.encoder_dim = self.config["encoder_dims"]
         self.decoder_dim = self.config["decoder_dims"]
 
+        self._patch_weights_management()
+
+    @property
+    def model_name(self):
+        """ str: The name of the keras model. Varies depending on selected architecture. """
+        return f"{self.name}_{self.architecture}"
+
     @property
     def ae_dims(self):
         """ Set the Autoencoder Dimensions or set to default """
@@ -30,6 +37,16 @@ class Model(ModelBase):
         if retval == 0:
             retval = 256 if self.architecture == "liae" else 512
         return retval
+
+    def _patch_weights_management(self):
+        """ Patch in the correct encoder name into the config dictionary for freezing and loading
+        weights based on architecture.
+        """
+        self.config["freeze_layers"] = [f"encoder_{self.architecture}"]
+        self.config["load_layers"] = [f"encoder_{self.architecture}"]
+        logger.debug("Patched encoder layers to config: %s",
+                     {k: v for k, v in self.config.items()
+                      if k in ("freeze_layers", "load_layers")})
 
     def build_model(self, inputs):
         """ Build the DFL-SAE Model """
@@ -53,7 +70,7 @@ class Model(ModelBase):
                        self.decoder("b", enc_output_shape)(encoder_b)]
         autoencoder = KerasModel(inputs,
                                  outputs,
-                                 name="{}_{}".format(self.name, self.architecture))
+                                 name=self.model_name)
         return autoencoder
 
     def encoder_df(self):
