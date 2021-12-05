@@ -1266,14 +1266,15 @@ class _Loss():
                 loss_func.add_loss(face_loss, mask_channel=mask_channels[0])
                 self._add_l2_regularization_term(loss_func, mask_channels[0])
 
-                mask_channel = 1
+                channel_idx = 1
                 for multiplier in ("eye_multiplier", "mouth_multiplier"):
+                    mask_channel = mask_channels[channel_idx]
                     if self._config[multiplier] > 1:
                         loss_func.add_loss(face_loss,
                                            weight=self._config[multiplier] * 1.0,
-                                           mask_channel=mask_channels[mask_channel])
+                                           mask_channel=mask_channel)
                         self._add_l2_regularization_term(loss_func, mask_channel)
-                    mask_channel += 1
+                    channel_idx += 1
 
             logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
             self._funcs[output_name] = loss_func
