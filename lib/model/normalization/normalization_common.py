@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """ Normalization methods for faceswap.py common to both Plaid and Tensorflow Backends """
 
+from ast import Import
 import sys
 import inspect
 
 from keras.layers import Layer, InputSpec
 from keras import initializers, regularizers, constraints
 from keras import backend as K
-from keras.utils import get_custom_objects
+
+try:
+    from keras.utils import get_custom_objects
+except ImportError:
+    from tensorflow.keras.utils import get_custom_objects
 
 from lib.utils import get_backend
 

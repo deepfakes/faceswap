@@ -20,7 +20,11 @@ from keras import losses as k_losses
 from keras import backend as K
 from keras.layers import Input
 from keras.models import load_model, Model as KModel
-from keras.optimizers import Adam, Nadam, RMSprop
+
+try:
+    from keras.optimizers import Adam, Nadam, RMSprop
+except ImportError:
+    from tensorflow.keras.optimizers import Adam, Nadam, RMSprop
 
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup

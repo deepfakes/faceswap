@@ -9,7 +9,11 @@ import numpy as np
 import tensorflow as tf
 from keras import backend as K
 from keras import initializers
-from keras.utils import get_custom_objects
+
+try:
+    from keras.utils import get_custom_objects
+except ImportError:
+    from tensorflow.keras.utils import get_custom_objects
 
 from lib.utils import get_backend
 

@@ -8,7 +8,11 @@ import inspect
 import sys
 
 import tensorflow as tf
-from keras.utils import get_custom_objects
+
+try:
+    from keras.utils import get_custom_objects
+except ImportError:
+    from tensorflow.keras.utils import get_custom_objects
 
 
 class AdaBelief(tf.keras.optimizers.Optimizer):
