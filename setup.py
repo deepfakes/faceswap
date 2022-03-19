@@ -289,6 +289,8 @@ class Environment():
             backend = "amd"
         elif self.enable_cuda:
             backend = "nvidia"
+        elif self.enable_apple:
+            backend = "apple"
         else:
             backend = "cpu"
         config = {"backend": backend}

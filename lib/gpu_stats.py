@@ -163,7 +163,7 @@ class GPUStats():
                 loglevel = "INFO" if self._logger is None else self._logger.getEffectiveLevel()
                 self._plaid = plaidlib(log_level=loglevel, log=log)
             elif IS_MACOS:
-                self._log("debug", "macOS Detected. Using pynvx")
+                self._log("debug", "macOS Detected.")
                 try:
                     metal.init()
                 except RuntimeError:

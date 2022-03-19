@@ -26,7 +26,7 @@ def _validate_metal():
         assert(tf.math.add(1.0, 2.0) == 3.0)
 
 def init(device_type: str = 'GPU') -> None:
-    _validate_metal()
+    #_validate_metal()
 
     os.environ['DISPLAY'] = ':0'
     try:
@@ -35,8 +35,8 @@ def init(device_type: str = 'GPU') -> None:
         pass
     Constants.System.DEVICE_TYPE = device_type
 
-    for device in get_devices():
-        tf.config.experimental.set_memory_growth(device, Constants.System.SET_MEMORY_GROWTH)
+    #for device in get_devices():
+    #    tf.config.experimental.set_memory_growth(device, Constants.System.SET_MEMORY_GROWTH)
     
     _dbg_check_mem()
 
