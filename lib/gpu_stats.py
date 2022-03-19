@@ -14,7 +14,7 @@ import platform
 from lib.utils import get_backend
 
 if platform.system() == 'Darwin':
-    import pynvx  # pylint: disable=import-error
+    import lib.metal as metal # pylint: disable=import-error
     IS_MACOS = True
 else:
     import pynvml
@@ -165,7 +165,7 @@ class GPUStats():
             elif IS_MACOS:
                 self._log("debug", "macOS Detected. Using pynvx")
                 try:
-                    pynvx.cudaInit()
+                    metal.init()
                 except RuntimeError:
                     self._initialized = True
                     return
@@ -218,7 +218,7 @@ class GPUStats():
         if self._is_plaidml:
             self._device_count = self._plaid.device_count
         elif IS_MACOS:
-            self._device_count = pynvx.cudaDeviceGetCount(ignore=True)
+            self._device_count = metal.get_device_count()
         else:
             try:
                 self._device_count = pynvml.nvmlDeviceGetCount()
@@ -250,7 +250,7 @@ class GPUStats():
         if self._is_plaidml:
             self._handles = self._plaid.devices
         elif IS_MACOS:
-            self._handles = pynvx.cudaDeviceGetHandles(ignore=True)
+            self._handles = metal.get_handles()
         else:
             self._handles = [pynvml.nvmlDeviceGetHandleByIndex(i)
                              for i in range(self._device_count)]
@@ -267,7 +267,7 @@ class GPUStats():
         if self._is_plaidml:
             driver = self._plaid.drivers
         elif IS_MACOS:
-            driver = pynvx.cudaSystemGetDriverVersion(ignore=True)
+            driver = metal.get_driver_version()
         else:
             try:
                 driver = pynvml.nvmlSystemGetDriverVersion().decode("utf-8")
@@ -292,8 +292,7 @@ class GPUStats():
         if self._is_plaidml:
             names = self._plaid.names
         elif IS_MACOS:
-            names = [pynvx.cudaGetName(handle, ignore=True)
-                     for handle in self._handles]
+            names = metal.get_device_names()
         else:
             names = [pynvml.nvmlDeviceGetName(handle).decode("utf-8")
                      for handle in self._handles]
@@ -315,8 +314,7 @@ class GPUStats():
         elif self._is_plaidml:
             vram = self._plaid.vram
         elif IS_MACOS:
-            vram = [pynvx.cudaGetMemTotal(handle, ignore=True) / (1024 * 1024)
-                    for handle in self._handles]
+            vram = [metal.get_memory_info(i) / (1024 * 1024) for i in range(self._device_count)]
         else:
             vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).total /
                     (1024 * 1024)

@@ -56,7 +56,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             If Tensorflow is not found, or is not between versions 2.2 and 2.6
         """
         min_ver = 2.2
-        max_ver = 2.6
+        max_ver = 2.8 #2.6
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
             os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
