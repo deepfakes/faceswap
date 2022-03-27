@@ -4,6 +4,7 @@
 Architecture and Pre-Trained Model ported from PyTorch to Keras by TorzDF from
 https://github.com/zllrunning/face-parsing.PyTorch
 """
+import os
 
 import numpy as np
 
@@ -20,8 +21,10 @@ from ._base import Masker, logger
 class Mask(Masker):
     """ Neural network to process face image into a segmentation mask of the face """
     def __init__(self, **kwargs):
+        self._is_faceswap = self._check_weights_selection(kwargs.get("configfile"))
+
         git_model_id = 14
-        model_filename = self._get_filename(kwargs.get("configfile"))
+        model_filename = f"bisnet_face_parsing_v{'2' if self._is_faceswap else '1'}.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
 
         self.name = "BiSeNet - Face Parsing"
@@ -38,9 +41,11 @@ class Mask(Masker):
         # Separate storage for face and head masks
         self._storage_name = f"{self._storage_name}_{self._storage_centering}"
 
-    def _get_filename(self, configfile):
-        """ Obtain the correct filename for weights based on user selection of faceswap or original
-        weights.
+    def _check_weights_selection(self, configfile):
+        """ Check which weights have been selected.
+
+        This is required for passing along the correct file name for the corresponding weights
+        selection, so config needs to be loaded and scanned prior to parent loading it.
 
         Parameters
         ----------
@@ -49,13 +54,22 @@ class Mask(Masker):
 
         Returns
         -------
-        str
-            The model weights file to use
+        bool
+            ``True`` if `faceswap` trained weights have been selected. ``False`` if `original`
+            weights have been selected
         """
         config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
-        weights = config.get("weights", "faceswap")
-        retval = f"bisnet_face_parsing_v{'1' if weights == 'original' else '2'}.h5"
-        logger.debug("Using saved weights '%s' for selection '%s'", retval, weights)
+        retval = config.get("weights", "faceswap").lower() == "faceswap"
+
+        # TODO Remove this check when weights moved to main code.
+        if retval:
+            _chk_dir = os.listdir(os.path.join(os.path.dirname(__file__), ".cache"))
+            if 'bisnet_face_parsing_v2.h5' not in _chk_dir:
+                logger.warning("'Faceswap' trained weights are currently Patreon timed exclusive. "
+                               "They will be coming to the main code soon.")
+                logger.warning("Switching to 'Original' weights.")
+                retval = False
+
         return retval
 
     def _get_segment_indices(self):
