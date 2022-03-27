@@ -63,6 +63,18 @@ _DEFAULTS = {
         group="settings",
         gui_radio=False,
         fixed=True),
+    "weights": dict(
+        default="faceswap",
+        info="The trained weights to use.\n"
+             "\n\tfaceswap - Weights trained on wildly varied Faceswap extracted data to better "
+             "handle varying conditions, obstructions, glasses and multiple targets within a "
+             "single extracted image."
+             "\n\toriginal - The original weights trained on the CelebAMask-HQ dataset.",
+        choices=["faceswap", "original"],
+        datatype=str,
+        group="settings",
+        gui_radio=True,
+    ),
     "include_ears": dict(
         default=False,
         info="Whether to include ears within the face mask.",
@@ -77,8 +89,10 @@ _DEFAULTS = {
     ),
     "include_glasses": dict(
         default=True,
-        info="Whether to include glasses within the face mask. NB: excluding glasses will mask "
-             "out the lenses as well as the frames.",
+        info="Whether to include glasses within the face mask.\n\tFor 'original' weights "
+             "excluding glasses will mask out the lenses as well as the frames.\n\tFor 'faceswap' "
+             "weights, the model has been trained to mask out lenses if eyes cannot be seen (i.e. "
+             "dark sunglasses) or just the frames if the eyes can be seen. ",
         datatype=bool,
         group="settings"
     ),
