@@ -35,7 +35,6 @@ class Mask(Masker):
         self.vram_per_batch = 64
         self.batchsize = self.config["batch-size"]
 
-        self._is_faceswap = self.config["weights"] == "faceswap"
         self._segment_indices = self._get_segment_indices()
         self._storage_centering = "head" if self.config["include_hair"] else "face"
         # Separate storage for face and head masks
