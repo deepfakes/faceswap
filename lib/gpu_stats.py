@@ -342,8 +342,7 @@ class GPUStats():
         if self._is_plaidml:
             vram = self._plaid.vram
         elif IS_MACOS:
-            vram = [pynvx.cudaGetMemFree(handle, ignore=True) / (1024 * 1024)
-                    for handle in self._handles]
+            vram = [metal.get_memory_info(i) / (1024 * 1024) for i in range(self._device_count)]
         else:
             vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).free / (1024 * 1024)
                     for handle in self._handles]
