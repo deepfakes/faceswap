@@ -85,7 +85,7 @@ msgid "Group by method. When -fp/--final-processing by folders choose the how th
 msgstr ""
 
 #: tools/sort/cli.py:140
-msgid "Integer value. Number of folders that will be used to group by blur, face-yaw and black-pixels. For blur folder 0 will be the least blurry, while the last folder will be the blurriest. For face-yaw the number of bins is by how much 180 degrees is divided. So if you use 18, then each folder will be a 10 degree increment. Folder 0 will contain faces looking the most to the left whereas the last folder will contain the faces looking the most to the right. If the number of images doesn't divide evenly into the number of bins, the remaining images get put in the last bin. For black-pixels it represents the divider of the percentage of black pixels. For 10, first folder will have the faces with 0 to 10% black pixels, second 11 to 20%, etc. Default value: 5"
+msgid "Integer value. Number of folders that will be used to group by blur, face-yaw and black-pixels. For blur folder 0 will be the least blurry, while the last folder will be the blurriest. For face-yaw the number of bins is by how much 180 degrees is divided. So if you use 18, then each folder will be a 10 degree increment. Folder 0 will contain faces looking the most to the left whereas the last folder will contain the faces looking the most to the right. If the number of images doesn't divide evenly into the number of bins, the remaining images get put in the last bin. For black-pixels it represents the divider of the percentage of black pixels. For 10, first folder will have the faces with 0 to 10%% black pixels, second 11 to 20%%, etc. Default value: 5"
 msgstr ""
 
 #: tools/sort/cli.py:154 tools/sort/cli.py:164

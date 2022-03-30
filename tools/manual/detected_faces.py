@@ -255,7 +255,9 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         self._tk_edited = detected_faces.tk_edited
         self._tk_face_count_changed = detected_faces.tk_face_count_changed
         self._globals = detected_faces._globals
-        self._sorted_frame_names = sorted(self._alignments.data)
+
+        # Must be populated after loading faces as video_meta_data may have increased frame count
+        self._sorted_frame_names = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def load(self):
@@ -270,6 +272,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
                 _ = face.aligned.average_distance  # cache the distances
                 this_frame_faces.append(face)
             self._frame_faces.append(this_frame_faces)
+        self._sorted_frame_names = sorted(self._alignments.data)
 
     def save(self):
         """ Convert updated :class:`~lib.align.DetectedFace` objects to alignments format
@@ -301,6 +304,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             logger.debug("Alignments not amended. Returning")
             return
         logger.verbose("Reverting alignments for frame_index %s", frame_index)
+        print(frame_index)
+        print(len(self._sorted_frame_names))
         alignments = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
         faces = self._frame_faces[frame_index]
 
