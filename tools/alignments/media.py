@@ -72,11 +72,14 @@ class MediaLoader():
     ----------
     folder: str
         The folder of images or video file to load images from
+    count: int or ``None``, optional
+        If the total frame count is known it can be passed in here which will skip
+        analyzing a video file. If the count is not passed in, it will be calculated.
     """
-    def __init__(self, folder):
+    def __init__(self, folder, count=None):
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
-        self._count = None
+        self._count = count
         self.folder = folder
         self.vid_reader = self.check_input_folder()
         self.file_list_sorted = self.sorted_items()
@@ -188,7 +191,7 @@ class MediaLoader():
         numpy.ndarray
             The image that has been loaded from disk
         """
-        loader = ImagesLoader(self.folder, queue_size=32)
+        loader = ImagesLoader(self.folder, queue_size=32, count=self._count)
         if skip_list is not None:
             loader.add_skip_list(skip_list)
         for filename, image in loader.load():
