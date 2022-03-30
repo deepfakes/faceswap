@@ -304,8 +304,6 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             logger.debug("Alignments not amended. Returning")
             return
         logger.verbose("Reverting alignments for frame_index %s", frame_index)
-        print(frame_index)
-        print(len(self._sorted_frame_names))
         alignments = self._alignments.data[self._sorted_frame_names[frame_index]]["faces"]
         faces = self._frame_faces[frame_index]
 
