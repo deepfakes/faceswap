@@ -4,8 +4,6 @@
 Architecture and Pre-Trained Model ported from PyTorch to Keras by TorzDF from
 https://github.com/zllrunning/face-parsing.PyTorch
 """
-import os
-
 import numpy as np
 
 from keras import backend as K
@@ -59,16 +57,6 @@ class Mask(Masker):
         """
         config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
         retval = config.get("weights", "faceswap").lower() == "faceswap"
-
-        # TODO Remove this check when weights moved to main code.
-        if retval:
-            _chk_dir = os.listdir(os.path.join(os.path.dirname(__file__), ".cache"))
-            if 'bisnet_face_parsing_v2.h5' not in _chk_dir:
-                logger.warning("'Faceswap' trained weights are currently Patreon timed exclusive. "
-                               "They will be coming to the main code soon.")
-                logger.warning("Switching to 'Original' weights.")
-                retval = False
-
         return retval
 
     def _get_segment_indices(self):
