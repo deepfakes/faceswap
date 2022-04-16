@@ -604,8 +604,11 @@ class _EventParser():  # pylint:disable=too-few-public-methods
 
         config = serializer.unmarshal(struct)["config"]
         model_outputs = self._get_outputs(config)
-        split_output = len(np.unique(model_outputs[..., 1])) == 1
 
+        # loss length of unique should be 3:
+        # - decoder_both, 1, 2
+        # - docoder_a, decoder_b, 1
+        split_output = len(np.unique(model_outputs[..., :2])) != 3
         for side_outputs, side in zip(model_outputs, ("a", "b")):
             logger.debug("side: '%s', outputs: '%s'", side, side_outputs)
             layer_name = side_outputs[0][0]
