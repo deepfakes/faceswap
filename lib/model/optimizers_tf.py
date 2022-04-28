@@ -8,7 +8,8 @@ import inspect
 import sys
 
 import tensorflow as tf
-from keras.utils import get_custom_objects
+
+from lib.utils import get_keras_custom_objects as get_custom_objects
 
 
 class AdaBelief(tf.keras.optimizers.Optimizer):
@@ -128,6 +129,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
     def __init__(self, learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-14,
                  weight_decay=0.0, rectify=True, amsgrad=False, sma_threshold=5.0, total_steps=0,
                  warmup_proportion=0.1, min_lr=0.0, name="AdaBeliefOptimizer", **kwargs):
+        # pylint:disable=too-many-arguments
         super().__init__(name, **kwargs)
         self._set_hyper("learning_rate", kwargs.get("lr", learning_rate))
         self._set_hyper("beta_1", beta_1)
@@ -196,7 +198,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         return wd_t
 
     def _resource_apply_dense(self, grad, handle, apply_state=None):
-        # pylint:disable=too-many-locals
+        # pylint:disable=too-many-locals,unused-argument
         """ Add ops to apply dense gradients to the variable handle.
 
         Parameters
@@ -274,7 +276,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         return tf.group(*updates)
 
     def _resource_apply_sparse(self, grad, handle, indices, apply_state=None):
-        # pylint:disable=too-many-locals
+        # pylint:disable=too-many-locals, unused-argument
         """ Add ops to apply sparse gradients to the variable handle.
 
         Similar to _apply_sparse, the indices argument to this method has been de-duplicated.
@@ -391,6 +393,6 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
 
 
 # Update layers into Keras custom objects
-for name, obj in inspect.getmembers(sys.modules[__name__]):
+for _name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({name: obj})
+        get_custom_objects().update({_name: obj})
