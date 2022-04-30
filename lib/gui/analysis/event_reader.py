@@ -7,8 +7,9 @@ import zlib
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.core.util import event_pb2
-from tensorflow.python.framework import errors_impl as tf_errors
+from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
+    errors_impl as tf_errors)
 
 from lib.serializer import get_serializer
 
@@ -43,7 +44,7 @@ class _LogFiles():
             The full path of each log file for each training session id that has been run
         """
         logger.debug("Loading log filenames. base_dir: '%s'", self._logs_folder)
-        retval = dict()
+        retval = {}
         for dirpath, _, filenames in os.walk(self._logs_folder):
             if not any(filename.startswith("events.out.tfevents") for filename in filenames):
                 continue
@@ -133,7 +134,7 @@ class _Cache():
     def __init__(self, session_ids):
         logger.debug("Initializing: %s: (session_ids: %s)", self.__class__.__name__, session_ids)
         self._data = {idx: None for idx in session_ids}
-        self._carry_over = dict()
+        self._carry_over = {}
         self._loss_labels = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -334,7 +335,7 @@ class _Cache():
 
         dtype = "float32" if metric == "loss" else "float64"
 
-        retval = dict()
+        retval = {}
         for idx, data in raw.items():
             val = {metric: np.frombuffer(zlib.decompress(data[metric]),
                                          dtype=dtype).reshape(data[f"{metric}_shape"])}
@@ -461,7 +462,7 @@ class TensorBoardLogs():
             and list of loss values for each step
         """
         logger.debug("Getting loss: (session_id: %s)", session_id)
-        retval = dict()
+        retval = {}
         for idx in [session_id] if session_id else self.session_ids:
             self._check_cache(idx)
             data = self._cache.get_data(idx, "loss")
@@ -493,7 +494,7 @@ class TensorBoardLogs():
 
         logger.debug("Getting timestamps: (session_id: %s, is_training: %s)",
                      session_id, self._is_training)
-        retval = dict()
+        retval = {}
         for idx in [session_id] if session_id else self.session_ids:
             self._check_cache(idx)
             data = self._cache.get_data(idx, "timestamps")
@@ -565,7 +566,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         session_id: int
             The session id that the data is being cached for
         """
-        data = dict()
+        data = {}
         try:
             for record in self._iterator:
                 event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
@@ -574,7 +575,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                 if event.summary.value[0].tag == "keras":
                     self._parse_outputs(event)
                 if event.summary.value[0].tag.startswith("batch_"):
-                    data[event.step] = self._process_event(event, data.get(event.step, dict()))
+                    data[event.step] = self._process_event(event, data.get(event.step, {}))
 
         except tf_errors.DataLossError as err:
             logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
@@ -670,8 +671,19 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             The given step `dict` with the given event data added to it.
         """
         summary = event.summary.value[0]
+
         if summary.tag in ("batch_loss", "batch_total"):  # Pre tf2.3 totals were "batch_total"
             step["timestamp"] = event.wall_time
             return step
-        step.setdefault("loss", list()).append(summary.simple_value)
+
+        loss = summary.simple_value
+        if not loss:
+            # Need to convert a tensor to a float for TF2.8 logged data. This maybe due to change
+            # in logging or may be due to work around put in place in FS training function for the
+            # following bug in TF 2.8 when writing records:
+            #  https://github.com/keras-team/keras/issues/16173
+            loss = float(tf.make_ndarray(summary.tensor))
+
+        step.setdefault("loss", []).append(loss)
+
         return step
