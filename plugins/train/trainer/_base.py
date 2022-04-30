@@ -16,10 +16,11 @@ import cv2
 import numpy as np
 
 import tensorflow as tf
-from tensorflow.python.framework import errors_impl as tf_errors
+from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
+    errors_impl as tf_errors)
 
 from lib.training import TrainingDataGenerator
-from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths
+from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths, get_tf_version
 from plugins.train._config import Config
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -129,8 +130,8 @@ class TrainerBase():
 
         logger.debug("Setting up TensorBoard Logging")
         log_dir = os.path.join(str(self._model.model_dir),
-                               "{}_logs".format(self._model.name),
-                               "session_{}".format(self._model.state.session_id))
+                               f"{self._model.name}_logs",
+                               f"session_{self._model.state.session_id}")
         tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_dir,
                                                      histogram_freq=0,  # Must be 0 or hangs
                                                      write_graph=get_backend() != "amd",
@@ -251,7 +252,16 @@ class TrainerBase():
         logger.trace("Updating TensorBoard log")
         logs = {log[0]: log[1]
                 for log in zip(self._model.state.loss_names, loss)}
+
         self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
+        if get_tf_version() == 2.8:
+            # Bug in TF 2.8 where batch recording got deleted.
+            # ref: https://github.com/keras-team/keras/issues/16173
+            for name, value in logs.items():
+                tf.summary.scalar(
+                    "batch_" + name,
+                    value,
+                    step=self._model._model._train_counter)  # pylint:disable=protected-access
 
     def _collate_and_store_loss(self, loss):
         """ Collate the loss into totals for each side.
@@ -297,11 +307,11 @@ class TrainerBase():
             The loss for each side. List should contain 2 ``floats`` side "a" in position 0 and
             side "b" in position `.
          """
-        output = ", ".join(["Loss {}: {:.5f}".format(side, side_loss)
+        output = ", ".join([f"Loss {side}: {side_loss:.5f}"
                             for side, side_loss in zip(("A", "B"), loss)])
         timestamp = time.strftime("%H:%M:%S")
-        output = "[{}] [#{:05d}] {}".format(timestamp, self._model.iterations, output)
-        print("\r{}".format(output), end="")
+        output = f"[{timestamp}] [#{self._model.iterations:05d}] {output}"
+        print(f"\r{output}", end="")
 
     def clear_tensorboard(self):
         """ Stop Tensorboard logging.
@@ -335,14 +345,14 @@ class _Feeder():
         self._model = model
         self._images = images
         self._config = config
-        self._target = dict()
-        self._samples = dict()
-        self._masks = dict()
+        self._target = {}
+        self._samples = {}
+        self._masks = {}
 
         self._feeds = {side: self._load_generator(idx).minibatch_ab(images[side], batch_size, side)
                        for idx, side in enumerate(("a", "b"))}
 
-        self._display_feeds = dict(preview=self._set_preview_feed(), timelapse=dict())
+        self._display_feeds = dict(preview=self._set_preview_feed(), timelapse={})
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     def _load_generator(self, output_index):
@@ -385,7 +395,7 @@ class _Feeder():
             The side ("a" or "b") as key, :class:`~lib.training_data.TrainingDataGenerator` as
             value.
         """
-        retval = dict()
+        retval = {}
         for idx, side in enumerate(("a", "b")):
             logger.debug("Setting preview feed: (side: '%s')", side)
             preview_images = self._config.get("preview_images", 14)
@@ -484,9 +494,9 @@ class _Feeder():
             should not be generated, in which case currently stored previews should be deleted.
         """
         if not do_preview:
-            self._samples = dict()
-            self._target = dict()
-            self._masks = dict()
+            self._samples = {}
+            self._target = {}
+            self._masks = {}
             return
         logger.debug("Generating preview")
         for side in ("a", "b"):
@@ -523,7 +533,7 @@ class _Feeder():
          """
         num_images = self._config.get("preview_images", 14)
         num_images = min(batch_size, num_images) if batch_size is not None else num_images
-        retval = dict()
+        retval = {}
         for side in ("a", "b"):
             logger.debug("Compiling samples: (side: '%s', samples: %s)", side, num_images)
             side_images = images[side] if images is not None else self._target[side]
@@ -544,9 +554,9 @@ class _Feeder():
             :class:`numpy.ndarrays` for creating a time-lapse frame
         """
         batchsizes = []
-        samples = dict()
-        images = dict()
-        masks = dict()
+        samples = {}
+        images = {}
+        masks = {}
         for side in ("a", "b"):
             batch = next(self._display_feeds["timelapse"][side])
             batchsizes.append(len(batch["samples"]))
@@ -607,7 +617,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
                      self.__class__.__name__, model, coverage_ratio)
         self._model = model
         self._display_mask = model.config["learn_mask"] or model.config["penalized_mask_loss"]
-        self.images = dict()
+        self.images = {}
         self._coverage_ratio = coverage_ratio
         self._scaling = scaling
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -630,9 +640,9 @@ class _Samples():  # pylint:disable=too-few-public-methods
             A compiled preview image ready for display or saving
         """
         logger.debug("Showing sample")
-        feeds = dict()
-        figures = dict()
-        headers = dict()
+        feeds = {}
+        figures = {}
+        headers = {}
         for idx, side in enumerate(("a", "b")):
             samples = self.images[side]
             faces = samples[1]
@@ -647,8 +657,8 @@ class _Samples():  # pylint:disable=too-few-public-methods
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
-            predictions = [preds["{0}_{0}".format(side)],
-                           preds["{}_{}".format(other_side, side)]]
+            predictions = [preds[f"{side}_{side}"],
+                           preds[f"{other_side}_{side}"]]
             display = self._to_full_frame(side, samples, predictions)
             headers[side] = self._get_headers(side, display[0].shape[1])
             figures[side] = np.stack([display[0], display[1], display[2], ], axis=1)
@@ -716,7 +726,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
             List of :class:`numpy.ndarray` of predictions received from the model
         """
         logger.debug("Getting Predictions")
-        preds = dict()
+        preds = {}
         standard = self._model.model.predict([feed_a, feed_b])
         swapped = self._model.model.predict([feed_b, feed_a])
 
@@ -904,9 +914,9 @@ class _Samples():  # pylint:disable=too-few-public-methods
         total_width = width * 3
         logger.debug("height: %s, total_width: %s", height, total_width)
         font = cv2.FONT_HERSHEY_SIMPLEX
-        texts = ["{} ({})".format(titles[0], side),
-                 "{0} > {0}".format(titles[0]),
-                 "{} > {}".format(titles[0], titles[1])]
+        texts = [f"{titles[0]} ({side})",
+                 f"{titles[0]} > {titles[0]}",
+                 f"{titles[0]} > {titles[1]}"]
         scaling = (width / 144) * 0.45
         text_sizes = [cv2.getTextSize(texts[idx], font, scaling, 1)[0]
                       for idx in range(len(texts))]
@@ -1002,7 +1012,7 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         logger.debug("Time-lapse output set to '%s'", self._output_file)
 
         # Rewrite paths to pull from the training images so mask and face data can be accessed
-        images = dict()
+        images = {}
         for side, input_ in zip(("a", "b"), (input_a, input_b)):
             training_path = os.path.dirname(self._image_paths[side][0])
             images[side] = [os.path.join(training_path, os.path.basename(pth))
