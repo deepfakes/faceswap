@@ -12,11 +12,11 @@ from lib.utils import get_backend, get_keras_custom_objects as get_custom_object
 
 if get_backend() == "amd":
     from keras.backend \
-    import normalize_data_format  # pylint:disable=ungrouped-imports,no-name-in-module
+        import normalize_data_format  # pylint:disable=ungrouped-imports,no-name-in-module
 else:
     # pylint:disable=no-name-in-module
     from tensorflow.python.keras.utils.conv_utils \
-    import normalize_data_format   # pylint:disable=no-name-in-module
+        import normalize_data_format   # pylint:disable=no-name-in-module
 
 
 class InstanceNormalization(Layer):
