@@ -76,11 +76,11 @@ def _test_optimizer(optimizer, target=0.75):
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
 def test_adam(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """
-    _test_optimizer(k_optimizers.Adam(), target=0.5)
-    _test_optimizer(k_optimizers.Adam(decay=1e-3), target=0.5)
+    _test_optimizer(k_optimizers.Adam(), target=0.45)
+    _test_optimizer(k_optimizers.Adam(decay=1e-3), target=0.45)
 
 
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
 def test_adabelief(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """
-    _test_optimizer(optimizers.AdaBelief(), target=0.5)
+    _test_optimizer(optimizers.AdaBelief(), target=0.45)
