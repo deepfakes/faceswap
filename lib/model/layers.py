@@ -15,6 +15,7 @@ from lib.utils import get_backend, get_keras_custom_objects as get_custom_object
 
 if get_backend() == "amd":
     from lib.plaidml_utils import pad
+    from keras.utils import conv_utils  # pylint:disable=ungrouped-imports
 else:
     from tensorflow import pad
     from tensorflow.python.keras.utils import conv_utils  # pylint:disable=no-name-in-module
