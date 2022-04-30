@@ -8,6 +8,8 @@ import inspect
 import sys
 
 import tensorflow as tf
+from tensorflow.keras.optimizers import (  # noqa pylint:disable=no-name-in-module,unused-import,import-error
+    Adam, Nadam, RMSprop)
 
 from lib.utils import get_keras_custom_objects as get_custom_objects
 
@@ -326,7 +328,7 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
         m_corr_t = m_t / (1.0 - beta_1_power)
 
         var_v = self.get_slot(handle, "v")
-        m_t_indices = tf.gather(m_t, indices)
+        m_t_indices = tf.gather(m_t, indices)  # pylint:disable=no-value-for-parameter
         v_scaled_g_values = tf.math.square(grad - m_t_indices) * (1 - beta_2_t)
         v_t = var_v.assign(var_v * beta_2_t + epsilon_t, use_locking=self._use_locking)
         v_t = self._resource_scatter_add(var_v, indices, v_scaled_g_values)
@@ -357,7 +359,9 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
 
         var_update = self._resource_scatter_add(handle,
                                                 indices,
-                                                tf.gather(tf.math.negative(lr_t) * var_t, indices))
+                                                tf.gather(  # pylint:disable=no-value-for-parameter
+                                                    tf.math.negative(lr_t) * var_t,
+                                                    indices))
 
         updates = [var_update, m_t, v_t]
         if self.amsgrad:
