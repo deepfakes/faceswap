@@ -171,7 +171,7 @@ class _Cache():
         timestamps, loss = self._to_numpy(data, is_live)
 
         if not is_live or (is_live and not self._data.get(session_id, None)):
-            self._data[session_id] = dict(labels=labels,
+            self._data[session_id] = dict(labels=self._loss_labels,
                                           loss=zlib.compress(loss),
                                           loss_shape=loss.shape,
                                           timestamps=zlib.compress(timestamps),
