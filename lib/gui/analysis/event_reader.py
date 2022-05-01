@@ -159,13 +159,14 @@ class _Cache():
         """
         logger.debug("Caching event data: (session_id: %s, labels: %s, data points: %s, "
                      "is_live: %s)", session_id, labels, len(data), is_live)
-        if not data:
-            logger.debug("No data to cache")
-            return
 
         if labels:
             logger.debug("Setting loss labels: %s", labels)
             self._loss_labels = labels
+
+        if not data:
+            logger.debug("No data to cache")
+            return
 
         timestamps, loss = self._to_numpy(data, is_live)
 
@@ -606,10 +607,6 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         config = serializer.unmarshal(struct)["config"]
         model_outputs = self._get_outputs(config)
 
-        # loss length of unique should be 3:
-        # - decoder_both, 1, 2
-        # - docoder_a, decoder_b, 1
-        split_output = len(np.unique(model_outputs[..., :2])) != 3
         for side_outputs, side in zip(model_outputs, ("a", "b")):
             logger.debug("side: '%s', outputs: '%s'", side, side_outputs)
             layer_name = side_outputs[0][0]
@@ -619,8 +616,10 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             layer_outputs = self._get_outputs(output_config)
             for output in layer_outputs:  # Drill into sub-model to get the actual output names
                 loss_name = output[0][0]
-                if not split_output:  # Rename losses to reflect the side's output
-                    loss_name = f"{loss_name.replace('_both', '')}_{side}"
+                if loss_name[-2:] not in ("_a", "_b"):  # Rename losses to reflect the side output
+                    new_name = f"{loss_name.replace('_both', '')}_{side}"
+                    logger.debug("Renaming loss output from '%s' to '%s'", loss_name, new_name)
+                    loss_name = new_name
                 if loss_name not in self._loss_labels:
                     logger.debug("Adding loss name: '%s'", loss_name)
                     self._loss_labels.append(loss_name)
