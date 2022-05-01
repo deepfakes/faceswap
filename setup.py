@@ -311,7 +311,7 @@ class Environment():
             return
 
         if self.os_version[0] == "Windows":
-            return  # TODO: Check if this is required for Windows and update accordingly
+            return
 
         conda_prefix = os.environ["CONDA_PREFIX"]
         activate_folder = os.path.join(conda_prefix, "etc", "conda", "activate.d")
@@ -320,18 +320,17 @@ class Environment():
         os.makedirs(activate_folder, exist_ok=True)
         os.makedirs(deactivate_folder, exist_ok=True)
 
-        ext = ".bat" if self.os_version[0] == "Windows" else ".sh"
-        shebang = "" if self.os_version[0] == "Windows" else "#!/bin/sh\n\n"
-
-        activate_script = os.path.join(conda_prefix, activate_folder, f"env_vars{ext}")
-        deactivate_script = os.path.join(conda_prefix, deactivate_folder, f"env_vars{ext}")
-        conda_libs = os.path.join(conda_prefix, "lib")
+        activate_script = os.path.join(conda_prefix, activate_folder, f"env_vars.sh")
+        deactivate_script = os.path.join(conda_prefix, deactivate_folder, f"env_vars.sh")
 
         if os.path.isfile(activate_script):
             # Only create file if it does not already exist. There may be instances where people
             # have created their own scripts, but these should be few and far between and those
             # people should already know what they are doing.
             return
+
+        conda_libs = os.path.join(conda_prefix, "lib")
+        shebang = "#!/bin/sh\n\n"
 
         with open(activate_script, "w", encoding="utf8") as afile:
             afile.write(f"{shebang}")
