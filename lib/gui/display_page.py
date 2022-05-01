@@ -153,10 +153,7 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Return tabs ids and titles """
         tabs = {}
         for tab_id in range(0, self.subnotebook.index("end")):
-            try:
-                tabs[self.subnotebook.tab(tab_id, "text")] = tab_id
-            except tk.TclError as err:
-                logger.info("Swallowed TCL error: %s", str(err))
+            tabs[self.subnotebook.tab(tab_id, "text")] = tab_id
         logger.debug(tabs)
         return tabs
 
