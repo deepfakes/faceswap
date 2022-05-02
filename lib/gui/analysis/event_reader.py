@@ -209,7 +209,7 @@ class _Cache():
                             for idx in sorted(data)])
         times, loss = self._process_data(data, times, loss, is_live)
 
-        if not all(len(val) == len(self._loss_labels) for val in loss):
+        if is_live and not all(len(val) == len(self._loss_labels) for val in loss):
             # TODO Many attempts have been made to fix this for live graph logging, and the issue
             # of non-consistent loss record sizes keeps coming up. In the meantime we shall swallow
             # any loss values that are of incorrect length so graph remains functional. This will,
@@ -222,10 +222,10 @@ class _Cache():
             # [1, 2, 2, 2, 2, 2, 2, 2] - 1st loss collection has 1 length
             # [2, 2, 2, 3, 2, 2, 2] - 4th loss collection has 3 length
 
-            logger.info("Inconsistent loss found in collection: %s", loss)
+            logger.debug("Inconsistent loss found in collection: %s", loss)
             for idx in reversed(range(len(loss))):
                 if len(loss[idx]) != len(self._loss_labels):
-                    logger.info("Removing loss/timestamps at position %s", idx)
+                    logger.debug("Removing loss/timestamps at position %s", idx)
                     del loss[idx]
                     del times[idx]
 
