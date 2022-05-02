@@ -364,6 +364,8 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             logger.trace("Loading graph")
             self.display_item = Session
             self._add_trace_variables()
+        elif Session.is_training and self.display_item is not None:
+            logger.trace("Graph already displayed. Nothing to do.")
         else:
             logger.trace("Clearing graph")
             self.display_item = None
