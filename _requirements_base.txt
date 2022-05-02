@@ -2,7 +2,7 @@ tqdm>=4.64
 psutil>=5.8.0
 numpy>=1.18.0
 opencv-python>=4.5.5.0
-pillow>=9.0.1
+pillow>=8.3.1
 scikit-learn>=1.0.2
 fastcluster>=1.2.4
 # matplotlib 3.3.1 breaks custom toolbar in graph popup
