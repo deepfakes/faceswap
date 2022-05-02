@@ -596,7 +596,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                     continue
                 if event.summary.value[0].tag == "keras":
                     self._parse_outputs(event)
-                if get_backend() == "amd" and not self._cache._loss_labels:
+                if get_backend() == "amd":
                     # No model is logged for AMD so need to get loss labels from state file
                     self._add_amd_loss_labels(session_id)
                 if event.summary.value[0].tag.startswith("batch_"):
@@ -688,8 +688,10 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             The session id that the data is being cached for
 
         """
+        if self._cache._loss_labels:  # pylint:disable=protected-access
+            return
         # Import global session here to prevent circular import
-        from . import Session
+        from . import Session  # pylint:disable=import-outside-toplevel
         loss_labels = sorted(Session.get_loss_keys(session_id=session_id))
         self._loss_labels = loss_labels
         logger.debug("Collated loss labels: %s", self._loss_labels)

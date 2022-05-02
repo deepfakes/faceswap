@@ -241,11 +241,12 @@ class GlobalSession():
         """
         if get_backend() == "amd":
             # We can't log the graph in Tensorboard logs for AMD so need to obtain from state file
-            loss_keys =  {int(sess_id): [name for name in session["loss_names"] if name != "total"]
-                          for sess_id, session in self._state["sessions"].items()}
+            loss_keys = {int(sess_id): [name for name in session["loss_names"] if name != "total"]
+                         for sess_id, session in self._state["sessions"].items()}
         else:
             loss_keys = {sess_id: list(logs.keys())
-                         for sess_id, logs in self._tb_logs.get_loss(session_id=session_id).items()}
+                         for sess_id, logs
+                         in self._tb_logs.get_loss(session_id=session_id).items()}
 
         if session_id is None:
             retval = list(set(loss_key
