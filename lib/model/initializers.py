@@ -9,9 +9,8 @@ import numpy as np
 import tensorflow as tf
 from keras import backend as K
 from keras import initializers
-from keras.utils import get_custom_objects
 
-from lib.utils import get_backend
+from lib.utils import get_backend, get_keras_custom_objects as get_custom_objects
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -64,7 +63,7 @@ def compute_fans(shape, data_format='channels_last'):
     return fan_in, fan_out
 
 
-class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
+class ICNR(initializers.Initializer):  # pylint: disable=invalid-name,no-member
     """ ICNR initializer for checkerboard artifact free sub pixel convolution
 
     Parameters
@@ -167,11 +166,11 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name
         config = {"scale": self.scale,
                   "initializer": self.initializer
                   }
-        base_config = super(ICNR, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class ConvolutionAware(initializers.Initializer):
+class ConvolutionAware(initializers.Initializer):  # pylint: disable=no-member
     """
     Initializer that generates orthogonal convolution filters in the Fourier space. If this
     initializer is passed a shape that is not 3D or 4D, orthogonal initialization will be used.
@@ -204,8 +203,8 @@ class ConvolutionAware(initializers.Initializer):
     def __init__(self, eps_std=0.05, seed=None, initialized=False):
         self.eps_std = eps_std
         self.seed = seed
-        self.orthogonal = initializers.Orthogonal()
-        self.he_uniform = initializers.he_uniform()
+        self.orthogonal = initializers.Orthogonal()  # pylint:disable=no-member
+        self.he_uniform = initializers.he_uniform()  # pylint:disable=no-member
         self.initialized = initialized
 
     def __call__(self, shape, dtype=None):

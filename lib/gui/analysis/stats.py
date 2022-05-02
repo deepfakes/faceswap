@@ -17,6 +17,7 @@ from threading import Event
 import numpy as np
 
 from lib.serializer import get_serializer
+from lib.utils import get_backend
 
 from .event_reader import TensorBoardLogs
 
@@ -62,9 +63,9 @@ class GlobalSession():
     def batch_sizes(self):
         """ dict: The batch sizes for each session_id for the model. """
         if self._state is None:
-            return dict()
+            return {}
         return {int(sess_id): sess["batchsize"]
-                for sess_id, sess in self._state.get("sessions", dict()).items()}
+                for sess_id, sess in self._state.get("sessions", {}).items()}
 
     @property
     def full_summary(self):
@@ -86,7 +87,7 @@ class GlobalSession():
 
     def _load_state_file(self):
         """ Load the current state file to :attr:`_state`. """
-        state_file = os.path.join(self._model_dir, "{}_state.json".format(self._model_name))
+        state_file = os.path.join(self._model_dir, f"{self._model_name}_state.json")
         logger.debug("Loading State: '%s'", state_file)
         serializer = get_serializer("json")
         self._state = serializer.load(state_file)
@@ -125,8 +126,7 @@ class GlobalSession():
         self._model_dir = model_folder
         self._model_name = model_name
         self._load_state_file()
-        self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir,
-                                                     "{}_logs".format(self._model_name)),
+        self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir, f"{self._model_name}_logs"),
                                         is_training)
 
         self._summary = SessionsSummary(self)
@@ -140,7 +140,7 @@ class GlobalSession():
 
     def clear(self):
         """ Clear the currently loaded session. """
-        self._state = dict()
+        self._state = {}
         self._model_dir = None
         self._model_name = None
 
@@ -173,13 +173,13 @@ class GlobalSession():
 
         loss_dict = self._tb_logs.get_loss(session_id=session_id)
         if session_id is None:
-            retval = dict()
+            retval = {}
             for key in sorted(loss_dict):
                 for loss_key, loss in loss_dict[key].items():
                     retval.setdefault(loss_key, []).extend(loss)
             retval = {key: np.array(val, dtype="float32") for key, val in retval.items()}
         else:
-            retval = loss_dict.get(session_id, dict())
+            retval = loss_dict.get(session_id, {})
 
         if self._is_training:
             self._is_querying.clear()
@@ -239,14 +239,21 @@ class GlobalSession():
             The loss keys for the given session. If ``None`` is passed as session_id then a unique
             list of all loss keys for all sessions is returned
         """
-        loss_keys = {sess_id: list(logs.keys())
-                     for sess_id, logs in self._tb_logs.get_loss(session_id=session_id).items()}
+        if get_backend() == "amd":
+            # We can't log the graph in Tensorboard logs for AMD so need to obtain from state file
+            loss_keys = {int(sess_id): [name for name in session["loss_names"] if name != "total"]
+                         for sess_id, session in self._state["sessions"].items()}
+        else:
+            loss_keys = {sess_id: list(logs.keys())
+                         for sess_id, logs
+                         in self._tb_logs.get_loss(session_id=session_id).items()}
+
         if session_id is None:
             retval = list(set(loss_key
                               for session in loss_keys.values()
                               for loss_key in session))
         else:
-            retval = loss_keys[session_id]
+            retval = loss_keys.get(session_id)
         return retval
 
 
@@ -334,7 +341,7 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
         """
         if self._per_session_stats is None:
             logger.debug("Collating per session stats")
-            compiled = list()
+            compiled = []
             for session_id, ts_data in self._time_stats.items():
                 logger.debug("Compiling session ID: %s", session_id)
                 if self._state is None:
@@ -446,15 +453,15 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
         retval = []
         for summary in compiled_stats:
             hrs, mins, secs = self._convert_time(summary["elapsed"])
-            stats = dict()
+            stats = {}
             for key in summary:
                 if key not in ("start", "end", "elapsed", "rate"):
                     stats[key] = summary[key]
                     continue
                 stats["start"] = time.strftime("%x %X", time.localtime(summary["start"]))
                 stats["end"] = time.strftime("%x %X", time.localtime(summary["end"]))
-                stats["elapsed"] = "{}:{}:{}".format(hrs, mins, secs)
-                stats["rate"] = "{0:.1f}".format(summary["rate"])
+                stats["elapsed"] = f"{hrs}:{mins}:{secs}"
+                stats["rate"] = f"{summary['rate']:.1f}"
             retval.append(stats)
         return retval
 
@@ -474,9 +481,9 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
         """
         hrs = int(timestamp // 3600)
         if hrs < 10:
-            hrs = "{0:02d}".format(hrs)
-        mins = "{0:02d}".format((int(timestamp % 3600) // 60))
-        secs = "{0:02d}".format((int(timestamp % 3600) % 60))
+            hrs = f"{hrs:02d}"
+        mins = f"{(int(timestamp % 3600) // 60):02d}"
+        secs = f"{(int(timestamp % 3600) % 60):02d}"
         return hrs, mins, secs
 
 
@@ -529,7 +536,7 @@ class Calculations():
         self._iterations = 0
         self._limit = 0
         self._start_iteration = 0
-        self._stats = dict()
+        self._stats = {}
         self.refresh()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -630,7 +637,7 @@ class Calculations():
                 if self._args["flatten_outliers"]:
                     loss = self._flatten_outliers(loss)
 
-                self.stats["raw_{}".format(loss_name)] = loss
+                self.stats[f"raw_{loss_name}"] = loss
 
             self._iterations = 0 if not iterations else min(iterations)
             if self._limit > 1:
@@ -642,7 +649,7 @@ class Calculations():
             if len(iterations) > 1:
                 # Crop all losses to the same number of items
                 if self._iterations == 0:
-                    self.stats = {lossname: np.array(list(), dtype=loss.dtype)
+                    self.stats = {lossname: np.array([], dtype=loss.dtype)
                                   for lossname, loss in self.stats.items()}
                 else:
                     self.stats = {lossname: loss[:self._iterations]
@@ -722,7 +729,7 @@ class Calculations():
         logger.debug("Calculating totals rate")
         batchsizes = _SESSION.batch_sizes
         total_timestamps = _SESSION.get_timestamps(None)
-        rate = list()
+        rate = []
         for sess_id in sorted(total_timestamps.keys()):
             batchsize = batchsizes[sess_id]
             timestamps = total_timestamps[sess_id]
@@ -737,10 +744,10 @@ class Calculations():
             if selection == "raw":
                 continue
             logger.debug("Calculating: %s", selection)
-            method = getattr(self, "_calc_{}".format(selection))
+            method = getattr(self, f"_calc_{selection}")
             raw_keys = [key for key in self._stats if key.startswith("raw_")]
             for key in raw_keys:
-                selected_key = "{}_{}".format(selection, key.replace("raw_", ""))
+                selected_key = f"{selection}_{key.replace('raw_', '')}"
                 self._stats[selected_key] = method(self._stats[key])
 
     def _calc_avg(self, data):
@@ -866,7 +873,7 @@ class _ExponentialMovingAverage():  # pylint:disable=too-few-public-methods
         optimizations.
         """
         # Use :func:`np.finfo(dtype).eps` if you are worried about accuracy and want to be safe.
-        epsilon = np.finfo(self._dtype).tiny
+        epsilon = np.finfo(self._dtype).tiny  # pylint:disable=no-member
         # If this produces an OverflowError, make epsilon larger:
         retval = int(np.log(epsilon) / np.log(1 - self._alpha)) + 1
         logger.debug("row_size: %s", retval)

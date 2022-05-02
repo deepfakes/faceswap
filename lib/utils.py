@@ -22,6 +22,7 @@ _image_extensions = [  # pylint:disable=invalid-name
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
+_TF_VERS = None
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -60,8 +61,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
         # Check if environment variable is set, if so use that
         if "FACESWAP_BACKEND" in os.environ:
             fs_backend = os.environ["FACESWAP_BACKEND"].lower()
-            print("Setting Faceswap backend from environment variable to "
-                  "{}".format(fs_backend.upper()))
+            print(f"Setting Faceswap backend from environment variable to {fs_backend.upper()}")
             return fs_backend
         # Intercept for sphinx docs build
         if sys.argv[0].endswith("sphinx-build"):
@@ -70,7 +70,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
             self._configure_backend()
         while True:
             try:
-                with open(self._config_file, "r") as cnf:
+                with open(self._config_file, "r", encoding="utf8") as cnf:
                     config = json.load(cnf)
                 break
             except json.decoder.JSONDecodeError:
@@ -80,7 +80,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
         if fs_backend is None or fs_backend.lower() not in self._backends.values():
             fs_backend = self._configure_backend()
         if current_process().name == "MainProcess":
-            print("Setting Faceswap backend to {}".format(fs_backend.upper()))
+            print(f"Setting Faceswap backend to {fs_backend.upper()}")
         return fs_backend.lower()
 
     def _configure_backend(self):
@@ -95,14 +95,14 @@ class _Backend():  # pylint:disable=too-few-public-methods
         while True:
             selection = input("1: AMD, 2: CPU, 3: NVIDIA: ")
             if selection not in ("1", "2", "3"):
-                print("'{}' is not a valid selection. Please try again".format(selection))
+                print(f"'{selection}' is not a valid selection. Please try again")
                 continue
             break
         fs_backend = self._backends[selection].lower()
         config = {"backend": fs_backend}
-        with open(self._config_file, "w") as cnf:
+        with open(self._config_file, "w", encoding="utf8") as cnf:
             json.dump(config, cnf)
-        print("Faceswap config written to: {}".format(self._config_file))
+        print(f"Faceswap config written to: {self._config_file}")
         return fs_backend
 
 
@@ -130,6 +130,32 @@ def set_backend(backend):
     """
     global _FS_BACKEND  # pylint:disable=global-statement
     _FS_BACKEND = backend.lower()
+
+
+def get_tf_version():
+    """ Obtain the major.minor version of currently installed Tensorflow.
+
+    Returns
+    -------
+    float
+        The currently installed tensorflow version
+    """
+    global _TF_VERS  # pylint:disable=global-statement
+    if _TF_VERS is None:
+        import tensorflow as tf  # pylint:disable=import-outside-toplevel
+        _TF_VERS = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
+    return _TF_VERS
+
+
+def get_keras_custom_objects():
+    """ Wrapper to obtain keras.utils.get_custom_objects from correct location depending on
+    backend used and tensorflow version. """
+    # pylint:disable=no-name-in-module,import-outside-toplevel
+    if get_backend() == "amd" or get_tf_version() < 2.8:
+        from keras.utils import get_custom_objects
+    else:
+        from keras.utils.generic_utils import get_custom_objects
+    return get_custom_objects()
 
 
 def get_folder(path, make_folder=True):
@@ -176,7 +202,7 @@ def get_image_paths(directory, extension=None):
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     image_extensions = _image_extensions if extension is None else [extension]
-    dir_contents = list()
+    dir_contents = []
 
     if not os.path.exists(directory):
         logger.debug("Creating folder: '%s'", directory)
@@ -242,7 +268,7 @@ def full_path_split(path):
     >>> ["foo", "baz", "bar"]
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    allparts = list()
+    allparts = []
     while True:
         parts = os.path.split(path)
         if parts[0] == path:   # sentinel for absolute paths
@@ -297,9 +323,9 @@ def deprecation_warning(function, additional_info=None):
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("func_name: %s, additional_info: %s", function, additional_info)
-    msg = "{}  has been deprecated and will be removed from a future update.".format(function)
+    msg = f"{function}  has been deprecated and will be removed from a future update."
     if additional_info is not None:
-        msg += " {}".format(additional_info)
+        msg += f" {additional_info}"
     logger.warning(msg)
 
 
@@ -355,7 +381,7 @@ class FaceswapError(Exception):
     pass  # pylint:disable=unnecessary-pass
 
 
-class GetModel():  # Pylint:disable=too-few-public-methods
+class GetModel():  # pylint:disable=too-few-public-methods
     """ Check for models in their cache path.
 
     If available, return the path, if not available, get, unzip and install model
@@ -428,7 +454,7 @@ class GetModel():  # Pylint:disable=too-few-public-methods
     @property
     def _model_zip_path(self):
         """ str: The full path to downloaded zip file. """
-        retval = os.path.join(self._cache_dir, "{}.zip".format(self._model_full_name))
+        retval = os.path.join(self._cache_dir, f"{self._model_full_name}.zip")
         self.logger.trace(retval)
         return retval
 
@@ -462,8 +488,8 @@ class GetModel():  # Pylint:disable=too-few-public-methods
     @property
     def _url_download(self):
         """ strL Base download URL for models. """
-        tag = "v{}.{}.{}".format(self._url_section, self._git_model_id, self._model_version)
-        retval = "{}/{}/{}.zip".format(self._url_base, tag, self._model_full_name)
+        tag = f"v{self._url_section}.{self._git_model_id}.{self._model_version}"
+        retval = f"{self._url_base}/{tag}/{self._model_full_name}.zip"
         self.logger.trace("Download url: %s", retval)
         return retval
 
@@ -493,11 +519,11 @@ class GetModel():  # Pylint:disable=too-few-public-methods
                 downloaded_size = self._url_partial_size
                 req = urllib.request.Request(self._url_download)
                 if downloaded_size != 0:
-                    req.add_header("Range", "bytes={}-".format(downloaded_size))
-                response = urllib.request.urlopen(req, timeout=10)
-                self.logger.debug("header info: {%s}", response.info())
-                self.logger.debug("Return Code: %s", response.getcode())
-                self._write_zipfile(response, downloaded_size)
+                    req.add_header("Range", f"bytes={downloaded_size}-")
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    self.logger.debug("header info: {%s}", response.info())
+                    self.logger.debug("Return Code: %s", response.getcode())
+                    self._write_zipfile(response, downloaded_size)
                 break
             except (socket_error, socket_timeout,
                     urllib.error.HTTPError, urllib.error.URLError) as err:
@@ -548,8 +574,8 @@ class GetModel():  # Pylint:disable=too-few-public-methods
         """ Unzip the model file to the cache folder """
         self.logger.info("Extracting: '%s'", self._model_name)
         try:
-            zip_file = zipfile.ZipFile(self._model_zip_path, "r")
-            self._write_model(zip_file)
+            with zipfile.ZipFile(self._model_zip_path, "r") as zip_file:
+                self._write_model(zip_file)
         except Exception as err:  # pylint:disable=broad-except
             self.logger.error("Unable to extract model file: %s", str(err))
             sys.exit(1)

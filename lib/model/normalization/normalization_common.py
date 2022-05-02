@@ -7,15 +7,16 @@ import inspect
 from keras.layers import Layer, InputSpec
 from keras import initializers, regularizers, constraints
 from keras import backend as K
-from keras.utils import get_custom_objects
 
-from lib.utils import get_backend
-
+from lib.utils import get_backend, get_keras_custom_objects as get_custom_objects
 
 if get_backend() == "amd":
-    from keras.backend import normalize_data_format  # pylint:disable=ungrouped-imports
+    from keras.backend \
+        import normalize_data_format  # pylint:disable=ungrouped-imports,no-name-in-module
 else:
-    from tensorflow.python.keras.utils.conv_utils import normalize_data_format
+    # pylint:disable=no-name-in-module
+    from tensorflow.python.keras.utils.conv_utils \
+        import normalize_data_format   # pylint:disable=no-name-in-module
 
 
 class InstanceNormalization(Layer):
@@ -61,6 +62,7 @@ class InstanceNormalization(Layer):
         - Instance Normalization: The Missing Ingredient for Fast Stylization - \
         https://arxiv.org/abs/1607.08022
     """
+    # pylint:disable=too-many-instance-attributes,too-many-arguments
     def __init__(self,
                  axis=None,
                  epsilon=1e-3,
@@ -348,6 +350,7 @@ class GroupNormalization(Layer):
     ----------
     Shaoanlu GAN: https://github.com/shaoanlu/faceswap-GAN
     """
+    # pylint:disable=too-many-instance-attributes
     def __init__(self, axis=-1, gamma_init='one', beta_init='zero', gamma_regularizer=None,
                  beta_regularizer=None, epsilon=1e-6, group=32, data_format=None, **kwargs):
         self.beta = None

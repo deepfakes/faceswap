@@ -7,10 +7,12 @@ import zlib
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.core.util import event_pb2
-from tensorflow.python.framework import errors_impl as tf_errors
+from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
+from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
+    errors_impl as tf_errors)
 
 from lib.serializer import get_serializer
+from lib.utils import get_backend
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -43,7 +45,7 @@ class _LogFiles():
             The full path of each log file for each training session id that has been run
         """
         logger.debug("Loading log filenames. base_dir: '%s'", self._logs_folder)
-        retval = dict()
+        retval = {}
         for dirpath, _, filenames in os.walk(self._logs_folder):
             if not any(filename.startswith("events.out.tfevents") for filename in filenames):
                 continue
@@ -133,7 +135,7 @@ class _Cache():
     def __init__(self, session_ids):
         logger.debug("Initializing: %s: (session_ids: %s)", self.__class__.__name__, session_ids)
         self._data = {idx: None for idx in session_ids}
-        self._carry_over = dict()
+        self._carry_over = {}
         self._loss_labels = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -158,18 +160,19 @@ class _Cache():
         """
         logger.debug("Caching event data: (session_id: %s, labels: %s, data points: %s, "
                      "is_live: %s)", session_id, labels, len(data), is_live)
-        if not data:
-            logger.debug("No data to cache")
-            return
 
         if labels:
             logger.debug("Setting loss labels: %s", labels)
             self._loss_labels = labels
 
+        if not data:
+            logger.debug("No data to cache")
+            return
+
         timestamps, loss = self._to_numpy(data, is_live)
 
         if not is_live or (is_live and not self._data.get(session_id, None)):
-            self._data[session_id] = dict(labels=labels,
+            self._data[session_id] = dict(labels=self._loss_labels,
                                           loss=zlib.compress(loss),
                                           loss_shape=loss.shape,
                                           timestamps=zlib.compress(timestamps),
@@ -207,10 +210,30 @@ class _Cache():
                             for idx in sorted(data)])
         times, loss = self._process_data(data, times, loss, is_live)
 
-        times, loss = (np.array(times, dtype="float64"), np.array(loss, dtype="float32"))
+        if is_live and not all(len(val) == len(self._loss_labels) for val in loss):
+            # TODO Many attempts have been made to fix this for live graph logging, and the issue
+            # of non-consistent loss record sizes keeps coming up. In the meantime we shall swallow
+            # any loss values that are of incorrect length so graph remains functional. This will,
+            # most likely, lead to a mismatch on iteration count so a proper fix should be
+            # implemented.
 
+            # Timestamps and loss appears to remain consistent with each other, but sometimes loss
+            # appears non-consistent. eg (lengths):
+            # [2, 2, 2, 2, 2, 2, 2, 0] - last loss collection has zero length
+            # [1, 2, 2, 2, 2, 2, 2, 2] - 1st loss collection has 1 length
+            # [2, 2, 2, 3, 2, 2, 2] - 4th loss collection has 3 length
+
+            logger.debug("Inconsistent loss found in collection: %s", loss)
+            for idx in reversed(range(len(loss))):
+                if len(loss[idx]) != len(self._loss_labels):
+                    logger.debug("Removing loss/timestamps at position %s", idx)
+                    del loss[idx]
+                    del times[idx]
+
+        times, loss = (np.array(times, dtype="float64"), np.array(loss, dtype="float32"))
         logger.debug("Converted to numpy: (data points: %s, timestamps shape: %s, loss shape: %s)",
                      len(data), times.shape, loss.shape)
+
         return times, loss
 
     def _collect_carry_over(self, data):
@@ -334,7 +357,7 @@ class _Cache():
 
         dtype = "float32" if metric == "loss" else "float64"
 
-        retval = dict()
+        retval = {}
         for idx, data in raw.items():
             val = {metric: np.frombuffer(zlib.decompress(data[metric]),
                                          dtype=dtype).reshape(data[f"{metric}_shape"])}
@@ -461,7 +484,7 @@ class TensorBoardLogs():
             and list of loss values for each step
         """
         logger.debug("Getting loss: (session_id: %s)", session_id)
-        retval = dict()
+        retval = {}
         for idx in [session_id] if session_id else self.session_ids:
             self._check_cache(idx)
             data = self._cache.get_data(idx, "loss")
@@ -493,7 +516,7 @@ class TensorBoardLogs():
 
         logger.debug("Getting timestamps: (session_id: %s, is_training: %s)",
                      session_id, self._is_training)
-        retval = dict()
+        retval = {}
         for idx in [session_id] if session_id else self.session_ids:
             self._check_cache(idx)
             data = self._cache.get_data(idx, "timestamps")
@@ -565,7 +588,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         session_id: int
             The session id that the data is being cached for
         """
-        data = dict()
+        data = {}
         try:
             for record in self._iterator:
                 event = event_pb2.Event.FromString(record)  # pylint:disable=no-member
@@ -573,8 +596,11 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                     continue
                 if event.summary.value[0].tag == "keras":
                     self._parse_outputs(event)
+                if get_backend() == "amd":
+                    # No model is logged for AMD so need to get loss labels from state file
+                    self._add_amd_loss_labels(session_id)
                 if event.summary.value[0].tag.startswith("batch_"):
-                    data[event.step] = self._process_event(event, data.get(event.step, dict()))
+                    data[event.step] = self._process_event(event, data.get(event.step, {}))
 
         except tf_errors.DataLossError as err:
             logger.warning("The logs for Session %s are corrupted and cannot be displayed. "
@@ -605,10 +631,6 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         config = serializer.unmarshal(struct)["config"]
         model_outputs = self._get_outputs(config)
 
-        # loss length of unique should be 3:
-        # - decoder_both, 1, 2
-        # - docoder_a, decoder_b, 1
-        split_output = len(np.unique(model_outputs[..., :2])) != 3
         for side_outputs, side in zip(model_outputs, ("a", "b")):
             logger.debug("side: '%s', outputs: '%s'", side, side_outputs)
             layer_name = side_outputs[0][0]
@@ -618,8 +640,10 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             layer_outputs = self._get_outputs(output_config)
             for output in layer_outputs:  # Drill into sub-model to get the actual output names
                 loss_name = output[0][0]
-                if not split_output:  # Rename losses to reflect the side's output
-                    loss_name = f"{loss_name.replace('_both', '')}_{side}"
+                if loss_name[-2:] not in ("_a", "_b"):  # Rename losses to reflect the side output
+                    new_name = f"{loss_name.replace('_both', '')}_{side}"
+                    logger.debug("Renaming loss output from '%s' to '%s'", loss_name, new_name)
+                    loss_name = new_name
                 if loss_name not in self._loss_labels:
                     logger.debug("Adding loss name: '%s'", loss_name)
                     self._loss_labels.append(loss_name)
@@ -650,6 +674,28 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                          outputs, outputs.shape)
         return outputs
 
+    def _add_amd_loss_labels(self, session_id):
+        """ It is not possible to store the model config in the Tensorboard logs for AMD so we
+        need to obtain the loss labels from the model's state file. This is called now so we know
+        event data is being written, and therefore the most current loss label data is available
+        in the state file.
+
+        Loss names are added to :attr:`_loss_labels`
+
+        Parameters
+        ----------
+        session_id: int
+            The session id that the data is being cached for
+
+        """
+        if self._cache._loss_labels:  # pylint:disable=protected-access
+            return
+        # Import global session here to prevent circular import
+        from . import Session  # pylint:disable=import-outside-toplevel
+        loss_labels = sorted(Session.get_loss_keys(session_id=session_id))
+        self._loss_labels = loss_labels
+        logger.debug("Collated loss labels: %s", self._loss_labels)
+
     @classmethod
     def _process_event(cls, event, step):
         """ Process a single Tensorflow event.
@@ -670,8 +716,19 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             The given step `dict` with the given event data added to it.
         """
         summary = event.summary.value[0]
+
         if summary.tag in ("batch_loss", "batch_total"):  # Pre tf2.3 totals were "batch_total"
             step["timestamp"] = event.wall_time
             return step
-        step.setdefault("loss", list()).append(summary.simple_value)
+
+        loss = summary.simple_value
+        if not loss:
+            # Need to convert a tensor to a float for TF2.8 logged data. This maybe due to change
+            # in logging or may be due to work around put in place in FS training function for the
+            # following bug in TF 2.8 when writing records:
+            #  https://github.com/keras-team/keras/issues/16173
+            loss = float(tf.make_ndarray(summary.tensor))
+
+        step.setdefault("loss", []).append(loss)
+
         return step

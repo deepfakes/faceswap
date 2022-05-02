@@ -63,13 +63,10 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             return
         filename = "extract_convert_preview"
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location,
-                                "{}_{}.{}".format(filename,
-                                                  now,
-                                                  "png"))
+        filename = os.path.join(location, f"{filename}_{now}.png")
         get_images().previewoutput[0].save(filename)
         logger.debug("Saved preview to %s", filename)
-        print("Saved preview to {}".format(filename))
+        print(f"Saved preview to {filename}")
 
 
 class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
@@ -125,7 +122,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         should_update = self.update_preview.get()
 
         for name in sortednames:
-            if name not in existing.keys():
+            if name not in existing:
                 self.add_child(name)
             elif should_update:
                 tab_id = existing[name]
@@ -197,19 +194,16 @@ class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
         """ Save the figure to file """
         filename = self.name
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location,
-                                "{}_{}.{}".format(filename,
-                                                  now,
-                                                  "png"))
+        filename = os.path.join(location, f"{filename}_{now}.png")
         get_images().previewtrain[self.name][0].save(filename)
         logger.debug("Saved preview to %s", filename)
-        print("Saved preview to {}".format(filename))
+        print(f"Saved preview to {filename}")
 
 
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ The Graph Tab of the Display section """
     def __init__(self, parent, tab_name, helptext, wait_time, command=None):
-        self._trace_vars = dict()
+        self._trace_vars = {}
         super().__init__(parent, tab_name, helptext, wait_time, command)
 
     def set_vars(self):
@@ -370,6 +364,8 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             logger.trace("Loading graph")
             self.display_item = Session
             self._add_trace_variables()
+        elif Session.is_training and self.display_item is not None:
+            logger.trace("Graph already displayed. Nothing to do.")
         else:
             logger.trace("Clearing graph")
             self.display_item = None
@@ -384,9 +380,15 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
         logger.debug("Adding graph")
         existing = list(self.subnotebook_get_titles_ids().keys())
-        loss_keys = [key
-                     for key in self.display_item.get_loss_keys(Session.session_ids[-1])
-                     if key != "total"]
+
+        loss_keys = self.display_item.get_loss_keys(Session.session_ids[-1])
+        if not loss_keys:
+            # Reload if we attempt to get loss keys before data is written
+            logger.debug("Waiting for Session Data to become available to graph")
+            self.after(1000, self.display_item_process)
+            return
+
+        loss_keys = [key for key in loss_keys if key != "total"]
         display_tabs = sorted(set(key[:-1].rstrip("_") for key in loss_keys))
 
         for loss_key in display_tabs:
@@ -472,7 +474,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
             for name, (var, trace) in self._trace_vars.items():
                 logger.debug("Clearing trace from variable: %s", name)
                 var.trace_vdelete("w", trace)
-            self._trace_vars = dict()
+            self._trace_vars = {}
 
     def close(self):
         """ Clear the plots from RAM """
