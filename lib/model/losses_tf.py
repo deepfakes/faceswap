@@ -66,7 +66,7 @@ class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-met
                              filter_sigma=self.filter_sigma,
                              k1=self.k_1,
                              k2=self.k_2)
-        dssim_loss = 1. - ssim
+        dssim_loss = (1. - ssim) / 2.0
         return dssim_loss
 
 
