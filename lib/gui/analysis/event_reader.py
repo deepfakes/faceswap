@@ -209,22 +209,29 @@ class _Cache():
                             for idx in sorted(data)])
         times, loss = self._process_data(data, times, loss, is_live)
 
-        try:
-            times, loss = (np.array(times, dtype="float64"), np.array(loss, dtype="float32"))
-            logger.debug("Converted to numpy: (data points: %s, timestamps shape: %s, loss "
-                         "shape: %s)", len(data), times.shape, loss.shape)
-        except AttributeError as err:
+        if not all(len(val) == len(self._loss_labels) for val in loss):
             # TODO Many attempts have been made to fix this for live graph logging, and the issue
             # of non-consistent loss record sizes keeps coming up. In the meantime we shall swallow
-            # this error so graph remains functional, but a proper fix should be implemented.
+            # any loss values that are of incorrect length so graph remains functional. This will,
+            # most likely, lead to a mismatch on iteration count so a proper fix should be
+            # implemented.
+
             # Timestamps and loss appears to remain consistent with each other, but sometimes loss
             # appears non-consistent. eg (lengths):
             # [2, 2, 2, 2, 2, 2, 2, 0] - last loss collection has zero length
             # [1, 2, 2, 2, 2, 2, 2, 2] - 1st loss collection has 1 length
             # [2, 2, 2, 3, 2, 2, 2] - 4th loss collection has 3 length
-            logger.debug("Inconsistent loss found. Error swallowed: %s", str(err))
-            logger.debug("Failing loss values: %s", loss)
-            times, loss = np.array([], dtype="float32"), np.array([], dtype="float32")
+
+            logger.info("Inconsistent loss found in collection: %s", loss)
+            for idx in reversed(range(len(loss))):
+                if len(loss[idx]) != len(self._loss_labels):
+                    logger.info("Removing loss/timestamps at position %s", idx)
+                    del loss[idx]
+                    del times[idx]
+
+        times, loss = (np.array(times, dtype="float64"), np.array(loss, dtype="float32"))
+        logger.debug("Converted to numpy: (data points: %s, timestamps shape: %s, loss shape: %s)",
+                     len(data), times.shape, loss.shape)
 
         return times, loss
 
