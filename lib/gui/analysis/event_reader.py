@@ -12,6 +12,7 @@ from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
 from lib.serializer import get_serializer
+from lib.utils import get_backend
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -595,6 +596,9 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                     continue
                 if event.summary.value[0].tag == "keras":
                     self._parse_outputs(event)
+                if get_backend() == "amd" and not self._cache._loss_labels:
+                    # No model is logged for AMD so need to get loss labels from state file
+                    self._add_amd_loss_labels(session_id)
                 if event.summary.value[0].tag.startswith("batch_"):
                     data[event.step] = self._process_event(event, data.get(event.step, {}))
 
@@ -669,6 +673,26 @@ class _EventParser():  # pylint:disable=too-few-public-methods
             logger.debug("Expanded dimensions for single output model. outputs: %s, shape: %s",
                          outputs, outputs.shape)
         return outputs
+
+    def _add_amd_loss_labels(self, session_id):
+        """ It is not possible to store the model config in the Tensorboard logs for AMD so we
+        need to obtain the loss labels from the model's state file. This is called now so we know
+        event data is being written, and therefore the most current loss label data is available
+        in the state file.
+
+        Loss names are added to :attr:`_loss_labels`
+
+        Parameters
+        ----------
+        session_id: int
+            The session id that the data is being cached for
+
+        """
+        # Import global session here to prevent circular import
+        from . import Session
+        loss_labels = sorted(Session.get_loss_keys(session_id=session_id))
+        self._loss_labels = loss_labels
+        logger.debug("Collated loss labels: %s", self._loss_labels)
 
     @classmethod
     def _process_event(cls, event, step):
