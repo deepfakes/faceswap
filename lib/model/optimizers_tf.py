@@ -8,10 +8,10 @@ import inspect
 import sys
 
 import tensorflow as tf
-from tensorflow.keras.optimizers import (  # noqa pylint:disable=no-name-in-module,unused-import,import-error
-    Adam, Nadam, RMSprop)
 
-from lib.utils import get_keras_custom_objects as get_custom_objects
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.optimizers import (Adam, Nadam, RMSprop)  # noqa pylint:disable=no-name-in-module,unused-import,import-error
+from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
 
 
 class AdaBelief(tf.keras.optimizers.Optimizer):

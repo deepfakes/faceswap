@@ -146,17 +146,6 @@ def get_tf_version():
     return _TF_VERS
 
 
-def get_keras_custom_objects():
-    """ Wrapper to obtain keras.utils.get_custom_objects from correct location depending on
-    backend used and tensorflow version. """
-    # pylint:disable=no-name-in-module,import-outside-toplevel
-    if get_backend() == "amd" or get_tf_version() < 2.8:
-        from keras.utils import get_custom_objects
-    else:
-        from keras.utils.generic_utils import get_custom_objects
-    return get_custom_objects()
-
-
 def get_folder(path, make_folder=True):
     """ Return a path to a folder, creating it if it doesn't exist
 

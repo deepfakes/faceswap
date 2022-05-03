@@ -7,16 +7,19 @@ import sys
 import inspect
 
 import tensorflow as tf
-import keras.backend as K
 
-from keras.layers import InputSpec, Layer
-
-from lib.utils import get_backend, get_keras_custom_objects as get_custom_objects
+from lib.utils import get_backend
 
 if get_backend() == "amd":
     from lib.plaidml_utils import pad
-    from keras.utils import conv_utils  # pylint:disable=ungrouped-imports
+    from keras.utils import get_custom_objects, conv_utils  # pylint:disable=no-name-in-module
+    import keras.backend as K
+    from keras.layers import InputSpec, Layer
 else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow.keras import backend as K  # pylint:disable=import-error
+    from tensorflow.keras.layers import InputSpec, Layer  # noqa pylint:disable=no-name-in-module,import-error
     from tensorflow import pad
     from tensorflow.python.keras.utils import conv_utils  # pylint:disable=no-name-in-module
 
