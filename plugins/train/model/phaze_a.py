@@ -5,7 +5,6 @@ import numpy as np
 import tensorflow as tf
 
 import keras.backend as K
-from keras import applications as kapp
 from keras.layers import (
     Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise,
     GlobalAveragePooling2D, GlobalMaxPooling2D, Input, LeakyReLU, Reshape, UpSampling2D,
@@ -20,6 +19,11 @@ from lib.model.normalization import (
     RMSNormalization)
 
 from lib.utils import get_backend, FaceswapError
+
+if get_backend() == "amd":
+    from keras import applications as kapp
+else:
+    from tensorflow.keras import applications as kapp
 
 from ._base import KerasModel, ModelBase, logger, _get_all_sub_models
 
