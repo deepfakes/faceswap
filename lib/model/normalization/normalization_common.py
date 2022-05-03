@@ -4,19 +4,19 @@
 import sys
 import inspect
 
-from keras.layers import Layer, InputSpec
-from keras import initializers, regularizers, constraints
-from keras import backend as K
-
-from lib.utils import get_backend, get_keras_custom_objects as get_custom_objects
+from lib.utils import get_backend
 
 if get_backend() == "amd":
-    from keras.backend \
-        import normalize_data_format  # pylint:disable=ungrouped-imports,no-name-in-module
+    from keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
+    from keras.layers import Layer, InputSpec
+    from keras import initializers, regularizers, constraints, backend as K
+    from keras.backend import normalize_data_format  # pylint:disable=no-name-in-module
 else:
-    # pylint:disable=no-name-in-module
-    from tensorflow.python.keras.utils.conv_utils \
-        import normalize_data_format   # pylint:disable=no-name-in-module
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow.keras.layers import Layer, InputSpec  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow.keras import initializers, regularizers, constraints, backend as K  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow.python.keras.utils.conv_utils import normalize_data_format  # noqa pylint:disable=no-name-in-module
 
 
 class InstanceNormalization(Layer):

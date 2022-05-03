@@ -4,10 +4,8 @@
     Based on the original https://www.reddit.com/r/deepfakes/
     code sample + contributions """
 
-from keras.layers import Dense, Flatten, Input, Reshape
-
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
-from .original import Model as OriginalModel, KerasModel
+from .original import Model as OriginalModel, KerasModel, Dense, Flatten, Input, Reshape
 
 
 class Model(OriginalModel):
@@ -36,7 +34,7 @@ class Model(OriginalModel):
         var_x = UpscaleBlock(512, activation="leakyrelu")(var_x)
         var_x = UpscaleBlock(256, activation="leakyrelu")(var_x)
         var_x = UpscaleBlock(128, activation="leakyrelu")(var_x)
-        var_x = Conv2DOutput(3, 5, activation="sigmoid", name="face_out_{}".format(side))(var_x)
+        var_x = Conv2DOutput(3, 5, activation="sigmoid", name=f"face_out_{side}")(var_x)
         outputs = [var_x]
 
         if self.config.get("learn_mask", False):
@@ -46,6 +44,6 @@ class Model(OriginalModel):
             var_y = UpscaleBlock(128, activation="leakyrelu")(var_y)
             var_y = Conv2DOutput(1, 5,
                                  activation="sigmoid",
-                                 name="mask_out_{}".format(side))(var_y)
+                                 name=f"mask_out_{side}")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs, name="decoder_{}".format(side))
+        return KerasModel(input_, outputs=outputs, name=f"decoder_{side}")

@@ -9,7 +9,7 @@ from importlib import import_module
 
 from lib.gpu_stats import set_exclude_devices, GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import (FaceswapError, get_backend, get_tf_version, KerasFinder, safe_shutdown,
+from lib.utils import (FaceswapError, get_backend, get_tf_version, safe_shutdown,
                        set_backend, set_system_verbosity)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -206,8 +206,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
 
         Set Faceswap backend to CPU if all GPUs have been deselected.
 
-        Add the Keras import interception code.
-
         Parameters
         ----------
         arguments: :class:`argparse.Namespace`
@@ -233,9 +231,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                 os.environ["KERAS_BACKEND"] = "tensorflow"
             set_backend("cpu")
             logger.info(msg)
-
-        # Add Keras finder to the meta_path list as the first item
-        sys.meta_path.insert(0, KerasFinder())
 
         logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
 

@@ -6,17 +6,15 @@ Adapted from Keras tests.
 
 import pytest
 import numpy as np
-from numpy.testing import assert_allclose
-
-from keras import backend as K
-from keras import losses as k_losses
-from keras.layers import Conv2D
-from keras.models import Sequential
-from keras.optimizers import Adam
 
 from lib.model import losses
 from lib.utils import get_backend
 
+if get_backend() == "amd":
+    from keras import backend as K, losses as k_losses
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import backend as K, losses as k_losses  # pylint:disable=import-error
 
 _PARAMS = [(losses.GeneralizedLoss(), (2, 16, 16)),
            (losses.GradientLoss(), (2, 16, 16)),
@@ -25,7 +23,7 @@ _PARAMS = [(losses.GeneralizedLoss(), (2, 16, 16)),
            # TODO Make sure these output dimensions are correct
            (losses.LInfNorm(), (2, 1, 1))]
 _IDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm"]
-_IDS = ["{}[{}]".format(loss, get_backend().upper()) for loss in _IDS]
+_IDS = [f"{loss}[{get_backend().upper()}]" for loss in _IDS]
 
 
 @pytest.mark.parametrize(["loss_func", "output_shape"], _PARAMS, ids=_IDS)
@@ -48,7 +46,7 @@ _LWPARAMS = [losses.GeneralizedLoss(), losses.GradientLoss(), losses.GMSDLoss(),
              k_losses.logcosh, losses.DSSIMObjective()]
 _LWIDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm", "mae", "mse", "logcosh",
           "DSSIMObjective"]
-_LWIDS = ["{}[{}]".format(loss, get_backend().upper()) for loss in _LWIDS]
+_LWIDS = [f"{loss}[{get_backend().upper()}]" for loss in _LWIDS]
 
 
 @pytest.mark.parametrize("loss_func", _LWPARAMS, ids=_LWIDS)

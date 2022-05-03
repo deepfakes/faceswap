@@ -5,9 +5,6 @@ Adapted from Keras tests.
 """
 import pytest
 
-from keras import optimizers as k_optimizers
-from keras.layers import Dense, Activation
-from keras.models import Sequential
 import numpy as np
 from numpy.testing import assert_allclose
 
@@ -15,6 +12,16 @@ from lib.model import optimizers
 from lib.utils import get_backend
 
 from tests.utils import generate_test_data, to_categorical
+
+if get_backend() == "amd":
+    from keras import optimizers as k_optimizers
+    from keras.layers import Dense, Activation
+    from keras.models import Sequential
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import optimizers as k_optimizers  # pylint:disable=import-error
+    from tensorflow.keras.layers import Dense, Activation  # noqa pylint:disable=import-error,no-name-in-module
+    from tensorflow.keras.models import Sequential  # pylint:disable=import-error,no-name-in-module
 
 
 def get_test_data():

@@ -6,14 +6,22 @@ https://github.com/zllrunning/face-parsing.PyTorch
 """
 import numpy as np
 
-from keras import backend as K
-from keras.layers import (Activation, Add, BatchNormalization, Concatenate, Conv2D,
-                          GlobalAveragePooling2D, Input, MaxPooling2D, Multiply, Reshape,
-                          UpSampling2D, ZeroPadding2D)
-
 from lib.model.session import KSession
+from lib.utils import get_backend
 from plugins.extract._base import _get_config
 from ._base import Masker, logger
+
+if get_backend() == "amd":
+    from keras import backend as K
+    from keras.layers import (
+        Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
+        MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import backend as K  # pylint:disable=import-error
+    from tensorflow.keras.layers import (  # pylint:disable=no-name-in-module,import-error
+        Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
+        MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
 
 
 class Mask(Masker):

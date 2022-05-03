@@ -5,10 +5,16 @@ import inspect
 
 import pytest
 
-import keras
-from keras import backend as K
-
 from lib.utils import get_backend
+
+if get_backend() == "amd":
+    import keras
+    from keras import backend as K
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow import keras
+    from tensorflow.keras import backend as K  # pylint:disable=import-error
+
 
 _BACKEND = get_backend()
 

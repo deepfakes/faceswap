@@ -9,11 +9,17 @@ from itertools import product
 import pytest
 import numpy as np
 
-from keras import Input, Model, backend as K
+
 from numpy.testing import assert_allclose
 
 from lib.model import nn_blocks
 from lib.utils import get_backend
+
+if get_backend() == "amd":
+    from keras import Input, Model, backend as K
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import Input, Model, backend as K  # pylint:disable=import-error
 
 
 def block_test(layer_func, kwargs={}, input_shape=None):

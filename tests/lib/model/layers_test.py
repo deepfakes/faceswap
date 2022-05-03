@@ -7,13 +7,19 @@ Adapted from Keras tests.
 
 import pytest
 import numpy as np
-from keras import Input, Model, backend as K
 
 from numpy.testing import assert_allclose
 
 from lib.model import layers
 from lib.utils import get_backend
 from tests.utils import has_arg
+
+if get_backend() == "amd":
+    from keras import Input, Model, backend as K
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import Input, Model, backend as K  # pylint:disable=import-error
+
 
 CONV_SHAPE = (3, 3, 256, 2048)
 CONV_ID = get_backend().upper()

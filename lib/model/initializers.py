@@ -7,10 +7,17 @@ import inspect
 
 import numpy as np
 import tensorflow as tf
-from keras import backend as K
-from keras import initializers
 
-from lib.utils import get_backend, get_keras_custom_objects as get_custom_objects
+from lib.utils import get_backend
+
+if get_backend() == "amd":
+    from keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
+    from keras import backend as K
+    from keras import initializers
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow.keras import initializers, backend as K  # noqa pylint:disable=no-name-in-module,import-error
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

@@ -7,11 +7,12 @@ import logging
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.keras.engine import compile_utils  # pylint:disable=no-name-in-module
 
-from keras import backend as K
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.python.keras.engine import compile_utils  # noqa pylint:disable=no-name-in-module,import-error
+from tensorflow.keras import backend as K  # pylint:disable=import-error
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
 class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods

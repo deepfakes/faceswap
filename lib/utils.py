@@ -1,7 +1,6 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
 
-import importlib
 import json
 import logging
 import os
@@ -145,17 +144,6 @@ def get_tf_version():
         import tensorflow as tf  # pylint:disable=import-outside-toplevel
         _TF_VERS = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
     return _TF_VERS
-
-
-def get_keras_custom_objects():
-    """ Wrapper to obtain keras.utils.get_custom_objects from correct location depending on
-    backend used and tensorflow version. """
-    # pylint:disable=no-name-in-module,import-outside-toplevel
-    if get_backend() == "amd" or get_tf_version() < 2.8:
-        from keras.utils import get_custom_objects
-    else:
-        from keras.utils.generic_utils import get_custom_objects
-    return get_custom_objects()
 
 
 def get_folder(path, make_folder=True):
@@ -609,73 +597,3 @@ class GetModel():  # pylint:disable=too-few-public-methods
                     out_file.write(buffer)
         zip_file.close()
         pbar.close()
-
-
-class KerasFinder(importlib.abc.MetaPathFinder):
-    """ Importlib Abstract Base Class for intercepting the import of Keras and returning either
-    Keras (AMD backend) or tensorflow.keras (any other backend).
-
-    The Importlib documentation is sparse at best, and real world examples are pretty much
-    non-existent. Coupled with this, the import ``tensorflow.keras`` does not resolve so we need
-    to split out to the actual location of Keras within ``tensorflow_core``. This method works, but
-    it relies on hard coded paths, and is likely to not be the most robust.
-
-    A custom loader is not used, as we can use the standard loader once we have returned the
-    correct spec.
-    """
-    def __init__(self):
-        self._logger = logging.getLogger(__name__)
-        self._backend = get_backend()
-        self._tf_keras_locations = [["tensorflow_core", "python", "keras", "api", "_v2"],
-                                    ["tensorflow", "python", "keras", "api", "_v2"]]
-
-    def find_spec(self, fullname, path, target=None):  # pylint:disable=unused-argument
-        """ Obtain the spec for either keras or tensorflow.keras depending on the backend in use.
-
-        If keras is not passed in as part of the :attr:`fullname` or the path is not ``None``
-        (i.e this is a dependency import) then this returns ``None`` to use the standard import
-        library.
-
-        Parameters
-        ----------
-        fullname: str
-            The absolute name of the module to be imported
-        path: str
-            The search path for the module
-        target: module object, optional
-            Inherited from parent but unused
-
-        Returns
-        -------
-        :class:`importlib.ModuleSpec`
-            The spec for the Keras module to be imported
-        """
-        prefix = fullname.split(".")[0]
-        suffix = fullname.split(".")[-1]
-        if prefix != "keras" or path is not None:
-            return None
-        self._logger.debug("Importing '%s' as keras for backend: '%s'",
-                           "keras" if self._backend == "amd" else "tf.keras", self._backend)
-        path = sys.path if path is None else path
-        for entry in path:
-            locations = ([os.path.join(entry, *location)
-                          for location in self._tf_keras_locations]
-                         if self._backend != "amd" else [entry])
-            for location in locations:
-                self._logger.debug("Scanning: '%s' for '%s'", location, suffix)
-                if os.path.isdir(os.path.join(location, suffix)):
-                    filename = os.path.join(location, suffix, "__init__.py")
-                    submodule_locations = [os.path.join(location, suffix)]
-                else:
-                    filename = os.path.join(location, suffix + ".py")
-                    submodule_locations = None
-                if not os.path.exists(filename):
-                    continue
-                retval = importlib.util.spec_from_file_location(
-                    fullname,
-                    filename,
-                    submodule_search_locations=submodule_locations)
-                self._logger.debug("Found spec: %s", retval)
-                return retval
-        self._logger.debug("Spec not found for '%s'. Falling back to default import", fullname)
-        return None

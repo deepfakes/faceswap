@@ -16,17 +16,25 @@ from contextlib import nullcontext
 import numpy as np
 import tensorflow as tf
 
-from keras import losses as k_losses
-from keras import backend as K
-from keras.layers import Input
-from keras.models import load_model, Model as KModel
-
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
 from lib.model import losses, optimizers
 from lib.model.nn_blocks import set_config as set_nnblock_config
 from lib.utils import get_backend, get_tf_version, FaceswapError
 from plugins.train._config import Config
+
+if get_backend() == "amd":
+    from keras import losses as k_losses
+    from keras import backend as K
+    from keras.layers import Input
+    from keras.models import load_model, Model as KModel
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import losses as k_losses  # pylint:disable=import-error
+    from tensorflow.keras import backend as K  # pylint:disable=import-error
+    from tensorflow.keras.layers import Input  # pylint:disable=import-error,no-name-in-module
+    from tensorflow.keras.models import load_model, Model as KModel  # noqa pylint:disable=import-error,no-name-in-module
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None

@@ -4,14 +4,10 @@ import inspect
 import sys
 
 import tensorflow as tf
-import tensorflow.keras.backend as K  # pylint:disable=no-name-in-module,import-error
-# tf.keras has a LayerNormaliztion implementation
-# pylint:disable=unused-import
-from tensorflow.keras.layers import (  # noqa pylint:disable=no-name-in-module,import-error
-    Layer,
-    LayerNormalization)
-
-from lib.utils import get_keras_custom_objects as get_custom_objects
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras import backend as K  # pylint:disable=import-error
+from tensorflow.keras.layers import Layer, LayerNormalization  # noqa pylint:disable=no-name-in-module,unused-import,import-error
+from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
 
 
 class RMSNormalization(Layer):

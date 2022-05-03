@@ -8,12 +8,21 @@ https://github.com/1adrianb/face-alignment
 
 from scipy.special import logsumexp
 import numpy as np
-import keras  # pylint:disable=import-error
-import keras.backend as K  # pylint:disable=import-error
-from keras.layers import Concatenate, Conv2D, Input, Maximum, MaxPooling2D, ZeroPadding2D
 
 from lib.model.session import KSession
+from lib.utils import get_backend
 from ._base import Detector, logger
+
+if get_backend() == "amd":
+    import keras
+    from keras import backend as K
+    from keras.layers import Concatenate, Conv2D, Input, Maximum, MaxPooling2D, ZeroPadding2D
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow import keras
+    from tensorflow.keras import backend as K  # pylint:disable=import-error
+    from tensorflow.keras.layers import (  # pylint:disable=no-name-in-module,import-error
+        Concatenate, Conv2D, Input, Maximum, MaxPooling2D, ZeroPadding2D)
 
 
 class Detect(Detector):
@@ -316,11 +325,11 @@ class S3fd(KSession):
         tensor
             The output tensor from the convolution block
         """
-        name = "conv{}".format(idx)
+        name = f"conv{idx}"
         var_x = inputs
         for i in range(1, recursions + 1):
-            rec_name = "{}_{}".format(name, i)
-            var_x = ZeroPadding2D(1, name="{}.zeropad".format(rec_name))(var_x)
+            rec_name = f"{name}_{i}"
+            var_x = ZeroPadding2D(1, name=f"{rec_name}.zeropad")(var_x)
             var_x = Conv2D(filters,
                            kernel_size=3,
                            strides=1,
@@ -346,13 +355,13 @@ class S3fd(KSession):
         tensor
             The output tensor from the convolution block
         """
-        name = "conv{}".format(idx)
+        name = f"conv{idx}"
         var_x = inputs
         for i in range(1, 3):
-            rec_name = "{}_{}".format(name, i)
+            rec_name = f"{name}_{i}"
             size = 1 if i == 1 else 3
             if i == 2:
-                var_x = ZeroPadding2D(1, name="{}.zeropad".format(rec_name))(var_x)
+                var_x = ZeroPadding2D(1, name=f"{rec_name}.zeropad")(var_x)
             var_x = Conv2D(filters * i,
                            kernel_size=size,
                            strides=i,
@@ -386,7 +395,7 @@ class S3fd(KSession):
         bounding_boxes_scales: list
             The output predictions from the S3FD model
         """
-        ret = list()
+        ret = []
         batch_size = range(bounding_boxes_scales[0].shape[0])
         for img in batch_size:
             bboxlist = [scale[img:img+1] for scale in bounding_boxes_scales]
@@ -399,7 +408,7 @@ class S3fd(KSession):
         """ Perform post processing on output
             TODO: do this on the batch.
         """
-        retval = list()
+        retval = []
         for i in range(len(bboxlist) // 2):
             bboxlist[i * 2] = self.softmax(bboxlist[i * 2], axis=3)
         for i in range(len(bboxlist) // 2):
@@ -450,7 +459,7 @@ class S3fd(KSession):
     @staticmethod
     def _nms(boxes, threshold):
         """ Perform Non-Maximum Suppression """
-        retained_box_indices = list()
+        retained_box_indices = []
 
         areas = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
         ranked_indices = boxes[:, 4].argsort()[::-1]
