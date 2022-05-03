@@ -3,11 +3,17 @@
     Based on the original https://www.reddit.com/r/deepfakes/
         code sample + contributions """
 
-from keras.initializers import RandomNormal
-from keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D
-
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
+from lib.utils import get_backend
 from ._base import ModelBase, KerasModel
+
+if get_backend() == "amd":
+    from keras.initializers import RandomNormal
+    from keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.initializers import RandomNormal  # noqa pylint:disable=import-error,no-name-in-module
+    from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D  # noqa pylint:disable=import-error,no-name-in-module
 
 
 class Model(ModelBase):
@@ -135,6 +141,6 @@ class Model(ModelBase):
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """
-        return {"{}_encoder.h5".format(self.name): "encoder",
-                "{}_decoder_A.h5".format(self.name): "decoder_a",
-                "{}_decoder_B.h5".format(self.name): "decoder_b"}
+        return {f"{self.name}_encoder.h5": "encoder",
+                f"{self.name}_decoder_A.h5": "decoder_a",
+                f"{self.name}_decoder_B.h5": "decoder_b"}

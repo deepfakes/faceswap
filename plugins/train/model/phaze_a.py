@@ -4,28 +4,31 @@
 import numpy as np
 import tensorflow as tf
 
-import keras.backend as K
-from keras.layers import (
-    Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise,
-    GlobalAveragePooling2D, GlobalMaxPooling2D, Input, LeakyReLU, Reshape, UpSampling2D,
-    Conv2D as KConv2D)
-from keras.models import clone_model
-
 from lib.model.nn_blocks import (
     Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
     UpscaleResizeImagesBlock)
 from lib.model.normalization import (
     AdaInstanceNormalization, GroupNormalization, InstanceNormalization, LayerNormalization,
     RMSNormalization)
-
 from lib.utils import get_backend, FaceswapError
 
-if get_backend() == "amd":
-    from keras import applications as kapp
-else:
-    from tensorflow.keras import applications as kapp
-
 from ._base import KerasModel, ModelBase, logger, _get_all_sub_models
+
+if get_backend() == "amd":
+    from keras import applications as kapp, backend as K
+    from keras.layers import (
+        Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise,
+        GlobalAveragePooling2D, GlobalMaxPooling2D, Input, LeakyReLU, Reshape, UpSampling2D,
+        Conv2D as KConv2D)
+    from keras.models import clone_model
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import applications as kapp, backend as K  # pylint:disable=import-error
+    from tensorflow.keras.layers import (  # pylint:disable=import-error,no-name-in-module
+        Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise,
+        GlobalAveragePooling2D, GlobalMaxPooling2D, Input, LeakyReLU, Reshape, UpSampling2D,
+        Conv2D as KConv2D)
+    from tensorflow.keras.models import clone_model  # noqa pylint:disable=import-error,no-name-in-module
 
 
 _MODEL_MAPPING = dict(
@@ -231,7 +234,7 @@ class Model(ModelBase):
                                 f"one of {list(_MODEL_MAPPING.keys())}.")
 
         if get_backend() == "amd" and model.get("no_amd"):
-            valid = [x for x in _MODEL_MAPPING if not _MODEL_MAPPING[x].get('no_amd')]
+            valid = [k for k, v in _MODEL_MAPPING.items() if not v.get('no_amd')]
             raise FaceswapError(f"'{arch}' is not compatible with the AMD backend. Choose one of "
                                 f"{valid}.")
 
@@ -553,7 +556,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
         """ dict: The selected encoder model options dictionary """
         arch = self._config["enc_architecture"]
         model = _MODEL_MAPPING.get(arch)
-        model["kwargs"] = self._model_kwargs.get(arch, dict())
+        model["kwargs"] = self._model_kwargs.get(arch, {})
         return model
 
     @property
@@ -804,7 +807,7 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
                 if self._config["fc_upsampler"].lower() == "upsample2d":
                     var_x = LeakyReLU(alpha=0.1)(var_x)
 
-        return KerasModel(input_, var_x, name="fc_{}".format(self._side))
+        return KerasModel(input_, var_x, name=f"fc_{self._side}")
 
 
 class GBlock():  # pylint:disable=too-few-public-methods
@@ -1028,4 +1031,4 @@ class Decoder():  # pylint:disable=too-few-public-methods
                                         self._config["dec_output_kernel"],
                                         name="mask_out")(var_y))
 
-        return KerasModel(inputs, outputs=outputs, name="decoder_{}".format(self._side))
+        return KerasModel(inputs, outputs=outputs, name=f"decoder_{self._side}")
