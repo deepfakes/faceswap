@@ -206,8 +206,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
 
         Set Faceswap backend to CPU if all GPUs have been deselected.
 
-        Add the Keras import interception code.
-
         Parameters
         ----------
         arguments: :class:`argparse.Namespace`

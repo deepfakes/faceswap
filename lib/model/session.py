@@ -5,11 +5,16 @@ import logging
 
 import numpy as np
 import tensorflow as tf
-# pylint:disable=no-name-in-module,import-error
-from keras.layers import Activation
-from keras.models import load_model as k_load_model, Model
 
 from lib.utils import get_backend
+
+if get_backend() == "amd":
+    from keras.layers import Activation
+    from keras.models import load_model as k_load_model, Model
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.layers import Activation  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow.keras.models import load_model as k_load_model, Model  # noqa pylint:disable=no-name-in-module,import-error
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -54,7 +59,7 @@ class KSession():
         self._backend = get_backend()
         self._set_session(allow_growth, exclude_gpus)
         self._model_path = model_path
-        self._model_kwargs = dict() if not model_kwargs else model_kwargs
+        self._model_kwargs = {} if not model_kwargs else model_kwargs
         self._model = None
         logger.trace("Initialized: %s", self.__class__.__name__,)
 
@@ -92,7 +97,7 @@ class KSession():
             feed = [feed]
         items = feed[0].shape[0]
         done_items = 0
-        results = list()
+        results = []
         while done_items < items:
             if batch_size < 4:  # Not much difference in BS < 4
                 batch_size = 1

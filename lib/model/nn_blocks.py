@@ -3,20 +3,31 @@
 
 import logging
 
-from keras.layers import (Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D,
-                          Conv2DTranspose, DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU,
-                          SeparableConv2D, UpSampling2D)
-from keras.initializers import he_uniform, VarianceScaling
+from lib.utils import get_backend
+
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
 from .normalization import InstanceNormalization
 
+if get_backend() == "amd":
+    from keras.layers import (
+        Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
+        DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
+    from keras.initializers import he_uniform, VarianceScaling  # pylint:disable=no-name-in-module
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.layers import (  # noqa pylint:disable=no-name-in-module,import-error
+        Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
+        DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
+    from tensorflow.keras.initializers import he_uniform, VarianceScaling  # noqa pylint:disable=no-name-in-module,import-error
+
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-_CONFIG = dict()
-_NAMES = dict()
+_CONFIG = {}
+_NAMES = {}
 
 
 def set_config(configuration):
@@ -52,9 +63,9 @@ def _get_name(name):
     str
         The unique name for this layer
     """
-    global _NAMES  # pylint:disable=global-statement
+    global _NAMES  # pylint:disable=global-statement,global-variable-not-assigned
     _NAMES[name] = _NAMES.setdefault(name, -1) + 1
-    name = "{}_{}".format(name, _NAMES[name])
+    name = f"{name}_{_NAMES[name]}"
     logger.debug("Generating block name: %s", name)
     return name
 
@@ -112,7 +123,7 @@ class Conv2D(KConv2D):  # pylint:disable=too-few-public-methods
     def __init__(self, *args, padding="same", check_icnr_init=False, **kwargs):
         if kwargs.get("name", None) is None:
             filters = kwargs["filters"] if "filters" in kwargs else args[0]
-            kwargs["name"] = _get_name("conv2d_{}".format(filters))
+            kwargs["name"] = _get_name(f"conv2d_{filters}")
         initializer = _get_default_initializer(kwargs.pop("kernel_initializer", None))
         if check_icnr_init and _CONFIG["icnr_init"]:
             initializer = ICNR(initializer=initializer)
@@ -179,7 +190,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
     """
     def __init__(self, filters, kernel_size, activation="sigmoid", padding="same", **kwargs):
         self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
-            "conv_output_{}".format(filters))
+            f"conv_output_{filters}")
         self._filters = filters
         self._kernel_size = kernel_size
         self._activation = activation
@@ -202,7 +213,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
         var_x = Conv2D(self._filters,
                        self._kernel_size,
                        padding=self._padding,
-                       name="{}_conv2d".format(self._name),
+                       name=f"{self._name}_conv2d",
                        **self._kwargs)(inputs)
         var_x = Activation(self._activation, dtype="float32", name=self._name)(var_x)
         return var_x
@@ -256,8 +267,7 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
                  activation="leakyrelu",
                  use_depthwise=False,
                  **kwargs):
-        self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
-            "conv_{}".format(filters))
+        self._name = kwargs.pop("name") if "name" in kwargs else _get_name(f"conv_{filters}")
 
         logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, padding: %s, "
                      "normalization: %s, activation: %s, use_depthwise: %s, kwargs: %s)",
@@ -299,26 +309,26 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
         if self._use_reflect_padding:
             inputs = ReflectionPadding2D(stride=self._strides,
                                          kernel_size=self._args[-1],
-                                         name="{}_reflectionpadding2d".format(self._name))(inputs)
+                                         name=f"{self._name}_reflectionpadding2d")(inputs)
         conv = DepthwiseConv2D if self._use_depthwise else Conv2D
         var_x = conv(*self._args,
                      strides=self._strides,
                      padding=self._padding,
-                     name="{}_{}conv2d".format(self._name, "dw" if self._use_depthwise else ""),
+                     name=f"{self._name}_{'dw' if self._use_depthwise else ''}conv2d",
                      **self._kwargs)(inputs)
         # normalization
         if self._normalization == "instance":
-            var_x = InstanceNormalization(name="{}_instancenorm".format(self._name))(var_x)
+            var_x = InstanceNormalization(name=f"{self._name}_instancenorm")(var_x)
         if self._normalization == "batch":
-            var_x = BatchNormalization(axis=3, name="{}_batchnorm".format(self._name))(var_x)
+            var_x = BatchNormalization(axis=3, name=f"{self._name}_batchnorm")(var_x)
 
         # activation
         if self._activation == "leakyrelu":
-            var_x = LeakyReLU(0.1, name="{}_leakyrelu".format(self._name))(var_x)
+            var_x = LeakyReLU(0.1, name=f"{self._name}_leakyrelu")(var_x)
         if self._activation == "swish":
-            var_x = Swish(name="{}_swish".format(self._name))(var_x)
+            var_x = Swish(name=f"{self._name}_swish")(var_x)
         if self._activation == "prelu":
-            var_x = PReLU(name="{}_prelu".format(self._name))(var_x)
+            var_x = PReLU(name=f"{self._name}_prelu")(var_x)
 
         return var_x
 
@@ -344,7 +354,7 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
         Convolutional 2D layer
     """
     def __init__(self, filters, kernel_size=5, strides=2, **kwargs):
-        self._name = _get_name("separableconv2d_{}".format(filters))
+        self._name = _get_name(f"separableconv2d_{filters}")
         logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      self._name, filters, kernel_size, strides, kwargs)
 
@@ -373,9 +383,9 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
                                 kernel_size=self._kernel_size,
                                 strides=self._strides,
                                 padding="same",
-                                name="{}_seperableconv2d".format(self._name),
+                                name=f"{self._name}_seperableconv2d",
                                 **self._kwargs)(inputs)
-        var_x = Activation("relu", name="{}_relu".format(self._name))(var_x)
+        var_x = Activation("relu", name=f"{self._name}_relu")(var_x)
         return var_x
 
 
@@ -420,7 +430,7 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
                  normalization=None,
                  activation="leakyrelu",
                  **kwargs):
-        self._name = _get_name("upscale_{}".format(filters))
+        self._name = _get_name(f"upscale_{filters}")
         logger.debug("name: %s. filters: %s, kernel_size: %s, padding: %s, scale_factor: %s, "
                      "normalization: %s, activation: %s, kwargs: %s)",
                      self._name, filters, kernel_size, padding, scale_factor, normalization,
@@ -453,10 +463,10 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
                             padding=self._padding,
                             normalization=self._normalization,
                             activation=self._activation,
-                            name="{}_conv2d".format(self._name),
+                            name=f"{self._name}_conv2d",
                             check_icnr_init=_CONFIG["icnr_init"],
                             **self._kwargs)(inputs)
-        var_x = PixelShuffler(name="{}_pixelshuffler".format(self._name),
+        var_x = PixelShuffler(name=f"{self._name}_pixelshuffler",
                               size=self._scale_factor)(var_x)
         return var_x
 
@@ -501,7 +511,7 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self, filters, kernel_size=3, padding="same", activation="leakyrelu",
                  interpolation="bilinear", sr_ratio=0.5, scale_factor=2, fast=False, **kwargs):
-        self._name = _get_name("upscale2x_{}_{}".format(filters, "fast" if fast else "hyb"))
+        self._name = _get_name(f"upscale2x_{filters}_{'fast' if fast else 'hyb'}")
 
         self._fast = fast
         self._filters = filters if self._fast else filters - int(filters * sr_ratio)
@@ -536,11 +546,11 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
         if self._fast or (not self._fast and self._filters > 0):
             var_x2 = Conv2D(self._filters, 3,
                             padding=self._padding,
-                            name="{}_conv2d".format(self._name),
+                            name=f"{self._name}_conv2d",
                             **self._kwargs)(var_x)
             var_x2 = UpSampling2D(size=(self._scale_factor, self._scale_factor),
                                   interpolation=self._interpolation,
-                                  name="{}_upsampling2D".format(self._name))(var_x2)
+                                  name=f"{self._name}_upsampling2D")(var_x2)
             if self._fast:
                 var_x1 = UpscaleBlock(self._filters,
                                       kernel_size=self._kernel_size,
@@ -550,7 +560,7 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
                                       **self._kwargs)(var_x)
                 var_x = Add()([var_x2, var_x1])
             else:
-                var_x = Concatenate(name="{}_concatenate".format(self._name))([var_x_sr, var_x2])
+                var_x = Concatenate(name=f"{self._name}_concatenate")([var_x_sr, var_x2])
         else:
             var_x = var_x_sr
         return var_x
@@ -587,7 +597,7 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self, filters, kernel_size=3, padding="same", activation="leakyrelu",
                  scale_factor=2, interpolation="bilinear"):
-        self._name = _get_name("upscale_ri_{}".format(filters))
+        self._name = _get_name(f"upscale_ri_{filters}")
         self._interpolation = interpolation
         self._size = scale_factor
         self._filters = filters
@@ -612,23 +622,23 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
 
         var_x_sr = KResizeImages(size=self._size,
                                  interpolation=self._interpolation,
-                                 name="{}_resize".format(self._name))(var_x)
+                                 name=f"{self._name}_resize")(var_x)
         var_x_sr = Conv2D(self._filters, self._kernel_size,
                           strides=1,
                           padding=self._padding,
-                          name="{}_conv".format(self._name))(var_x_sr)
+                          name=f"{self._name}_conv")(var_x_sr)
         var_x_us = Conv2DTranspose(self._filters, 3,
                                    strides=2,
                                    padding=self._padding,
-                                   name="{}_convtrans".format(self._name))(var_x)
+                                   name=f"{self._name}_convtrans")(var_x)
         var_x = Add()([var_x_sr, var_x_us])
 
         if self._activation == "leakyrelu":
-            var_x = LeakyReLU(0.2, name="{}_leakyrelu".format(self._name))(var_x)
+            var_x = LeakyReLU(0.2, name=f"{self._name}_leakyrelu")(var_x)
         if self._activation == "swish":
-            var_x = Swish(name="{}_swish".format(self._name))(var_x)
+            var_x = Swish(name=f"{self._name}_swish")(var_x)
         if self._activation == "prelu":
-            var_x = PReLU(name="{}_prelu".format(self._name))(var_x)
+            var_x = PReLU(name=f"{self._name}_prelu")(var_x)
         return var_x
 
 
@@ -656,7 +666,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         The output tensor from the Upscale layer
     """
     def __init__(self, filters, kernel_size=3, padding="same", **kwargs):
-        self._name = _get_name("residual_{}".format(filters))
+        self._name = _get_name(f"residual_{filters}")
         logger.debug("name: %s, filters: %s, kernel_size: %s, padding: %s, kwargs: %s)",
                      self._name, filters, kernel_size, padding, kwargs)
         self._use_reflect_padding = _CONFIG["reflect_padding"]
@@ -683,17 +693,17 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
                                         kernel_size=self._kernel_size,
-                                        name="{}_reflectionpadding2d_0".format(self._name))(var_x)
+                                        name=f"{self._name}_reflectionpadding2d_0")(var_x)
         var_x = Conv2D(self._filters,
                        kernel_size=self._kernel_size,
                        padding=self._padding,
-                       name="{}_conv2d_0".format(self._name),
+                       name=f"{self._name}_conv2d_0",
                        **self._kwargs)(var_x)
-        var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_1".format(self._name))(var_x)
+        var_x = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1")(var_x)
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
                                         kernel_size=self._kernel_size,
-                                        name="{}_reflectionpadding2d_1".format(self._name))(var_x)
+                                        name=f"{self._name}_reflectionpadding2d_1")(var_x)
 
         kwargs = {key: val for key, val in self._kwargs.items() if key != "kernel_initializer"}
         if not _CONFIG["conv_aware_init"]:
@@ -703,9 +713,9 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         var_x = Conv2D(self._filters,
                        kernel_size=self._kernel_size,
                        padding=self._padding,
-                       name="{}_conv2d_1".format(self._name),
+                       name=f"{self._name}_conv2d_1",
                        **kwargs)(var_x)
 
         var_x = Add()([var_x, inputs])
-        var_x = LeakyReLU(alpha=0.2, name="{}_leakyrelu_3".format(self._name))(var_x)
+        var_x = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_3")(var_x)
         return var_x

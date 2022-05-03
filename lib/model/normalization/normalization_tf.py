@@ -5,7 +5,7 @@ import sys
 
 import tensorflow as tf
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-import tensorflow.keras.backend as K  # noqa pylint:disable=no-name-in-module,import-error
+from tensorflow.keras import backend as K  # pylint:disable=import-error
 from tensorflow.keras.layers import Layer, LayerNormalization  # noqa pylint:disable=no-name-in-module,unused-import,import-error
 from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
 

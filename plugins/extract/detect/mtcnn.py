@@ -5,10 +5,16 @@ from __future__ import absolute_import, division, print_function
 
 import cv2
 import numpy as np
-# pylint:disable=import-error
-from keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU
+
 from lib.model.session import KSession
+from lib.utils import get_backend
 from ._base import Detector, logger
+
+if get_backend() == "amd":
+    from keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU  # noqa pylint:disable=no-name-in-module,import-error
 
 
 class Detect(Detector):
@@ -234,8 +240,8 @@ class MTCNN():
         rectangles = self.detect_pnet(batch, origin_h, origin_w)
         rectangles = self.detect_rnet(batch, rectangles, origin_h, origin_w)
         rectangles = self.detect_onet(batch, rectangles, origin_h, origin_w)
-        ret_boxes = list()
-        ret_points = list()
+        ret_boxes = []
+        ret_points = []
         for rects in rectangles:
             if rects:
                 total_boxes = np.array([result[:5] for result in rects])
@@ -284,7 +290,7 @@ class MTCNN():
         # TODO: batching
         for idx, rectangles in enumerate(rectangle_batch):
             if not rectangles:
-                ret.append(list())
+                ret.append([])
                 continue
             image = images[idx]
             crop_number = 0
@@ -307,11 +313,11 @@ class MTCNN():
 
     def detect_onet(self, images, rectangle_batch, height, width):
         """ third stage - further refinement and facial landmarks positions with o-net """
-        ret = list()
+        ret = []
         # TODO: batching
         for idx, rectangles in enumerate(rectangle_batch):
             if not rectangles:
-                ret.append(list())
+                ret.append([])
                 continue
             image = images[idx]
             crop_number = 0

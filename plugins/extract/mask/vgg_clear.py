@@ -2,12 +2,20 @@
 """ VGG Clear face mask plugin. """
 
 import numpy as np
-from keras.layers import (Add, Conv2D,    # pylint:disable=no-name-in-module,import-error
-                          Conv2DTranspose, Cropping2D, Dropout, Input, Lambda,
-                          MaxPooling2D, ZeroPadding2D)
 
 from lib.model.session import KSession
+from lib.utils import get_backend
 from ._base import Masker, logger
+
+if get_backend() == "amd":
+    from keras.layers import (
+        Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
+        ZeroPadding2D)
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.layers import (  # pylint:disable=no-name-in-module,import-error
+        Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
+        ZeroPadding2D)
 
 
 class Mask(Masker):
@@ -151,7 +159,7 @@ class _ConvBlock():  # pylint:disable=too-few-public-methods
         The number of consecutive Conv2D layers to create
     """
     def __init__(self, level, filters, iterations):
-        self._name = "conv{}_".format(level)
+        self._name = f"conv{level}_"
         self._level = level
         self._filters = filters
         self._iterator = range(1, iterations + 1)
@@ -176,10 +184,10 @@ class _ConvBlock():  # pylint:disable=too-few-public-methods
                            3,
                            padding=padding,
                            activation="relu",
-                           name="{}{}".format(self._name, i))(var_x)
+                           name=f"{self._name}{i}")(var_x)
         var_x = MaxPooling2D(padding="same",
                              strides=(2, 2),
-                             name="pool{}".format(self._level))(var_x)
+                             name=f"pool{self._level}")(var_x)
         return var_x
 
 
@@ -196,7 +204,7 @@ class _ScorePool():  # pylint:disable=too-few-public-methods
         The amount of 2D cropping to apply. Tuple of `ints`
     """
     def __init__(self, level, scale, crop):
-        self._name = "_pool{}".format(level)
+        self._name = f"_pool{level}"
         self._cropping = (crop, crop)
         self._scale = scale
 
