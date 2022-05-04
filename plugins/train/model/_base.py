@@ -1177,9 +1177,10 @@ class _Loss():
                                smooth_loss=losses.GeneralizedLoss(),
                                l_inf_norm=losses.LInfNorm(),
                                ssim=losses.DSSIMObjective(),
+                               ms_ssim=losses.MSSSIMLoss(),
                                gmsd=losses.GMSDLoss(),
                                pixel_gradient_diff=losses.GradientLoss())
-        self._uses_l2_reg = ["ssim", "gmsd"]
+        self._uses_l2_reg = ["ssim", "ms_ssim", "gmsd"]
         self._inputs = None
         self._names = []
         self._funcs = {}

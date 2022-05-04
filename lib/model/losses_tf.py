@@ -71,6 +71,100 @@ class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-met
         return dssim_loss
 
 
+class MSSSIMLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
+    """ Multiscale Structural Similarity Loss Function
+
+    Parameters
+    ----------
+    k_1: float, optional
+        Parameter of the SSIM. Default: `0.01`
+    k_2: float, optional
+        Parameter of the SSIM. Default: `0.03`
+    filter_size: int, optional
+        size of gaussian filter Default: `11`
+    filter_sigma: float, optional
+        Width of gaussian filter Default: `1.5`
+    max_value: float, optional
+        Max value of the output. Default: `1.0`
+    power_factors: tuple, optional
+        Iterable of weights for each of the scales. The number of scales used is the length of the
+        list. Index 0 is the unscaled resolution's weight and each increasing scale corresponds to
+        the image being downsampled by 2. Defaults to the values obtained in the original paper.
+        Default: (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
+
+    Notes
+    ------
+    You should add a regularization term like a l2 loss in addition to this one.
+    """
+    def __init__(self,
+                 k_1=0.01,
+                 k_2=0.03,
+                 filter_size=4,
+                 filter_sigma=1.5,
+                 max_value=1.0,
+                 power_factors=(0.0448, 0.2856, 0.3001, 0.2363, 0.1333)):
+        super().__init__(name="SSIM_Multiscale_Loss")
+        self.filter_size = filter_size
+        self.filter_sigma = filter_sigma
+        self.k_1 = k_1
+        self.k_2 = k_2
+        self.max_value = max_value
+        self.power_factors = power_factors
+
+    def call(self, y_true, y_pred):
+        """ Call the MS-SSIM Loss Function.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The MS-SSIM Loss value
+        """
+        im_size = K.int_shape(y_true)[1]
+        # filter size cannot be larger than the smallest scale
+        smallest_scale = self._get_smallest_size(im_size, len(self.power_factors) - 1)
+        filter_size = min(self.filter_size, smallest_scale)
+
+        ms_ssim = tf.image.ssim_multiscale(y_true,
+                                           y_pred,
+                                           self.max_value,
+                                           power_factors=self.power_factors,
+                                           filter_size=filter_size,
+                                           filter_sigma=self.filter_sigma,
+                                           k1=self.k_1,
+                                           k2=self.k_2)
+        ms_ssim_loss = 1. - ms_ssim
+        return ms_ssim_loss
+
+    def _get_smallest_size(self, size, idx):
+        """ Recursive function to obtain the smallest size that the image will be scaled to.
+
+        Parameters
+        ----------
+        size: int
+            The current scaled size to iterate through
+        idx: int
+            The current iteration to be performed. When iteration hits zero the value will
+            be returned
+
+        Returns
+        -------
+        int
+            The smallest size the image will be scaled to based on the original image size and
+            the amount of scaling factors that will occur
+        """
+        logger.debug("scale id: %s, size: %s", idx, size)
+        if idx > 0:
+            size = self._get_smallest_size(size // 2, idx - 1)
+        return size
+
+
 class GeneralizedLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """  Generalized function used to return a large variety of mathematical loss functions.
 

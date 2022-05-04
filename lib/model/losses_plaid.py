@@ -199,6 +199,65 @@ class DSSIMObjective():
         return patches
 
 
+class MSSSIMLoss():  # pylint:disable=too-few-public-methods
+    """ Multiscale Structural Similarity Loss Function
+
+    Parameters
+    ----------
+    k_1: float, optional
+        Parameter of the SSIM. Default: `0.01`
+    k_2: float, optional
+        Parameter of the SSIM. Default: `0.03`
+    filter_size: int, optional
+        size of gaussian filter Default: `11`
+    filter_sigma: float, optional
+        Width of gaussian filter Default: `1.5`
+    max_value: float, optional
+        Max value of the output. Default: `1.0`
+    power_factors: tuple, optional
+        Iterable of weights for each of the scales. The number of scales used is the length of the
+        list. Index 0 is the unscaled resolution's weight and each increasing scale corresponds to
+        the image being downsampled by 2. Defaults to the values obtained in the original paper.
+        Default: (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
+
+    Notes
+    ------
+    You should add a regularization term like a l2 loss in addition to this one.
+    """
+    def __init__(self,
+                 k_1=0.01,
+                 k_2=0.03,
+                 filter_size=4,
+                 filter_sigma=1.5,
+                 max_value=1.0,
+                 power_factors=(0.0448, 0.2856, 0.3001, 0.2363, 0.1333)):
+        super().__init__(name="SSIM_Multiscale_Loss")
+        self.filter_size = filter_size
+        self.filter_sigma = filter_sigma
+        self.k_1 = k_1
+        self.k_2 = k_2
+        self.max_value = max_value
+        self.power_factors = power_factors
+
+    def __call__(self, y_true, y_pred):
+        """ Call the MS-SSIM Loss Function.
+
+        Parameters
+        ----------
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
+
+        Returns
+        -------
+        tensor
+            The MS-SSIM Loss value
+        """
+        raise FaceswapError("MS-SSIM Loss is not currently compatible with PlaidML. Please select "
+                            "a different Loss method.")
+
+
 class GeneralizedLoss():  # pylint:disable=too-few-public-methods
     """  Generalized function used to return a large variety of mathematical loss functions.
 
