@@ -52,7 +52,8 @@ _ENCODERS = ["densenet121", "densenet169", "densenet201", "inception_resnet_v2",
 if get_backend() != "amd":
     _ENCODERS.extend(["efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3",
                       "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7",
-                      "resnet50_v2", "resnet101", "resnet101_v2", "resnet152", "resnet152_v2"])
+                      "mobilenet_v3_large", "mobilenet_v3_small", "resnet50_v2", "resnet101",
+                      "resnet101_v2", "resnet152", "resnet152_v2"])
 _ENCODERS = sorted(_ENCODERS)
 
 
@@ -157,6 +158,9 @@ _DEFAULTS = dict(
              "\n\tmobilenet_v2: (32px - 224px). Additional MobileNet parameters can be set with "
              "the 'mobilenet' options. Ref: MobileNetV2: Inverted Residuals and Linear "
              "Bottlenecks (2018): https://arxiv.org/abs/1801.04381"
+             "\n\tmobilenet_v3: (32px - 224px). Additional MobileNet parameters can be set with "
+             "the 'mobilenet' options. Ref: Searching for MobileNetV3 (2019): "
+             "https://arxiv.org/pdf/1905.02244.pdf"
              "\n\tnasnet: (32px - 331px (large) or 224px (mobile)). Ref: Learning Transferable "
              "Architectures for Scalable Image Recognition (2017): "
              "https://arxiv.org/abs/1707.07012"
@@ -569,9 +573,10 @@ _DEFAULTS = dict(
              "each layer. Values greater than 1.0 proportionally increase the number of filters "
              "within each layer. 1.0 is the default number of layers used within the paper.\n"
              "NB: This option is ignored for any non-mobilenet encoders.\n"
-             "NB: If loading ImageNet weights, then for mobilenet v1 only values of '0.25', "
-             "'0.5', '0.75' or '1.0 can be selected. For mobilenet v2 only values of '0.35', "
-             "'0.50', '0.75', '1.0', '1.3' or '1.4' can be selected",
+             "NB: If loading ImageNet weights, then for MobilenetV1 only values of '0.25', "
+             "'0.5', '0.75' or '1.0 can be selected. For MobilenetV2 only values of '0.35', "
+             "'0.50', '0.75', '1.0', '1.3' or '1.4' can be selected. For mobilenet_v3 only values "
+             "of '0.75' or '1.0' can be selected",
         datatype=float,
         min_max=(0.1, 2.0),
         rounding=2,
@@ -579,10 +584,10 @@ _DEFAULTS = dict(
         fixed=True),
     mobilenet_depth=dict(
         default=1,
-        info="The depth multiplier for mobilenet v1 encoder. This is the depth multiplier "
+        info="The depth multiplier for MobilenetV1 encoder. This is the depth multiplier "
              "for depthwise convolution (known as the resolution multiplier within the original "
              "paper).\n"
-             "NB: This option is only used for mobilenet v1 and is ignored for all other "
+             "NB: This option is only used for MobilenetV1 and is ignored for all other "
              "encoders.\n"
              "NB: If loading ImageNet weights, this must be set to 1.",
         datatype=int,
@@ -592,13 +597,25 @@ _DEFAULTS = dict(
         fixed=True),
     mobilenet_dropout=dict(
         default=0.001,
-        info="The dropout rate for for mobilenet v1 encoder.\n"
-             "NB: This option is only used for mobilenet v1 and is ignored for all other "
-             "encoders.\n"
-             "NB: If loading ImageNet weights, this must be set to 1.0.",
+        info="The dropout rate for MobilenetV1 encoder.\n"
+             "NB: This option is only used for MobilenetV1 and is ignored for all other "
+             "encoders.",
         datatype=float,
-        min_max=(0.1, 2.0),
-        rounding=2,
+        min_max=(0.001, 2.0),
+        rounding=3,
+        group="mobilenet encoder configuration",
+        fixed=True),
+    mobilenet_minimalistic=dict(
+        default=False,
+        info="Use a minimilist version of MobilenetV3.\n"
+             "In addition to large and small models MobilenetV3 also contains so-called "
+             "minimalistic models, these models have the same per-layer dimensions characteristic "
+             "as MobilenetV3 however, they don't utilize any of the advanced blocks "
+             "(squeeze-and-excite units, hard-swish, and 5x5 convolutions). While these models "
+             "are less efficient on CPU, they are much more performant on GPU/DSP.\n"
+             "NB: This option is only used for MobilenetV3 and is ignored for all other "
+             "encoders.\n",
+        datatype=bool,
         group="mobilenet encoder configuration",
         fixed=True),
     )

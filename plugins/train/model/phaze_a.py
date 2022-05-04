@@ -2,7 +2,6 @@
 """ Phaze-A Model by TorzDF with thanks to BirbFakes and the myriad of testers. """
 
 import numpy as np
-import tensorflow as tf
 
 from lib.model.nn_blocks import (
     Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
@@ -10,7 +9,7 @@ from lib.model.nn_blocks import (
 from lib.model.normalization import (
     AdaInstanceNormalization, GroupNormalization, InstanceNormalization, LayerNormalization,
     RMSNormalization)
-from lib.utils import get_backend, FaceswapError
+from lib.utils import get_backend, get_tf_version, FaceswapError
 
 from ._base import KerasModel, ModelBase, logger, _get_all_sub_models
 
@@ -62,6 +61,10 @@ _MODEL_MAPPING = dict(
         keras_name="MobileNet", scaling=(-1, 1), default_size=224),
     mobilenet_v2=dict(
         keras_name="MobileNetV2", scaling=(-1, 1), default_size=224),
+    mobilenet_v3_large=dict(
+        keras_name="MobileNetV3Large", no_amd=True, tf_min=2.4, scaling=(-1, 1), default_size=224),
+    mobilenet_v3_small=dict(
+        keras_name="MobileNetV3Small", no_amd=True, tf_min=2.4, scaling=(-1, 1), default_size=224),
     nasnet_large=dict(
         keras_name="NASNetLarge", scaling=(-1, 1), default_size=331, enforce_for_weights=True),
     nasnet_mobile=dict(
@@ -208,16 +211,32 @@ class Model(ModelBase):
         Input shape is calculated from the selected Encoder's input size, scaled to the user
         selected Input Scaling, rounded down to the nearest 16 pixels.
 
+        Notes
+        -----
+        Some models (NasNet) require the input size to be of a certain dimension if loading
+        imagenet weights. In these instances resize inputs and raise warning message
+
         Returns
         -------
         tuple
             The shape tuple for the input size to the Phaze-A model
         """
-        size = _MODEL_MAPPING[self.config["enc_architecture"]]["default_size"]
-        min_size = _MODEL_MAPPING[self.config["enc_architecture"]].get("min_size", 32)
+        arch = self.config["enc_architecture"]
+        enforce_size = _MODEL_MAPPING[arch].get("enforce_for_weights", False)
+        default_size = _MODEL_MAPPING[arch]["default_size"]
         scaling = self.config["enc_scaling"] / 100
-        size = int(max(min_size, min(size, ((size * scaling) // 16) * 16)))
-        retval = (size, size, 3)
+
+        min_size = _MODEL_MAPPING[arch].get("min_size", 32)
+        size = int(max(min_size, min(default_size, ((default_size * scaling) // 16) * 16)))
+
+        if self.config["enc_load_weights"] and enforce_size and scaling != 1.0:
+            logger.warning("%s requires input size to be %spx when loading imagenet weights. "
+                           "Adjusting input size from %spx to %spx",
+                           arch, default_size, size, default_size)
+            retval = (default_size, default_size, 3)
+        else:
+            retval = (size, size, 3)
+
         logger.debug("Encoder input set to: %s", retval)
         return retval
 
@@ -238,7 +257,7 @@ class Model(ModelBase):
             raise FaceswapError(f"'{arch}' is not compatible with the AMD backend. Choose one of "
                                 f"{valid}.")
 
-        tf_ver = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
+        tf_ver = get_tf_version()
         tf_min = model.get("tf_min", 2.0)
         if get_backend() != "amd" and tf_ver < tf_min:
             raise FaceswapError(f"{arch}' is not compatible with your version of Tensorflow. The "
@@ -549,7 +568,10 @@ class Encoder():  # pylint:disable=too-few-public-methods
         return dict(mobilenet=dict(alpha=self._config["mobilenet_width"],
                                    depth_multiplier=self._config["mobilenet_depth"],
                                    dropout=self._config["mobilenet_dropout"]),
-                    mobilenet_v2=dict(alpha=self._config["mobilenet_width"]))
+                    mobilenet_v2=dict(alpha=self._config["mobilenet_width"]),
+                    mobilenet_v3=dict(alpha=self._config["mobilenet_width"],
+                                      minimalist=self._config["mobilenet_minimalistic"],
+                                      include_preprocessing=False))
 
     @property
     def _selected_model(self):
@@ -559,22 +581,6 @@ class Encoder():  # pylint:disable=too-few-public-methods
         model["kwargs"] = self._model_kwargs.get(arch, {})
         return model
 
-    @property
-    def _model_input_shape(self):
-        """ tuple: The required input shape for the encoder model.
-
-        Notes
-        -----
-        NasNet does not allow custom input sizes when loading pre-trained weights, so we need to
-        resize the input for this model
-        """
-        default_size = self._selected_model.get("default_size")
-        if self._config["enc_load_weights"] and self._selected_model.get("enforce_for_weights"):
-            retval = (default_size, default_size, 3)
-        else:
-            retval = self._input_shape
-        return retval
-
     def __call__(self):
         """ Create the Phaze-A Encoder Model.
 
@@ -583,11 +589,8 @@ class Encoder():  # pylint:disable=too-few-public-methods
         :class:`keras.models.Model`
             The selected Encoder Model
         """
-        input_ = Input(shape=self._model_input_shape)
+        input_ = Input(shape=self._input_shape)
         var_x = input_
-
-        if self._input_shape != self._model_input_shape:
-            var_x = self._resize_inputs(var_x)
 
         scaling = self._selected_model.get("scaling")
         if scaling:
@@ -611,28 +614,6 @@ class Encoder():  # pylint:disable=too-few-public-methods
 
         return KerasModel(input_, var_x, name="encoder")
 
-    def _resize_inputs(self, inputs):
-        """ Some models (specifically NasNet) need a specific input size when loading trained
-        weights. This is slightly hacky, but arbitrarily resize the input for these instances.
-
-        Parameters
-        ----------
-        inputs: tensor
-            The input tensor to be resized
-
-        Returns
-        -------
-        tensor
-            The resized input tensor
-        """
-        input_size = self._input_shape[0]
-        new_size = self._model_input_shape[0]
-        logger.debug("Resizing input for encoder: '%s' from %s to %s due to trained weights usage",
-                     self._config["enc_architecture"], input_size, new_size)
-        scale = new_size / input_size
-        interp = "bilinear" if scale > 1 else "nearest"
-        return K.resize_images(size=scale, interpolation=interp)(inputs)
-
     def _get_encoder_model(self):
         """ Return the model defined by the selected architecture.
 
@@ -648,7 +629,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
         """
         if self._selected_model.get("keras_name"):
             kwargs = self._selected_model["kwargs"]
-            kwargs["input_shape"] = self._model_input_shape
+            kwargs["input_shape"] = self._input_shape
             kwargs["include_top"] = False
             kwargs["weights"] = "imagenet" if self._config["enc_load_weights"] else None
             retval = getattr(kapp, self._selected_model["keras_name"])(**kwargs)
