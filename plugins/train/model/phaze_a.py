@@ -53,6 +53,20 @@ _MODEL_MAPPING = dict(
         keras_name="EfficientNetB6", no_amd=True, tf_min=2.3, scaling=(0, 255), default_size=528),
     efficientnet_b7=dict(
         keras_name="EfficientNetB7", no_amd=True, tf_min=2.3, scaling=(0, 255), default_size=600),
+    efficientnet_v2_b0=dict(
+        keras_name="EfficientNetV2B0", no_amd=True, tf_min=2.8, scaling=(-1, 1), default_size=224),
+    efficientnet_v2_b1=dict(
+        keras_name="EfficientNetV2B1", no_amd=True, tf_min=2.8, scaling=(-1, 1), default_size=240),
+    efficientnet_v2_b2=dict(
+        keras_name="EfficientNetV2B2", no_amd=True, tf_min=2.8, scaling=(-1, 1), default_size=260),
+    efficientnet_v2_b3=dict(
+        keras_name="EfficientNetV2B3", no_amd=True, tf_min=2.8, scaling=(-1, 1), default_size=300),
+    efficientnet_v2_s=dict(
+        keras_name="EfficientNetV2S", no_amd=True, tf_min=2.8, scaling=(-1, 1), default_size=384),
+    efficientnet_v2_m=dict(
+        keras_name="EfficientNetV2M", no_amd=True, tf_min=2.8, scaling=(-1, 1), default_size=480),
+    efficientnet_v2_l=dict(
+        keras_name="EfficientNetV2L", no_amd=True, tf_min=2.8, scaling=(-1, 1), default_size=480),
     inception_resnet_v2=dict(
         keras_name="InceptionResNetV2", scaling=(-1, 1), min_size=75, default_size=299),
     inception_v3=dict(
@@ -579,6 +593,8 @@ class Encoder():  # pylint:disable=too-few-public-methods
         arch = self._config["enc_architecture"]
         model = _MODEL_MAPPING.get(arch)
         model["kwargs"] = self._model_kwargs.get(arch, {})
+        if arch.startswith("efficientnet_v2"):
+            model["kwargs"]["include_preprocessing"] = False
         return model
 
     def __call__(self):

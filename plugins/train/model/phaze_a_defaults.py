@@ -52,8 +52,10 @@ _ENCODERS = ["densenet121", "densenet169", "densenet201", "inception_resnet_v2",
 if get_backend() != "amd":
     _ENCODERS.extend(["efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3",
                       "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7",
-                      "mobilenet_v3_large", "mobilenet_v3_small", "resnet50_v2", "resnet101",
-                      "resnet101_v2", "resnet152", "resnet152_v2"])
+                      "efficientnet_v2_b0", "efficientnet_v2_b1", "efficientnet_v2_b2",
+                      "efficientnet_v2_b3", "efficientnet_v2_l", "efficientnet_v2_m",
+                      "efficientnet_v2_s", "mobilenet_v3_large", "mobilenet_v3_small",
+                      "resnet50_v2", "resnet101", "resnet101_v2", "resnet152", "resnet152_v2"])
 _ENCODERS = sorted(_ENCODERS)
 
 
@@ -143,6 +145,13 @@ _DEFAULTS = dict(
              "each variant is: b0: 224px, b1: 240px, b2: 260px, b3: 300px, b4: 380px, b5: 456px, "
              "b6: 528px, b7 600px. Ref: Rethinking Model Scaling for Convolutional Neural "
              "Networks (2020): https://arxiv.org/abs/1905.11946"
+             "\n\tefficientnet_v2: [Tensorflow 2.8+ only] EfficientNetV2 is the follow up to "
+             "efficientnet. It has numerous variants (B0 - B3 and Small, Medium and Large) that "
+             "increases the model width, depth and dimensional space at each step. The minimum "
+             "input resolution is 32px for all variants. The maximum input resolution for each "
+             "variant is: b0: 224px, b1: 240px, b2: 260px, b3: 300px, s: 384px, m: 480px, l: "
+             "480px. Ref: EfficientNetV2: Smaller Models and Faster Training (2021): "
+             "https://arxiv.org/abs/2104.00298"
              "\n\tfs_original: (32px - 160px). A configurable variant of the original facewap "
              "encoder. ImageNet weights cannot be loaded for this model. Additional parameters "
              "can be configured with the 'fs_enc' options. A version of this encoder is used in "
