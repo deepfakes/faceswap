@@ -206,17 +206,20 @@ class Model(ModelBase):
         list
             The selected layers for weight freezing
         """
+        arch = self.config["enc_architecture"]
         layers = self.config["freeze_layers"]
-        keras_name = _MODEL_MAPPING[self.config["enc_architecture"]].get("keras_name")
+        # EfficientNetV2 is inconsistent with other model's naming conventions
+        keras_name = _MODEL_MAPPING[arch].get("keras_name").replace("EfficientNetV2",
+                                                                    "EfficientNetV2-")
 
         if "keras_encoder" not in self.config["freeze_layers"]:
             retval = layers
         elif keras_name:
             retval = [layer.replace("keras_encoder", keras_name.lower()) for layer in layers]
-            logger.debug("Substituting 'keras_encoder' for '%s'", self.config["enc_architecture"])
+            logger.debug("Substituting 'keras_encoder' for '%s'", arch)
         else:
             retval = [layer for layer in layers if layer != "keras_encoder"]
-            logger.debug("Removing 'keras_encoder' for '%s'", self.config["enc_architecture"])
+            logger.debug("Removing 'keras_encoder' for '%s'", arch)
         return retval
 
     def _get_input_shape(self):
