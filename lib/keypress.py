@@ -17,6 +17,7 @@ GNU General Public License for more details.
 """
 
 import os
+import sys
 
 # Windows
 if os.name == "nt":
@@ -24,7 +25,6 @@ if os.name == "nt":
 
 # Posix (Linux, OS X)
 else:
-    import sys
     import termios
     import atexit
     from select import select
