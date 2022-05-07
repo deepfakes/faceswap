@@ -405,12 +405,29 @@ class Extract():  # pylint:disable=too-few-public-methods
         self._is_legacy = self._alignments.version == 1.0  # pylint:disable=protected-access
         self._mask_pipeline = None
         self._faces_dir = arguments.faces_dir
-        self._frames = Frames(arguments.frames_dir)
+
+        self._frames = Frames(arguments.frames_dir, self._get_count())
         self._extracted_faces = ExtractedFaces(self._frames,
                                                self._alignments,
                                                size=arguments.size)
         self._saver = None
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _get_count(self):
+        """ If the alignments file has been run through the manual tool, then it will hold video
+        meta information, meaning that the count of frames in the alignment file can be relied
+        on to be accurate.
+
+        Returns
+        -------
+        int or ``None``
+        For video input which contain video meta-data in the alignments file then the count of
+        frames is returned. In all other cases ``None`` is returned
+        """
+        has_meta = all(val is not None for val in self._alignments.video_meta_data.values())
+        retval = len(self._alignments.video_meta_data["pts_time"]) if has_meta else None
+        logger.debug("Frame count from alignments file: (has_meta: %s, %s", has_meta, retval)
+        return retval
 
     def process(self):
         """ Run the re-extraction from Alignments file process"""

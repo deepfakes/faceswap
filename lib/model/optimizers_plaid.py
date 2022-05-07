@@ -4,7 +4,7 @@ import inspect
 import sys
 
 from keras import backend as K
-from keras.optimizers import Optimizer
+from keras.optimizers import Optimizer, Adam, Nadam, RMSprop  # noqa pylint:disable=unused-import
 from keras.utils import get_custom_objects
 
 

@@ -137,6 +137,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                      "variable: %s)", self.__class__.__name__, handle_type, file_type, title,
                      initial_folder, initial_file, command, action, variable)
         self._handletype = handle_type
+        self._dummy_master = self._set_dummy_master()
         self._defaults = self._set_defaults()
         self._kwargs = self._set_kwargs(title,
                                         initial_folder,
@@ -145,7 +146,9 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                                         command,
                                         action,
                                         variable)
-        self.return_file = getattr(self, "_{}".format(self._handletype.lower()))()
+        self.return_file = getattr(self, f"_{self._handletype.lower()}")()
+        self._remove_dummy_master()
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -184,10 +187,10 @@ class FileHandler():  # pylint:disable=too-few-public-methods
             if platform.system() == "Linux":
                 filetypes[key] = [item
                                   if item[0] == "All files"
-                                  else (item[0], "{} {}".format(item[1], item[1].upper()))
+                                  else (item[0], f"{item[1]} {item[1].upper()}")
                                   for item in filetypes[key]]
             if len(filetypes[key]) > 2:
-                multi = ["{} Files".format(key.title())]
+                multi = [f"{key.title()} Files"]
                 multi.append(" ".join([ftype[1]
                                        for ftype in filetypes[key] if ftype[0] != "All files"]))
                 filetypes[key].insert(0, tuple(multi))
@@ -213,6 +216,35 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                                          "rescale": "save_filename",
                                          "rotate": "save_filename",
                                          "slice": "save_filename"}))
+
+    @classmethod
+    def _set_dummy_master(cls):
+        """ Add an option to force black font on Linux file dialogs KDE issue that displays light
+        font on white background).
+
+        This is a pretty hacky solution, but tkinter does not allow direct editing of file dialogs,
+        so we create a dummy frame and add the foreground option there, so that the file dialog can
+        inherit the foreground.
+
+        Returns
+        -------
+        tkinter.Frame or ``None``
+            The dummy master frame for Linux systems, otherwise ``None``
+        """
+        if platform.system().lower() == "linux":
+            retval = tk.Frame()
+            retval.option_add("*foreground", "black")
+        else:
+            retval = None
+        return retval
+
+    def _remove_dummy_master(self):
+        """ Destroy the dummy master widget on Linux systems. """
+        if platform.system().lower() != "linux":
+            return
+        self._dummy_master.destroy()
+        del self._dummy_master
+        self._dummy_master = None
 
     def _set_defaults(self):
         """ Set the default file type for the file dialog. Generally the first found file type
@@ -264,7 +296,9 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         logger.debug("Setting Kwargs: (title: %s, initial_folder: %s, initial_file: '%s', "
                      "file_type: '%s', command: '%s': action: '%s', variable: '%s')",
                      title, initial_folder, initial_file, file_type, command, action, variable)
-        kwargs = dict()
+
+        kwargs = dict(master=self._dummy_master)
+
         if self._handletype.lower() == "context":
             self._set_context_handletype(command, action, variable)
 
@@ -361,10 +395,10 @@ class Images():
         self._pathpreview = os.path.join(PATHCACHE, "preview")
         self._pathoutput = None
         self._previewoutput = None
-        self._previewtrain = dict()
+        self._previewtrain = {}
         self._previewcache = dict(modified=None,  # cache for extract and convert
                                   images=None,
-                                  filenames=list(),
+                                  filenames=[],
                                   placeholder=None)
         self._errcount = 0
         self._icons = self._load_icons()
@@ -420,7 +454,7 @@ class Images():
         """
         size = get_config().user_config_dict.get("icon_size", 16)
         size = int(round(size * get_config().scaling_factor))
-        icons = dict()
+        icons = {}
         pathicons = os.path.join(PATHCACHE, "icons")
         for fname in os.listdir(pathicons):
             name, ext = os.path.splitext(fname)
@@ -470,10 +504,10 @@ class Images():
         logger.debug("Clearing image cache")
         self._pathoutput = None
         self._previewoutput = None
-        self._previewtrain = dict()
+        self._previewtrain = {}
         self._previewcache = dict(modified=None,  # cache for extract and convert
                                   images=None,
-                                  filenames=list(),
+                                  filenames=[],
                                   placeholder=None)
 
     @staticmethod
@@ -600,10 +634,10 @@ class Images():
         logger.debug("num_images: %s", num_images)
         if num_images == 0:
             return False
-        samples = list()
+        samples = []
         start_idx = len(image_files) - num_images if len(image_files) > num_images else 0
         show_files = sorted(image_files, key=os.path.getctime)[start_idx:]
-        dropped_files = list()
+        dropped_files = []
         for fname in show_files:
             try:
                 img = Image.open(fname)
@@ -732,7 +766,7 @@ class Images():
         modified = None
         if not image_files:
             logger.debug("No preview to display")
-            self._previewtrain = dict()
+            self._previewtrain = {}
             return
         for img in image_files:
             modified = os.path.getmtime(img) if modified is None else modified
@@ -755,7 +789,7 @@ class Images():
                     self._errcount += 1
                 else:
                     logger.error("Error reading the preview file for '%s'", img)
-                    print("Error reading the preview file for {}".format(name))
+                    print(f"Error reading the preview file for {name}")
                     self._previewtrain[name] = None
 
     def _get_current_size(self, name):
@@ -1126,7 +1160,7 @@ class Config():
             Additional text to be appended to the GUI title bar. Default: ``None``
         """
         title = "Faceswap.py"
-        title += " - {}".format(text) if text is not None and text else ""
+        title += f" - {text}" if text is not None and text else ""
         self.root.title(title)
 
     def set_geometry(self, width, height, fullscreen=False):
@@ -1154,8 +1188,7 @@ class Config():
         elif fullscreen:
             self.root.attributes('-zoomed', True)
         else:
-            self.root.geometry("{}x{}+80+80".format(str(initial_dimensions[0]),
-                                                    str(initial_dimensions[1])))
+            self.root.geometry(f"{str(initial_dimensions[0])}x{str(initial_dimensions[1])}+80+80")
         logger.debug("Geometry: %sx%s", *initial_dimensions)
 
 
@@ -1260,7 +1293,7 @@ class PreviewTrigger():
          """
         trigger = self._trigger_files[trigger_type]
         if not os.path.isfile(trigger):
-            with open(trigger, "w"):
+            with open(trigger, "w", encoding="utf8"):
                 pass
             logger.debug("Set preview trigger: %s", trigger)
 

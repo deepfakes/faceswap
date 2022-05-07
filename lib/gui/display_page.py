@@ -59,7 +59,7 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
     @staticmethod
     def set_vars():
         """ Override to return a dict of page specific variables """
-        return dict()
+        return {}
 
     def on_tab_select(self):  # pylint:disable=no-self-use
         """ Override for specific actions when the current tab is selected """
@@ -151,7 +151,7 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def subnotebook_get_titles_ids(self):
         """ Return tabs ids and titles """
-        tabs = dict()
+        tabs = {}
         for tab_id in range(0, self.subnotebook.index("end")):
             tabs[self.subnotebook.tab(tab_id, "text")] = tab_id
         logger.debug(tabs)
@@ -213,11 +213,11 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
     def set_info_text(self):
         """ Set waiting for display text """
         if not self.vars["enabled"].get():
-            msg = "{} disabled".format(self.tabname.title())
+            msg = f"{self.tabname.title()} disabled"
         elif self.vars["enabled"].get() and not self.vars["ready"].get():
-            msg = "Waiting for {}...".format(self.tabname)
+            msg = f"Waiting for {self.tabname}..."
         else:
-            msg = "Displaying {}".format(self.tabname)
+            msg = f"Displaying {self.tabname}"
         logger.debug(msg)
         self.set_info(msg)
 
@@ -235,7 +235,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
                              command=self.save_items)
         btnsave.pack(padx=2, side=tk.RIGHT)
         Tooltip(btnsave,
-                text=_("Save {}(s) to file").format(self.tabname),
+                text=_(f"Save {self.tabname}(s) to file"),
                 wrap_length=200)
 
     def add_option_enable(self):
@@ -243,11 +243,11 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         logger.debug("Adding enable option")
         chkenable = ttk.Checkbutton(self.optsframe,
                                     variable=self.vars["enabled"],
-                                    text="Enable {}".format(self.tabname),
+                                    text=f"Enable {self.tabname}",
                                     command=self.on_chkenable_change)
         chkenable.pack(side=tk.RIGHT, padx=5, anchor=tk.W)
         Tooltip(chkenable,
-                text=_("Enable or disable {} display").format(self.tabname),
+                text=_(f"Enable or disable {self.tabname} display"),
                 wrap_length=200)
 
     def save_items(self):

@@ -146,7 +146,7 @@ class SortArgs(FaceSwapArgs):
                    "right. If the number of images doesn't divide evenly into the number of "
                    "bins, the remaining images get put in the last bin. For black-pixels it "
                    "represents the divider of the percentage of black pixels. For 10, first "
-                   "folder will have the faces with 0 to 10% black pixels, second 11 to 20%, "
+                   "folder will have the faces with 0 to 10%% black pixels, second 11 to 20%%, "
                    "etc. Default value: 5")))
         argument_list.append(dict(
             opts=('-l', '--log-changes'),

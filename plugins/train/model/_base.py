@@ -16,22 +16,25 @@ from contextlib import nullcontext
 import numpy as np
 import tensorflow as tf
 
-from keras import losses as k_losses
-from keras import backend as K
-from keras.layers import Input
-from keras.models import load_model, Model as KModel
-
-try:
-    from keras.optimizers import Adam, Nadam, RMSprop
-except ImportError:
-    from tensorflow.keras.optimizers import Adam, Nadam, RMSprop
-
 from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
 from lib.model import losses, optimizers
 from lib.model.nn_blocks import set_config as set_nnblock_config
-from lib.utils import get_backend, FaceswapError
+from lib.utils import get_backend, get_tf_version, FaceswapError
 from plugins.train._config import Config
+
+if get_backend() == "amd":
+    from keras import losses as k_losses
+    from keras import backend as K
+    from keras.layers import Input
+    from keras.models import load_model, Model as KModel
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import losses as k_losses  # pylint:disable=import-error
+    from tensorflow.keras import backend as K  # pylint:disable=import-error
+    from tensorflow.keras.layers import Input  # pylint:disable=import-error,no-name-in-module
+    from tensorflow.keras.models import load_model, Model as KModel  # noqa pylint:disable=import-error,no-name-in-module
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _CONFIG = None
@@ -268,13 +271,14 @@ class ModelBase():
             return
 
         if len(multiple_models) == 1:
-            msg = ("You have requested to train with the '{}' plugin, but a model file for the "
-                   "'{}' plugin already exists in the folder '{}'.\nPlease select a different "
-                   "model folder.".format(self.name, multiple_models[0], self.model_dir))
+            msg = (f"You have requested to train with the '{self.name}' plugin, but a model file "
+                   f"for the '{multiple_models[0]}' plugin already exists in the folder "
+                   f"'{self.model_dir}'.\nPlease select a different model folder.")
         else:
-            msg = ("There are multiple plugin types ('{}') stored in the model folder '{}'. This "
-                   "is not supported.\nPlease split the model files into their own folders before "
-                   "proceeding".format("', '".join(multiple_models), self.model_dir))
+            ptypes = "', '".join(multiple_models)
+            msg = (f"There are multiple plugin types ('{ptypes}') stored in the model folder '"
+                   f"{self.model_dir}'. This is not supported.\nPlease split the model files into "
+                   "their own folders before proceeding")
         raise FaceswapError(msg)
 
     def build(self):
@@ -315,11 +319,11 @@ class ModelBase():
         if not all(os.path.isfile(os.path.join(self.model_dir, fname))
                    for fname in self._legacy_mapping()):
             return
-        archive_dir = "{}_TF1_Archived".format(self.model_dir)
+        archive_dir = f"{self.model_dir}_TF1_Archived"
         if os.path.exists(archive_dir):
             raise FaceswapError("We need to update your model files for use with Tensorflow 2.x, "
                                 "but the archive folder already exists. Please remove the "
-                                "following folder to continue: '{}'".format(archive_dir))
+                                f"following folder to continue: '{archive_dir}'")
 
         logger.info("Updating legacy models for Tensorflow 2.x")
         logger.info("Your Tensorflow 1.x models will be archived in the following location: '%s'",
@@ -375,7 +379,7 @@ class ModelBase():
             input_shapes = [self.input_shape, self.input_shape]
         else:
             input_shapes = self.input_shape
-        inputs = [Input(shape=shape, name="face_in_{}".format(side))
+        inputs = [Input(shape=shape, name=f"face_in_{side}")
                   for side, shape in zip(("a", "b"), input_shapes)]
         logger.debug("inputs: %s", inputs)
         return inputs
@@ -454,7 +458,7 @@ class ModelBase():
         seen = {name: 0 for name in set(self._model.output_names)}
         new_names = []
         for name in self._model.output_names:
-            new_names.append("{}_{}".format(name, seen[name]))
+            new_names.append(f"{name}_{seen[name]}")
             seen[name] += 1
         logger.debug("Output names rewritten: (old: %s, new: %s)",
                      self._model.output_names, new_names)
@@ -514,7 +518,7 @@ class _IO():
     @property
     def _filename(self):
         """str: The filename for this model."""
-        return os.path.join(self._model_dir, "{}.h5".format(self._plugin.name))
+        return os.path.join(self._model_dir, f"{self._plugin.name}.h5")
 
     @property
     def model_exists(self):
@@ -571,7 +575,7 @@ class _IO():
                        "You can try to load the model again but if the problem persists you "
                        "should use the Restore Tool to restore your model from backup.\n"
                        f"Original error: {str(err)}")
-                raise FaceswapError(msg)
+                raise FaceswapError(msg) from err
             raise err
         except KeyError as err:
             if "unable to open object" in str(err).lower():
@@ -580,7 +584,7 @@ class _IO():
                        "You can try to load the model again but if the problem persists you "
                        "should use the Restore Tool to restore your model from backup.\n"
                        f"Original error: {str(err)}")
-                raise FaceswapError(msg)
+                raise FaceswapError(msg) from err
             raise err
 
         logger.info("Loaded model from disk: '%s'", self._filename)
@@ -609,9 +613,9 @@ class _IO():
 
         msg = "[Saved models]"
         if save_averages:
-            lossmsg = ["face_{}: {:.5f}".format(side, avg)
+            lossmsg = [f"face_{side}: {avg:.5f}"
                        for side, avg in zip(("a", "b"), save_averages)]
-            msg += " - Average loss since last save: {}".format(", ".join(lossmsg))
+            msg += f" - Average loss since last save: {', '.join(lossmsg)}"
         logger.info(msg)
 
     def _get_save_averages(self):
@@ -703,12 +707,11 @@ class _Settings():
         logger.debug("Initializing %s: (arguments: %s, mixed_precision: %s, allow_growth: %s, "
                      "is_predict: %s)", self.__class__.__name__, arguments, mixed_precision,
                      allow_growth, is_predict)
-        self._tf_version = [int(i) for i in tf.__version__.split(".")[:2]]
         self._set_tf_settings(allow_growth, arguments.exclude_gpus)
 
         use_mixed_precision = not is_predict and mixed_precision and get_backend() == "nvidia"
         # Mixed precision moved out of experimental in tensorflow 2.4
-        if use_mixed_precision and self._tf_version[0] == 2 and self._tf_version[1] < 4:
+        if use_mixed_precision and get_tf_version() < 2.4:
             self._mixed_precision = tf.keras.mixed_precision.experimental
         elif use_mixed_precision:
             self._mixed_precision = tf.keras.mixed_precision
@@ -747,9 +750,8 @@ class _Settings():
         """
         # tensorflow versions < 2.4 had different kwargs where scaling needs to be explicitly
         # defined
-        vers = self._tf_version
-        kwargs = dict(loss_scale="dynamic") if vers[0] == 2 and vers[1] < 4 else dict()
-        logger.debug("tf version: %s, kwargs: %s", vers, kwargs)
+        kwargs = dict(loss_scale="dynamic") if get_tf_version() < 2.4 else {}
+        logger.debug("tf version: %s, kwargs: %s", get_tf_version(), kwargs)
         return self._mixed_precision.LossScaleOptimizer(optimizer, **kwargs)
 
     @classmethod
@@ -825,10 +827,11 @@ class _Settings():
             return False
         logger.info("Enabling Mixed Precision Training.")
 
-        if exclude_gpus and self._tf_version[0] == 2 and self._tf_version[1] == 2:
+        if exclude_gpus and get_tf_version() == 2.2:
             # TODO remove this hacky fix to disable mixed precision compatibility testing when
             # tensorflow 2.2 support dropped
-            # pylint:disable=import-outside-toplevel,protected-access,import-error
+            # pylint:disable=import-outside-toplevel,protected-access
+            # pylint:disable=import-error,no-name-in-module
             from tensorflow.python.keras.mixed_precision.experimental import \
                 device_compatibility_check
             logger.debug("Overriding tensorflow _logged_compatibility_check parameter. Initial "
@@ -837,7 +840,7 @@ class _Settings():
             logger.debug("New value: %s", device_compatibility_check._logged_compatibility_check)
 
         policy = self._mixed_precision.Policy('mixed_float16')
-        if self._tf_version[0] == 2 and self._tf_version[1] < 4:
+        if get_tf_version() < 2.4:
             self._mixed_precision.set_policy(policy)
         else:
             self._mixed_precision.set_global_policy(policy)
@@ -1106,9 +1109,11 @@ class _Optimizer():  # pylint:disable=too-few-public-methods
                      optimizer, learning_rate, clipnorm, epsilon, arguments)
         valid_optimizers = {"adabelief": (optimizers.AdaBelief,
                                           dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
-                            "adam": (Adam, dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
-                            "nadam": (Nadam, dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
-                            "rms-prop": (RMSprop, dict(epsilon=epsilon))}
+                            "adam": (optimizers.Adam,
+                                     dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
+                            "nadam": (optimizers.Nadam,
+                                      dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
+                            "rms-prop": (optimizers.RMSprop, dict(epsilon=epsilon))}
         self._optimizer, self._kwargs = valid_optimizers[optimizer]
 
         self._configure(learning_rate, clipnorm, arguments)
@@ -1172,12 +1177,13 @@ class _Loss():
                                smooth_loss=losses.GeneralizedLoss(),
                                l_inf_norm=losses.LInfNorm(),
                                ssim=losses.DSSIMObjective(),
+                               ms_ssim=losses.MSSSIMLoss(),
                                gmsd=losses.GMSDLoss(),
                                pixel_gradient_diff=losses.GradientLoss())
-        self._uses_l2_reg = ["ssim", "gmsd"]
+        self._uses_l2_reg = ["ssim", "ms_ssim", "gmsd"]
         self._inputs = None
         self._names = []
-        self._funcs = dict()
+        self._funcs = {}
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -1252,7 +1258,7 @@ class _Loss():
                          side, output_names, output_shapes, output_types)
             self._names.extend(["{}_{}{}".format(name, side,
                                                  "" if output_types.count(name) == 1
-                                                 else "_{}".format(idx))
+                                                 else f"_{idx}")
                                 for idx, name in enumerate(output_types)])
         logger.debug(self._names)
 
@@ -1358,13 +1364,13 @@ class State():
                      "config_changeable_items: '%s', no_logs: %s", self.__class__.__name__,
                      model_dir, model_name, config_changeable_items, no_logs)
         self._serializer = get_serializer("json")
-        filename = "{}_state.{}".format(model_name, self._serializer.file_extension)
+        filename = f"{model_name}_state.{self._serializer.file_extension}"
         self._filename = os.path.join(model_dir, filename)
         self._name = model_name
         self._iterations = 0
-        self._sessions = dict()
-        self._lowest_avg_loss = dict()
-        self._config = dict()
+        self._sessions = {}
+        self._lowest_avg_loss = {}
+        self._config = {}
         self._load(config_changeable_items)
         self._session_id = self._new_session_id()
         self._create_new_session(no_logs, config_changeable_items)
@@ -1477,10 +1483,10 @@ class State():
             return
         state = self._serializer.load(self._filename)
         self._name = state.get("name", self._name)
-        self._sessions = state.get("sessions", dict())
-        self._lowest_avg_loss = state.get("lowest_avg_loss", dict())
+        self._sessions = state.get("sessions", {})
+        self._lowest_avg_loss = state.get("lowest_avg_loss", {})
         self._iterations = state.get("iterations", 0)
-        self._config = state.get("config", dict())
+        self._config = state.get("config", {})
         logger.debug("Loaded state: %s", state)
         self._replace_config(config_changeable_items)
 
@@ -1674,7 +1680,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         logger.debug("Compiling inference model. saved_model: %s", saved_model)
         struct = self._get_filtered_structure()
         model_inputs = self._get_inputs(saved_model.inputs)
-        compiled_layers = dict()
+        compiled_layers = {}
         for layer in saved_model.layers:
             if layer.name not in struct:
                 logger.debug("Skipping unused layer: '%s'", layer.name)
@@ -1708,7 +1714,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
                 logger.debug("Compiling layer '%s': layer inputs: %s", layer.name, layer_inputs)
                 model = layer(layer_inputs)
             compiled_layers[layer.name] = model
-            retval = KerasModel(model_inputs, model, name="{}_inference".format(saved_model.name))
+            retval = KerasModel(model_inputs, model, name=f"{saved_model.name}_inference")
         logger.debug("Compiled inference model '%s': %s", retval.name, retval)
         return retval
 

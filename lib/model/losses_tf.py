@@ -7,17 +7,18 @@ import logging
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.keras.engine import compile_utils
 
-from keras import backend as K
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.python.keras.engine import compile_utils  # noqa pylint:disable=no-name-in-module,import-error
+from tensorflow.keras import backend as K  # pylint:disable=import-error
 
-logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+logger = logging.getLogger(__name__)
 
 
-class DSSIMObjective(tf.keras.losses.Loss):
+class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """ DSSIM Loss Function
 
-    Difference of Structural Similarity (DSSIM loss function). Clipped between 0 and 0.5
+    Difference of Structural Similarity (DSSIM loss function).
 
     Parameters
     ----------
@@ -25,66 +26,24 @@ class DSSIMObjective(tf.keras.losses.Loss):
         Parameter of the SSIM. Default: `0.01`
     k_2: float, optional
         Parameter of the SSIM. Default: `0.03`
-    kernel_size: int, optional
-        Size of the sliding window Default: `3`
+    filter_size: int, optional
+        size of gaussian filter Default: `11`
+    filter_sigma: float, optional
+        Width of gaussian filter Default: `1.5`
     max_value: float, optional
         Max value of the output. Default: `1.0`
 
     Notes
     ------
     You should add a regularization term like a l2 loss in addition to this one.
-
-    References
-    ----------
-    https://github.com/keras-team/keras-contrib/blob/master/keras_contrib/losses/dssim.py
-
-    MIT License
-
-    Copyright (c) 2017 Fariz Rahman
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
     """
-    def __init__(self, k_1=0.01, k_2=0.03, kernel_size=3, max_value=1.0):
+    def __init__(self, k_1=0.01, k_2=0.03, filter_size=11, filter_sigma=1.5, max_value=1.0):
         super().__init__(name="DSSIMObjective")
-        self.kernel_size = kernel_size
+        self.filter_size = filter_size
+        self.filter_sigma = filter_sigma
         self.k_1 = k_1
         self.k_2 = k_2
         self.max_value = max_value
-        self.c_1 = (self.k_1 * self.max_value) ** 2
-        self.c_2 = (self.k_2 * self.max_value) ** 2
-        self.dim_ordering = K.image_data_format()
-
-    @staticmethod
-    def _int_shape(input_tensor):
-        """ Returns the shape of tensor or variable as a tuple of int or None entries.
-
-        Parameters
-        ----------
-        input_tensor: tensor or variable
-            The input to return the shape for
-
-        Returns
-        -------
-        tuple
-            A tuple of integers (or None entries)
-        """
-        return K.int_shape(input_tensor)
 
     def call(self, y_true, y_pred):
         """ Call the DSSIM Loss Function.
@@ -100,104 +59,113 @@ class DSSIMObjective(tf.keras.losses.Loss):
         -------
         tensor
             The DSSIM Loss value
-
-        Notes
-        -----
-        There are additional parameters for this function. some of the 'modes' for edge behavior
-        do not yet have a gradient definition in the Theano tree and cannot be used for learning
         """
+        ssim = tf.image.ssim(y_true,
+                             y_pred,
+                             self.max_value,
+                             filter_size=self.filter_size,
+                             filter_sigma=self.filter_sigma,
+                             k1=self.k_1,
+                             k2=self.k_2)
+        dssim_loss = (1. - ssim) / 2.0
+        return dssim_loss
 
-        kernel = [self.kernel_size, self.kernel_size]
-        y_true = K.reshape(y_true, [-1] + list(self._int_shape(y_pred)[1:]))
-        y_pred = K.reshape(y_pred, [-1] + list(self._int_shape(y_pred)[1:]))
-        patches_pred = self.extract_image_patches(y_pred,
-                                                  kernel,
-                                                  kernel,
-                                                  'valid',
-                                                  self.dim_ordering)
-        patches_true = self.extract_image_patches(y_true,
-                                                  kernel,
-                                                  kernel,
-                                                  'valid',
-                                                  self.dim_ordering)
 
-        # Get mean
-        u_true = K.mean(patches_true, axis=-1)
-        u_pred = K.mean(patches_pred, axis=-1)
-        # Get variance
-        var_true = K.var(patches_true, axis=-1)
-        var_pred = K.var(patches_pred, axis=-1)
-        # Get standard deviation
-        covar_true_pred = K.mean(
-            patches_true * patches_pred, axis=-1) - u_true * u_pred
+class MSSSIMLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
+    """ Multiscale Structural Similarity Loss Function
 
-        ssim = (2 * u_true * u_pred + self.c_1) * (
-            2 * covar_true_pred + self.c_2)
-        denom = (K.square(u_true) + K.square(u_pred) + self.c_1) * (
-            var_pred + var_true + self.c_2)
-        ssim /= denom  # no need for clipping, c_1 + c_2 make the denorm non-zero
-        return (1.0 - ssim) / 2.0
+    Parameters
+    ----------
+    k_1: float, optional
+        Parameter of the SSIM. Default: `0.01`
+    k_2: float, optional
+        Parameter of the SSIM. Default: `0.03`
+    filter_size: int, optional
+        size of gaussian filter Default: `11`
+    filter_sigma: float, optional
+        Width of gaussian filter Default: `1.5`
+    max_value: float, optional
+        Max value of the output. Default: `1.0`
+    power_factors: tuple, optional
+        Iterable of weights for each of the scales. The number of scales used is the length of the
+        list. Index 0 is the unscaled resolution's weight and each increasing scale corresponds to
+        the image being downsampled by 2. Defaults to the values obtained in the original paper.
+        Default: (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
 
-    @staticmethod
-    def _preprocess_padding(padding):
-        """Convert keras padding to tensorflow padding.
+    Notes
+    ------
+    You should add a regularization term like a l2 loss in addition to this one.
+    """
+    def __init__(self,
+                 k_1=0.01,
+                 k_2=0.03,
+                 filter_size=4,
+                 filter_sigma=1.5,
+                 max_value=1.0,
+                 power_factors=(0.0448, 0.2856, 0.3001, 0.2363, 0.1333)):
+        super().__init__(name="SSIM_Multiscale_Loss")
+        self.filter_size = filter_size
+        self.filter_sigma = filter_sigma
+        self.k_1 = k_1
+        self.k_2 = k_2
+        self.max_value = max_value
+        self.power_factors = power_factors
+
+    def call(self, y_true, y_pred):
+        """ Call the MS-SSIM Loss Function.
 
         Parameters
         ----------
-        padding: string,
-            `"same"` or `"valid"`.
+        y_true: tensor or variable
+            The ground truth value
+        y_pred: tensor or variable
+            The predicted value
 
         Returns
         -------
-        str
-            `"SAME"` or `"VALID"`.
-
-        Raises
-        ------
-        ValueError
-            If `padding` is invalid.
+        tensor
+            The MS-SSIM Loss value
         """
-        if padding == 'same':
-            padding = 'SAME'
-        elif padding == 'valid':
-            padding = 'VALID'
-        else:
-            raise ValueError('Invalid padding:', padding)
-        return padding
+        im_size = K.int_shape(y_true)[1]
+        # filter size cannot be larger than the smallest scale
+        smallest_scale = self._get_smallest_size(im_size, len(self.power_factors) - 1)
+        filter_size = min(self.filter_size, smallest_scale)
 
-    def extract_image_patches(self, input_tensor, k_sizes, s_sizes,
-                              padding='same', data_format='channels_last'):
-        """ Extract the patches from an image.
+        ms_ssim = tf.image.ssim_multiscale(y_true,
+                                           y_pred,
+                                           self.max_value,
+                                           power_factors=self.power_factors,
+                                           filter_size=filter_size,
+                                           filter_sigma=self.filter_sigma,
+                                           k1=self.k_1,
+                                           k2=self.k_2)
+        ms_ssim_loss = 1. - ms_ssim
+        return ms_ssim_loss
+
+    def _get_smallest_size(self, size, idx):
+        """ Recursive function to obtain the smallest size that the image will be scaled to.
 
         Parameters
         ----------
-        input_tensor: tensor
-            The input image
-        k_sizes: tuple
-            2-d tuple with the kernel size
-        s_sizes: tuple
-            2-d tuple with the strides size
-        padding: str, optional
-            `"same"` or `"valid"`. Default: `"same"`
-        data_format: str, optional.
-            `"channels_last"` or `"channels_first"`. Default: `"channels_last"`
+        size: int
+            The current scaled size to iterate through
+        idx: int
+            The current iteration to be performed. When iteration hits zero the value will
+            be returned
 
         Returns
         -------
-        The (k_w, k_h) patches extracted
-            Tensorflow ==> (batch_size, w, h, k_w, k_h, c)
-            Theano ==> (batch_size, w, h, c, k_w, k_h)
+        int
+            The smallest size the image will be scaled to based on the original image size and
+            the amount of scaling factors that will occur
         """
-        kernel = [1, k_sizes[0], k_sizes[1], 1]
-        strides = [1, s_sizes[0], s_sizes[1], 1]
-        padding = self._preprocess_padding(padding)
-        if data_format == 'channels_first':
-            input_tensor = K.permute_dimensions(input_tensor, (0, 2, 3, 1))
-        patches = tf.image.extract_patches(input_tensor, kernel, strides, [1, 1, 1, 1], padding)
-        return patches
+        logger.debug("scale id: %s, size: %s", idx, size)
+        if idx > 0:
+            size = self._get_smallest_size(size // 2, idx - 1)
+        return size
 
 
-class GeneralizedLoss(tf.keras.losses.Loss):
+class GeneralizedLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """  Generalized function used to return a large variety of mathematical loss functions.
 
     The primary benefit is a smooth, differentiable version of L1 loss.
@@ -247,10 +215,11 @@ class GeneralizedLoss(tf.keras.losses.Loss):
         return loss
 
 
-class LInfNorm(tf.keras.losses.Loss):
+class LInfNorm(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """ Calculate the L-inf norm as a loss function. """
 
-    def call(self, y_true, y_pred):
+    @classmethod
+    def call(cls, y_true, y_pred):
         """ Call the L-inf norm loss function.
 
         Parameters
@@ -271,7 +240,7 @@ class LInfNorm(tf.keras.losses.Loss):
         return loss
 
 
-class GradientLoss(tf.keras.losses.Loss):
+class GradientLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """ Gradient Loss Function.
 
     Calculates the first and second order gradient difference between pixels of an image in the x
@@ -392,7 +361,7 @@ class GradientLoss(tf.keras.losses.Loss):
         return (xy_out1 - xy_out2) * 0.25
 
 
-class GMSDLoss(tf.keras.losses.Loss):
+class GMSDLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """ Gradient Magnitude Similarity Deviation Loss.
 
     Improved image quality metric over MS-SSIM with easier calculations
@@ -486,7 +455,9 @@ class GMSDLoss(tf.keras.losses.Loss):
         # Use depth-wise convolution to calculate edge maps per channel.
         # Output tensor has shape [batch_size, h, w, d * num_kernels].
         pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
-        padded = tf.pad(image, pad_sizes, mode='REFLECT')
+        padded = tf.pad(image,  # pylint:disable=unexpected-keyword-arg,no-value-for-parameter
+                        pad_sizes,
+                        mode='REFLECT')
         output = K.depthwise_conv2d(padded, kernels)
 
         if not magnitude:  # direction of edges

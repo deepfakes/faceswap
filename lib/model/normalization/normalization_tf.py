@@ -4,10 +4,10 @@ import inspect
 import sys
 
 import tensorflow as tf
-import tensorflow.keras.backend as K
-# tf.keras has a LayerNormaliztion implementation
-from tensorflow.keras.layers import Layer, LayerNormalization  # noqa pylint:disable=unused-import
-from tensorflow.keras.utils import get_custom_objects
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras import backend as K  # pylint:disable=import-error
+from tensorflow.keras.layers import Layer, LayerNormalization  # noqa pylint:disable=no-name-in-module,unused-import,import-error
+from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
 
 
 class RMSNormalization(Layer):
@@ -117,9 +117,10 @@ class RMSNormalization(Layer):
             mean_square = K.mean(K.square(inputs), axis=self.axis, keepdims=True)
         else:
             partial_size = int(layer_size * self.partial)
-            partial_x, _ = tf.split(inputs,
-                                    [partial_size, layer_size - partial_size],
-                                    axis=self.axis)
+            partial_x, _ = tf.split(  # pylint:disable=redundant-keyword-arg,no-value-for-parameter
+                inputs,
+                [partial_size, layer_size - partial_size],
+                axis=self.axis)
             mean_square = K.mean(K.square(partial_x), axis=self.axis, keepdims=True)
 
         recip_square_root = tf.math.rsqrt(mean_square + self.epsilon)

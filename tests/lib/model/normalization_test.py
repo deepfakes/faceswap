@@ -8,12 +8,16 @@ from itertools import product
 import numpy as np
 import pytest
 
-from keras import regularizers, models, layers
-
 from lib.model import normalization
 from lib.utils import get_backend
 
 from tests.lib.model.layers_test import layer_test
+
+if get_backend() == "amd":
+    from keras import regularizers, models, layers
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras import regularizers, models, layers  # pylint:disable=import-error
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
@@ -101,8 +105,7 @@ def test_layer_normalization(center, scale):
 
 _PARAMS = ["partial", "bias"]
 _VALUES = [(0.0, False), (0.25, False), (0.5, True), (0.75, False), (1.0, True)]
-_IDS = ["partial={}|bias={}[{}]".format(v[0], v[1], get_backend().upper())
-        for v in _VALUES]
+_IDS = [f"partial={v[0]}|bias={v[1]}[{get_backend().upper()}]" for v in _VALUES]
 
 
 @pytest.mark.parametrize(_PARAMS, _VALUES, ids=_IDS)

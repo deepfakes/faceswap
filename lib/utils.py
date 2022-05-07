@@ -1,7 +1,6 @@
 #!/usr/bin python3
 """ Utilities available across all scripts """
 
-import importlib
 import json
 import logging
 import os
@@ -22,6 +21,7 @@ _image_extensions = [  # pylint:disable=invalid-name
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
+_TF_VERS = None
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -60,8 +60,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
         # Check if environment variable is set, if so use that
         if "FACESWAP_BACKEND" in os.environ:
             fs_backend = os.environ["FACESWAP_BACKEND"].lower()
-            print("Setting Faceswap backend from environment variable to "
-                  "{}".format(fs_backend.upper()))
+            print(f"Setting Faceswap backend from environment variable to {fs_backend.upper()}")
             return fs_backend
         # Intercept for sphinx docs build
         if sys.argv[0].endswith("sphinx-build"):
@@ -70,7 +69,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
             self._configure_backend()
         while True:
             try:
-                with open(self._config_file, "r") as cnf:
+                with open(self._config_file, "r", encoding="utf8") as cnf:
                     config = json.load(cnf)
                 break
             except json.decoder.JSONDecodeError:
@@ -80,7 +79,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
         if fs_backend is None or fs_backend.lower() not in self._backends.values():
             fs_backend = self._configure_backend()
         if current_process().name == "MainProcess":
-            print("Setting Faceswap backend to {}".format(fs_backend.upper()))
+            print(f"Setting Faceswap backend to {fs_backend.upper()}")
         return fs_backend.lower()
 
     def _configure_backend(self):
@@ -95,14 +94,14 @@ class _Backend():  # pylint:disable=too-few-public-methods
         while True:
             selection = input("1: AMD, 2: CPU, 3: NVIDIA, 4: Apple: ")
             if selection not in ("1", "2", "3", "4"):
-                print("'{}' is not a valid selection. Please try again".format(selection))
+                print(f"'{selection}' is not a valid selection. Please try again")
                 continue
             break
         fs_backend = self._backends[selection].lower()
         config = {"backend": fs_backend}
-        with open(self._config_file, "w") as cnf:
+        with open(self._config_file, "w", encoding="utf8") as cnf:
             json.dump(config, cnf)
-        print("Faceswap config written to: {}".format(self._config_file))
+        print(f"Faceswap config written to: {self._config_file}")
         return fs_backend
 
 
@@ -130,6 +129,21 @@ def set_backend(backend):
     """
     global _FS_BACKEND  # pylint:disable=global-statement
     _FS_BACKEND = backend.lower()
+
+
+def get_tf_version():
+    """ Obtain the major.minor version of currently installed Tensorflow.
+
+    Returns
+    -------
+    float
+        The currently installed tensorflow version
+    """
+    global _TF_VERS  # pylint:disable=global-statement
+    if _TF_VERS is None:
+        import tensorflow as tf  # pylint:disable=import-outside-toplevel
+        _TF_VERS = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
+    return _TF_VERS
 
 
 def get_folder(path, make_folder=True):
@@ -176,7 +190,7 @@ def get_image_paths(directory, extension=None):
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     image_extensions = _image_extensions if extension is None else [extension]
-    dir_contents = list()
+    dir_contents = []
 
     if not os.path.exists(directory):
         logger.debug("Creating folder: '%s'", directory)
@@ -242,7 +256,7 @@ def full_path_split(path):
     >>> ["foo", "baz", "bar"]
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
-    allparts = list()
+    allparts = []
     while True:
         parts = os.path.split(path)
         if parts[0] == path:   # sentinel for absolute paths
@@ -297,9 +311,9 @@ def deprecation_warning(function, additional_info=None):
     """
     logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
     logger.debug("func_name: %s, additional_info: %s", function, additional_info)
-    msg = "{}  has been deprecated and will be removed from a future update.".format(function)
+    msg = f"{function}  has been deprecated and will be removed from a future update."
     if additional_info is not None:
-        msg += " {}".format(additional_info)
+        msg += f" {additional_info}"
     logger.warning(msg)
 
 
@@ -355,7 +369,7 @@ class FaceswapError(Exception):
     pass  # pylint:disable=unnecessary-pass
 
 
-class GetModel():  # Pylint:disable=too-few-public-methods
+class GetModel():  # pylint:disable=too-few-public-methods
     """ Check for models in their cache path.
 
     If available, return the path, if not available, get, unzip and install model
@@ -428,7 +442,7 @@ class GetModel():  # Pylint:disable=too-few-public-methods
     @property
     def _model_zip_path(self):
         """ str: The full path to downloaded zip file. """
-        retval = os.path.join(self._cache_dir, "{}.zip".format(self._model_full_name))
+        retval = os.path.join(self._cache_dir, f"{self._model_full_name}.zip")
         self.logger.trace(retval)
         return retval
 
@@ -462,8 +476,8 @@ class GetModel():  # Pylint:disable=too-few-public-methods
     @property
     def _url_download(self):
         """ strL Base download URL for models. """
-        tag = "v{}.{}.{}".format(self._url_section, self._git_model_id, self._model_version)
-        retval = "{}/{}/{}.zip".format(self._url_base, tag, self._model_full_name)
+        tag = f"v{self._url_section}.{self._git_model_id}.{self._model_version}"
+        retval = f"{self._url_base}/{tag}/{self._model_full_name}.zip"
         self.logger.trace("Download url: %s", retval)
         return retval
 
@@ -493,11 +507,11 @@ class GetModel():  # Pylint:disable=too-few-public-methods
                 downloaded_size = self._url_partial_size
                 req = urllib.request.Request(self._url_download)
                 if downloaded_size != 0:
-                    req.add_header("Range", "bytes={}-".format(downloaded_size))
-                response = urllib.request.urlopen(req, timeout=10)
-                self.logger.debug("header info: {%s}", response.info())
-                self.logger.debug("Return Code: %s", response.getcode())
-                self._write_zipfile(response, downloaded_size)
+                    req.add_header("Range", f"bytes={downloaded_size}-")
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    self.logger.debug("header info: {%s}", response.info())
+                    self.logger.debug("Return Code: %s", response.getcode())
+                    self._write_zipfile(response, downloaded_size)
                 break
             except (socket_error, socket_timeout,
                     urllib.error.HTTPError, urllib.error.URLError) as err:
@@ -548,8 +562,8 @@ class GetModel():  # Pylint:disable=too-few-public-methods
         """ Unzip the model file to the cache folder """
         self.logger.info("Extracting: '%s'", self._model_name)
         try:
-            zip_file = zipfile.ZipFile(self._model_zip_path, "r")
-            self._write_model(zip_file)
+            with zipfile.ZipFile(self._model_zip_path, "r") as zip_file:
+                self._write_model(zip_file)
         except Exception as err:  # pylint:disable=broad-except
             self.logger.error("Unable to extract model file: %s", str(err))
             sys.exit(1)
@@ -583,73 +597,3 @@ class GetModel():  # Pylint:disable=too-few-public-methods
                     out_file.write(buffer)
         zip_file.close()
         pbar.close()
-
-
-class KerasFinder(importlib.abc.MetaPathFinder):
-    """ Importlib Abstract Base Class for intercepting the import of Keras and returning either
-    Keras (AMD backend) or tensorflow.keras (any other backend).
-
-    The Importlib documentation is sparse at best, and real world examples are pretty much
-    non-existent. Coupled with this, the import ``tensorflow.keras`` does not resolve so we need
-    to split out to the actual location of Keras within ``tensorflow_core``. This method works, but
-    it relies on hard coded paths, and is likely to not be the most robust.
-
-    A custom loader is not used, as we can use the standard loader once we have returned the
-    correct spec.
-    """
-    def __init__(self):
-        self._logger = logging.getLogger(__name__)
-        self._backend = get_backend()
-        self._tf_keras_locations = [["tensorflow_core", "python", "keras", "api", "_v2"],
-                                    ["tensorflow", "python", "keras", "api", "_v2"]]
-
-    def find_spec(self, fullname, path, target=None):  # pylint:disable=unused-argument
-        """ Obtain the spec for either keras or tensorflow.keras depending on the backend in use.
-
-        If keras is not passed in as part of the :attr:`fullname` or the path is not ``None``
-        (i.e this is a dependency import) then this returns ``None`` to use the standard import
-        library.
-
-        Parameters
-        ----------
-        fullname: str
-            The absolute name of the module to be imported
-        path: str
-            The search path for the module
-        target: module object, optional
-            Inherited from parent but unused
-
-        Returns
-        -------
-        :class:`importlib.ModuleSpec`
-            The spec for the Keras module to be imported
-        """
-        prefix = fullname.split(".")[0]
-        suffix = fullname.split(".")[-1]
-        if prefix != "keras" or path is not None:
-            return None
-        self._logger.debug("Importing '%s' as keras for backend: '%s'",
-                           "keras" if self._backend == "amd" else "tf.keras", self._backend)
-        path = sys.path if path is None else path
-        for entry in path:
-            locations = ([os.path.join(entry, *location)
-                          for location in self._tf_keras_locations]
-                         if self._backend != "amd" else [entry])
-            for location in locations:
-                self._logger.debug("Scanning: '%s' for '%s'", location, suffix)
-                if os.path.isdir(os.path.join(location, suffix)):
-                    filename = os.path.join(location, suffix, "__init__.py")
-                    submodule_locations = [os.path.join(location, suffix)]
-                else:
-                    filename = os.path.join(location, suffix + ".py")
-                    submodule_locations = None
-                if not os.path.exists(filename):
-                    continue
-                retval = importlib.util.spec_from_file_location(
-                    fullname,
-                    filename,
-                    submodule_search_locations=submodule_locations)
-                self._logger.debug("Found spec: %s", retval)
-                return retval
-        self._logger.debug("Spec not found for '%s'. Falling back to default import", fullname)
-        return None

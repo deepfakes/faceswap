@@ -9,8 +9,8 @@ from importlib import import_module
 
 from lib.gpu_stats import set_exclude_devices, GPUStats
 from lib.logger import crash_log, log_setup
-from lib.utils import (FaceswapError, get_backend, KerasFinder, safe_shutdown, set_backend,
-                       set_system_verbosity)
+from lib.utils import (FaceswapError, get_backend, get_tf_version, safe_shutdown,
+                       set_backend, set_system_verbosity)
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -41,7 +41,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         self._test_for_tf_version()
         self._test_for_gui()
         cmd = os.path.basename(sys.argv[0])
-        src = "tools.{}".format(self._command.lower()) if cmd == "tools.py" else "scripts"
+        src = f"tools.{self._command.lower()}" if cmd == "tools.py" else "scripts"
         mod = ".".join((src, self._command.lower()))
         module = import_module(mod)
         script = getattr(module, self._command.title())
@@ -53,15 +53,15 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         Raises
         ------
         FaceswapError
-            If Tensorflow is not found, or is not between versions 2.2 and 2.6
+            If Tensorflow is not found, or is not between versions 2.2 and 2.8
         """
         min_ver = 2.2
-        max_ver = 2.8 #2.6
+        max_ver = 2.8
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
             os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
             os.environ["KMP_AFFINITY"] = "disabled"
-            import tensorflow as tf  # pylint:disable=import-outside-toplevel
+            import tensorflow as tf  # noqa pylint:disable=import-outside-toplevel,unused-import
         except ImportError as err:
             if "DLL load failed while importing" in str(err):
                 msg = (
@@ -77,14 +77,14 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                     f"error: {str(err)}")
             self._handle_import_error(msg)
 
-        tf_ver = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
+        tf_ver = get_tf_version()
         if tf_ver < min_ver:
-            msg = ("The minimum supported Tensorflow is version {} but you have version {} "
-                   "installed. Please upgrade Tensorflow.".format(min_ver, tf_ver))
+            msg = (f"The minimum supported Tensorflow is version {min_ver} but you have version "
+                   f"{tf_ver} installed. Please upgrade Tensorflow.")
             self._handle_import_error(msg)
         if tf_ver > max_ver:
-            msg = ("The maximum supported Tensorflow is version {} but you have version {} "
-                   "installed. Please downgrade Tensorflow.".format(max_ver, tf_ver))
+            msg = (f"The maximum supported Tensorflow is version {max_ver} but you have version "
+                   f"{tf_ver} installed. Please downgrade Tensorflow.")
             self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
@@ -206,8 +206,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
 
         Set Faceswap backend to CPU if all GPUs have been deselected.
 
-        Add the Keras import interception code.
-
         Parameters
         ----------
         arguments: :class:`argparse.Namespace`
@@ -233,9 +231,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                 os.environ["KERAS_BACKEND"] = "tensorflow"
             set_backend("cpu")
             logger.info(msg)
-
-        # Add Keras finder to the meta_path list as the first item
-        sys.meta_path.insert(0, KerasFinder())
 
         logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
 

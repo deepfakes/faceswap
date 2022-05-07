@@ -7,22 +7,21 @@ import sys
 import inspect
 
 import tensorflow as tf
-import keras.backend as K
-
-from keras.layers import InputSpec, Layer
-try:
-    from keras.utils import get_custom_objects
-except ImportError:
-    from tensorflow.keras.utils import get_custom_objects
 
 from lib.utils import get_backend
 
 if get_backend() == "amd":
     from lib.plaidml_utils import pad
-    from keras.utils import conv_utils  # pylint:disable=ungrouped-imports
+    from keras.utils import get_custom_objects, conv_utils  # pylint:disable=no-name-in-module
+    import keras.backend as K
+    from keras.layers import InputSpec, Layer
 else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow.keras import backend as K  # pylint:disable=import-error
+    from tensorflow.keras.layers import InputSpec, Layer  # noqa pylint:disable=no-name-in-module,import-error
     from tensorflow import pad
-    from tensorflow.python.keras.utils import conv_utils
+    from tensorflow.python.keras.utils import conv_utils  # pylint:disable=no-name-in-module
 
 
 class PixelShuffler(Layer):
@@ -67,20 +66,22 @@ class PixelShuffler(Layer):
     def __init__(self, size=(2, 2), data_format=None, **kwargs):
         super().__init__(**kwargs)
         if get_backend() == "amd":
-            self.data_format = K.normalize_data_format(data_format)
+            self.data_format = K.normalize_data_format(data_format)  # pylint:disable=no-member
         else:
             self.data_format = conv_utils.normalize_data_format(data_format)
         self.size = conv_utils.normalize_tuple(size, 2, 'size')
 
-    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
+    def call(self, inputs, *args, **kwargs):
         """This is where the layer's logic lives.
 
         Parameters
         ----------
         inputs: tensor
             Input tensor, or list/tuple of input tensors
+        args: tuple
+            Additional standard keras Layer arguments
         kwargs: dict
-            Additional keyword arguments. Unused
+            Additional standard keras Layer keyword arguments
 
         Returns
         -------
@@ -189,7 +190,7 @@ class PixelShuffler(Layer):
         """
         config = {'size': self.size,
                   'data_format': self.data_format}
-        base_config = super(PixelShuffler, self).get_config()
+        base_config = super().get_config()
 
         return dict(list(base_config.items()) + list(config.items()))
 
@@ -211,15 +212,17 @@ class KResizeImages(Layer):
         self.size = size
         self.interpolation = interpolation
 
-    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
+    def call(self, inputs, *args, **kwargs):
         """ Call the upsample layer
 
         Parameters
         ----------
         inputs: tensor
             Input tensor, or list/tuple of input tensors
+        args: tuple
+            Additional standard keras Layer arguments
         kwargs: dict
-            Additional keyword arguments. Unused
+            Additional standard keras Layer keyword arguments
 
         Returns
         -------
@@ -319,11 +322,11 @@ class SubPixelUpscaling(Layer):
     """
 
     def __init__(self, scale_factor=2, data_format=None, **kwargs):
-        super(SubPixelUpscaling, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
         self.scale_factor = scale_factor
         if get_backend() == "amd":
-            self.data_format = K.normalize_data_format(data_format)
+            self.data_format = K.normalize_data_format(data_format)  # pylint:disable=no-member
         else:
             self.data_format = conv_utils.normalize_data_format(data_format)
 
@@ -340,15 +343,17 @@ class SubPixelUpscaling(Layer):
         """
         pass  # pylint: disable=unnecessary-pass
 
-    def call(self, inputs, **kwargs):  # pylint:disable=unused-argument
+    def call(self, inputs, *args, **kwargs):
         """This is where the layer's logic lives.
 
         Parameters
         ----------
         inputs: tensor
             Input tensor, or list/tuple of input tensors
+        args: tuple
+            Additional standard keras Layer arguments
         kwargs: dict
-            Additional keyword arguments. Unused
+            Additional standard keras Layer keyword arguments
 
         Returns
         -------
@@ -463,7 +468,7 @@ class SubPixelUpscaling(Layer):
         """
         config = {"scale_factor": self.scale_factor,
                   "data_format": self.data_format}
-        base_config = super(SubPixelUpscaling, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
@@ -595,7 +600,7 @@ class ReflectionPadding2D(Layer):
         """
         config = {'stride': self.stride,
                   'kernel_size': self.kernel_size}
-        base_config = super(ReflectionPadding2D, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
@@ -605,9 +610,9 @@ class _GlobalPooling2D(Layer):
     From keras as access to pooling is trickier in tensorflow.keras
     """
     def __init__(self, data_format=None, **kwargs):
-        super(_GlobalPooling2D, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         if get_backend() == "amd":
-            self.data_format = K.normalize_data_format(data_format)
+            self.data_format = K.normalize_data_format(data_format)  # pylint:disable=no-member
         else:
             self.data_format = conv_utils.normalize_data_format(data_format)
         self.input_spec = InputSpec(ndim=4)
@@ -624,37 +629,41 @@ class _GlobalPooling2D(Layer):
             return (input_shape[0], input_shape[3])
         return (input_shape[0], input_shape[1])
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, *args, **kwargs):
         """ Override to call the layer.
 
         Parameters
         ----------
         inputs: Tensor
             The input to the layer
+        args: tuple
+            Additional standard keras Layer arguments
         kwargs: dict
-            Additional keyword arguments
+            Additional standard keras Layer keyword arguments
         """
         raise NotImplementedError
 
     def get_config(self):
         """ Set the Keras config """
         config = {'data_format': self.data_format}
-        base_config = super(_GlobalPooling2D, self).get_config()
+        base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
 class GlobalMinPooling2D(_GlobalPooling2D):
     """Global minimum pooling operation for spatial data. """
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, *args, **kwargs):
         """This is where the layer's logic lives.
 
         Parameters
         ----------
         inputs: tensor
             Input tensor, or list/tuple of input tensors
+        args: tuple
+            Additional standard keras Layer arguments
         kwargs: dict
-            Additional keyword arguments
+            Additional standard keras Layer keyword arguments
 
         Returns
         -------
@@ -671,15 +680,17 @@ class GlobalMinPooling2D(_GlobalPooling2D):
 class GlobalStdDevPooling2D(_GlobalPooling2D):
     """Global standard deviation pooling operation for spatial data. """
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, *args, **kwargs):
         """This is where the layer's logic lives.
 
         Parameters
         ----------
         inputs: tensor
             Input tensor, or list/tuple of input tensors
+        args: tuple
+            Additional standard keras Layer arguments
         kwargs: dict
-            Additional keyword arguments
+            Additional standard keras Layer keyword arguments
 
         Returns
         -------
@@ -705,7 +716,7 @@ class L2_normalize(Layer):  # pylint:disable=invalid-name
     """
     def __init__(self, axis, **kwargs):
         self.axis = axis
-        super(L2_normalize, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def call(self, inputs):  # pylint:disable=arguments-differ
         """This is where the layer's logic lives.
@@ -739,7 +750,7 @@ class L2_normalize(Layer):  # pylint:disable=invalid-name
         dict
             A python dictionary containing the layer configuration
         """
-        config = super(L2_normalize, self).get_config()
+        config = super().get_config()
         config["axis"] = self.axis
         return config
 

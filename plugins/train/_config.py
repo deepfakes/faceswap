@@ -234,6 +234,7 @@ class Config(FaceswapConfig):
         L_inf_norm https://medium.com/@montjoile/l0-norm-l1-norm-l2-norm-l-infinity
                    -norm-7a7d18a4f40c
         SSIM http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf
+        MSSIM https://www.cns.nyu.edu/pub/eero/wang03b.pdf
         GMSD https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
         """
         logger.debug("Setting Loss config")
@@ -248,8 +249,8 @@ class Config(FaceswapConfig):
             datatype=str,
             group="loss",
             default="ssim",
-            choices=["mae", "mse", "logcosh", "smooth_loss", "l_inf_norm", "ssim", "gmsd",
-                     "pixel_gradient_diff"],
+            choices=["mae", "mse", "logcosh", "smooth_loss", "l_inf_norm", "ssim", "ms_ssim",
+                     "gmsd", "pixel_gradient_diff"],
             info="The loss function to use."
                  "\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
                  "towards its median value in the training dataset. Robust to outliers but as "
@@ -269,6 +270,9 @@ class Config(FaceswapConfig):
                  "\n\t SSIM - Structural Similarity Index Metric is a perception-based "
                  "loss that considers changes in texture, luminance, contrast, and local spatial "
                  "statistics of an image. Potentially delivers more realistic looking images."
+                 "\n\t MS_SSIM - Multiscale Structural Similarity Index Metric is similar to SSIM "
+                 "except that it performs the calculations along multiple scales of the input "
+                 "image. NB: This loss currently does not work on AMD Cards."
                  "\n\t GMSD - Gradient Magnitude Similarity Deviation seeks to match "
                  "the global standard deviation of the pixel to pixel differences between two "
                  "images. Similar in approach to SSIM. NB: This loss does not currently work on "
@@ -304,9 +308,10 @@ class Config(FaceswapConfig):
                  "loss functions.\n\nNB: You should only adjust this if you know what you are "
                  "doing!\n\n"
                  "L2 regularization applies a penalty term to the given Loss function. This "
-                 "penalty will only be applied if SSIM or GMSD is selected for the main loss "
-                 "function, otherwise it is ignored.\n\nThe value given here is as a percentage "
-                 "weight of the main loss function. For example:"
+                 "penalty will only be applied if SSIM, MS-SSIM or GMSD is selected for the main "
+                 "loss function, otherwise it is ignored."
+                 "\n\nThe value given here is as a percentage weight of the main loss function. "
+                 "For example:"
                  "\n\t 100 - Will give equal weighting to the main loss and the penalty function. "
                  "\n\t 25 - Will give the penalty function 1/4 of the weight of the main loss "
                  "function. "

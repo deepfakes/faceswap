@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """ Improved autoencoder for faceswap """
 
-from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
-
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
+from lib.utils import get_backend
+
 from ._base import ModelBase, KerasModel
+
+if get_backend() == "amd":
+    from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
+
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.layers import Concatenate, Dense, Flatten, Input, Reshape  # noqa pylint:disable=import-error,no-name-in-module
 
 
 class Model(ModelBase):
@@ -48,7 +55,7 @@ class Model(ModelBase):
         var_x = Dense(self.encoder_dim)(input_)
         var_x = Dense(4 * 4 * int(self.encoder_dim/2))(var_x)
         var_x = Reshape((4, 4, int(self.encoder_dim/2)))(var_x)
-        return KerasModel(input_, var_x, name="inter_{}".format(side))
+        return KerasModel(input_, var_x, name=f"inter_{side}")
 
     def decoder(self):
         """ Decoder Network """
@@ -73,8 +80,8 @@ class Model(ModelBase):
 
     def _legacy_mapping(self):
         """ The mapping of legacy separate model names to single model names """
-        return {"{}_encoder.h5".format(self.name): "encoder",
-                "{}_intermediate_A.h5".format(self.name): "inter_a",
-                "{}_intermediate_B.h5".format(self.name): "inter_b",
-                "{}_inter.h5".format(self.name): "inter_both",
-                "{}_decoder.h5".format(self.name): "decoder"}
+        return {f"{self.name}_encoder.h5": "encoder",
+                f"{self.name}_intermediate_A.h5": "inter_a",
+                f"{self.name}_intermediate_B.h5": "inter_b",
+                f"{self.name}_inter.h5": "inter_both",
+                f"{self.name}_decoder.h5": "decoder"}
