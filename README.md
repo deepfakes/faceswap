@@ -17,25 +17,9 @@
 
 [![Build Status](https://travis-ci.org/deepfakes/faceswap.svg?branch=master)](https://travis-ci.org/deepfakes/faceswap) [![Documentation Status](https://readthedocs.org/projects/faceswap/badge/?version=latest)](https://faceswap.readthedocs.io/en/latest/?badge=latest)
 
-============================
-# Apple Silicon port
-## WIP port for GPU-accelerated, native Apple Silicon processing.
-
-```sh
-$ conda env create -f conda-environment-apple-silicon.yml
-```
-
-Ensure that the backend is set to "apple" and **not** to "cpu".
-You may have to modify the config file in `./config/.faceswap`.
-
-============================
-
-
 Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
 - [deepfakes_faceswap](#deepfakes_faceswap)
-- [Apple Silicon port](#apple-silicon-port)
-  - [WIP port for GPU-accelerated, native Apple Silicon processing.](#wip-port-for-gpu-accelerated-native-apple-silicon-processing)
 - [Manifesto](#manifesto)
   - [FaceSwap has ethical uses.](#faceswap-has-ethical-uses)
 - [How To setup and run the project](#how-to-setup-and-run-the-project)

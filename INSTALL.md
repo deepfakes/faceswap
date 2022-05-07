@@ -20,6 +20,7 @@
   - [Running faceswap](#running-faceswap)
   - [Create a desktop shortcut](#create-a-desktop-shortcut)
   - [Updating faceswap](#updating-faceswap)
+- [macOS (Apple Silicon) Install Guide](#macos-apple-silicon-install-guide)
 - [General Install Guide](#general-install-guide)
   - [Installing dependencies](#installing-dependencies)
     - [Git](#git-1)
@@ -54,7 +55,7 @@ The type of computations that the process does are well suited for graphics card
 - **Linux**
   Most Ubuntu/Debian or CentOS based Linux distributions will work.
 - **macOS**
-  GPU support on macOS is limited due to lack of drivers/libraries from Nvidia.
+  WIP port for GPU-accelerated, native Apple Silicon processing.
 - All operating systems must be 64-bit for Tensorflow to run.
 
 Alternatively, there is a docker image that is based on Debian.
@@ -144,6 +145,42 @@ It's good to keep faceswap up to date as new features are added and bugs are fix
 - Enter the faceswap folder: `cd faceswap`
 - Enter the following `git pull --all`
 - Once the latest version has downloaded, make sure your dependencies are up to date. There is a script to help with this: `python update_deps.py`
+
+# macOS (Apple Silicon) Install Guide
+
+## Prerequisites
+
+### OS
+macOS 12.0+
+
+### XCode Tools
+`xcode-select --install`
+
+### XQuartz
+Download and install from: https://www.xquartz.org/
+
+### Conda
+Download and install the latest Conda env from: https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
+```sh
+$ chmod +x ~/Downloads/Miniforge3-MacOSX-arm64.sh
+$ sh ~/Downloads/Miniforge3-MacOSX-arm64.sh
+$ source ~/miniforge3/bin/activate
+```
+## Setup
+
+### faceswap
+- Get the faceswap repo by typing: `git clone --depth 1 https://github.com/deepfakes/faceswap.git`
+- Enter the faceswap folder: `cd faceswap`
+
+#### Easy install
+```sh
+$ conda deactivate
+$ conda env create -f conda-environment-apple-silicon.yml
+$ conda activate faceswap
+```
+- Enter the command `python faceswap.py gui` and follow the prompts:
+- Choose '4' for Apple Silicon
+- If you have issues/errors follow the Manual install steps below.
 
 # General Install Guide
 ## Installing dependencies
