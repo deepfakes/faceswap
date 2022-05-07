@@ -1,4 +1,4 @@
-name: faceswap2
+name: faceswap
 channels:
   - conda-forge
   - apple

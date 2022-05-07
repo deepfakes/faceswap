@@ -163,7 +163,7 @@ class GPUStats():
                 loglevel = "INFO" if self._logger is None else self._logger.getEffectiveLevel()
                 self._plaid = plaidlib(log_level=loglevel, log=log)
             elif IS_MACOS:
-                self._log("debug", "macOS Detected.")
+                self._log("debug", "macOS Detected. Using Metal")
                 try:
                     metal.init()
                 except RuntimeError:
@@ -314,7 +314,9 @@ class GPUStats():
         elif self._is_plaidml:
             vram = self._plaid.vram
         elif IS_MACOS:
-            vram = [metal.get_memory_info(i) / (1024 * 1024) for i in range(self._device_count)]
+            vram = [metal.get_memory_info(i) /
+                    (1024 * 1024)
+                    for i in range(self._device_count)]
         else:
             vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).total /
                     (1024 * 1024)
@@ -342,7 +344,9 @@ class GPUStats():
         if self._is_plaidml:
             vram = self._plaid.vram
         elif IS_MACOS:
-            vram = [metal.get_memory_info(i) / (1024 * 1024) for i in range(self._device_count)]
+            vram = [metal.get_memory_info(i) /
+                    (1024 * 1024)
+                    for i in range(self._device_count)]
         else:
             vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).free / (1024 * 1024)
                     for handle in self._handles]

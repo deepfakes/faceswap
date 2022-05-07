@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Normalization methods for faceswap.py common to both Plaid and Tensorflow Backends """
 
-from ast import Import
 import sys
 import inspect
 
