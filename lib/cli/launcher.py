@@ -238,7 +238,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             plaidml_found = self._setup_amd(arguments)
             if not plaidml_found:
                 safe_shutdown(got_error=True)
-                sys.exit(1)
 
     @classmethod
     def _setup_amd(cls, arguments):
@@ -255,7 +254,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         except ImportError:
             logger.error("PlaidML not found. Run `pip install plaidml-keras` for AMD support")
             return False
-        from lib.plaidml_tools import setup_plaidml  # pylint:disable=import-outside-toplevel
+        from lib.gpu_stats import setup_plaidml  # pylint:disable=import-outside-toplevel
         setup_plaidml(arguments.loglevel, arguments.exclude_gpus)
         logger.debug("setup up for PlaidML")
         return True
