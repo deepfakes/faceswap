@@ -16,3 +16,5 @@ elif backend == "nvidia":
     from .nvidia import NvidiaStats as GPUStats  # noqa
 elif backend == "amd":
     from .amd import AMDStats as GPUStats, setup_plaidml  # noqa
+elif backend == "cpu":
+    from .cpu import CPUStats as GPUStats  # noqa

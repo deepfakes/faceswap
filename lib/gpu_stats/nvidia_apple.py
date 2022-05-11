@@ -130,10 +130,8 @@ class NvidiaAppleStats(GPUStats):
              List of `float`s containing the amount of VRAM available, in Megabytes, for each
              connected GPU as corresponding to the values in :attr:`_handles
         """
-        self._initialize()
         vram = [
             pynvx.cudaGetMemFree(handle, ignore=True) / (1024 * 1024)  # pylint:disable=no-member
             for handle in self._handles]
-        self._shutdown()
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram

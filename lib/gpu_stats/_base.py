@@ -7,6 +7,8 @@ import os
 
 from typing import List, Optional, TypedDict
 
+from lib.utils import get_backend
+
 
 _EXCLUDE_DEVICES: List[int] = []
 
@@ -61,9 +63,10 @@ class GPUStats():
         self._driver: str = self._get_driver()
         self._device_names: List[str] = self._get_device_names()
         self._vram: List[float] = self._get_vram()
+        self._vram_free: List[float] = self._get_free_vram()
 
-        if not self._active_devices:
-            self._log("warning", "No GPU detected. Switching to CPU mode")
+        if get_backend() != "cpu" and not self._active_devices:
+            self._log("warning", "No GPU detected")
 
         self._shutdown()
         self._log("debug", f"Initialized {self.__class__.__name__}")
@@ -241,7 +244,7 @@ class GPUStats():
                                     free=2048,
                                     total=2048)
         else:
-            free_vram = [self._get_free_vram()[i] for i in self._active_devices]
+            free_vram = [self._vram_free[i] for i in self._active_devices]
             vram_free = max(free_vram)
             card_id = self._active_devices[free_vram.index(vram_free)]
             retval = BiggestGPUInfo(card_id=card_id,
