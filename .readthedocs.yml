@@ -22,4 +22,4 @@ sphinx:
 # Optionally declare the Python requirements required to build your docs
 python:
    install:
-   - requirements: docs/spinx_requirements.txt
+   - requirements: docs/sphinx_requirements.txt
