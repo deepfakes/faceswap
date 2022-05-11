@@ -1,9 +1,7 @@
-******************
 gpu\_stats package
-******************
+==================
 
 The GPU Stats Package handles collection of information from connected GPUs
-
 
 .. contents:: Contents
    :local:
