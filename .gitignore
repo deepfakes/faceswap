@@ -20,6 +20,7 @@
 !.install/
 !.install/**
 !config/
+!.readthedocs.yml
 !docs/
 !docs/full**
 !docs/_static**

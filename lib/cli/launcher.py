@@ -211,10 +211,11 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         arguments: :class:`argparse.Namespace`
             The command line arguments passed to Faceswap.
         """
-        if not hasattr(arguments, "exclude_gpus"):
+        if get_backend() == "cpu":
             # Cpu backends will not have this attribute
             logger.debug("Adding missing exclude gpus argument to namespace")
             setattr(arguments, "exclude_gpus", None)
+            return
 
         if arguments.exclude_gpus:
             if not all(idx.isdigit() for idx in arguments.exclude_gpus):
@@ -224,7 +225,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             arguments.exclude_gpus = [int(idx) for idx in arguments.exclude_gpus]
             set_exclude_devices(arguments.exclude_gpus)
 
-        if GPUStats().exclude_all_devices and get_backend() != "cpu":
+        if GPUStats().exclude_all_devices:
             msg = "Switching backend to CPU"
             if get_backend() == "amd":
                 msg += (". Using Tensorflow for CPU operations.")
@@ -234,11 +235,8 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
 
         logger.debug("Executing: %s. PID: %s", self._command, os.getpid())
 
-        if get_backend() == "amd":
-            plaidml_found = self._setup_amd(arguments)
-            if not plaidml_found:
-                safe_shutdown(got_error=True)
-                sys.exit(1)
+        if get_backend() == "amd" and not self._setup_amd(arguments):
+            safe_shutdown(got_error=True)
 
     @classmethod
     def _setup_amd(cls, arguments):
@@ -255,7 +253,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         except ImportError:
             logger.error("PlaidML not found. Run `pip install plaidml-keras` for AMD support")
             return False
-        from lib.plaidml_tools import setup_plaidml  # pylint:disable=import-outside-toplevel
+        from lib.gpu_stats import setup_plaidml  # pylint:disable=import-outside-toplevel
         setup_plaidml(arguments.loglevel, arguments.exclude_gpus)
         logger.debug("setup up for PlaidML")
         return True
