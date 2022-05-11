@@ -59,7 +59,7 @@ class KBHit:
     def getch(self):
         """ Returns a keyboard character after kbhit() has been called.
             Should not be called in the same program as getarrow(). """
-        if self.is_gui and os.name != "nt" or not sys.stdout.isatty():
+        if (self.is_gui or not sys.stdout.isatty()) and os.name != "nt":
             return None
         if os.name == "nt":
             return msvcrt.getch().decode("utf-8")
@@ -73,7 +73,7 @@ class KBHit:
         3 : left
         Should not be called in the same program as getch(). """
 
-        if self.is_gui or not sys.stdout.isatty():
+        if (self.is_gui or not sys.stdout.isatty()) and os.name != "nt":
             return None
         if os.name == "nt":
             msvcrt.getch()  # skip 0xE0
@@ -87,7 +87,7 @@ class KBHit:
 
     def kbhit(self):
         """ Returns True if keyboard character was hit, False otherwise. """
-        if self.is_gui and os.name != "nt" or not sys.stdout.isatty():
+        if (self.is_gui or not sys.stdout.isatty()) and os.name != "nt":
             return None
         if os.name == "nt":
             return msvcrt.kbhit()

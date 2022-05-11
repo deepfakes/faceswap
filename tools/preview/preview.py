@@ -186,8 +186,8 @@ class Samples():
         self._display = display
         self._lock = lock
         self._trigger_patch = trigger_patch
-        self._input_images = list()
-        self._predicted_images = list()
+        self._input_images = []
+        self._predicted_images = []
 
         self._images = Images(arguments)
         self._alignments = Alignments(arguments,
@@ -250,8 +250,7 @@ class Samples():
         """
         logger.debug("Filtering file list to frames with faces")
         if self._images.is_video:
-            filelist = ["{}_{:06d}.png".format(os.path.splitext(self._images.input_images)[0],
-                                               frame_no)
+            filelist = [f"{os.path.splitext(self._images.input_images)[0]}_{frame_no:06d}.png"
                         for frame_no in range(1, self._images.images_found + 1)]
         else:
             filelist = self._images.input_images
@@ -288,10 +287,8 @@ class Samples():
         size = len(top_tail)
         retval = [top_tail[start:start + size // self._sample_size]
                   for start in range(0, size, size // self._sample_size)]
-        logger.debug("Indices pools: %s", ["{}: (start: {}, end: {}, size: {})".format(idx,
-                                                                                       min(pool),
-                                                                                       max(pool),
-                                                                                       len(pool))
+        logger.debug("Indices pools: %s", [f"{idx}: (start: {min(pool)}, "
+                                           f"end: {max(pool)}, size: {len(pool)})"
                                            for idx, pool in enumerate(retval)])
         return retval
 
@@ -316,7 +313,7 @@ class Samples():
         * Sets :attr:`_display.source` to the input images and flags that the display should be \
         updated
         """
-        self._input_images = list()
+        self._input_images = []
         for selection in self._random_choice:
             filename = os.path.basename(self._filelist[selection])
             image = self._images.load_one_image(self._filelist[selection])
@@ -338,7 +335,7 @@ class Samples():
         model predict function and add the output to :attr:`predicted`
         """
         with self._lock:
-            self._predicted_images = list()
+            self._predicted_images = []
             for frame in self._input_images:
                 self._predictor.in_queue.put(frame)
             idx = 0
@@ -562,7 +559,7 @@ class Patch():
         """
         logger.trace("Patching faces")
         self._converter.process(queue_in, queue_out)
-        swapped = list()
+        swapped = []
         idx = 0
         while idx < sample_size:
             logger.trace("Patching image %s of %s", idx + 1, sample_size)
@@ -605,7 +602,7 @@ class FacesDisplay():
         self._tk_vars = tk_vars
         self._padding = padding
 
-        self._faces = dict()
+        self._faces = {}
         self._centering = None
         self._faces_source = None
         self._faces_dest = None
@@ -613,9 +610,9 @@ class FacesDisplay():
 
         # Set from Samples
         self.update_source = False
-        self.source = list()  # Source images, filenames + detected faces
+        self.source = []  # Source images, filenames + detected faces
         # Set from Patch
-        self.destination = list()  # Swapped + patched images
+        self.destination = []  # Swapped + patched images
 
         logger.trace("Initialized %s", self.__class__.__name__)
 
@@ -717,19 +714,19 @@ class FacesDisplay():
         """ Extract the source faces from the source frames, along with their filenames and the
         transformation matrix used to extract the faces. """
         logger.debug("Updating source faces")
-        self._faces = dict()
+        self._faces = {}
         for image in self.source:
             detected_face = image["detected_faces"][0]
             src_img = image["image"]
             detected_face.load_aligned(src_img, size=self._size, centering=self._centering)
             matrix = detected_face.aligned.matrix
             self._faces.setdefault("filenames",
-                                   list()).append(os.path.splitext(image["filename"])[0])
-            self._faces.setdefault("matrix", list()).append(matrix)
-            self._faces.setdefault("src", list()).append(transform_image(src_img,
-                                                                         matrix,
-                                                                         self._size,
-                                                                         self._padding))
+                                   []).append(os.path.splitext(image["filename"])[0])
+            self._faces.setdefault("matrix", []).append(matrix)
+            self._faces.setdefault("src", []).append(transform_image(src_img,
+                                                                     matrix,
+                                                                     self._size,
+                                                                     self._padding))
         self.update_source = False
         logger.debug("Updated source faces")
 
@@ -737,7 +734,7 @@ class FacesDisplay():
         """ Extract the swapped faces from the swapped frames using the source face destination
         matrices. """
         logger.debug("Updating destination faces")
-        self._faces["dst"] = list()
+        self._faces["dst"] = []
         destination = self.destination if self.destination else [np.ones_like(src["image"])
                                                                  for src in self.source]
         for idx, image in enumerate(destination):
@@ -810,7 +807,7 @@ class ConfigTools():
     """
     def __init__(self):
         self._config = Config(None)
-        self.tk_vars = dict()
+        self.tk_vars = {}
         self._config_dicts = self._get_config_dicts()  # Holds currently saved config
 
     @property
@@ -864,13 +861,13 @@ class ConfigTools():
             Each configuration section as keys, with the values as a dict of option:
             :class:`lib.gui.control_helper.ControlOption` pairs. """
         logger.debug("Formatting Config for GUI")
-        config_dicts = dict()
+        config_dicts = {}
         for section in self._config.config.sections():
             if section.startswith("writer."):
                 continue
             for key, val in self._config.defaults[section].items():
                 if key == "helptext":
-                    config_dicts.setdefault(section, dict())[key] = val
+                    config_dicts.setdefault(section, {})[key] = val
                     continue
                 cp_option = ControlPanelOption(title=key,
                                                dtype=val["type"],
@@ -882,8 +879,8 @@ class ConfigTools():
                                                rounding=val["rounding"],
                                                min_max=val["min_max"],
                                                helptext=val["helptext"])
-                self.tk_vars.setdefault(section, dict())[key] = cp_option.tk_var
-                config_dicts.setdefault(section, dict())[key] = cp_option
+                self.tk_vars.setdefault(section, {})[key] = cp_option.tk_var
+                config_dicts.setdefault(section, {})[key] = cp_option
         logger.debug("Formatted Config for GUI: %s", config_dicts)
         return config_dicts
 
@@ -933,6 +930,11 @@ class ConfigTools():
     def save_config(self, section=None):
         """ Save the configuration ``.ini`` file with the currently stored values.
 
+        Notes
+        -----
+        We cannot edit the existing saved config as comments tend to get removed, so we create
+        a new config and populate that.
+
         Parameters
         ----------
         section: str, optional
@@ -940,27 +942,33 @@ class ConfigTools():
             Default: ``None``
         """
         logger.debug("Saving %s config", section)
+
         new_config = ConfigParser(allow_no_value=True)
-        for config_section, items in self._config_dicts.items():
+
+        for config_section, items in self._config.defaults.items():
             logger.debug("Adding section: '%s')", config_section)
             self._config.insert_config_section(config_section,
                                                items["helptext"],
                                                config=new_config)
             for item, options in items.items():
                 if item == "helptext":
-                    continue
+                    continue  # helptext already written at top
                 if ((section is not None and config_section != section)
                         or config_section not in self.tk_vars):
-                    new_opt = options.value  # Keep saved item for other sections
+                    # retain saved values that have not been updated
+                    new_opt = self._config.get(config_section, item)
                     logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
                 else:
                     new_opt = self.tk_vars[config_section][item].get()
                     logger.debug("Setting option: (item: '%s', value: '%s')", item, new_opt)
+
                     # Set config_dicts value to new saved value
-                    options.set_initial_value(new_opt)
-                helptext = self._config.format_help(options.helptext, is_section=False)
+                    self._config_dicts[config_section][item].set_initial_value(new_opt)
+
+                helptext = self._config.format_help(options["helptext"], is_section=False)
                 new_config.set(config_section, helptext)
                 new_config.set(config_section, item, str(new_opt))
+
         self._config.config = new_config
         self._config.save_config()
         logger.info("Saved config: '%s'", self._config.configfile)
@@ -1051,10 +1059,10 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
         self._options = ["color", "mask_type"]
         self._busy_tkvar = tk_vars["busy"]
-        self._tk_vars = dict()
+        self._tk_vars = {}
 
         d_locals = locals()
-        defaults = {opt: self._format_to_display(d_locals["selected_{}".format(opt)])
+        defaults = {opt: self._format_to_display(d_locals[f"selected_{opt}"])
                     for opt in self._options}
         self._busy_indicator = self._build_frame(defaults,
                                                  refresh_callback,
@@ -1343,7 +1351,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config_tools = config_tools
 
-        self._tabs = dict()
+        self._tabs = {}
         self._build_tabs()
         self._build_sub_tabs()
         self._add_patch_callback(patch_callback)
@@ -1452,13 +1460,13 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             logger.debug("Adding button: '%s'", utl)
             img = get_images().icons[utl]
             if utl == "save":
-                text = _("Save {} config").format(title)
+                text = _(f"Save {title} config")
                 action = parent.config_tools.save_config
             elif utl == "clear":
-                text = _("Reset {} config to default values").format(title)
+                text = _(f"Reset {title} config to default values")
                 action = parent.config_tools.reset_config_to_default
             elif utl == "reload":
-                text = _("Reset {} config to saved values").format(title)
+                text = _(f"Reset {title} config to saved values")
                 action = parent.config_tools.reset_config_to_saved
 
             btnutl = ttk.Button(btn_frame,

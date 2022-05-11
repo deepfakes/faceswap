@@ -23,10 +23,6 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _LANG = gettext.translation("gui.tooltips", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-_POPUP = []
-_CONFIG_FILES = []
-_CONFIGS = dict()
-
 
 class _State():
     """ Holds the existing config files and the current state of the popup window. """
@@ -34,7 +30,7 @@ class _State():
         self._popup = None
         # The GUI Config cannot be scanned until GUI is launched, so this is populated
         # on the first call to load the settings
-        self._configs = dict()
+        self._configs = {}
 
     def open_popup(self, name=None):
         """ Launch the popup, ensuring only one instance is ever open
@@ -45,8 +41,7 @@ class _State():
             The name of the configuration file. Used for selecting the correct section if required.
             Set to ``None`` if no initial section should be selected. Default: ``None``
         """
-        if not self._configs:
-            self._scan_for_configs()
+        self._scan_for_configs()
         logger.debug("name: %s", name)
         if self._popup is not None:
             logger.debug("Restoring existing popup")
@@ -162,7 +157,7 @@ class _ConfigurePlugins(tk.Toplevel):
         width = int(600 * scaling_factor)
         height = int(536 * scaling_factor)
         logger.debug("Pop up Geometry: %sx%s, %s+%s", width, height, pos_x, pos_y)
-        self.geometry("{}x{}+{}+{}".format(width, height, pos_x, pos_y))
+        self.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
     def _build_header(self):
         """ Build the main header text and separator. """
@@ -243,7 +238,7 @@ class _ConfigurePlugins(tk.Toplevel):
         selection = self._tree.focus()
         section = selection.split("|")[0]
         subsections = selection.split("|")[1:] if "|" in selection else []
-        self._tk_vars["header"].set("{} Settings".format(section.title()))
+        self._tk_vars["header"].set(f"{section.title()} Settings")
         self._opts_frame.select_options(section, subsections)
 
 
@@ -336,7 +331,7 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
         categories += [x for x in ordered if x not in categories]
 
         for cat in categories:
-            img = get_images().icons.get("settings_{}".format(cat), "")
+            img = get_images().icons.get(f"settings_{cat}", "")
             text = cat.replace("_", " ").title()
             text = " " + text if img else text
             is_open = tk.TRUE if name is None or name == cat else tk.FALSE
@@ -372,14 +367,14 @@ class _Tree(ttk.Frame):  # pylint:disable=too-many-ancestors
             if section[-1] == "global":  # Global categories get escalated to parent
                 continue
             sect = section[0]
-            section_id = "{}|{}".format(category, sect)
+            section_id = f"{category}|{sect}"
             if sect not in seen:
                 seen.add(sect)
                 text = sect.replace("_", " ").title()
                 tree.insert(category, "end", section_id, text=text, open=is_open, tags="section")
             if len(section) == 2:
                 opt = section[-1]
-                opt_id = "{}|{}".format(section_id, opt)
+                opt_id = f"{section_id}|{opt}"
                 opt_text = opt.replace("_", " ").title()
                 tree.insert(section_id, "end", opt_id, text=opt_text, open=is_open, tags="option")
 
@@ -406,8 +401,8 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._configs = configurations
         self._theme = theme
         self._tree = tree
-        self._vars = dict()
-        self._cache = dict()
+        self._vars = {}
+        self._cache = {}
         self._config_cpanel_dict = self._get_config()
         self._displayed_frame = None
         self._displayed_key = None
@@ -436,14 +431,14 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
             objects
         """
         logger.debug("Formatting Config for GUI")
-        retval = dict()
+        retval = {}
         for plugin, conf in self._configs.items():
             for section in conf.config.sections():
                 conf.section = section
                 category = section.split(".")[0]
                 sect = section.split(".")[-1]
                 # Elevate global to root
-                key = plugin if sect == "global" else "{}|{}|{}".format(plugin, category, sect)
+                key = plugin if sect == "global" else f"{plugin}|{category}|{sect}"
                 retval[key] = dict(helptext=None, options=OrderedDict())
 
                 for option, params in conf.defaults[section].items():
@@ -584,7 +579,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                             foreground=self._theme["link_color"],
                             cursor="hand2")
             lbl.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(0, 5))
-            bind = "{}|{}".format(key, link)
+            bind = f"{key}|{link}"
             lbl.bind("<Button-1>", lambda e, l=bind: self._link_callback(l))
 
         return frame
@@ -673,7 +668,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                     # Get currently selected value
                     key = category
                     if section != "global":
-                        key += "|{}".format(section.replace(".", "|"))
+                        key += f"|{section.replace('.', '|')}"
                     new_opt = self._config_cpanel_dict[key]["options"][item].get()
                     logger.debug("Updating value to '%s' for %s",
                                  new_opt, ".".join([section, item]))

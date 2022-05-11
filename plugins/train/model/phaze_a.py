@@ -209,8 +209,8 @@ class Model(ModelBase):
         arch = self.config["enc_architecture"]
         layers = self.config["freeze_layers"]
         # EfficientNetV2 is inconsistent with other model's naming conventions
-        keras_name = _MODEL_MAPPING[arch].get("keras_name").replace("EfficientNetV2",
-                                                                    "EfficientNetV2-")
+        keras_name = _MODEL_MAPPING[arch].get("keras_name", "").replace("EfficientNetV2",
+                                                                        "EfficientNetV2-")
 
         if "keras_encoder" not in self.config["freeze_layers"]:
             retval = layers
