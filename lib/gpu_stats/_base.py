@@ -212,6 +212,7 @@ class GPUStats():
              List of `float`s containing the total amount of VRAM in Megabytes for each
              connected GPU as corresponding to the values in :attr:`_handles`
         """
+        raise NotImplementedError()
 
     def _get_free_vram(self) -> List[float]:
         """ Override to obrain the amount of VRAM that is available, in Megabytes, for each
