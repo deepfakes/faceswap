@@ -30,7 +30,7 @@ class _Backend():  # pylint:disable=too-few-public-methods
 
     If file doesn't exist and a variable hasn't been set, create the config file. """
     def __init__(self):
-        self._backends = {"1": "amd", "2": "cpu", "3": "nvidia"}
+        self._backends = {"1": "amd", "2": "cpu", "3": "nvidia", "4": "apple_silicon"}
         self._config_file = self._get_config_file()
         self.backend = self._get_backend()
 
@@ -92,8 +92,8 @@ class _Backend():  # pylint:disable=too-few-public-methods
         """
         print("First time configuration. Please select the required backend")
         while True:
-            selection = input("1: AMD, 2: CPU, 3: NVIDIA: ")
-            if selection not in ("1", "2", "3"):
+            selection = input("1: AMD, 2: CPU, 3: NVIDIA, 4: Apple Silicon: ")
+            if selection not in ("1", "2", "3", "4"):
                 print(f"'{selection}' is not a valid selection. Please try again")
                 continue
             break
@@ -124,7 +124,7 @@ def set_backend(backend):
 
     Parameters
     ----------
-    backend: ["amd", "cpu", "nvidia"]
+    backend: ["amd", "cpu", "nvidia", "apple_silicon"]
         The backend to set faceswap to
     """
     global _FS_BACKEND  # pylint:disable=global-statement

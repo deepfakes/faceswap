@@ -19,7 +19,7 @@
 
 Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
 
-- [deepfakes_faceswap](#deepfakesfaceswap)
+- [deepfakes_faceswap](#deepfakes_faceswap)
 - [Manifesto](#manifesto)
   - [FaceSwap has ethical uses.](#faceswap-has-ethical-uses)
 - [How To setup and run the project](#how-to-setup-and-run-the-project)
@@ -37,7 +37,6 @@ Make sure you check out [INSTALL.md](INSTALL.md) before getting started.
   - [One time Donations](#one-time-donations)
     - [@torzdf](#torzdf)
     - [@andenixa](#andenixa)
-    - [@kvrooman](#kvrooman)
 - [How to contribute](#how-to-contribute)
   - [For people interested in the generative models](#for-people-interested-in-the-generative-models)
   - [For devs](#for-devs)
