@@ -14,3 +14,4 @@ ffmpy==0.2.3
 nvidia-ml-py>=11.510,<300
 pywin32>=228 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
+typing-extensions ; python_version < "3.8"

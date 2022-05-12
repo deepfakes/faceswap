@@ -4,10 +4,16 @@ from the :class:`GPUStats` class contained here. """
 
 import logging
 import os
+import sys
 
-from typing import List, Optional, TypedDict
+from typing import List, Optional
 
 from lib.utils import get_backend
+
+if sys.version_info < (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 
 _EXCLUDE_DEVICES: List[int] = []
