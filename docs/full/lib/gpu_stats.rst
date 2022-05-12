@@ -14,6 +14,14 @@ gpu_stats._base module
    :undoc-members:
    :show-inheritance:
 
+gpu_stats.apple_silicon module
+------------------------------
+
+.. automodule:: lib.gpu_stats.apple_silicon
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 gpu_stats.amd module
 --------------------
 
