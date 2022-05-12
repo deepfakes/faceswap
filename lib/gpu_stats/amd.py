@@ -137,6 +137,8 @@ class AMDStats(GPUStats):
         self._device_details = self._get_device_details()
         self._select_device()
 
+        super()._initialize()
+
     def _initialize_plaidml(self) -> None:
         """ Initialize PlaidML on first call to this class and set global
         :attr:``_PLAIDML_INITIALIZED`` to ``True``. If PlaidML has already been initialized then
