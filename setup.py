@@ -287,8 +287,6 @@ class Environment():
             backend = "amd"
         elif self.enable_cuda:
             backend = "nvidia"
-        elif self.enable_apple:
-            backend = "apple_silicon"
         else:
             backend = "cpu"
         config = {"backend": backend}
@@ -322,8 +320,8 @@ class Environment():
         os.makedirs(activate_folder, exist_ok=True)
         os.makedirs(deactivate_folder, exist_ok=True)
 
-        activate_script = os.path.join(conda_prefix, activate_folder, f"env_vars.sh")
-        deactivate_script = os.path.join(conda_prefix, deactivate_folder, f"env_vars.sh")
+        activate_script = os.path.join(conda_prefix, activate_folder, "env_vars.sh")
+        deactivate_script = os.path.join(conda_prefix, deactivate_folder, "env_vars.sh")
 
         if os.path.isfile(activate_script):
             # Only create file if it does not already exist. There may be instances where people
