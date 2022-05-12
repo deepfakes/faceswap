@@ -11,9 +11,10 @@ from typing import List, Optional
 from lib.utils import get_backend
 
 if sys.version_info < (3, 8):
-    from typing import TypedDict
-else:
     from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
+    
 
 
 _EXCLUDE_DEVICES: List[int] = []
