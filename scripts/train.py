@@ -421,6 +421,8 @@ class Train():  # pylint:disable=too-few-public-methods
     def _create_resizable_window(cls, name: str, image_shape: tuple) -> None:
         """ Create a resizable OpenCV window to hold the preview image.
 
+        Parameters
+        ----------
         name: str
             The name to display in the window header and for window identification
         shape: tuple
