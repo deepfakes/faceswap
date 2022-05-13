@@ -51,7 +51,7 @@ class Train():  # pylint:disable=too-few-public-methods
         self._save_now = False
         self._toggle_preview_mask = False
         self._refresh_preview = False
-        self._preview_buffer = dict()
+        self._preview_buffer = {}
         self._lock = Lock()
 
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -66,9 +66,9 @@ class Train():  # pylint:disable=too-few-public-methods
             for that side.
         """
         logger.debug("Getting image paths")
-        images = dict()
+        images = {}
         for side in ("a", "b"):
-            image_dir = getattr(self._args, "input_{}".format(side))
+            image_dir = getattr(self._args, f"input_{side}")
             if not os.path.isdir(image_dir):
                 logger.error("Error: '%s' does not exist", image_dir)
                 sys.exit(1)
@@ -362,19 +362,24 @@ class Train():  # pylint:disable=too-few-public-methods
             logger.info("  Using live preview")
         if sys.stdout.isatty():
             logger.info("  Press '%s' to save and quit",
-                    "Stop" if self._args.redirect_gui or self._args.colab else "ENTER")
+                        "Stop" if self._args.redirect_gui or self._args.colab else "ENTER")
         if not self._args.redirect_gui and not self._args.colab and sys.stdout.isatty():
             logger.info("  Press 'S' to save model weights immediately")
         logger.info("===================================================")
 
         keypress = KBHit(is_gui=self._args.redirect_gui)
+        window_created = False
         err = False
         while True:
             try:
                 if self._args.preview:
                     with self._lock:
                         for name, image in self._preview_buffer.items():
+                            if not window_created:
+                                self._create_resizable_window(name, image.shape)
                             cv2.imshow(name, image)  # pylint: disable=no-member
+                        if not window_created:
+                            window_created = bool(self._preview_buffer)
                     cv_key = cv2.waitKey(1000)  # pylint: disable=no-member
                 else:
                     cv_key = None
@@ -411,6 +416,20 @@ class Train():  # pylint:disable=too-few-public-methods
         keypress.set_normal_term()
         logger.debug("Closed Monitor")
         return err
+
+    @classmethod
+    def _create_resizable_window(cls, name: str, image_shape: tuple) -> None:
+        """ Create a resizable OpenCV window to hold the preview image.
+
+        name: str
+            The name to display in the window header and for window identification
+        shape: tuple
+            The (`rows`, `columns`, `channels`) of the image to be displayed
+        """
+        logger.debug("Creating named window '%s' for image shape %s", name, image_shape)
+        height, width = image_shape[:2]
+        cv2.namedWindow(name, cv2.WINDOW_GUI_EXPANDED)
+        cv2.resizeWindow(name, width, height)
 
     def _preview_monitor(self, key_press):
         """ Monitors keyboard presses on the pop-up OpenCV Preview Window.
