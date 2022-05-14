@@ -33,3 +33,22 @@ mask.mask_blend module
    :members:
    :undoc-members:
    :show-inheritance:
+
+writer package
+==============
+
+writer._base module
+-------------------
+
+.. automodule:: plugins.convert.writer._base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+writer.ffmpeg module
+--------------------
+
+.. automodule:: plugins.convert.writer.ffmpeg
+   :members:
+   :undoc-members:
+   :show-inheritance:
