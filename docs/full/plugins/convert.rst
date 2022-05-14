@@ -52,3 +52,11 @@ writer.ffmpeg module
    :members:
    :undoc-members:
    :show-inheritance:
+
+writer.gif module
+-----------------
+
+.. automodule:: plugins.convert.writer.gif
+   :members:
+   :undoc-members:
+   :show-inheritance:

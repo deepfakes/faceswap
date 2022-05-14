@@ -3,7 +3,7 @@
 import os
 from collections import OrderedDict
 from math import ceil
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import imageio
 import imageio_ffmpeg as im_ffm
@@ -22,8 +22,8 @@ class Writer(Output):
     total_count: int
         The total number of frames to be converted
     frame_ranges: list or ``None``
-        List of integers for any explicit frame ranges to be converted or ``None`` if all frames
-        are to be converted
+        List of tuples for starting and end values of each frame range to be converted or ``None``
+        if all frames are to be converted
     source_video: str
         The full path to the source video for obtaining fps and audio
     kwargs: dict
@@ -32,7 +32,7 @@ class Writer(Output):
     def __init__(self,
                  output_folder: str,
                  total_count: int,
-                 frame_ranges: Optional[List[int]],
+                 frame_ranges: Optional[List[Tuple[int]]],
                  source_video: str,
                  **kwargs) -> None:
         super().__init__(output_folder, **kwargs)
@@ -40,8 +40,8 @@ class Writer(Output):
                      total_count, frame_ranges, source_video)
         self._source_video: str = source_video
         self._output_filename: str = self._get_output_filename()
-        self._frame_ranges: Optional[List[int]] = frame_ranges
-        self._frame_order: List[int] = self._set_frame_order(total_count)
+        self._frame_ranges: Optional[List[Tuple[int]]] = frame_ranges
+        self.frame_order: List[int] = self._set_frame_order(total_count)
         self._output_dimensions: Optional[str] = None  # Fix dims on 1st received frame
         # Need to know dimensions of first frame, so set writer then
         self._writer: Optional[imageio.plugins.ffmpeg.FfmpegFormat.Writer] = None
@@ -189,11 +189,11 @@ class Writer(Output):
     def _save_from_cache(self) -> None:
         """ Writes any consecutive frames to the video container that are ready to be output
         from the cache. """
-        while self._frame_order:
-            if self._frame_order[0] not in self.cache:
+        while self.frame_order:
+            if self.frame_order[0] not in self.cache:
                 logger.trace("Next frame not ready. Continuing")
                 break
-            save_no = self._frame_order.pop(0)
+            save_no = self.frame_order.pop(0)
             save_image = self.cache.pop(save_no)
             logger.trace("Rendering from cache. Frame no: %s", save_no)
             self._writer.append_data(save_image[:, :, ::-1])

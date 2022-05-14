@@ -123,7 +123,7 @@ class Output():
         speed up the process to do any pre-encoding as part of the converter process.
 
         If the writer supports pre-encoding then override this to pre-encode the image in
-        :module:`lib.convert` to speed up saving.
+        :mod:`lib.convert` to speed up saving.
 
         Parameters
         ----------
