@@ -425,7 +425,7 @@ class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
         super().__init__(parent, data, ylabel)
         self._scale = scale
 
-    def build(self):
+    def build(self) -> None:
         """ Build the session graph """
         logger.debug("Building session graph")
         self._toolbar_place(self)
