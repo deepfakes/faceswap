@@ -18,7 +18,7 @@ dependencies:
     - pillow>=8.3.1
     - scikit-learn>=1.0.2
     - fastcluster>=1.2.4
-    - matplotlib>=3.2.0,<3.3.0
+    - matplotlib>=3.5.1
     - imageio>=2.9.0
     - imageio-ffmpeg>=0.4.7
     - ffmpy==0.2.3
