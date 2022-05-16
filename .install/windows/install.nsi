@@ -370,6 +370,7 @@ Function SetEnvironment
 
     IfFileExists  "$dirConda\envs\$envName" DeleteEnv CreateEnv
         DeleteEnv:
+            DetailPrint "Removing existing Conda Virtual Environment..."
             SetDetailsPrint listonly
             ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda env remove -y -n $\"$envName$\" && conda deactivate"
             pop $0
@@ -380,6 +381,19 @@ Function SetEnvironment
                 DetailPrint "Error deleting Conda Virtual Environment"
                 Call Abort
             ${EndIf}
+
+        # Often Conda won't actually remove the folder and some of it's contents which leads to permission problems later
+        IfFileExists  "$dirConda\envs\$envName" DeleteFolder CreateEnv
+            DeleteFolder:
+                DetailPrint "Deleting stale Conda Virtual Environment files..."
+                SetDetailsPrint listonly
+                RMDir /r "$dirConda\envs\$envName"
+                pop $0
+                SetDetailsPrint both
+                ${If} $0 != 0
+                    DetailPrint "Error deleting Conda Virtual Environment Folder"
+                    Call Abort
+                ${EndIf}
 
     CreateEnv:
         SetDetailsPrint listonly
