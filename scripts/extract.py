@@ -1,9 +1,12 @@
 #!/usr/bin python3
 """ Main entry point to the extract process of FaceSwap """
 
+from __future__ import annotations
+
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING, Optional
 
 from tqdm import tqdm
 
@@ -12,6 +15,10 @@ from lib.multithreading import MultiThread
 from lib.utils import get_folder
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, finalize
+
+if TYPE_CHECKING:
+    import argparse
+
 
 tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -31,11 +38,11 @@ class Extract():  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    arguments: argparse.Namespace
+    arguments: :class:`argparse.Namespace`
         The arguments to be passed to the extraction process as generated from Faceswap's command
         line arguments
     """
-    def __init__(self, arguments):
+    def __init__(self, arguments: argparse.Namespace) -> None:
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self._args = arguments
         self._output_dir = None if self._args.skip_saving_faces else get_folder(
@@ -64,12 +71,12 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,
                                     re_feed=self._args.re_feed)
-        self._threads = list()
+        self._threads = []
         self._verify_output = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def _save_interval(self):
+    def _save_interval(self) -> Optional[int]:
         """ int: The number of frames to be processed between each saving of the alignments file if
         it has been provided, otherwise ``None`` """
         if hasattr(self._args, "save_interval"):
@@ -77,11 +84,11 @@ class Extract():  # pylint:disable=too-few-public-methods
         return None
 
     @property
-    def _skip_num(self):
+    def _skip_num(self) -> int:
         """ int: Number of frames to skip if extract_every_n has been provided """
         return self._args.extract_every_n if hasattr(self._args, "extract_every_n") else 1
 
-    def _set_skip_list(self):
+    def _set_skip_list(self) -> None:
         """ Add the skip list to the image loader
 
         Checks against `extract_every_n` and the existence of alignments data (can exist if
@@ -108,7 +115,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Adding skip list: %s", skip_list)
         self._images.add_skip_list(skip_list)
 
-    def process(self):
+    def process(self) -> None:
         """ The entry point for triggering the Extraction Process.
 
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
@@ -124,7 +131,7 @@ class Extract():  # pylint:disable=too-few-public-methods
                  self._alignments.faces_count,
                  self._verify_output)
 
-    def _threaded_redirector(self, task, io_args=None):
+    def _threaded_redirector(self, task: str, io_args: Optional[tuple] = None) -> None:
         """ Redirect image input/output tasks to relevant queues in background thread
 
         Parameters
@@ -136,12 +143,12 @@ class Extract():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Threading task: (Task: '%s')", task)
         io_args = tuple() if io_args is None else (io_args, )
-        func = getattr(self, "_{}".format(task))
+        func = getattr(self, f"_{task}")
         io_thread = MultiThread(func, *io_args, thread_count=1)
         io_thread.start()
         self._threads.append(io_thread)
 
-    def _load(self):
+    def _load(self) -> None:
         """ Load the images
 
         Loads images from :class:`lib.image.ImagesLoader`, formats them into a dict compatible
@@ -158,7 +165,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
 
-    def _reload(self, detected_faces):
+    def _reload(self, detected_faces: dict[str, ExtractMedia]) -> None:
         """ Reload the images and pair to detected face
 
         When the extraction pipeline is running in serial mode, images are reloaded from disk,
@@ -186,7 +193,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         load_queue.put("EOF")
         logger.debug("Reload Images: Complete")
 
-    def _run_extraction(self):
+    def _run_extraction(self) -> None:
         """ The main Faceswap Extraction process
 
         Receives items from :class:`plugins.extract.Pipeline.Extractor` and either saves out the
@@ -202,18 +209,15 @@ class Extract():  # pylint:disable=too-few-public-methods
             if exception:
                 break
             is_final = self._extractor.final_pass
-            detected_faces = dict()
+            detected_faces = {}
             self._extractor.launch()
             self._check_thread_error()
             ph_desc = "Extraction" if self._extractor.passes == 1 else self._extractor.phase_text
-            desc = "Running pass {} of {}: {}".format(phase + 1,
-                                                      self._extractor.passes,
-                                                      ph_desc)
-            status_bar = tqdm(self._extractor.detected_faces(),
-                              total=self._images.process_count,
-                              file=sys.stdout,
-                              desc=desc)
-            for idx, extract_media in enumerate(status_bar):
+            desc = f"Running pass {phase + 1} of {self._extractor.passes}: {ph_desc}"
+            for idx, extract_media in enumerate(tqdm(self._extractor.detected_faces(),
+                                                     total=self._images.process_count,
+                                                     file=sys.stdout,
+                                                     desc=desc)):
                 self._check_thread_error()
                 if is_final:
                     self._output_processing(extract_media, size)
@@ -224,7 +228,6 @@ class Extract():  # pylint:disable=too-few-public-methods
                     extract_media.remove_image()
                     # cache extract_media for next run
                     detected_faces[extract_media.filename] = extract_media
-                status_bar.update(1)
 
             if not is_final:
                 logger.debug("Reloading images")
@@ -232,12 +235,12 @@ class Extract():  # pylint:disable=too-few-public-methods
         if not self._args.skip_saving_faces:
             saver.close()
 
-    def _check_thread_error(self):
+    def _check_thread_error(self) -> None:
         """ Check if any errors have occurred in the running threads and their errors """
         for thread in self._threads:
             thread.check_and_raise_error()
 
-    def _output_processing(self, extract_media, size):
+    def _output_processing(self, extract_media: ExtractMedia, size: int) -> None:
         """ Prepare faces for output
 
         Loads the aligned face, generate the thumbnail, perform any processing actions and verify
@@ -266,7 +269,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         if not self._verify_output and faces_count > 1:
             self._verify_output = True
 
-    def _output_faces(self, saver, extract_media):
+    def _output_faces(self, saver: ImagesSaver, extract_media: ExtractMedia) -> None:
         """ Output faces to save thread
 
         Set the face filename based on the frame name and put the face to the
@@ -281,12 +284,12 @@ class Extract():  # pylint:disable=too-few-public-methods
             The output from :class:`~plugins.extract.Pipeline.Extractor`
         """
         logger.trace("Outputting faces for %s", extract_media.filename)
-        final_faces = list()
+        final_faces = []
         filename = os.path.splitext(os.path.basename(extract_media.filename))[0]
         extension = ".png"
 
         for idx, face in enumerate(extract_media.detected_faces):
-            output_filename = "{}_{}{}".format(filename, str(idx), extension)
+            output_filename = f"{filename}_{idx}{extension}"
             meta = dict(alignments=face.to_png_meta(),
                         source=dict(alignments_version=self._alignments.version,
                                     original_filename=output_filename,
