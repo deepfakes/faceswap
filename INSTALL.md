@@ -120,9 +120,9 @@ Do not follow these steps if the Easy Install above completed succesfully.
 If you are using an Nvidia card make sure you have the correct versions of Cuda/cuDNN installed for the required version of Tensorflow
 - Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install requirements:
-  - For Nvidia GPU users: `pip install -r requirements_nvidia.txt`
-  - For AMD GPU users: `pip install -r requirements_amd.txt`
-  - For CPU users: `pip install -r requirements_cpu.txt`
+  - For Nvidia GPU users: `pip install -r ./requirements/requirements_nvidia.txt`
+  - For AMD GPU users: `pip install -r ./requirements/requirements_amd.txt`
+  - For CPU users: `pip install -r ./requirements/requirements_cpu.txt`
 
 ## Running faceswap
 - If you are not already in your virtual environment follow [these steps](#entering-your-virtual-environment)
@@ -176,7 +176,7 @@ $ source ~/miniforge3/bin/activate
 #### Easy install
 ```sh
 $ conda deactivate
-$ conda env create -f conda-environment-apple-silicon.yml
+$ conda env create -f ./requirements/conda-environment-apple-silicon.yml
 $ conda activate faceswap
 ```
 - Enter the command `python faceswap.py gui` and follow the prompts:
@@ -219,7 +219,7 @@ Enter your virtual environment and then enter the folder that faceswap has been 
 ```bash
 python setup.py
 ```
-If setup fails for any reason you can still manually install the packages listed within requirements.txt
+If setup fails for any reason you can still manually install the packages listed within the files in the requirements folder.
 
 ### About some of the options
    - CUDA: For acceleration. Requires a good nVidia Graphics Card (which supports CUDA inside)

@@ -126,23 +126,16 @@ class Environment():
         req_files = ["_requirements_base.txt", f"requirements_{suffix}"]
         pypath = os.path.dirname(os.path.realpath(__file__))
         requirements = []
-        git_requirements = []
         for req_file in req_files:
-            requirements_file = os.path.join(pypath, req_file)
+            requirements_file = os.path.join(pypath, "requirements", req_file)
             with open(requirements_file, encoding="utf8") as req:
                 for package in req.readlines():
                     package = package.strip()
-                    # parse_requirements can't handle git dependencies, so extract and then
-                    # manually add to final list
-                    if package and package.startswith("git+"):
-                        git_requirements.append((package, []))
-                        continue
                     if package and (not package.startswith(("#", "-r"))):
                         requirements.append(package)
         self.required_packages = [(pkg.name, pkg.specs)
                                   for pkg in parse_requirements(requirements)
                                   if pkg.marker is None or pkg.marker.evaluate()]
-        self.required_packages.extend(git_requirements)
 
     def check_permission(self):
         """ Check for Admin permissions """
@@ -166,10 +159,12 @@ class Environment():
     def check_python(self):
         """ Check python and virtual environment status """
         self.output.info(f"Installed Python: {self.py_version[0]} {self.py_version[1]}")
-        if not (self.py_version[0].split(".")[0] == "3"
-                and self.py_version[0].split(".")[1] in ("7", "8")
-                and self.py_version[1] == "64bit") and not self.updater:
-            self.output.error("Please run this script with Python version 3.7 or 3.8 "
+
+        if self.updater:
+            return
+
+        if not ((3, 7) <= sys.version_info < (3, 10) and self.py_version[1] == "64bit"):
+            self.output.error("Please run this script with Python version 3.7 to 3.9 "
                               "64bit and try again.")
             sys.exit(1)
 
@@ -209,7 +204,7 @@ class Environment():
     def get_installed_packages(self):
         """ Get currently installed packages """
         installed_packages = {}
-        with Popen(f"\"{sys.executable}\" -m pip freeze", shell=True, stdout=PIPE) as chk:
+        with Popen(f"\"{sys.executable}\" -m pip freeze --local", shell=True, stdout=PIPE) as chk:
             installed = chk.communicate()[0].decode(self.encoding).splitlines()
 
         for pkg in installed:
@@ -663,18 +658,17 @@ class Install():
     def check_missing_dep(self):
         """ Check for missing dependencies """
         for key, specs in self.env.required_packages:
-            if self.env.is_conda:
-                # Get Conda alias for Key
+
+            if self.env.is_conda:  # Get Conda alias for Key
                 key = CONDA_MAPPING.get(key, (key, None))[0]
-            if (key == "git+https://github.com/deepfakes/nvidia-ml-py3.git" and
-                    self.env.installed_packages.get("nvidia-ml-py3", "") == "7.352.1"):
-                # Annoying explicit hack to get around our custom version of nvidia-ml=py3 being
-                # constantly re-downloaded
-                continue
+
             if key not in self.env.installed_packages:
+                # Add not installed packages to missing packages list
                 self.env.missing_packages.append((key, specs))
                 continue
+
             installed_vers = self.env.installed_packages.get(key, "")
+
             if specs and not all(self._operators[spec[0]](installed_vers, spec[1])
                                  for spec in specs):
                 self.env.missing_packages.append((key, specs))

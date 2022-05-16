@@ -15,8 +15,8 @@ RUN rm get-pip.py
 
 # install requirements
 RUN apt-get install ffmpeg git -y
-COPY _requirements_base.txt /opt/
-COPY requirements_nvidia.txt /opt/
+COPY ./requirements/_requirements_base.txt /opt/
+COPY ./requirements/requirements_nvidia.txt /opt/
 RUN python3.8 -m pip --no-cache-dir install -r /opt/requirements_nvidia.txt && rm /opt/_requirements_base.txt && rm /opt/requirements_nvidia.txt
 
 RUN python3.8 -m pip install jupyter matplotlib

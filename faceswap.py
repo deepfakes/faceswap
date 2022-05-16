@@ -12,9 +12,7 @@ _LANG = gettext.translation("faceswap", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
 
-if sys.version_info[0] < 3:
-    raise Exception("This program requires at least python3.7")
-if sys.version_info[0] == 3 and sys.version_info[1] < 7:
+if sys.version_info < (3, 7):
     raise Exception("This program requires at least python3.7")
 
 

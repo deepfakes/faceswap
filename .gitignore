@@ -3,10 +3,14 @@
 !*.keep
 !*.md
 
+# Requirements files
+!/requirements/
+!/requirements/*requirements*.txt
+!/requirements/*conda*.yml
+
 # Root files
 !Dockerfile*
 !.pylintrc
-!*requirements*.txt
 !setup.cfg
 !.travis.yml
 !/faceswap.py
