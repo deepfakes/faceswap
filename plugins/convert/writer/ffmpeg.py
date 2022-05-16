@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """ Video output writer for faceswap.py converter """
 import os
-from collections import OrderedDict
 from math import ceil
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Generator
 
 import imageio
 import imageio_ffmpeg as im_ffm
-from ffmpy import FFmpeg, FFRuntimeError
+import numpy as np
 
 from ._base import Output, logger
 
@@ -44,16 +43,7 @@ class Writer(Output):
         self.frame_order: List[int] = self._set_frame_order(total_count)
         self._output_dimensions: Optional[str] = None  # Fix dims on 1st received frame
         # Need to know dimensions of first frame, so set writer then
-        self._writer: Optional[imageio.plugins.ffmpeg.FfmpegFormat.Writer] = None
-
-    @property
-    def _video_tmp_file(self) -> str:
-        """ str: Full path to the temporary video file that is generated prior to muxing final
-        audio. """
-        path, filename = os.path.split(self._output_filename)
-        retval = os.path.join(path, f"__tmp_{filename}")
-        logger.debug(retval)
-        return retval
+        self._writer: Optional[Generator[None, np.ndarray, None]] = None
 
     @property
     def _valid_tunes(self) -> dict:
@@ -79,7 +69,6 @@ class Writer(Output):
         # Force all frames to the same size
         output_args = ["-vf", f"scale={self._output_dimensions}"]
 
-        output_args.extend(["-c:v", codec])
         output_args.extend(["-crf", str(self.config["crf"])])
         output_args.extend(["-preset", self.config["preset"]])
 
@@ -94,6 +83,23 @@ class Writer(Output):
 
         logger.debug(output_args)
         return output_args
+
+    @property
+    def _audio_codec(self) -> Optional[str]:
+        """ str or ``None``: The audio codec to use. This will either be ``"copy"`` (the default) or
+        ``None`` if skip muxing has been selected in configuration options, or if frame ranges have
+        been passed in the command line arguments. """
+        retval = "copy"
+        if self.config["skip_mux"]:
+            logger.info("Skipping audio muxing due to configuration settings.")
+            retval = None
+        elif self._frame_ranges is not None:
+            logger.warning("Muxing audio is not supported for limited frame ranges."
+                           "The output video will be created but you will need to mux audio "
+                           "manually.")
+            retval = None
+        logger.debug("Audio codec: %s", retval)
+        return retval
 
     def _get_output_filename(self) -> str:
         """ Return full path to video output file.
@@ -143,23 +149,40 @@ class Writer(Output):
         logger.debug("frame_order: %s", retval)
         return retval
 
-    def _get_writer(self) -> imageio.plugins.ffmpeg.FfmpegFormat.Writer:
+    def _get_writer(self, frame_dims: Tuple[int]) -> Generator[None, np.ndarray, None]:
         """ Add the requested encoding options and return the writer.
+
+        Parameters
+        ----------
+        frame_dims: tuple
+            The (rows, colums) shape of the input image
 
         Returns
         -------
-        :class:`imageio.plugins.ffmpeg.FfmpegFormat.Writer`
+        generator
             The imageio ffmpeg writer
         """
-        logger.debug("writer config: %s", self.config)
-        return imageio.get_writer(self._video_tmp_file,
-                                  fps=self._video_fps,
-                                  ffmpeg_log_level="error",
-                                  quality=None,
-                                  macro_block_size=8,
-                                  output_params=self._output_params)
+        audio_codec = self._audio_codec
+        audio_path = None if audio_codec is None else self._source_video
+        logger.debug("writer config: %s, audio_path: '%s'", self.config, audio_path)
 
-    def write(self, filename: str, image) -> None:
+        retval = im_ffm.write_frames(self._output_filename,
+                                     size=(frame_dims[1], frame_dims[0]),
+                                     fps=self._video_fps,
+                                     quality=None,
+                                     codec=self.config["codec"],
+                                     macro_block_size=8,
+                                     ffmpeg_log_level="error",
+                                     ffmpeg_timeout=10,
+                                     output_params=self._output_params,
+                                     audio_path=audio_path,
+                                     audio_codec=audio_codec)
+        logger.debug("FFMPEG Writer created: %s", retval)
+        retval.send(None)
+
+        return retval
+
+    def write(self, filename: str, image: np.ndarray) -> None:
         """ Frames come from the pool in arbitrary order, so frames are cached for writing out
         in the correct order.
 
@@ -172,18 +195,25 @@ class Writer(Output):
         """
         logger.trace("Received frame: (filename: '%s', shape: %s", filename, image.shape)
         if not self._output_dimensions:
-            self._set_dimensions(image.shape[:2])
-            self._writer = self._get_writer()
+            input_dims = image.shape[:2]
+            self._set_dimensions(input_dims)
+            self._writer = self._get_writer(input_dims)
         self.cache_frame(filename, image)
         self._save_from_cache()
 
-    def _set_dimensions(self, frame_dims) -> None:
+    def _set_dimensions(self, frame_dims: Tuple[int]) -> None:
         """ Set the attribute :attr:`_output_dimensions` based on the first frame received.
         This protects against different sized images coming in and ensures all images are written
-        to ffmpeg at the same size. Dimensions are mapped to a macro block size 16. """
+        to ffmpeg at the same size. Dimensions are mapped to a macro block size 8.
+
+        Parameters
+        ----------
+        frame_dims: tuple
+            The (rows, colums) shape of the input image
+        """
         logger.debug("input dimensions: %s", frame_dims)
-        self._output_dimensions = (f"{int(ceil(frame_dims[1] / 16) * 16)}:"
-                                   f"{int(ceil(frame_dims[0] / 16) * 16)}")
+        self._output_dimensions = (f"{int(ceil(frame_dims[1] / 8) * 8)}:"
+                                   f"{int(ceil(frame_dims[0] / 8) * 8)}")
         logger.debug("Set dimensions: %s", self._output_dimensions)
 
     def _save_from_cache(self) -> None:
@@ -196,65 +226,9 @@ class Writer(Output):
             save_no = self.frame_order.pop(0)
             save_image = self.cache.pop(save_no)
             logger.trace("Rendering from cache. Frame no: %s", save_no)
-            self._writer.append_data(save_image[:, :, ::-1])
+            self._writer.send(np.ascontiguousarray(save_image[:, :, ::-1]))
         logger.trace("Current cache size: %s", len(self.cache))
 
     def close(self) -> None:
         """ Close the ffmpeg writer and mux the audio """
         self._writer.close()
-        self._mux_audio()
-
-    def _mux_audio(self) -> None:
-        """ Mux audio the audio to the generated video temp file.
-
-            ImageIO is a useful lib for frames > video as it also packages the ffmpeg binary
-            however muxing audio is non-trivial, so this is done afterwards with ffmpy.
-
-            # TODO A future fix could be implemented to mux audio with the frames """
-        if self.config["skip_mux"]:
-            logger.info("Skipping audio muxing due to configuration settings.")
-            self._rename_tmp_file()
-            return
-
-        logger.info("Muxing Audio...")
-        if self._frame_ranges is not None:
-            logger.warning("Muxing audio is not currently supported for limited frame ranges."
-                           "The output video has been created but you will need to mux audio "
-                           "yourself")
-            self._rename_tmp_file()
-            return
-
-        exe = im_ffm.get_ffmpeg_exe()
-        inputs = OrderedDict([(self._video_tmp_file, None), (self._source_video, None)])
-        outputs = {self._output_filename: "-map 0:v:0 -map 1:a:0 -c: copy"}
-        ffm = FFmpeg(executable=exe,
-                     global_options="-hide_banner -nostats -v 0 -y",
-                     inputs=inputs,
-                     outputs=outputs)
-        logger.debug("Executing: %s", ffm.cmd)
-        # Sometimes ffmpy exits for no discernible reason, but then works on a later attempt,
-        # so take 5 shots at this
-        attempts = 5
-        for attempt in range(attempts):
-            logger.debug("Muxing attempt: %s", attempt + 1)
-            try:
-                ffm.run()
-            except FFRuntimeError as err:
-                logger.debug("ffmpy runtime error: %s", str(err))
-                if attempt != attempts - 1:
-                    continue
-                logger.error("There was a problem muxing audio. The output video has been "
-                             "created but you will need to mux audio yourself either with the "
-                             "EFFMpeg tool or an external application.")
-                os.rename(self._video_tmp_file, self._output_filename)
-            break
-        logger.debug("Removing temp file")
-        if os.path.isfile(self._video_tmp_file):
-            os.remove(self._video_tmp_file)
-
-    def _rename_tmp_file(self) -> None:
-        """ Rename the temporary video file if not muxing audio. """
-        os.rename(self._video_tmp_file, self._output_filename)
-        logger.debug("Removing temp file")
-        if os.path.isfile(self._video_tmp_file):
-            os.remove(self._video_tmp_file)
