@@ -10,7 +10,9 @@ imageio>=2.9.0
 imageio-ffmpeg>=0.4.7
 ffmpy==0.2.3
 # Exclude badly numbered Python2 version of nvidia-ml-py
-nvidia-ml-py>=11.510,<300
+#nvidia-ml-py>=11.510,<300
+# Pin nvidida-ml-py to <11.515 until we know if bytes->str is an error or permanent change
+nvidia-ml-py<11.515
 pywin32>=228 ; sys_platform == "win32"
 pynvx==1.0.0 ; sys_platform == "darwin"
 typing-extensions ; python_version < "3.8"
