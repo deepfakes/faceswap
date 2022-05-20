@@ -763,8 +763,11 @@ class Alignments():
         update_count = 0
         for val in self._data.values():
             for alignment in val["faces"]:
+                if "mask" not in alignment:
+                    alignment["mask"] = {}
                 for mask in alignment["mask"].values():
                     mask["stored_centering"] = "face"
+                    update_count += 1
         logger.debug("Updated legacy mask centering: %s", update_count)
 
 
