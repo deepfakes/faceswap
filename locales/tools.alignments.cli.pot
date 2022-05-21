@@ -102,7 +102,7 @@ msgstr ""
 msgid "[Extract only] The output size of extracted faces."
 msgstr ""
 
-#: tools/alignments/cli.py:129
-msgid "[Extract only] Only extract faces that have not been upscaled to the required size (`-sz`, `--size). Useful for excluding low-res images from a training set."
+#: tools/alignments/cli.py:133
+msgid "[Extract only] Only extract faces that have been resized by this percent or more to meet the specified extract size (`-sz`, `--size`). Useful for excluding low-res images from a training set. Set to 0 to extract all faces. Eg: For an extract size of 512px, A setting of 50 will only include faces that have been resized from 256px or above. Setting to 100 will only extract faces that have been resized from 512px or above. A setting of 200 will only extract faces that have been downscaled from 1024px or above."
 msgstr ""
 

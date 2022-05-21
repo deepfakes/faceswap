@@ -31,7 +31,7 @@ class AlignmentsArgs(FaceSwapArgs):
         frames_and_faces_dir = _(" Must Pass in a frames folder/source video file AND a faces "
                                  "folder (-fr and -fc).")
         output_opts = _(" Use the output option (-o) to process results.")
-        argument_list = list()
+        argument_list = []
         argument_list.append(dict(
             opts=("-j", "--job"),
             action=Radio,
@@ -117,16 +117,24 @@ class AlignmentsArgs(FaceSwapArgs):
             type=int,
             action=Slider,
             min_max=(256, 1024),
+            rounding=64,
             default=512,
             group=_("extract"),
-            rounding=64,
             help=_("[Extract only] The output size of extracted faces.")))
         argument_list.append(dict(
-            opts=("-l", "--large"),
-            action="store_true",
+            opts=("-m", "--min-size"),
+            type=int,
+            action=Slider,
+            min_max=(0, 200),
+            rounding=1,
+            default=0,
+            dest="min_size",
             group=_("extract"),
-            default=False,
-            help=_("[Extract only] Only extract faces that have not been upscaled to the required "
-                   "size (`-sz`, `--size). Useful for excluding low-res images from a training "
-                   "set.")))
+            help=_("[Extract only] Only extract faces that have been resized by this percent or "
+                   "more to meet the specified extract size (`-sz`, `--size`). Useful for "
+                   "excluding low-res images from a training set. Set to 0 to extract all faces. "
+                   "Eg: For an extract size of 512px, A setting of 50 will only include faces "
+                   "that have been resized from 256px or above. Setting to 100 will only extract "
+                   "faces that have been resized from 512px or above. A setting of 200 will only "
+                   "extract faces that have been downscaled from 1024px or above.")))
         return argument_list

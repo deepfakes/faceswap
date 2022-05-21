@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from typing import TYPE_CHECKING, Optional, List
 
 import cv2
 import numpy as np
@@ -18,6 +19,10 @@ from lib.image import encode_image, generate_thumbnail, ImagesSaver, update_exis
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 from .media import ExtractedFaces, Faces, Frames
+
+if TYPE_CHECKING:
+    import argparse
+    from .media import AlignmentData
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -91,7 +96,7 @@ class Check():
     def _compile_output(self):
         """ Compile list of frames that meet criteria """
         action = self._job.replace("-", "_")
-        processor = getattr(self, "_get_{}".format(action))
+        processor = getattr(self, f"_get_{action}")
         logger.debug("Processor: %s", processor)
         return [item for item in processor()]  # pylint:disable=unnecessary-comprehension
 
@@ -108,7 +113,7 @@ class Check():
     def _get_multi_faces(self):
         """ yield each frame or face that has multiple faces
             matched in alignments file """
-        process_type = getattr(self, "_get_multi_faces_{}".format(self._type))
+        process_type = getattr(self, f"_get_multi_faces_{self._type}")
         for item in process_type():
             yield item
 
@@ -170,8 +175,7 @@ class Check():
             # Strip the index for printed/file output
             items_output = [item[0] for item in items_output]
         output_message = "-----------------------------------------------\r\n"
-        output_message += " {} ({})\r\n".format(self.output_message,
-                                                len(items_output))
+        output_message += f" {self.output_message} ({len(items_output)})\r\n"
         output_message += "-----------------------------------------------\r\n"
         output_message += "\r\n".join(items_output)
         if self._output == "console":
@@ -191,31 +195,30 @@ class Check():
         """ Video name needs to be prefixed to filename if input is a
             video and processing frames """
         if self._is_video and self._type == "frames":
-            return "{}_".format(os.path.basename(self._source_dir))
+            return f"{os.path.basename(self._source_dir)}_"
         return ""
 
     def output_file(self, output_message, items_discovered):
         """ Save the output to a text file in the frames directory """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         dst_dir = self._get_output_folder()
-        filename = "{}{}_{}.txt".format(self._get_filename_prefix(),
-                                        self.output_message.replace(" ", "_").lower(),
-                                        now)
+        filename = (f"{self._get_filename_prefix()}{self.output_message.replace(' ', '_').lower()}"
+                    f"_{now}.txt")
         output_file = os.path.join(dst_dir, filename)
         logger.info("Saving %s result(s) to '%s'", items_discovered, output_file)
-        with open(output_file, "w") as f_output:
+        with open(output_file, "w", encoding="utf8") as f_output:
             f_output.write(output_message)
 
     def _move_file(self, items_output):
         """ Move the identified frames to a new sub folder """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = "{}{}_{}".format(self._get_filename_prefix(),
-                                       self.output_message.replace(" ", "_").lower(), now)
+        folder_name = (f"{self._get_filename_prefix()}"
+                       f"{self.output_message.replace(' ','_').lower()}_{now}")
         dst_dir = self._get_output_folder()
         output_folder = os.path.join(dst_dir, folder_name)
         logger.debug("Creating folder: '%s'", output_folder)
         os.makedirs(output_folder)
-        move = getattr(self, "_move_{}".format(self._type))
+        move = getattr(self, f"_move_{self._type}")
         logger.debug("Move function: %s", move)
         move(output_folder, items_output)
 
@@ -282,7 +285,7 @@ class Draw():  # pylint:disable=too-few-public-methods
 
         """
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = "drawn_landmarks_{}".format(now)
+        folder_name = f"drawn_landmarks_{now}"
         if self._frames.is_video:
             dest_folder = os.path.dirname(self._frames.folder)
         else:
@@ -398,13 +401,14 @@ class Extract():  # pylint:disable=too-few-public-methods
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
-    def __init__(self, alignments, arguments):
+    def __init__(self, alignments: "AlignmentData", arguments: "argparse.Namespace") -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._arguments = arguments
         self._alignments = alignments
         self._is_legacy = self._alignments.version == 1.0  # pylint:disable=protected-access
         self._mask_pipeline = None
         self._faces_dir = arguments.faces_dir
+        self._min_size = self._get_min_size(arguments.size, arguments.min_size)
 
         self._frames = Frames(arguments.frames_dir, self._get_count())
         self._extracted_faces = ExtractedFaces(self._frames,
@@ -413,7 +417,30 @@ class Extract():  # pylint:disable=too-few-public-methods
         self._saver = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_count(self):
+    @classmethod
+    def _get_min_size(cls, extract_size: int, min_size: int) -> int:
+        """ Obtain the minimum size that a face has been resized from to be included as a valid
+        extract.
+
+        Parameters
+        ----------
+        extract_size: int
+            The requested size of the extracted images
+        min_size: int
+            The percentage amount that has been supplied for valid faces (as a percentage of
+            extract size)
+
+        Returns
+        -------
+        int
+            The minimum size, in pixels, that a face is resized from to be considered valid
+        """
+        retval = 0 if min_size == 0 else max(4, int(extract_size * (min_size / 100.)))
+        logger.debug("Extract size: %s, min percentage size: %s, min_size: %s",
+                     extract_size, min_size, retval)
+        return retval
+
+    def _get_count(self) -> Optional[int]:
         """ If the alignments file has been run through the manual tool, then it will hold video
         meta information, meaning that the count of frames in the alignment file can be relied
         on to be accurate.
@@ -429,16 +456,21 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Frame count from alignments file: (has_meta: %s, %s", has_meta, retval)
         return retval
 
-    def process(self):
+    def process(self) -> None:
         """ Run the re-extraction from Alignments file process"""
         logger.info("[EXTRACT FACES]")  # Tidy up cli output
         self._check_folder()
         if self._is_legacy:
             self._legacy_check()
         self._saver = ImagesSaver(self._faces_dir, as_bytes=True)
+
+        if self._min_size > 0:
+            logger.info("Only selecting faces that have been resized from a minimum resolution "
+                        "of %spx", self._min_size)
+
         self._export_faces()
 
-    def _check_folder(self):
+    def _check_folder(self) -> None:
         """ Check that the faces folder doesn't pre-exist and create. """
         err = None
         if not self._faces_dir:
@@ -447,21 +479,21 @@ class Extract():  # pylint:disable=too-few-public-methods
             logger.debug("Creating folder: '%s'", self._faces_dir)
             os.makedirs(self._faces_dir)
         elif os.listdir(self._faces_dir):
-            err = "ERROR: Output faces folder should be empty: '{}'".format(self._faces_dir)
+            err = f"ERROR: Output faces folder should be empty: '{self._faces_dir}'"
         if err:
             logger.error(err)
             sys.exit(0)
         logger.verbose("Creating output folder at '%s'", self._faces_dir)
 
-    def _legacy_check(self):
+    def _legacy_check(self) -> None:
         """ Check whether the alignments file was created with the legacy extraction method.
 
         If so, force user to re-extract all faces if any options have been specified, otherwise
         raise the appropriate warnings and set the legacy options.
         """
-        if self._arguments.large or self._arguments.extract_every_n != 1:
+        if self._min_size > 0 or self._arguments.extract_every_n != 1:
             logger.warning("This alignments file was generated with the legacy extraction method.")
-            logger.warning("You should run this extraction job, but with 'large' deselected and "
+            logger.warning("You should run this extraction job, but with 'min_size' set to 0 and "
                            "'extract-every-n' set to 1 to update the alignments file.")
             logger.warning("You can then re-run this extraction job with your chosen options.")
             sys.exit(0)
@@ -482,11 +514,12 @@ class Extract():  # pylint:disable=too-few-public-methods
         # Update alignments versioning
         self._alignments._version = _VERSION  # pylint:disable=protected-access
 
-    def _export_faces(self):
+    def _export_faces(self) -> None:
         """ Export the faces to the output folder. """
         extracted_faces = 0
         skip_list = self._set_skip_list()
         count = self._frames.count if skip_list is None else self._frames.count - len(skip_list)
+
         for filename, image in tqdm(self._frames.stream(skip_list=skip_list),
                                     total=count, desc="Saving extracted faces"):
             frame_name = os.path.basename(filename)
@@ -494,11 +527,11 @@ class Extract():  # pylint:disable=too-few-public-methods
                 logger.verbose("Skipping '%s' - Alignments not found", frame_name)
                 continue
             extracted_faces += self._output_faces(frame_name, image)
-        if self._is_legacy and extracted_faces != 0 and not self._arguments.large:
+        if self._is_legacy and extracted_faces != 0 and self._min_size == 0:
             self._alignments.save()
         logger.info("%s face(s) extracted", extracted_faces)
 
-    def _set_skip_list(self):
+    def _set_skip_list(self) -> Optional[List[int]]:
         """ Set the indices for frames that should be skipped based on the `extract_every_n`
         command line option.
 
@@ -521,7 +554,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Adding skip list: %s", skip_list)
         return skip_list
 
-    def _output_faces(self, filename, image):
+    def _output_faces(self, filename: str, image: np.ndarray) -> int:
         """ For each frame save out the faces
 
         Parameters
@@ -546,7 +579,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             faces = self._process_legacy(filename, image, faces)
 
         for idx, face in enumerate(faces):
-            output = "{}_{}.png".format(frame_name, str(idx))
+            output = f"{frame_name}_{idx}.png"
             meta = dict(alignments=face.to_png_meta(),
                         source=dict(alignments_version=self._alignments.version,
                                     original_filename=output,
@@ -555,14 +588,14 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     source_is_video=self._frames.is_video,
                                     source_frame_dims=image.shape[:2]))
             self._saver.save(output, encode_image(face.aligned.face, ".png", metadata=meta))
-            if not self._arguments.large and self._is_legacy:
+            if self._min_size == 0 and self._is_legacy:
                 face.thumbnail = generate_thumbnail(face.aligned.face, size=96, quality=60)
                 self._alignments.data[filename]["faces"][idx] = face.to_alignment()
             face_count += 1
         self._saver.close()
         return face_count
 
-    def _select_valid_faces(self, frame, image):
+    def _select_valid_faces(self, frame: str, image: np.ndarray) -> List[DetectedFace]:
         """ Return the aligned faces from a frame that meet the selection criteria,
 
         Parameters
@@ -578,17 +611,20 @@ class Extract():  # pylint:disable=too-few-public-methods
             List of valid :class:`lib,align.DetectedFace` objects
         """
         faces = self._extracted_faces.get_faces_in_frame(frame, image=image)
-        if not self._arguments.large:
+        if self._min_size == 0:
             valid_faces = faces
         else:
             sizes = self._extracted_faces.get_roi_size_for_frame(frame)
             valid_faces = [faces[idx] for idx, size in enumerate(sizes)
-                           if size >= self._extracted_faces.size]
+                           if size >= self._min_size]
         logger.trace("frame: '%s', total_faces: %s, valid_faces: %s",
                      frame, len(faces), len(valid_faces))
         return valid_faces
 
-    def _process_legacy(self, filename, image, detected_faces):
+    def _process_legacy(self,
+                        filename: str,
+                        image: np.ndarray,
+                        detected_faces: List[DetectedFace]) -> List[DetectedFace]:
         """ Process legacy face extractions to new extraction method.
 
         Updates stored masks to new extract size
@@ -601,6 +637,11 @@ class Extract():  # pylint:disable=too-few-public-methods
             The current image the contains the faces
         detected_faces: list
             list of :class:`lib.align.DetectedFace` objects for the current frame
+
+        Returns
+        -------
+        list
+            The updated list of :class:`lib.align.DetectedFace` objects for the current frame
         """
         # Update landmarks based masks for face centering
         mask_item = ExtractMedia(filename, image, detected_faces=detected_faces)
@@ -613,7 +654,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         return faces
 
     @classmethod
-    def _pad_legacy_masks(cls, detected_face):
+    def _pad_legacy_masks(cls, detected_face: DetectedFace) -> None:
         """ Recenter legacy Neural Network based masks from legacy centering to face centering
         and pad accordingly.
 
@@ -667,7 +708,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
 
-        kwargs = dict()
+        kwargs = {}
         if alignments.version < 2.1:
             # Update headers of faces generated with hash based alignments
             kwargs["alignments"] = alignments
@@ -722,7 +763,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
                          fullpath, face_index, new_index)
 
             # Update file_list_sorted for rename task
-            orig_filename = "{}_{}.png".format(os.path.splitext(frame)[0], new_index)
+            orig_filename = f"{os.path.splitext(frame)[0]}_{new_index}.png"
             file_info["face_index"] = new_index
             file_info["original_filename"] = orig_filename
 
@@ -758,7 +799,7 @@ class Rename():  # pylint:disable=too-few-public-methods
                      self.__class__.__name__, arguments, faces)
         self._alignments = alignments
 
-        kwargs = dict()
+        kwargs = {}
         if alignments.version < 2.1:
             # Update headers of faces generated with hash based alignments
             kwargs["alignments"] = alignments
@@ -877,8 +918,8 @@ class Spatial():
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.arguments = arguments
         self._alignments = alignments
-        self.mappings = dict()
-        self.normalized = dict()
+        self.mappings = {}
+        self.normalized = {}
         self.shapes_model = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
