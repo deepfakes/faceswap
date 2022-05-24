@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
+import sys
 import gettext
 
 from lib.cli.args import FaceSwapArgs
@@ -18,12 +19,25 @@ class AlignmentsArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Alignments tool """
 
     @staticmethod
-    def get_info():
-        """ Return command information """
+    def get_info() -> str:
+        """ Obtain command information.
+
+        Returns
+        -------
+        str
+            The help text for displaying in argparses help output
+         """
         return _("Alignments tool\nThis tool allows you to perform numerous actions on or using "
                  "an alignments file against its corresponding faceset/frame source.")
 
-    def get_argument_list(self):
+    def get_argument_list(self) -> dict:
+        """ Collect the argparse argument options.
+
+        Returns
+        -------
+        dict
+            The argparse command line options for processing by argparse
+        """
         frames_dir = _(" Must Pass in a frames folder/source video file (-fr).")
         faces_dir = _(" Must Pass in a faces folder (-fc).")
         frames_or_faces_dir = _(" Must Pass in either a frames folder/source video file OR a"
@@ -36,8 +50,8 @@ class AlignmentsArgs(FaceSwapArgs):
             opts=("-j", "--job"),
             action=Radio,
             type=str,
-            choices=("draw", "extract", "missing-alignments", "missing-frames", "multi-faces",
-                     "no-faces", "remove-faces", "rename", "sort", "spatial"),
+            choices=("draw", "extract", "from-faces", "missing-alignments", "missing-frames",
+                     "multi-faces", "no-faces", "remove-faces", "rename", "sort", "spatial"),
             group=_("processing"),
             required=True,
             help=_("R|Choose which action you want to perform. NB: All actions require an "
@@ -47,6 +61,13 @@ class AlignmentsArgs(FaceSwapArgs):
                    "\nL|'extract': Re-extract faces from the source frames/video based on "
                    "alignment data. This is a lot quicker than re-detecting faces. Can pass in "
                    "the '-een' (--extract-every-n) parameter to only extract every nth frame.{1}"
+                   "\nL|'from-faces': Generate alignment file(s) from a folder of extracted "
+                   "faces. if the folder of faces comes from multiple sources, then multiple "
+                   "alignments files will be created. NB: for faces which have been extracted "
+                   "folders of source images, rather than a video, a single alignments file will "
+                   "be created as there is no way for the process to know how many folders of "
+                   "images were originally used. You do not need to provide an alignments file "
+                   "path to run this job. {3}"
                    "\nL|'missing-alignments': Identify frames that do not exist in the alignments "
                    "file.{2}{0}"
                    "\nL|'missing-frames': Identify frames in the alignments file that do not "
@@ -84,9 +105,12 @@ class AlignmentsArgs(FaceSwapArgs):
             dest="alignments_file",
             type=str,
             group=_("data"),
-            required=True,
+            # hacky solution to not require alignments file if creating alignments from faces:
+            required="from-faces" not in sys.argv,
             filetypes="alignments",
-            help=_("Full path to the alignments file to be processed.")))
+            help=_("Full path to the alignments file to be processed. This is required for all "
+                   "jobs except for 'from-faces' when the alignments file will be generated in "
+                   "the specified faces folder.")))
         argument_list.append(dict(
             opts=("-fc", "-faces_folder"),
             action=DirFullPaths,

@@ -2,9 +2,14 @@
 """ Tools for manipulating the alignments serialized file """
 import logging
 
+from typing import TYPE_CHECKING
+
 from .media import AlignmentData
-from .jobs import (Check, Draw, Extract, Rename,  # noqa pylint: disable=unused-import
+from .jobs import (Check, Draw, Extract, FromFaces, Rename,  # noqa pylint: disable=unused-import
                    RemoveFaces, Sort, Spatial)
+
+if TYPE_CHECKING:
+    from argparse import Namespace
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -20,13 +25,14 @@ class Alignments():  # pylint:disable=too-few-public-methods
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
-    def __init__(self, arguments):
+    def __init__(self, arguments: "Namespace") -> None:
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         self.args = arguments
-        self.alignments = AlignmentData(self.args.alignments_file)
+        job = self.args.job
+        self.alignments = None if job == "from-faces" else AlignmentData(self.args.alignments_file)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def process(self):
+    def process(self) -> None:
         """ The entry point for the Alignments tool from :mod:`lib.tools.alignments.cli`.
 
         Launches the selected alignments job.

@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional, List
 
+from argparse import Namespace
+
 import cv2
 import numpy as np
 from scipy import signal
@@ -15,13 +17,14 @@ from tqdm import tqdm
 
 from lib.align import DetectedFace, _EXTRACT_RATIOS
 from lib.align.alignments import _VERSION
-from lib.image import encode_image, generate_thumbnail, ImagesSaver, update_existing_metadata
+from lib.image import (encode_image, generate_thumbnail, ImagesSaver,
+                       read_image_meta_batch, update_existing_metadata)
 from plugins.extract.pipeline import Extractor, ExtractMedia
+from scripts.fsmedia import Alignments
 
 from .media import ExtractedFaces, Faces, Frames
 
 if TYPE_CHECKING:
-    import argparse
     from .media import AlignmentData
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -401,7 +404,7 @@ class Extract():  # pylint:disable=too-few-public-methods
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
-    def __init__(self, alignments: "AlignmentData", arguments: "argparse.Namespace") -> None:
+    def __init__(self, alignments: "AlignmentData", arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._arguments = arguments
         self._alignments = alignments
@@ -694,6 +697,242 @@ class Extract():  # pylint:disable=too-few-public-methods
             mask._affine_matrix = detected_face.mask["components"].affine_matrix
 
 
+class FromFaces():  # pylint:disable=too-few-public-methods
+    """ Scan a folder of Faceswap Extracted Faces and re-create the associated alignments file(s)
+
+    Parameters
+    ----------
+    alignments: NoneType
+        Parameter included for standard job naming convention, but not used for this process.
+    arguments: :class:`argparse.Namespace`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+    """
+    def __init__(self, alignments: None, arguments: Namespace) -> None:
+        logger.debug("Initializing %s: (alignments: %s, arguments: %s)",
+                     self.__class__.__name__, alignments, arguments)
+        self._faces_dir = arguments.faces_dir
+        self._filelist = self._get_filenames()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _get_filenames(self) -> list[str]:
+        """ Obtain the full path to all filenames in the specified faces folder.
+
+        Only png files will be returned, any other files will be ignored. An error is output if
+        the returned filelist is not valid
+
+        Returns
+        -------
+        list
+            Full path list to face png files
+        """
+        err = None
+        if not self._faces_dir:
+            err = "A faces folder must be provided."
+        elif not os.path.isdir(self._faces_dir):
+            err = f"The Faces location '{self._faces_dir}' does not exit"
+        else:
+            filelist = [os.path.join(self._faces_dir, fname)
+                        for fname in os.listdir(self._faces_dir)
+                        if os.path.splitext(fname.lower())[1] == ".png"]
+        if not err and not filelist:
+            err = "Faces folder should contain Faceswap extracted PNG files"
+        if err:
+            logger.error(err)
+            sys.exit(0)
+        logger.debug("Collected %s png images from folder '%s'", len(filelist), self._faces_dir)
+        return filelist
+
+    def process(self) -> None:
+        """ Run the job to read faces from a folder to create alignments file(s). """
+        logger.info("[CREATE ALIGNMENTS FROM FACES]")  # Tidy up cli output
+        skip_count = 0
+        d_align = {}
+        for filename, meta in tqdm(read_image_meta_batch(self._filelist),
+                                   desc="Generating Alignments",
+                                   total=len(self._filelist),
+                                   leave=False):
+
+            if "itxt" not in meta or "alignments" not in meta["itxt"]:
+                logger.verbose("skipping invalid file: '%s'", filename)
+                skip_count += 1
+                continue
+
+            align_fname = self._get_alignments_filename(meta["itxt"]["source"])
+            source_name, f_idx, alignment = self._extract_alignment(meta)
+            full_info = (f_idx, alignment, filename, meta["itxt"]["source"])
+
+            d_align.setdefault(align_fname, {}).setdefault(source_name, []).append(full_info)
+
+        alignments = self._sort_alignments(d_align)
+        self._save_alignments(alignments)
+        if skip_count > 1:
+            logger.warning("%s of %s files skipped that do not contain valid alignment data",
+                           skip_count, len(self._filelist))
+            logger.warning("Run the process in verbose mode to see which files were skipped")
+
+    @classmethod
+    def _get_alignments_filename(cls, source_data: dict) -> str:
+        """ Obtain the name of the alignments file from the source information contained within the
+        PNG metadata.
+
+        Parameters
+        ----------
+        source_data: dict
+            The source information contained within a Faceswap extracted PNG
+
+        Returns
+        -------
+        str:
+            If the face was generated from a video file, the filename will be
+            `'<video_name>_alignments.fsa'`. If it was extracted from an image file it will be
+            `'alignments.fsa'`
+        """
+        is_video = source_data["source_is_video"]
+        src_name = source_data["source_filename"]
+        prefix = f"{src_name.rpartition('_')[0]}_" if is_video else ""
+        retval = f"{prefix}alignments.fsa"
+        logger.trace("Extracted alignments file filename: '%s'", retval)
+        return retval
+
+    def _extract_alignment(self, metadata: dict) -> tuple[str, int, dict]:
+        """ Extract alignment data from a PNG image's itxt header.
+
+        Formats the landmarks into a numpy array and adds in mask centering information if it is
+        from an older extract.
+
+        Parameters
+        ----------
+        metadata: dict
+            An extracted faces PNG Header data
+
+        Returns
+        -------
+        tuple
+            The alignment's source frame name in position 0. The index of the face within the
+            alignment file in position 1. The alignment data correctly formatted for writing to an
+            alignments file in positin 2
+        """
+        alignment = metadata["itxt"]["alignments"]
+        alignment["landmarks_xy"] = np.array(alignment["landmarks_xy"], dtype="float32")
+
+        src = metadata["itxt"]["source"]
+        frame_name = src["source_filename"]
+        face_index = int(src["face_index"])
+        version = src["alignments_version"]
+
+        if version < 2.2:
+            logger.trace("Updating mask centering for frame '%s', face index: %s, version: %s",
+                         frame_name, face_index, version)
+            self._update_mask_centering(alignment)
+
+        logger.trace("Extracted alignment for frame: '%s', face index: %s", frame_name, face_index)
+        return frame_name, face_index, alignment
+
+    @classmethod
+    def _update_mask_centering(cls, alignment: dict) -> None:
+        """ Prior to alignment version 2.2 all masks were stored with face centering.
+
+        Update the existing masks with correct centering parameter.
+
+        Parameters
+        ----------
+        alignment: dict
+            The alignment for the face to have the mask centering parameter updated
+        """
+        if "mask" not in alignment:
+            alignment["mask"] = {}
+        for mask in alignment["mask"].values():
+            mask["stored_centering"] = "face"
+
+    def _sort_alignments(self, alignments: dict) -> dict:
+        """ Sort the faces into face index order as they appeared in the original alignments file.
+
+        If the face index stored in the png header does not match it's position in the alignments
+        file (i.e. A face has been removed from a frame) then update the header of the
+        corresponding png to the correct index as exists in the newly created alignments file.
+
+        Parameters
+        ----------
+        alignments: dict
+            The unsorted alignments file(s) as generated from the face PNG headers, including the
+            face index of the face within it's respective frame, the original face filename and
+            the orignal face header source information
+
+        Returns
+        -------
+        dict
+            The alignments file dictionaries sorted into the correct face order, ready for savind
+        """
+        logger.info("Sorting and checking faces...")
+        aln_sorted = {}
+        for fname, frames in alignments.items():
+            this_file = {}
+            for frame in tqdm(sorted(frames), desc=f"Sorting {fname}", leave=False):
+                this_file[frame] = []
+                for real_idx, (f_id, alignment, f_path, f_src) in enumerate(sorted(frames[frame])):
+                    if real_idx != f_id:
+                        self._update_png_header(f_path, real_idx, alignment, f_src)
+                    this_file[frame].append(alignment)
+            aln_sorted[fname] = this_file
+        return aln_sorted
+
+    @classmethod
+    def _update_png_header(cls,
+                           face_path: str,
+                           new_index: int,
+                           alignment: dict,
+                           source_info: dict) -> None:
+        """ Update the PNG header for faces where the stored index does not correspond with the
+        alignments file. This can occur when frames with multiple faces have had some faces deleted
+        from the faces folder.
+
+        Updates the original filename and index in the png header.
+
+        Parameters
+        ----------
+        face_path: str
+            Full path to the saved face image that requires updating
+        new_index: int
+            The new index as it appears in the newly generated alignments file
+        alignment: dict
+            The alignment information to store in the png header
+        source_info: dict
+            The face source information as extracted from the original face png file
+        """
+        face = DetectedFace()
+        face.from_alignment(alignment)
+        new_filename = f"{os.path.splitext(source_info['source_filename'])[0]}_{new_index}.png"
+
+        logger.trace("Updating png header for '%s': (face index from %s to %s, original filename "
+                     "from '%s' to '%s'", face_path, source_info["face_index"], new_index,
+                     source_info["original_filename"], new_filename)
+
+        source_info["face_index"] = new_index
+        source_info["original_filename"] = new_filename
+        meta = dict(alignments=face.to_png_meta(), source=source_info)
+        update_existing_metadata(face_path, meta)
+
+    def _save_alignments(self, all_alignments: dict) -> None:
+        """ Save the newely generated alignments file(s).
+
+        If an alignments file already exists in the source faces folder, back it up rather than
+        overwriting
+
+        Parameters
+        ----------
+        all_alignments: dict
+            The alignment(s) dictionaries found in the faces folder. Alignment filename as key,
+            corresponding alignments as value.
+        """
+        for fname, alignments in all_alignments.items():
+            alignments_path = os.path.join(self._faces_dir, fname)
+            dummy_args = Namespace(alignments_path=alignments_path)
+            aln = Alignments(dummy_args, is_extract=True)
+            aln._data = alignments  # pylint:disable=protected-access
+            aln.backup()
+            aln.save()
+
+
 class RemoveFaces():  # pylint:disable=too-few-public-methods
     """ Remove items from alignments file.
 
@@ -704,7 +943,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
     arguments: :class:`argparse.Namespace`
         The command line arguments that have called this job
     """
-    def __init__(self, alignments, arguments):
+    def __init__(self, alignments: "AlignmentData", arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
 
@@ -715,7 +954,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         self._items = Faces(arguments.faces_dir, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def process(self):
+    def process(self) -> None:
         """ Run the job to remove faces from an alignments file that do not exist within a faces
         folder. """
         logger.info("[REMOVE FACES FROM ALIGNMENTS]")  # Tidy up cli output
@@ -740,7 +979,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         rename = Rename(self._alignments, None, self._items)
         rename.process()
 
-    def _update_png_headers(self):
+    def _update_png_headers(self) -> None:
         """ Update the EXIF iTXt field of any face PNGs that have had their face index changed.
 
         Notes
@@ -794,7 +1033,10 @@ class Rename():  # pylint:disable=too-few-public-methods
         An optional faces object, if the rename task is being called by another job.
         Default: ``None``
     """
-    def __init__(self, alignments, arguments, faces=None):
+    def __init__(self,
+                 alignments: "AlignmentData",
+                 arguments: Namespace,
+                 faces: Optional[Faces] = None) -> None:
         logger.debug("Initializing %s: (arguments: %s, faces: %s)",
                      self.__class__.__name__, arguments, faces)
         self._alignments = alignments
@@ -806,7 +1048,7 @@ class Rename():  # pylint:disable=too-few-public-methods
         self._faces = faces if faces else Faces(arguments.faces_dir, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def process(self):
+    def process(self) -> None:
         """ Process the face renaming """
         logger.info("[RENAME FACES]")  # Tidy up cli output
         rename_mappings = sorted([(face["current_filename"], face["original_filename"])
@@ -816,7 +1058,7 @@ class Rename():  # pylint:disable=too-few-public-methods
         rename_count = self._rename_faces(rename_mappings)
         logger.info("%s faces renamed", rename_count)
 
-    def _rename_faces(self, filename_mappings):
+    def _rename_faces(self, filename_mappings: list[tuple[str, str]]) -> int:
         """ Rename faces back to their original name as exists in the alignments file.
 
         If the source and destination filename are the same then skip that file.
@@ -875,12 +1117,12 @@ class Sort():
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
-    def __init__(self, alignments, arguments):
+    def __init__(self, alignments: "AlignmentData", arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def process(self):
+    def process(self) -> None:
         """ Execute the sort process """
         logger.info("[SORT INDEXES]")  # Tidy up cli output
         reindexed = self.reindex_faces()
@@ -889,7 +1131,7 @@ class Sort():
             logger.warning("If you have a face-set corresponding to the alignment file you "
                            "processed then you should run the 'Extract' job to regenerate it.")
 
-    def reindex_faces(self):
+    def reindex_faces(self) -> None:
         """ Re-Index the faces """
         reindexed = 0
         for alignment in tqdm(self._alignments.yield_faces(),
