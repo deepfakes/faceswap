@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional, List
+from typing import List, Tuple, TYPE_CHECKING, Optional
 
 from argparse import Namespace
 
@@ -714,7 +714,7 @@ class FromFaces():  # pylint:disable=too-few-public-methods
         self._filelist = self._get_filenames()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_filenames(self) -> list[str]:
+    def _get_filenames(self) -> List[str]:
         """ Obtain the full path to all filenames in the specified faces folder.
 
         Only png files will be returned, any other files will be ignored. An error is output if
@@ -794,7 +794,7 @@ class FromFaces():  # pylint:disable=too-few-public-methods
         logger.trace("Extracted alignments file filename: '%s'", retval)
         return retval
 
-    def _extract_alignment(self, metadata: dict) -> tuple[str, int, dict]:
+    def _extract_alignment(self, metadata: dict) -> Tuple[str, int, dict]:
         """ Extract alignment data from a PNG image's itxt header.
 
         Formats the landmarks into a numpy array and adds in mask centering information if it is
@@ -1058,7 +1058,7 @@ class Rename():  # pylint:disable=too-few-public-methods
         rename_count = self._rename_faces(rename_mappings)
         logger.info("%s faces renamed", rename_count)
 
-    def _rename_faces(self, filename_mappings: list[tuple[str, str]]) -> int:
+    def _rename_faces(self, filename_mappings: List[Tuple[str, str]]) -> int:
         """ Rename faces back to their original name as exists in the alignments file.
 
         If the source and destination filename are the same then skip that file.
