@@ -438,7 +438,7 @@ class ModelBase():
         weights.freeze()
 
         self._loss.configure(self._model)
-        self._model.compile(optimizer=optimizer, loss=self._loss.functions, run_eagerly=False)
+        self._model.compile(optimizer=optimizer, loss=self._loss.functions)
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self._model)
 
