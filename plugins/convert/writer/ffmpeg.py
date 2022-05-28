@@ -2,6 +2,7 @@
 """ Video output writer for faceswap.py converter """
 import os
 from math import ceil
+from subprocess import CalledProcessError, check_output, STDOUT
 from typing import Optional, List, Tuple, Generator
 
 import imageio
@@ -98,7 +99,48 @@ class Writer(Output):
                            "The output video will be created but you will need to mux audio "
                            "manually.")
             retval = None
+        elif not self._test_for_audio_stream():
+            logger.warning("No audio stream could be found in the source video '%s'. Muxing audio "
+                           "will be disabled.", self._source_video)
+            retval = None
         logger.debug("Audio codec: %s", retval)
+        return retval
+
+    def _test_for_audio_stream(self) -> bool:
+        """ Check whether the source video file contains an audio stream.
+
+        If we attempt to mux audio from a source video that does not contain an audio stream
+        ffmpeg will crash faceswap in a fairly ugly manner.
+
+        Returns
+        -------
+        bool
+            ``True if an audio stream is found in the source video file, otherwise ``False``
+
+        Raises
+        ------
+        RuntimeError
+            If a subprocess error is raised scanning the input video file
+        """
+        exe = im_ffm.get_ffmpeg_exe()
+        cmd = [exe, "-hide_banner", "-i", self._source_video, "-f", "ffmetadata", "-"]
+
+        try:
+            out = check_output(cmd, stderr=STDOUT)
+        except CalledProcessError as err:
+            out = err.output.decode(errors="ignore")
+            raise ValueError("Error checking audio stream. Status: "
+                             f"{err.returncode}\n{out}") from err
+
+        retval = False
+        for line in out.splitlines():
+            if not line.strip().startswith(b"Stream #"):
+                continue
+            logger.debug("scanning Stream line: %s", line.decode(errors="ignore").strip())
+            if b"Audio" in line:
+                retval = True
+                break
+        logger.debug("Audio found: %s", retval)
         return retval
 
     def _get_output_filename(self) -> str:
