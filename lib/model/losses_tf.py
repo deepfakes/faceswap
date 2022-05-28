@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 
 import logging
+from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -38,12 +39,12 @@ class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-met
     You should add a regularization term like a l2 loss in addition to this one.
     """
     def __init__(self, k_1=0.01, k_2=0.03, filter_size=11, filter_sigma=1.5, max_value=1.0):
-        super().__init__(name="DSSIMObjective")
-        self.filter_size = filter_size
-        self.filter_sigma = filter_sigma
-        self.k_1 = k_1
-        self.k_2 = k_2
-        self.max_value = max_value
+        super().__init__(name="DSSIMObjective", reduction=tf.keras.losses.Reduction.NONE)
+        self._filter_size = filter_size
+        self._filter_sigma = filter_sigma
+        self._k_1 = k_1
+        self._k_2 = k_2
+        self._max_value = max_value
 
     def call(self, y_true, y_pred):
         """ Call the DSSIM Loss Function.
@@ -62,11 +63,11 @@ class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-met
         """
         ssim = tf.image.ssim(y_true,
                              y_pred,
-                             self.max_value,
-                             filter_size=self.filter_size,
-                             filter_sigma=self.filter_sigma,
-                             k1=self.k_1,
-                             k2=self.k_2)
+                             self._max_value,
+                             filter_size=self._filter_size,
+                             filter_sigma=self._filter_sigma,
+                             k1=self._k_1,
+                             k2=self._k_2)
         dssim_loss = (1. - ssim) / 2.0
         return dssim_loss
 
@@ -470,24 +471,42 @@ class GMSDLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
         return output
 
 
-class LossWrapper(tf.keras.losses.Loss):
-    """ A wrapper class for multiple keras losses to enable multiple weighted loss functions on a
-    single output.
+class LossWrapper():
+    """ A wrapper class for multiple keras losses to enable multiple masked weighted loss
+    functions on a single output.
+
+    Notes
+    -----
+    Whilst Keras does allow for applying multiple weighted loss functions, it does not allow
+    for an easy mechanism to add additional data (in our case masks) that are batch specific
+    but are not fed in to the model.
+
+    This wrapper receives this additional mask data for the batch stacked onto the end of the
+    color channels of the received :param:`y_true` batch of images. These masks are then split
+    off the batch of images and applied to both the :param:`y_true` and :param:`y_pred` tensors
+    prior to feeding into the loss functions.
+
+    For example, for an image of shape (4, 128, 128, 3) 3 additional masks may be stacked onto
+    the end of y_true, meaning we receive an input of shape (4, 128, 128, 6). This wrapper then
+    splits off (4, 128, 128, 3:6) from the end of the tensor, leaving the original y_true of
+    shape (4, 128, 128, 3) ready for masking and feeding through the loss functions.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        super().__init__(name="LossWrapper")
         self._loss_functions = []
         self._loss_weights = []
         self._mask_channels = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def add_loss(self, function, weight=1.0, mask_channel=-1):
+    def add_loss(self,
+                 function: tf.keras.losses.Loss,
+                 weight: float = 1.0,
+                 mask_channel: int = -1) -> None:
         """ Add the given loss function with the given weight to the loss function chain.
 
         Parameters
         ----------
-        function: :class:`keras.losses.Loss`
+        function: :class:`tf.keras.losses.Loss`
             The loss function to add to the loss chain
         weight: float, optional
             The weighting to apply to the loss function. Default: `1.0`
@@ -497,29 +516,31 @@ class LossWrapper(tf.keras.losses.Loss):
         """
         logger.debug("Adding loss: (function: %s, weight: %s, mask_channel: %s)",
                      function, weight, mask_channel)
+        # Loss must be compiled inside LossContainer for keras to handle distibuted strategies
         self._loss_functions.append(compile_utils.LossesContainer(function))
         self._loss_weights.append(weight)
         self._mask_channels.append(mask_channel)
 
-    def call(self, y_true, y_pred):
+    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """ Call the sub loss functions for the loss wrapper.
 
-        Weights are returned as the weighted sum of the chosen losses.
+        Loss is returned as the weighted sum of the chosen losses.
 
-        If a mask is being applied to the loss, then the appropriate mask is extracted from y_true
-        and added as the 4th channel being passed to the penalized loss function.
+        If masks are being applied to the loss function inputs, then they should be included as
+        additional channels at the end of :param:`y_true`, so that they can be split off and
+        applied to the actual inputs to the selected loss function(s).
 
         Parameters
         ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
+        y_true: :class:`tensorflow.Tensor`
+            The ground truth batch of images, with any required masks stacked on the end
+        y_pred: :class:`tensorflow.Tensor`
+            The batch of model predictions
 
         Returns
         -------
-        tensor
-            The final loss value
+        :class:`tensorflow.Tensor`
+            The final weighted loss
         """
         loss = 0.0
         for func, weight, mask_channel in zip(self._loss_functions,
@@ -532,7 +553,11 @@ class LossWrapper(tf.keras.losses.Loss):
         return loss
 
     @classmethod
-    def _apply_mask(cls, y_true, y_pred, mask_channel, mask_prop=1.0):
+    def _apply_mask(cls,
+                    y_true: tf.Tensor,
+                    y_pred: tf.Tensor,
+                    mask_channel: int,
+                    mask_prop: float = 1.0) -> Tuple[tf.Tensor, tf.Tensor]:
         """ Apply the mask to the input y_true and y_pred. If a mask is not required then
         return the unmasked inputs.
 
@@ -549,8 +574,10 @@ class LossWrapper(tf.keras.losses.Loss):
 
         Returns
         -------
-        tuple
-            (n_true, n_pred): The ground truth and predicted value tensors with the mask applied
+        tf.Tensor
+            The ground truth batch of images, with the required mask applied
+        tf.Tensor
+            The predicted batch of images with the required mask applied
         """
         if mask_channel == -1:
             logger.debug("No mask to apply")
@@ -561,7 +588,7 @@ class LossWrapper(tf.keras.losses.Loss):
         mask_as_k_inv_prop = 1 - mask_prop
         mask = (mask * mask_prop) + mask_as_k_inv_prop
 
-        n_true = K.concatenate([y_true[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
-        n_pred = K.concatenate([y_pred[:, :, :, i:i+1] * mask for i in range(3)], axis=-1)
+        n_true = K.concatenate([y_true[..., i:i + 1] * mask for i in range(3)], axis=-1)
+        n_pred = K.concatenate([y_pred[..., i:i + 1] * mask for i in range(3)], axis=-1)
 
         return n_true, n_pred

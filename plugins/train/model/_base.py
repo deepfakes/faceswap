@@ -438,7 +438,7 @@ class ModelBase():
         weights.freeze()
 
         self._loss.configure(self._model)
-        self._model.compile(optimizer=optimizer, loss=self._loss.functions)
+        self._model.compile(optimizer=optimizer, loss=self._loss.functions, run_eagerly=False)
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self._model)
 
@@ -1256,10 +1256,9 @@ class _Loss():
             output_types = ["mask" if shape[-1] == 1 else "face" for shape in output_shapes]
             logger.debug("side: %s, output names: %s, output_shapes: %s, output_types: %s",
                          side, output_names, output_shapes, output_types)
-            self._names.extend(["{}_{}{}".format(name, side,
-                                                 "" if output_types.count(name) == 1
-                                                 else f"_{idx}")
-                                for idx, name in enumerate(output_types)])
+            for idx, name in enumerate(output_types):
+                suffix = "" if output_types.count(name) == 1 else f"_{idx}"
+                self._names.append(f"{name}_{side}{suffix}")
         logger.debug(self._names)
 
     def _set_loss_functions(self, output_names):
