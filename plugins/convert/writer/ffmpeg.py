@@ -115,11 +115,11 @@ class Writer(Output):
         Returns
         -------
         bool
-            ``True if an audio stream is found in the source video file, otherwise ``False``
+            ``True`` if an audio stream is found in the source video file, otherwise ``False``
 
         Raises
         ------
-        RuntimeError
+        ValueError
             If a subprocess error is raised scanning the input video file
         """
         exe = im_ffm.get_ffmpeg_exe()
