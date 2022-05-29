@@ -78,6 +78,7 @@ class FaceswapFormatter(logging.Formatter):
         """
         record.message = record.getMessage()
         record = self._rewrite_warnings(record)
+        record = self._lower_external(record)
         # strip newlines
         if record.levelno < 30 and ("\n" in record.message or "\r" in record.message):
             record.message = record.message.replace("\n", "\\n").replace("\r", "\\r")
@@ -109,6 +110,12 @@ class FaceswapFormatter(logging.Formatter):
         ----------
         record: :class:`logging.LogRecord`
             The log record to check for rewriting
+
+        Returns
+        -------
+        :class:`logging.LogRecord`
+            The log rewritten or untouched record
+
         """
         if record.levelno == 30 and record.funcName == "warn" and record.module == "ag_logging":
             # TF 2.3 in Conda is imported with the wrong gast(0.4 when 0.3.3 should be used). This
@@ -120,6 +127,31 @@ class FaceswapFormatter(logging.Formatter):
         if record.levelno == 30 and (record.funcName == "_tfmw_add_deprecation_warning" or
                                      record.module in ("deprecation", "deprecation_wrapper")):
             # Keras Deprecations.
+            record.levelno = 10
+            record.levelname = "DEBUG"
+
+        return record
+
+    @classmethod
+    def _lower_external(cls, record):
+        """ Some external libs log at a higher level than we would really like, so lower their
+        log level.
+
+        Specifically: Matplotlib font properties
+
+        Parameters
+        ----------
+        record: :class:`logging.LogRecord`
+            The log record to check for rewriting
+
+        Returns
+        ----------
+        :class:`logging.LogRecord`
+            The log rewritten or untouched record
+        """
+        if (record.levelno == 20 and record.funcName == "__init__"
+                and record.module == "font_manager"):
+            # Matplotlib font manager
             record.levelno = 10
             record.levelname = "DEBUG"
 
@@ -315,7 +347,7 @@ def get_loglevel(loglevel):
     """
     numeric_level = getattr(logging, loglevel.upper(), None)
     if not isinstance(numeric_level, int):
-        raise ValueError("Invalid log level: %s" % loglevel)
+        raise ValueError(f"Invalid log level: {loglevel}")
     return numeric_level
 
 
@@ -336,7 +368,7 @@ def crash_log():
         from lib.sysinfo import sysinfo  # pylint:disable=import-outside-toplevel
     except Exception:  # pylint:disable=broad-except
         sysinfo = ("\n\nThere was an error importing System Information from lib.sysinfo. This is "
-                   "probably a bug which should be fixed:\n{}".format(traceback.format_exc()))
+                   f"probably a bug which should be fixed:\n{traceback.format_exc()}")
     with open(filename, "wb") as outfile:
         outfile.writelines(freeze_log)
         outfile.write(original_traceback)
