@@ -218,6 +218,8 @@ class GeneralizedLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-me
 
 class LInfNorm(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     """ Calculate the L-inf norm as a loss function. """
+    def __init__(self):
+        super().__init__(name="l_inf_norm_loss")
 
     @classmethod
     def call(cls, y_true, y_pred):
@@ -372,6 +374,8 @@ class GMSDLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
     """
+    def __init__(self):
+        super().__init__(name="gmsd_loss", reduction=tf.keras.losses.Reduction.NONE)
 
     def call(self, y_true, y_pred):
         """ Return the Gradient Magnitude Similarity Deviation Loss.
