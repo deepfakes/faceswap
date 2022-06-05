@@ -22,7 +22,7 @@ InstallDir $PROFILE\faceswap
 # Install cli flags
 !define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$PROFILE\MiniConda3"
 !define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
-!define flagsEnv "-y python=3.9"
+!define flagsEnv "-y python=3."
 
 # Folders
 Var ProgramData
@@ -397,7 +397,12 @@ Function SetEnvironment
 
     CreateEnv:
         SetDetailsPrint listonly
-        ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create ${flagsEnv} -n  $\"$envName$\" && conda deactivate"
+        ${If} $setupType == "amd"
+            StrCpy $0 "${flagsEnv}8"
+        ${else}
+            StrCpy $0 "${flagsEnv}9"
+        ${EndIf}        
+        ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create $0 -n  $\"$envName$\" && conda deactivate"
         pop $0
         ExecDos::wait $0
         pop $0
