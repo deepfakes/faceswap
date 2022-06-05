@@ -5,6 +5,7 @@ import sys
 
 from lib.cli import args as cli_args
 from lib.config import generate_configs
+from lib.utils import get_backend
 
 
 # LOCALES
@@ -14,19 +15,21 @@ _ = _LANG.gettext
 
 if sys.version_info < (3, 7):
     raise Exception("This program requires at least python3.7")
+if get_backend() == "amd" and sys.version_info >= (3, 9):
+    raise Exception("The AMD version of Faceswap cannot run on versions of Python higher than 3.8")
 
 
 _PARSER = cli_args.FullHelpArgumentParser()
 
 
-def _bad_args(*args):  # pylint:disable=unused-argument
+def _bad_args(*args) -> None:  # pylint:disable=unused-argument
     """ Print help to console when bad arguments are provided. """
     print(cli_args)
     _PARSER.print_help()
     sys.exit(0)
 
 
-def _main():
+def _main() -> None:
     """ The main entry point into Faceswap.
 
     - Generates the config files, if they don't pre-exist.

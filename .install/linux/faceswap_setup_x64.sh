@@ -131,7 +131,7 @@ ask_version() {
         vers="${vers:-${default}}"
         case $vers in
             1) VERSION="nvidia" ; break ;;
-            2) VERSION="amd" ; break ;;
+            2) VERSION="amd" ; PYENV_VERSION="3.8" ; break ;;
             3) VERSION="cpu" ; break ;;
             * ) echo "Invalid selection." ;;
         esac

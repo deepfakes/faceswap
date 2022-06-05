@@ -167,6 +167,10 @@ class Environment():
             self.output.error("Please run this script with Python version 3.7 to 3.9 "
                               "64bit and try again.")
             sys.exit(1)
+        if self.enable_amd and sys.version_info >= (3, 9):
+            self.output.error("The AMD version of Faceswap cannot be installed on versions of "
+                              "Python higher than 3.8")
+            sys.exit(1)
 
     def output_runtime_info(self):
         """ Output run time info """
