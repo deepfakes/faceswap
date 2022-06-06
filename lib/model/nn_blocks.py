@@ -2,7 +2,7 @@
 """ Neural Network Blocks for faceswap.py. """
 
 import logging
-from typing import Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
 
 from lib.utils import get_backend
 
@@ -17,7 +17,7 @@ if get_backend() == "amd":
     from keras.initializers import he_uniform, VarianceScaling  # pylint:disable=no-name-in-module
     # type checking:
     import keras
-    from plaidml.tile import Value as Tensor
+    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow.keras.layers import (  # noqa pylint:disable=no-name-in-module,import-error
@@ -32,8 +32,8 @@ else:
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-_CONFIG = {}
-_NAMES = {}
+_CONFIG: dict = {}
+_NAMES: Dict[str, int] = {}
 
 
 def set_config(configuration: dict) -> None:
@@ -275,8 +275,8 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]] = 5,
-                 strides: Union[int, Tuple[int]] = 2,
+                 kernel_size: Union[int, Tuple[int, int]] = 5,
+                 strides: Union[int, Tuple[int, int]] = 2,
                  padding: str = "same",
                  normalization: Optional[str] = None,
                  activation: Optional[str] = "leakyrelu",
@@ -372,8 +372,8 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]] = 5,
-                 strides: Union[int, Tuple[int]] = 2, **kwargs) -> None:
+                 kernel_size: Union[int, Tuple[int, int]] = 5,
+                 strides: Union[int, Tuple[int, int]] = 2, **kwargs) -> None:
         self._name = _get_name(f"separableconv2d_{filters}")
         logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      self._name, filters, kernel_size, strides, kwargs)
@@ -444,7 +444,7 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
 
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]] = 3,
+                 kernel_size: Union[int, Tuple[int, int]] = 3,
                  padding: str = "same",
                  scale_factor: int = 2,
                  normalization: Optional[str] = None,
@@ -531,7 +531,7 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]] = 3,
+                 kernel_size: Union[int, Tuple[int, int]] = 3,
                  padding: str = "same",
                  activation: Optional[str] = "leakyrelu",
                  interpolation: str = "bilinear",
@@ -625,7 +625,7 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]] = 3,
+                 kernel_size: Union[int, Tuple[int, int]] = 3,
                  padding: str = "same",
                  activation: str = "leakyrelu",
                  scale_factor: int = 2,
@@ -710,7 +710,7 @@ class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]] = 3,
+                 kernel_size: Union[int, Tuple[int, int]] = 3,
                  padding: str = "same",
                  activation: str = "leakyrelu",
                  size: int = 2,
@@ -767,7 +767,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]] = 3,
+                 kernel_size: Union[int, Tuple[int, int]] = 3,
                  padding: str = "same",
                  **kwargs) -> None:
         self._name = _get_name(f"residual_{filters}")
