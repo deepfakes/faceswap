@@ -41,6 +41,7 @@
   "fs_original_depth": 4,
   "fs_original_min_filters": 128,
   "fs_original_max_filters": 1024,
+  "fs_original_use_alt": false,
   "mobilenet_width": 1.0,
   "mobilenet_depth": 1,
   "mobilenet_dropout": 0.001,

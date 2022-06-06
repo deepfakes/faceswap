@@ -9,7 +9,7 @@ import numpy as np
 
 from lib.model.nn_blocks import (
     Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
-    UpscaleResizeImagesBlock)
+    UpscaleResizeImagesBlock, UpscaleDNYBlock)
 from lib.model.normalization import (
     AdaInstanceNormalization, GroupNormalization, InstanceNormalization, LayerNormalization,
     RMSNormalization)
@@ -20,7 +20,7 @@ from ._base import KerasModel, ModelBase, logger, _get_all_sub_models
 if get_backend() == "amd":
     from keras import applications as kapp, backend as K
     from keras.layers import (
-        Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise,
+        Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise, MaxPool2D,
         GlobalAveragePooling2D, GlobalMaxPooling2D, Input, LeakyReLU, Reshape, UpSampling2D,
         Conv2D as KConv2D)
     from keras.models import clone_model
@@ -31,7 +31,7 @@ else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow.keras import applications as kapp, backend as K  # pylint:disable=import-error
     from tensorflow.keras.layers import (  # pylint:disable=import-error,no-name-in-module
-        Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise,
+        Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise, MaxPool2D,
         GlobalAveragePooling2D, GlobalMaxPooling2D, Input, LeakyReLU, Reshape, UpSampling2D,
         Conv2D as KConv2D)
     from tensorflow.keras.models import clone_model  # noqa pylint:disable=import-error,no-name-in-module
@@ -148,7 +148,7 @@ _MODEL_MAPPING: Dict[str, _EncoderInfo] = dict(
     xception=_EncoderInfo(
         keras_name="Xception", scaling=(-1, 1), min_size=71, default_size=299),
     fs_original=_EncoderInfo(
-        keras_name="", color_order="bgr", min_size=32, default_size=160))
+        keras_name="", color_order="bgr", min_size=32, default_size=1024))
 
 
 class Model(ModelBase):
@@ -526,7 +526,8 @@ def _bottleneck(inputs: Tensor, bottleneck: str, size: int, normalization: str) 
     return var_x
 
 
-def _get_upscale_layer(method: str,
+def _get_upscale_layer(method: Literal["resize_images", "subpixel", "upscale_dny", "upscale_fast",
+                                       "upscale_hybrid", "upsample2d"],
                        filters: int,
                        activation: Optional[str] = None,
                        upsamples: Optional[int] = None,
@@ -536,7 +537,8 @@ def _get_upscale_layer(method: str,
     Parameters
     ----------
     method: str
-        The user selected upscale method to use
+        The user selected upscale method to use. One of `"resize_images"`, `"subpixel"`,
+        `"upscale_dny"`, `"upscale_fast"`, `"upscale_hybrid"`, `"upsample2d"`
     filters: int
         The number of filters to use in the upscale layer
     activation: str, optional
@@ -567,6 +569,8 @@ def _get_upscale_layer(method: str,
         return Upscale2xBlock(filters, activation=activation, fast=True)
     if method == "upscale_hybrid":
         return Upscale2xBlock(filters, activation=activation, fast=False)
+    if method == "upscale_dny":
+        return UpscaleDNYBlock(filters, activation=activation)
     return UpscaleResizeImagesBlock(filters, activation=activation)
 
 
@@ -756,6 +760,10 @@ class _EncoderFaceswap():  # pylint:disable=too-few-public-methods
         self._depth = config[f"{self._type}_depth"]
         self._min_filters = config["fs_original_min_filters"]
         self._max_filters = config["fs_original_max_filters"]
+        self._is_alt = config["fs_original_use_alt"]
+        self._relu_alpha = 0.2 if self._is_alt else 0.1
+        self._kernel_size = 3 if self._is_alt else 5
+        self._strides = 1 if self._is_alt else 2
 
     def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the original Faceswap Encoder
@@ -772,9 +780,35 @@ class _EncoderFaceswap():  # pylint:disable=too-few-public-methods
         """
         var_x = inputs
         filters = self._config["fs_original_min_filters"]
+
+        if self._is_alt:
+            var_x = Conv2DBlock(filters,
+                                kernel_size=1,
+                                strides=self._strides,
+                                relu_alpha=self._relu_alpha)(var_x)
+
         for i in range(self._depth):
-            var_x = Conv2DBlock(filters, activation="leakyrelu", name=f"fs_enc_convblk_{i}")(var_x)
+            name = f"fs_{'dny_' if self._is_alt else ''}enc"
+            var_x = Conv2DBlock(filters,
+                                kernel_size=self._kernel_size,
+                                strides=self._strides,
+                                relu_alpha=self._relu_alpha,
+                                name=f"{name}_convblk_{i}")(var_x)
             filters = min(self._config["fs_original_max_filters"], filters * 2)
+            if self._is_alt and i == self._depth - 1:
+                var_x = Conv2DBlock(filters,
+                                    kernel_size=4,
+                                    strides=self._strides,
+                                    padding="valid",
+                                    relu_alpha=self._relu_alpha,
+                                    name=f"{name}_convblk_{i}_1")(var_x)
+            elif self._is_alt:
+                var_x = Conv2DBlock(filters,
+                                    kernel_size=self._kernel_size,
+                                    strides=self._strides,
+                                    relu_alpha=self._relu_alpha,
+                                    name=f"{name}_convblk_{i}_1")(var_x)
+                var_x = MaxPool2D(2, name=f"{name}_pool_{i}")(var_x)
         return var_x
 
 
@@ -1027,6 +1061,7 @@ class Decoder():  # pylint:disable=too-few-public-methods
         self._side = side
         self._input_shape = input_shape
         self._config = config
+        self._is_dny = self._config["dec_upscale_method"].lower() == "upscale_dny"
         logger.debug("Initialized: %s", self.__class__.__name__,)
 
     def _reshape_for_output(self, inputs: Tensor) -> Tensor:
@@ -1094,7 +1129,8 @@ class Decoder():  # pylint:disable=too-few-public-methods
                 var_x = ResidualBlock(filters)(var_x)
         else:
             var_x = self._normalization(var_x)
-            var_x = LeakyReLU(alpha=0.1)(var_x)
+            if not self._is_dny:
+                var_x = LeakyReLU(alpha=0.1)(var_x)
         return var_x
 
     def _normalization(self, inputs: Tensor) -> Tensor:
@@ -1119,6 +1155,31 @@ class Decoder():  # pylint:disable=too-few-public-methods
                      rms=RMSNormalization)
         return norms[self._config["dec_norm"]]()(inputs)
 
+    def _dny_entry(self, inputs: Tensor) -> Tensor:
+        """ Entry convolutions for using the upscale_dny method.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The inputs to the dny entry block
+
+        Returns
+        -------
+        Tensor
+            The output from the dny entry block
+        """
+        var_x = Conv2DBlock(self._config["dec_max_filters"],
+                            kernel_size=4,
+                            strides=1,
+                            padding="same",
+                            relu_alpha=0.2)(inputs)
+        var_x = Conv2DBlock(self._config["dec_max_filters"],
+                            kernel_size=3,
+                            strides=1,
+                            padding="same",
+                            relu_alpha=0.2)(var_x)
+        return var_x
+
     def __call__(self) -> keras.models.Model:
         """ Decoder Network.
 
@@ -1134,6 +1195,11 @@ class Decoder():  # pylint:disable=too-few-public-methods
         if self._config["learn_mask"]:
             var_y = inputs
             var_y = self._reshape_for_output(var_y)
+
+        if self._is_dny:
+            var_x = self._dny_entry(var_x)
+        if self._is_dny and self._config["learn_mask"]:
+            var_y = self._dny_entry(var_y)
 
         # De-convolve
         upscales = int(np.log2(self._config["output_size"] / K.int_shape(var_x)[1]))

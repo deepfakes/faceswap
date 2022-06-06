@@ -157,7 +157,7 @@ _DEFAULTS = dict(
              "variant is: b0: 224px, b1: 240px, b2: 260px, b3: 300px, s: 384px, m: 480px, l: "
              "480px. Ref: EfficientNetV2: Smaller Models and Faster Training (2021): "
              "https://arxiv.org/abs/2104.00298"
-             "\n\tfs_original: (32px - 160px). A configurable variant of the original facewap "
+             "\n\tfs_original: (32px - 1024px). A configurable variant of the original facewap "
              "encoder. ImageNet weights cannot be loaded for this model. Additional parameters "
              "can be configured with the 'fs_enc' options. A version of this encoder is used in "
              "the following models: Original, Original (lowmem), Dfaker, DFL-H128, DFL-SAE, IAE, "
@@ -190,12 +190,13 @@ _DEFAULTS = dict(
         group="encoder",
         fixed=True),
     enc_scaling=dict(
-        default=40,
+        default=7,
         info="Input scaling for the encoder. Some of the encoders have large input sizes, which "
              "often are not helpful for Faceswap. This setting scales the dimensional space that "
              "the encoder works in. For example an encoder with a maximum input size of 224px "
              "will be input an image of 112px at 50%% scaling. See the Architecture tooltip for "
-             "the minimum and maximum sizes for each encoder.",
+             "the minimum and maximum sizes for each encoder. NB: The input size will be rounded "
+             "down to the nearest 16 pixels.",
         datatype=int,
         min_max=(0, 100),
         rounding=1,
@@ -432,9 +433,11 @@ _DEFAULTS = dict(
              "\n\tupscale_fast - Developed by Andenixa. Focusses on speed to upscale, but "
              "requires more VRAM."
              "\n\tupscale_hybrid - Developed by Andenixa. Uses a combination of PixelShuffler and "
-             "Upsampling2D to upscale, saving about 1/3rd of VRAM of the heaviest methods.",
+             "Upsampling2D to upscale, saving about 1/3rd of VRAM of the heaviest methods."
+             "\n\tupscale_dny - An alternative upscale implementation using Upsampling2D to "
+             "upsale.",
         datatype=str,
-        choices=["subpixel", "resize_images", "upscale_fast", "upscale_hybrid"],
+        choices=["subpixel", "resize_images", "upscale_fast", "upscale_hybrid", "upscale_dny"],
         gui_radio=True,
         group="decoder",
         fixed=True),
@@ -599,6 +602,14 @@ _DEFAULTS = dict(
         datatype=int,
         min_max=(256, 8192),
         rounding=128,
+        group="faceswap encoder configuration",
+        fixed=True),
+    fs_original_use_alt=dict(
+        default=False,
+        info="Use a slightly alternate version of the Faceswap Encoder."
+             "\n\tTrue - Use the alternate variation of the Faceswap Encoder."
+             "\n\tFalse - Use the original Faceswap Encoder.",
+        datatype=bool,
         group="faceswap encoder configuration",
         fixed=True),
 

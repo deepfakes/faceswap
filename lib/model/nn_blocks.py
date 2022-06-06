@@ -712,7 +712,7 @@ class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
                  filters: int,
                  kernel_size: Union[int, Tuple[int, int]] = 3,
                  padding: str = "same",
-                 activation: str = "leakyrelu",
+                 activation: Optional[str] = "leakyrelu",
                  size: int = 2,
                  interpolation: str = "bilinear",
                  **kwargs) -> None:
