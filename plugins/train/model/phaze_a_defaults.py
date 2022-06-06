@@ -39,16 +39,21 @@
                    the value saved in the state file with the updated value in config. If not
                    provided this will default to True.
 """
+from typing import List
+
 from lib.utils import get_backend
 
-_HELPTEXT = ("Phaze-A Model by TorzDF, with thanks to BirbFakes.\n"
-             "Allows for the experimentation of various standard Networks as the encoder and "
-             "takes inspiration from Nvidia's StyleGAN for the Decoder. It is highly recommended "
-             "to research to understand the parameters better.")
+_HELPTEXT: str = (
+    "Phaze-A Model by TorzDF, with thanks to BirbFakes.\n"
+    "Allows for the experimentation of various standard Networks as the encoder and takes "
+    "inspiration from Nvidia's StyleGAN for the Decoder. It is highly recommended to research to "
+    "understand the parameters better.")
 
-_ENCODERS = ["densenet121", "densenet169", "densenet201", "inception_resnet_v2", "inception_v3",
-             "mobilenet", "mobilenet_v2", "nasnet_large", "nasnet_mobile", "resnet50", "vgg16",
-             "vgg19", "xception", "fs_original"]
+_ENCODERS: List[str] = [
+    "densenet121", "densenet169", "densenet201", "inception_resnet_v2", "inception_v3",
+    "mobilenet", "mobilenet_v2", "nasnet_large", "nasnet_mobile", "resnet50", "vgg16", "vgg19",
+    "xception", "fs_original"]
+
 if get_backend() != "amd":
     _ENCODERS.extend(["efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3",
                       "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7",
@@ -67,7 +72,7 @@ _DEFAULTS = dict(
              "BE AWARE Larger resolution will dramatically increase VRAM requirements.",
         datatype=int,
         rounding=64,
-        min_max=(64, 1024),
+        min_max=(64, 2048),
         group="general",
         fixed=True),
     shared_fc=dict(
@@ -259,7 +264,7 @@ _DEFAULTS = dict(
              "intermediate layer.",
         datatype=int,
         rounding=1,
-        min_max=(1, 16),
+        min_max=(0, 16),
         group="hidden layers",
         fixed=True),
     fc_min_filters=dict(
@@ -279,7 +284,7 @@ _DEFAULTS = dict(
              "connected layer is: fc_min_filters x fc_dimensions x fc_dimensions.\nNB: This value "
              "may be scaled down, depending on output resolution.",
         datatype=int,
-        rounding=128,
+        rounding=64,
         min_max=(128, 5120),
         group="hidden layers",
         fixed=True),
@@ -290,7 +295,7 @@ _DEFAULTS = dict(
              "layer will be: fc_dimensions x fc_dimensions x fc_max_filters.",
         datatype=int,
         rounding=1,
-        min_max=(3, 16),
+        min_max=(1, 16),
         group="hidden layers",
         fixed=True),
     fc_filter_slope=dict(
@@ -357,7 +362,7 @@ _DEFAULTS = dict(
              "down, depending on output resolution. Also note, that this figure will dictate the "
              "number of filters used for the G-Block, if selected.",
         datatype=int,
-        rounding=128,
+        rounding=64,
         min_max=(128, 5120),
         group="hidden layers",
         fixed=True),
@@ -376,7 +381,7 @@ _DEFAULTS = dict(
         default=512,
         info="The number of nodes to use for the initial G-Block shared fully connected layer.",
         datatype=int,
-        rounding=128,
+        rounding=64,
         min_max=(128, 5120),
         group="g-block hidden layers",
         fixed=True),
@@ -384,7 +389,7 @@ _DEFAULTS = dict(
         default=512,
         info="The number of nodes to use for the final G-Block shared fully connected layer.",
         datatype=int,
-        rounding=128,
+        rounding=64,
         min_max=(128, 5120),
         group="g-block hidden layers",
         fixed=True),
@@ -453,8 +458,8 @@ _DEFAULTS = dict(
         info="The minimum number of filters to use in decoder upscalers (i.e. the number of "
              "filters to use for the final upscale layer).",
         datatype=int,
-        min_max=(64, 512),
-        rounding=64,
+        min_max=(16, 512),
+        rounding=16,
         group="decoder",
         fixed=True),
     dec_max_filters=dict(
@@ -463,18 +468,41 @@ _DEFAULTS = dict(
              "filters to use for the first upscale layer).",
         datatype=int,
         min_max=(256, 5120),
-        rounding=128,
+        rounding=64,
         group="decoder",
         fixed=True),
+    dec_slope_mode=dict(
+        default="full",
+        info="Alters the action of the filter slope.\n"
+             "\n\tfull: The number of filters at each upscale layer will reduce from the chosen "
+             "max_filters at the first layer to the chosen min_filters at the last layer as "
+             "dictated by the dec_filter_slope."
+             "\n\tcap_max: The filters will decline at a fixed rate from each upscale to the next "
+             "based on the filter_slope setting. If there are more upscales than filters, "
+             "then the earliest upscales will be capped at the max_filter value until the filters "
+             "can reduce to the min_filters value at the final upscale. (EG: 512 -> 512 -> 512 -> "
+             "256 -> 128 -> 64)."
+             "\n\tcap_min: The filters will decline at a fixed rate from each upscale to the next "
+             "based on the filter_slope setting. If there are more upscales than filters, then "
+             "the earliest upscales will drop their filters until the min_filter value is met and "
+             "repeat the min_filter value for the remaining upscales. (EG: 512 -> 256 -> 128 -> "
+             "64 -> 64 -> 64).",
+        choices=["full", "cap_max", "cap_min"],
+        group="decoder",
+        fixed=True,
+        gui_radio=True),
     dec_filter_slope=dict(
         default=-0.45,
-        info="The rate that the filters reduce at each upscale layer. EG:\n"
-             "Negative numbers will drop the number of filters quicker at first and slow down "
-             "each upscale.\n"
-             "Positive numbers will drop the number of filters slower at first but then speed "
-             "up each upscale.\n"
-             "0.0 - This will reduce at a linear rate (i.e. the same number of filters will be "
-             "reduced at each upscale).",
+        info="The rate that the filters reduce at each upscale layer.\n"
+             "\n\tFull Slope Mode: Negative numbers will drop the number of filters quicker at "
+             "first and slow down each upscale. Positive numbers will drop the number of filters "
+             "slower at first but then speed up each upscale. A value of 0.0 will reduce at a "
+             "linear rate (i.e. the same number of filters will be reduced at each upscale).\n"
+             "\n\tCap Min/Max Slope Mode: Only positive values will work here. Negative values "
+             "will automatically be converted to their positive counterpart. A value of 0.5 will "
+             "halve the number of filters at each upscale until the minimum value is reached. A "
+             "value of 0.33 will be reduce the number of filters by a third until the minimum "
+             "value is reached etc.",
         datatype=float,
         min_max=(-.99, .99),
         rounding=2,
@@ -560,7 +588,7 @@ _DEFAULTS = dict(
         info="Faceswap Encoder only: The minumum number of filters to use for encoder "
              "convolutions. (i.e. the number of filters to use for the first encoder layer).",
         datatype=int,
-        min_max=(64, 2048),
+        min_max=(16, 2048),
         rounding=64,
         group="faceswap encoder configuration",
         fixed=True),

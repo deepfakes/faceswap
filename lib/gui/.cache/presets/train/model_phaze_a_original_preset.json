@@ -30,6 +30,7 @@
   "dec_norm": "none",
   "dec_min_filters": 64,
   "dec_max_filters": 256,
+  "dec_slope_mode": "full",
   "dec_filter_slope": -0.33,
   "dec_res_blocks": 0,
   "dec_output_kernel": 5,

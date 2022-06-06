@@ -627,7 +627,7 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
                  filters: int,
                  kernel_size: Union[int, Tuple[int, int]] = 3,
                  padding: str = "same",
-                 activation: str = "leakyrelu",
+                 activation: Optional[str] = "leakyrelu",
                  scale_factor: int = 2,
                  interpolation: str = "bilinear") -> None:
         self._name = _get_name(f"upscale_ri_{filters}")

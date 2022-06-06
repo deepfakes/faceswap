@@ -403,7 +403,7 @@ class ModelBase():
             # print to logger
             print_fn = lambda x: logger.verbose("%s", x)  # noqa
         for model in _get_all_sub_models(self._model):
-            model.summary(print_fn=print_fn)
+            model.summary(line_length=100, print_fn=print_fn)
 
     def save(self):
         """ Save the model to disk.
