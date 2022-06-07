@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """ Plugin to blend the edges of the face between the swap and the original face. """
+from typing import List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
 
 from ._base import Adjustment, logger
+
+if TYPE_CHECKING:
+    from lib.align import DetectedFace
 
 
 class Mask(Adjustment):
@@ -22,13 +26,20 @@ class Mask(Adjustment):
     **kwargs: dict, optional
         See the parent :class:`~plugins.convert.mask._base` for additional keyword arguments.
     """
-    def __init__(self, mask_type, output_size, coverage_ratio, **kwargs):
+    def __init__(self, mask_type: str, output_size: int, coverage_ratio: float, **kwargs):
         super().__init__(mask_type, output_size, **kwargs)
-        self._do_erode = self.config.get("erosion", 0) != 0
+
+        erode_types = [f"erosion{f}" for f in ["", "_left", "_top", "_right", "_bottom"]]
+        self._erodes = [self.config.get(erode, 0) / 100 for erode in erode_types]
+        self._do_erode = any(amount != 0 for amount in self._erodes)
+
         self._coverage_ratio = coverage_ratio
 
-    def process(self, detected_face, sub_crop_offset,    # pylint:disable=arguments-differ
-                centering, predicted_mask=None,):
+    def process(self,  # type:ignore # pylint:disable=arguments-differ
+                detected_face: "DetectedFace",
+                sub_crop_offset: Optional[np.ndarray],
+                centering: Literal["legacy", "face", "head"],
+                predicted_mask: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
         """ Obtain the requested mask type and perform any defined mask manipulations.
 
         Parameters
@@ -50,16 +61,22 @@ class Mask(Adjustment):
         raw_mask: :class:`numpy.ndarray`
             The mask with no erosion/dilation applied
         """
-        logger.trace("detected_face: %s, sub_crop_offset: %s, centering: '%s', predicted_mask: %s",
-                     detected_face, sub_crop_offset, centering, predicted_mask is not None)
+        logger.trace(  # type: ignore
+            "detected_face: %s, sub_crop_offset: %s, centering: '%s', predicted_mask: %s",
+            detected_face, sub_crop_offset, centering, predicted_mask is not None)
         mask = self._get_mask(detected_face, predicted_mask, centering, sub_crop_offset)
         raw_mask = mask.copy()
         if not self.skip and self._do_erode:
             mask = self._erode(mask)
-        logger.trace("mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
+        logger.trace(  # type: ignore
+            "mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
         return mask, raw_mask
 
-    def _get_mask(self, detected_face, predicted_mask, centering, sub_crop_offset):
+    def _get_mask(self,
+                  detected_face: "DetectedFace",
+                  predicted_mask: Optional[np.ndarray],
+                  centering: Literal["legacy", "face", "head"],
+                  sub_crop_offset: Optional[np.ndarray]) -> np.ndarray:
         """ Return the requested mask with any requested blurring applied.
 
         Parameters
@@ -83,7 +100,7 @@ class Mask(Adjustment):
         if self.mask_type == "none":
             # Return a dummy mask if not using a mask
             mask = np.ones_like(self.dummy[:, :, 1], dtype="float32")[..., None]
-        elif self.mask_type == "predicted":
+        elif self.mask_type == "predicted" and predicted_mask is not None:
             mask = predicted_mask[..., None]
         else:
             mask = detected_face.mask[self.mask_type]
@@ -91,7 +108,7 @@ class Mask(Adjustment):
                                         blur_type=self.config["type"],
                                         blur_passes=self.config["passes"],
                                         threshold=self.config["threshold"])
-            if np.any(sub_crop_offset):
+            if sub_crop_offset is not None and np.any(sub_crop_offset):
                 mask.set_sub_crop(sub_crop_offset, centering)
             mask = self._crop_to_coverage(mask.mask)
             mask_size = mask.shape[0]
@@ -102,10 +119,10 @@ class Mask(Adjustment):
                                   self.dummy.shape[:2],
                                   interpolation=interp)[..., None]
             mask = mask.astype("float32") / 255.0
-        logger.trace(mask.shape)
+        logger.trace(mask.shape)  # type: ignore
         return mask
 
-    def _crop_to_coverage(self, mask):
+    def _crop_to_coverage(self, mask: np.ndarray) -> np.ndarray:
         """ Crop the mask to the correct dimensions based on coverage ratio.
 
         Parameters
@@ -124,12 +141,12 @@ class Mask(Adjustment):
         padding = round((mask_size * (1 - self._coverage_ratio)) / 2)
         mask_slice = slice(padding, mask_size - padding)
         mask = mask[mask_slice, mask_slice, :]
-        logger.trace("mask_size: %s, coverage: %s, padding: %s, final shape: %s",
+        logger.trace("mask_size: %s, coverage: %s, padding: %s, final shape: %s",  # type: ignore
                      mask_size, self._coverage_ratio, padding, mask.shape)
         return mask
 
     # MASK MANIPULATIONS
-    def _erode(self, mask):
+    def _erode(self, mask: np.ndarray) -> np.ndarray:
         """ Erode or dilate mask the mask based on configuration options.
 
         Parameters
@@ -142,17 +159,29 @@ class Mask(Adjustment):
         :class:`numpy.ndarray`
             The mask with erosion/dilation applied
         """
-        kernel = self._get_erosion_kernel(mask)
-        if self.config["erosion"] > 0:
-            logger.trace("Eroding mask")
-            mask = cv2.erode(mask, kernel, iterations=1)
-        else:
-            logger.trace("Dilating mask")
-            mask = cv2.dilate(mask, kernel, iterations=1)
+        kernels = self._get_erosion_kernels(mask)
+        if not any(k.any() for k in kernels):
+            return mask  # No kernels could be created from selected input res
+        eroded = []
+        for idx, (kernel, ratio) in enumerate(zip(kernels, self._erodes)):
+            if not kernel.any():
+                continue
+            anchor = [-1, -1]
+            if idx > 0:
+                pos = 1 if idx % 2 == 0 else 0
+                val = max(kernel.shape) - 1 if idx < 3 else 0
+                anchor[pos] = val
+            func = cv2.erode if ratio > 0 else cv2.dilate
+            eroded.append(func(mask, kernel, iterations=1, anchor=anchor))
+
+        mask = np.min(np.array(eroded), axis=0) if len(eroded) > 1 else eroded[0]
         return mask
 
-    def _get_erosion_kernel(self, mask):
-        """ Get the erosion kernel.
+    def _get_erosion_kernels(self, mask: np.ndarray) -> List[np.ndarray]:
+        """ Get the erosion kernels for each of the center, left, top right and bottom erosions.
+
+        An approximation is made based on the number of positive pixels within the mask to create
+        an ellipse to act as kernel.
 
         Parameters
         ----------
@@ -161,12 +190,18 @@ class Mask(Adjustment):
 
         Returns
         -------
-        :class:`numpy.ndarray`
-            The erosion kernel to be used for erosion/dilation
+        list
+            The erosion kernels to be used for erosion/dilation
         """
-        erosion_ratio = self.config["erosion"] / 100
         mask_radius = np.sqrt(np.sum(mask)) / 2
-        kernel_size = max(1, int(abs(erosion_ratio * mask_radius)))
-        erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-        logger.trace("erosion_kernel shape: %s", erosion_kernel.shape)
-        return erosion_kernel
+        kernel_sizes = [max(0, int(abs(ratio * mask_radius))) for ratio in self._erodes]
+        kernels = []
+        for idx, size in enumerate(kernel_sizes):
+            kernel = [size, size]
+            shape = cv2.MORPH_ELLIPSE if idx == 0 else cv2.MORPH_RECT
+            if idx > 1:
+                pos = 0 if idx % 2 == 0 else 1
+                kernel[pos] = 1  # Set x/y to 1px based on whether eroding top/bottom, left/right
+            kernels.append(cv2.getStructuringElement(shape, kernel) if size else np.array(0))
+        logger.trace("Erosion kernels: %s", [k.shape for k in kernels])  # type: ignore
+        return kernels

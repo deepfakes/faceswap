@@ -100,9 +100,62 @@ _DEFAULTS = dict(
     ),
     erosion=dict(
         default=0.0,
-        info="Erosion kernel size as a percentage of the mask radius area.\n"
+        info="Apply erosion to the whole of the face mask.\n"
+             "Erosion kernel size as a percentage of the mask radius area.\n"
              "Positive values apply erosion which reduces the size of the swapped area.\n"
              "Negative values apply dilation which increases the swapped area.",
+        datatype=float,
+        rounding=1,
+        min_max=(-100.0, 100.0),
+        choices=[],
+        gui_radio=False,
+        group="settings",
+        fixed=True,
+    ),
+    erosion_top=dict(
+        default=0.0,
+        info="Apply erosion to the top part of the mask only.\n"
+             "Positive values apply erosion which pulls the mask into the center.\n"
+             "Negative values apply dilation which pushes the mask away from the center.",
+        datatype=float,
+        rounding=1,
+        min_max=(-100.0, 100.0),
+        choices=[],
+        gui_radio=False,
+        group="settings",
+        fixed=True,
+    ),
+    erosion_bottom=dict(
+        default=0.0,
+        info="Apply erosion to the bottom part of the mask only.\n"
+             "Positive values apply erosion which pulls the mask into the center.\n"
+             "Negative values apply dilation which pushes the mask away from the center.",
+        datatype=float,
+        rounding=1,
+        min_max=(-100.0, 100.0),
+        choices=[],
+        gui_radio=False,
+        group="settings",
+        fixed=True,
+    ),
+    erosion_left=dict(
+        default=0.0,
+        info="Apply erosion to the left part of the mask only.\n"
+             "Positive values apply erosion which pulls the mask into the center.\n"
+             "Negative values apply dilation which pushes the mask away from the center.",
+        datatype=float,
+        rounding=1,
+        min_max=(-100.0, 100.0),
+        choices=[],
+        gui_radio=False,
+        group="settings",
+        fixed=True,
+    ),
+    erosion_right=dict(
+        default=0.0,
+        info="Apply erosion to the right part of the mask only.\n"
+             "Positive values apply erosion which pulls the mask into the center.\n"
+             "Negative values apply dilation which pushes the mask away from the center.",
         datatype=float,
         rounding=1,
         min_max=(-100.0, 100.0),
