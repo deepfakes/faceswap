@@ -52,7 +52,7 @@ class Converter():
         self._configfile = configfile
 
         self._scale = arguments.output_scale / 100
-        self._adjustments = dict(box=None, mask=None, color=None, seamless=None, sharpening=None)
+        self._adjustments = dict(mask=None, color=None, seamless=None, sharpening=None)
 
         self._load_plugins()
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -75,7 +75,7 @@ class Converter():
             Pre-loaded :class:`lib.config.FaceswapConfig`. used over any configuration on disk.
         """
         logger.debug("Reinitializing converter")
-        self._adjustments = dict(box=None, mask=None, color=None, seamless=None, sharpening=None)
+        self._adjustments = dict(mask=None, color=None, seamless=None, sharpening=None)
         self._load_plugins(config=config, disable_logging=True)
         logger.debug("Reinitialized converter")
 
@@ -95,13 +95,6 @@ class Converter():
             suppress these messages otherwise ``False``. Default: ``False``
         """
         logger.debug("Loading plugins. config: %s", config)
-        self._adjustments["box"] = PluginLoader.get_converter(
-            "mask",
-            "box_blend",
-            disable_logging=disable_logging)(self._output_size,
-                                             configfile=self._configfile,
-                                             config=config)
-
         self._adjustments["mask"] = PluginLoader.get_converter(
             "mask",
             "mask_blend",
@@ -287,7 +280,6 @@ class Converter():
         logger.trace("new_face shape: %s, predicted_mask shape: %s", new_face.shape,
                      predicted_mask.shape if predicted_mask is not None else None)
         old_face = reference_face.face[..., :3] / 255.0
-        new_face = self._adjustments["box"].run(new_face)
         new_face, raw_mask = self._get_image_mask(new_face,
                                                   detected_face,
                                                   predicted_mask,
@@ -300,15 +292,14 @@ class Converter():
         return new_face
 
     def _get_image_mask(self, new_face, detected_face, predicted_mask, reference_face):
-        """ Return any selected image mask and intersect with any box mask.
+        """ Return any selected image mask
 
-        Places the requested mask into the new face's Alpha channel, intersecting with any box
-        mask that has already been applied.
+        Places the requested mask into the new face's Alpha channel.
 
         Parameters
         ----------
         new_face: :class:`numpy.ndarray`
-            The swapped face received from the faceswap model, with any box mask applied
+            The swapped face received from the faceswap model.
         detected_face: :class:`~lib.DetectedFace`
             The detected_face object as defined in :class:`scripts.convert.Predictor`
         predicted_mask: :class:`numpy.ndarray` or ``None``
@@ -331,12 +322,8 @@ class Converter():
                        reference_face.pose.offset[mask_centering])
         mask, raw_mask = self._adjustments["mask"].run(detected_face, crop_offset, self._centering,
                                                        predicted_mask=predicted_mask)
-        if new_face.shape[2] == 4:
-            logger.trace("Combining mask with alpha channel box mask")
-            new_face[:, :, -1] = np.minimum(new_face[:, :, -1], mask.squeeze())
-        else:
-            logger.trace("Adding mask to alpha channel")
-            new_face = np.concatenate((new_face, mask), -1)
+        logger.trace("Adding mask to alpha channel")
+        new_face = np.concatenate((new_face, mask), -1)
         logger.trace("Got mask. Image shape: %s", new_face.shape)
         return new_face, raw_mask
 
