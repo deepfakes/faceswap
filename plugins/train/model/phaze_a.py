@@ -954,7 +954,225 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
             var_x = Reshape((dim, dim, int(self._max_nodes / (dim ** 2))))(var_x)
             var_x = self._do_upsampling(var_x)
 
+            num_upscales = self._config["dec_upscales_in_fc"]
+            if num_upscales:
+                var_x = UpscaleBlocks(self._side,
+                                      K.int_shape(var_x)[1:],
+                                      self._config,
+                                      layer_indicies=(0, num_upscales))(var_x)
+
         return KerasModel(input_, var_x, name=f"fc_{self._side}")
+
+
+class UpscaleBlocks():  # pylint: disable=too-few-public-methods
+    """ Obtain a block of upscalers.
+
+    This class exists outside of the :class:`Decoder` model, as it is possible to place some of
+    the upscalers at the end of the Fully Connected Layers, so the upscale chain needs to be able
+    to be calculated by both the Fully Connected Layers and by the Decoder if required.
+
+    For this reason, the Upscale Filter list is created as a class attribute of the
+    :class:`UpscaleBlocks` layers for reference by either the Decoder or Fully Connected models
+
+    Parameters
+    ----------
+    side: ["a", "b", "both", "shared"]
+        The side of the model that the Decoder belongs to. Used for naming
+    input_shape: tuple
+        The shape tuple for the input to the decoder.
+    config: dict
+        The user configuration dictionary
+    layer_indices: tuple, optional
+        The tuple indicies indicating the starting layer index and the ending layer index to
+        generate upscales for. Used for when splitting upscales between the Fully Connected Layers
+        and the Decoder. ``None`` will generate the full Upscale chain. An end index of -1 will
+        generate the layers from the starting index to the final upscale. Default: ``None``
+    """
+    _filters: List[int] = []
+
+    def __init__(self,
+                 side: Literal["a", "b", "both", "shared"],
+                 input_shape: Tuple[int, int, int],
+                 config: dict,
+                 layer_indicies: Optional[Tuple[int, int]] = None) -> None:
+        logger.debug("Initializing: %s (side: %s, input_shape: %s, layer_indicies: %s)",
+                     self.__class__.__name__, side, input_shape, layer_indicies)
+        self._side = side
+        self._input_shape = input_shape
+        self._config = config
+        self._is_dny = self._config["dec_upscale_method"].lower() == "upscale_dny"
+        self._layer_indicies = layer_indicies
+        logger.debug("Initialized: %s", self.__class__.__name__,)
+
+    def _reshape_for_output(self, inputs: Tensor) -> Tensor:
+        """ Reshape the input for arbitrary output sizes.
+
+        The number of filters in the input will have been scaled to the model output size allowing
+        us to scale the dimensions to the requested output size.
+
+        Parameters
+        ----------
+        inputs: tensor
+            The tensor that is to be reshaped
+
+        Returns
+        -------
+        tensor
+            The tensor shaped correctly to upscale to output size
+        """
+        var_x = inputs
+        old_dim = K.int_shape(inputs)[1]
+        new_dim = _scale_dim(self._config["output_size"], old_dim)
+        if new_dim != old_dim:
+            old_shape = K.int_shape(inputs)[1:]
+            new_shape = (new_dim, new_dim, np.prod(old_shape) // new_dim ** 2)
+            logger.debug("Reshaping tensor from %s to %s for output size %s",
+                         K.int_shape(inputs)[1:], new_shape, self._config["output_size"])
+            var_x = Reshape(new_shape)(var_x)
+        return var_x
+
+    def _upscale_block(self,
+                       inputs: Tensor,
+                       filters: int,
+                       skip_residual: bool = False,
+                       is_mask: bool = False) -> Tensor:
+        """ Upscale block for Phaze-A Decoder.
+
+        Uses requested upscale method, adds requested regularization and activation function.
+
+        Parameters
+        ----------
+        inputs: tensor
+            The input tensor for the upscale block
+        filters: int
+            The number of filters to use for the upscale
+        skip_residual: bool, optional
+            ``True`` if a residual block should not be placed in the upscale block, otherwise
+            ``False``. Default ``False``
+        is_mask: bool, optional
+            ``True`` if the input is a mask. ``False`` if the input is a face. Default: ``False``
+
+        Returns
+        -------
+        tensor
+            The output tensor from the upscale block
+        """
+        upscaler = _get_upscale_layer(self._config["dec_upscale_method"].lower(),
+                                      filters,
+                                      activation="leakyrelu",
+                                      upsamples=2,
+                                      interpolation="bilinear")
+
+        var_x = upscaler(inputs)
+        if not is_mask and self._config["dec_gaussian"]:
+            var_x = GaussianNoise(1.0)(var_x)
+        if not is_mask and self._config["dec_res_blocks"] and not skip_residual:
+            var_x = self._normalization(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
+            for _ in range(self._config["dec_res_blocks"]):
+                var_x = ResidualBlock(filters)(var_x)
+        else:
+            var_x = self._normalization(var_x)
+            if not self._is_dny:
+                var_x = LeakyReLU(alpha=0.1)(var_x)
+        return var_x
+
+    def _normalization(self, inputs: Tensor) -> Tensor:
+        """ Add a normalization layer if requested.
+
+        Parameters
+        ----------
+        inputs: tensor
+            The input tensor to apply normalization to.
+
+        Returns
+        --------
+        tensor
+            The tensor with any normalization applied
+        """
+        if not self._config["dec_norm"]:
+            return inputs
+        norms = dict(batch=BatchNormalization,
+                     group=GroupNormalization,
+                     instance=InstanceNormalization,
+                     layer=LayerNormalization,
+                     rms=RMSNormalization)
+        return norms[self._config["dec_norm"]]()(inputs)
+
+    def _dny_entry(self, inputs: Tensor) -> Tensor:
+        """ Entry convolutions for using the upscale_dny method.
+
+        Parameters
+        ----------
+        inputs: Tensor
+            The inputs to the dny entry block
+
+        Returns
+        -------
+        Tensor
+            The output from the dny entry block
+        """
+        var_x = Conv2DBlock(self._config["dec_max_filters"],
+                            kernel_size=4,
+                            strides=1,
+                            padding="same",
+                            relu_alpha=0.2)(inputs)
+        var_x = Conv2DBlock(self._config["dec_max_filters"],
+                            kernel_size=3,
+                            strides=1,
+                            padding="same",
+                            relu_alpha=0.2)(var_x)
+        return var_x
+
+    def __call__(self, inputs: Optional[Tensor] = None) -> Tensor:
+        """ Decoder Network.
+
+        Parameters
+        inputs: Tensor, optional
+            If the input is an output from another model (such as the Fully Connected Model) this
+            should be ``None`` otherwise it should be a Tensor
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The Decoder model
+        """
+        inputs = Input(shape=self._input_shape) if inputs is None else inputs
+        var_x = inputs
+        start_idx, end_idx = (0, None) if self._layer_indicies is None else self._layer_indicies
+        end_idx = None if end_idx == -1 else end_idx
+
+        if start_idx == 0:
+            var_x = self._reshape_for_output(var_x)
+
+            if self._config["learn_mask"]:
+                var_y = inputs
+                var_y = self._reshape_for_output(var_y)
+
+            if self._is_dny:
+                var_x = self._dny_entry(var_x)
+            if self._is_dny and self._config["learn_mask"]:
+                var_y = self._dny_entry(var_y)
+
+        # De-convolve
+        if not self._filters:
+            upscales = int(np.log2(self._config["output_size"] / K.int_shape(var_x)[1]))
+            self._filters.extend(_get_curve(self._config["dec_max_filters"],
+                                            self._config["dec_min_filters"],
+                                            upscales,
+                                            self._config["dec_filter_slope"],
+                                            mode=self._config["dec_slope_mode"]))
+            logger.debug("Generated class filters: %s", self._filters)
+
+        filters = self._filters[start_idx: end_idx]
+
+        for idx, filts in enumerate(filters):
+            skip_res = idx == len(filters) - 1 and self._config["dec_skip_last_residual"]
+            var_x = self._upscale_block(var_x, filts, skip_residual=skip_res)
+            if self._config["learn_mask"]:
+                var_y = self._upscale_block(var_y, filts, is_mask=True)
+        retval = [var_x, var_y] if self._config["learn_mask"] else var_x
+        return retval
 
 
 class GBlock():  # pylint:disable=too-few-public-methods
@@ -965,7 +1183,7 @@ class GBlock():  # pylint:disable=too-few-public-methods
     side: ["a", "b", "both"]
         The side of the model that the fully connected layers belong to. Used for naming
     input_shapes: list or tuple
-        The shape tuples for the input to the decoder. The first item is the input from each side's
+        The shape tuples for the input to the G-Block. The first item is the input from each side's
         fully connected model, the second item is the input shape from the combined fully connected
         model.
     config: dict
@@ -1046,7 +1264,7 @@ class Decoder():  # pylint:disable=too-few-public-methods
     Parameters
     ----------
     side: ["a", "b", "both"]
-        The side of the model that the fully connected layers belong to. Used for naming
+        The side of the model that the Decoder belongs to. Used for naming
     input_shape: tuple
         The shape tuple for the input to the decoder.
     config: dict
@@ -1061,124 +1279,7 @@ class Decoder():  # pylint:disable=too-few-public-methods
         self._side = side
         self._input_shape = input_shape
         self._config = config
-        self._is_dny = self._config["dec_upscale_method"].lower() == "upscale_dny"
         logger.debug("Initialized: %s", self.__class__.__name__,)
-
-    def _reshape_for_output(self, inputs: Tensor) -> Tensor:
-        """ Reshape the input for arbitrary output sizes.
-
-        The number of filters in the input will have been scaled to the model output size allowing
-        us to scale the dimensions to the requested output size.
-
-        Parameters
-        ----------
-        inputs: tensor
-            The tensor that is to be reshaped
-
-        Returns
-        -------
-        tensor
-            The tensor shaped correctly to upscale to output size
-        """
-        var_x = inputs
-        old_dim = K.int_shape(inputs)[1]
-        new_dim = _scale_dim(self._config["output_size"], old_dim)
-        if new_dim != old_dim:
-            old_shape = K.int_shape(inputs)[1:]
-            new_shape = (new_dim, new_dim, np.prod(old_shape) // new_dim ** 2)
-            logger.debug("Reshaping tensor from %s to %s for output size %s",
-                         K.int_shape(inputs)[1:], new_shape, self._config["output_size"])
-            var_x = Reshape(new_shape)(var_x)
-        return var_x
-
-    def _upscale_block(self,
-                       inputs: Tensor,
-                       filters: int,
-                       skip_residual: bool = False,
-                       is_mask: bool = False) -> Tensor:
-        """ Upscale block for Phaze-A Decoder.
-
-        Uses requested upscale method, adds requested regularization and activation function.
-
-        Parameters
-        ----------
-        inputs: tensor
-            The input tensor for the upscale block
-        filters: int
-            The number of filters to use for the upscale
-        skip_residual: bool, optional
-            ``True`` if a residual block should not be placed in the upscale block, otherwise
-            ``False``. Default ``False``
-        is_mask: bool, optional
-            ``True`` if the input is a mask. ``False`` if the input is a face. Default: ``False``
-
-        Returns
-        -------
-        tensor
-            The output tensor from the upscale block
-        """
-        upscaler = _get_upscale_layer(self._config["dec_upscale_method"].lower(), filters)
-
-        var_x = upscaler(inputs)
-        if not is_mask and self._config["dec_gaussian"]:
-            var_x = GaussianNoise(1.0)(var_x)
-        if not is_mask and self._config["dec_res_blocks"] and not skip_residual:
-            var_x = self._normalization(var_x)
-            var_x = LeakyReLU(alpha=0.2)(var_x)
-            for _ in range(self._config["dec_res_blocks"]):
-                var_x = ResidualBlock(filters)(var_x)
-        else:
-            var_x = self._normalization(var_x)
-            if not self._is_dny:
-                var_x = LeakyReLU(alpha=0.1)(var_x)
-        return var_x
-
-    def _normalization(self, inputs: Tensor) -> Tensor:
-        """ Add a normalization layer if requested.
-
-        Parameters
-        ----------
-        inputs: tensor
-            The input tensor to apply normalization to.
-
-        Returns
-        --------
-        tensor
-            The tensor with any normalization applied
-        """
-        if not self._config["dec_norm"]:
-            return inputs
-        norms = dict(batch=BatchNormalization,
-                     group=GroupNormalization,
-                     instance=InstanceNormalization,
-                     layer=LayerNormalization,
-                     rms=RMSNormalization)
-        return norms[self._config["dec_norm"]]()(inputs)
-
-    def _dny_entry(self, inputs: Tensor) -> Tensor:
-        """ Entry convolutions for using the upscale_dny method.
-
-        Parameters
-        ----------
-        inputs: Tensor
-            The inputs to the dny entry block
-
-        Returns
-        -------
-        Tensor
-            The output from the dny entry block
-        """
-        var_x = Conv2DBlock(self._config["dec_max_filters"],
-                            kernel_size=4,
-                            strides=1,
-                            padding="same",
-                            relu_alpha=0.2)(inputs)
-        var_x = Conv2DBlock(self._config["dec_max_filters"],
-                            kernel_size=3,
-                            strides=1,
-                            padding="same",
-                            relu_alpha=0.2)(var_x)
-        return var_x
 
     def __call__(self) -> keras.models.Model:
         """ Decoder Network.
@@ -1190,30 +1291,18 @@ class Decoder():  # pylint:disable=too-few-public-methods
         """
         inputs = Input(shape=self._input_shape)
         var_x = inputs
-        var_x = self._reshape_for_output(var_x)
+        num_ups_in_fc = self._config["dec_upscales_in_fc"]
+        indicies = None if not num_ups_in_fc else (num_ups_in_fc, -1)
+
+        upscales = UpscaleBlocks(self._side,
+                                 self._input_shape,
+                                 self._config,
+                                 layer_indicies=indicies)(var_x)
 
         if self._config["learn_mask"]:
-            var_y = inputs
-            var_y = self._reshape_for_output(var_y)
-
-        if self._is_dny:
-            var_x = self._dny_entry(var_x)
-        if self._is_dny and self._config["learn_mask"]:
-            var_y = self._dny_entry(var_y)
-
-        # De-convolve
-        upscales = int(np.log2(self._config["output_size"] / K.int_shape(var_x)[1]))
-        filters = _get_curve(self._config["dec_max_filters"],
-                             self._config["dec_min_filters"],
-                             upscales,
-                             self._config["dec_filter_slope"],
-                             mode=self._config["dec_slope_mode"])
-
-        for idx, filts in enumerate(filters):
-            skip_res = idx == len(filters) - 1 and self._config["dec_skip_last_residual"]
-            var_x = self._upscale_block(var_x, filts, skip_residual=skip_res)
-            if self._config["learn_mask"]:
-                var_y = self._upscale_block(var_y, filts, is_mask=True)
+            var_x, var_y = upscales
+        else:
+            var_x = upscales
 
         outputs = [Conv2DOutput(3, self._config["dec_output_kernel"], name="face_out")(var_x)]
         if self._config["learn_mask"]:

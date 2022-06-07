@@ -402,8 +402,12 @@ class ModelBase():
         else:
             # print to logger
             print_fn = lambda x: logger.verbose("%s", x)  # noqa
-        for model in _get_all_sub_models(self._model):
+        for idx, model in enumerate(_get_all_sub_models(self._model)):
+            if idx == 0:
+                parent = model
+                continue
             model.summary(line_length=100, print_fn=print_fn)
+        parent.summary(line_length=100, print_fn=print_fn)
 
     def save(self):
         """ Save the model to disk.

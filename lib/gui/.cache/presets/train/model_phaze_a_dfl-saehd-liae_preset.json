@@ -27,6 +27,7 @@
   "fc_gblock_filter_slope": -0.5,
   "fc_gblock_dropout": 0.0,
   "dec_upscale_method": "subpixel",
+  "dec_upscales_in_fc": 0,
   "dec_norm": "none",
   "dec_min_filters": 128,
   "dec_max_filters": 512,
