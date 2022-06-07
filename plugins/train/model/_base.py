@@ -20,7 +20,7 @@ from lib.serializer import get_serializer
 from lib.model.backup_restore import Backup
 from lib.model import losses, optimizers
 from lib.model.nn_blocks import set_config as set_nnblock_config
-from lib.utils import get_backend, get_tf_version, FaceswapError
+from lib.utils import get_backend, FaceswapError
 from plugins.train._config import Config
 
 if get_backend() == "amd":
@@ -433,7 +433,8 @@ class ModelBase():
                                10 ** int(self.config["epsilon_exponent"]),
                                self._args).optimizer
         if self._settings.use_mixed_precision:
-            optimizer = self._settings.loss_scale_optimizer(optimizer)
+            optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer)
+
         if get_backend() == "amd":
             self._rewrite_plaid_outputs()
 
@@ -714,14 +715,6 @@ class _Settings():
         self._set_tf_settings(allow_growth, arguments.exclude_gpus)
 
         use_mixed_precision = not is_predict and mixed_precision and get_backend() == "nvidia"
-        # Mixed precision moved out of experimental in tensorflow 2.4
-        if use_mixed_precision and get_tf_version() < 2.4:
-            self._mixed_precision = tf.keras.mixed_precision.experimental
-        elif use_mixed_precision:
-            self._mixed_precision = tf.keras.mixed_precision
-        else:
-            self._mixed_precision = None
-
         self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision,
                                                                     bool(arguments.exclude_gpus))
 
@@ -738,25 +731,6 @@ class _Settings():
     def use_mixed_precision(self):
         """ bool: ``True`` if mixed precision training has been enabled, otherwise ``False``. """
         return self._use_mixed_precision
-
-    def loss_scale_optimizer(self, optimizer):
-        """ Optimize loss scaling for mixed precision training.
-
-        Parameters
-        ----------
-        optimizer: :class:`tf.keras.optimizers.Optimizer`
-            The optimizer instance to wrap
-
-        Returns
-        --------
-        :class:`tf.keras.mixed_precision.loss_scale_optimizer.LossScaleOptimizer`
-            The original optimizer with loss scaling applied
-        """
-        # tensorflow versions < 2.4 had different kwargs where scaling needs to be explicitly
-        # defined
-        kwargs = dict(loss_scale="dynamic") if get_tf_version() < 2.4 else {}
-        logger.debug("tf version: %s, kwargs: %s", get_tf_version(), kwargs)
-        return self._mixed_precision.LossScaleOptimizer(optimizer, **kwargs)
 
     @classmethod
     def _set_tf_settings(cls, allow_growth, exclude_devices):
@@ -796,7 +770,8 @@ class _Settings():
                 tf.config.experimental.set_memory_growth(gpu, True)
             logger.debug("Set Tensorflow 'allow_growth' option")
 
-    def _set_keras_mixed_precision(self, use_mixed_precision, exclude_gpus):
+    @classmethod
+    def _set_keras_mixed_precision(cls, use_mixed_precision, exclude_gpus):
         """ Enable the Keras experimental Mixed Precision API.
 
         Enables the Keras experimental Mixed Precision API if requested in the user configuration
@@ -809,19 +784,6 @@ class _Settings():
             otherwise ``False``.
         exclude_gpus: bool
             ``True`` If connected GPUs are being excluded otherwise ``False``.
-
-            There is a bug in Tensorflow 2.2 that will cause a failure if "set_visible_devices" has
-            been set and mixed_precision is enabled. This can happen if GPUs have been excluded.
-            The issue is Specifically in
-            :file:`tensorflow.python.keras.mixed_precision.experimental.device_compatibility_check`
-
-            From doc-string: "if list_local_devices() and tf.config.set_visible_devices() are both
-            called, TensorFlow will crash. However, GPU names and compute capabilities cannot be
-            checked without list_local_devices().
-
-            To get around this, we hack in to set a global parameter to indicate the test has
-            already been performed. This is likely to cause some issues, but not as many as
-            guaranteed failure when limiting GPU devices
         """
         logger.debug("use_mixed_precision: %s, exclude_gpus: %s",
                      use_mixed_precision, exclude_gpus)
@@ -831,23 +793,8 @@ class _Settings():
             return False
         logger.info("Enabling Mixed Precision Training.")
 
-        if exclude_gpus and get_tf_version() == 2.2:
-            # TODO remove this hacky fix to disable mixed precision compatibility testing when
-            # tensorflow 2.2 support dropped
-            # pylint:disable=import-outside-toplevel,protected-access
-            # pylint:disable=import-error,no-name-in-module
-            from tensorflow.python.keras.mixed_precision.experimental import \
-                device_compatibility_check
-            logger.debug("Overriding tensorflow _logged_compatibility_check parameter. Initial "
-                         "value: %s", device_compatibility_check._logged_compatibility_check)
-            device_compatibility_check._logged_compatibility_check = True
-            logger.debug("New value: %s", device_compatibility_check._logged_compatibility_check)
-
-        policy = self._mixed_precision.Policy('mixed_float16')
-        if get_tf_version() < 2.4:
-            self._mixed_precision.set_policy(policy)
-        else:
-            self._mixed_precision.set_global_policy(policy)
+        policy = tf.keras.mixed_precision.Policy('mixed_float16')
+        tf.keras.mixed_precision.set_global_policy(policy)
         logger.debug("Enabled mixed precision. (Compute dtype: %s, variable_dtype: %s)",
                      policy.compute_dtype, policy.variable_dtype)
         return True

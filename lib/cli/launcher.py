@@ -53,9 +53,10 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         Raises
         ------
         FaceswapError
-            If Tensorflow is not found, or is not between versions 2.2 and 2.8
+            If Tensorflow is not found, or is not between versions 2.4 and 2.8
         """
-        min_ver = 2.2
+        amd_ver = 2.2
+        min_ver = 2.4
         max_ver = 2.8
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
@@ -78,13 +79,18 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             self._handle_import_error(msg)
 
         tf_ver = get_tf_version()
-        if tf_ver < min_ver:
+        backend = get_backend()
+        if backend != "amd" and tf_ver < min_ver:
             msg = (f"The minimum supported Tensorflow is version {min_ver} but you have version "
                    f"{tf_ver} installed. Please upgrade Tensorflow.")
             self._handle_import_error(msg)
-        if tf_ver > max_ver:
+        if backend != "amd" and tf_ver > max_ver:
             msg = (f"The maximum supported Tensorflow is version {max_ver} but you have version "
                    f"{tf_ver} installed. Please downgrade Tensorflow.")
+            self._handle_import_error(msg)
+        if backend == "amd" and tf_ver != amd_ver:
+            msg = (f"The supported Tensorflow version for AMD cards is {amd_ver} but you have "
+                   "version {tf_ver} installed. Please install the correct version.")
             self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 

@@ -21,13 +21,21 @@
   - [Create a desktop shortcut](#create-a-desktop-shortcut)
   - [Updating faceswap](#updating-faceswap)
 - [macOS (Apple Silicon) Install Guide](#macos-apple-silicon-install-guide)
+  - [Prerequisites](#prerequisites-2)
+    - [OS](#os)
+    - [XCode Tools](#xcode-tools)
+    - [XQuartz](#xquartz)
+    - [Conda](#conda)
+  - [Setup](#setup-1)
+    - [faceswap](#faceswap-1)
+      - [Easy install](#easy-install-1)
 - [General Install Guide](#general-install-guide)
   - [Installing dependencies](#installing-dependencies)
     - [Git](#git-1)
     - [Python](#python)
     - [Virtual Environment](#virtual-environment)
   - [Getting the faceswap code](#getting-the-faceswap-code)
-  - [Setup](#setup-1)
+  - [Setup](#setup-2)
     - [About some of the options](#about-some-of-the-options)
   - [Run the project](#run-the-project)
   - [Notes](#notes)
@@ -193,7 +201,7 @@ Obtain git for your distribution from the [git website](https://git-scm.com/down
 The recommended install method is to use a Conda3 Environment as this will handle the installation of Nvidia's CUDA and cuDNN straight into your Conda Environment. This is by far the easiest and most reliable way to setup the project.
   - MiniConda3 is recommended: [MiniConda3](https://docs.conda.io/en/latest/miniconda.html)
 
-Alternatively you can install Python (>= 3.7-3.8 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Tensorflow (Current release: Tensorflow 2.2. Release v1.0: Tensorflow 1.15). You can check for the compatible versions here: (https://www.tensorflow.org/install/source#gpu).
+Alternatively you can install Python (>= 3.7-3.9 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Tensorflow (Current release: Tensorflow 2.8. Release v1.0: Tensorflow 1.15). You can check for the compatible versions here: (https://www.tensorflow.org/install/source#gpu).
   - Python distributions:
     - apt/yum install python3 (Linux)
     - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)

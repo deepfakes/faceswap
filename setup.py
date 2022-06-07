@@ -17,8 +17,7 @@ from pkg_resources import parse_requirements, Requirement
 INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
 # Tensorflow builds available from pypi
-TENSORFLOW_REQUIREMENTS = {">=2.2.0,<2.4.0": ["10.1", "7.6"],
-                           ">=2.4.0,<2.5.0": ["11.0", "8.0"],
+TENSORFLOW_REQUIREMENTS = {">=2.4.0,<2.5.0": ["11.0", "8.0"],
                            ">=2.5.0,<2.9.0": ["11.2", "8.1"]}
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
 CONDA_MAPPING = {
@@ -256,7 +255,7 @@ class Environment():
             return
 
         self.output.warning(
-            "The minimum Tensorflow requirement is 2.3 \n"
+            "The minimum Tensorflow requirement is 2.4 \n"
             "Tensorflow currently has no official prebuild for your CUDA, cuDNN "
             "combination.\nEither install a combination that Tensorflow supports or "
             "build and install your own tensorflow-gpu.\r\n"
@@ -643,8 +642,6 @@ class Install():
                 not self.env.missing_packages and not self.env.conda_missing_packages):
             self.output.info("All Dependencies are up to date")
             return
-        if self.env.updater:
-            self._remove_unrequired_packages()
         self.install_missing_dep()
         if self.env.updater:
             return
@@ -690,42 +687,6 @@ class Install():
                 if pkg[0].split("==")[1] != self.env.installed_conda_packages.get(key):
                     self.env.conda_missing_packages.append(pkg)
                     continue
-
-    def _remove_unrequired_packages(self):
-        """ Remove packages that have been installed by Pip that might now be installed by
-        Conda.
-
-        This specifically relates to tensorflow 2.2 when a Conda version was not available for
-        Windows, so needed to be installed by Pip, with the Cuda toolkit coming from Conda.
-
-        This method is left here in case it is needed in the future. """
-        if not self.env.is_conda or self.env.os_version[0] != "Windows":
-            return
-        installed_pip = self.env.get_installed_packages()
-        if "tensorflow-gpu" not in installed_pip:
-            return
-        if not installed_pip["tensorflow-gpu"].startswith("2.2"):
-            return
-        # The below are a load of pip installed tf dependencies. They may not need to be all
-        # removed, but won't hurt to take them out of pip and put in Conda
-        remove_packages = ["urllib3", "pyasn1", "idna", "chardet", "rsa", "requests",
-                           "pyasn1-modules", "oauthlib", "cachetools", "requests-oauthlib",
-                           "google-auth", "werkzeug", "tensorboard-plugin-wit", "protobuf",
-                           "numpy", "markdown", "grpcio", "google-auth-oauthlib", "absl-py",
-                           "wrapt", "termcolor", "tensorflow-gpu-estimator", "tensorboard",
-                           "opt-einsum", "keras-preprocessing", "h5py", "google-pasta", "gast",
-                           "astunparse", "tensorflow-gpu"]
-        self.output.info("Uninstalling Pip Tensorflow 2.2")
-        pipexe = [sys.executable, "-m", "pip", "uninstall", "-y", "-qq"]
-        if not self.env.is_admin and not self.env.is_virtualenv:
-            pipexe.append("--user")
-        pipexe.extend([pkg for pkg in remove_packages if pkg in installed_pip])
-
-        try:
-            run(pipexe, check=True)
-        except CalledProcessError:
-            self.output.warning("Couldn't remove Tensorflow 2.2 with pip. You should attempt this "
-                                "manually")
 
     def install_missing_dep(self):
         """ Install missing dependencies """
@@ -840,32 +801,6 @@ class Install():
         except CalledProcessError:
             self.output.warning(f"Couldn't install {package} with pip. "
                                 "Please install this package manually")
-
-    def _tensorflow_dependency_install(self):
-        """ Install the Cuda/cuDNN dependencies from Conda when tensorflow is not available
-        in Conda.
-
-        This was used whilst Tensorflow 2.2 was not available for Windows in Conda. It is kept
-        here in case it is required again in the future.
-        """
-        # TODO This will need to be more robust if/when we accept multiple Tensorflow Versions
-        versions = list(TENSORFLOW_REQUIREMENTS.values())[-1]
-        condaexe = ["conda", "search"]
-        pkgs = ["cudatoolkit", "cudnn"]
-        shell = self.env.os_version[0] == "Windows"
-        for pkg in pkgs:
-            with Popen(condaexe + [pkg], shell=shell, stdout=PIPE) as chk:
-                available = [line.split()
-                             for line
-                             in chk.communicate()[0].decode(self.env.encoding).splitlines()
-                             if line.startswith(pkg)]
-                compatible = [req for req in available
-                              if (pkg == "cudatoolkit" and req[1].startswith(versions[0]))
-                              or (pkg == "cudnn" and versions[0] in req[2]
-                                  and req[1].startswith(versions[1]))]
-
-            candidate = "==".join(sorted(compatible, key=lambda x: x[1])[-1][:2])
-            self.conda_installer(candidate, verbose=True, conda_only=True)
 
 
 class Tips():
