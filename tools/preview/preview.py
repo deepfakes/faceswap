@@ -10,7 +10,7 @@ import os
 import sys
 
 from configparser import ConfigParser
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 
 import cv2
 import numpy as np
@@ -22,7 +22,6 @@ from lib.gui.utils import get_images, get_config, initialize_config, initialize_
 from lib.gui.custom_widgets import Tooltip
 from lib.gui.control_helper import ControlPanel, ControlPanelOption
 from lib.convert import Converter
-from lib.multithreading import MultiThread
 from lib.utils import FaceswapError
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
@@ -409,14 +408,14 @@ class Patch():
                                     configfile=configfile)
         self._shutdown = Event()
 
-        self._thread = MultiThread(self._process,
-                                   self._trigger,
-                                   self._shutdown,
-                                   self._queue_patch_in,
-                                   self._samples,
-                                   tk_vars,
-                                   thread_count=1,
-                                   name="patch_thread")
+        self._thread = Thread(target=self._process,
+                              name="patch_thread",
+                              args=(self._trigger,
+                                    self._shutdown,
+                                    self._queue_patch_in,
+                                    self._samples,
+                                    tk_vars),
+                              daemon=True)
         self._thread.start()
         logger.debug("Initializing %s", self.__class__.__name__)
 
@@ -509,6 +508,7 @@ class Patch():
                 self._display.destination = swapped
             tk_vars["refresh"].set(True)
             tk_vars["busy"].set(False)
+
         logger.debug("Closed patch process thread")
 
     def _update_converter_arguments(self):

@@ -105,9 +105,11 @@ class Mask():  # pylint:disable=too-few-public-methods
         edge = output_size // 32
         box[edge:-edge, edge:-edge] = 1.0
 
-        box = BlurMask(self._config["type"],
-                       box, self._config["kernel_size"],
-                       self._config["passes"]).blurred
+        if self._config["type"] is not None:
+            box = BlurMask("gaussian",
+                           box,
+                           6,
+                           is_ratio=True).blurred
         return box
 
     def run(self,
@@ -142,14 +144,13 @@ class Mask():  # pylint:disable=too-few-public-methods
         mask = self._get_mask(detected_face, predicted_mask, centering, sub_crop_offset)
         raw_mask = mask.copy()
 
-        if self._config.get("type") is not None and self._do_erode:
-            mask = self._erode(mask)
-        logger.trace(  # type: ignore
-            "mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
-
         if self._mask_type != "none":
+
+            mask = self._erode(mask) if self._do_erode else mask
             mask *= self._box
 
+        logger.trace(  # type: ignore
+            "mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
         return mask, raw_mask
 
     def _get_mask(self,
@@ -180,11 +181,32 @@ class Mask():  # pylint:disable=too-few-public-methods
         if self._mask_type == "none":
             mask = np.ones_like(self._box)  # Return a dummy mask if not using a mask
         elif self._mask_type == "predicted" and predicted_mask is not None:
-            mask = predicted_mask
+            mask = self._process_predicted_mask(predicted_mask)
         else:
             mask = self._get_stored_mask(detected_face, centering, sub_crop_offset)
 
         logger.trace(mask.shape)  # type: ignore
+        return mask
+
+    def _process_predicted_mask(self, mask: np.ndarray) -> np.ndarray:
+        """ Process blurring of the predicted mask
+
+        Parameters
+        ----------
+        mask: :class:`numpy.ndarray`
+            The predicted mask as output from the Faceswap Model
+
+        Returns
+        ------
+        :class:`numpy.ndarray`
+            The processed predicted mask
+        """
+        blur_type = self._config["type"]
+        if blur_type is not None:
+            mask = BlurMask(blur_type,
+                            mask,
+                            self._config["kernel_size"],
+                            passes=self._config["passes"]).blurred
         return mask
 
     def _get_stored_mask(self,
