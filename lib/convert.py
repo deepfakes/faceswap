@@ -162,8 +162,8 @@ class Converter():
                     loglevel("Convert error traceback:", exc_info=True)
                     log_once = True
                     # UNCOMMENT THIS CODE BLOCK TO PRINT TRACEBACK ERRORS
-                    # import sys ; import traceback
-                    # exc_info = sys.exc_info() ; traceback.print_exception(*exc_info)
+                    import sys ; import traceback
+                    exc_info = sys.exc_info() ; traceback.print_exception(*exc_info)
                 logger.trace("Out queue put: %s", item["filename"])
                 out_queue.put((item["filename"], image))
         logger.debug("Completed convert process")
@@ -245,7 +245,7 @@ class Converter():
                            frame_size,
                            placeholder,
                            flags=cv2.WARP_INVERSE_MAP | interpolator,
-                           borderMode=cv2.BORDER_TRANSPARENT)
+                           borderMode=cv2.BORDER_CONSTANT)
 
         logger.trace("Got filename: '%s'. (placeholders: %s)",
                      predicted["filename"], placeholder.shape)
