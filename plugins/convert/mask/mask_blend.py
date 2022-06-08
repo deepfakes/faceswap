@@ -245,6 +245,8 @@ class Mask():  # pylint:disable=too-few-public-methods
             mask = cv2.resize(mask,
                               self._box.shape[:2],
                               interpolation=interp)[..., None].astype("float32") / 255.
+        else:
+            mask = np.float32(mask) / 255.
         return mask
 
     def _crop_to_coverage(self, mask: np.ndarray) -> np.ndarray:
