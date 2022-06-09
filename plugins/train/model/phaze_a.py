@@ -2,8 +2,15 @@
 """ Phaze-A Model by TorzDF with thanks to BirbFakes and the myriad of testers. """
 
 # pylint: disable=too-many-lines
+import sys
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Tuple, Union
+
+from typing import Dict, List, Optional, Tuple, Union
+
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
 
 import numpy as np
 
