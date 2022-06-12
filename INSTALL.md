@@ -37,6 +37,8 @@
   - [Getting the faceswap code](#getting-the-faceswap-code)
   - [Setup](#setup-2)
     - [About some of the options](#about-some-of-the-options)
+- [Docker Install Guide](#docker-install-guide)
+  - [Docker General](#docker-general)
   - [Run the project](#run-the-project)
   - [Notes](#notes)
 
@@ -234,42 +236,97 @@ If setup fails for any reason you can still manually install the packages listed
    - Docker: Provide a ready-made image. Hide trivial details. Get you straight to the project.
    - nVidia-Docker: Access to the nVidia GPU on host machine from inside container.
 
-CUDA with Docker in 20 minutes.
+# Docker Install Guide
+
+## Docker General
+<details>
+  <summary>Click to expand!</summary>
+
+  ### CUDA with Docker in 20 minutes.
+  
+  1. Install Docker
+     https://www.docker.com/community-edition
+
+  2. Install Nvidia-Docker & Restart Docker Service
+     https://github.com/NVIDIA/nvidia-docker
+
+  3. Build Docker Image For faceswap
+  
+  ```bash
+  docker build -t deepfakes-gpu -f Dockerfile.gpu . 
+  ```
+
+  4. Mount faceswap volume and Run it
+    a). without `gui.tools.py` gui not working.
+
+ ```bash
+ nvidia-docker run --rm -it -p 8888:8888 \
+     --hostname faceswap-gpu --name faceswap-gpu \
+     -v /opt/faceswap:/srv \
+     deepfakes-gpu
+ ```
+
+    b). with gui. tools.py gui working.
+
+Enable local access to X11 server
+
+```bash
+xhost +local:
 ```
-INFO    The tool provides tips for installation
-        and installs required python packages
-INFO    Setup in Linux 4.14.39-1-MANJARO
-INFO    Installed Python: 3.7.5 64bit
-INFO    Installed PIP: 10.0.1
-Enable  Docker? [Y/n]
-INFO    Docker Enabled
-Enable  CUDA? [Y/n]
-INFO    CUDA Enabled
-INFO    1. Install Docker
-        https://www.docker.com/community-edition
 
-        1. Install Nvidia-Docker & Restart Docker Service
-        https://github.com/NVIDIA/nvidia-docker
+Enable nvidia device if working under bumblebee
 
-        1. Build Docker Image For faceswap
-        docker build -t deepfakes-gpu -f Dockerfile.gpu .
+```bash
+echo ON > /proc/acpi/bbswitch
+```
 
-        1. Mount faceswap volume and Run it
-        # without gui. tools.py gui not working.
-        nvidia-docker run --rm -it -p 8888:8888 \
+Create container
+```bash
+nvidia-docker run -p 8888:8888 \
+   --hostname faceswap-gpu --name faceswap-gpu \
+   -v /opt/faceswap:/srv \
+   -v /tmp/.X11-unix:/tmp/.X11-unix \
+   -e DISPLAY=unix$DISPLAY \
+   -e AUDIO_GID=`getent group audio | cut -d: -f3` \
+   -e VIDEO_GID=`getent group video | cut -d: -f3` \
+   -e GID=`id -g` \
+   -e UID=`id -u` \
+   deepfakes-gpu
+
+```
+
+Open a new terminal to interact with the project
+
+```bash
+docker exec -it deepfakes-gpu /bin/bash
+```
+
+Launch deepfakes gui (Answer 3 for NVIDIA at the prompt)
+
+```bash
+python3.8 /srv/faceswap.py gui
+```
+</details>
+
+## CUDA with Docker on Arch Linux
+
+<details>
+  <summary>Click to expand!</summary>
+
+### Install docker
+
+```bash
+sudo pacman -S docker
+```
+
+The steps are same but Arch linux doesn't use nvidia-docker
+
+create container
+
+```bash
+docker run -p 8888:8888 --gpus all --privileged -v /dev:/dev \  
             --hostname faceswap-gpu --name faceswap-gpu \
-            -v /opt/faceswap:/srv \
-            deepfakes-gpu
-
-        # with gui. tools.py gui working.
-        ## enable local access to X11 server
-        xhost +local:
-        ## enable nvidia device if working under bumblebee
-        echo ON > /proc/acpi/bbswitch
-        ## create container
-        nvidia-docker run -p 8888:8888 \
-            --hostname faceswap-gpu --name faceswap-gpu \
-            -v /opt/faceswap:/srv \
+            -v /mnt/hdd2/faceswap:/srv \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
             -e DISPLAY=unix$DISPLAY \
             -e AUDIO_GID=`getent group audio | cut -d: -f3` \
@@ -277,14 +334,31 @@ INFO    1. Install Docker
             -e GID=`id -g` \
             -e UID=`id -u` \
             deepfakes-gpu
-
-        1. Open a new terminal to interact with the project
-        docker exec -it deepfakes-gpu /bin/bash
-	# Launch deepfakes gui (Answer 3 for NVIDIA at the prompt)
-	python3.8 /srv/faceswap.py gui
 ```
 
-A successful setup log, without docker.
+Open a new terminal to interact with the project
+
+```bash
+docker exec -it deepfakes-gpu /bin/bash
+```
+
+Launch deepfakes gui (Answer 3 for NVIDIA at the prompt)
+
+**With `gui.tools.py` gui working.**
+ Enable local access to X11 server
+
+ ```bash
+xhost +local:
+```
+ 
+ ```bash
+ python3.8 /srv/faceswap.py gui
+ ```
+
+</details>
+
+--- 
+## A successful setup log, without docker.
 ```
 INFO    The tool provides tips for installation
         and installs required python packages
