@@ -104,7 +104,7 @@ class MSSSIMLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
                  filter_sigma=1.5,
                  max_value=1.0,
                  power_factors=(0.0448, 0.2856, 0.3001, 0.2363, 0.1333)):
-        super().__init__(name="SSIM_Multiscale_Loss")
+        super().__init__(name="SSIM_Multiscale_Loss", reduction=tf.keras.losses.Reduction.NONE)
         self.filter_size = filter_size
         self.filter_sigma = filter_sigma
         self.k_1 = k_1

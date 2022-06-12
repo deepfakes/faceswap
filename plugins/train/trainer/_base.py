@@ -311,7 +311,11 @@ class TrainerBase():
                             for side, side_loss in zip(("A", "B"), loss)])
         timestamp = time.strftime("%H:%M:%S")
         output = f"[{timestamp}] [#{self._model.iterations:05d}] {output}"
-        print(f"\r{output}", end="")
+        try:
+            print(f"\r{output}", end="")
+        except OSError as err:
+            logger.warning("Swallowed OS Error caused by Tensorflow distributed training. output "
+                           "line: %s, error: %s", output, str(err))
 
     def clear_tensorboard(self):
         """ Stop Tensorboard logging.
