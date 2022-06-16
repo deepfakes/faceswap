@@ -196,7 +196,7 @@ $ conda activate faceswap
 ```
 
 ### faceswap
-- Download the faceswap repo and enter thr faceswap folder:
+- Download the faceswap repo and enter the faceswap folder:
 ```sh
 $ git clone --depth 1 https://github.com/deepfakes/faceswap.git
 $ cd faceswap
