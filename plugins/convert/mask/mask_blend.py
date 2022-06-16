@@ -146,12 +146,12 @@ class Mask():  # pylint:disable=too-few-public-methods
 
         if self._mask_type != "none":
 
-            mask = self._erode(mask) if self._do_erode else mask
-            mask *= self._box
+            out = self._erode(mask) if self._do_erode else mask
+            out = np.minimum(out, self._box)
 
         logger.trace(  # type: ignore
             "mask shape: %s, raw_mask shape: %s", mask.shape, raw_mask.shape)
-        return mask, raw_mask
+        return out, raw_mask
 
     def _get_mask(self,
                   detected_face: DetectedFace,
