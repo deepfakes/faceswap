@@ -1,3 +1,4 @@
+protobuf>= 3.19.0,<3.20.0  # TF has started pulling in incompatible protobuf
 tensorflow-macos>=2.8.0,<2.9.0
 tensorflow-deps>=2.8.0,<2.9.0
 tensorflow-metal>=0.4.0,<0.5.0

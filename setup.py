@@ -166,12 +166,13 @@ class Environment():
         if not self.updater and not self.os_version[0] in ["Windows", "Linux", "Darwin"]:
             self.output.error(f"Your system {self.os_version[0]} is not supported!")
             sys.exit(1)
-        if (not self.updater and
-                self.os_version[0].lower() == "darwin" and
-                platform.machine() == "arm64" and not self.is_conda):
-            self.output.error("Setting up Faceswap for Apple Silicon outside of a Conda "
-                              "environment is unsupported")
-            sys.exit(1)
+        if self.os_version[0].lower() == "darwin" and platform.machine() == "arm64":
+            self.enable_apple_silicon = True
+
+            if not self.updater and not self.is_conda:
+                self.output.error("Setting up Faceswap for Apple Silicon outside of a Conda "
+                                  "environment is unsupported")
+                sys.exit(1)
 
     def check_python(self) -> None:
         """ Check python and virtual environment status """
@@ -517,20 +518,22 @@ class Checks():
 class CudaCheck():  # pylint:disable=too-few-public-methods
     """ Find the location of system installed Cuda and cuDNN on Windows and Linux. """
 
-    def __init__(self):
-        self.cuda_path = None
-        self.cuda_version = None
-        self.cudnn_version = None
+    def __init__(self) -> None:
+        self.cuda_path: Optional[str] = None
+        self.cuda_version: Optional[str] = None
+        self.cudnn_version: Optional[str] = None
 
-        self._os = platform.system().lower()
-        self._cuda_keys = [key for key in os.environ if key.lower().startswith("cuda_path_v")]
-        self._cudnn_header_files = ["cudnn_version.h", "cudnn.h"]
+        self._os: str = platform.system().lower()
+        self._cuda_keys: List[str] = [key
+                                      for key in os.environ
+                                      if key.lower().startswith("cuda_path_v")]
+        self._cudnn_header_files: List[str] = ["cudnn_version.h", "cudnn.h"]
 
         if self._os in ("windows", "linux"):
             self._cuda_check()
             self._cudnn_check()
 
-    def _cuda_check(self):
+    def _cuda_check(self) -> None:
         """ Obtain the location and version of Cuda and populate :attr:`cuda_version` and
         :attr:`cuda_path`
 
@@ -542,7 +545,8 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         if not stderr:
             version = re.search(r".*release (?P<cuda>\d+\.\d+)",
                                 stdout.decode(locale.getpreferredencoding()))
-            self.cuda_version = version.groupdict().get("cuda", None)
+            if version is not None:
+                self.cuda_version = version.groupdict().get("cuda", None)
             locate = "where" if self._os == "windows" else "which"
             path = os.popen(f"{locate} nvcc").read()
             if path:
@@ -557,7 +561,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         # Failed to load nvcc, manual check
         getattr(self, f"_cuda_check_{self._os}")()
 
-    def _cuda_check_linux(self):
+    def _cuda_check_linux(self) -> None:
         """ For Linux check the dynamic link loader for libcudart. If not found with ldconfig then
         attempt to find it in LD_LIBRARY_PATH. """
         chk = os.popen("ldconfig -p | grep -P \"libcudart.so.\\d+.\\d+\" | head -n 1").read()
@@ -574,7 +578,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         self.cuda_version = cudavers[:cudavers.find(" ")]
         self.cuda_path = chk[chk.find("=>") + 3:chk.find("targets") - 1]
 
-    def _cuda_check_windows(self):
+    def _cuda_check_windows(self) -> None:
         """ Check Windows CUDA Version and path from Environment Variables"""
         if not self._cuda_keys:  # Cuda environment variable not found
             return
@@ -605,7 +609,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
             return
         self.cudnn_version = ".".join([str(major), str(minor), str(patchlevel)])
 
-    def _get_checkfiles_linux(self):
+    def _get_checkfiles_linux(self) -> List[str]:
         """ Return the the files to check for cuDNN locations for Linux by querying
         the dynamic link loader.
 
@@ -627,7 +631,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         cudnn_checkfiles = [os.path.join(cudnn_path, header) for header in header_files]
         return cudnn_checkfiles
 
-    def _get_checkfiles_windows(self):
+    def _get_checkfiles_windows(self) -> List[str]:
         """ Return the check-file locations for Windows. Just looks inside the include folder of
         the discovered :attr:`cuda_path`
 
