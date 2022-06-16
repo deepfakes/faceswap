@@ -289,7 +289,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         kernels = self._get_erosion_kernels(mask)
         if not any(k.any() for k in kernels):
             return mask  # No kernels could be created from selected input res
-        eroded = []
+        eroded = mask
         for idx, (kernel, ratio) in enumerate(zip(kernels, self._erodes)):
             if not kernel.any():
                 continue
@@ -303,10 +303,9 @@ class Mask():  # pylint:disable=too-few-public-methods
                 anchor[pos] = val
 
             func = cv2.erode if ratio > 0 else cv2.dilate
-            eroded.append(func(mask, kernel, iterations=1, anchor=anchor))
+            eroded = func(eroded, kernel, iterations=1, anchor=anchor)
 
-        mask = np.min(np.array(eroded), axis=0) if len(eroded) > 1 else eroded[0]
-        return mask[..., None]
+        return eroded[..., None]
 
     def _get_erosion_kernels(self, mask: np.ndarray) -> List[np.ndarray]:
         """ Get the erosion kernels for each of the center, left, top right and bottom erosions.
