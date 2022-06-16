@@ -102,7 +102,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             The box mask
         """
         box = np.zeros((output_size, output_size, 1), dtype="float32")
-        edge = output_size // 32
+        edge = (output_size // 32) + 1
         box[edge:-edge, edge:-edge] = 1.0
 
         if self._config["type"] is not None:
