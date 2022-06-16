@@ -2,19 +2,21 @@
 """ DeepFaceLab SAE Model
     Based on https://github.com/iperov/DeepFaceLab
 """
-
+import logging
 import numpy as np
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 from lib.utils import get_backend
 
-from ._base import ModelBase, KerasModel, logger
+from ._base import ModelBase, KerasModel
 
 if get_backend() == "amd":
     from keras.layers import Concatenate, Dense, Flatten, Input, LeakyReLU, Reshape
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow.keras.layers import Concatenate, Dense, Flatten, Input, LeakyReLU, Reshape  # noqa pylint:disable=import-error,no-name-in-module
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Model(ModelBase):

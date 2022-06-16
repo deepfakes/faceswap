@@ -9,7 +9,7 @@ from lib.utils import get_backend
 from .original import Model as OriginalModel, KerasModel
 
 if get_backend() == "amd":
-    from keras.initializers import RandomNormal
+    from keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
     from keras.layers import Input, LeakyReLU
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system

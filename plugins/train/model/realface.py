@@ -7,19 +7,22 @@
     Additional thanks: Birb - source of inspiration, great Encoder ideas
                        Kvrooman - additional counseling on auto-encoders and practical advice
     """
+import logging
 import sys
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 from lib.utils import get_backend
-from ._base import ModelBase, KerasModel, logger
+from ._base import ModelBase, KerasModel
 
 if get_backend() == "amd":
-    from keras.initializers import RandomNormal
+    from keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
     from keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow.keras.initializers import RandomNormal  # noqa pylint:disable=import-error,no-name-in-module
     from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape  # noqa pylint:disable=import-error,no-name-in-module
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Model(ModelBase):
