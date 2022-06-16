@@ -191,7 +191,7 @@ $ source ~/miniforge3/bin/activate
 ## Setup
 ### Create and Activate the Environment
 ```sh
-$ conda env create -n faceswap python=3.9
+$ conda create --name faceswap python=3.9
 $ conda activate faceswap
 ```
 
