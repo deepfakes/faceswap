@@ -11,8 +11,13 @@ import os
 import re
 import sys
 from subprocess import CalledProcessError, run, PIPE, Popen
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 from pkg_resources import parse_requirements, Requirement
+
+if TYPE_CHECKING:
+    from logging import Logger
+
 
 INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
@@ -23,28 +28,31 @@ TENSORFLOW_REQUIREMENTS = {">=2.4.0,<2.5.0": ["11.0", "8.0"],
 CONDA_MAPPING = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
     "fastcluster": ("fastcluster", "conda-forge"),
-    "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge")}
+    "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
+    "tensorflow-deps": ("tensorflow-deps", "apple"),
+    "libblas": ("libblas", "conda-forge")}
 
 
 class Environment():
     """ The current install environment """
-    def __init__(self, logger=None, updater=False):
+    def __init__(self, logger: Optional["Logger"] = None, updater: bool = False) -> None:
         """ logger will override built in Output() function if passed in
             updater indicates that this is being run from update_deps.py
             so certain steps can be skipped/output limited """
-        self.conda_required_packages = [("tk", )]
-        self.output = logger if logger else Output()
+        self.conda_required_packages: List[Tuple[str, ...]] = [("tk", )]
+        self.output: Union["Logger", "Output"] = logger if logger else Output()
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
-        self.is_installer = False
-        self.cuda_version = ""
-        self.cudnn_version = ""
-        self.enable_amd = False
-        self.enable_docker = False
-        self.enable_cuda = False
-        self.required_packages = []
-        self.missing_packages = []
-        self.conda_missing_packages = []
+        self.is_installer: bool = False
+        self.cuda_version: str = ""
+        self.cudnn_version: str = ""
+        self.enable_amd: bool = False
+        self.enable_apple_silicon: bool = False
+        self.enable_docker: bool = False
+        self.enable_cuda: bool = False
+        self.required_packages: List[Tuple[str, Tuple[str, str]]] = []
+        self.missing_packages: List[str] = []
+        self.conda_missing_packages: List[str] = []
 
         self.process_arguments()
         self.check_permission()
@@ -59,37 +67,37 @@ class Environment():
         self.installed_packages.update(self.get_installed_conda_packages())
 
     @property
-    def encoding(self):
+    def encoding(self) -> str:
         """ Get system encoding """
         return locale.getpreferredencoding()
 
     @property
-    def os_version(self):
+    def os_version(self) -> Tuple[str, str]:
         """ Get OS Version """
         return platform.system(), platform.release()
 
     @property
-    def py_version(self):
+    def py_version(self) -> Tuple[str, str]:
         """ Get Python Version """
         return platform.python_version(), platform.architecture()[0]
 
     @property
-    def is_conda(self):
+    def is_conda(self) -> bool:
         """ Check whether using Conda """
         return ("conda" in sys.version.lower() or
                 os.path.exists(os.path.join(sys.prefix, 'conda-meta')))
 
     @property
-    def is_admin(self):
+    def is_admin(self) -> bool:
         """ Check whether user is admin """
         try:
             retval = os.getuid() == 0
         except AttributeError:
-            retval = ctypes.windll.shell32.IsUserAnAdmin() != 0
+            retval = ctypes.windll.shell32.IsUserAnAdmin() != 0  # type: ignore
         return retval
 
     @property
-    def is_virtualenv(self):
+    def is_virtualenv(self) -> bool:
         """ Check whether this is a virtual environment """
         if not self.is_conda:
             retval = (hasattr(sys, "real_prefix") or
@@ -99,7 +107,7 @@ class Environment():
             retval = (os.path.basename(prefix) == "envs")
         return retval
 
-    def process_arguments(self):
+    def process_arguments(self) -> None:
         """ Process any cli arguments and dummy in cli arguments if calling from updater. """
         args = [arg for arg in sys.argv]  # pylint:disable=unnecessary-comprehension
         if self.updater:
@@ -113,13 +121,17 @@ class Environment():
                 self.enable_cuda = True
             if arg == "--amd":
                 self.enable_amd = True
+            if arg == "--apple-silicon":
+                self.enable_apple_silicon = True
 
-    def get_required_packages(self):
+    def get_required_packages(self) -> None:
         """ Load requirements list """
         if self.enable_amd:
             suffix = "amd.txt"
         elif self.enable_cuda:
             suffix = "nvidia.txt"
+        elif self.enable_apple_silicon:
+            suffix = "apple_silicon.txt"
         else:
             suffix = "cpu.txt"
         req_files = ["_requirements_base.txt", f"requirements_{suffix}"]
@@ -136,7 +148,7 @@ class Environment():
                                   for pkg in parse_requirements(requirements)
                                   if pkg.marker is None or pkg.marker.evaluate()]
 
-    def check_permission(self):
+    def check_permission(self) -> None:
         """ Check for Admin permissions """
         if self.updater:
             return
@@ -145,7 +157,7 @@ class Environment():
         else:
             self.output.info("Running without root/admin privileges")
 
-    def check_system(self):
+    def check_system(self) -> None:
         """ Check the system """
         if not self.updater:
             self.output.info("The tool provides tips for installation\n"
@@ -154,8 +166,14 @@ class Environment():
         if not self.updater and not self.os_version[0] in ["Windows", "Linux", "Darwin"]:
             self.output.error(f"Your system {self.os_version[0]} is not supported!")
             sys.exit(1)
+        if (not self.updater and
+                self.os_version[0].lower() == "darwin" and
+                platform.machine() == "arm64" and not self.is_conda):
+            self.output.error("Setting up Faceswap for Apple Silicon outside of a Conda "
+                              "environment is unsupported")
+            sys.exit(1)
 
-    def check_python(self):
+    def check_python(self) -> None:
         """ Check python and virtual environment status """
         self.output.info(f"Installed Python: {self.py_version[0]} {self.py_version[1]}")
 
@@ -171,7 +189,7 @@ class Environment():
                               "Python higher than 3.8")
             sys.exit(1)
 
-    def output_runtime_info(self):
+    def output_runtime_info(self) -> None:
         """ Output run time info """
         if self.is_conda:
             self.output.info("Running in Conda")
@@ -179,7 +197,7 @@ class Environment():
             self.output.info("Running in a Virtual Environment")
         self.output.info(f"Encoding: {self.encoding}")
 
-    def check_pip(self):
+    def check_pip(self) -> None:
         """ Check installed pip version """
         if self.updater:
             return
@@ -189,7 +207,7 @@ class Environment():
             self.output.error("Import pip failed. Please Install python3-pip and try again")
             sys.exit(1)
 
-    def upgrade_pip(self):
+    def upgrade_pip(self) -> None:
         """ Upgrade pip to latest version """
         if not self.is_conda:
             # Don't do this with Conda, as we must use Conda version of pip
@@ -204,7 +222,7 @@ class Environment():
         pip_version = pip.__version__
         self.output.info(f"Installed pip: {pip_version}")
 
-    def get_installed_packages(self):
+    def get_installed_packages(self) -> Dict[str, str]:
         """ Get currently installed packages """
         installed_packages = {}
         with Popen(f"\"{sys.executable}\" -m pip freeze --local", shell=True, stdout=PIPE) as chk:
@@ -217,10 +235,10 @@ class Environment():
             installed_packages[item[0]] = item[1]
         return installed_packages
 
-    def get_installed_conda_packages(self):
+    def get_installed_conda_packages(self) -> Dict[str, str]:
         """ Get currently installed conda packages """
         if not self.is_conda:
-            return None
+            return {}
         chk = os.popen("conda list").read()
         installed = [re.sub(" +", " ", line.strip())
                      for line in chk.splitlines() if not line.startswith("#")]
@@ -230,7 +248,7 @@ class Environment():
             retval[item[0]] = item[1]
         return retval
 
-    def update_tf_dep(self):
+    def update_tf_dep(self) -> None:
         """ Update Tensorflow Dependency """
         if self.is_conda or not self.enable_cuda:
             # CPU/AMD doesn't need Cuda and Conda handles Cuda and cuDNN so nothing to do here
@@ -249,9 +267,12 @@ class Environment():
             # Remove the version of tensorflow in requirements file and add the correct version
             # that corresponds to the installed Cuda/cuDNN versions
             self.required_packages = [pkg for pkg in self.required_packages
-                                      if not pkg.startswith("tensorflow-gpu")]
+                                      if not pkg[0].startswith("tensorflow-gpu")]
             tf_ver = f"tensorflow-gpu{tf_ver}"
-            self.required_packages.append(tf_ver)
+
+            tf_ver = f"tensorflow-gpu{tf_ver}"
+            self.required_packages.append(("tensorflow-gpu",
+                                           next(parse_requirements(tf_ver)).specs))
             return
 
         self.output.warning(
@@ -277,14 +298,16 @@ class Environment():
         elif os.path.splitext(custom_tf)[1] != ".whl":
             self.output.error(f"{custom_tf} is not a valid pip wheel")
         elif custom_tf:
-            self.required_packages.append(custom_tf)
+            self.required_packages.append((custom_tf, (custom_tf, "")))
 
-    def set_config(self):
+    def set_config(self) -> None:
         """ Set the backend in the faceswap config file """
         if self.enable_amd:
             backend = "amd"
         elif self.enable_cuda:
             backend = "nvidia"
+        elif self.enable_apple_silicon:
+            backend = "apple_silicon"
         else:
             backend = "cpu"
         config = {"backend": backend}
@@ -294,9 +317,9 @@ class Environment():
             json.dump(config, cnf)
         self.output.info(f"Faceswap config written to: {config_file}")
 
-    def set_ld_library_path(self):
+    def set_ld_library_path(self) -> None:
         """ Update the LD_LIBRARY_PATH environment variable when activating a conda environment
-        and revert it when deactivating.
+        and revert it when deactivating. Linux/conda only
 
         Notes
         -----
@@ -305,10 +328,7 @@ class Environment():
         We update the environment variable for all instances using Conda as it shouldn't hurt
         anything and may help avoid conflicts with globally installed Cuda
         """
-        if not self.is_conda or not self.enable_cuda:
-            return
-
-        if self.os_version[0] == "Windows":
+        if not self.is_conda or not self.enable_cuda or self.os_version[0].lower() != "linux":
             return
 
         conda_prefix = os.environ["CONDA_PREFIX"]
@@ -345,15 +365,15 @@ class Environment():
 
 class Output():
     """ Format and display output """
-    def __init__(self):
-        self.red = "\033[31m"
-        self.green = "\033[32m"
-        self.yellow = "\033[33m"
-        self.default_color = "\033[0m"
-        self.term_support_color = platform.system() in ("Linux", "Darwin")
+    def __init__(self) -> None:
+        self.red: str = "\033[31m"
+        self.green: str = "\033[32m"
+        self.yellow: str = "\033[33m"
+        self.default_color: str = "\033[0m"
+        self.term_support_color: bool = platform.system().lower() in ("linux", "darwin")
 
     @staticmethod
-    def __indent_text_block(text):
+    def __indent_text_block(text: str) -> str:
         """ Indent a text block """
         lines = text.splitlines()
         if len(lines) > 1:
@@ -364,21 +384,21 @@ class Output():
             return out
         return text
 
-    def info(self, text):
+    def info(self, text: str) -> None:
         """ Format INFO Text """
         trm = "INFO    "
         if self.term_support_color:
             trm = f"{self.green}INFO   {self.default_color} "
         print(trm + self.__indent_text_block(text))
 
-    def warning(self, text):
+    def warning(self, text: str) -> None:
         """ Format WARNING Text """
         trm = "WARNING "
         if self.term_support_color:
             trm = f"{self.yellow}WARNING{self.default_color} "
         print(trm + self.__indent_text_block(text))
 
-    def error(self, text):
+    def error(self, text: str) -> None:
         """ Format ERROR Text """
         global INSTALL_FAILED  # pylint:disable=global-statement
         trm = "ERROR   "
@@ -390,13 +410,15 @@ class Output():
 
 class Checks():
     """ Pre-installation checks """
-    def __init__(self, environment):
-        self.env = environment
-        self.output = Output()
-        self.tips = Tips()
-
+    def __init__(self, environment: Environment) -> None:
+        self.env:  Environment = environment
+        self.output: Output = Output()
+        self.tips: Tips = Tips()
     # Checks not required for installer
         if self.env.is_installer:
+            return
+    # Checks not required for Apple Silicon
+        if self.env.enable_apple_silicon:
             return
 
     # Ask AMD/Docker/Cuda
@@ -443,7 +465,7 @@ class Checks():
         if self.env.os_version[0] == "Windows":
             self.tips.pip()
 
-    def amd_ask_enable(self):
+    def amd_ask_enable(self) -> None:
         """ Enable or disable Plaidml for AMD"""
         self.output.info("AMD Support: AMD GPU support is currently limited.\r\n"
                          "Nvidia Users MUST answer 'no' to this option.")
@@ -455,7 +477,7 @@ class Checks():
             self.output.info("AMD Support Disabled")
             self.env.enable_amd = False
 
-    def docker_ask_enable(self):
+    def docker_ask_enable(self) -> None:
         """ Enable or disable Docker """
         i = input("Enable  Docker? [y/N] ")
         if i in ("Y", "y"):
@@ -465,7 +487,7 @@ class Checks():
             self.output.info("Docker Disabled")
             self.env.enable_docker = False
 
-    def docker_confirm(self):
+    def docker_confirm(self) -> None:
         """ Warn if nvidia-docker on non-Linux system """
         self.output.warning("Nvidia-Docker is only supported on Linux.\r\n"
                             "Only CPU is supported in Docker for your system")
@@ -474,14 +496,14 @@ class Checks():
             self.output.warning("CUDA Disabled")
             self.env.enable_cuda = False
 
-    def docker_tips(self):
+    def docker_tips(self) -> None:
         """ Provide tips for Docker use """
         if not self.env.enable_cuda:
             self.tips.docker_no_cuda()
         else:
             self.tips.docker_cuda()
 
-    def cuda_ask_enable(self):
+    def cuda_ask_enable(self) -> None:
         """ Enable or disable CUDA """
         i = input("Enable  CUDA? [Y/n] ")
         if i in ("", "Y", "y"):
@@ -624,7 +646,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
 
 class Install():
     """ Install the requirements """
-    def __init__(self, environment):
+    def __init__(self, environment: Environment):
         self._operators = {"==": operator.eq,
                            ">=": operator.ge,
                            "<=": operator.le,
@@ -707,7 +729,7 @@ class Install():
                 pkg = pkg[0]
             if version:
                 pkg = f"{pkg}{','.join(''.join(spec) for spec in version)}"
-            if self.env.is_conda and not pkg.startswith("git"):
+            if self.env.is_conda and not self.env.enable_apple_silicon:
                 if pkg.startswith("tensorflow-gpu"):
                     # From TF 2.4 onwards, Anaconda Tensorflow becomes a mess. The version of 2.5
                     # installed by Anaconda is compiled against an incorrect numpy version which

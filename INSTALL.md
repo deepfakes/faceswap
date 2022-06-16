@@ -27,6 +27,7 @@
     - [XQuartz](#xquartz)
     - [Conda](#conda)
   - [Setup](#setup-1)
+    - [Create and Activate the Environment](#create-and-activate-the-environment)
     - [faceswap](#faceswap-1)
       - [Easy install](#easy-install-1)
 - [General Install Guide](#general-install-guide)
@@ -39,6 +40,10 @@
     - [About some of the options](#about-some-of-the-options)
 - [Docker Install Guide](#docker-install-guide)
   - [Docker General](#docker-general)
+    - [CUDA with Docker in 20 minutes.](#cuda-with-docker-in-20-minutes)
+  - [CUDA with Docker on Arch Linux](#cuda-with-docker-on-arch-linux)
+    - [Install docker](#install-docker)
+  - [A successful setup log, without docker.](#a-successful-setup-log-without-docker)
   - [Run the project](#run-the-project)
   - [Notes](#notes)
 
@@ -165,35 +170,48 @@ It's good to keep faceswap up to date as new features are added and bugs are fix
 macOS 12.0+
 
 ### XCode Tools
-`xcode-select --install`
+```sh
+xcode-select --install
+```
 
 ### XQuartz
-Download and install from: https://www.xquartz.org/
+Download and install from:
+- https://www.xquartz.org/
 
 ### Conda
-Download and install the latest Conda env from: https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
+Download and install the latest Conda env from:
+- https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-MacOSX-arm64.sh
+
+Install Conda:
 ```sh
 $ chmod +x ~/Downloads/Miniforge3-MacOSX-arm64.sh
 $ sh ~/Downloads/Miniforge3-MacOSX-arm64.sh
 $ source ~/miniforge3/bin/activate
 ```
 ## Setup
+### Create and Activate the Environment
+```sh
+$ conda env create -n faceswap python=3.9
+$ conda activate faceswap
+```
 
 ### faceswap
-- Get the faceswap repo by typing: `git clone --depth 1 https://github.com/deepfakes/faceswap.git`
-- Enter the faceswap folder: `cd faceswap`
+- Download the faceswap repo and enter thr faceswap folder:
+```sh
+$ git clone --depth 1 https://github.com/deepfakes/faceswap.git
+$ cd faceswap
+```
 
 #### Easy install
 ```sh
-$ conda deactivate
-$ conda env create -f ./requirements/conda-environment-apple-silicon.yml
-$ conda activate faceswap
+$ python setup.py
 ```
-- Enter the command `python faceswap.py gui` and follow the prompts:
-- Choose '4' for Apple Silicon
+
 - If you have issues/errors follow the Manual install steps below.
 
+
 # General Install Guide
+
 ## Installing dependencies
 ### Git
 Git is required for obtaining the code and keeping your codebase up to date.
