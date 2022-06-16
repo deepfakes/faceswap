@@ -729,7 +729,7 @@ class Install():
                 pkg = pkg[0]
             if version:
                 pkg = f"{pkg}{','.join(''.join(spec) for spec in version)}"
-            if self.env.is_conda and not self.env.enable_apple_silicon:
+            if self.env.is_conda:
                 if pkg.startswith("tensorflow-gpu"):
                     # From TF 2.4 onwards, Anaconda Tensorflow becomes a mess. The version of 2.5
                     # installed by Anaconda is compiled against an incorrect numpy version which
