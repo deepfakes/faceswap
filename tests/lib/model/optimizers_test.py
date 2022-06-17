@@ -90,4 +90,4 @@ def test_adam(dummy):  # pylint:disable=unused-argument
 @pytest.mark.parametrize("dummy", [None], ids=[get_backend().upper()])
 def test_adabelief(dummy):  # pylint:disable=unused-argument
     """ Test for custom Adam optimizer """
-    _test_optimizer(optimizers.AdaBelief(), target=0.45)
+    _test_optimizer(optimizers.AdaBelief(), target=0.20)

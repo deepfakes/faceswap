@@ -38,7 +38,7 @@ def test_loss_output(loss_func, output_shape):
         assert K.eval(objective_output).shape == output_shape
     else:
         output = objective_output.numpy()
-        assert output.dtype == "float32" and not np.isnan(output)
+        assert output.dtype == "float32" and not np.any(np.isnan(output))
 
 
 _LWPARAMS = [losses.GeneralizedLoss(), losses.GradientLoss(), losses.GMSDLoss(),
@@ -69,4 +69,4 @@ def test_loss_wrapper(loss_func):
         assert K.dtype(output) == "float32" and K.eval(output).shape == (2, )
     else:
         output = output.numpy()
-        assert output.dtype == "float32" and not np.isnan(output)
+        assert output.dtype == "float32" and not np.any(np.isnan(output))
