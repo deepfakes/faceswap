@@ -588,11 +588,12 @@ class LossWrapper():
             return y_true[..., :3], y_pred[..., :3]
 
         logger.debug("Applying mask from channel %s", mask_channel)
-        mask = K.expand_dims(y_true[..., mask_channel], axis=-1)
+
+        mask = K.tile(K.expand_dims(y_true[..., mask_channel], axis=-1), (1, 1, 1, 3))
         mask_as_k_inv_prop = 1 - mask_prop
         mask = (mask * mask_prop) + mask_as_k_inv_prop
 
-        n_true = K.concatenate([y_true[..., i:i + 1] * mask for i in range(3)], axis=-1)
-        n_pred = K.concatenate([y_pred[..., i:i + 1] * mask for i in range(3)], axis=-1)
+        m_true = y_true[..., :3] * mask
+        m_pred = y_pred[..., :3] * mask
 
-        return n_true, n_pred
+        return m_true, m_pred

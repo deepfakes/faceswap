@@ -8,11 +8,6 @@ from dataclasses import dataclass
 
 from typing import Dict, List, Optional, Tuple, Union
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 import numpy as np
 
 from lib.model.nn_blocks import (
@@ -24,6 +19,11 @@ from lib.model.normalization import (
 from lib.utils import get_backend, get_tf_version, FaceswapError
 
 from ._base import KerasModel, ModelBase, get_all_sub_models
+
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -299,7 +299,7 @@ class Model(ModelBase):
         scaling = self.config["enc_scaling"] / 100
 
         min_size = _MODEL_MAPPING[arch].min_size
-        size = int(max(min_size, min(default_size, ((default_size * scaling) // 16) * 16)))
+        size = int(max(min_size, ((default_size * scaling) // 16) * 16))
 
         if self.config["enc_load_weights"] and enforce_size and scaling != 1.0:
             logger.warning("%s requires input size to be %spx when loading imagenet weights. "

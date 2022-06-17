@@ -62,7 +62,6 @@ class Loss():
                                ms_ssim=losses.MSSSIMLoss(),
                                gmsd=losses.GMSDLoss(),
                                pixel_gradient_diff=losses.GradientLoss())
-        self._uses_l2_reg = ["ssim", "ms_ssim", "gmsd"]
         self._mask_channels = self._get_mask_channels()
         self._inputs: List[keras.layers.Layer] = []
         self._names: List[str] = []
@@ -149,47 +148,55 @@ class Loss():
         output_names: list
             The output names from the model
         """
-        face_loss = self._loss_dict[self._config["loss_function"]]
+        face_losses = [(self._loss_dict[v], self._config.get(f"loss_weight_{k[-1]}", 100))
+                       for k, v in sorted(self._config.items())
+                       if k.startswith("loss_function")
+                       and self._config.get(f"loss_weight_{k[-1]}", 100) != 0
+                       and v is not None]
 
         for name, output_name in zip(self._names, output_names):
             if name.startswith("mask"):
                 loss_func = self._loss_dict[self._config["mask_loss_function"]]
             else:
                 loss_func = losses.LossWrapper()
-                loss_func.add_loss(face_loss, mask_channel=self._mask_channels[0])
-                self._add_l2_regularization_term(loss_func, self._mask_channels[0])
-
-                channel_idx = 1
-                for multiplier in ("eye_multiplier", "mouth_multiplier"):
-                    mask_channel = self._mask_channels[channel_idx]
-                    if self._config[multiplier] > 1:
-                        loss_func.add_loss(face_loss,
-                                           weight=self._config[multiplier] * 1.0,
-                                           mask_channel=mask_channel)
-                        self._add_l2_regularization_term(loss_func, mask_channel)
-                    channel_idx += 1
+                for func, weight in face_losses:
+                    self._add_face_loss_function(loss_func, func, weight / 100.)
 
             logger.debug("%s: (output_name: '%s', function: %s)", name, output_name, loss_func)
             self._funcs[output_name] = loss_func
         logger.debug("functions: %s", self._funcs)
 
-    def _add_l2_regularization_term(self, loss_wrapper, mask_channel):
-        """ Check if an L2 Regularization term should be added and add to the loss function
-        wrapper.
+    def _add_face_loss_function(self,
+                                loss_wrapper: losses.LossWrapper,
+                                loss_function: Callable,
+                                weight: float) -> None:
+        """ Add the given face loss function at the given weight and apply any mouth and eye
+        multipliers
 
         Parameters
         ----------
         loss_wrapper: :class:`lib.model.losses.LossWrapper`
             The wrapper loss function that holds the face losses
-        mask_channel: int
-            The channel that holds the mask in `y_true`, if a mask is used for the loss.
-            `-1` if the input is not masked
+        loss_func: :class:`keras.losses.Loss`
+            The loss function to add to the loss wrapper
+        weight: float
+            The amount of weight to apply to the given loss function
         """
-        if self._config["loss_function"] in self._uses_l2_reg and self._config["l2_reg_term"] > 0:
-            logger.debug("Adding L2 Regularization for Structural Loss")
-            loss_wrapper.add_loss(self._loss_dict["mse"],
-                                  weight=self._config["l2_reg_term"] / 100.0,
-                                  mask_channel=mask_channel)
+        logger.debug("Adding loss function: %s, weight: %s", loss_function, weight)
+        loss_wrapper.add_loss(loss_function,
+                              weight=weight,
+                              mask_channel=self._mask_channels[0])
+
+        channel_idx = 1
+        for section in ("eye_multiplier", "mouth_multiplier"):
+            mask_channel = self._mask_channels[channel_idx]
+            multiplier = self._config[section] * 1.
+            if multiplier > 1.:
+                logger.debug("Adding section loss %s: %s", section, multiplier)
+                loss_wrapper.add_loss(loss_function,
+                                      weight=weight * multiplier,
+                                      mask_channel=mask_channel)
+            channel_idx += 1
 
     def _get_mask_channels(self) -> List[int]:
         """ Obtain the channels from the face targets that the masks reside in from the training

@@ -695,6 +695,9 @@ class State():
             * loss - If old `dssim_loss` is ``true`` set new `loss_function` to `ssim` otherwise
             set it to `mae`. Remove old `dssim_loss` item
 
+            * l2_reg_term - If this exists, set loss_function_2 to ``mse`` and loss_weight_2 to
+            the value held in the old ``l2_reg_term`` item
+
             * masks - If `learn_mask` does not exist then it is set to ``True`` if `mask_type` is
             not ``None`` otherwise it is set to ``False``.
 
@@ -706,8 +709,8 @@ class State():
             ``True`` if legacy items exist and state file has been updated, otherwise ``False``
         """
         logger.debug("Checking for legacy state file update")
-        priors = ["dssim_loss", "mask_type", "mask_type"]
-        new_items = ["loss_function", "learn_mask", "mask_type"]
+        priors = ["dssim_loss", "mask_type", "mask_type", "l2_reg_term"]
+        new_items = ["loss_function", "learn_mask", "mask_type", "loss_function_2"]
         updated = False
         for old, new in zip(priors, new_items):
             if old not in self._config:
@@ -739,6 +742,15 @@ class State():
                 updated = True
                 logger.info("Updated 'mask_type' from '%s' to '%s' for this model",
                             old_mask, self._config[new])
+
+            # Replace l2_reg_term with the correct loss_2_function and update the value of
+            # loss_2_weight
+            if old == "l2_reg_term":
+                self._config[new] = "mse"
+                self._config["loss_weight_2"] = self._config[old]
+                del self._config[old]
+                updated = True
+                logger.info("Updated config from legacy 'l2_reg_term' to 'loss_function_2'")
 
         logger.debug("State file updated for legacy config: %s", updated)
         return updated

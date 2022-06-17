@@ -12,18 +12,60 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 ADDITIONAL_INFO = ("\nNB: Unless specifically stated, values changed here will only take effect "
                    "when creating a new model.")
 
+_LOSS_HELP = dict(
+    gmsd=(
+        "Gradient Magnitude Similarity Deviation seeks to match the global standard deviation of "
+        "the pixel to pixel differences between two images. Similar in approach to SSIM. NB: This "
+        "loss does not currently work on AMD cards."),
+    l_inf_norm=(
+        "The L_inf norm will reduce the largest individual pixel error in an image. As "
+        "each largest error is minimized sequentially, the overall error is improved. This loss "
+        "will be extremely focused on outliers."),
+    logcosh=(
+        "log(cosh(x)) acts similar to MSE for small errors and to MAE for large errors. Like "
+        "MSE, it is very stable and prevents overshoots when errors are near zero. Like MAE, it "
+        "is robust to outliers. NB: Due to a bug in PlaidML, this loss does not work on AMD "
+        "cards."),
+    mae=(
+        "Mean absolute error will guide reconstructions of each pixel towards its median value in "
+        "the training dataset. Robust to outliers but as a median, it can potentially ignore some "
+        "infrequent image types in the dataset."),
+    mse=(
+        "Mean squared error will guide reconstructions of each pixel towards its average value in "
+        "the training dataset. As an avg, it will be susceptible to outliers and typically "
+        "produces slightly blurrier results."),
+    ms_ssim=(
+        "Multiscale Structural Similarity Index Metric is similar to SSIM except that it "
+        "performs the calculations along multiple scales of the input image. NB: This loss "
+        "currently does not work on AMD Cards."),
+    smooth_loss=(
+        "Smooth_L1 is a modification of the MAE loss to correct two of its disadvantages. "
+        "This loss has improved stability and guidance for small errors."),
+    ssim=(
+        "Structural Similarity Index Metric is a perception-based loss that considers changes in "
+        "texture, luminance, contrast, and local spatial statistics of an image. Potentially "
+        "delivers more realistic looking images."),
+    pixel_gradient_diff=(
+        "Instead of minimizing the difference between the absolute value of each "
+        "pixel in two reference images, compute the pixel to pixel spatial difference in each "
+        "image and then minimize that difference between two images. Allows for large color "
+        "shifts, but maintains the structure of the image."),
+    none="Do not use an additional loss function.")
+
+_NON_PRIMARY_LOSS = ["none"]
+
 
 class Config(FaceswapConfig):
     """ Config File for Models """
     # pylint: disable=too-many-statements
-    def set_defaults(self):
+    def set_defaults(self) -> None:
         """ Set the default values for config """
         logger.debug("Setting defaults")
         self._set_globals()
         self._set_loss()
         self._defaults_from_plugin(os.path.dirname(__file__))
 
-    def _set_globals(self):
+    def _set_globals(self) -> None:
         """ Set the global options for training """
         logger.debug("Setting global config")
         section = "global"
@@ -220,23 +262,21 @@ class Config(FaceswapConfig):
                  "convert speed, however, if you are getting Out of Memory errors, then you may "
                  "want to reduce the batch size.")
 
-    def _set_loss(self):
+    def _set_loss(self) -> None:
+        # pylint:disable=line-too-long
         """ Set the default loss options.
 
         Loss Documentation
-        MAE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine
-            -learners-should-know-4fb140e9d4b0
-        MSE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine
-            -learners-should-know-4fb140e9d4b0
-        LogCosh https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine
-                -learners-should-know-4fb140e9d4b0
+        MAE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
+        MSE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
+        LogCosh https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
         Smooth L1 https://arxiv.org/pdf/1701.03077.pdf
-        L_inf_norm https://medium.com/@montjoile/l0-norm-l1-norm-l2-norm-l-infinity
-                   -norm-7a7d18a4f40c
+        L_inf_norm https://medium.com/@montjoile/l0-norm-l1-norm-l2-norm-l-infinity-norm-7a7d18a4f40c
         SSIM http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf
         MSSIM https://www.cns.nyu.edu/pub/eero/wang03b.pdf
         GMSD https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
-        """
+        """  # noqa
+        # pylint:enable=line-too-long
         logger.debug("Setting Loss config")
         section = "global.loss"
         self.add_section(title=section,
@@ -249,45 +289,113 @@ class Config(FaceswapConfig):
             datatype=str,
             group="loss",
             default="ssim",
-            choices=["mae", "mse", "logcosh", "smooth_loss", "l_inf_norm", "ssim", "ms_ssim",
-                     "gmsd", "pixel_gradient_diff"],
-            info="The loss function to use."
-                 "\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
-                 "towards its median value in the training dataset. Robust to outliers but as "
-                 "a median, it can potentially ignore some infrequent image types in the dataset."
-                 "\n\t MSE - Mean squared error will guide reconstructions of each pixel "
-                 "towards its average value in the training dataset. As an avg, it will be "
-                 "susceptible to outliers and typically produces slightly blurrier results."
-                 "\n\t LogCosh - log(cosh(x)) acts similar to MSE for small errors and to "
-                 "MAE for large errors. Like MSE, it is very stable and prevents overshoots "
-                 "when errors are near zero. Like MAE, it is robust to outliers. NB: Due to a bug "
-                 "in PlaidML, this loss does not work on AMD cards."
-                 "\n\t Smooth_L1 --- Modification of the MAE loss to correct two of its "
-                 "disadvantages. This loss has improved stability and guidance for small errors."
-                 "\n\t L_inf_norm --- The L_inf norm will reduce the largest individual pixel "
-                 "error in an image. As each largest error is minimized sequentially, the "
-                 "overall error is improved. This loss will be extremely focused on outliers."
-                 "\n\t SSIM - Structural Similarity Index Metric is a perception-based "
-                 "loss that considers changes in texture, luminance, contrast, and local spatial "
-                 "statistics of an image. Potentially delivers more realistic looking images."
-                 "\n\t MS_SSIM - Multiscale Structural Similarity Index Metric is similar to SSIM "
-                 "except that it performs the calculations along multiple scales of the input "
-                 "image. NB: This loss currently does not work on AMD Cards."
-                 "\n\t GMSD - Gradient Magnitude Similarity Deviation seeks to match "
-                 "the global standard deviation of the pixel to pixel differences between two "
-                 "images. Similar in approach to SSIM. NB: This loss does not currently work on "
-                 "AMD cards."
-                 "\n\t Pixel_Gradient_Difference - Instead of minimizing the difference between "
-                 "the absolute value of each pixel in two reference images, compute the pixel to "
-                 "pixel spatial difference in each image and then minimize that difference "
-                 "between two images. Allows for large color shifts, but maintains the structure "
-                 "of the image.")
+            fixed=False,
+            choices=[x for x in sorted(_LOSS_HELP) if x not in _NON_PRIMARY_LOSS],
+            info="The loss function to use.\n\n\t" +
+                 "\n\t".join(f"{k}: {v}"
+                             for k, v in sorted(_LOSS_HELP.items()) if k not in _NON_PRIMARY_LOSS))
+        self.add_item(
+            section=section,
+            title="loss_function_2",
+            datatype=str,
+            group="loss",
+            default="mse",
+            fixed=False,
+            choices=list(sorted(_LOSS_HELP)),
+            info="The second loss function to use. If using a structural based loss (such as "
+                 "SSIM, MS-SSIM or GMSD) it is common to add an L1 regularization(MAE) or L2 "
+                 "regularization (MSE) function. You can adjust the weighting of this loss "
+                 "function with the loss_weight_2 option.\n\n\t" +
+                 "\n\t".join(f"{k}: {v}"
+                             for k, v in sorted(_LOSS_HELP.items())))
+        self.add_item(
+            section=section,
+            title="loss_weight_2",
+            datatype=int,
+            group="loss",
+            min_max=(0, 400),
+            rounding=1,
+            default=100,
+            fixed=False,
+            info="The amount of weight to apply to the second loss function.\n\n"
+                 "\n\nThe value given here is as a percentage denoting how much the selected "
+                 "function should contribute to the overall loss cost of the model. For example:"
+                 "\n\t 100 - The loss calculated for the second loss function will be applied at "
+                 "its full amount towards the overall loss score. "
+                 "\n\t 25 - The loss calculated for the second loss function will be reduced by a "
+                 "quarter prior to adding to the overall loss score. "
+                 "\n\t 400 - The loss calculated for the second loss function will be mulitplied "
+                 "4 times prior to adding to the overall loss score. "
+                 "\n\t 0 - Disables the second loss function altogether.")
+        self.add_item(
+            section=section,
+            title="loss_function_3",
+            datatype=str,
+            group="loss",
+            default="none",
+            fixed=False,
+            choices=list(sorted(_LOSS_HELP)),
+            info="The third loss function to use. You can adjust the weighting of this loss "
+                 "function with the loss_weight_3 option.\n\n\t" +
+                 "\n\t".join(f"{k}: {v}"
+                             for k, v in sorted(_LOSS_HELP.items())))
+        self.add_item(
+            section=section,
+            title="loss_weight_3",
+            datatype=int,
+            group="loss",
+            min_max=(0, 400),
+            rounding=1,
+            default=0,
+            fixed=False,
+            info="The amount of weight to apply to the third loss function.\n\n"
+                 "\n\nThe value given here is as a percentage denoting how much the selected "
+                 "function should contribute to the overall loss cost of the model. For example:"
+                 "\n\t 100 - The loss calculated for the third loss function will be applied at "
+                 "its full amount towards the overall loss score. "
+                 "\n\t 25 - The loss calculated for the third loss function will be reduced by a "
+                 "quarter prior to adding to the overall loss score. "
+                 "\n\t 400 - The loss calculated for the third loss function will be mulitplied 4 "
+                 "times prior to adding to the overall loss score. "
+                 "\n\t 0 - Disables the third loss function altogether.")
+        self.add_item(
+            section=section,
+            title="loss_function_4",
+            datatype=str,
+            group="loss",
+            default="none",
+            fixed=False,
+            choices=list(sorted(_LOSS_HELP)),
+            info="The fourth loss function to use. You can adjust the weighting of this loss "
+                 "function with the loss_weight_3 option.\n\n\t" +
+                 "\n\t".join(f"{k}: {v}"
+                             for k, v in sorted(_LOSS_HELP.items())))
+        self.add_item(
+            section=section,
+            title="loss_weight_4",
+            datatype=int,
+            group="loss",
+            min_max=(0, 400),
+            rounding=1,
+            default=0,
+            fixed=False,
+            info="The amount of weight to apply to the fourth loss function.\n\n"
+                 "\n\nThe value given here is as a percentage denoting how much the selected "
+                 "function should contribute to the overall loss cost of the model. For example:"
+                 "\n\t 100 - The loss calculated for the fourth loss function will be applied at "
+                 "its full amount towards the overall loss score. "
+                 "\n\t 25 - The loss calculated for the fourth loss function will be reduced by a "
+                 "quarter prior to adding to the overall loss score. "
+                 "\n\t 400 - The loss calculated for the fourth loss function will be mulitplied "
+                 "4 times prior to adding to the overall loss score. "
+                 "\n\t 0 - Disables the fourth loss function altogether.")
         self.add_item(
             section=section,
             title="mask_loss_function",
             datatype=str,
             group="loss",
             default="mse",
+            fixed=False,
             choices=["mae", "mse"],
             info="The loss function to use when learning a mask."
                  "\n\t MAE - Mean absolute error will guide reconstructions of each pixel "
@@ -296,28 +404,6 @@ class Config(FaceswapConfig):
                  "\n\t MSE - Mean squared error will guide reconstructions of each pixel "
                  "towards its average value in the training dataset. As an average, it will be "
                  "susceptible to outliers and typically produces slightly blurrier results.")
-        self.add_item(
-            section=section,
-            title="l2_reg_term",
-            datatype=int,
-            group="loss",
-            min_max=(0, 400),
-            rounding=1,
-            default=100,
-            info="The amount of L2 Regularization to apply as a penalty to Structural Similarity "
-                 "loss functions.\n\nNB: You should only adjust this if you know what you are "
-                 "doing!\n\n"
-                 "L2 regularization applies a penalty term to the given Loss function. This "
-                 "penalty will only be applied if SSIM, MS-SSIM or GMSD is selected for the main "
-                 "loss function, otherwise it is ignored."
-                 "\n\nThe value given here is as a percentage weight of the main loss function. "
-                 "For example:"
-                 "\n\t 100 - Will give equal weighting to the main loss and the penalty function. "
-                 "\n\t 25 - Will give the penalty function 1/4 of the weight of the main loss "
-                 "function. "
-                 "\n\t 400 - Will give the penalty function 4x as much importance as the main "
-                 "loss function."
-                 "\n\t 0 - Disables L2 Regularization altogether.")
         self.add_item(
             section=section,
             title="eye_multiplier",

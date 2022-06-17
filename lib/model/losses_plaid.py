@@ -649,10 +649,12 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
             return y_true[..., :3], y_pred[..., :3]
 
         logger.debug("Applying mask from channel %s", mask_channel)
-        mask = K.expand_dims(y_true[..., mask_channel], axis=-1)
+
+        mask = K.tile(K.expand_dims(y_true[..., mask_channel], axis=-1), (1, 1, 1, 3))
         mask_as_k_inv_prop = 1 - mask_prop
         mask = (mask * mask_prop) + mask_as_k_inv_prop
 
-        n_true = y_true[..., :3] * mask
-        n_pred = y_pred * mask
-        return n_true, n_pred
+        m_true = y_true[..., :3] * mask
+        m_pred = y_pred[..., :3] * mask
+
+        return m_true, m_pred
