@@ -7,12 +7,13 @@
     kvrooman for numerous insights and invaluable aid
     DeepHomage for lots of testing
     """
+import logging
 
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock,
                                  Upscale2xBlock)
 from lib.utils import FaceswapError, get_backend
 
-from ._base import ModelBase, KerasModel, logger
+from ._base import ModelBase, KerasModel
 
 if get_backend() == "amd":
     from keras.layers import (
@@ -23,6 +24,8 @@ else:
     from tensorflow.keras.layers import (  # pylint:disable=import-error,no-name-in-module
         AveragePooling2D, BatchNormalization, Concatenate, Dense, Dropout, Flatten, Input, Reshape,
         LeakyReLU, UpSampling2D)
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Model(ModelBase):

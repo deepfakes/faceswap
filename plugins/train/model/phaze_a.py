@@ -2,6 +2,7 @@
 """ Phaze-A Model by TorzDF with thanks to BirbFakes and the myriad of testers. """
 
 # pylint: disable=too-many-lines
+import logging
 import sys
 from dataclasses import dataclass
 
@@ -22,7 +23,10 @@ from lib.model.normalization import (
     RMSNormalization)
 from lib.utils import get_backend, get_tf_version, FaceswapError
 
-from ._base import KerasModel, ModelBase, logger, _get_all_sub_models
+from ._base import KerasModel, ModelBase, get_all_sub_models
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
 
 if get_backend() == "amd":
     from keras import applications as kapp, backend as K
@@ -223,7 +227,7 @@ class Model(ModelBase):
                         gblock=self.config["fc_gblock_dropout"])
         logger.debug("Config dropouts: %s", dropouts)
         updated = False
-        for mod in _get_all_sub_models(model):
+        for mod in get_all_sub_models(model):
             if not mod.name.startswith("fc_"):
                 continue
             key = "gblock" if "gblock" in mod.name else mod.name.split("_")[0]

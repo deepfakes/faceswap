@@ -19,8 +19,9 @@
 !/update_deps.py
 
 # Support files
-!_travis/
-!_travis/*.py
+!/.github/
+!/.github/workflows/
+!/.github/workflows/*.yml
 !.install/
 !.install/**
 !config/
