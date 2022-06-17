@@ -4,22 +4,29 @@
 from __future__ import absolute_import
 
 import logging
+from typing import List, Tuple
 
 import numpy as np
+import plaidml
 import tensorflow as tf
 
 from keras import backend as K
-from plaidml.op import extract_image_patches
 from lib.plaidml_utils import pad
 from lib.utils import FaceswapError
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
-class DSSIMObjective():
-    """ DSSIM Loss Function
+class DSSIMObjective():  # pylint:disable=too-few-public-methods
+    """ DSSIM and MS-DSSIM Loss Functions
 
-    Difference of Structural Similarity (DSSIM loss function). Clipped between 0 and 0.5
+    Difference of Structural Similarity (DSSIM loss function).
+
+    Adapted from :func:`tensorflow.image.ssim` for a pure keras implentation.
+
+    Notes
+    -----
+    Channels last only. Assumes all input images are the same size and square
 
     Parameters
     ----------
@@ -27,179 +34,135 @@ class DSSIMObjective():
         Parameter of the SSIM. Default: `0.01`
     k_2: float, optional
         Parameter of the SSIM. Default: `0.03`
-    kernel_size: int, optional
-        Size of the sliding window Default: `3`
+    filter_size: int, optional
+        size of gaussian filter Default: `11`
+    filter_sigma: float, optional
+        Width of gaussian filter Default: `1.5`
     max_value: float, optional
         Max value of the output. Default: `1.0`
 
     Notes
     ------
     You should add a regularization term like a l2 loss in addition to this one.
-
-    References
-    ----------
-    https://github.com/keras-team/keras-contrib/blob/master/keras_contrib/losses/dssim.py
-
-    MIT License
-
-    Copyright (c) 2017 Fariz Rahman
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in all
-    copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-    SOFTWARE.
     """
-    def __init__(self, k_1=0.01, k_2=0.03, kernel_size=3, max_value=1.0):
-        self.__name__ = 'DSSIMObjective'
-        self.kernel_size = kernel_size
-        self.k_1 = k_1
-        self.k_2 = k_2
-        self.max_value = max_value
-        self.c_1 = (self.k_1 * self.max_value) ** 2
-        self.c_2 = (self.k_2 * self.max_value) ** 2
-        self.dim_ordering = K.image_data_format()
+    def __init__(self,
+                 k_1: float = 0.01,
+                 k_2: float = 0.03,
+                 filter_size: int = 11,
+                 filter_sigma: float = 1.5,
+                 max_value: float = 1.0) -> None:
+        self._filter_size = filter_size
+        self._filter_sigma = filter_sigma
+        self._kernel = self._get_kernel()
 
-    @staticmethod
-    def _int_shape(input_tensor):
-        """ Returns the shape of tensor or variable as a tuple of int or None entries.
+        compensation = 1.0
+        self._c1 = (k_1 * max_value) ** 2
+        self._c2 = ((k_2 * max_value) ** 2) * compensation
 
-        Parameters
-        ----------
-        input_tensor: tensor or variable
-            The input to return the shape for
+    def _get_kernel(self) -> plaidml.tile.Value:
+        """ Obtain the base kernel for performing depthwise convolution.
 
         Returns
         -------
-        tuple
-            A tuple of integers (or None entries)
+        :class:`plaidml.tile.Value`
+            The gaussian kernel based on selected size and sigma
         """
-        return K.int_shape(input_tensor)
+        coords = np.arange(self._filter_size, dtype="float32")
+        coords -= (self._filter_size - 1) / 2.
 
-    def __call__(self, y_true, y_pred):
-        """ Call the DSSIM Loss Function.
+        kernel = np.square(coords)
+        kernel *= -0.5 / np.square(self._filter_sigma)
+        kernel = np.reshape(kernel, (1, -1)) + np.reshape(kernel, (-1, 1))
+        kernel = K.constant(np.reshape(kernel, (1, -1)))
+        kernel = K.softmax(kernel)
+        kernel = K.reshape(kernel, (self._filter_size, self._filter_size, 1, 1))
+        return kernel
+
+    @classmethod
+    def _depthwise_conv2d(cls,
+                          image: plaidml.tile.Value,
+                          kernel: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Perform a standardized depthwise convolution.
 
         Parameters
         ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
+        image: :class:`plaidml.tile.Value`
+            Batch of images, channels last, to perform depthwise convolution
+        kernel: :class:`plaidml.tile.Value`
+            convolution kernel
 
         Returns
         -------
-        tensor
-            The DSSIM Loss value
-
-        Notes
-        -----
-        There are additional parameters for this function. some of the 'modes' for edge behavior
-        do not yet have a gradient definition in the Theano tree and cannot be used for learning
+        :class:`plaidml.tile.Value`
+            The output from the convolution
         """
+        return K.depthwise_conv2d(image, kernel, strides=(1, 1), padding="valid")
 
-        kernel = [self.kernel_size, self.kernel_size]
-        y_true = K.reshape(y_true, [-1] + list(self._int_shape(y_pred)[1:]))
-        y_pred = K.reshape(y_pred, [-1] + list(self._int_shape(y_pred)[1:]))
-        patches_pred = self.extract_image_patches(y_pred,
-                                                  kernel,
-                                                  kernel,
-                                                  'valid',
-                                                  self.dim_ordering)
-        patches_true = self.extract_image_patches(y_true,
-                                                  kernel,
-                                                  kernel,
-                                                  'valid',
-                                                  self.dim_ordering)
-
-        # Get mean
-        u_true = K.mean(patches_true, axis=-1)
-        u_pred = K.mean(patches_pred, axis=-1)
-        # Get variance
-        var_true = K.var(patches_true, axis=-1)
-        var_pred = K.var(patches_pred, axis=-1)
-        # Get standard deviation
-        covar_true_pred = K.mean(
-            patches_true * patches_pred, axis=-1) - u_true * u_pred
-
-        ssim = (2 * u_true * u_pred + self.c_1) * (
-            2 * covar_true_pred + self.c_2)
-        denom = (K.square(u_true) + K.square(u_pred) + self.c_1) * (
-            var_pred + var_true + self.c_2)
-        ssim /= denom  # no need for clipping, c_1 + c_2 make the denorm non-zero
-        return (1.0 - ssim) / 2.0
-
-    @staticmethod
-    def _preprocess_padding(padding):
-        """Convert keras padding to tensorflow padding.
+    def _get_ssim(self,
+                  y_true: plaidml.tile.Value,
+                  y_pred: plaidml.tile.Value) -> Tuple[plaidml.tile.Value, plaidml.tile.Value]:
+        """ Obtain the structural similarity between a batch of true and predicted images.
 
         Parameters
         ----------
-        padding: string,
-            `"same"` or `"valid"`.
+        y_true: :class:`plaidml.tile.Value`
+            The input batch of ground truth images
+        y_pred: :class:`plaidml.tile.Value`
+            The input batch of predicted images
 
         Returns
         -------
-        str
-            `"SAME"` or `"VALID"`.
-
-        Raises
-        ------
-        ValueError
-            If `padding` is invalid.
+        :class:`plaidml.tile.Value`
+            The SSIM for the given images
+        :class:`plaidml.tile.Value`
+            The Contrast for the given images
         """
-        if padding == 'same':
-            padding = 'SAME'
-        elif padding == 'valid':
-            padding = 'VALID'
-        else:
-            raise ValueError('Invalid padding:', padding)
-        return padding
+        channels = K.int_shape(y_pred)[-1]
+        kernel = K.tile(self._kernel, (1, 1, channels, 1))
 
-    def extract_image_patches(self, input_tensor, k_sizes, s_sizes,
-                              padding='same', data_format='channels_last'):
-        """ Extract the patches from an image.
+        # SSIM luminance measure is (2 * mu_x * mu_y + c1) / (mu_x ** 2 + mu_y ** 2 + c1)
+        mean_true = self._depthwise_conv2d(y_true, kernel)
+        mean_pred = self._depthwise_conv2d(y_pred, kernel)
+        num_lum = mean_true * mean_pred * 2.0
+        den_lum = K.square(mean_true) + K.square(mean_pred)
+        luminance = (num_lum + self._c1) / (den_lum + self._c1)
+
+        # SSIM contrast-structure measure is (2 * cov_{xy} + c2) / (cov_{xx} + cov_{yy} + c2)
+        num_con = self._depthwise_conv2d(y_true * y_pred, kernel) * 2.0
+        den_con = self._depthwise_conv2d(K.square(y_true) + K.square(y_pred), kernel)
+
+        contrast = (num_con - num_lum + self._c2) / (den_con - den_lum + self._c2)
+
+        # Average over the height x width dimensions
+        axes = (-3, -2)
+        ssim = K.mean(luminance * contrast, axis=axes)
+        contrast = K.mean(contrast, axis=axes)
+
+        return ssim, contrast
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Call the DSSIM  or MS-DSSIM Loss Function.
 
         Parameters
         ----------
-        input_tensor: tensor
-            The input image
-        k_sizes: tuple
-            2-d tuple with the kernel size
-        s_sizes: tuple
-            2-d tuple with the strides size
-        padding: str, optional
-            `"same"` or `"valid"`. Default: `"same"`
-        data_format: str, optional.
-            `"channels_last"` or `"channels_first"`. Default: `"channels_last"`
+        y_true: :class:`plaidml.tile.Value`
+            The input batch of ground truth images
+        y_pred: :class:`plaidml.tile.Value`
+            The input batch of predicted images
 
         Returns
         -------
-        The (k_w, k_h) patches extracted
-            Tensorflow ==> (batch_size, w, h, k_w, k_h, c)
-            Theano ==> (batch_size, w, h, c, k_w, k_h)
+        :class:`plaidml.tile.Value`
+            The DSSIM or MS-DSSIM for the given images
         """
-        kernel = [1, k_sizes[0], k_sizes[1], 1]
-        strides = [1, s_sizes[0], s_sizes[1], 1]
-        padding = self._preprocess_padding(padding)
-        if data_format == 'channels_first':
-            input_tensor = K.permute_dimensions(input_tensor, (0, 2, 3, 1))
-        patches = extract_image_patches(input_tensor, kernel, strides, [1, 1, 1, 1], padding)
-        return patches
+        ssim = self._get_ssim(y_true, y_pred)[0]
+        retval = (1. - ssim) / 2.0
+        return K.mean(retval)
 
 
-class MSSSIMLoss():  # pylint:disable=too-few-public-methods
+class MSSIMLoss(DSSIMObjective):  # pylint:disable=too-few-public-methods
     """ Multiscale Structural Similarity Loss Function
 
     Parameters
@@ -225,18 +188,115 @@ class MSSSIMLoss():  # pylint:disable=too-few-public-methods
     You should add a regularization term like a l2 loss in addition to this one.
     """
     def __init__(self,
-                 k_1=0.01,
-                 k_2=0.03,
-                 filter_size=4,
-                 filter_sigma=1.5,
-                 max_value=1.0,
-                 power_factors=(0.0448, 0.2856, 0.3001, 0.2363, 0.1333)):
-        self.filter_size = filter_size
-        self.filter_sigma = filter_sigma
-        self.k_1 = k_1
-        self.k_2 = k_2
-        self.max_value = max_value
-        self.power_factors = power_factors
+                 k_1: float = 0.01,
+                 k_2: float = 0.03,
+                 filter_size: int = 11,
+                 filter_sigma: float = 1.5,
+                 max_value: float = 1.0,
+                 power_factors: Tuple[float, ...] = (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
+                 ) -> None:
+        super().__init__(k_1=k_1,
+                         k_2=k_2,
+                         filter_size=filter_size,
+                         filter_sigma=filter_sigma,
+                         max_value=max_value)
+        self._power_factors = K.constant(power_factors)
+
+    def _get_smallest_size(self, size: int, idx: int) -> int:
+        """ Recursive function to obtain the smallest size that the image will be scaled to.
+        for MS-SSIM
+
+        Parameters
+        ----------
+        size: int
+            The current scaled size to iterate through
+        idx: int
+            The current iteration to be performed. When iteration hits zero the value will
+            be returned
+
+        Returns
+        -------
+        int
+            The smallest size the image will be scaled to based on the original image size and
+            the amount of scaling factors that will occur
+        """
+        logger.debug("scale id: %s, size: %s", idx, size)
+        if idx > 0:
+            size = self._get_smallest_size(size // 2, idx - 1)
+        return size
+
+    @classmethod
+    def _shrink_images(cls, images: List[plaidml.tile.Value]) -> List[plaidml.tile.Value]:
+        """ Reduce the dimensional space of a batch of images in half. If the images are an odd
+        number of pixels then pad them to an even dimension prior to shrinking
+
+        All incoming images are assumed square.
+
+        Parameters
+        ----------
+        images: list
+            The y_true, y_pred batch of images to be shrunk
+
+        Returns
+        -------
+        list
+            The y_true, y_pred batch shrunk by half
+        """
+        if any(x % 2 != 0 for x in K.int_shape(images[1])[1:2]):
+            images = [pad(img,
+                          [[0, 0], [0, 1], [0, 1], [0, 0]],
+                          mode="REFLECT")
+                      for img in images]
+
+        images = [K.pool2d(img, (2, 2), strides=(2, 2), padding="valid", pool_mode="avg")
+                  for img in images]
+
+        return images
+
+    def _get_ms_ssim(self,
+                     y_true: plaidml.tile.Value,
+                     y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Obtain the Multiscale Stuctural Similarity metric.
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The input batch of ground truth images
+        y_pred: :class:`plaidml.tile.Value`
+            The input batch of predicted images
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The MS-SSIM for the given images
+        """
+        im_size = K.int_shape(y_pred)[1]
+        # filter size cannot be larger than the smallest scale
+        recursions = K.int_shape(self._power_factors)[0]
+        smallest_scale = self._get_smallest_size(im_size, recursions - 1)
+        if smallest_scale < self._filter_size:
+            self._filter_size = smallest_scale
+            self._kernel = self._get_kernel()
+
+        images = [y_true, y_pred]
+        contrasts = []
+
+        for idx in range(recursions):
+            images = self._shrink_images(images) if idx > 0 else images
+            ssim, contrast = self._get_ssim(*images)
+
+            if idx < recursions - 1:
+                contrasts.append(K.relu(K.expand_dims(contrast, axis=-1)))
+
+        contrasts.append(K.relu(K.expand_dims(ssim, axis=-1)))
+        mcs_and_ssim = K.concatenate(contrasts, axis=-1)
+        ms_ssim = K.pow(mcs_and_ssim, self._power_factors)
+
+        # K.prod does not work in plaidml so slow recursion it is
+        out = ms_ssim[..., 0]
+        for idx in range(1, recursions):
+            out *= ms_ssim[..., idx]
+        return out
 
     def __call__(self, y_true, y_pred):
         """ Call the MS-SSIM Loss Function.
@@ -253,8 +313,9 @@ class MSSSIMLoss():  # pylint:disable=too-few-public-methods
         tensor
             The MS-SSIM Loss value
         """
-        raise FaceswapError("MS-SSIM Loss is not currently compatible with PlaidML. Please select "
-                            "a different Loss method.")
+        ms_ssim = self._get_ms_ssim(y_true, y_pred)
+        retval = 1. - ms_ssim
+        return K.mean(retval)
 
 
 class GeneralizedLoss():  # pylint:disable=too-few-public-methods

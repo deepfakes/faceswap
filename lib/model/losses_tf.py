@@ -4,7 +4,7 @@
 from __future__ import absolute_import
 
 import logging
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -16,10 +16,16 @@ from tensorflow.keras import backend as K  # pylint:disable=import-error
 logger = logging.getLogger(__name__)
 
 
-class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
-    """ DSSIM Loss Function
+class DSSIMObjective():  # pylint:disable=too-few-public-methods
+    """ DSSIM and MS-DSSIM Loss Functions
 
     Difference of Structural Similarity (DSSIM loss function).
+
+    Adapted from :func:`tensorflow.image.ssim` for a pure keras implentation.
+
+    Notes
+    -----
+    Channels last only. Assumes all input images are the same size and square
 
     Parameters
     ----------
@@ -38,41 +44,118 @@ class DSSIMObjective(tf.keras.losses.Loss):  # pylint:disable=too-few-public-met
     ------
     You should add a regularization term like a l2 loss in addition to this one.
     """
-    def __init__(self, k_1=0.01, k_2=0.03, filter_size=11, filter_sigma=1.5, max_value=1.0):
-        super().__init__(name="DSSIMObjective", reduction=tf.keras.losses.Reduction.NONE)
+    def __init__(self,
+                 k_1: float = 0.01,
+                 k_2: float = 0.03,
+                 filter_size: int = 11,
+                 filter_sigma: float = 1.5,
+                 max_value: float = 1.0) -> None:
         self._filter_size = filter_size
         self._filter_sigma = filter_sigma
-        self._k_1 = k_1
-        self._k_2 = k_2
-        self._max_value = max_value
+        self._kernel = self._get_kernel()
 
-    def call(self, y_true, y_pred):
-        """ Call the DSSIM Loss Function.
+        compensation = 1.0
+        self._c1 = (k_1 * max_value) ** 2
+        self._c2 = ((k_2 * max_value) ** 2) * compensation
 
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
+    def _get_kernel(self) -> tf.Tensor:
+        """ Obtain the base kernel for performing depthwise convolution.
 
         Returns
         -------
-        tensor
-            The DSSIM Loss value
+        :class:`tf.Tensor`
+            The gaussian kernel based on selected size and sigma
         """
-        ssim = tf.image.ssim(y_true,
-                             y_pred,
-                             self._max_value,
-                             filter_size=self._filter_size,
-                             filter_sigma=self._filter_sigma,
-                             k1=self._k_1,
-                             k2=self._k_2)
-        dssim_loss = (1. - ssim) / 2.0
-        return dssim_loss
+        coords = np.arange(self._filter_size, dtype="float32")
+        coords -= (self._filter_size - 1) / 2.
+
+        kernel = np.square(coords)
+        kernel *= -0.5 / np.square(self._filter_sigma)
+        kernel = np.reshape(kernel, (1, -1)) + np.reshape(kernel, (-1, 1))
+        kernel = K.constant(np.reshape(kernel, (1, -1)))
+        kernel = K.softmax(kernel)
+        kernel = K.reshape(kernel, (self._filter_size, self._filter_size, 1, 1))
+        return kernel
+
+    @classmethod
+    def _depthwise_conv2d(cls, image: tf.Tensor, kernel: tf.Tensor) -> tf.Tensor:
+        """ Perform a standardized depthwise convolution.
+
+        Parameters
+        ----------
+        image: :class:`tf.Tensor`
+            Batch of images, channels last, to perform depthwise convolution
+        kernel: :class:`tf.Tensor`
+            convolution kernel
+
+        Returns
+        -------
+        :class:`tf.Tensor`
+            The output from the convolution
+        """
+        return K.depthwise_conv2d(image, kernel, strides=(1, 1), padding="valid")
+
+    def _get_ssim(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+        """ Obtain the structural similarity between a batch of true and predicted images.
+
+        Parameters
+        ----------
+        y_true: :class:`tf.Tensor`
+            The input batch of ground truth images
+        y_pred: :class:`tf.Tensor`
+            The input batch of predicted images
+
+        Returns
+        -------
+        :class:`tf.Tensor`
+            The SSIM for the given images
+        :class:`tf.Tensor`
+            The Contrast for the given images
+        """
+        channels = K.int_shape(y_true)[-1]
+        kernel = K.tile(self._kernel, (1, 1, channels, 1))
+
+        # SSIM luminance measure is (2 * mu_x * mu_y + c1) / (mu_x ** 2 + mu_y ** 2 + c1)
+        mean_true = self._depthwise_conv2d(y_true, kernel)
+        mean_pred = self._depthwise_conv2d(y_pred, kernel)
+        num_lum = mean_true * mean_pred * 2.0
+        den_lum = K.square(mean_true) + K.square(mean_pred)
+        luminance = (num_lum + self._c1) / (den_lum + self._c1)
+
+        # SSIM contrast-structure measure is (2 * cov_{xy} + c2) / (cov_{xx} + cov_{yy} + c2)
+        num_con = self._depthwise_conv2d(y_true * y_pred, kernel) * 2.0
+        den_con = self._depthwise_conv2d(K.square(y_true) + K.square(y_pred), kernel)
+
+        contrast = (num_con - num_lum + self._c2) / (den_con - den_lum + self._c2)
+
+        # Average over the height x width dimensions
+        axes = (-3, -2)
+        ssim = K.mean(luminance * contrast, axis=axes)
+        contrast = K.mean(contrast, axis=axes)
+
+        return ssim, contrast
+
+    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+        """ Call the DSSIM  or MS-DSSIM Loss Function.
+
+        Parameters
+        ----------
+        y_true: :class:`tf.Tensor`
+            The input batch of ground truth images
+        y_pred: :class:`tf.Tensor`
+            The input batch of predicted images
+
+        Returns
+        -------
+        :class:`tf.Tensor`
+            The DSSIM or MS-DSSIM for the given images
+        """
+        ssim = self._get_ssim(y_true, y_pred)[0]
+        retval = (1. - ssim) / 2.0
+        return K.mean(retval)
 
 
-class MSSSIMLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
+class MSSIMLoss():  # pylint:disable=too-few-public-methods
     """ Multiscale Structural Similarity Loss Function
 
     Parameters
@@ -98,13 +181,13 @@ class MSSSIMLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
     You should add a regularization term like a l2 loss in addition to this one.
     """
     def __init__(self,
-                 k_1=0.01,
-                 k_2=0.03,
-                 filter_size=4,
-                 filter_sigma=1.5,
-                 max_value=1.0,
-                 power_factors=(0.0448, 0.2856, 0.3001, 0.2363, 0.1333)):
-        super().__init__(name="SSIM_Multiscale_Loss", reduction=tf.keras.losses.Reduction.NONE)
+                 k_1: float = 0.01,
+                 k_2: float = 0.03,
+                 filter_size: int = 11,
+                 filter_sigma: float = 1.5,
+                 max_value: float = 1.0,
+                 power_factors: Tuple[float, ...] = (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
+                 ) -> None:
         self.filter_size = filter_size
         self.filter_sigma = filter_sigma
         self.k_1 = k_1
@@ -112,19 +195,19 @@ class MSSSIMLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
         self.max_value = max_value
         self.power_factors = power_factors
 
-    def call(self, y_true, y_pred):
+    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """ Call the MS-SSIM Loss Function.
 
         Parameters
         ----------
-        y_true: tensor or variable
+        y_true: :class:`tf.Tensor`
             The ground truth value
-        y_pred: tensor or variable
+        y_pred: :class:`tf.Tensor`
             The predicted value
 
         Returns
         -------
-        tensor
+        :class:`tf.Tensor`
             The MS-SSIM Loss value
         """
         im_size = K.int_shape(y_true)[1]
@@ -141,9 +224,9 @@ class MSSSIMLoss(tf.keras.losses.Loss):  # pylint:disable=too-few-public-methods
                                            k1=self.k_1,
                                            k2=self.k_2)
         ms_ssim_loss = 1. - ms_ssim
-        return ms_ssim_loss
+        return K.mean(ms_ssim_loss)
 
-    def _get_smallest_size(self, size, idx):
+    def _get_smallest_size(self, size: int, idx: int) -> int:
         """ Recursive function to obtain the smallest size that the image will be scaled to.
 
         Parameters
@@ -486,8 +569,8 @@ class LossWrapper():
     but are not fed in to the model.
 
     This wrapper receives this additional mask data for the batch stacked onto the end of the
-    color channels of the received :param:`y_true` batch of images. These masks are then split
-    off the batch of images and applied to both the :param:`y_true` and :param:`y_pred` tensors
+    color channels of the received :attr:`y_true` batch of images. These masks are then split
+    off the batch of images and applied to both the :attr:`y_true` and :attr:`y_pred` tensors
     prior to feeding into the loss functions.
 
     For example, for an image of shape (4, 128, 128, 3) 3 additional masks may be stacked onto
@@ -497,9 +580,9 @@ class LossWrapper():
     """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._loss_functions = []
-        self._loss_weights = []
-        self._mask_channels = []
+        self._loss_functions: List[compile_utils.LossesContainer] = []
+        self._loss_weights: List[float] = []
+        self._mask_channels: List[int] = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def add_loss(self,
@@ -531,7 +614,7 @@ class LossWrapper():
         Loss is returned as the weighted sum of the chosen losses.
 
         If masks are being applied to the loss function inputs, then they should be included as
-        additional channels at the end of :param:`y_true`, so that they can be split off and
+        additional channels at the end of :attr:`y_true`, so that they can be split off and
         applied to the actual inputs to the selected loss function(s).
 
         Parameters

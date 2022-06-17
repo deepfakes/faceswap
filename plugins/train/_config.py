@@ -36,8 +36,7 @@ _LOSS_HELP = dict(
         "produces slightly blurrier results."),
     ms_ssim=(
         "Multiscale Structural Similarity Index Metric is similar to SSIM except that it "
-        "performs the calculations along multiple scales of the input image. NB: This loss "
-        "currently does not work on AMD Cards."),
+        "performs the calculations along multiple scales of the input image."),
     smooth_loss=(
         "Smooth_L1 is a modification of the MAE loss to correct two of its disadvantages. "
         "This loss has improved stability and guidance for small errors."),

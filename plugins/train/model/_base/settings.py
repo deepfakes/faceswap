@@ -59,7 +59,7 @@ class Loss():
                                smooth_loss=losses.GeneralizedLoss(),
                                l_inf_norm=losses.LInfNorm(),
                                ssim=losses.DSSIMObjective(),
-                               ms_ssim=losses.MSSSIMLoss(),
+                               ms_ssim=losses.MSSIMLoss(),
                                gmsd=losses.GMSDLoss(),
                                pixel_gradient_diff=losses.GradientLoss())
         self._mask_channels = self._get_mask_channels()
