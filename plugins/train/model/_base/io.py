@@ -32,7 +32,7 @@ else:
     from tensorflow.keras.models import load_model, Model as KModel  # noqa pylint:disable=import-error,no-name-in-module
 
 if TYPE_CHECKING:
-    from .._base import ModelBase
+    from .model import ModelBase
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -52,7 +52,7 @@ def get_all_sub_models(
     Returns
     -------
     list
-        A list of all :class:`keras.models.Model`s found within the given model. The provided
+        A list of all :class:`keras.models.Model`\s found within the given model. The provided
         model will always be returned in the first position
     """
     if models is None:

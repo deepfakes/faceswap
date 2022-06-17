@@ -90,7 +90,7 @@ def extract_args(detector, aligner, in_path, out_path, args=None):
     return _extract_args.split()
 
 
-def train_args(model, model_path, faces, iterations=1, batchsize=4, extra_args=""):
+def train_args(model, model_path, faces, iterations=1, batchsize=2, extra_args=""):
     """ Train command """
     py_exe = sys.executable
     args = (f"{py_exe} faceswap.py train -A {faces} -B {faces} -m {model_path} -t {model} "

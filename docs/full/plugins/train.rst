@@ -8,20 +8,11 @@ The Train Package handles the Model and Trainer plugins for training models in F
 .. contents:: Contents
    :local:
 
-model._base module
-==================
-
-.. rubric:: Module Summary
-
-.. autosummary::
-   :nosignatures:
-
-   ~plugins.train.model._base.model
-   ~plugins.train.model._base.settings
-   ~plugins.train.model._base.io
+model package
+=============
 
 model._base.model module
-========================
+------------------------
 
 .. automodule:: plugins.train.model._base.model
    :members:
@@ -29,7 +20,7 @@ model._base.model module
    :show-inheritance:
 
 model._base.settings module
-===========================
+---------------------------
 
 .. automodule:: plugins.train.model._base.settings
    :members:
@@ -37,7 +28,7 @@ model._base.settings module
    :show-inheritance:
 
 model._base.io module
-=====================
+---------------------
 
 .. automodule:: plugins.train.model._base.io
    :members:
@@ -45,15 +36,18 @@ model._base.io module
    :show-inheritance:
 
 model.original module
-=====================
+----------------------
 
 .. automodule:: plugins.train.model.original
    :members:
    :undoc-members:
    :show-inheritance:
 
+trainer package
+===============
+
 trainer._base module
-====================
+----------------------
 
 .. automodule:: plugins.train.trainer._base
    :members:
