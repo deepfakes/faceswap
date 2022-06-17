@@ -14,8 +14,6 @@ if sys.version_info < (3, 8):
     from typing_extensions import TypedDict
 else:
     from typing import TypedDict
-    
-
 
 _EXCLUDE_DEVICES: List[int] = []
 
@@ -25,7 +23,7 @@ class GPUInfo(TypedDict):
     vram: List[int]
     driver: str
     devices: List[str]
-    active_devices: List[str]
+    devices_active: List[str]
 
 
 class BiggestGPUInfo(TypedDict):

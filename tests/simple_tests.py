@@ -31,9 +31,8 @@ def print_colored(text, color="OK", bold=False):
     although travis runs windows stuff in git bash, so it might ?
     """
     color = _COLORS.get(color, color)
-    print("%s%s%s%s" % (
-        color, "" if not bold else _COLORS["BOLD"], text, _COLORS["ENDC"]
-    ))
+    fmt = '' if not bold else _COLORS['BOLD']
+    print(f"{color}{fmt}{text}{_COLORS['ENDC']}")
 
 
 def print_ok(text):
@@ -54,15 +53,15 @@ def print_status(text):
 def run_test(name, cmd):
     """ run a test """
     global FAIL_COUNT, TEST_COUNT  # pylint:disable=global-statement
-    print_status("[?] running %s" % name)
-    print("Cmd: %s" % " ".join(cmd))
+    print_status(f"[?] running {name}")
+    print(f"Cmd: {''.join(cmd)}")
     TEST_COUNT += 1
     try:
         check_call(cmd)
         print_ok("[+] Test success")
         return True
     except CalledProcessError as err:
-        print_fail("[-] Test failed with %s" % err)
+        print_fail(f"[-] Test failed with {err}")
         FAIL_COUNT += 1
         return False
 
@@ -70,54 +69,50 @@ def run_test(name, cmd):
 def download_file(url, filename):  # TODO: retry
     """ Download a file from given url """
     if os.path.isfile(filename):
-        print_status("[?] '%s' already cached as '%s'" % (url, filename))
+        print_status(f"[?] '{url}' already cached as '{filename}'")
         return filename
     try:
-        print_status("[?] Downloading '%s' to '%s'" % (url, filename))
+        print_status(f"[?] Downloading '{url}' to '{filename}'")
         video, _ = urlretrieve(url, filename)
         return video
     except urllib.error.URLError as err:
-        print_fail("[-] Failed downloading: %s" % err)
+        print_fail(f"[-] Failed downloading: {err}")
         return None
 
 
 def extract_args(detector, aligner, in_path, out_path, args=None):
     """ Extraction command """
     py_exe = sys.executable
-    _extract_args = "%s faceswap.py extract -i %s -o %s -D %s -A %s" % (
-        py_exe, in_path, out_path, detector, aligner
-    )
+    _extract_args = (f"{py_exe} faceswap.py extract -i {in_path} -o {out_path} -D {detector} "
+                     f"-A {aligner}")
     if args:
-        _extract_args += " %s" % args
+        _extract_args += f" {args}"
     return _extract_args.split()
 
 
-def train_args(model, model_path, faces, alignments, iterations=5, batchsize=8, extra_args=""):
+def train_args(model, model_path, faces, iterations=1, batchsize=4, extra_args=""):
     """ Train command """
     py_exe = sys.executable
-    args = "%s faceswap.py train -A %s -B %s -m %s -t %s -bs %i -it %s %s" % (
-        py_exe, faces, faces, model_path, model, batchsize, iterations, extra_args
-    )
+    args = (f"{py_exe} faceswap.py train -A {faces} -B {faces} -m {model_path} -t {model} "
+            f"-bs {batchsize} -it {iterations} {extra_args}")
     return args.split()
 
 
 def convert_args(in_path, out_path, model_path, writer, args=None):
     """ Convert command """
     py_exe = sys.executable
-    conv_args = "%s faceswap.py convert -i %s -o %s -m %s -w %s" % (
-        py_exe, in_path, out_path, model_path, writer
-    )
+    conv_args = (f"{py_exe} faceswap.py convert -i {in_path} -o {out_path} -m {model_path} "
+                 f"-w {writer}")
     if args:
-        conv_args += " %s" % args
+        conv_args += f" {args}"
     return conv_args.split()  # Don't use pathes with spaces ;)
 
 
 def sort_args(in_path, out_path, sortby="face", groupby="hist", method="rename"):
     """ Sort command """
     py_exe = sys.executable
-    _sort_args = "%s tools.py sort -i %s -o %s -s %s -fp %s -g %s -k" % (
-        py_exe, in_path, out_path, sortby, method, groupby
-    )
+    _sort_args = (f"{py_exe} tools.py sort -i {in_path} -o {out_path} -s {sortby} -fp {method} "
+                  f"-g {groupby} -k")
     return _sort_args.split()
 
 
@@ -174,16 +169,14 @@ def main():
             "Train lightweight model for 1 iteration with WTL.",
             train_args(
                 "lightweight", pathjoin(vid_base, "model"),
-                pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.fsa"),
-                iterations=1, extra_args="-wl"
+                pathjoin(vid_base, "faces"), extra_args="-wl"
             )
         )
 
         was_trained = run_test(
-            "Train lightweight model for 5 iterations WITHOUT WTL.",
+            "Train lightweight model for 1 iterations WITHOUT WTL.",
             train_args(
-                "lightweight", pathjoin(vid_base, "model"),
-                pathjoin(vid_base, "faces"), pathjoin(vid_base, "test_alignments.fsa")
+                "lightweight", pathjoin(vid_base, "model"), pathjoin(vid_base, "faces")
             )
         )
 
@@ -205,10 +198,10 @@ def main():
         )
 
     if FAIL_COUNT == 0:
-        print_ok("[+] Failed %i/%i tests." % (FAIL_COUNT, TEST_COUNT))
+        print_ok(f"[+] Failed {FAIL_COUNT}/{TEST_COUNT} tests.")
         sys.exit(0)
     else:
-        print_fail("[-] Failed %i/%i tests." % (FAIL_COUNT, TEST_COUNT))
+        print_fail(f"[-] Failed {FAIL_COUNT}/{TEST_COUNT} tests.")
         sys.exit(1)
 
 

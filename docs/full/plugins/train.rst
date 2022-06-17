@@ -16,13 +16,30 @@ model._base module
 .. autosummary::
    :nosignatures:
 
-   ~plugins.train.model._base.KerasModel
-   ~plugins.train.model._base.ModelBase
-   ~plugins.train.model._base.State
+   ~plugins.train.model._base.model
+   ~plugins.train.model._base.settings
+   ~plugins.train.model._base.io
 
-.. rubric:: Module
+model._base.model module
+========================
 
-.. automodule:: plugins.train.model._base
+.. automodule:: plugins.train.model._base.model
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+model._base.settings module
+===========================
+
+.. automodule:: plugins.train.model._base.settings
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+model._base.io module
+=====================
+
+.. automodule:: plugins.train.model._base.io
    :members:
    :undoc-members:
    :show-inheritance:
