@@ -3,8 +3,6 @@
 :mod:`~plugins.extract.mask` Plugins
 """
 import logging
-import os
-import sys
 
 from tensorflow.python.framework import errors_impl as tf_errors
 
@@ -139,13 +137,13 @@ class Extractor():
         """ int: Batchsize for feeding this model. The number of images the model should
         feed through at once. """
 
-        self._queues = dict()
+        self._queues = {}
         """ dict: in + out queues and internal queues for this plugin, """
 
         self._threads = []
         """ list: Internal threads for this plugin """
 
-        self._extract_media = dict()
+        self._extract_media = {}
         """ dict: The :class:`plugins.extract.pipeline.ExtractMedia` objects currently being
         processed. Stored at input for pairing back up on output of extractor process """
 
@@ -352,7 +350,8 @@ class Extractor():
 
     # <<< PROTECTED ACCESS METHODS >>> #
     # <<< INIT METHODS >>> #
-    def _get_model(self, git_model_id, model_filename):
+    @classmethod
+    def _get_model(cls, git_model_id, model_filename):
         """ Check if model is available, if not, download and unzip it """
         if model_filename is None:
             logger.debug("No model_filename specified. Returning None")
@@ -360,13 +359,7 @@ class Extractor():
         if git_model_id is None:
             logger.debug("No git_model_id specified. Returning None")
             return None
-        plugin_path = os.path.join(*self.__module__.split(".")[:-1])
-        if os.path.basename(plugin_path) in ("detect", "align", "mask", "recognition"):
-            base_path = os.path.dirname(os.path.realpath(sys.argv[0]))
-            cache_path = os.path.join(base_path, plugin_path, ".cache")
-        else:
-            cache_path = os.path.join(os.path.dirname(__file__), ".cache")
-        model = GetModel(model_filename, cache_path, git_model_id)
+        model = GetModel(model_filename, git_model_id)
         return model.model_path
 
     # <<< PLUGIN INITIALIZATION >>> #
@@ -382,7 +375,7 @@ class Extractor():
         name = self.name.replace(" ", "_").lower()
         self._add_queues(kwargs["in_queue"],
                          kwargs["out_queue"],
-                         ["predict_{}".format(name), "post_{}".format(name)])
+                         [f"predict_{name}", f"post_{name}"])
         self._compile_threads()
         try:
             self.init_model()
@@ -409,7 +402,7 @@ class Extractor():
         self._queues["out"] = out_queue
         for q_name in queues:
             self._queues[q_name] = queue_manager.get_queue(
-                name="{}{}_{}".format(self._plugin_type, self._instance, q_name),
+                name=f"{self._plugin_type}{self._instance}_{q_name}",
                 maxsize=self.queue_size)
 
     # <<< THREAD METHODS >>> #
@@ -417,18 +410,18 @@ class Extractor():
         """ Compile the threads into self._threads list """
         logger.debug("Compiling %s threads", self._plugin_type)
         name = self.name.replace(" ", "_").lower()
-        base_name = "{}_{}".format(self._plugin_type, name)
-        self._add_thread("{}_input".format(base_name),
+        base_name = f"{self._plugin_type}_{name}"
+        self._add_thread(f"{base_name}_input",
                          self._process_input,
                          self._queues["in"],
-                         self._queues["predict_{}".format(name)])
-        self._add_thread("{}_predict".format(base_name),
+                         self._queues[f"predict_{name}"])
+        self._add_thread(f"{base_name}_predict",
                          self._predict,
-                         self._queues["predict_{}".format(name)],
-                         self._queues["post_{}".format(name)])
-        self._add_thread("{}_output".format(base_name),
+                         self._queues[f"predict_{name}"],
+                         self._queues[f"post_{name}"])
+        self._add_thread(f"{base_name}_output",
                          self._process_output,
-                         self._queues["post_{}".format(name)],
+                         self._queues[f"post_{name}"],
                          self._queues["out"])
         logger.debug("Compiled %s threads: %s", self._plugin_type, self._threads)
 

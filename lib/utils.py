@@ -370,7 +370,7 @@ class FaceswapError(Exception):
 
 
 class GetModel():  # pylint:disable=too-few-public-methods
-    """ Check for models in their cache path.
+    """ Check for models in the cache path.
 
     If available, return the path, if not available, get, unzip and install model
 
@@ -378,9 +378,6 @@ class GetModel():  # pylint:disable=too-few-public-methods
     ----------
     model_filename: str or list
         The name of the model to be loaded (see notes below)
-    cache_dir: str
-        The model cache folder of the current plugin calling this class. IE: The folder that holds
-        the model to be loaded.
     git_model_id: int
         The second digit in the github tag that identifies this model. See
         https://github.com/deepfakes-models/faceswap-models for more information
@@ -397,12 +394,12 @@ class GetModel():  # pylint:disable=too-few-public-methods
     ,"resnet_ssd_v1.prototext"]`
     """
 
-    def __init__(self, model_filename, cache_dir, git_model_id):
+    def __init__(self, model_filename, git_model_id):
         self.logger = logging.getLogger(__name__)
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
         self._model_filename = model_filename
-        self._cache_dir = cache_dir
+        self._cache_dir = os.path.join(os.path.abspath(os.path.dirname(sys.argv[0])), ".fs_cache")
         self._git_model_id = git_model_id
         self._url_base = "https://github.com/deepfakes-models/faceswap-models/releases/download"
         self._chunk_size = 1024  # Chunk size for downloading and unzipping
@@ -457,26 +454,9 @@ class GetModel():  # pylint:disable=too-few-public-methods
         return retval
 
     @property
-    def _plugin_section(self):
-        """ str: The plugin section from the config_dir """
-        path = os.path.normpath(self._cache_dir)
-        split = path.split(os.sep)
-        retval = split[split.index("plugins") + 1]
-        self.logger.trace(retval)
-        return retval
-
-    @property
-    def _url_section(self):
-        """ int: The section ID in github for this plugin type. """
-        sections = dict(extract=1, train=2, convert=3)
-        retval = sections[self._plugin_section]
-        self.logger.trace(retval)
-        return retval
-
-    @property
     def _url_download(self):
         """ strL Base download URL for models. """
-        tag = f"v{self._url_section}.{self._git_model_id}.{self._model_version}"
+        tag = f"v{self._git_model_id}.{self._model_version}"
         retval = f"{self._url_base}/{tag}/{self._model_full_name}.zip"
         self.logger.trace("Download url: %s", retval)
         return retval

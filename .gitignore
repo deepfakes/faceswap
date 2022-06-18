@@ -36,6 +36,7 @@
 !tests/**/*.py
 
 # Core files
+!.fs_cache
 !lib/
 !lib/**/
 !lib/**/*.py
