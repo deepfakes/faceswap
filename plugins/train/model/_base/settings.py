@@ -53,15 +53,16 @@ class Loss():
     def __init__(self, config: dict) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._config = config
-        self._loss_dict = dict(mae=k_losses.mean_absolute_error,
-                               mse=k_losses.mean_squared_error,
-                               logcosh=k_losses.logcosh,
-                               smooth_loss=losses.GeneralizedLoss(),
+        self._loss_dict = dict(gmsd=losses.GMSDLoss(),
                                l_inf_norm=losses.LInfNorm(),
-                               ssim=losses.DSSIMObjective(),
+                               laploss=losses.LaplacianPyramidLoss(),
+                               logcosh=k_losses.logcosh,
                                ms_ssim=losses.MSSIMLoss(),
-                               gmsd=losses.GMSDLoss(),
-                               pixel_gradient_diff=losses.GradientLoss())
+                               mae=k_losses.mean_absolute_error,
+                               mse=k_losses.mean_squared_error,
+                               pixel_gradient_diff=losses.GradientLoss(),
+                               ssim=losses.DSSIMObjective(),
+                               smooth_loss=losses.GeneralizedLoss(),)
         self._mask_channels = self._get_mask_channels()
         self._inputs: List[keras.layers.Layer] = []
         self._names: List[str] = []

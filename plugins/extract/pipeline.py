@@ -122,7 +122,7 @@ class Extractor():
         For align/mask (2nd/3rd pass operations) the :attr:`ExtractMedia.detected_faces` should
         also be populated by calling :func:`ExtractMedia.set_detected_faces`.
         """
-        qname = "extract{}_{}_in".format(self._instance, self._current_phase[0])
+        qname = f"extract{self._instance}_{self._current_phase[0]}_in"
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -193,7 +193,7 @@ class Extractor():
             The batch size to use for this plugin type
         """
         logger.debug("Overriding batchsize for plugin_type: %s to: %s", plugin_type, batchsize)
-        plugin = getattr(self, "_{}".format(plugin_type))
+        plugin = getattr(self, f"_{plugin_type}")
         plugin.batchsize = batchsize
 
     def launch(self):
@@ -283,10 +283,10 @@ class Extractor():
     @property
     def _vram_per_phase(self):
         """ dict: The amount of vram required for each phase in :attr:`_flow`. """
-        retval = dict()
+        retval = {}
         for phase in self._flow:
             plugin_type, idx = self._get_plugin_type_and_index(phase)
-            attr = getattr(self, "_{}".format(plugin_type))
+            attr = getattr(self, f"_{plugin_type}")
             attr = attr[idx] if idx is not None else attr
             retval[phase] = attr.vram
         logger.trace(retval)
@@ -322,10 +322,9 @@ class Extractor():
     def _output_queue(self):
         """ Return the correct output queue depending on the current phase """
         if self.final_pass:
-            qname = "extract{}_{}_out".format(self._instance, self._final_phase)
+            qname = f"extract{self._instance}_{self._final_phase}_out"
         else:
-            qname = "extract{}_{}_in".format(self._instance,
-                                             self._phases[self._phase_index + 1][0])
+            qname = f"extract{self._instance}_{self._phases[self._phase_index + 1][0]}_in"
         retval = self._queues[qname]
         logger.trace("%s: %s", qname, retval)
         return retval
@@ -336,7 +335,7 @@ class Extractor():
         retval = []
         for phase in self._flow:
             plugin_type, idx = self._get_plugin_type_and_index(phase)
-            attr = getattr(self, "_{}".format(plugin_type))
+            attr = getattr(self, f"_{plugin_type}")
             attr = attr[idx] if idx is not None else attr
             retval.append(attr)
         logger.trace("All Plugins: %s", retval)
@@ -348,7 +347,7 @@ class Extractor():
         retval = []
         for phase in self._current_phase:
             plugin_type, idx = self._get_plugin_type_and_index(phase)
-            attr = getattr(self, "_{}".format(plugin_type))
+            attr = getattr(self, f"_{plugin_type}")
             retval.append(attr[idx] if idx is not None else attr)
         logger.trace("Active plugins: %s", retval)
         return retval
@@ -362,7 +361,7 @@ class Extractor():
             retval.append("detect")
         if aligner is not None and aligner.lower() != "none":
             retval.append("align")
-        retval.extend(["mask_{}".format(idx)
+        retval.extend([f"mask_{idx}"
                        for idx, mask in enumerate(masker)
                        if mask is not None and mask.lower() != "none"])
         logger.debug("flow: %s", retval)
@@ -400,9 +399,9 @@ class Extractor():
 
     def _add_queues(self):
         """ Add the required processing queues to Queue Manager """
-        queues = dict()
-        tasks = ["extract{}_{}_in".format(self._instance, phase) for phase in self._flow]
-        tasks.append("extract{}_{}_out".format(self._instance, self._final_phase))
+        queues = {}
+        tasks = [f"extract{self._instance}_{phase}_in" for phase in self._flow]
+        tasks.append(f"extract{self._instance}_{self._final_phase}_out")
         for task in tasks:
             # Limit queue size to avoid stacking ram
             queue_manager.add_queue(task, maxsize=self._queue_size)
@@ -552,17 +551,17 @@ class Extractor():
     def _launch_plugin(self, phase):
         """ Launch an extraction plugin """
         logger.debug("Launching %s plugin", phase)
-        in_qname = "extract{}_{}_in".format(self._instance, phase)
+        in_qname = f"extract{self._instance}_{phase}_in"
         if phase == self._final_phase:
-            out_qname = "extract{}_{}_out".format(self._instance, self._final_phase)
+            out_qname = f"extract{self._instance}_{self._final_phase}_out"
         else:
             next_phase = self._flow[self._flow.index(phase) + 1]
-            out_qname = "extract{}_{}_in".format(self._instance, next_phase)
+            out_qname = f"extract{self._instance}_{next_phase}_in"
         logger.debug("in_qname: %s, out_qname: %s", in_qname, out_qname)
         kwargs = dict(in_queue=self._queues[in_qname], out_queue=self._queues[out_qname])
 
         plugin_type, idx = self._get_plugin_type_and_index(phase)
-        plugin = getattr(self, "_{}".format(plugin_type))
+        plugin = getattr(self, f"_{plugin_type}")
         plugin = plugin[idx] if idx is not None else plugin
         plugin.initialize(**kwargs)
         plugin.start()
@@ -645,7 +644,7 @@ class Extractor():
                 logger.debug("Remaining VRAM to allocate: %sMB", remaining)
 
         if batchsizes != requested_batchsizes:
-            text = ", ".join(["{}: {}".format(plugin.__class__.__name__, batchsize)
+            text = ", ".join([f"{plugin.__class__.__name__}: {batchsize}"
                               for plugin, batchsize in zip(plugins, batchsizes)])
             for plugin, batchsize in zip(plugins, batchsizes):
                 plugin.batchsize = batchsize
@@ -726,7 +725,7 @@ class ExtractMedia():
             A copy of :attr:`image` in the requested :attr:`color_format`
         """
         logger.trace("Requested color format '%s' for frame '%s'", color_format, self._filename)
-        image = getattr(self, "_image_as_{}".format(color_format.lower()))()
+        image = getattr(self, f"_image_as_{color_format.lower()}")()
         return image
 
     def add_detected_faces(self, faces):

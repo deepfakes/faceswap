@@ -41,11 +41,18 @@ def test_loss_output(loss_func, output_shape):
         assert output.dtype == "float32" and not np.any(np.isnan(output))
 
 
-_LWPARAMS = [losses.GeneralizedLoss(), losses.GradientLoss(), losses.GMSDLoss(),
-             losses.LInfNorm(), k_losses.mean_absolute_error, k_losses.mean_squared_error,
-             k_losses.logcosh, losses.DSSIMObjective(), losses.MSSIMLoss()]
-_LWIDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm", "mae", "mse", "logcosh",
-          "DSSIMObjective", "MS-SSIM"]
+_LWPARAMS = [losses.DSSIMObjective(),
+             losses.GeneralizedLoss(),
+             losses.GMSDLoss(),
+             losses.GradientLoss(),
+             losses.LaplacianPyramidLoss(),
+             losses.LInfNorm(),
+             k_losses.logcosh,
+             k_losses.mean_absolute_error,
+             k_losses.mean_squared_error,
+             losses.MSSIMLoss()]
+_LWIDS = ["DSSIMObjective", "GeneralizedLoss", "GMSDLoss", "GradientLoss", "LaplacianPyramidLoss",
+          "LInfNorm", "logcosh", "mae", "mse", "MS-SSIM"]
 _LWIDS = [f"{loss}[{get_backend().upper()}]" for loss in _LWIDS]
 
 
@@ -57,8 +64,8 @@ def test_loss_wrapper(loss_func):
             pytest.skip("GMSD Loss is not currently compatible with PlaidML")
         if hasattr(loss_func, "__name__") and loss_func.__name__ == "logcosh":
             pytest.skip("LogCosh Loss is not currently compatible with PlaidML")
-    y_a = K.variable(np.random.random((2, 16, 16, 4)))
-    y_b = K.variable(np.random.random((2, 16, 16, 3)))
+    y_a = K.variable(np.random.random((2, 64, 64, 4)))
+    y_b = K.variable(np.random.random((2, 64, 64, 3)))
     p_loss = losses.LossWrapper()
     p_loss.add_loss(loss_func, 1.0, -1)
     p_loss.add_loss(k_losses.mean_squared_error, 2.0, 3)

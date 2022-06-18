@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ Parent class for obtaining Stats for various GPU/TPU backends. All GPU Stats should inherit
-from the :class:`GPUStats` class contained here. """
+from the :class:`_GPUStats` class contained here. """
 
 import logging
 import os
@@ -23,7 +23,7 @@ class GPUInfo(TypedDict):
     vram: List[int]
     driver: str
     devices: List[str]
-    devices_active: List[str]
+    devices_active: List[int]
 
 
 class BiggestGPUInfo(TypedDict):
@@ -50,7 +50,7 @@ def set_exclude_devices(devices: List[int]) -> None:
     _EXCLUDE_DEVICES.extend(devices)
 
 
-class GPUStats():
+class _GPUStats():
     """ Parent class for returning information of GPUs used. """
 
     def __init__(self, log: bool = True) -> None:
@@ -67,8 +67,8 @@ class GPUStats():
         self._handles: list = self._get_handles()
         self._driver: str = self._get_driver()
         self._device_names: List[str] = self._get_device_names()
-        self._vram: List[float] = self._get_vram()
-        self._vram_free: List[float] = self._get_free_vram()
+        self._vram: List[int] = self._get_vram()
+        self._vram_free: List[int] = self._get_free_vram()
 
         if get_backend() != "cpu" and not self._active_devices:
             self._log("warning", "No GPU detected")
@@ -164,8 +164,8 @@ class GPUStats():
         devices = [idx for idx in range(self._device_count) if idx not in _EXCLUDE_DEVICES]
         env_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
         if env_devices:
-            env_devices = [int(i) for i in env_devices.split(",")]
-            devices = [idx for idx in devices if idx in env_devices]
+            new_devices = [int(i) for i in env_devices.split(",")]
+            devices = [idx for idx in devices if idx in new_devices]
         self._log("debug", f"Active GPU Devices: {devices}")
         return devices
 
@@ -202,7 +202,7 @@ class GPUStats():
         """
         raise NotImplementedError()
 
-    def _get_vram(self) -> List[float]:
+    def _get_vram(self) -> List[int]:
         """ Override to obtain the total VRAM in Megabytes for each connected GPU.
 
         Returns
@@ -213,8 +213,8 @@ class GPUStats():
         """
         raise NotImplementedError()
 
-    def _get_free_vram(self) -> List[float]:
-        """ Override to obrain the amount of VRAM that is available, in Megabytes, for each
+    def _get_free_vram(self) -> List[int]:
+        """ Override to obtain the amount of VRAM that is available, in Megabytes, for each
         connected GPU.
 
         Returns

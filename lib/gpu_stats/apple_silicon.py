@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """ Collects and returns Information on available Apple Silicon SoCs in Apple Macs. """
-from typing import List, Optional
+from typing import Any, List
 
 import os
 import psutil
@@ -8,13 +8,13 @@ import tensorflow as tf
 
 from lib.utils import FaceswapError
 
-from ._base import GPUStats
+from ._base import _GPUStats
 
 
 _METAL_INITIALIZED: bool = False
 
 
-class AppleSiliconStats(GPUStats):
+class AppleSiliconStats(_GPUStats):
     """ Holds information and statistics about Apple Silicon SoC(s) available on the currently
     running Apple system.
 
@@ -35,7 +35,7 @@ class AppleSiliconStats(GPUStats):
     """
     def __init__(self, log: bool = True) -> None:
         # Following attribute set in :func:``_initialize``
-        self._tf_devices: Optional(List[str]) = None
+        self._tf_devices: List[Any] = []
 
         super().__init__(log=log)
 
@@ -155,7 +155,7 @@ class AppleSiliconStats(GPUStats):
         self._log("debug", f"GPU Devices: {names}")
         return names
 
-    def _get_vram(self) -> List[float]:
+    def _get_vram(self) -> List[int]:
         """ Obtain the VRAM in Megabytes for each available Apple Silicon SoC(s) as identified in
         :attr:`_handles`.
 
@@ -170,12 +170,12 @@ class AppleSiliconStats(GPUStats):
         list
             The RAM in Megabytes for each available Apple Silicon SoC
         """
-        vram = [(psutil.virtual_memory().total / self._device_count) / (1024 * 1024)
+        vram = [int((psutil.virtual_memory().total / self._device_count) / (1024 * 1024))
                 for _ in range(self._device_count)]
         self._log("debug", f"SoC RAM: {vram}")
         return vram
 
-    def _get_free_vram(self) -> List[float]:
+    def _get_free_vram(self) -> List[int]:
         """ Obtain the amount of VRAM that is available, in Megabytes, for each available Apple
         Silicon SoC.
 
@@ -185,7 +185,7 @@ class AppleSiliconStats(GPUStats):
              List of `float`s containing the amount of RAM available, in Megabytes, for each
              available SoC as corresponding to the values in :attr:`_handles
         """
-        vram = [(psutil.virtual_memory().available / self._device_count) / (1024 * 1024)
+        vram = [int((psutil.virtual_memory().available / self._device_count) / (1024 * 1024))
                 for _ in range(self._device_count)]
         self._log("debug", f"SoC RAM free: {vram}")
         return vram

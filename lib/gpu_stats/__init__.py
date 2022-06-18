@@ -11,12 +11,12 @@ from ._base import set_exclude_devices  # noqa
 backend = get_backend()
 
 if backend == "nvidia" and platform.system().lower() == "darwin":
-    from .nvidia_apple import NvidiaAppleStats as GPUStats  # noqa
+    from .nvidia_apple import NvidiaAppleStats as GPUStats  # type:ignore # noqa
 elif backend == "nvidia":
-    from .nvidia import NvidiaStats as GPUStats  # noqa
+    from .nvidia import NvidiaStats as GPUStats  # type:ignore # noqa
 elif backend == "amd":
-    from .amd import AMDStats as GPUStats, setup_plaidml  # noqa
+    from .amd import AMDStats as GPUStats, setup_plaidml  # type:ignore # noqa
 elif backend == "apple_silicon":
-    from .apple_silicon import AppleSiliconStats as GPUStats  # noqa
+    from .apple_silicon import AppleSiliconStats as GPUStats  # type:ignore # noqa
 elif backend == "cpu":
-    from .cpu import CPUStats as GPUStats  # noqa
+    from .cpu import CPUStats as GPUStats  # type:ignore # noqa

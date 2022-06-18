@@ -9,7 +9,7 @@ from typing import List, Optional
 
 import plaidml
 
-from ._base import GPUStats, _EXCLUDE_DEVICES
+from ._base import _GPUStats, _EXCLUDE_DEVICES
 
 
 _PLAIDML_INITIALIZED: bool = False
@@ -40,7 +40,7 @@ def setup_plaidml(log_level: str, exclude_devices: List[int]) -> None:
     logger.info("Successfully set up for PlaidML")
 
 
-class AMDStats(GPUStats):
+class AMDStats(_GPUStats):
     """ Holds information and statistics about AMD GPU(s) available on the currently
     running system.
 
@@ -104,9 +104,9 @@ class AMDStats(GPUStats):
         return retval
 
     @property
-    def _all_vram(self) -> List[float]:
+    def _all_vram(self) -> List[int]:
         """ list: The VRAM of each GPU device that PlaidML has discovered. """
-        return [int(device.get("globalMemSize", 0)) / (1024 * 1024)
+        return [int(device.get("globalMemSize", 0) / (1024 * 1024))
                 for device in self._device_details]
 
     @property
@@ -159,7 +159,7 @@ class AMDStats(GPUStats):
         self._log("debug", "Setting PlaidML Default Logger")
 
         plaidml.DEFAULT_LOG_HANDLER = logging.getLogger("plaidml_root")
-        plaidml.DEFAULT_LOG_HANDLER.propagate = 0
+        plaidml.DEFAULT_LOG_HANDLER.propagate = False
 
         numeric_level = getattr(logging, self._log_level, None)
         if numeric_level < 10:  # DEBUG Logging
@@ -344,8 +344,8 @@ class AMDStats(GPUStats):
         str
             The current AMD GPU driver versions
         """
-        drivers = [device.get("driverVersion", "No Driver Found")
-                   for device in self._device_details]
+        drivers = "|".join([device.get("driverVersion", "No Driver Found")
+                            for device in self._device_details])
         self._log("debug", f"GPU Drivers: {drivers}")
         return drivers
 
@@ -361,7 +361,7 @@ class AMDStats(GPUStats):
         self._log("debug", f"GPU Devices: {names}")
         return names
 
-    def _get_vram(self) -> List[float]:
+    def _get_vram(self) -> List[int]:
         """ Obtain the VRAM in Megabytes for each connected AMD GPU as identified in
         :attr:`_handles`.
 
@@ -374,7 +374,7 @@ class AMDStats(GPUStats):
         self._log("debug", f"GPU VRAM: {vram}")
         return vram
 
-    def _get_free_vram(self) -> List[float]:
+    def _get_free_vram(self) -> List[int]:
         """ Obtain the amount of VRAM that is available, in Megabytes, for each connected AMD
         GPU.
 

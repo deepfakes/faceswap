@@ -6,10 +6,10 @@ import pynvx
 
 from lib.utils import FaceswapError
 
-from ._base import GPUStats
+from ._base import _GPUStats
 
 
-class NvidiaAppleStats(GPUStats):
+class NvidiaAppleStats(_GPUStats):
     """ Holds information and statistics about Nvidia GPU(s) available on the currently
     running Apple system.
 
@@ -105,7 +105,7 @@ class NvidiaAppleStats(GPUStats):
         self._log("debug", f"GPU Devices: {names}")
         return names
 
-    def _get_vram(self) -> List[float]:
+    def _get_vram(self) -> List[int]:
         """ Obtain the VRAM in Megabytes for each connected Nvidia GPU as identified in
         :attr:`_handles`.
 
@@ -120,7 +120,7 @@ class NvidiaAppleStats(GPUStats):
         self._log("debug", f"GPU VRAM: {vram}")
         return vram
 
-    def _get_free_vram(self) -> List[float]:
+    def _get_free_vram(self) -> List[int]:
         """ Obtain the amount of VRAM that is available, in Megabytes, for each connected Nvidia
         GPU.
 

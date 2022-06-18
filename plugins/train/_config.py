@@ -21,6 +21,13 @@ _LOSS_HELP = dict(
         "The L_inf norm will reduce the largest individual pixel error in an image. As "
         "each largest error is minimized sequentially, the overall error is improved. This loss "
         "will be extremely focused on outliers."),
+    laploss=(
+        "Laplacian Pyramid Loss. Attempts to improve results by focussing on edges using "
+        "Laplacian Pyramids. As this loss function gives priority to edges over other low-"
+        "frequency information, like color, it should not be used on its own. The original "
+        "implementation uses this loss as a complimentary function to MSE. "
+        "Ref: Optimizing the Latent Space of Generative Networks "
+        "https://arxiv.org/abs/1707.05776"),
     logcosh=(
         "log(cosh(x)) acts similar to MSE for small errors and to MAE for large errors. Like "
         "MSE, it is very stable and prevents overshoots when errors are near zero. Like MAE, it "

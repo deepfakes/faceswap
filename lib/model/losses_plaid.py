@@ -4,7 +4,7 @@
 from __future__ import absolute_import
 
 import logging
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 import numpy as np
 import plaidml
@@ -621,18 +621,155 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
         return output
 
 
+class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
+    """ Laplacian Pyramid Loss Function
+
+    Notes
+    -----
+    Channels last implementation on square images only.
+
+    Parameters
+    ----------
+    max_levels: int, Optional
+        The max number of laplacian pyramid levels to use. Default: `5`
+    gaussian_size: int, Optional
+        The size of the gaussian kernel. Default: `5`
+    gaussian_sigma: float, optional
+        The gaussian sigma. Default: 2.0
+
+    References
+    ----------
+    https://arxiv.org/abs/1707.05776
+    https://github.com/nathanaelbosch/generative-latent-optimization/blob/master/utils.py
+    """
+    def __init__(self,
+                 max_levels: int = 5,
+                 gaussian_size: int = 5,
+                 gaussian_sigma: float = 1.0) -> None:
+        self._max_levels = max_levels
+        self._weights = K.constant([np.power(2., -2 * idx) for idx in range(max_levels + 1)])
+        self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
+        self._shape: Tuple[int, ...] = ()
+
+    @classmethod
+    def _get_gaussian_kernel(cls, size: int, sigma: float) -> plaidml.tile.Value:
+        """ Obtain the base gaussian kernel for the Laplacian Pyramid.
+
+        Parameters
+        ----------
+        size: int, Optional
+            The size of the gaussian kernel
+        sigma: float
+            The gaussian sigma
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The base single channel Gaussian kernel
+        """
+        assert size % 2 == 1, ("kernel size must be uneven")
+        x_1 = np.linspace(- (size // 2), size // 2, size, dtype="float32")
+        x_1 /= np.sqrt(2)*sigma
+        x_2 = x_1 ** 2
+        kernel = np.exp(- x_2[:, None] - x_2[None, :])
+        kernel /= kernel.sum()
+        kernel = np.reshape(kernel, (size, size, 1, 1))
+        return K.constant(kernel)
+
+    def _conv_gaussian(self, inputs: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Perform Gaussian convolution on a batch of images.
+
+        Parameters
+        ----------
+        inputs: :class:`plaidml.tile.Value`
+            The input batch of images to perform Gaussian convolution on.
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The convolved images
+        """
+        channels = self._shape[-1]
+        gauss = K.tile(self._gaussian_kernel, (1, 1, 1, channels))
+
+        # PlaidML doesn't implement replication padding like pytorch. This is an inefficient way to
+        # implement it for a square guassian kernel
+        size = K.int_shape(self._gaussian_kernel)[1] // 2
+        padded_inputs = inputs
+        for _ in range(size):
+            padded_inputs = pad(padded_inputs,  # noqa,pylint:disable=no-value-for-parameter,unexpected-keyword-arg
+                                ([0, 0], [1, 1], [1, 1], [0, 0]),
+                                mode="REFLECT")
+
+        retval = K.conv2d(padded_inputs, gauss, strides=(1, 1), padding="valid")
+        return retval
+
+    def _get_laplacian_pyramid(self, inputs: plaidml.tile.Value) -> List[plaidml.tile.Value]:
+        """ Obtain the Laplacian Pyramid.
+
+        Parameters
+        ----------
+        inputs: :class:`plaidml.tile.Value`
+            The input batch of images to run through the Laplacian Pyramid
+
+        Returns
+        -------
+        list
+            The tensors produced from the Laplacian Pyramid
+        """
+        pyramid = []
+        current = inputs
+        for _ in range(self._max_levels):
+            gauss = self._conv_gaussian(current)
+            diff = current - gauss
+            pyramid.append(diff)
+            current = K.pool2d(gauss, (2, 2), strides=(2, 2), padding="valid", pool_mode="avg")
+        pyramid.append(current)
+        return pyramid
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Calculate the Laplacian Pyramid Loss.
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth value
+        y_pred: :class:`plaidml.tile.Value`
+            The predicted value
+
+        Returns
+        -------
+        :class: `plaidml.tile.Value`
+            The loss value
+        """
+        if not self._shape:
+            self._shape = K.int_shape(y_pred)
+        pyramid_true = self._get_laplacian_pyramid(y_true)
+        pyramid_pred = self._get_laplacian_pyramid(y_pred)
+
+        losses = K.stack([K.sum(K.abs(ppred - ptrue)) / K.cast(K.prod(K.shape(ptrue)), "float32")
+                          for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
+        loss = K.sum(losses * self._weights)
+        return loss
+
+
 class LossWrapper():  # pylint:disable=too-few-public-methods
     """ A wrapper class for multiple keras losses to enable multiple weighted loss functions on a
     single output and masking.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._loss_functions = []
-        self._loss_weights = []
-        self._mask_channels = []
+        self._loss_functions: List[Callable] = []
+        self._loss_weights: List[float] = []
+        self._mask_channels: List[int] = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def add_loss(self, function, weight=1.0, mask_channel=-1):
+    def add_loss(self,
+                 function,
+                 weight: float = 1.0,
+                 mask_channel: int = -1) -> None:
         """ Add the given loss function with the given weight to the loss function chain.
 
         Parameters
@@ -651,21 +788,23 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
         self._loss_weights.append(weight)
         self._mask_channels.append(mask_channel)
 
-    def __call__(self, y_true, y_pred):
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
         """ Call the sub loss functions for the loss wrapper.
 
         Weights are returned as the weighted sum of the chosen losses.
 
         Parameters
         ----------
-        y_true: tensor or variable
+        y_true: :class:`plaidml.tile.Value`
             The ground truth value
-        y_pred: tensor or variable
+        y_pred: :class:`plaidml.tile.Value`
             The predicted value
 
         Returns
         -------
-        tensor
+        :class:`plaidml.tile.Value`
             The final loss value
         """
         loss = 0.0
@@ -685,15 +824,19 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
         return loss
 
     @classmethod
-    def _apply_mask(cls, y_true, y_pred, mask_channel, mask_prop=1.0):
+    def _apply_mask(cls,
+                    y_true: plaidml.tile.Value,
+                    y_pred: plaidml.tile.Value,
+                    mask_channel: int,
+                    mask_prop: float = 1.0) -> Tuple[plaidml.tile.Value, plaidml.tile.Value]:
         """ Apply the mask to the input y_true and y_pred. If a mask is not required then
         return the unmasked inputs.
 
         Parameters
         ----------
-        y_true: tensor or variable
+        y_true: :class:`plaidml.tile.Value`
             The ground truth value
-        y_pred: tensor or variable
+        y_pred: :class:`plaidml.tile.Value`
             The predicted value
         mask_channel: int
             The channel within y_true that the required mask resides in
