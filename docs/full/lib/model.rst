@@ -55,7 +55,7 @@ model.losses module
 -------------------
 
 The losses listed here are generated from the docstrings in :mod:`lib.model.losses_tf`, however
-the functions are excactly the same for :mod:`lib.model.losses_plaid`. The correct loss module will
+the functions are exactly the same for :mod:`lib.model.losses_plaid`. The correct loss module will
 be imported as :mod:`lib.model.losses` depending on the backend in use.
 
 .. rubric:: Module Summary
@@ -63,14 +63,32 @@ be imported as :mod:`lib.model.losses` depending on the backend in use.
 .. autosummary::
    :nosignatures:
 
-   ~lib.model.losses_tf.DSSIMObjective
-   ~lib.model.losses_tf.GeneralizedLoss
-   ~lib.model.losses_tf.GMSDLoss
-   ~lib.model.losses_tf.GradientLoss
-   ~lib.model.losses_tf.LInfNorm
-   ~lib.model.losses_tf.LossWrapper
+   ~lib.model.loss.loss_tf.DSSIMObjective
+   ~lib.model.loss.loss_tf.FocalFrequencyLoss
+   ~lib.model.loss.loss_tf.GeneralizedLoss
+   ~lib.model.loss.loss_tf.GMSDLoss
+   ~lib.model.loss.loss_tf.GradientLoss
+   ~lib.model.loss.loss_tf.LaplacianPyramidLoss
+   ~lib.model.loss.loss_tf.LInfNorm
+   ~lib.model.loss.loss_tf.LossWrapper
 
-.. automodule:: lib.model.losses_tf
+.. automodule:: lib.model.loss.loss_tf
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+model.nets module
+-----------------
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~lib.model.nets.AlexNet
+   ~lib.model.nets.SqueezeNet
+
+.. automodule:: lib.model.nets
    :members:
    :undoc-members:
    :show-inheritance:

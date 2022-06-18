@@ -11,6 +11,17 @@ The Train Package handles the Model and Trainer plugins for training models in F
 model package
 =============
 
+This package contains various helper functions that plugins can inherit from
+
+.. rubric:: Module Summary
+
+.. autosummary::
+   :nosignatures:
+
+   ~plugins.train.model._base.model
+   ~plugins.train.model._base.settings
+   ~plugins.train.model._base.io
+
 model._base.model module
 ------------------------
 

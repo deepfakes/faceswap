@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class DSSIMObjective():  # pylint:disable=too-few-public-methods
-    """ DSSIM and MS-DSSIM Loss Functions
+    """ DSSIM Loss Functions
 
     Difference of Structural Similarity (DSSIM loss function).
 

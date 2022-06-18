@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 
 class DSSIMObjective():  # pylint:disable=too-few-public-methods
-    """ DSSIM and MS-DSSIM Loss Functions
+    """ DSSIM Loss Function
 
     Difference of Structural Similarity (DSSIM loss function).
 
@@ -678,13 +678,12 @@ class LInfNorm():  # pylint:disable=too-few-public-methods
         return loss
 
 
-class LogCosh():
+class LogCosh():  # pylint:disable=too-few-public-methods
     """Logarithm of the hyperbolic cosine of the prediction error.
 
-    `log(cosh(x))` is approximately equal to `(x ** 2) / 2` for small `x` and
-    to `abs(x) - log(2)` for large `x`. This means that 'logcosh' works mostly
-    like the mean squared error, but will not be so strongly affected by the
-    occasional wildly incorrect prediction.
+    `log(cosh(x))` is approximately equal to `(x ** 2) / 2` for small `x` and to `abs(x) - log(2)`
+    for large `x`. This means that 'logcosh' works mostly like the mean squared error, but will not
+    be so strongly affected by the occasional wildly incorrect prediction.
     """
     def __call__(self,
                  y_true: plaidml.tile.Value,
