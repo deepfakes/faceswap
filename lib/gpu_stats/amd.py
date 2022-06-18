@@ -106,7 +106,7 @@ class AMDStats(_GPUStats):
     @property
     def _all_vram(self) -> List[int]:
         """ list: The VRAM of each GPU device that PlaidML has discovered. """
-        return [int(device.get("globalMemSize", 0) / (1024 * 1024))
+        return [int(int(device.get("globalMemSize", 0)) / (1024 * 1024))
                 for device in self._device_details]
 
     @property

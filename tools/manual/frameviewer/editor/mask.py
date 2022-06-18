@@ -122,6 +122,7 @@ class Mask(Editor):
                                              default="Circle",
                                              is_radio=True,
                                              helptext=_("Select a shape for masking cursor.")))
+
     def _set_tk_mask_change_callback(self):
         """ Add a trace to change the displayed mask on a mask type change. """
         var = self._control_vars["display"]["MaskType"]
