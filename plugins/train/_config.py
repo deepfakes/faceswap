@@ -37,8 +37,7 @@ _LOSS_HELP = dict(
     logcosh=(
         "log(cosh(x)) acts similar to MSE for small errors and to MAE for large errors. Like "
         "MSE, it is very stable and prevents overshoots when errors are near zero. Like MAE, it "
-        "is robust to outliers. NB: Due to a bug in PlaidML, this loss does not work on AMD "
-        "cards."),
+        "is robust to outliers."),
     mae=(
         "Mean absolute error will guide reconstructions of each pixel towards its median value in "
         "the training dataset. Robust to outliers but as a median, it can potentially ignore some "

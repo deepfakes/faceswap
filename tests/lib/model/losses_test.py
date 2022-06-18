@@ -17,11 +17,10 @@ else:
     from tensorflow.keras import backend as K, losses as k_losses  # pylint:disable=import-error
 
 
-_KWARGS = dict(input_dims=(64, 64)) if get_backend() == "amd" else {}
 _PARAMS = [(losses.GeneralizedLoss(), (2, 16, 16)),
            (losses.GradientLoss(), (2, 16, 16)),
            # TODO Make sure these output dimensions are correct
-           (losses.GMSDLoss(**_KWARGS), (2, 1, 1)),
+           (losses.GMSDLoss(), (2, 1, 1)),
            # TODO Make sure these output dimensions are correct
            (losses.LInfNorm(), (2, 1, 1))]
 _IDS = ["GeneralizedLoss", "GradientLoss", "GMSDLoss", "LInfNorm"]
@@ -44,11 +43,11 @@ def test_loss_output(loss_func, output_shape):
 _LWPARAMS = [losses.DSSIMObjective(),
              losses.FocalFrequencyLoss(),
              losses.GeneralizedLoss(),
-             losses.GMSDLoss(**_KWARGS),
+             losses.GMSDLoss(),
              losses.GradientLoss(),
              losses.LaplacianPyramidLoss(),
              losses.LInfNorm(),
-             k_losses.logcosh,
+             losses.LogCosh() if get_backend() == "amd" else k_losses.logcosh,
              k_losses.mean_absolute_error,
              k_losses.mean_squared_error,
              losses.MSSIMLoss()]
@@ -63,8 +62,6 @@ def test_loss_wrapper(loss_func):
     if get_backend() == "amd":
         if isinstance(loss_func, losses.FocalFrequencyLoss):
             pytest.skip("FocalFrequencyLoss Loss is not currently compatible with PlaidML")
-        if hasattr(loss_func, "__name__") and loss_func.__name__ == "logcosh":
-            pytest.skip("LogCosh Loss is not currently compatible with PlaidML")
     y_a = K.variable(np.random.random((2, 64, 64, 4)))
     y_b = K.variable(np.random.random((2, 64, 64, 3)))
     p_loss = losses.LossWrapper()

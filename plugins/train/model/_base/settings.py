@@ -56,7 +56,18 @@ class Loss():
     def __init__(self, config: dict) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._config = config
-        self._loss_dict: Dict[str, Callable] = {}
+        logcosh = losses.LogCosh() if get_backend() == "amd" else k_losses.logcosh
+        self._loss_dict = dict(ffl=losses.FocalFrequencyLoss(),
+                               gmsd=losses.GMSDLoss(),
+                               l_inf_norm=losses.LInfNorm(),
+                               laploss=losses.LaplacianPyramidLoss(),
+                               logcosh=logcosh,
+                               ms_ssim=losses.MSSIMLoss(),
+                               mae=k_losses.mean_absolute_error,
+                               mse=k_losses.mean_squared_error,
+                               pixel_gradient_diff=losses.GradientLoss(),
+                               ssim=losses.DSSIMObjective(),
+                               smooth_loss=losses.GeneralizedLoss(),)
         self._mask_channels = self._get_mask_channels()
         self._inputs: List[keras.layers.Layer] = []
         self._names: List[str] = []
@@ -97,19 +108,6 @@ class Loss():
             The model that is to be trained
         """
         self._inputs = model.inputs
-        # Some Plaid losses can't calculate the input shape at runtime, so pass these in
-        kwargs = dict(input_dims=model.output_shape[0][1:3]) if get_backend() == "amd" else {}
-        self._loss_dict = dict(ffl=losses.FocalFrequencyLoss(),
-                               gmsd=losses.GMSDLoss(**kwargs),
-                               l_inf_norm=losses.LInfNorm(),
-                               laploss=losses.LaplacianPyramidLoss(),
-                               logcosh=k_losses.logcosh,
-                               ms_ssim=losses.MSSIMLoss(),
-                               mae=k_losses.mean_absolute_error,
-                               mse=k_losses.mean_squared_error,
-                               pixel_gradient_diff=losses.GradientLoss(),
-                               ssim=losses.DSSIMObjective(),
-                               smooth_loss=losses.GeneralizedLoss(),)
         self._set_loss_names(model.outputs)
         self._set_loss_functions(model.output_names)
         self._names.insert(0, "total")

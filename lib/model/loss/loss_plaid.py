@@ -293,9 +293,6 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
     http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
     https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
     """
-    def __init__(self, input_dims: Tuple[int, int]) -> None:
-        self._input_dims = input_dims
-
     def __call__(self,
                  y_true: plaidml.tile.Value,
                  y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
@@ -313,7 +310,7 @@ class GMSDLoss():  # pylint:disable=too-few-public-methods
         :class:`plaidml.tile.Value`
             The loss value
         """
-        image_shape = (None, *self._input_dims, K.int_shape(y_pred)[-1])
+        image_shape = K.int_shape(y_pred)
         true_edge = self._scharr_edges(y_true, True, image_shape)
         pred_edge = self._scharr_edges(y_pred, True, image_shape)
         ephsilon = 0.0025
@@ -681,6 +678,35 @@ class LInfNorm():  # pylint:disable=too-few-public-methods
         return loss
 
 
+class LogCosh():
+    """Logarithm of the hyperbolic cosine of the prediction error.
+
+    `log(cosh(x))` is approximately equal to `(x ** 2) / 2` for small `x` and
+    to `abs(x) - log(2)` for large `x`. This means that 'logcosh' works mostly
+    like the mean squared error, but will not be so strongly affected by the
+    occasional wildly incorrect prediction.
+    """
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Call the LogCosh loss function.
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth value
+        y_pred: :class:`plaidml.tile.Value`
+            The predicted value
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The loss value
+        """
+        diff = y_pred - y_true
+        loss = diff + K.softplus(-2. * diff) - K.log(K.constant(2., dtype="float32"))
+        return K.mean(loss, axis=-1)
+
+
 class MSSIMLoss(DSSIMObjective):  # pylint:disable=too-few-public-methods
     """ Multiscale Structural Similarity Loss Function
 
@@ -898,10 +924,9 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
             logger.debug("Processing loss function: (func: %s, weight: %s, mask_channel: %s)",
                          func, weight, mask_channel)
             n_true, n_pred = self._apply_mask(y_true, y_pred, mask_channel)
-            if isinstance(func, DSSIMObjective):
-                # Extract Image Patches in SSIM requires that y_pred be of a known shape, so
-                # specifically reshape the tensor.
-                n_pred = K.reshape(n_pred, K.int_shape(y_pred))
+            # Some loss functions requires that y_pred be of a known shape, so specifically
+            # reshape the tensor.
+            n_pred = K.reshape(n_pred, K.int_shape(y_pred))
             this_loss = func(n_true, n_pred)
             loss_dims = K.ndim(this_loss)
             loss += (K.mean(this_loss, axis=list(range(1, loss_dims))) * weight)
