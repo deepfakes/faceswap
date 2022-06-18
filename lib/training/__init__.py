@@ -2,5 +2,5 @@
 """ Package for handling alignments files, detected faces and aligned faces along with their
 associated objects. """
 
-from .augmentation import ImageAugmentation
-from .generator import TrainingDataGenerator
+from .augmentation import ImageAugmentation  # noqa
+from .generator import TrainingDataGenerator  # noqa
