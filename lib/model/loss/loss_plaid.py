@@ -156,8 +156,6 @@ class DSSIMObjective():  # pylint:disable=too-few-public-methods
         :class:`plaidml.tile.Value`
             The DSSIM or MS-DSSIM for the given images
         """
-        print(K.int_shape(y_pred))
-
         ssim = self._get_ssim(y_true, y_pred)[0]
         retval = (1. - ssim) / 2.0
         return K.mean(retval)
