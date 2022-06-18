@@ -8,7 +8,6 @@ from typing import Callable, List, Tuple
 
 import numpy as np
 import plaidml
-import tensorflow as tf
 
 from keras import backend as K
 from lib.plaidml_utils import pad
@@ -157,9 +156,531 @@ class DSSIMObjective():  # pylint:disable=too-few-public-methods
         :class:`plaidml.tile.Value`
             The DSSIM or MS-DSSIM for the given images
         """
+        print(K.int_shape(y_pred))
+
         ssim = self._get_ssim(y_true, y_pred)[0]
         retval = (1. - ssim) / 2.0
         return K.mean(retval)
+
+
+class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
+    """ Focal Frequencey Loss Function.
+
+    A channels last implementation.
+
+    Notes
+    -----
+    There is a bug in this implementation that will do an incorrect FFT if
+    :attr:`patch_factor` >  ``1``, which means incorrect loss will be returned, so keep
+    patch factor at 1.
+
+    Parameters
+    ----------
+    alpha: float, Optional
+        Scaling factor of the spectrum weight matrix for flexibility. Default: ``1.0``
+    patch_factor: int, Optional
+        Factor to crop image patches for patch-based focal frequency loss.
+        Default: ``1``
+    ave_spectrum: bool, Optional
+        ``True`` to use minibatch average spectrum otherwise ``False``. Default: ``False``
+    log_matrix: bool, Optional
+        ``True`` to adjust the spectrum weight matrix by logarithm otherwise ``False``.
+        Default: ``False``
+    batch_matrix: bool, Optional
+        ``True`` to calculate the spectrum weight matrix using batch-based statistics otherwise
+        ``False``. Default: ``False``
+
+    References
+    ----------
+    https://arxiv.org/pdf/2012.12821.pdf
+    https://github.com/EndlessSora/focal-frequency-loss
+    """
+
+    def __init__(self,
+                 alpha: float = 1.0,
+                 patch_factor: int = 1,
+                 ave_spectrum: bool = False,
+                 log_matrix: bool = False,
+                 batch_matrix: bool = False) -> None:
+        self._alpha = alpha
+        self._patch_factor = patch_factor
+        self._ave_spectrum = ave_spectrum
+        self._log_matrix = log_matrix
+        self._batch_matrix = batch_matrix
+        self._dims: Tuple[int, int] = (0, 0)
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Call the Focal Frequency Loss Function.
+
+        # TODO Not implemented as:
+          - We need a PlaidML replacement for tf.signal
+          - The dimensions do not appear to be readable for y_pred
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth batch of images
+        y_pred: :class:`plaidml.tile.Value`
+            The predicted batch of images
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The loss for this batch of images
+        """
+        raise FaceswapError("Focal Frequency Loss is not currently compatible with PlaidML. "
+                            "Please select a different Loss method.")
+
+
+class GeneralizedLoss():  # pylint:disable=too-few-public-methods
+    """  Generalized function used to return a large variety of mathematical loss functions.
+
+    The primary benefit is a smooth, differentiable version of L1 loss.
+
+    References
+    ----------
+    Barron, J. A More General Robust Loss Function - https://arxiv.org/pdf/1701.03077.pdf
+
+    Example
+    -------
+    >>> a=1.0, x>>c , c=1.0/255.0  # will give a smoothly differentiable version of L1 / MAE loss
+    >>> a=1.999999 (limit as a->2), beta=1.0/255.0 # will give L2 / RMSE loss
+
+    Parameters
+    ----------
+    alpha: float, optional
+        Penalty factor. Larger number give larger weight to large deviations. Default: `1.0`
+    beta: float, optional
+        Scale factor used to adjust to the input scale (i.e. inputs of mean `1e-4` or `256`).
+        Default: `1.0/255.0`
+    """
+    def __init__(self, alpha: float = 1.0, beta: float = 1.0/255.0) -> None:
+        self._alpha = alpha
+        self._beta = beta
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Call the Generalized Loss Function
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth value
+        y_pred: :class:`plaidml.tile.Value`
+            The predicted value
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The loss value from the results of function(y_pred - y_true)
+        """
+        diff = y_pred - y_true
+        second = (K.pow(K.pow(diff/self._beta, 2.) / K.abs(2. - self._alpha) + 1.,
+                        (self._alpha / 2.)) - 1.)
+        loss = (K.abs(2. - self._alpha)/self._alpha) * second
+        loss = K.mean(loss, axis=-1) * self._beta
+        return loss
+
+
+class GMSDLoss():  # pylint:disable=too-few-public-methods
+    """ Gradient Magnitude Similarity Deviation Loss.
+
+    Improved image quality metric over MS-SSIM with easier calculations
+
+    References
+    ----------
+    http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
+    https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
+    """
+    def __init__(self, input_dims: Tuple[int, int]) -> None:
+        self._input_dims = input_dims
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Return the Gradient Magnitude Similarity Deviation Loss.
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth value
+        y_pred: :class:`plaidml.tile.Value`
+            The predicted value
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The loss value
+        """
+        image_shape = (None, *self._input_dims, K.int_shape(y_pred)[-1])
+        true_edge = self._scharr_edges(y_true, True, image_shape)
+        pred_edge = self._scharr_edges(y_pred, True, image_shape)
+        ephsilon = 0.0025
+        upper = 2.0 * true_edge * pred_edge
+        lower = K.square(true_edge) + K.square(pred_edge)
+        gms = (upper + ephsilon) / (lower + ephsilon)
+        gmsd = K.std(gms, axis=(1, 2, 3), keepdims=True)
+        gmsd = K.squeeze(gmsd, axis=-1)
+        return gmsd
+
+    @classmethod
+    def _scharr_edges(cls,
+                      image: plaidml.tile.Value,
+                      magnitude: bool,
+                      image_shape: Tuple[None, int, int, int]) -> plaidml.tile.Value:
+        """ Returns a tensor holding modified Scharr edge maps.
+
+        Parameters
+        ----------
+        image: :class:`plaidml.tile.Value`
+            Image tensor with shape [batch_size, h, w, d] and type float32. The image(s) must be
+            2x2 or larger.
+        magnitude: bool
+            Boolean to determine if the edge magnitude or edge direction is returned
+        image_shape: tuple
+            The shape of the incoming image
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            Tensor holding edge maps for each channel. Returns a tensor with shape `[batch_size, h,
+            w, d, 2]` where the last two dimensions hold `[[dy[0], dx[0]], [dy[1], dx[1]], ...,
+            [dy[d-1], dx[d-1]]]` calculated using the Scharr filter.
+        """
+        # Define vertical and horizontal Scharr filters.
+        # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
+        matrix = np.array([[[[0.00070, 0.00070]],
+                            [[0.00520, 0.00370]],
+                            [[0.03700, 0.00000]],
+                            [[0.00520, -0.0037]],
+                            [[0.00070, -0.0007]]],
+                           [[[0.00370, 0.00520]],
+                            [[0.11870, 0.11870]],
+                            [[0.25890, 0.00000]],
+                            [[0.11870, -0.1187]],
+                            [[0.00370, -0.0052]]],
+                           [[[0.00000, 0.03700]],
+                            [[0.00000, 0.25890]],
+                            [[0.00000, 0.00000]],
+                            [[0.00000, -0.2589]],
+                            [[0.00000, -0.0370]]],
+                           [[[-0.0037, 0.00520]],
+                            [[-0.1187, 0.11870]],
+                            [[-0.2589, 0.00000]],
+                            [[-0.1187, -0.1187]],
+                            [[-0.0037, -0.0052]]],
+                           [[[-0.0007, 0.00070]],
+                            [[-0.0052, 0.00370]],
+                            [[-0.0370, 0.00000]],
+                            [[-0.0052, -0.0037]],
+                            [[-0.0007, -0.0007]]]])
+        # num_kernels = [2]
+        kernels = K.constant(matrix, dtype='float32')
+        kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
+
+        # Use depth-wise convolution to calculate edge maps per channel.
+        # Output tensor has shape [batch_size, h, w, d * num_kernels].
+        pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
+        padded = pad(image, pad_sizes, mode='REFLECT')
+        output = K.depthwise_conv2d(padded, kernels)
+
+        # TODO magnitude not implemented for plaidml
+        if not magnitude:  # direction of edges
+            raise FaceswapError("Magnitude for GMSD Loss is not implemented in PlaidML")
+        #    # Reshape to [batch_size, h, w, d, num_kernels].
+        #    shape = K.concatenate([image_shape, num_kernels], axis=0)
+        #    output = K.reshape(output, shape=shape)
+        #    output.set_shape(static_image_shape.concatenate(num_kernels))
+        #    output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1], axis=None))
+        # magnitude of edges -- unified x & y edges don't work well with Neural Networks
+        return output
+
+
+class GradientLoss():  # pylint:disable=too-few-public-methods
+    """ Gradient Loss Function.
+
+    Calculates the first and second order gradient difference between pixels of an image in the x
+    and y dimensions. These gradients are then compared between the ground truth and the predicted
+    image and the difference is taken. When used as a loss, its minimization will result in
+    predicted images approaching the same level of sharpness / blurriness as the ground truth.
+
+    References
+    ----------
+    TV+TV2 Regularization with Non-Convex Sparseness-Inducing Penalty for Image Restoration,
+    Chengwu Lu & Hua Huang, 2014 - http://downloads.hindawi.com/journals/mpe/2014/790547.pdf
+    """
+    def __init__(self):
+        self.generalized_loss = GeneralizedLoss(alpha=1.9999)
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Call the gradient loss function.
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth value
+        y_pred: tensor or variable
+            :class:`plaidml.tile.Value`
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The loss value
+        """
+        tv_weight = 1.0
+        tv2_weight = 1.0
+        loss = 0.0
+        loss += tv_weight * (self.generalized_loss(self._diff_x(y_true), self._diff_x(y_pred)) +
+                             self.generalized_loss(self._diff_y(y_true), self._diff_y(y_pred)))
+        loss += tv2_weight * (self.generalized_loss(self._diff_xx(y_true), self._diff_xx(y_pred)) +
+                              self.generalized_loss(self._diff_yy(y_true), self._diff_yy(y_pred)) +
+                              self.generalized_loss(self._diff_xy(y_true), self._diff_xy(y_pred))
+                              * 2.)
+        loss = loss / (tv_weight + tv2_weight)
+        # TODO simplify to use MSE instead
+        return loss
+
+    @classmethod
+    def _diff_x(cls, img):
+        """ X Difference """
+        x_left = img[:, :, 1:2, :] - img[:, :, 0:1, :]
+        x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
+        x_right = img[:, :, -1:, :] - img[:, :, -2:-1, :]
+        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
+        return x_out * 0.5
+
+    @classmethod
+    def _diff_y(cls, img):
+        """ Y Difference """
+        y_top = img[:, 1:2, :, :] - img[:, 0:1, :, :]
+        y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
+        y_bot = img[:, -1:, :, :] - img[:, -2:-1, :, :]
+        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
+        return y_out * 0.5
+
+    @classmethod
+    def _diff_xx(cls, img):
+        """ X-X Difference """
+        x_left = img[:, :, 1:2, :] + img[:, :, 0:1, :]
+        x_inner = img[:, :, 2:, :] + img[:, :, :-2, :]
+        x_right = img[:, :, -1:, :] + img[:, :, -2:-1, :]
+        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
+        return x_out - 2.0 * img
+
+    @classmethod
+    def _diff_yy(cls, img):
+        """ Y-Y Difference """
+        y_top = img[:, 1:2, :, :] + img[:, 0:1, :, :]
+        y_inner = img[:, 2:, :, :] + img[:, :-2, :, :]
+        y_bot = img[:, -1:, :, :] + img[:, -2:-1, :, :]
+        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
+        return y_out - 2.0 * img
+
+    @classmethod
+    def _diff_xy(cls, img: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ X-Y Difference """
+        # xout1
+        # Left
+        top = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
+        inner = img[:, 2:, 1:2, :] + img[:, :-2, 0:1, :]
+        bottom = img[:, -1:, 1:2, :] + img[:, -2:-1, 0:1, :]
+        xy_left = K.concatenate([top, inner, bottom], axis=1)
+        # Mid
+        top = img[:, 1:2, 2:, :] + img[:, 0:1, :-2, :]
+        mid = img[:, 2:, 2:, :] + img[:, :-2, :-2, :]
+        bottom = img[:, -1:, 2:, :] + img[:, -2:-1, :-2, :]
+        xy_mid = K.concatenate([top, mid, bottom], axis=1)
+        # Right
+        top = img[:, 1:2, -1:, :] + img[:, 0:1, -2:-1, :]
+        inner = img[:, 2:, -1:, :] + img[:, :-2, -2:-1, :]
+        bottom = img[:, -1:, -1:, :] + img[:, -2:-1, -2:-1, :]
+        xy_right = K.concatenate([top, inner, bottom], axis=1)
+
+        # Xout2
+        # Left
+        top = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
+        inner = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
+        bottom = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
+        xy_left = K.concatenate([top, inner, bottom], axis=1)
+        # Mid
+        top = img[:, 0:1, 2:, :] + img[:, 1:2, :-2, :]
+        mid = img[:, :-2, 2:, :] + img[:, 2:, :-2, :]
+        bottom = img[:, -2:-1, 2:, :] + img[:, -1:, :-2, :]
+        xy_mid = K.concatenate([top, mid, bottom], axis=1)
+        # Right
+        top = img[:, 0:1, -1:, :] + img[:, 1:2, -2:-1, :]
+        inner = img[:, :-2, -1:, :] + img[:, 2:, -2:-1, :]
+        bottom = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
+        xy_right = K.concatenate([top, inner, bottom], axis=1)
+
+        xy_out1 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
+        xy_out2 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
+        return (xy_out1 - xy_out2) * 0.25
+
+
+class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
+    """ Laplacian Pyramid Loss Function
+
+    Notes
+    -----
+    Channels last implementation on square images only.
+
+    Parameters
+    ----------
+    max_levels: int, Optional
+        The max number of laplacian pyramid levels to use. Default: `5`
+    gaussian_size: int, Optional
+        The size of the gaussian kernel. Default: `5`
+    gaussian_sigma: float, optional
+        The gaussian sigma. Default: 2.0
+
+    References
+    ----------
+    https://arxiv.org/abs/1707.05776
+    https://github.com/nathanaelbosch/generative-latent-optimization/blob/master/utils.py
+    """
+    def __init__(self,
+                 max_levels: int = 5,
+                 gaussian_size: int = 5,
+                 gaussian_sigma: float = 1.0) -> None:
+        self._max_levels = max_levels
+        self._weights = K.constant([np.power(2., -2 * idx) for idx in range(max_levels + 1)])
+        self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
+        self._shape: Tuple[int, ...] = ()
+
+    @classmethod
+    def _get_gaussian_kernel(cls, size: int, sigma: float) -> plaidml.tile.Value:
+        """ Obtain the base gaussian kernel for the Laplacian Pyramid.
+
+        Parameters
+        ----------
+        size: int, Optional
+            The size of the gaussian kernel
+        sigma: float
+            The gaussian sigma
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The base single channel Gaussian kernel
+        """
+        assert size % 2 == 1, ("kernel size must be uneven")
+        x_1 = np.linspace(- (size // 2), size // 2, size, dtype="float32")
+        x_1 /= np.sqrt(2)*sigma
+        x_2 = x_1 ** 2
+        kernel = np.exp(- x_2[:, None] - x_2[None, :])
+        kernel /= kernel.sum()
+        kernel = np.reshape(kernel, (size, size, 1, 1))
+        return K.constant(kernel)
+
+    def _conv_gaussian(self, inputs: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Perform Gaussian convolution on a batch of images.
+
+        Parameters
+        ----------
+        inputs: :class:`plaidml.tile.Value`
+            The input batch of images to perform Gaussian convolution on.
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The convolved images
+        """
+        channels = self._shape[-1]
+        gauss = K.tile(self._gaussian_kernel, (1, 1, 1, channels))
+
+        # PlaidML doesn't implement replication padding like pytorch. This is an inefficient way to
+        # implement it for a square guassian kernel
+        size = K.int_shape(self._gaussian_kernel)[1] // 2
+        padded_inputs = inputs
+        for _ in range(size):
+            padded_inputs = pad(padded_inputs,  # noqa,pylint:disable=no-value-for-parameter,unexpected-keyword-arg
+                                ([0, 0], [1, 1], [1, 1], [0, 0]),
+                                mode="REFLECT")
+
+        retval = K.conv2d(padded_inputs, gauss, strides=(1, 1), padding="valid")
+        return retval
+
+    def _get_laplacian_pyramid(self, inputs: plaidml.tile.Value) -> List[plaidml.tile.Value]:
+        """ Obtain the Laplacian Pyramid.
+
+        Parameters
+        ----------
+        inputs: :class:`plaidml.tile.Value`
+            The input batch of images to run through the Laplacian Pyramid
+
+        Returns
+        -------
+        list
+            The tensors produced from the Laplacian Pyramid
+        """
+        pyramid = []
+        current = inputs
+        for _ in range(self._max_levels):
+            gauss = self._conv_gaussian(current)
+            diff = current - gauss
+            pyramid.append(diff)
+            current = K.pool2d(gauss, (2, 2), strides=(2, 2), padding="valid", pool_mode="avg")
+        pyramid.append(current)
+        return pyramid
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Calculate the Laplacian Pyramid Loss.
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth value
+        y_pred: :class:`plaidml.tile.Value`
+            The predicted value
+
+        Returns
+        -------
+        :class: `plaidml.tile.Value`
+            The loss value
+        """
+        if not self._shape:
+            self._shape = K.int_shape(y_pred)
+        pyramid_true = self._get_laplacian_pyramid(y_true)
+        pyramid_pred = self._get_laplacian_pyramid(y_pred)
+
+        losses = K.stack([K.sum(K.abs(ppred - ptrue)) / K.cast(K.prod(K.shape(ptrue)), "float32")
+                          for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
+        loss = K.sum(losses * self._weights)
+        return loss
+
+
+class LInfNorm():  # pylint:disable=too-few-public-methods
+    """ Calculate the L-inf norm as a loss function. """
+
+    def __call__(self,
+                 y_true: plaidml.tile.Value,
+                 y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
+        """ Call the L-inf norm loss function.
+
+        Parameters
+        ----------
+        y_true: :class:`plaidml.tile.Value`
+            The ground truth value
+        y_pred: :class:`plaidml.tile.Value`
+            The predicted value
+
+        Returns
+        -------
+        :class:`plaidml.tile.Value`
+            The loss value
+        """
+        diff = K.abs(y_true - y_pred)
+        max_loss = K.max(diff, axis=(1, 2), keepdims=True)
+        loss = K.mean(max_loss, axis=-1)
+        return loss
 
 
 class MSSIMLoss(DSSIMObjective):  # pylint:disable=too-few-public-methods
@@ -298,439 +819,10 @@ class MSSIMLoss(DSSIMObjective):  # pylint:disable=too-few-public-methods
             out *= ms_ssim[..., idx]
         return out
 
-    def __call__(self, y_true, y_pred):
-        """ Call the MS-SSIM Loss Function.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The MS-SSIM Loss value
-        """
-        ms_ssim = self._get_ms_ssim(y_true, y_pred)
-        retval = 1. - ms_ssim
-        return K.mean(retval)
-
-
-class GeneralizedLoss():  # pylint:disable=too-few-public-methods
-    """  Generalized function used to return a large variety of mathematical loss functions.
-
-    The primary benefit is a smooth, differentiable version of L1 loss.
-
-    References
-    ----------
-    Barron, J. A More General Robust Loss Function - https://arxiv.org/pdf/1701.03077.pdf
-
-    Example
-    -------
-    >>> a=1.0, x>>c , c=1.0/255.0  # will give a smoothly differentiable version of L1 / MAE loss
-    >>> a=1.999999 (limit as a->2), beta=1.0/255.0 # will give L2 / RMSE loss
-
-    Parameters
-    ----------
-    alpha: float, optional
-        Penalty factor. Larger number give larger weight to large deviations. Default: `1.0`
-    beta: float, optional
-        Scale factor used to adjust to the input scale (i.e. inputs of mean `1e-4` or `256`).
-        Default: `1.0/255.0`
-    """
-    def __init__(self, alpha=1.0, beta=1.0/255.0):
-        self.alpha = alpha
-        self.beta = beta
-
-    def __call__(self, y_true, y_pred):
-        """ Call the Generalized Loss Function
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The loss value from the results of function(y_pred - y_true)
-        """
-        diff = y_pred - y_true
-        second = (K.pow(K.pow(diff/self.beta, 2.) / K.abs(2. - self.alpha) + 1.,
-                        (self.alpha / 2.)) - 1.)
-        loss = (K.abs(2. - self.alpha)/self.alpha) * second
-        loss = K.mean(loss, axis=-1) * self.beta
-        return loss
-
-
-class LInfNorm():  # pylint:disable=too-few-public-methods
-    """ Calculate the L-inf norm as a loss function. """
-
-    def __call__(self, y_true, y_pred):
-        """ Call the L-inf norm loss function.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The loss value
-        """
-        diff = K.abs(y_true - y_pred)
-        max_loss = K.max(diff, axis=(1, 2), keepdims=True)
-        loss = K.mean(max_loss, axis=-1)
-        return loss
-
-
-class GradientLoss():  # pylint:disable=too-few-public-methods
-    """ Gradient Loss Function.
-
-    Calculates the first and second order gradient difference between pixels of an image in the x
-    and y dimensions. These gradients are then compared between the ground truth and the predicted
-    image and the difference is taken. When used as a loss, its minimization will result in
-    predicted images approaching the same level of sharpness / blurriness as the ground truth.
-
-    References
-    ----------
-    TV+TV2 Regularization with Non-Convex Sparseness-Inducing Penalty for Image Restoration,
-    Chengwu Lu & Hua Huang, 2014 - http://downloads.hindawi.com/journals/mpe/2014/790547.pdf
-    """
-    def __init__(self):
-        self.generalized_loss = GeneralizedLoss(alpha=1.9999)
-
-    def __call__(self, y_true, y_pred):
-        """ Call the gradient loss function.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The loss value
-        """
-        tv_weight = 1.0
-        tv2_weight = 1.0
-        loss = 0.0
-        loss += tv_weight * (self.generalized_loss(self._diff_x(y_true), self._diff_x(y_pred)) +
-                             self.generalized_loss(self._diff_y(y_true), self._diff_y(y_pred)))
-        loss += tv2_weight * (self.generalized_loss(self._diff_xx(y_true), self._diff_xx(y_pred)) +
-                              self.generalized_loss(self._diff_yy(y_true), self._diff_yy(y_pred)) +
-                              self.generalized_loss(self._diff_xy(y_true), self._diff_xy(y_pred))
-                              * 2.)
-        loss = loss / (tv_weight + tv2_weight)
-        # TODO simplify to use MSE instead
-        return loss
-
-    @classmethod
-    def _diff_x(cls, img):
-        """ X Difference """
-        x_left = img[:, :, 1:2, :] - img[:, :, 0:1, :]
-        x_inner = img[:, :, 2:, :] - img[:, :, :-2, :]
-        x_right = img[:, :, -1:, :] - img[:, :, -2:-1, :]
-        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
-        return x_out * 0.5
-
-    @classmethod
-    def _diff_y(cls, img):
-        """ Y Difference """
-        y_top = img[:, 1:2, :, :] - img[:, 0:1, :, :]
-        y_inner = img[:, 2:, :, :] - img[:, :-2, :, :]
-        y_bot = img[:, -1:, :, :] - img[:, -2:-1, :, :]
-        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
-        return y_out * 0.5
-
-    @classmethod
-    def _diff_xx(cls, img):
-        """ X-X Difference """
-        x_left = img[:, :, 1:2, :] + img[:, :, 0:1, :]
-        x_inner = img[:, :, 2:, :] + img[:, :, :-2, :]
-        x_right = img[:, :, -1:, :] + img[:, :, -2:-1, :]
-        x_out = K.concatenate([x_left, x_inner, x_right], axis=2)
-        return x_out - 2.0 * img
-
-    @classmethod
-    def _diff_yy(cls, img):
-        """ Y-Y Difference """
-        y_top = img[:, 1:2, :, :] + img[:, 0:1, :, :]
-        y_inner = img[:, 2:, :, :] + img[:, :-2, :, :]
-        y_bot = img[:, -1:, :, :] + img[:, -2:-1, :, :]
-        y_out = K.concatenate([y_top, y_inner, y_bot], axis=1)
-        return y_out - 2.0 * img
-
-    @classmethod
-    def _diff_xy(cls, img):
-        """ X-Y Difference """
-        # xout1
-        top_left = img[:, 1:2, 1:2, :] + img[:, 0:1, 0:1, :]
-        inner_left = img[:, 2:, 1:2, :] + img[:, :-2, 0:1, :]
-        bot_left = img[:, -1:, 1:2, :] + img[:, -2:-1, 0:1, :]
-        xy_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
-
-        top_mid = img[:, 1:2, 2:, :] + img[:, 0:1, :-2, :]
-        mid_mid = img[:, 2:, 2:, :] + img[:, :-2, :-2, :]
-        bot_mid = img[:, -1:, 2:, :] + img[:, -2:-1, :-2, :]
-        xy_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
-
-        top_right = img[:, 1:2, -1:, :] + img[:, 0:1, -2:-1, :]
-        inner_right = img[:, 2:, -1:, :] + img[:, :-2, -2:-1, :]
-        bot_right = img[:, -1:, -1:, :] + img[:, -2:-1, -2:-1, :]
-        xy_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
-
-        # Xout2
-        top_left = img[:, 0:1, 1:2, :] + img[:, 1:2, 0:1, :]
-        inner_left = img[:, :-2, 1:2, :] + img[:, 2:, 0:1, :]
-        bot_left = img[:, -2:-1, 1:2, :] + img[:, -1:, 0:1, :]
-        xy_left = K.concatenate([top_left, inner_left, bot_left], axis=1)
-
-        top_mid = img[:, 0:1, 2:, :] + img[:, 1:2, :-2, :]
-        mid_mid = img[:, :-2, 2:, :] + img[:, 2:, :-2, :]
-        bot_mid = img[:, -2:-1, 2:, :] + img[:, -1:, :-2, :]
-        xy_mid = K.concatenate([top_mid, mid_mid, bot_mid], axis=1)
-
-        top_right = img[:, 0:1, -1:, :] + img[:, 1:2, -2:-1, :]
-        inner_right = img[:, :-2, -1:, :] + img[:, 2:, -2:-1, :]
-        bot_right = img[:, -2:-1, -1:, :] + img[:, -1:, -2:-1, :]
-        xy_right = K.concatenate([top_right, inner_right, bot_right], axis=1)
-
-        xy_out1 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
-        xy_out2 = K.concatenate([xy_left, xy_mid, xy_right], axis=2)
-        return (xy_out1 - xy_out2) * 0.25
-
-
-class GMSDLoss():  # pylint:disable=too-few-public-methods
-    """ Gradient Magnitude Similarity Deviation Loss.
-
-    Improved image quality metric over MS-SSIM with easier calculations
-
-    References
-    ----------
-    http://www4.comp.polyu.edu.hk/~cslzhang/IQA/GMSD/GMSD.htm
-    https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
-    """
-
-    def __call__(self, y_true, y_pred):
-        """ Return the Gradient Magnitude Similarity Deviation Loss.
-
-        Parameters
-        ----------
-        y_true: tensor or variable
-            The ground truth value
-        y_pred: tensor or variable
-            The predicted value
-
-        Returns
-        -------
-        tensor
-            The loss value
-        """
-        raise FaceswapError("GMSD Loss is not currently compatible with PlaidML. Please select a "
-                            "different Loss method.")
-
-        true_edge = self._scharr_edges(y_true, True)
-        pred_edge = self._scharr_edges(y_pred, True)
-        ephsilon = 0.0025
-        upper = 2.0 * true_edge * pred_edge
-        lower = K.square(true_edge) + K.square(pred_edge)
-        gms = (upper + ephsilon) / (lower + ephsilon)
-        gmsd = K.std(gms, axis=(1, 2, 3), keepdims=True)
-        gmsd = K.squeeze(gmsd, axis=-1)
-        return gmsd
-
-    @classmethod
-    def _scharr_edges(cls, image, magnitude):
-        """ Returns a tensor holding modified Scharr edge maps.
-
-        Parameters
-        ----------
-        image: tensor
-            Image tensor with shape [batch_size, h, w, d] and type float32. The image(s) must be
-            2x2 or larger.
-        magnitude: bool
-            Boolean to determine if the edge magnitude or edge direction is returned
-
-        Returns
-        -------
-        tensor
-            Tensor holding edge maps for each channel. Returns a tensor with shape `[batch_size, h,
-            w, d, 2]` where the last two dimensions hold `[[dy[0], dx[0]], [dy[1], dx[1]], ...,
-            [dy[d-1], dx[d-1]]]` calculated using the Scharr filter.
-        """
-
-        # Define vertical and horizontal Scharr filters.
-        # TODO PlaidML: AttributeError: 'Value' object has no attribute 'get_shape'
-        static_image_shape = image.get_shape()
-        image_shape = K.shape(image)
-
-        # 5x5 modified Scharr kernel ( reshape to (5,5,1,2) )
-        matrix = np.array([[[[0.00070, 0.00070]],
-                            [[0.00520, 0.00370]],
-                            [[0.03700, 0.00000]],
-                            [[0.00520, -0.0037]],
-                            [[0.00070, -0.0007]]],
-                           [[[0.00370, 0.00520]],
-                            [[0.11870, 0.11870]],
-                            [[0.25890, 0.00000]],
-                            [[0.11870, -0.1187]],
-                            [[0.00370, -0.0052]]],
-                           [[[0.00000, 0.03700]],
-                            [[0.00000, 0.25890]],
-                            [[0.00000, 0.00000]],
-                            [[0.00000, -0.2589]],
-                            [[0.00000, -0.0370]]],
-                           [[[-0.0037, 0.00520]],
-                            [[-0.1187, 0.11870]],
-                            [[-0.2589, 0.00000]],
-                            [[-0.1187, -0.1187]],
-                            [[-0.0037, -0.0052]]],
-                           [[[-0.0007, 0.00070]],
-                            [[-0.0052, 0.00370]],
-                            [[-0.0370, 0.00000]],
-                            [[-0.0052, -0.0037]],
-                            [[-0.0007, -0.0007]]]])
-        num_kernels = [2]
-        kernels = K.constant(matrix, dtype='float32')
-        kernels = K.tile(kernels, [1, 1, image_shape[-1], 1])
-
-        # Use depth-wise convolution to calculate edge maps per channel.
-        # Output tensor has shape [batch_size, h, w, d * num_kernels].
-        pad_sizes = [[0, 0], [2, 2], [2, 2], [0, 0]]
-        padded = pad(image, pad_sizes, mode='REFLECT')
-        output = K.depthwise_conv2d(padded, kernels)
-
-        if not magnitude:  # direction of edges
-            # Reshape to [batch_size, h, w, d, num_kernels].
-            shape = K.concatenate([image_shape, num_kernels], axis=0)
-            output = K.reshape(output, shape=shape)
-            output.set_shape(static_image_shape.concatenate(num_kernels))
-            output = tf.atan(K.squeeze(output[:, :, :, :, 0] / output[:, :, :, :, 1], axis=None))
-        # magnitude of edges -- unified x & y edges don't work well with Neural Networks
-        return output
-
-
-class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
-    """ Laplacian Pyramid Loss Function
-
-    Notes
-    -----
-    Channels last implementation on square images only.
-
-    Parameters
-    ----------
-    max_levels: int, Optional
-        The max number of laplacian pyramid levels to use. Default: `5`
-    gaussian_size: int, Optional
-        The size of the gaussian kernel. Default: `5`
-    gaussian_sigma: float, optional
-        The gaussian sigma. Default: 2.0
-
-    References
-    ----------
-    https://arxiv.org/abs/1707.05776
-    https://github.com/nathanaelbosch/generative-latent-optimization/blob/master/utils.py
-    """
-    def __init__(self,
-                 max_levels: int = 5,
-                 gaussian_size: int = 5,
-                 gaussian_sigma: float = 1.0) -> None:
-        self._max_levels = max_levels
-        self._weights = K.constant([np.power(2., -2 * idx) for idx in range(max_levels + 1)])
-        self._gaussian_kernel = self._get_gaussian_kernel(gaussian_size, gaussian_sigma)
-        self._shape: Tuple[int, ...] = ()
-
-    @classmethod
-    def _get_gaussian_kernel(cls, size: int, sigma: float) -> plaidml.tile.Value:
-        """ Obtain the base gaussian kernel for the Laplacian Pyramid.
-
-        Parameters
-        ----------
-        size: int, Optional
-            The size of the gaussian kernel
-        sigma: float
-            The gaussian sigma
-
-        Returns
-        -------
-        :class:`plaidml.tile.Value`
-            The base single channel Gaussian kernel
-        """
-        assert size % 2 == 1, ("kernel size must be uneven")
-        x_1 = np.linspace(- (size // 2), size // 2, size, dtype="float32")
-        x_1 /= np.sqrt(2)*sigma
-        x_2 = x_1 ** 2
-        kernel = np.exp(- x_2[:, None] - x_2[None, :])
-        kernel /= kernel.sum()
-        kernel = np.reshape(kernel, (size, size, 1, 1))
-        return K.constant(kernel)
-
-    def _conv_gaussian(self, inputs: plaidml.tile.Value) -> plaidml.tile.Value:
-        """ Perform Gaussian convolution on a batch of images.
-
-        Parameters
-        ----------
-        inputs: :class:`plaidml.tile.Value`
-            The input batch of images to perform Gaussian convolution on.
-
-        Returns
-        -------
-        :class:`plaidml.tile.Value`
-            The convolved images
-        """
-        channels = self._shape[-1]
-        gauss = K.tile(self._gaussian_kernel, (1, 1, 1, channels))
-
-        # PlaidML doesn't implement replication padding like pytorch. This is an inefficient way to
-        # implement it for a square guassian kernel
-        size = K.int_shape(self._gaussian_kernel)[1] // 2
-        padded_inputs = inputs
-        for _ in range(size):
-            padded_inputs = pad(padded_inputs,  # noqa,pylint:disable=no-value-for-parameter,unexpected-keyword-arg
-                                ([0, 0], [1, 1], [1, 1], [0, 0]),
-                                mode="REFLECT")
-
-        retval = K.conv2d(padded_inputs, gauss, strides=(1, 1), padding="valid")
-        return retval
-
-    def _get_laplacian_pyramid(self, inputs: plaidml.tile.Value) -> List[plaidml.tile.Value]:
-        """ Obtain the Laplacian Pyramid.
-
-        Parameters
-        ----------
-        inputs: :class:`plaidml.tile.Value`
-            The input batch of images to run through the Laplacian Pyramid
-
-        Returns
-        -------
-        list
-            The tensors produced from the Laplacian Pyramid
-        """
-        pyramid = []
-        current = inputs
-        for _ in range(self._max_levels):
-            gauss = self._conv_gaussian(current)
-            diff = current - gauss
-            pyramid.append(diff)
-            current = K.pool2d(gauss, (2, 2), strides=(2, 2), padding="valid", pool_mode="avg")
-        pyramid.append(current)
-        return pyramid
-
     def __call__(self,
                  y_true: plaidml.tile.Value,
                  y_pred: plaidml.tile.Value) -> plaidml.tile.Value:
-        """ Calculate the Laplacian Pyramid Loss.
+        """ Call the MS-SSIM Loss Function.
 
         Parameters
         ----------
@@ -741,18 +833,12 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class: `plaidml.tile.Value`
-            The loss value
+        :class:`plaidml.tile.Value`
+            The MS-SSIM Loss value
         """
-        if not self._shape:
-            self._shape = K.int_shape(y_pred)
-        pyramid_true = self._get_laplacian_pyramid(y_true)
-        pyramid_pred = self._get_laplacian_pyramid(y_pred)
-
-        losses = K.stack([K.sum(K.abs(ppred - ptrue)) / K.cast(K.prod(K.shape(ptrue)), "float32")
-                          for ptrue, ppred in zip(pyramid_true, pyramid_pred)])
-        loss = K.sum(losses * self._weights)
-        return loss
+        ms_ssim = self._get_ms_ssim(y_true, y_pred)
+        retval = 1. - ms_ssim
+        return K.mean(retval)
 
 
 class LossWrapper():  # pylint:disable=too-few-public-methods

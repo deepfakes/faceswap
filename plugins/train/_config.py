@@ -13,10 +13,16 @@ ADDITIONAL_INFO = ("\nNB: Unless specifically stated, values changed here will o
                    "when creating a new model.")
 
 _LOSS_HELP = dict(
+    ffl="Focal Frequency Loss. Analyzes the frequency spectrum of the images rather than the "
+        "images themselves. This loss function can be used on its own, but the original paper "
+        "found increased benefits when using it as a complementary loss to another spacial loss "
+        "function (e.g. MSE). Ref: Focal Frequency Loss for Image Reconstruction and Synthesis "
+        "https://arxiv.org/pdf/2012.12821.pdf NB: This loss does not currently work on AMD cards.",
     gmsd=(
         "Gradient Magnitude Similarity Deviation seeks to match the global standard deviation of "
-        "the pixel to pixel differences between two images. Similar in approach to SSIM. NB: This "
-        "loss does not currently work on AMD cards."),
+        "the pixel to pixel differences between two images. Similar in approach to SSIM. Ref: "
+        "Gradient Magnitude Similarity Deviation: An Highly Efficient Perceptual Image Quality "
+        "Index https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf"),
     l_inf_norm=(
         "The L_inf norm will reduce the largest individual pixel error in an image. As "
         "each largest error is minimized sequentially, the overall error is improved. This loss "
@@ -40,17 +46,20 @@ _LOSS_HELP = dict(
     mse=(
         "Mean squared error will guide reconstructions of each pixel towards its average value in "
         "the training dataset. As an avg, it will be susceptible to outliers and typically "
-        "produces slightly blurrier results."),
+        "produces slightly blurrier results. Ref: Multi-Scale Structural Similarity for Image "
+        "Quality Assessment https://www.cns.nyu.edu/pub/eero/wang03b.pdf"),
     ms_ssim=(
         "Multiscale Structural Similarity Index Metric is similar to SSIM except that it "
         "performs the calculations along multiple scales of the input image."),
     smooth_loss=(
         "Smooth_L1 is a modification of the MAE loss to correct two of its disadvantages. "
-        "This loss has improved stability and guidance for small errors."),
+        "This loss has improved stability and guidance for small errors. Ref: A General and "
+        "Adaptive Robust Loss Function https://arxiv.org/pdf/1701.03077.pdf"),
     ssim=(
         "Structural Similarity Index Metric is a perception-based loss that considers changes in "
         "texture, luminance, contrast, and local spatial statistics of an image. Potentially "
-        "delivers more realistic looking images."),
+        "delivers more realistic looking images. Ref: Image Quality Assessment: From Error "
+        "Visibility to Structural Similarity http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf"),
     pixel_gradient_diff=(
         "Instead of minimizing the difference between the absolute value of each "
         "pixel in two reference images, compute the pixel to pixel spatial difference in each "
@@ -276,11 +285,7 @@ class Config(FaceswapConfig):
         MAE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
         MSE https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
         LogCosh https://heartbeat.fritz.ai/5-regression-loss-functions-all-machine-learners-should-know-4fb140e9d4b0
-        Smooth L1 https://arxiv.org/pdf/1701.03077.pdf
         L_inf_norm https://medium.com/@montjoile/l0-norm-l1-norm-l2-norm-l-infinity-norm-7a7d18a4f40c
-        SSIM http://www.cns.nyu.edu/pub/eero/wang03-reprint.pdf
-        MSSIM https://www.cns.nyu.edu/pub/eero/wang03b.pdf
-        GMSD https://arxiv.org/ftp/arxiv/papers/1308/1308.3052.pdf
         """  # noqa
         # pylint:enable=line-too-long
         logger.debug("Setting Loss config")
@@ -298,8 +303,9 @@ class Config(FaceswapConfig):
             fixed=False,
             choices=[x for x in sorted(_LOSS_HELP) if x not in _NON_PRIMARY_LOSS],
             info="The loss function to use.\n\n\t" +
-                 "\n\t".join(f"{k}: {v}"
-                             for k, v in sorted(_LOSS_HELP.items()) if k not in _NON_PRIMARY_LOSS))
+                 "\n\n\t".join(f"{k}: {v}"
+                               for k, v in sorted(_LOSS_HELP.items())
+                               if k not in _NON_PRIMARY_LOSS))
         self.add_item(
             section=section,
             title="loss_function_2",
@@ -312,8 +318,8 @@ class Config(FaceswapConfig):
                  "SSIM, MS-SSIM or GMSD) it is common to add an L1 regularization(MAE) or L2 "
                  "regularization (MSE) function. You can adjust the weighting of this loss "
                  "function with the loss_weight_2 option.\n\n\t" +
-                 "\n\t".join(f"{k}: {v}"
-                             for k, v in sorted(_LOSS_HELP.items())))
+                 "\n\n\t".join(f"{k}: {v}"
+                               for k, v in sorted(_LOSS_HELP.items())))
         self.add_item(
             section=section,
             title="loss_weight_2",
@@ -343,8 +349,8 @@ class Config(FaceswapConfig):
             choices=list(sorted(_LOSS_HELP)),
             info="The third loss function to use. You can adjust the weighting of this loss "
                  "function with the loss_weight_3 option.\n\n\t" +
-                 "\n\t".join(f"{k}: {v}"
-                             for k, v in sorted(_LOSS_HELP.items())))
+                 "\n\n\t".join(f"{k}: {v}"
+                               for k, v in sorted(_LOSS_HELP.items())))
         self.add_item(
             section=section,
             title="loss_weight_3",
@@ -374,8 +380,8 @@ class Config(FaceswapConfig):
             choices=list(sorted(_LOSS_HELP)),
             info="The fourth loss function to use. You can adjust the weighting of this loss "
                  "function with the loss_weight_3 option.\n\n\t" +
-                 "\n\t".join(f"{k}: {v}"
-                             for k, v in sorted(_LOSS_HELP.items())))
+                 "\n\n\t".join(f"{k}: {v}"
+                               for k, v in sorted(_LOSS_HELP.items())))
         self.add_item(
             section=section,
             title="loss_weight_4",
