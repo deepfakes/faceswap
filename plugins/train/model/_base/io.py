@@ -52,8 +52,8 @@ def get_all_sub_models(
     Returns
     -------
     list
-        A list of all :class:`keras.models.Model`\s found within the given model. The provided
-        model will always be returned in the first position
+        A list of all :class:`keras.models.Model` objects found within the given model. The
+        provided model will always be returned in the first position
     """
     if models is None:
         models = [model]
