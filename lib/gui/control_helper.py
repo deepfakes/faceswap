@@ -23,16 +23,28 @@ _ = _LANG.gettext
 # We store Tooltips, ContextMenus and Commands globally when they are created
 # Because we need to add them back to newly cloned widgets (they are not easily accessible from
 # original config or are prone to getting destroyed when the original widget is destroyed)
-_RECREATE_OBJECTS = dict(tooltips=dict(), commands=dict(), contextmenus=dict())
+_RECREATE_OBJECTS = dict(tooltips={}, commands={}, contextmenus={})
 
 
-def _get_tooltip(widget, text=None, text_variable=None, wrap_length=600):
-    """ Store the tooltip layout and widget id in _TOOLTIPS and return a tooltip """
+def _get_tooltip(widget, text=None, text_variable=None):
+    """ Store the tooltip layout and widget id in _TOOLTIPS and return a tooltip.
+
+    Auto adjust tooltip width based on amount of text.
+
+    """
     _RECREATE_OBJECTS["tooltips"][str(widget)] = {"text": text,
-                                                  "text_variable": text_variable,
-                                                  "wrap_length": wrap_length}
-    logger.debug("Adding to tooltips dict: (widget: %s. text: '%s', wrap_length: %s)",
-                 widget, text, wrap_length)
+                                                  "text_variable": text_variable}
+    logger.debug("Adding to tooltips dict: (widget: %s. text: '%s')", widget, text)
+
+    wrap_length = 400
+    if text is not None:
+        while True:
+            if len(text) < wrap_length * 5:
+                break
+            if wrap_length > 720:
+                break
+            wrap_length = int(wrap_length * 1.10)
+
     return Tooltip(widget, text=text, text_variable=text_variable, wrap_length=wrap_length)
 
 
@@ -405,8 +417,8 @@ class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors
         if self._style.startswith("SPanel"):
             self._theme = {**self._theme, **get_config().user_theme["group_settings"]}
 
-        self.group_frames = dict()
-        self._sub_group_frames = dict()
+        self.group_frames = {}
+        self._sub_group_frames = {}
 
         canvas_kwargs = dict(bd=0, highlightthickness=0, bg=self._theme["panel_background"])
 
@@ -630,7 +642,7 @@ class AutoFillContainer():
         """ Set a sub-frame for each possible column """
         subframes = []
         for idx in range(self.max_columns):
-            name = "af_subframe_{}".format(idx)
+            name = f"af_subframe_{idx}"
             subframe = ttk.Frame(self.parent, name=name, style=f"{self._style}TFrame")
             if idx < self.columns:
                 # Only pack visible columns
@@ -705,7 +717,7 @@ class AutoFillContainer():
         dict
             The custom keyword arguments required for recreating the given widget
         """
-        retval = dict()
+        retval = {}
         if widget.__class__.__name__ == "MultiOption":
             retval = dict(value=widget._value,  # pylint:disable=protected-access
                           variable=widget._master_variable)  # pylint:disable=protected-access
@@ -773,7 +785,7 @@ class AutoFillContainer():
             configuration from a widget
             We use config() instead of configure() because some items (ttk Scale) do
             not populate configure()"""
-        new_config = dict()
+        new_config = {}
         for key in widget.config():
             if key == "class":
                 continue
@@ -923,7 +935,7 @@ class ControlBuilder():
         """ Frame to hold control and it's label """
         logger.debug("Build control frame")
         frame = ttk.Frame(parent,
-                          name="fr_{}".format(self.option.name),
+                          name=f"fr_{self.option.name}",
                           style=f"{self._style}Group.TFrame")
         frame.pack(fill=tk.X)
         logger.debug("Built control frame")
@@ -955,7 +967,7 @@ class ControlBuilder():
                         style=f"{self._style}Group.TLabel")
         lbl.pack(padx=5, pady=5, side=tk.LEFT, anchor=tk.N)
         if self.option.helptext is not None:
-            _get_tooltip(lbl, text=self.option.helptext, wrap_length=600)
+            _get_tooltip(lbl, text=self.option.helptext)
         logger.debug("Built control label: (widget: '%s', title: '%s'",
                      self.option.name, self.option.title)
 
@@ -975,7 +987,7 @@ class ControlBuilder():
         if self.option.control != ttk.Checkbutton:
             ctl.pack(padx=5, pady=5, fill=tk.X, expand=True)
             if self.option.helptext is not None and not self.helpset:
-                tooltip_kwargs = dict(text=self.option.helptext, wrap_length=600)
+                tooltip_kwargs = dict(text=self.option.helptext)
                 if self.option.sysbrowser is not None:
                     tooltip_kwargs["text_variable"] = self.option.tk_var
                 _get_tooltip(ctl, **tooltip_kwargs)
@@ -996,7 +1008,7 @@ class ControlBuilder():
         help_intro, help_items = self._get_multi_help_items(self.option.helptext)
         ctl = ttk.LabelFrame(self.frame,
                              text=self.option.title,
-                             name="{}_labelframe".format(option_type),
+                             name=f"{option_type}_labelframe",
                              style=f"{self._style}Group.TLabelframe")
         holder = AutoFillContainer(ctl,
                                    self.option_columns,
@@ -1018,8 +1030,8 @@ class ControlBuilder():
             if choice.lower() in help_items:
                 self.helpset = True
                 helptext = help_items[choice.lower()]
-                helptext = "{}\n\n - {}".format(helptext, help_intro)
-                _get_tooltip(ctl, text=helptext, wrap_length=600)
+                helptext = f"{helptext}\n\n - {help_intro}"
+                _get_tooltip(ctl, text=helptext)
             ctl.pack(anchor=tk.W, fill=tk.X)
             logger.debug("Added %s option %s", option_type, choice)
         return holder.parent
@@ -1183,14 +1195,14 @@ class ControlBuilder():
         lbl.pack(padx=2, pady=5, side=tk.RIGHT, anchor=tk.N)
         frame.pack(side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
-            _get_tooltip(lbl, text=self.option.helptext, wrap_length=600)
+            _get_tooltip(lbl, text=self.option.helptext)
         logger.debug("Added control to Options Frame: %s", self.option.name)
         return ctl
 
     def _ask_color(self, frame, title):
         """ Pop ask color dialog set to variable and change frame color """
         color = self.option.tk_var.get()
-        chosen = colorchooser.askcolor(color=color, title="{} Color".format(title))[1]
+        chosen = colorchooser.askcolor(color=color, title=f"{title} Color")[1]
         if chosen is None:
             return
         frame.config(bg=chosen)
@@ -1205,7 +1217,7 @@ class ControlBuilder():
                                   text=self.option.title,
                                   name=self.option.name,
                                   style=f"{self._style}Group.TCheckbutton")
-        _get_tooltip(ctl, text=self.option.helptext, wrap_length=600)
+        _get_tooltip(ctl, text=self.option.helptext)
         ctl.pack(side=tk.TOP, anchor=tk.W, fill=tk.X)
         logger.debug("Added control checkframe: '%s'", self.option.name)
         return ctl
@@ -1286,7 +1298,7 @@ class FileBrowser():
                                 cursor="hand2")
             _add_command(fileopn.cget("command"), cmd)
             fileopn.pack(padx=1, side=tk.RIGHT)
-            _get_tooltip(fileopn, text=self.helptext[lbl], wrap_length=600)
+            _get_tooltip(fileopn, text=self.helptext[lbl])
             logger.debug("Added browser buttons: (action: %s, filetypes: %s",
                          action, self.filetypes)
 
@@ -1324,7 +1336,7 @@ class FileBrowser():
         """ Pop-up to get path to a file """
         filenames = FileHandler("filename_multi", filetypes).return_file
         if filenames:
-            final_names = " ".join("\"{}\"".format(fname) for fname in filenames)
+            final_names = " ".join(f"\"{fname}\"" for fname in filenames)
             logger.debug(final_names)
             filepath.set(final_names)
 

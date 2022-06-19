@@ -10,11 +10,12 @@ Handles configuration of model plugins for:
     - Optimizer settings
     - General global model configuration settings
 """
+from dataclasses import dataclass, field
 import logging
 import platform
 
 from contextlib import nullcontext
-from typing import Callable, ContextManager, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Callable, ContextManager, Dict, List, Optional, TYPE_CHECKING, Union
 
 import tensorflow as tf
 
@@ -42,6 +43,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
+@dataclass
+class LossClass:
+    """ Typing class for holding loss functions.
+
+    Parameters
+    ----------
+    function: Callable
+        The function that takes in the true/predicted images and returns the loss
+    init: bool, Optional
+        Whether the loss object ``True`` needs to be initialized (i.e. it's a class) or
+        ``False`` it does not require initialization (i.e. it's a function).
+        Default ``True``
+    kwargs: dict
+        Any keyword arguments to supply to the loss function at initialization.
+    """
+    function: Union[Callable[[tf.Tensor, tf.Tensor], tf.Tensor], Any] = k_losses.mae
+    init: bool = True
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+
+
 class Loss():
     """ Holds loss names and functions for an Autoencoder.
 
@@ -56,22 +77,27 @@ class Loss():
     def __init__(self, config: dict) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._config = config
-        logcosh = losses.LogCosh() if get_backend() == "amd" else k_losses.logcosh
-        self._loss_dict = dict(ffl=losses.FocalFrequencyLoss(),
-                               gmsd=losses.GMSDLoss(),
-                               l_inf_norm=losses.LInfNorm(),
-                               laploss=losses.LaplacianPyramidLoss(),
-                               logcosh=logcosh,
-                               ms_ssim=losses.MSSIMLoss(),
-                               mae=k_losses.mean_absolute_error,
-                               mse=k_losses.mean_squared_error,
-                               pixel_gradient_diff=losses.GradientLoss(),
-                               ssim=losses.DSSIMObjective(),
-                               smooth_loss=losses.GeneralizedLoss(),)
         self._mask_channels = self._get_mask_channels()
         self._inputs: List[keras.layers.Layer] = []
         self._names: List[str] = []
         self._funcs: Dict[str, Callable] = {}
+
+        logcosh = losses.LogCosh() if get_backend() == "amd" else k_losses.logcosh
+        self._loss_dict = dict(ffl=LossClass(function=losses.FocalFrequencyLoss),
+                               gmsd=LossClass(function=losses.GMSDLoss),
+                               l_inf_norm=LossClass(function=losses.LInfNorm),
+                               laploss=LossClass(function=losses.LaplacianPyramidLoss),
+                               logcosh=LossClass(function=logcosh,
+                                                 init=False),
+                               ms_ssim=LossClass(function=losses.MSSIMLoss),
+                               mae=LossClass(function=k_losses.mean_absolute_error,
+                                             init=False),
+                               mse=LossClass(function=k_losses.mean_squared_error,
+                                             init=False),
+                               pixel_gradient_diff=LossClass(function=losses.GradientLoss),
+                               ssim=LossClass(function=losses.DSSIMObjective),
+                               smooth_loss=LossClass(function=losses.GeneralizedLoss))
+
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
@@ -144,6 +170,24 @@ class Loss():
                 self._names.append(f"{name}_{side}{suffix}")
         logger.debug(self._names)
 
+    def _get_function(self, name: str) -> Callable[[tf.Tensor, tf.Tensor], tf.Tensor]:
+        """ Obtain the requested Loss function
+
+        Parameters
+        ----------
+        name: str
+            The name of the loss function from the training configuration file
+
+        Returns
+        -------
+        Keras Loss Function
+            The requested loss function
+        """
+        func = self._loss_dict[name]
+        retval = func.function(**func.kwargs) if func.init else func.function  # type:ignore
+        logger.debug("Obtained loss function `%s` (%s)", name, retval)
+        return retval
+
     def _set_loss_functions(self, output_names: List[str]):
         """ Set the loss functions and their associated weights.
 
@@ -154,15 +198,15 @@ class Loss():
         output_names: list
             The output names from the model
         """
-        face_losses = [(self._loss_dict[v], self._config.get(f"loss_weight_{k[-1]}", 100))
-                       for k, v in sorted(self._config.items())
+        face_losses = [(lossname, self._config.get(f"loss_weight_{k[-1]}", 100))
+                       for k, lossname in sorted(self._config.items())
                        if k.startswith("loss_function")
                        and self._config.get(f"loss_weight_{k[-1]}", 100) != 0
-                       and v is not None]
+                       and lossname is not None]
 
         for name, output_name in zip(self._names, output_names):
             if name.startswith("mask"):
-                loss_func = self._loss_dict[self._config["mask_loss_function"]]
+                loss_func = self._get_function(self._config["mask_loss_function"])
             else:
                 loss_func = losses.LossWrapper()
                 for func, weight in face_losses:
@@ -174,7 +218,7 @@ class Loss():
 
     def _add_face_loss_function(self,
                                 loss_wrapper: losses.LossWrapper,
-                                loss_function: Callable,
+                                loss_function: str,
                                 weight: float) -> None:
         """ Add the given face loss function at the given weight and apply any mouth and eye
         multipliers
@@ -183,13 +227,13 @@ class Loss():
         ----------
         loss_wrapper: :class:`lib.model.losses.LossWrapper`
             The wrapper loss function that holds the face losses
-        loss_func: :class:`keras.losses.Loss`
+        loss_function: str
             The loss function to add to the loss wrapper
         weight: float
             The amount of weight to apply to the given loss function
         """
         logger.debug("Adding loss function: %s, weight: %s", loss_function, weight)
-        loss_wrapper.add_loss(loss_function,
+        loss_wrapper.add_loss(self._get_function(loss_function),
                               weight=weight,
                               mask_channel=self._mask_channels[0])
 
@@ -199,7 +243,7 @@ class Loss():
             multiplier = self._config[section] * 1.
             if multiplier > 1.:
                 logger.debug("Adding section loss %s: %s", section, multiplier)
-                loss_wrapper.add_loss(loss_function,
+                loss_wrapper.add_loss(self._get_function(loss_function),
                                       weight=weight * multiplier,
                                       mask_channel=mask_channel)
             channel_idx += 1

@@ -20,7 +20,7 @@ else:
     from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
     from tensorflow.keras import backend as K  # pylint:disable=import-error
     from tensorflow.keras.layers import InputSpec, Layer  # noqa pylint:disable=no-name-in-module,import-error
-    from tensorflow import pad
+    from tensorflow import pad  # type:ignore
     from tensorflow.python.keras.utils import conv_utils  # pylint:disable=no-name-in-module
 
 

@@ -195,7 +195,7 @@ class ModelBase():
         """ list: A list of list of shape tuples for the outputs of the model with the batch
         dimension removed. The outer list contains 2 sub-lists (one for each side "a" and "b").
         The inner sub-lists contain the output shapes for that side. """
-        shapes = [tuple(K.int_shape(output)[-3:]) for output in self._model.outputs]
+        shapes = [tuple(K.int_shape(output)[-3:]) for output in self.model.outputs]
         return [shapes[:len(shapes) // 2], shapes[len(shapes) // 2:]]
 
     @property
@@ -313,14 +313,15 @@ class ModelBase():
         os.mkdir(self.model_dir)
         new_model = self.build_model(self._get_inputs())
         for model_name, layer_name in legacy_mapping.items():
-            old_model = load_model(os.path.join(archive_dir, model_name), compile=False)
+            old_model: keras.models.Model = load_model(os.path.join(archive_dir, model_name),
+                                                       compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
             if not layer:
                 logger.warning("Skipping legacy weights from '%s'...", model_name)
                 continue
-            layer = layer[0]
+            klayer: keras.layers.Layer = layer[0]
             logger.info("Updating legacy weights from '%s'...", model_name)
-            layer.set_weights(old_model.get_weights())
+            klayer.set_weights(old_model.get_weights())
         filename = self._io._filename  # pylint:disable=protected-access
         logger.info("Saving Tensorflow 2.x model to '%s'", filename)
         new_model.save(filename)
@@ -392,7 +393,7 @@ class ModelBase():
         else:
             # print to logger
             print_fn = lambda x: logger.verbose("%s", x)  # type: ignore # noqa
-        for idx, model in enumerate(get_all_sub_models(self._model)):
+        for idx, model in enumerate(get_all_sub_models(self.model)):
             if idx == 0:
                 parent = model
                 continue
@@ -432,10 +433,10 @@ class ModelBase():
         weights.load(self._io.model_exists)
         weights.freeze()
 
-        self._loss.configure(self._model)
-        self._model.compile(optimizer=optimizer, loss=self._loss.functions)
+        self._loss.configure(self.model)
+        self.model.compile(optimizer=optimizer, loss=self._loss.functions)
         self._state.add_session_loss_names(self._loss.names)
-        logger.debug("Compiled Model: %s", self._model)
+        logger.debug("Compiled Model: %s", self.model)
 
     def _rewrite_plaid_outputs(self) -> None:
         """ Rewrite the output names for models using the PlaidML (Keras 2.2.4) backend
@@ -447,17 +448,17 @@ class ModelBase():
         """
         # TODO Remove this rewrite code if PlaidML updates to a version of Keras where this is
         # no longer necessary
-        if len(self._model.output_names) == len(set(self._model.output_names)):
-            logger.debug("Output names are unique, not rewriting: %s", self._model.output_names)
+        if len(self.model.output_names) == len(set(self.model.output_names)):
+            logger.debug("Output names are unique, not rewriting: %s", self.model.output_names)
             return
-        seen = {name: 0 for name in set(self._model.output_names)}
+        seen = {name: 0 for name in set(self.model.output_names)}
         new_names = []
-        for name in self._model.output_names:
+        for name in self.model.output_names:
             new_names.append(f"{name}_{seen[name]}")
             seen[name] += 1
         logger.debug("Output names rewritten: (old: %s, new: %s)",
-                     self._model.output_names, new_names)
-        self._model.output_names = new_names
+                     self.model.output_names, new_names)
+        self.model.output_names = new_names
 
     def _legacy_mapping(self) -> Optional[dict]:  # pylint:disable=no-self-use
         """ The mapping of separate model files to single model layers for transferring of legacy
