@@ -804,7 +804,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         """ :class:`keras.models.Model`: The Faceswap model, compiled for inference. """
         return self._model
 
-    def _get_nodes(self, nodes: list) -> List[Tuple[str, int]]:
+    def _get_nodes(self, nodes: np.ndarray) -> List[Tuple[str, int]]:
         """ Given in input list of nodes from a :attr:`keras.models.Model.get_config` dictionary,
         filters the layer name(s) and output index of the node, splitting to the correct output
         index in the event of multiple inputs.
@@ -841,7 +841,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         logger.debug("Compiling inference model. saved_model: %s", saved_model)
         struct = self._get_filtered_structure()
         model_inputs = self._get_inputs(saved_model.inputs)
-        compiled_layers = {}
+        compiled_layers: Dict[str, keras.layers.Layer] = {}
         for layer in saved_model.layers:
             if layer.name not in struct:
                 logger.debug("Skipping unused layer: '%s'", layer.name)

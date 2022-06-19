@@ -34,6 +34,21 @@ _LOSS_HELP = dict(
         "implementation uses this loss as a complimentary function to MSE. "
         "Ref: Optimizing the Latent Space of Generative Networks "
         "https://arxiv.org/abs/1707.05776"),
+    lpips_alex=(
+        "LPIPS is a perceptual loss that uses the feature outputs of other pretrained models as a "
+        "loss metric. Be aware that this loss function will use more VRAM. Used on its own and "
+        "this loss will create a distinct moire pattern on the output, however it can be helpful "
+        "as a complimentary loss function. The output of this function is strong, so depending "
+        "on your chosen primary loss function, you are unlikely going to want to set the weight "
+        "above about 25%. Ref: The Unreasonable Effectiveness of Deep Features as a Perceptual "
+        "Metric http://arxiv.org/abs/1801.03924\nThis variant uses the AlexNet backbone. A fairly "
+        "light and old model which performed best in the paper's original implementation.\nNB: "
+        "For AMD Users the final linear layer is not implemented."),
+    lpips_squeeze=(
+        "Same as lpips_alex, but using the SqueezeNet backbone. A more lightweight "
+        "version of AlexNet.\nNB: For AMD Users the final linear layer is not implemented."),
+    lpips_vgg16="Same as lpips_alex, but using the VGG16 backbone. A more heavyweight model.\n"
+                "NB: For AMD Users the final linear layer is not implemented.",
     logcosh=(
         "log(cosh(x)) acts similar to MSE for small errors and to MAE for large errors. Like "
         "MSE, it is very stable and prevents overshoots when errors are near zero. Like MAE, it "
@@ -66,7 +81,7 @@ _LOSS_HELP = dict(
         "shifts, but maintains the structure of the image."),
     none="Do not use an additional loss function.")
 
-_NON_PRIMARY_LOSS = ["none"]
+_NON_PRIMARY_LOSS = ["lpips_alex", "lpips_squeeze", "lpips_vgg16", "none"]
 
 
 class Config(FaceswapConfig):

@@ -327,7 +327,7 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
             inputs = ReflectionPadding2D(stride=self._strides,
                                          kernel_size=self._args[-1],
                                          name=f"{self._name}_reflectionpadding2d")(inputs)
-        conv = DepthwiseConv2D if self._use_depthwise else Conv2D
+        conv: keras.layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
         var_x = conv(*self._args,
                      strides=self._strides,
                      padding=self._padding,

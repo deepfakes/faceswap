@@ -13,6 +13,8 @@ import tensorflow as tf
 from tensorflow.python.keras.engine import compile_utils  # noqa pylint:disable=no-name-in-module,import-error
 from tensorflow.keras import backend as K  # pylint:disable=import-error
 
+from .feature_loss_tf import LPIPSLoss  #pylint:disable=unused-import # noqa
+
 logger = logging.getLogger(__name__)
 
 

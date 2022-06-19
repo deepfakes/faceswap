@@ -13,6 +13,8 @@ from keras import backend as K
 from lib.plaidml_utils import pad
 from lib.utils import FaceswapError
 
+from .feature_loss_plaid import LPIPSLoss  #pylint:disable=unused-import # noqa
+
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 

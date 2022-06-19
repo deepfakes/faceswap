@@ -71,8 +71,14 @@ be imported as :mod:`lib.model.losses` depending on the backend in use.
    ~lib.model.loss.loss_tf.LaplacianPyramidLoss
    ~lib.model.loss.loss_tf.LInfNorm
    ~lib.model.loss.loss_tf.LossWrapper
+   ~lib.model.loss.feature_loss_tf.LPIPSLoss
 
 .. automodule:: lib.model.loss.loss_tf
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: lib.model.loss.feature_loss_tf
    :members:
    :undoc-members:
    :show-inheritance:
