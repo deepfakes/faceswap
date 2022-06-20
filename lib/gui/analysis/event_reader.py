@@ -321,13 +321,19 @@ class _Cache():
         cache = self._data[session_id]
         for metric in ("loss", "timestamps"):
             data = locals()[metric]
-            old_shape = cache[f"{metric}_shape"]
             dtype = "float32" if metric == "loss" else "float64"
-            old = np.frombuffer(zlib.decompress(cache[metric]), dtype=dtype).reshape(old_shape)
+
+            old = np.frombuffer(zlib.decompress(cache[metric]), dtype=dtype)
+            if data.ndim > 1:
+                old = old.reshape(-1, *data.shape[1:])
+
             new = np.concatenate((old, data))
-            logger.debug("'%s' old_shape: %s new_shape: %s", metric, old_shape, new.shape)
+
+            logger.debug("'%s' old_shape: %s new_shape: %s",
+                         metric, cache[f"{metric}_shape"], new.shape)
             cache[f"{metric}_shape"] = new.shape
             cache[metric] = zlib.compress(new)
+
             del old
 
     def get_data(self, session_id, metric):

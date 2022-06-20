@@ -34,8 +34,8 @@ class GlobalSession():
     def __init__(self) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._state = None
-        self._model_dir = None
-        self._model_name = None
+        self._model_dir = ""
+        self._model_name = ""
 
         self._tb_logs = None
         self._summary = None
@@ -48,7 +48,7 @@ class GlobalSession():
     @property
     def is_loaded(self) -> bool:
         """ bool: ``True`` if session data is loaded otherwise ``False`` """
-        return self._model_dir is not None
+        return bool(self._model_dir)
 
     @property
     def is_training(self) -> bool:
@@ -146,8 +146,8 @@ class GlobalSession():
     def clear(self) -> None:
         """ Clear the currently loaded session. """
         self._state = {}
-        self._model_dir = None
-        self._model_name = None
+        self._model_dir = ""
+        self._model_name = ""
 
         del self._tb_logs
         self._tb_logs = None
