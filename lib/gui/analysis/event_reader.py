@@ -365,10 +365,11 @@ class _Cache():
 
         retval = {}
         for idx, data in raw.items():
-            val = np.frombuffer(zlib.decompress(data[metric]), dtype=dtype)
+            buff = np.frombuffer(zlib.decompress(data[metric]), dtype=dtype)
             shape = data[f"{metric}_shape"]
             if len(shape) > 1:
-                val = val.reshape(-1, *shape[1:])
+                buff = buff.reshape(-1, *shape[1:])
+            val = {metric: buff}
             if metric == "loss":
                 val["labels"] = data["labels"]
             retval[idx] = val
