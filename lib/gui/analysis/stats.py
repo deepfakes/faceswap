@@ -389,12 +389,14 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
             The collated session summary statistics
         """
         timestamps = self._time_stats[session_id]
-        elapsed = int(timestamps["end_time"] - timestamps["start_time"])
+        start = np.nan_to_num(timestamps["start_time"])
+        end = np.nan_to_num(timestamps["end_time"])
+        elapsed = int(start - end)
         batchsize = self._session.batch_sizes.get(session_id, 0)
         retval = dict(
             session=session_id,
-            start=timestamps["start_time"],
-            end=timestamps["end_time"],
+            start=start,
+            end=end,
             elapsed=elapsed,
             rate=(((batchsize * 2) * timestamps["iterations"]) / elapsed if elapsed != 0 else 0),
             batch=batchsize,
