@@ -367,12 +367,14 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
 
             stats = self._per_session_stats[-1]
 
-            stats["start"] = ts_data["start_time"]
-            stats["end"] = ts_data["end_time"]
-            stats["elapsed"] = int(stats["end"] - stats["start"])
+            start = np.nan_to_num(ts_data["start_time"])
+            end = np.nan_to_num(ts_data["end_time"])
+            stats["start"] = start
+            stats["end"] = end
+            stats["elapsed"] = int(end - start)
             stats["iterations"] = ts_data["iterations"]
             stats["rate"] = (((stats["batch"] * 2) * stats["iterations"])
-                             / stats["elapsed"] if stats["elapsed"] != 0 else 0)
+                             / stats["elapsed"] if stats["elapsed"] > 0 else 0)
         logger.debug("per_session_stats: %s", self._per_session_stats)
 
     def _collate_stats(self, session_id: int) -> dict:
