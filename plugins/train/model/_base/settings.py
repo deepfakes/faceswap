@@ -39,6 +39,7 @@ else:
 
 if TYPE_CHECKING:
     from argparse import Namespace
+    from .model import State
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -413,8 +414,9 @@ class Settings():
         self._set_tf_settings(allow_growth, arguments.exclude_gpus)
 
         use_mixed_precision = not is_predict and mixed_precision and get_backend() == "nvidia"
-        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision,
-                                                                    bool(arguments.exclude_gpus))
+        self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
+        if self._use_mixed_precision:
+            logger.info("Enabling Mixed Precision Training.")
 
         distributed = False if not hasattr(arguments, "distributed") else arguments.distributed
         self._strategy = self._get_strategy(distributed)
@@ -487,7 +489,7 @@ class Settings():
             logger.debug("Set Tensorflow 'allow_growth' option")
 
     @classmethod
-    def _set_keras_mixed_precision(cls, use_mixed_precision: bool, exclude_gpus: bool) -> bool:
+    def _set_keras_mixed_precision(cls, use_mixed_precision: bool) -> bool:
         """ Enable the Keras experimental Mixed Precision API.
 
         Enables the Keras experimental Mixed Precision API if requested in the user configuration
@@ -498,21 +500,24 @@ class Settings():
         use_mixed_precision: bool
             ``True`` if experimental mixed precision support should be enabled for Nvidia GPUs
             otherwise ``False``.
-        exclude_gpus: bool
-            ``True`` If connected GPUs are being excluded otherwise ``False``.
 
         Returns
         -------
         bool
             ``True`` if mixed precision has been enabled otherwise ``False``
         """
-        logger.debug("use_mixed_precision: %s, exclude_gpus: %s",
-                     use_mixed_precision, exclude_gpus)
-        if not use_mixed_precision:
+        logger.debug("use_mixed_precision: %s", use_mixed_precision)
+        if not use_mixed_precision and get_backend() == "amd":
             logger.debug("Not enabling 'mixed_precision' (backend: %s, use_mixed_precision: %s)",
                          get_backend(), use_mixed_precision)
             return False
-        logger.info("Enabling Mixed Precision Training.")
+
+        if not use_mixed_precision:
+            policy = mixedprecision.Policy('float32')
+            mixedprecision.set_global_policy(policy)
+            logger.debug("Disabling mixed precision. (Compute dtype: %s, variable_dtype: %s)",
+                         policy.compute_dtype, policy.variable_dtype)
+            return False
 
         policy = mixedprecision.Policy('mixed_float16')
         mixedprecision.set_global_policy(policy)
@@ -556,6 +561,139 @@ class Settings():
             retval = tf.distribute.get_strategy()
         logger.debug("Using strategy: %s", retval)
         return retval
+
+    def _get_mixed_precision_layers(self, layers: List[dict]) -> List[str]:
+        """ Obtain the names of the layers in a mixed precision model that have their dtype policy
+        explicitly set to mixed-float16.
+
+        Parameters
+        ----------
+        layers: List
+            The list of layers that appear in a keras's model configuration `dict`
+
+        Returns
+        -------
+        list
+            A list of layer names within the model that are assigned a float16 policy
+        """
+        retval = []
+        for layer in layers:
+            config = layer["config"]
+
+            if layer["class_name"] == "Functional":  # Recurse into sub-models
+                retval.extend(self._get_mixed_precision_layers(config["layers"]))
+                continue
+
+            dtype = config["dtype"]
+            if isinstance(dtype, dict) and dtype["config"]["name"] == "mixed_float16":
+                logger.debug("Adding supported mixed precision layer: %s %s", layer["name"], dtype)
+                retval.append(layer["name"])
+            else:
+                logger.debug("Skipping unsupported layer: %s %s", layer["name"], dtype)
+        return retval
+
+    def _switch_precision(self, layers: List[dict], compatible: List[str]) -> None:
+        """ Switch a model's datatype between mixed-float16 and float32.
+
+        Parameters
+        ----------
+        layers: List
+            The list of layers that appear in a keras's model configuration `dict`
+        compatible: List
+            A list of layer names that are compatible to have their datatype switched
+        """
+        dtype = "mixed_float16" if self.use_mixed_precision else "float32"
+        policy = dict(class_name="Policy", config=dict(name=dtype))
+
+        for layer in layers:
+            config = layer["config"]
+
+            if layer["class_name"] == "Functional":  # Recurse into sub-models
+                self._switch_precision(config["layers"], compatible)
+                continue
+
+            if layer["name"] not in compatible:
+                logger.debug("Skipping incompatible layer: %s", layer["name"])
+                continue
+
+            logger.debug("Updating dtype for %s from: %s to: %s",
+                         layer["name"], config["dtype"], policy)
+            config["dtype"] = policy
+
+    def get_mixed_precision_layers(self,
+                                   build_func: Callable[[List[keras.layers.Layer]],
+                                                        keras.models.Model],
+                                   inputs: List[keras.layers.Layer]) -> List[str]:
+        """ Get and store the mixed precision layers from a full precision enabled model.
+
+        Parameters
+        ----------
+        build_func: Callable
+            The function to be called to compile the newly created model
+        inputs:
+            The inputs to the model to be compiled
+
+        Returns
+        -------
+        list
+            The list of layer names within the full precision model that can be switched
+            to mixed precision
+        """
+        logger.info("Storing Mixed Precision compatible layers. Please ignore any following "
+                    "warnings about using mixed precision.")
+        self._set_keras_mixed_precision(True)
+        model = build_func(inputs)
+        layers = self._get_mixed_precision_layers(model.get_config()["layers"])
+        self._set_keras_mixed_precision(False)
+        del model
+        return layers
+
+    def check_model_precision(self,
+                              model: keras.models.Model,
+                              state: "State") -> keras.models.Model:
+        """ Check the model's precision.
+
+        If this is a new model, then
+        Rewrite an existing model's training precsion mode from mixed-float16 to float32 or
+        vice versa.
+
+        This is not easy to do in keras, so we edit the model's config to change the dtype policy
+        for compatible layers. Create a new model from this config, then port the weights from the
+        old model to the new model.
+
+        Parameters
+        ----------
+        model: :class:`keras.models.Model`
+            The original saved keras model to rewrite the dtype
+        state: ~:class:`plugins.train.model._base.model.State`
+            The State information for the model
+
+        Returns
+        -------
+        :class:`keras.models.Model`
+            The original model with the datatype updated
+        """
+        config = model.get_config()
+        if not self.use_mixed_precision and not state.mixed_precision_layers:
+            # Switched to Full Precision, get compatible layers from model if not already stored
+            state.add_mixed_precision_layers(self._get_mixed_precision_layers(config["layers"]))
+
+        if self.use_mixed_precision and not state.mixed_precision_layers:
+            # Switching to mixed precision on a model which was started in FP32 prior to the
+            # ability to switch between precisions on a saved model is not supported as we
+            # do not have the compatible layer names
+            logger.warning("Switching from Full Precision to Mixed Precision is not supported on "
+                           "older model files. Reverting to Full Precision.")
+            return model
+
+        self._switch_precision(config["layers"], state.mixed_precision_layers)
+
+        new_model = keras.models.Model().from_config(config)
+        new_model.set_weights(model.get_weights())
+        logger.info("Mixed precision has been updated from '%s' to '%s'",
+                    not self.use_mixed_precision, self.use_mixed_precision)
+        del model
+        return new_model
 
     def strategy_scope(self) -> ContextManager:
         """ Return the strategy scope if we have set a strategy, otherwise return a null

@@ -256,6 +256,7 @@ class Config(FaceswapConfig):
             title="mixed_precision",
             datatype=bool,
             default=False,
+            fixed=False,
             group="network",
             info="[Nvidia Only], NVIDIA GPUs can run operations in float16 faster than in "
                  "float32. Mixed precision allows you to use a mix of float16 with float32, to "

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     import argparse
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_CONFIG = None
+_CONFIG: Dict[str, Union[str, float, int, bool, None]] = {}
 
 
 def KerasModel(inputs: list, outputs: list, name: str) -> keras.models.Model:  # noqa, pylint:disable=invalid-name
@@ -285,6 +285,10 @@ class ModelBase():
             else:
                 self._validate_input_shape()
                 inputs = self._get_inputs()
+                if not self._settings.use_mixed_precision:
+                    # Store layer names which can be switched to mixed precision
+                    self._state.add_mixed_precision_layers(
+                        self._settings.get_mixed_precision_layers(self.build_model, inputs))
                 self._model = self.build_model(inputs)
             if not is_summary and not self._is_predict:
                 self._compile_model()
@@ -418,6 +422,9 @@ class ModelBase():
         """ Compile the model to include the Optimizer and Loss Function(s). """
         logger.debug("Compiling Model")
 
+        if self.state.model_needs_rebuild:
+            self._model = self._settings.check_model_precision(self._model, self._state)
+
         optimizer = Optimizer(self.config["optimizer"],
                               self.config["learning_rate"],
                               self.config.get("clipnorm", False),
@@ -515,9 +522,11 @@ class State():
         self._filename = os.path.join(model_dir, filename)
         self._name = model_name
         self._iterations = 0
+        self._mixed_precision_layers: List[str] = []
+        self._rebuild_model = False
         self._sessions: Dict[int, dict] = {}
         self._lowest_avg_loss: Dict[str, float] = {}
-        self._config = {}
+        self._config: Dict[str, Union[str, float, int, bool, None]] = {}
         self._load(config_changeable_items)
         self._session_id = self._new_session_id()
         self._create_new_session(no_logs, config_changeable_items)
@@ -547,6 +556,17 @@ class State():
     def session_id(self) -> int:
         """ int: The current training session id. """
         return self._session_id
+
+    @property
+    def mixed_precision_layers(self) -> List[str]:
+        """list: Layers that can be switched between mixed-float16 and float32. """
+        return self._mixed_precision_layers
+
+    @property
+    def model_needs_rebuild(self) -> bool:
+        """bool: ``True`` if mixed precision policy has changed so model needs to be rebuilt
+        otherwise ``False`` """
+        return self._rebuild_model
 
     def _new_session_id(self) -> int:
         """ Generate a new session id. Returns 1 if this is a new model, or the last session id + 1
@@ -613,6 +633,12 @@ class State():
         self._iterations += 1
         self._sessions[self._session_id]["iterations"] += 1
 
+    def add_mixed_precision_layers(self, layers: List[str]) -> None:
+        """ Add the list of model's layers that are compatible for mixed precision to the
+        state dictionary """
+        logger.debug("Storing mixed precision layers: %s", layers)
+        self._mixed_precision_layers = layers
+
     def _load(self, config_changeable_items: dict) -> None:
         """ Load a state file and set the serialized values to the class instance.
 
@@ -633,6 +659,7 @@ class State():
         self._sessions = state.get("sessions", {})
         self._lowest_avg_loss = state.get("lowest_avg_loss", {})
         self._iterations = state.get("iterations", 0)
+        self._mixed_precision_layers = state.get("mixed_precision_layers", [])
         self._config = state.get("config", {})
         logger.debug("Loaded state: %s", state)
         self._replace_config(config_changeable_items)
@@ -644,6 +671,7 @@ class State():
                  "sessions": self._sessions,
                  "lowest_avg_loss": self._lowest_avg_loss,
                  "iterations": self._iterations,
+                 "mixed_precision_layers": self._mixed_precision_layers,
                  "config": _CONFIG}
         self._serializer.save(self._filename, state)
         logger.debug("Saved State")
@@ -759,12 +787,15 @@ class State():
     def _update_changed_config_items(self, config_changeable_items: dict) -> None:
         """ Update any parameters which are not fixed and have been changed.
 
+        Set the :attr:`model_needs_rebuild` to ``True`` if mixed precision state has changed
+
         Parameters
         ----------
         config_changeable_items: dict
             Configuration options that can be altered when resuming a model, and their current
             values
         """
+        rebuild_tasks = ["mixed_precision"]
         if not config_changeable_items:
             logger.debug("No changeable parameters have been updated")
             return
@@ -774,6 +805,7 @@ class State():
                 continue
             self._config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
+            self._rebuild_model = not self._rebuild_model and key in rebuild_tasks
 
 
 class _Inference():  # pylint:disable=too-few-public-methods
