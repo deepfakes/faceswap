@@ -641,6 +641,9 @@ class Settings():
         """
         logger.info("Storing Mixed Precision compatible layers. Please ignore any following "
                     "warnings about using mixed precision.")
+        if get_backend() == "amd":
+            logger.debug("Mixed Precision not supported for AMD. Returning empty list")
+            return []
         self._set_keras_mixed_precision(True)
         model = build_func(inputs)
         layers = self._get_mixed_precision_layers(model.get_config()["layers"])
