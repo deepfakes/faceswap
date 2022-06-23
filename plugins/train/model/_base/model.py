@@ -124,6 +124,7 @@ class ModelBase():
                                 "Mask to use. Please select a mask or disable Penalized Mask "
                                 "Loss.")
 
+        self._mixed_precision = self.config["mixed_precision"] and get_backend() != "amd"
         self._io = IO(self, model_dir, self._is_predict, self.config["save_optimizer"])
         self._check_multiple_models()
 
@@ -132,7 +133,7 @@ class ModelBase():
                             self._config_changeable_items,
                             False if self._is_predict else self._args.no_logs)
         self._settings = Settings(self._args,
-                                  self.config["mixed_precision"],
+                                  self._mixed_precision,
                                   self.config["allow_growth"],
                                   self._is_predict)
         self._loss = Loss(self.config)
@@ -435,7 +436,7 @@ class ModelBase():
                               self.config["learning_rate"],
                               self.config.get("clipnorm", False),
                               10 ** int(self.config["epsilon_exponent"]),
-                              self.config.get("mixed_precision", False),
+                              self._mixed_precision,
                               self._args).optimizer
         if self._settings.use_mixed_precision:
             optimizer = self._settings.loss_scale_optimizer(optimizer)

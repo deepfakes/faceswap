@@ -871,6 +871,7 @@ class LossWrapper():  # pylint:disable=too-few-public-methods
     single output and masking.
     """
     def __init__(self) -> None:
+        self.__name__ = "LossWrapper"
         logger.debug("Initializing: %s", self.__class__.__name__)
         self._loss_functions: List[Callable] = []
         self._loss_weights: List[float] = []

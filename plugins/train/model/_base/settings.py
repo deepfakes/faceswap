@@ -413,7 +413,7 @@ class Settings():
                      allow_growth, is_predict)
         self._set_tf_settings(allow_growth, arguments.exclude_gpus)
 
-        use_mixed_precision = not is_predict and mixed_precision and get_backend() == "nvidia"
+        use_mixed_precision = not is_predict and mixed_precision
         self._use_mixed_precision = self._set_keras_mixed_precision(use_mixed_precision)
         if self._use_mixed_precision:
             logger.info("Enabling Mixed Precision Training.")
@@ -507,9 +507,9 @@ class Settings():
             ``True`` if mixed precision has been enabled otherwise ``False``
         """
         logger.debug("use_mixed_precision: %s", use_mixed_precision)
-        if not use_mixed_precision and get_backend() == "amd":
-            logger.debug("Not enabling 'mixed_precision' (backend: %s, use_mixed_precision: %s)",
-                         get_backend(), use_mixed_precision)
+        if get_backend() == "amd":
+            logger.debug("No action to perform for 'mixed_precision' on backend '%s': "
+                         "use_mixed_precision: %s)", get_backend(), use_mixed_precision)
             return False
 
         if not use_mixed_precision:
@@ -676,10 +676,8 @@ class Settings():
         :class:`keras.models.Model`
             The original model with the datatype updated
         """
-        config = model.get_config()
-        if not self.use_mixed_precision and not state.mixed_precision_layers:
-            # Switched to Full Precision, get compatible layers from model if not already stored
-            state.add_mixed_precision_layers(self._get_mixed_precision_layers(config["layers"]))
+        if get_backend() == "amd":  # Mixed precision not supported on amd
+            return model
 
         if self.use_mixed_precision and not state.mixed_precision_layers:
             # Switching to mixed precision on a model which was started in FP32 prior to the
@@ -688,6 +686,12 @@ class Settings():
             logger.warning("Switching from Full Precision to Mixed Precision is not supported on "
                            "older model files. Reverting to Full Precision.")
             return model
+
+        config = model.get_config()
+
+        if not self.use_mixed_precision and not state.mixed_precision_layers:
+            # Switched to Full Precision, get compatible layers from model if not already stored
+            state.add_mixed_precision_layers(self._get_mixed_precision_layers(config["layers"]))
 
         self._switch_precision(config["layers"], state.mixed_precision_layers)
 
