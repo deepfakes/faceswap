@@ -172,14 +172,18 @@ class IO():
         logger.info("Loaded model from disk: '%s'", self._filename)
         return model
 
-    def save(self, is_exit: bool = False) -> None:
+    def save(self, is_exit: bool = False, force_save_optimizer: bool = False) -> None:
         """ Backup and save the model and state file.
 
         Parameters
         ----------
         is_exit: bool, optional
-            ``True`` if the save request has come from an exit process request otherwise ``False``
+            ``True`` if the save request has come from an exit process request otherwise ``False``.
             Default: ``False``
+
+        force_save_optimizer: bool, optional
+            ``True`` to force saving the optimizer weights with the model, otherwise ``False``.
+            Default:``False``
 
         Notes
         -----
@@ -196,12 +200,14 @@ class IO():
             # pylint:disable=protected-access
             self._backup.backup_model(self._plugin.state._filename)
 
-        include_optimizer = self._save_optimizer == "always" or (self._save_optimizer == "exit"
-                                                                 and is_exit)
+        include_optimizer = (force_save_optimizer or
+                             self._save_optimizer == "always" or
+                             (self._save_optimizer == "exit" and is_exit))
+
         self._plugin.model.save(self._filename, include_optimizer=include_optimizer)
         self._plugin.state.save()
 
-        msg = "[Saved models]"
+        msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved models]"
         if save_averages:
             lossmsg = [f"face_{side}: {avg:.5f}"
                        for side, avg in zip(("a", "b"), save_averages)]
@@ -266,6 +272,7 @@ class IO():
         the latest save, hence iteration being reduced by 1.
         """
         logger.debug("Performing snapshot. Iterations: %s", self._plugin.iterations)
+        self.save(force_save_optimizer=True)
         self._backup.snapshot_models(self._plugin.iterations - 1)
         logger.debug("Performed snapshot")
 
