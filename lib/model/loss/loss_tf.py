@@ -883,7 +883,7 @@ class MSSIMLoss():  # pylint:disable=too-few-public-methods
         return size
 
 
-class LossWrapper():
+class LossWrapper(tf.keras.losses.Loss):
     """ A wrapper class for multiple keras losses to enable multiple masked weighted loss
     functions on a single output.
 
@@ -905,6 +905,7 @@ class LossWrapper():
     """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
+        super().__init__(name="LossWrapper")
         self._loss_functions: List[compile_utils.LossesContainer] = []
         self._loss_weights: List[float] = []
         self._mask_channels: List[int] = []
@@ -933,7 +934,7 @@ class LossWrapper():
         self._loss_weights.append(weight)
         self._mask_channels.append(mask_channel)
 
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+    def call(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """ Call the sub loss functions for the loss wrapper.
 
         Loss is returned as the weighted sum of the chosen losses.

@@ -80,11 +80,20 @@ class IO():
     is_predict: bool
         ``True`` if the model is being loaded for inference. ``False`` if the model is being loaded
         for training.
+    save_optimizer: ["never", "always", "exit"]
+        When to save the optimizer weights. `"never"` never saves the optimizer weights. `"always"`
+        always saves the optimizer weights. `"exit"` only saves the optimizer weights on an exit
+        request.
     """
-    def __init__(self, plugin: "ModelBase", model_dir: str, is_predict: bool) -> None:
+    def __init__(self,
+                 plugin: "ModelBase",
+                 model_dir: str,
+                 is_predict: bool,
+                 save_optimizer: Literal["never", "always", "exit"]) -> None:
         self._plugin = plugin
         self._is_predict = is_predict
         self._model_dir = model_dir
+        self._save_optimizer = save_optimizer
         self._history: List[List[float]] = [[], []]  # Loss histories per save iteration
         self._backup = Backup(self._model_dir, self._plugin.name)
 
@@ -163,8 +172,14 @@ class IO():
         logger.info("Loaded model from disk: '%s'", self._filename)
         return model
 
-    def save(self) -> None:
+    def save(self, is_exit: bool = False) -> None:
         """ Backup and save the model and state file.
+
+        Parameters
+        ----------
+        is_exit: bool, optional
+            ``True`` if the save request has come from an exit process request otherwise ``False``
+            Default: ``False``
 
         Notes
         -----
@@ -181,7 +196,9 @@ class IO():
             # pylint:disable=protected-access
             self._backup.backup_model(self._plugin.state._filename)
 
-        self._plugin.model.save(self._filename, include_optimizer=False)
+        include_optimizer = self._save_optimizer == "always" or (self._save_optimizer == "exit"
+                                                                 and is_exit)
+        self._plugin.model.save(self._filename, include_optimizer=include_optimizer)
         self._plugin.state.save()
 
         msg = "[Saved models]"

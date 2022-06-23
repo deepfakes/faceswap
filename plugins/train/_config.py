@@ -230,6 +230,29 @@ class Config(FaceswapConfig):
                  "to 0.001 (1e-3).")
         self.add_item(
             section=section,
+            title="save_optimizer",
+            datatype=str,
+            group="optimizer",
+            default="exit",
+            fixed=False,
+            gui_radio=True,
+            choices=["never", "always", "exit"],
+            info="When to save the Optimizer Weights. Saving the optimizer weights is not "
+                 "necessary and will increase the model file size 3x (and by extension the amount "
+                 "of time it takes to save the model). However, it can be useful to save these "
+                 "weights if you want to guarantee that a resumed model carries off exactly from "
+                 "where it left off, rather than spending a few hundred iterations catching up."
+                 "\n\t never - Don't save optimizer weights."
+                 "\n\t always - Save the optimizer weights at every save iteration. Model saving "
+                 "will take longer, due to the increased file size, but you will always have the "
+                 "last saved optimizer state in your model file."
+                 "\n\t exit - Only save the optimizer weights when explicitly terminating a "
+                 "model. This can be when the model is actively stopped or when the target "
+                 "iterations are met. Note: If the training session ends because of another "
+                 "reason (e.g. power outage, Out of Memory Error, NaN detected) then the "
+                 "optimizer weights will NOT be saved.")
+        self.add_item(
+            section=section,
             title="reflect_padding",
             datatype=bool,
             default=False,

@@ -243,7 +243,7 @@ class Train():  # pylint:disable=too-few-public-methods
         except KeyboardInterrupt:
             try:
                 logger.debug("Keyboard Interrupt Caught. Saving Weights and exiting")
-                model.save()
+                model.save(on_exit=True)
                 trainer.clear_tensorboard()
             except KeyboardInterrupt:
                 logger.info("Saving model weights has been cancelled!")
@@ -337,24 +337,18 @@ class Train():  # pylint:disable=too-few-public-methods
 
             if save_iteration:
                 logger.debug("Save Iteration: (iteration: %s", iteration)
-                model.save()
+                model.save(is_exit=False)
             elif self._save_now:
                 logger.debug("Save Requested: (iteration: %s", iteration)
-                model.save()
+                model.save(is_exit=False)
                 self._save_now = False
         logger.debug("Training cycle complete")
-        model.save()
+        model.save(is_exit=True)
         trainer.clear_tensorboard()
         self._stop = True
 
-    def _monitor(self, thread):
-        """ Monitor the background :func:`_training` thread for key presses and errors.
-
-        Returns
-        -------
-        bool
-            ``True`` if there has been an error in the background thread otherwise ``False``
-        """
+    def _output_startup_info(self):
+        """ Print the startup information to the console. """
         logger.debug("Launching Monitor")
         logger.info("===================================================")
         logger.info("  Starting")
@@ -366,56 +360,6 @@ class Train():  # pylint:disable=too-few-public-methods
         if not self._args.redirect_gui and not self._args.colab and sys.stdout.isatty():
             logger.info("  Press 'S' to save model weights immediately")
         logger.info("===================================================")
-
-        keypress = KBHit(is_gui=self._args.redirect_gui)
-        window_created = False
-        err = False
-        while True:
-            try:
-                if self._args.preview:
-                    with self._lock:
-                        for name, image in self._preview_buffer.items():
-                            if not window_created:
-                                self._create_resizable_window(name, image.shape)
-                            cv2.imshow(name, image)  # pylint: disable=no-member
-                        if not window_created:
-                            window_created = bool(self._preview_buffer)
-                    cv_key = cv2.waitKey(1000)  # pylint: disable=no-member
-                else:
-                    cv_key = None
-
-                if thread.has_error:
-                    logger.debug("Thread error detected")
-                    err = True
-                    break
-                if self._stop:
-                    logger.debug("Stop received")
-                    break
-
-                # Preview Monitor
-                if not self._preview_monitor(cv_key):
-                    break
-
-                # Console Monitor
-                if keypress.kbhit():
-                    console_key = keypress.getch()
-                    if console_key in ("\n", "\r"):
-                        logger.debug("Exit requested")
-                        break
-                    if console_key in ("s", "S"):
-                        logger.info("Save requested")
-                        self._save_now = True
-
-                # GUI Preview trigger update monitor
-                self._process_gui_triggers()
-
-                sleep(1)
-            except KeyboardInterrupt:
-                logger.debug("Keyboard Interrupt received")
-                break
-        keypress.set_normal_term()
-        logger.debug("Closed Monitor")
-        return err
 
     @classmethod
     def _create_resizable_window(cls, name: str, image_shape: tuple) -> None:
@@ -433,7 +377,52 @@ class Train():  # pylint:disable=too-few-public-methods
         cv2.namedWindow(name, cv2.WINDOW_GUI_EXPANDED)
         cv2.resizeWindow(name, width, height)
 
-    def _preview_monitor(self, key_press):
+    def _do_preview(self, window_created: bool) -> bool:
+        """" Display an image preview in a resizable window
+
+        Parameters
+        ----------
+        window_created: bool
+            ``True`` if a preview window has been created otherwise ``False``
+
+        Returns
+        -------
+        bool
+            ``True`` if a preview window has been created otherwise ``False``
+        """
+        with self._lock:
+            for name, image in self._preview_buffer.items():
+                if not window_created:
+                    self._create_resizable_window(name, image.shape)
+                cv2.imshow(name, image)  # pylint: disable=no-member
+            window_created = bool(self._preview_buffer) if not window_created else window_created
+        return window_created
+
+    def _check_keypress(self, keypress: KBHit) -> bool:
+        """ Check if a keypress has been detected.
+
+        Parameters
+        ----------
+        keypress: :class:`lib.keypress.KBHit`
+            The keypress monitor
+
+        Returns
+        -------
+        bool
+            ``True`` if an exit keypress has been detected otherwise ``False``
+        """
+        retval = False
+        if keypress.kbhit():
+            console_key = keypress.getch()
+            if console_key in ("\n", "\r"):
+                logger.debug("Exit requested")
+                retval = True
+            if console_key in ("s", "S"):
+                logger.info("Save requested")
+                self._save_now = True
+        return retval
+
+    def _preview_monitor(self, key_press: str) -> bool:
         """ Monitors keyboard presses on the pop-up OpenCV Preview Window.
 
         Parameters
@@ -464,12 +453,12 @@ class Train():  # pylint:disable=too-few-public-methods
             self._refresh_preview = True
         if key_press == ord("m"):
             print("\n")
-            logger.verbose("Toggle mask display requested")
+            logger.verbose("Toggle mask display requested")  # type:ignore
             self._toggle_preview_mask = True
 
         return True
 
-    def _process_gui_triggers(self):
+    def _process_gui_triggers(self) -> None:
         """ Check whether a file drop has occurred from the GUI to manually update the preview. """
         if not self._args.redirect_gui:
             return
@@ -488,6 +477,58 @@ class Train():  # pylint:disable=too-few-public-methods
                     logger.info("Refresh preview requested")
 
                 setattr(self, parent_flags[trigger], True)
+
+    def _monitor(self, thread: MultiThread) -> bool:
+        """ Monitor the background :func:`_training` thread for key presses and errors.
+
+        Parameters
+        ----------
+        thread: :class:~`lib.multithreading.MultiThread`
+            The thread containing the training loop
+
+        Returns
+        -------
+        bool
+            ``True`` if there has been an error in the background thread otherwise ``False``
+        """
+        self._output_startup_info()
+        keypress = KBHit(is_gui=self._args.redirect_gui)
+        window_created = False
+        err = False
+        while True:
+            try:
+                if self._args.preview:
+                    self._do_preview(window_created)
+                    cv_key = cv2.waitKey(1000)  # pylint: disable=no-member
+                else:
+                    cv_key = None
+
+                if thread.has_error:
+                    logger.debug("Thread error detected")
+                    err = True
+                    break
+                if self._stop:
+                    logger.debug("Stop received")
+                    break
+
+                # Preview Monitor
+                if not self._preview_monitor(cv_key):
+                    break
+
+                # Console Monitor
+                if self._check_keypress(keypress):
+                    break  # Exit requested
+
+                # GUI Preview trigger update monitor
+                self._process_gui_triggers()
+
+                sleep(1)
+            except KeyboardInterrupt:
+                logger.debug("Keyboard Interrupt received")
+                break
+        keypress.set_normal_term()
+        logger.debug("Closed Monitor")
+        return err
 
     def _show(self, image, name=""):
         """ Generate the preview and write preview file output.

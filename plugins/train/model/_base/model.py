@@ -124,7 +124,7 @@ class ModelBase():
                                 "Mask to use. Please select a mask or disable Penalized Mask "
                                 "Loss.")
 
-        self._io = IO(self, model_dir, self._is_predict)
+        self._io = IO(self, model_dir, self._is_predict, self.config["save_optimizer"])
         self._check_multiple_models()
 
         self._state = State(model_dir,
@@ -404,14 +404,20 @@ class ModelBase():
             model.summary(line_length=100, print_fn=print_fn)
         parent.summary(line_length=100, print_fn=print_fn)
 
-    def save(self) -> None:
+    def save(self, is_exit: bool = False) -> None:
         """ Save the model to disk.
 
         Saves the serialized model, with weights, to the folder location specified when
         initializing the plugin. If loss has dropped on both sides of the model, then
         a backup is taken.
+
+        Parameters
+        ----------
+        is_exit: bool, optional
+            ``True`` if the save request has come from an exit process request otherwise ``False``
+            Default: ``False``
         """
-        self._io.save()  # pylint:disable=protected-access
+        self._io.save(is_exit=is_exit)
 
     def snapshot(self) -> None:
         """ Creates a snapshot of the model folder to the models parent folder, with the number
