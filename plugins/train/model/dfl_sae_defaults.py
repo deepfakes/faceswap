@@ -44,74 +44,59 @@
 _HELPTEXT = "DFL SAE Model (Adapted from https://github.com/iperov/DeepFaceLab)"
 
 
-_DEFAULTS = {
-    "input_size": {
-        "default": 128,
-        "info": "Resolution (in pixels) of the input image to train on.\n"
-                "BE AWARE Larger resolution will dramatically increase VRAM requirements.\n"
-                "\nMust be divisible by 16.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 256),
-        "group": "size",
-        "fixed": True,
-    },
-    "clipnorm": {
-        "default": True,
-        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
-                "the expense of VRAM.",
-        "datatype": bool,
-        "fixed": False,
-        "group": "settings",
-    },
-    "architecture": {
-        "default": "df",
-        "info": "Model architecture:"
-                "\n\t'df': Keeps the faces more natural."
-                "\n\t'liae': Can help fix overly different face shapes.",
-        "datatype": str,
-        "choices": ["df", "liae"],
-        "gui_radio": True,
-        "fixed": True,
-        "group": "network",
-    },
-    "autoencoder_dims": {
-        "default": 0,
-        "info": "Face information is stored in AutoEncoder dimensions. If there are not enough "
-                "dimensions then certain facial features may not be recognized."
-                "\nHigher number of dimensions are better, but require more VRAM."
-                "\nSet to 0 to use the architecture defaults (256 for liae, 512 for df).",
-        "datatype": int,
-        "rounding": 32,
-        "min_max": (0, 1024),
-        "fixed": True,
-        "group": "network",
-    },
-    "encoder_dims": {
-        "default": 42,
-        "info": "Encoder dimensions per channel. Higher number of encoder dimensions will help "
-                "the model to recognize more facial features, but will require more VRAM.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (21, 85),
-        "fixed": True,
-        "group": "network",
-    },
-    "decoder_dims": {
-        "default": 21,
-        "info": "Decoder dimensions per channel. Higher number of decoder dimensions will help "
-                "the model to improve details, but will require more VRAM.",
-        "datatype": int,
-        "rounding": 1,
-        "min_max": (10, 85),
-        "fixed": True,
-        "group": "network",
-    },
-    "multiscale_decoder": {
-        "default": False,
-        "info": "Multiscale decoder can help to obtain better details.",
-        "datatype": bool,
-        "fixed": True,
-        "group": "network",
-    },
-}
+_DEFAULTS = dict(
+    input_size=dict(
+        default=128,
+        info="Resolution (in pixels) of the input image to train on.\n"
+             "BE AWARE Larger resolution will dramatically increase VRAM requirements.\n"
+             "\nMust be divisible by 16.",
+        datatype=int,
+        rounding=16,
+        min_max=(64, 256),
+        group="size",
+        fixed=True),
+    architecture=dict(
+        default="df",
+        info="Model architecture:"
+             "\n\t'df': Keeps the faces more natural."
+             "\n\t'liae': Can help fix overly different face shapes.",
+        datatype=str,
+        choices=["df", "liae"],
+        gui_radio=True,
+        fixed=True,
+        group="network"),
+    autoencoder_dims=dict(
+        default=0,
+        info="Face information is stored in AutoEncoder dimensions. If there are not enough "
+             "dimensions then certain facial features may not be recognized."
+             "\nHigher number of dimensions are better, but require more VRAM."
+             "\nSet to 0 to use the architecture defaults (256 for liae, 512 for df).",
+        datatype=int,
+        rounding=32,
+        min_max=(0, 1024),
+        fixed=True,
+        group="network"),
+    encoder_dims=dict(
+        default=42,
+        info="Encoder dimensions per channel. Higher number of encoder dimensions will help "
+             "the model to recognize more facial features, but will require more VRAM.",
+        datatype=int,
+        rounding=1,
+        min_max=(21, 85),
+        fixed=True,
+        group="network"),
+    decoder_dims=dict(
+        default=21,
+        info="Decoder dimensions per channel. Higher number of decoder dimensions will help "
+             "the model to improve details, but will require more VRAM.",
+        datatype=int,
+        rounding=1,
+        min_max=(10, 85),
+        fixed=True,
+        group="network"),
+    multiscale_decoder=dict(
+        default=False,
+        info="Multiscale decoder can help to obtain better details.",
+        datatype=bool,
+        fixed=True,
+        group="network"))

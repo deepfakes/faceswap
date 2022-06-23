@@ -31,6 +31,7 @@ else:
     from tensorflow import keras
     from tensorflow.keras import losses as k_losses  # pylint:disable=import-error
     from tensorflow.keras import backend as K  # pylint:disable=import-error
+    from lib.model.autoclip import AutoClipper  # pylint:disable=ungrouped-imports
 
 if get_tf_version() < 2.4:
     import tensorflow.keras.mixed_precision.experimental as mixedprecision  # noqa pylint:disable=import-error,no-name-in-module
@@ -294,26 +295,19 @@ class Optimizer():  # pylint:disable=too-few-public-methods
         The selected optimizer name for the plugin
     learning_rate: float
         The selected learning rate to use
-    clipnorm: bool
-        Whether to clip gradients to avoid exploding/vanishing gradients
+    autoclip: bool
+        ``True`` if AutoClip should be enabled otherwise ``False``
     epsilon: float
         The value to use for the epsilon of the optimizer
-    mixed_precision: bool
-        ``True`` if mixed precision training is to be enabled otherwise ``False``
-    arguments: :class:`argparse.Namespace`
-        The arguments that were passed to the train or convert process as generated from
-        Faceswap's command line arguments
     """
     def __init__(self,
                  optimizer: str,
                  learning_rate: float,
-                 clipnorm: bool,
-                 epsilon: float,
-                 mixed_precision: bool,
-                 arguments: "Namespace") -> None:
-        logger.debug("Initializing %s: (optimizer: %s, learning_rate: %s, clipnorm: %s, "
-                     "epsilon: %s, mixed_precision: %s, arguments: %s)", self.__class__.__name__,
-                     optimizer, learning_rate, clipnorm, epsilon, mixed_precision, arguments)
+                 autoclip: bool,
+                 epsilon: float) -> None:
+        logger.debug("Initializing %s: (optimizer: %s, learning_rate: %s, autoclip: %s, "
+                     ", epsilon: %s)", self.__class__.__name__, optimizer, learning_rate,
+                     autoclip, epsilon)
         valid_optimizers = {"adabelief": (optimizers.AdaBelief,
                                           dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
                             "adam": (optimizers.Adam,
@@ -323,7 +317,7 @@ class Optimizer():  # pylint:disable=too-few-public-methods
                             "rms-prop": (optimizers.RMSprop, dict(epsilon=epsilon))}
         self._optimizer, self._kwargs = valid_optimizers[optimizer]
 
-        self._configure(learning_rate, clipnorm, mixed_precision, arguments)
+        self._configure(learning_rate, autoclip)
         logger.verbose("Using %s optimizer", optimizer.title())  # type:ignore
         logger.debug("Initialized: %s", self.__class__.__name__)
 
@@ -334,22 +328,15 @@ class Optimizer():  # pylint:disable=too-few-public-methods
 
     def _configure(self,
                    learning_rate: float,
-                   clipnorm: bool,
-                   mixed_precision: bool,
-                   arguments: "Namespace") -> None:
+                   autoclip: bool) -> None:
         """ Configure the optimizer based on user settings.
 
         Parameters
         ----------
         learning_rate: float
             The selected learning rate to use
-        clipnorm: bool
-            Whether to clip gradients to avoid exploding/vanishing gradients
-        mixed_precision: bool
-            ``True`` if mixed precision training is to be enabled otherwise ``False``
-        arguments: :class:`argparse.Namespace`
-            The arguments that were passed to the train or convert process as generated from
-            Faceswap's command line arguments
+        autoclip: bool
+            ``True`` if AutoClip should be enabled otherwise ``False``
 
         Notes
         -----
@@ -363,20 +350,11 @@ class Optimizer():  # pylint:disable=too-few-public-methods
         lr_key = "lr" if get_backend() == "amd" else "learning_rate"
         self._kwargs[lr_key] = learning_rate
 
-        if clipnorm and (arguments.distributed or mixed_precision):
-            logger.warning("Clipnorm has been selected, but is unsupported when using distributed "
-                           "or mixed_precision training, so has been disabled. If you wish to "
-                           "enable clipnorm, then you must disable these other options.")
-            clipnorm = False
-        if clipnorm and get_backend() == "amd":
-            # TODO add clipnorm in for plaidML when it is fixed upstream. Still not fixed in
-            # release 0.7.0.
-            logger.warning("Due to a bug in plaidML, clipnorm cannot be used on AMD backends so "
-                           "has been disabled")
-            clipnorm = False
-        if clipnorm:
-            self._kwargs["clipnorm"] = 1.0
+        if not autoclip:
+            return
 
+        logger.info("Enabling AutoClip")
+        self._kwargs["gradient_transformers"] = [AutoClipper(10, history_size=10000)]
         logger.debug("optimizer kwargs: %s", self._kwargs)
 
 

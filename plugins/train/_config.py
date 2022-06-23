@@ -253,6 +253,19 @@ class Config(FaceswapConfig):
                  "optimizer weights will NOT be saved.")
         self.add_item(
             section=section,
+            title="autoclip",
+            datatype=bool,
+            default=False,
+            info="[Nvidia Only] Apply AutoClipping to the gradients. AutoClip analyzes the "
+                 "gradient weights and adjusts the normalization value dynamically to fit the "
+                 "data. Can help prevent NaNs and improve model optimization at the expense of "
+                 "VRAM. Ref: AutoClip: Adaptive Gradient Clipping for Source Separation Networks "
+                 "https://arxiv.org/abs/2007.14469",
+            fixed=False,
+            gui_radio=True,
+            group="optimizer")
+        self.add_item(
+            section=section,
             title="reflect_padding",
             datatype=bool,
             default=False,

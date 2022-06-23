@@ -47,90 +47,70 @@ _HELPTEXT = (
 )
 
 
-_DEFAULTS = {
-    "input_size": {
-        "default": 128,
-        "info": "Resolution (in pixels) of the image to train on.\n"
-                "BE AWARE Larger resolution will dramatically increaseVRAM requirements.\n"
-                "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
-                "NB: Your faceset must be at least 1.6x larger than your required input "
-                "size.\n(e.g. 160 is the maximum input size for a 256x256 faceset).",
-        "datatype": int,
-        "rounding": 64,
-        "min_max": (64, 512),
-        "choices": [],
-        "gui_radio": False,
-        "group": "size",
-        "fixed": True,
-    },
-    "lowmem": {
-        "default": False,
-        "info": "Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
-                "NB: Models with a changed lowmem mode are not compatible with each other.\n"
-                "NB: lowmem will override cutom nodes and complexity settings.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "group": "settings",
-        "fixed": True,
-    },
-    "clipnorm": {
-        "default": True,
-        "info": "Controls gradient clipping of the optimizer. Can prevent model corruption at "
-                "the expense of VRAM.",
-        "datatype": bool,
-        "rounding": None,
-        "min_max": None,
-        "choices": [],
-        "gui_radio": False,
-        "group": "settings",
-        "fixed": True,
-    },
-    "nodes": {
-        "default": 1024,
-        "info": "Number of nodes for decoder. Don't change this unless you know what you are "
-                "doing!",
-        "datatype": int,
-        "rounding": 64,
-        "min_max": (512, 4096),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "network",
-    },
-    "complexity_encoder": {
-        "default": 128,
-        "info": "Encoder Convolution Layer Complexity. sensible ranges: 128 to 160.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "network",
-    },
-    "complexity_decoder_a": {
-        "default": 384,
-        "info": "Decoder A Complexity.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "network",
-    },
-    "complexity_decoder_b": {
-        "default": 512,
-        "info": "Decoder B Complexity.",
-        "datatype": int,
-        "rounding": 16,
-        "min_max": (64, 1024),
-        "choices": [],
-        "gui_radio": False,
-        "fixed": True,
-        "group": "network",
-    },
-}
+_DEFAULTS = dict(
+    input_size=dict(
+        default=128,
+        info="Resolution (in pixels) of the image to train on.\n"
+             "BE AWARE Larger resolution will dramatically increaseVRAM requirements.\n"
+             "Make sure your resolution is divisible by 64 (e.g. 64, 128, 256 etc.).\n"
+             "NB: Your faceset must be at least 1.6x larger than your required input "
+             "size.\n(e.g. 160 is the maximum input size for a 256x256 faceset).",
+        datatype=int,
+        rounding=64,
+        min_max=(64, 512),
+        choices=[],
+        gui_radio=False,
+        group="size",
+        fixed=True),
+    lowmem=dict(
+        default=False,
+        info="Lower memory mode. Set to 'True' if having issues with VRAM useage.\n"
+             "NB: Models with a changed lowmem mode are not compatible with each other.\n"
+             "NB: lowmem will override cutom nodes and complexity settings.",
+        datatype=bool,
+        rounding=None,
+        min_max=None,
+        choices=[],
+        gui_radio=False,
+        group="settings",
+        fixed=True),
+    nodes=dict(
+        default=1024,
+        info="Number of nodes for decoder. Don't change this unless you know what you are doing!",
+        datatype=int,
+        rounding=64,
+        min_max=(512, 4096),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+        group="network"),
+    complexity_encoder=dict(
+        default=128,
+        info="Encoder Convolution Layer Complexity. sensible ranges: 128 to 160.",
+        datatype=int,
+        rounding=16,
+        min_max=(64, 1024),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+        group="network"),
+    complexity_decoder_a=dict(
+        default=384,
+        info="Decoder A Complexity.",
+        datatype=int,
+        rounding=16,
+        min_max=(64, 1024),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+        group="network"),
+    complexity_decoder_b=dict(
+        default=512,
+        info="Decoder B Complexity.",
+        datatype=int,
+        rounding=16,
+        min_max=(64, 1024),
+        choices=[],
+        gui_radio=False,
+        fixed=True,
+        group="network"))

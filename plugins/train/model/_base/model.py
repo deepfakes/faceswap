@@ -432,12 +432,11 @@ class ModelBase():
         if self.state.model_needs_rebuild:
             self._model = self._settings.check_model_precision(self._model, self._state)
 
+        autoclip = get_backend() != "amd" and self.config["autoclip"]
         optimizer = Optimizer(self.config["optimizer"],
                               self.config["learning_rate"],
-                              self.config.get("clipnorm", False),
-                              10 ** int(self.config["epsilon_exponent"]),
-                              self._mixed_precision,
-                              self._args).optimizer
+                              autoclip,
+                              10 ** int(self.config["epsilon_exponent"])).optimizer
         if self._settings.use_mixed_precision:
             optimizer = self._settings.loss_scale_optimizer(optimizer)
         if get_backend() == "amd":
@@ -739,14 +738,18 @@ class State():
 
             * masks type - Replace removed masks 'dfl_full' and 'facehull' with `components` mask
 
+            * clipnorm - Only existed in 2 models (DFL-SAE + Unbalanced). Replaced with global
+            option autoclip
+
         Returns
         -------
         bool
             ``True`` if legacy items exist and state file has been updated, otherwise ``False``
         """
         logger.debug("Checking for legacy state file update")
-        priors = ["dssim_loss", "mask_type", "mask_type", "l2_reg_term"]
-        new_items = ["loss_function", "learn_mask", "mask_type", "loss_function_2"]
+        priors = ["dssim_loss", "mask_type", "mask_type", "l2_reg_term", "clipnorm"]
+        new_items = ["loss_function", "learn_mask", "mask_type", "loss_function_2",
+                     "autoclip"]
         updated = False
         for old, new in zip(priors, new_items):
             if old not in self._config:
@@ -787,6 +790,13 @@ class State():
                 del self._config[old]
                 updated = True
                 logger.info("Updated config from legacy 'l2_reg_term' to 'loss_function_2'")
+
+            # Replace clipnorm with correct gradient clipping type and value
+            if old == "clipnorm":
+                self._config[new] = self._config[old]
+                del self._config[old]
+                updated = True
+                logger.info("Updated config from legacy '%s' to '%s'", old, new)
 
         logger.debug("State file updated for legacy config: %s", updated)
         return updated
