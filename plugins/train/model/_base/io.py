@@ -272,7 +272,13 @@ class IO():
         the latest save, hence iteration being reduced by 1.
         """
         logger.debug("Performing snapshot. Iterations: %s", self._plugin.iterations)
-        self.save(force_save_optimizer=True)
+        # self.save(force_save_optimizer=True)
+        # TODO Re-enable saving optimizer state when h5 bug fixed:
+        # File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+        # File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+        # File "h5py/h5d.pyx", line 87, in h5py.h5d.create
+        # ValueError: Unable to create dataset (name already exists)
+
         self._backup.snapshot_models(self._plugin.iterations - 1)
         logger.debug("Performed snapshot")
 

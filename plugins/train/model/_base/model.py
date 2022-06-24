@@ -125,7 +125,14 @@ class ModelBase():
                                 "Loss.")
 
         self._mixed_precision = self.config["mixed_precision"] and get_backend() != "amd"
-        self._io = IO(self, model_dir, self._is_predict, self.config["save_optimizer"])
+        # self._io = IO(self, model_dir, self._is_predict, self.config["save_optimizer"])
+        # TODO - Re-enable saving of optimizer once this bug is fixed:
+        # File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+        # File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+        # File "h5py/h5d.pyx", line 87, in h5py.h5d.create
+        # ValueError: Unable to create dataset (name already exists)
+
+        self._io = IO(self, model_dir, self._is_predict, "never")
         self._check_multiple_models()
 
         self._state = State(model_dir,
