@@ -877,7 +877,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         """
         anodes = np.array(nodes, dtype="object")[..., :3]
         num_layers = anodes.shape[0]
-        anodes = anodes[self._output_idx] if num_layers == 2 else nodes[0]
+        anodes = anodes[self._output_idx] if num_layers == 2 else anodes[0]
         retval = [(node[0], node[2]) for node in anodes]
         return retval
 
