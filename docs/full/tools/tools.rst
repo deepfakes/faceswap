@@ -30,6 +30,14 @@ mask module
    :undoc-members:
    :show-inheritance:
 
+model module
+============
+
+.. automodule:: tools.model.model
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 preview module
 ===============
 

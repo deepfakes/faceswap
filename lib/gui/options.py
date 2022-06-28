@@ -212,7 +212,7 @@ class CliOptions():
 
     def gen_command_options(self, command):
         """ Yield each option for specified command """
-        for key, val in self.opts[command].items():
+        for key, val in self.opts.get(command, {}).items():
             if not isinstance(val, dict):
                 continue
             yield key, val

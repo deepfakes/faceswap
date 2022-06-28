@@ -1,5 +1,6 @@
+*************
 model package
-=============
+*************
 
 The Model Package handles interfacing with the neural network backend and holds custom objects.
 
@@ -7,7 +8,7 @@ The Model Package handles interfacing with the neural network backend and holds 
    :local:
 
 model.backup_restore module
----------------------------
+===========================
 
 .. automodule:: lib.model.backup_restore
    :members:
@@ -15,7 +16,7 @@ model.backup_restore module
    :show-inheritance:
 
 model.initializers module
--------------------------
+=========================
 
 .. rubric:: Module Summary
 
@@ -32,7 +33,7 @@ model.initializers module
    :show-inheritance:
 
 model.layers module
--------------------
+===================
 
 .. rubric:: Module Summary
 
@@ -52,7 +53,7 @@ model.layers module
    :show-inheritance:
 
 model.losses module
--------------------
+===================
 
 The losses listed here are generated from the docstrings in :mod:`lib.model.losses_tf`, however
 the functions are exactly the same for :mod:`lib.model.losses_plaid`. The correct loss module will
@@ -84,7 +85,7 @@ be imported as :mod:`lib.model.losses` depending on the backend in use.
    :show-inheritance:
 
 model.nets module
------------------
+=================
 
 .. rubric:: Module Summary
 
@@ -100,7 +101,7 @@ model.nets module
    :show-inheritance:
 
 model.nn_blocks module
-----------------------
+======================
 
 .. rubric:: Module Summary
 
@@ -122,7 +123,7 @@ model.nn_blocks module
    :show-inheritance:
 
 model.normalization module
---------------------------
+==========================
 
 .. rubric:: Module Summary
 
@@ -137,7 +138,7 @@ model.normalization module
    :show-inheritance:
 
 model.optimizers module
------------------------
+=======================
 
 The optimizers listed here are generated from the docstrings in :mod:`lib.model.optimizers_tf`, however
 the functions are excactly the same for :mod:`lib.model.optimizers_plaid`. The correct optimizers module will
@@ -156,10 +157,9 @@ be imported as :mod:`lib.model.optimizers` depending on the backend in use.
    :show-inheritance:
 
 model.session module
----------------------
+=====================
 
 .. automodule:: lib.model.session
    :members:
    :undoc-members:
    :show-inheritance:
-
