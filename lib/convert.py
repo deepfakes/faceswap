@@ -245,7 +245,7 @@ class Converter():
                            frame_size,
                            placeholder,
                            flags=cv2.WARP_INVERSE_MAP | interpolator,
-                           borderMode=cv2.BORDER_CONSTANT)
+                           borderMode=cv2.BORDER_TRANSPARENT)
 
         logger.trace("Got filename: '%s'. (placeholders: %s)",
                      predicted["filename"], placeholder.shape)
