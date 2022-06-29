@@ -90,7 +90,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             self._handle_import_error(msg)
         if backend == "amd" and tf_ver != amd_ver:
             msg = (f"The supported Tensorflow version for AMD cards is {amd_ver} but you have "
-                   "version {tf_ver} installed. Please install the correct version.")
+                   f"version {tf_ver} installed. Please install the correct version.")
             self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
