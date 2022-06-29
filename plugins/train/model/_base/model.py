@@ -293,7 +293,7 @@ class ModelBase():
             else:
                 self._validate_input_shape()
                 inputs = self._get_inputs()
-                if not self._settings.use_mixed_precision:
+                if not self._settings.use_mixed_precision and not is_summary:
                     # Store layer names which can be switched to mixed precision
                     self._state.add_mixed_precision_layers(
                         self._settings.get_mixed_precision_layers(self.build_model, inputs))
