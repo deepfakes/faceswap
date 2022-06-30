@@ -183,7 +183,6 @@ class TrainerBase():
         self._model.state.increment_iterations()
         logger.trace("Training one step: (iteration: %s)", self._model.iterations)
         do_preview = viewer is not None
-        do_timelapse = timelapse_kwargs is not None
         snapshot_interval = self._model.command_line_arguments.snapshot_interval
         do_snapshot = (snapshot_interval != 0 and
                        self._model.iterations - 1 >= snapshot_interval and
@@ -236,7 +235,7 @@ class TrainerBase():
                        "Training - 'S': Save Now. 'R': Refresh Preview. 'M': Toggle Mask. "
                        "'ENTER': Save and Quit")
 
-        if do_timelapse:
+        if timelapse_kwargs:
             self._timelapse.output_timelapse(timelapse_kwargs)
 
     def _log_tensorboard(self, loss):
