@@ -898,13 +898,6 @@ msgstr ""
 msgid "preview"
 msgstr "previsualización"
 
-#: lib/cli/args.py:1066
-msgid ""
-"Percentage amount to scale the preview by. 100%% is the model output size."
-msgstr ""
-"Cantidad porcentual para escalar la vista previa. 100%% es el tamaño de "
-"salida del modelo."
-
 #: lib/cli/args.py:1073
 msgid "Show training preview output. in a separate window."
 msgstr ""

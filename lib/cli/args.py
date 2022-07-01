@@ -9,6 +9,8 @@ import re
 import sys
 import textwrap
 
+from typing import Any, Dict, List, NoReturn, Optional
+
 from lib.utils import get_backend
 from lib.gpu_stats import GPUStats
 
@@ -28,9 +30,9 @@ _ = _LANG.gettext
 
 class FullHelpArgumentParser(argparse.ArgumentParser):
     """ Extends :class:`argparse.ArgumentParser` to output full help on bad arguments. """
-    def error(self, message):
+    def error(self, message: str) -> NoReturn:
         self.print_help(sys.stderr)
-        self.exit(2, "{}: error: {}\n".format(self.prog, message))
+        self.exit(2, f"{self.prog}: error: {message}\n")
 
 
 class SmartFormatter(argparse.HelpFormatter):
@@ -45,11 +47,15 @@ class SmartFormatter(argparse.HelpFormatter):
     Prefixing a new line within the help text with "L|" will turn that line into a list item in
     both the cli help text and the GUI.
     """
-    def __init__(self, prog, indent_increment=2, max_help_position=24, width=None):
+    def __init__(self,
+                 prog: str,
+                 indent_increment: int = 2,
+                 max_help_position: int = 24,
+                 width: Optional[int] = None) -> None:
         super().__init__(prog, indent_increment, max_help_position, width)
         self._whitespace_matcher_limited = re.compile(r'[ \r\f\v]+', re.ASCII)
 
-    def _split_lines(self, text, width):
+    def _split_lines(self, text: str, width: int) -> List[str]:
         """ Split the given text by the given display width.
 
         If the text is not prefixed with "R|" then the standard
@@ -62,18 +68,25 @@ class SmartFormatter(argparse.HelpFormatter):
             The help text that is to be formatted for display
         width: int
             The display width, in characters, for the help text
+
+        Returns
+        -------
+        list
+            A list of split strings
         """
         if text.startswith("R|"):
             text = self._whitespace_matcher_limited.sub(' ', text).strip()[2:]
-            output = list()
+            output = []
             for txt in text.splitlines():
                 indent = ""
                 if txt.startswith("L|"):
                     indent = "    "
-                    txt = "  - {}".format(txt[2:])
+                    txt = f"  - {txt[2:]}"
                 output.extend(textwrap.wrap(txt, width, subsequent_indent=indent))
             return output
-        return argparse.HelpFormatter._split_lines(self, text, width)
+        return argparse.HelpFormatter._split_lines(self,  # pylint: disable=protected-access
+                                                   text,
+                                                   width)
 
 
 class FaceSwapArgs():
@@ -94,7 +107,10 @@ class FaceSwapArgs():
     description: str, optional
         The description for the given command. Default: "default"
     """
-    def __init__(self, subparser, command, description="default"):
+    def __init__(self,
+                 subparser: argparse._SubParsersAction,
+                 command: str,
+                 description: str = "default") -> None:
         self.global_arguments = self._get_global_arguments()
         self.info = self.get_info()
         self.argument_list = self.get_argument_list()
@@ -108,7 +124,7 @@ class FaceSwapArgs():
         self.parser.set_defaults(func=script.execute_script)
 
     @staticmethod
-    def get_info():
+    def get_info() -> str:
         """ Returns the information text for the current command.
 
         This function should be overridden with the actual command help text for each
@@ -119,10 +135,10 @@ class FaceSwapArgs():
         str
             The information text for this command.
         """
-        return None
+        return ""
 
     @staticmethod
-    def get_argument_list():
+    def get_argument_list() -> List[Dict[str, Any]]:
         """ Returns the argument list for the current command.
 
         The argument list should be a list of dictionaries pertaining to each option for a command.
@@ -136,11 +152,11 @@ class FaceSwapArgs():
         list
             The list of command line options for the given command
         """
-        argument_list = []
+        argument_list: List[Dict[str, Any]] = []
         return argument_list
 
     @staticmethod
-    def get_optional_arguments():
+    def get_optional_arguments() -> List[Dict[str, Any]]:
         """ Returns the optional argument list for the current command.
 
         The optional arguments list is not always required, but is used when there are shared
@@ -151,11 +167,11 @@ class FaceSwapArgs():
         list
             The list of optional command line options for the given command
         """
-        argument_list = []
+        argument_list: List[Dict[str, Any]] = []
         return argument_list
 
     @staticmethod
-    def _get_global_arguments():
+    def _get_global_arguments() -> List[Dict[str, Any]]:
         """ Returns the global Arguments list that are required for ALL commands in Faceswap.
 
         This method should NOT be overridden.
@@ -165,7 +181,7 @@ class FaceSwapArgs():
         list
             The list of global command line options for all Faceswap commands.
         """
-        global_args = list()
+        global_args: List[Dict[str, Any]] = []
         if _GPUS:
             global_args.append(dict(
                 opts=("-X", "--exclude-gpus"),
@@ -220,15 +236,20 @@ class FaceSwapArgs():
         return global_args
 
     @staticmethod
-    def _create_parser(subparser, command, description):
+    def _create_parser(subparser: argparse._SubParsersAction,
+                       command: str,
+                       description: str) -> argparse.ArgumentParser:
         """ Create the parser for the selected command.
 
         Parameters
         ----------
+        subparser: :class:`argparse._SubParsersAction`
+            The subparser for the given command
         command: str
             The faceswap command that is to be executed
         description: str
             The description for the given command
+
 
         Returns
         -------
@@ -242,7 +263,7 @@ class FaceSwapArgs():
                                       formatter_class=SmartFormatter)
         return parser
 
-    def _add_arguments(self):
+    def _add_arguments(self) -> None:
         """ Parse the list of dictionaries containing the command line arguments and convert to
         argparse parser arguments. """
         options = self.global_arguments + self.argument_list + self.optional_arguments
@@ -251,7 +272,7 @@ class FaceSwapArgs():
             kwargs = {key: option[key] for key in option.keys() if key not in ("opts", "group")}
             self.parser.add_argument(*args, **kwargs)
 
-    def _process_suppressions(self):
+    def _process_suppressions(self) -> None:
         """ Certain options are only available for certain backends.
 
         Suppresses command line options that are not available for the running backend.
@@ -281,7 +302,7 @@ class ExtractConvertArgs(FaceSwapArgs):
     """
 
     @staticmethod
-    def get_argument_list():
+    def get_argument_list() -> List[Dict[str, Any]]:
         """ Returns the argument list for shared Extract and Convert arguments.
 
         Returns
@@ -289,7 +310,7 @@ class ExtractConvertArgs(FaceSwapArgs):
         list
             The list of command line options for the given Extract and Convert
         """
-        argument_list = list()
+        argument_list: List[Dict[str, Any]] = []
         argument_list.append(dict(
             opts=("-i", "--input-dir"),
             action=DirOrFileFullPaths,
@@ -329,7 +350,7 @@ class ExtractArgs(ExtractConvertArgs):
     """
 
     @staticmethod
-    def get_info():
+    def get_info() -> str:
         """ The information text for the Extract command.
 
         Returns
@@ -341,7 +362,7 @@ class ExtractArgs(ExtractConvertArgs):
                  "Extraction plugins can be configured in the 'Settings' Menu")
 
     @staticmethod
-    def get_optional_arguments():
+    def get_optional_arguments() -> List[Dict[str, Any]]:
         """ Returns the argument list unique to the Extract command.
 
         Returns
@@ -355,7 +376,7 @@ class ExtractArgs(ExtractConvertArgs):
             default_detector = "s3fd"
             default_aligner = "fan"
 
-        argument_list = []
+        argument_list: List[Dict[str, Any]] = []
         argument_list.append(dict(
             opts=("-D", "--detector"),
             action=Radio,
@@ -599,7 +620,7 @@ class ConvertArgs(ExtractConvertArgs):
     """
 
     @staticmethod
-    def get_info():
+    def get_info() -> str:
         """ The information text for the Convert command.
 
         Returns
@@ -611,7 +632,7 @@ class ConvertArgs(ExtractConvertArgs):
                  "Conversion plugins can be configured in the 'Settings' Menu")
 
     @staticmethod
-    def get_optional_arguments():
+    def get_optional_arguments() -> List[Dict[str, Any]]:
         """ Returns the argument list unique to the Convert command.
 
         Returns
@@ -620,7 +641,7 @@ class ConvertArgs(ExtractConvertArgs):
             The list of optional command line options for the Convert command
         """
 
-        argument_list = []
+        argument_list: List[Dict[str, Any]] = []
         argument_list.append(dict(
             opts=("-ref", "--reference-video"),
             action=FileFullPaths,
@@ -853,7 +874,7 @@ class TrainArgs(FaceSwapArgs):
     """ Creates the command line arguments for training. """
 
     @staticmethod
-    def get_info():
+    def get_info() -> str:
         """ The information text for the Train command.
 
         Returns
@@ -866,7 +887,7 @@ class TrainArgs(FaceSwapArgs):
                  "Model plugins can be configured in the 'Settings' Menu")
 
     @staticmethod
-    def get_argument_list():
+    def get_argument_list() -> List[Dict[str, Any]]:
         """ Returns the argument list for Train arguments.
 
         Returns
@@ -874,7 +895,7 @@ class TrainArgs(FaceSwapArgs):
         list
             The list of command line options for training
         """
-        argument_list = list()
+        argument_list: List[Dict[str, Any]] = []
         argument_list.append(dict(
             opts=("-A", "--input-A"),
             action=DirFullPaths,
@@ -1055,16 +1076,6 @@ class TrainArgs(FaceSwapArgs):
                    "the input folders are supplied but no output folder, it will default to your "
                    "model folder /timelapse/")))
         argument_list.append(dict(
-            opts=("-ps", "--preview-scale"),
-            action=Slider,
-            min_max=(25, 200),
-            rounding=25,
-            type=int,
-            dest="preview_scale",
-            default=100,
-            group=_("preview"),
-            help=_("Percentage amount to scale the preview by. 100%% is the model output size.")))
-        argument_list.append(dict(
             opts=("-p", "--preview"),
             action="store_true",
             dest="preview",
@@ -1131,7 +1142,7 @@ class GuiArgs(FaceSwapArgs):
     """ Creates the command line arguments for the GUI. """
 
     @staticmethod
-    def get_argument_list():
+    def get_argument_list() -> List[Dict[str, Any]]:
         """ Returns the argument list for GUI arguments.
 
         Returns
@@ -1139,7 +1150,7 @@ class GuiArgs(FaceSwapArgs):
         list
             The list of command line options for the GUI
         """
-        argument_list = []
+        argument_list: List[Dict[str, Any]] = []
         argument_list.append(dict(
             opts=("-d", "--debug"),
             action="store_true",

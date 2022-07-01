@@ -78,9 +78,7 @@ class TrainerBase():
         self._feeder = _Feeder(images, self._model, batch_size, self._config)
 
         self._tensorboard = self._set_tensorboard()
-        self._samples = _Samples(self._model,
-                                 self._model.coverage_ratio,
-                                 self._model.command_line_arguments.preview_scale / 100)
+        self._samples = _Samples(self._model, self._model.coverage_ratio)
         self._timelapse = _Timelapse(self._model,
                                      self._model.coverage_ratio,
                                      self._config.get("preview_images", 14),
@@ -232,8 +230,8 @@ class TrainerBase():
             samples = self._samples.show_sample()
             if samples is not None:
                 viewer(samples,
-                       "Training - 'S': Save Now. 'R': Refresh Preview. 'M': Toggle Mask. "
-                       "'ENTER': Save and Quit")
+                       "Training - 'S': Save Now. 'R': Refresh Preview. 'M': Toggle Mask. 'F': "
+                       "Toggle Screen Fit-Actual Size. 'ENTER': Save and Quit")
 
         if timelapse_kwargs:
             self._timelapse.output_timelapse(timelapse_kwargs)
@@ -605,8 +603,6 @@ class _Samples():  # pylint:disable=too-few-public-methods
         The selected model that will be running this trainer
     coverage_ratio: float
         Ratio of face to be cropped out of the training image.
-    scaling: float, optional
-        The amount to scale the final preview image by. Default: `1.0`
 
     Attributes
     ----------
@@ -615,14 +611,13 @@ class _Samples():  # pylint:disable=too-few-public-methods
         dictionary should contain 2 keys ("a" and "b") with the values being the training images
         for generating samples corresponding to each side.
     """
-    def __init__(self, model, coverage_ratio, scaling=1.0):
+    def __init__(self, model, coverage_ratio):
         logger.debug("Initializing %s: model: '%s', coverage_ratio: %s)",
                      self.__class__.__name__, model, coverage_ratio)
         self._model = model
         self._display_mask = model.config["learn_mask"] or model.config["penalized_mask_loss"]
         self.images = {}
         self._coverage_ratio = coverage_ratio
-        self._scaling = scaling
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def toggle_mask_display(self):
@@ -787,9 +782,6 @@ class _Samples():  # pylint:disable=too-few-public-methods
             images = self._compile_masked(images, samples[-1])
         images = [self._overlay_foreground(full.copy(), image) for image in images]
 
-        if self._scaling != 1.0:
-            new_size = int(images[0].shape[1] * self._scaling)
-            images = [self._resize_sample(side, image, new_size) for image in images]
         return images
 
     def _process_full(self, side, images, prediction_size, color):
