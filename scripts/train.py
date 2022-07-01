@@ -336,8 +336,15 @@ class Train():  # pylint:disable=too-few-public-methods
                 viewer = display_func
             else:
                 viewer = None
+
             timelapse = self._timelapse if save_iteration else {}
             trainer.train_one_step(viewer, timelapse)
+
+            if viewer is not None and not save_iteration:
+                # Spammy but required by GUI to know to update window
+                print("\n")
+                logger.info("[Preview Updated]")
+
             if self._stop:
                 logger.debug("Stop received. Terminating")
                 break
@@ -488,7 +495,7 @@ class Train():  # pylint:disable=too-few-public-methods
                 imgfile = os.path.join(scriptpath, "lib", "gui",
                                        ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
-                logger.debug("Generated preview for GUI: '%s'", img)
+                logger.debug("Generated preview for GUI: '%s'", imgfile)
             if self._args.preview:
                 logger.debug("Generating preview for display: '%s'", name)
                 self._preview.add_image(name, image)
@@ -505,37 +512,25 @@ class Preview():
     def __init__(self) -> None:
         self._lock = Lock()
         self._dpi: float = 0.0
-        self._toggle_mask: bool = False
-        self._full_size: bool = False
-        self._refresh: bool = False
-        self._save: bool = False
-        self._quit: bool = False
+        self._triggers: Dict[str, bool] = dict(toggle_mask=False,
+                                               full_size=False,
+                                               refresh=False,
+                                               save=False,
+                                               quit=False)
         self._needs_update: bool = False
         self._preview_buffer: Dict[str, np.ndarray] = {}
         self._images: Dict[str, Tuple[figure.Figure, Tuple[float, float]]] = {}
         self._resize_ids: List[Tuple[figure.Figure, int]] = []
-        self._callbacks = dict(f="_toggle_size",
-                               m="_toggle_mask",
-                               r="_refresh",
-                               s="_save",
-                               enter="_quit")
+        self._callbacks = dict(f="full_size",
+                               m="toggle_mask",
+                               r="refresh",
+                               s="save",
+                               enter="quit")
         self._reassign_keys()
 
-    @property
-    def _toggle_size(self) -> bool:
-        return self._full_size
-
-    @_toggle_size.setter
-    def _toggle_size(self, value: bool) -> None:  # pylint:disable=unused-argument
-        """ Toggle between actual size and screen-fit size.
-
-        Parameters
-        ----------
-        value: bool
-            Unused, but required for setter. The size will check the previous state and switch it
-            to the opposite state
-        """
-        self._full_size = not self._full_size
+    def _toggle_size(self) -> None:  # pylint:disable=unused-argument
+        """ Toggle between actual size and screen-fit size. """
+        self._triggers["full_size"] = not self._triggers["full_size"]
         self._set_resize_callback()
 
     @classmethod
@@ -547,32 +542,32 @@ class Preview():
 
     def should_toggle_mask(self) -> bool:
         """ Check whether the mask should be toggled and return the value. If ``True`` is returned
-        then resets :attr:`_toggle_mask` back to ``False``
+        then resets mask toggle back to ``False``
 
         Returns
         -------
         bool
             ``True`` if the mask should be toggled otherwise ``False``. """
         with self._lock:
-            retval = self._toggle_mask
+            retval = self._triggers["toggle_mask"]
             if retval:
                 logger.debug("Sending toggle mask")
-                self._toggle_mask = False
+                self._triggers["toggle_mask"] = False
         return retval
 
     def should_refresh(self) -> bool:
         """ Check whether the preview should be updated and return the value. If ``True`` is
-        returned then resets :attr:`_refresh` back to ``False``
+        returned then resets the refresh trigger back to ``False``
 
         Returns
         -------
         bool
             ``True`` if the preview should be refreshed otherwise ``False``. """
         with self._lock:
-            retval = self._refresh
+            retval = self._triggers["refresh"]
             if retval:
                 logger.debug("Sending should refresh")
-                self._refresh = False
+                self._triggers["refresh"] = False
             return retval
 
     def should_save(self) -> bool:
@@ -584,10 +579,10 @@ class Preview():
         bool
             ``True`` if a save has been requested otherwise ``False``. """
         with self._lock:
-            retval = self._save
+            retval = self._triggers["save"]
             if retval:
                 logger.debug("Sending should save")
-                self._save = False
+                self._triggers["save"] = False
         return retval
 
     def should_quit(self) -> bool:
@@ -598,24 +593,24 @@ class Preview():
         bool
             ``True`` if an exit request has been made otherwise ``False``. """
         with self._lock:
-            retval = self._quit
+            retval = self._triggers["quit"]
         if retval:
             logger.debug("Sending should stop")
         return retval
 
     def request_refresh(self) -> None:
         """ Handle a GUI trigger or a training thread trigger (after a mask toggle) request to set
-        the :attr:`_refresh` to ``True`` to request a refresh on the next pass of the
+        the refresh trigger to ``True`` to request a refresh on the next pass of the
         training loop. """
         with self._lock:
-            self._refresh = True
+            self._triggers["refresh"] = True
 
     def request_mask_toggle(self) -> None:
-        """ Handle a GUI trigger request to set the Set the :attr:`_toggle_mask` to ``True`` to
+        """ Handle a GUI trigger request to set the mask toggle to ``True`` to
         request a mask toggle on next pass of the training loop. """
         logger.verbose("Toggle mask display requested...")  # type:ignore
         with self._lock:
-            self._toggle_mask = True
+            self._triggers["toggle_mask"] = True
 
     def add_image(self, name: str, image: np.ndarray) -> None:
         """ Add a preview image to the preview buffer.
@@ -641,7 +636,7 @@ class Preview():
                     if (name not in self._images or  # new preview or preview was closed
                             not plt.fignum_exists(self._images[name][0].number)):
                         self._create_resizable_window(name, image.shape)
-                        if self._full_size:  # This can only be true if preview was closed
+                        if self._triggers["full_size"]:  # Can only be true if preview was closed
                             self._set_resize_callback()
                     plt.figure(name)
                     plt.imshow(image)
@@ -677,7 +672,7 @@ class Preview():
     def _set_resize_callback(self):
         """ Sets the resize callback if displaying preview at actual size or removes it if
         displaying at screen-fit size. """
-        if self._full_size:
+        if self._triggers["full_size"]:
             logger.debug("Setting resize callback for actual size display")
             for fig, size in self._images.values():
                 self._resize_ids.append((fig, fig.canvas.mpl_connect("resize_event",
@@ -713,7 +708,10 @@ class Preview():
             logger.info("Refresh preview requested...")
 
         with self._lock:
-            setattr(self, self._callbacks[key], True)
+            if key == "f":
+                self._toggle_size()
+            else:
+                self._triggers[self._callbacks[key]] = True
 
     def _on_resize(self,
                    event: backend_bases.ResizeEvent) -> None:  # noqa # pylint:disable=unused-argument
