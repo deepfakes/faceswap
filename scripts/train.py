@@ -526,7 +526,7 @@ class Preview():
                                r="refresh",
                                s="save",
                                enter="quit")
-        self._reassign_keys()
+        self._configure_matplotlib()
 
     def _toggle_size(self) -> None:  # pylint:disable=unused-argument
         """ Toggle between actual size and screen-fit size. """
@@ -534,11 +534,13 @@ class Preview():
         self._set_resize_callback()
 
     @classmethod
-    def _reassign_keys(cls):
-        """ Remove `F`, 'S' and 'R' from their default bindings. """
+    def _configure_matplotlib(cls):
+        """ Remove `F`, 'S' and 'R' from their default bindings and stop Matplotlib from stealing
+        focus """
         rcParams["keymap.fullscreen"] = [k for k in rcParams["keymap.fullscreen"] if k != "f"]
         rcParams["keymap.save"] = [k for k in rcParams["keymap.save"] if k != "s"]
         rcParams["keymap.home"] = [k for k in rcParams["keymap.home"] if k != "r"]
+        rcParams["figure.raise_window"] = False
 
     def should_toggle_mask(self) -> bool:
         """ Check whether the mask should be toggled and return the value. If ``True`` is returned
@@ -641,8 +643,8 @@ class Preview():
                     plt.figure(name)
                     plt.imshow(image)
                 self._needs_update = False
+            plt.show(block=False)
             logger.debug("preview updated")  # type: ignore
-        plt.show(block=False)
         plt.pause(0.1)
 
     def _create_resizable_window(self, name: str, image_shape: tuple) -> None:
