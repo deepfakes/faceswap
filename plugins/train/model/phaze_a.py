@@ -486,6 +486,12 @@ class Model(ModelBase):
         # There will only ever be 1 input. For inters: either inter out, or concatenate of inters
         # For g-block, this only ever has one output
         input_ = input_[0] if isinstance(input_, list) else input_
+
+        # If learning a mask and upscales have been placed into FC layer, then the mask will also
+        # come as an input
+        if self.config["learn_mask"] and self.config["dec_upscales_in_fc"]:
+            input_ = input_[0]
+
         input_shape = K.int_shape(input_)[1:]
 
         if self.config["split_decoders"]:
@@ -678,7 +684,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
     config: dict
         The model configuration options
     """
-    def __init__(self, input_shape: Tuple[int, int, int], config: dict) -> None:
+    def __init__(self, input_shape: Tuple[int, ...], config: dict) -> None:
         self.input_shape = input_shape
         self._config = config
         self._input_shape = input_shape
@@ -968,7 +974,6 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
             num_upscales = self._config["dec_upscales_in_fc"]
             if num_upscales:
                 var_x = UpscaleBlocks(self._side,
-                                      K.int_shape(var_x)[1:],
                                       self._config,
                                       layer_indicies=(0, num_upscales))(var_x)
 
@@ -989,8 +994,6 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
     ----------
     side: ["a", "b", "both", "shared"]
         The side of the model that the Decoder belongs to. Used for naming
-    input_shape: tuple
-        The shape tuple for the input to the decoder.
     config: dict
         The user configuration dictionary
     layer_indices: tuple, optional
@@ -1003,13 +1006,11 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
 
     def __init__(self,
                  side: Literal["a", "b", "both", "shared"],
-                 input_shape: Tuple[int, int, int],
                  config: dict,
                  layer_indicies: Optional[Tuple[int, int]] = None) -> None:
-        logger.debug("Initializing: %s (side: %s, input_shape: %s, layer_indicies: %s)",
-                     self.__class__.__name__, side, input_shape, layer_indicies)
+        logger.debug("Initializing: %s (side: %s, layer_indicies: %s)",
+                     self.__class__.__name__, side, layer_indicies)
         self._side = side
-        self._input_shape = input_shape
         self._config = config
         self._is_dny = self._config["dec_upscale_method"].lower() == "upscale_dny"
         self._layer_indicies = layer_indicies
@@ -1135,29 +1136,40 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
                             relu_alpha=0.2)(var_x)
         return var_x
 
-    def __call__(self, inputs: Optional[Tensor] = None) -> Tensor:
-        """ Decoder Network.
+    def __call__(self, inputs: Union[Tensor, List[Tensor]]) -> Union[Tensor, List[Tensor]]:
+        """ Upscale Network.
 
         Parameters
-        inputs: Tensor, optional
-            If the input is an output from another model (such as the Fully Connected Model) this
-            should be ``None`` otherwise it should be a Tensor
+        inputs: Tensor or list of tensors
+            Input tensor(s) to upscale block. This will be a single tensor if learn mask is not
+            selected or if this is the first call to the upscale blocks. If learn mask is selected
+            and this is not the first call to upscale blocks, then this will be a list of the face
+            and mask tensors.
 
         Returns
         -------
-        :class:`keras.models.Model`
-            The Decoder model
+         Tensor or list of tensors
+            The output of encoder blocks. Either a single tensor (if learn mask is not enabled) or
+            list of tensors (if learn mask is enabled)
         """
-        inputs = Input(shape=self._input_shape) if inputs is None else inputs
-        var_x = inputs
         start_idx, end_idx = (0, None) if self._layer_indicies is None else self._layer_indicies
         end_idx = None if end_idx == -1 else end_idx
+
+        if self._config["learn_mask"] and start_idx == 0:
+            # Mask needs to be created
+            var_x = inputs
+            var_y = inputs
+        elif self._config["learn_mask"]:
+            # Mask has already been created and is an input to upscale blocks
+            var_x, var_y = inputs
+        else:
+            # No mask required
+            var_x = inputs
 
         if start_idx == 0:
             var_x = self._reshape_for_output(var_x)
 
             if self._config["learn_mask"]:
-                var_y = inputs
                 var_y = self._reshape_for_output(var_y)
 
             if self._is_dny:
@@ -1301,14 +1313,17 @@ class Decoder():  # pylint:disable=too-few-public-methods
             The Decoder model
         """
         inputs = Input(shape=self._input_shape)
-        var_x = inputs
-        num_ups_in_fc = self._config["dec_upscales_in_fc"]
-        indicies = None if not num_ups_in_fc else (num_ups_in_fc, -1)
 
+        num_ups_in_fc = self._config["dec_upscales_in_fc"]
+
+        if self._config["learn_mask"] and num_ups_in_fc:
+            # Mask has already been created in FC and is an output of that model
+            inputs = [inputs, Input(shape=self._input_shape)]
+
+        indicies = None if not num_ups_in_fc else (num_ups_in_fc, -1)
         upscales = UpscaleBlocks(self._side,
-                                 self._input_shape,
                                  self._config,
-                                 layer_indicies=indicies)(var_x)
+                                 layer_indicies=indicies)(inputs)
 
         if self._config["learn_mask"]:
             var_x, var_y = upscales
