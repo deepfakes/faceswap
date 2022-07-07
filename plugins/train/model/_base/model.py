@@ -34,6 +34,11 @@ else:
     from tensorflow.keras.layers import Input  # pylint:disable=import-error,no-name-in-module
     from tensorflow.keras.models import load_model, Model as KModel  # noqa pylint:disable=import-error,no-name-in-module
 
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
 if TYPE_CHECKING:
     import argparse
 
@@ -108,9 +113,9 @@ class ModelBase():
                      self.__class__.__name__, model_dir, arguments, predict)
 
         # Input shape must be set within the plugin after initializing
-        self.input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]] = ()
+        self.input_shape: Tuple[int, ...] = ()
         self.trainer = "original"  # Override for plugin specific trainer
-        self.color_order = "bgr"  # Override for plugin specific image color channel order
+        self.color_order: Literal["bgr", "rgb"] = "bgr"  # Override for image color channel order
 
         self._args = arguments
         self._is_predict = predict
@@ -143,7 +148,7 @@ class ModelBase():
                                   self._mixed_precision,
                                   self.config["allow_growth"],
                                   self._is_predict)
-        self._loss = Loss(self.config)
+        self._loss = Loss(self.config, self.color_order)
 
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
@@ -349,12 +354,7 @@ class ModelBase():
     def _validate_input_shape(self) -> None:
         """ Validate that the input shape is either a single shape tuple of 3 dimensions or
         a list of 2 shape tuples of 3 dimensions. """
-        assert len(self.input_shape) in (2, 3), "Input shape should either be a single 3 " \
-            "dimensional shape tuple for use in both sides of the model, or a list of 2 3 " \
-            "dimensional shape tuples for use in the 'A' and 'B' sides of the model"
-        if len(self.input_shape) == 2:
-            assert [len(shape) == 3 for shape in self.input_shape], "All input shapes should " \
-                "have 3 dimensions"
+        assert len(self.input_shape) == 3, "Input shape should be a 3 dimensional shape tuple"
 
     def _get_inputs(self) -> List[keras.layers.Input]:
         """ Obtain the standardized inputs for the model.
@@ -369,10 +369,7 @@ class ModelBase():
             for each side) each of shapes :attr:`input_shape`.
         """
         logger.debug("Getting inputs")
-        if len(self.input_shape) == 3:
-            input_shapes = [self.input_shape, self.input_shape]
-        else:
-            input_shapes = self.input_shape
+        input_shapes = [self.input_shape, self.input_shape]
         inputs = [Input(shape=shape, name=f"face_in_{side}")
                   for side, shape in zip(("a", "b"), input_shapes)]
         logger.debug("inputs: %s", inputs)

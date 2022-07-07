@@ -18,6 +18,12 @@ _LOSS_HELP = dict(
         "found increased benefits when using it as a complementary loss to another spacial loss "
         "function (e.g. MSE). Ref: Focal Frequency Loss for Image Reconstruction and Synthesis "
         "https://arxiv.org/pdf/2012.12821.pdf NB: This loss does not currently work on AMD cards.",
+    flip="Nvidia FLIP. A perceptual loss measure that approximates the difference perceived by "
+         "humans as they alternate quickly (or flip) between two images. Used on its own and this "
+         "loss function creates a distinct grid on the output. However it can be helpful when "
+         "used as a complimentary loss function. Ref: FLIP: A Difference Evaluator for "
+         "Alternating Images: "
+         "https://research.nvidia.com/sites/default/files/node/3260/FLIP_Paper.pdf",
     gmsd=(
         "Gradient Magnitude Similarity Deviation seeks to match the global standard deviation of "
         "the pixel to pixel differences between two images. Similar in approach to SSIM. Ref: "
@@ -81,7 +87,7 @@ _LOSS_HELP = dict(
         "shifts, but maintains the structure of the image."),
     none="Do not use an additional loss function.")
 
-_NON_PRIMARY_LOSS = ["lpips_alex", "lpips_squeeze", "lpips_vgg16", "none"]
+_NON_PRIMARY_LOSS = ["flip", "lpips_alex", "lpips_squeeze", "lpips_vgg16", "none"]
 
 
 class Config(FaceswapConfig):

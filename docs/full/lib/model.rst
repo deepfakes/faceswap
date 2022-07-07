@@ -64,15 +64,16 @@ be imported as :mod:`lib.model.losses` depending on the backend in use.
 .. autosummary::
    :nosignatures:
 
-   ~lib.model.loss.loss_tf.DSSIMObjective
+   ~lib.model.loss.perceptual_loss_tf.DSSIMObjective
    ~lib.model.loss.loss_tf.FocalFrequencyLoss
    ~lib.model.loss.loss_tf.GeneralizedLoss
-   ~lib.model.loss.loss_tf.GMSDLoss
+   ~lib.model.loss.perceptual_loss_tf.GMSDLoss
    ~lib.model.loss.loss_tf.GradientLoss
    ~lib.model.loss.loss_tf.LaplacianPyramidLoss
    ~lib.model.loss.loss_tf.LInfNorm
    ~lib.model.loss.loss_tf.LossWrapper
    ~lib.model.loss.feature_loss_tf.LPIPSLoss
+   ~lib.model.loss.perceptual_loss_tf.MSSIMLoss
 
 .. automodule:: lib.model.loss.loss_tf
    :members:
@@ -83,6 +84,12 @@ be imported as :mod:`lib.model.losses` depending on the backend in use.
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. automodule:: lib.model.loss.perceptual_loss_tf
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 
 model.nets module
 =================

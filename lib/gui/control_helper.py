@@ -41,7 +41,7 @@ def _get_tooltip(widget, text=None, text_variable=None):
         while True:
             if len(text) < wrap_length * 5:
                 break
-            if wrap_length > 720:
+            if wrap_length > 800:
                 break
             wrap_length = int(wrap_length * 1.10)
 

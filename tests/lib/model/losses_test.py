@@ -46,13 +46,14 @@ _LWPARAMS = [losses.DSSIMObjective(),
              losses.GMSDLoss(),
              losses.GradientLoss(),
              losses.LaplacianPyramidLoss(),
+             losses.LDRFLIPLoss(),
              losses.LInfNorm(),
              losses.LogCosh() if get_backend() == "amd" else k_losses.logcosh,
              k_losses.mean_absolute_error,
              k_losses.mean_squared_error,
              losses.MSSIMLoss()]
 _LWIDS = ["DSSIMObjective", "FocalFrequencyLosse", "GeneralizedLoss", "GMSDLoss", "GradientLoss",
-          "LaplacianPyramidLoss", "LInfNorm", "logcosh", "mae", "mse", "MS-SSIM"]
+          "LaplacianPyramidLoss", "LInfNorm", "LDRFlipLoss", "logcosh", "mae", "mse", "MS-SSIM"]
 _LWIDS = [f"{loss}[{get_backend().upper()}]" for loss in _LWIDS]
 
 

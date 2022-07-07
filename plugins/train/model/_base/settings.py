@@ -13,6 +13,7 @@ Handles configuration of model plugins for:
 from dataclasses import dataclass, field
 import logging
 import platform
+import sys
 
 from contextlib import nullcontext
 from typing import Any, Callable, ContextManager, Dict, List, Optional, TYPE_CHECKING, Union
@@ -37,6 +38,11 @@ if get_tf_version() < 2.4:
     import tensorflow.keras.mixed_precision.experimental as mixedprecision  # noqa pylint:disable=import-error,no-name-in-module
 else:
     import tensorflow.keras.mixed_precision as mixedprecision  # noqa pylint:disable=import-error,no-name-in-module
+
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -72,12 +78,11 @@ class Loss():
     ----------
     config: dict
         The configuration options for the current model plugin
-    input_shape: tuple
-        Required for AMD backends only. Some loss functions are unable to calculate the input shape
-        at runtime, so we add the shape as an initializing variable
+    color_order: str
+        Color order of the model. One of `"BGR"` or `"RGB"`
     """
-    def __init__(self, config: dict) -> None:
-        logger.debug("Initializing %s", self.__class__.__name__)
+    def __init__(self, config: dict, color_order: Literal["bgr", "rgb"]) -> None:
+        logger.debug("Initializing %s: (color_order: %s)", self.__class__.__name__, color_order)
         self._config = config
         self._mask_channels = self._get_mask_channels()
         self._inputs: List[keras.layers.Layer] = []
@@ -86,6 +91,8 @@ class Loss():
 
         logcosh = losses.LogCosh() if get_backend() == "amd" else k_losses.logcosh
         self._loss_dict = dict(ffl=LossClass(function=losses.FocalFrequencyLoss),
+                               flip=LossClass(function=losses.LDRFLIPLoss,
+                                              kwargs=dict(color_order=color_order)),
                                gmsd=LossClass(function=losses.GMSDLoss),
                                l_inf_norm=LossClass(function=losses.LInfNorm),
                                laploss=LossClass(function=losses.LaplacianPyramidLoss),
@@ -315,7 +322,9 @@ class Optimizer():  # pylint:disable=too-few-public-methods
                             "nadam": (optimizers.Nadam,
                                       dict(beta_1=0.5, beta_2=0.99, epsilon=epsilon)),
                             "rms-prop": (optimizers.RMSprop, dict(epsilon=epsilon))}
-        self._optimizer, self._kwargs = valid_optimizers[optimizer]
+        optimizer_info = valid_optimizers[optimizer]
+        self._optimizer: Callable = optimizer_info[0]
+        self._kwargs: Dict[str, Any] = optimizer_info[1]
 
         self._configure(learning_rate, autoclip)
         logger.verbose("Using %s optimizer", optimizer.title())  # type:ignore
