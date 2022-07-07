@@ -629,7 +629,7 @@ def _get_curve(start_y: int,
     else:
         y_axis = [start_y]
         scale = 1. - abs(scale)
-        for _ in range(num_points):
+        for _ in range(num_points - 1):
             current_value = max(end_y, int(((y_axis[-1] * scale) // 8) * 8))
             y_axis.append(current_value)
             if current_value == end_y:
