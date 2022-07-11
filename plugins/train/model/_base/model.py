@@ -875,6 +875,11 @@ class _Inference():  # pylint:disable=too-few-public-methods
         anodes = np.array(nodes, dtype="object")[..., :3]
         num_layers = anodes.shape[0]
         anodes = anodes[self._output_idx] if num_layers == 2 else anodes[0]
+
+        # Probably better checks for this, but this occurs when DNY preset is used and learn
+        # mask is enabled (i.e. the mask is created in fully connected layers)
+        anodes = anodes.squeeze() if anodes.ndim == 3 else anodes
+
         retval = [(node[0], node[2]) for node in anodes]
         return retval
 
