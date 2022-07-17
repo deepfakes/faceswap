@@ -2,7 +2,7 @@
 # It is for documentation purposes only
 
 sphinx==5.0.2
-sphinx_rtd_theme-1.0.0
+sphinx_rtd_theme==1.0.0
 tqdm==4.64
 psutil==5.8.0
 numpy>=1.18.0
