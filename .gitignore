@@ -42,6 +42,7 @@
 !lib/**/*.py
 !lib/gui/**/icons/*.png
 !lib/gui/**/themes/default.json
+!lib/gui/**/presets/**/*.json
 !plugins/
 !plugins/**/
 !plugins/**/*.py
