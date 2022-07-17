@@ -48,8 +48,8 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
     -----
     This port only contains the features portion of the model.
 
-    Reference
-    ---------
+    References
+    ----------
     https://papers.nips.cc/paper/2012/file/c399862d3b9d6b76c8436e924a68c45b-Paper.pdf
 
     Parameters
@@ -144,8 +144,8 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
     -----
     This port only contains the features portion of the model.
 
-    Reference
-    ---------
+    References
+    ----------
     https://arxiv.org/abs/1602.07360
 
     Parameters

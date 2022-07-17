@@ -180,8 +180,8 @@ class ColorSpaceConvert():  # pylint:disable=too-few-public-methods
         The conversion in both directions is the same, but the mappping matrix for XYZ to RGB is
         the inverse of RGB to XYZ.
 
-        Reference
-        ---------
+        References
+        ----------
         https://www.image-engineering.de/library/technotes/958-how-to-convert-between-srgb-and-ciexyz
 
         Parameters
