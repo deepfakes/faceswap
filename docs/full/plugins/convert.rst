@@ -44,3 +44,19 @@ writer.gif module
    :members:
    :undoc-members:
    :show-inheritance:
+
+writer.opencv module
+--------------------
+
+.. automodule:: plugins.convert.writer.opencv
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+writer.pillow module
+--------------------
+
+.. automodule:: plugins.convert.writer.pillow
+   :members:
+   :undoc-members:
+   :show-inheritance:

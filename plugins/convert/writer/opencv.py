@@ -2,20 +2,33 @@
 """ Image output writer for faceswap.py converter
     Uses cv2 for writing as in testing this was a lot faster than both Pillow and ImageIO
 """
+from typing import List, Tuple
 
 import cv2
+import numpy as np
+
 from ._base import Output, logger
 
 
 class Writer(Output):
-    """ Images output writer using cv2 """
-    def __init__(self, output_folder, **kwargs):
-        super().__init__(output_folder, **kwargs)
-        self.extension = ".{}".format(self.config["format"])
-        self.check_transparency_format()
-        self.args = self.get_save_args()
+    """ Images output writer using cv2
 
-    def check_transparency_format(self):
+    Parameters
+    ----------
+    output_folder: str
+        The full path to the output folder where the converted media should be saved
+    configfile: str, optional
+        The full path to a custom configuration ini file. If ``None`` is passed
+        then the file is loaded from the default location. Default: ``None``.
+    """
+    def __init__(self, output_folder: str, **kwargs) -> None:
+        super().__init__(output_folder, **kwargs)
+        self._extension = f".{self.config['format']}"
+        self._check_transparency_format()
+        self._separate_mask = self.config["draw_transparent"] and self.config["separate_mask"]
+        self._args = self._get_save_args()
+
+    def _check_transparency_format(self) -> None:
         """ Make sure that the output format is correct if draw_transparent is selected """
         transparent = self.config["draw_transparent"]
         if not transparent or (transparent and self.config["format"] == "png"):
@@ -24,10 +37,16 @@ class Writer(Output):
                        "transparency. Changing output format to 'png'")
         self.config["format"] = "png"
 
-    def get_save_args(self):
-        """ Return the save parameters for the file format """
+    def _get_save_args(self) -> Tuple[int, ...]:
+        """ Obtain the save parameters for the file format.
+
+        Returns
+        -------
+        tuple
+            The OpenCV specific arguments for the selected file format
+         """
         filetype = self.config["format"]
-        args = list()
+        args: Tuple[int, ...] = tuple()
         if filetype == "jpg" and self.config["jpg_quality"] > 0:
             args = (cv2.IMWRITE_JPEG_QUALITY,  # pylint: disable=no-member
                     self.config["jpg_quality"])
@@ -37,21 +56,58 @@ class Writer(Output):
         logger.debug(args)
         return args
 
-    def write(self, filename, image):
-        logger.trace("Outputting: (filename: '%s'", filename)
-        filename = self.output_filename(filename)
-        try:
-            with open(filename, "wb") as outfile:
-                outfile.write(image)
-        except Exception as err:  # pylint: disable=broad-except
-            logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
+    def write(self, filename: str, image: List[bytes]) -> None:
+        """ Write out the pre-encoded image to disk. If separate mask has been selected, write out
+        the encoded mask to a sub-folder in the output directory.
 
-    def pre_encode(self, image):
-        """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker """
-        logger.trace("Pre-encoding image")
-        image = cv2.imencode(self.extension, image, self.args)[1]  # pylint: disable=no-member
-        return image
+        Parameters
+        ----------
+        filename: str
+            The full path to write out the image to.
+        image: list
+            List of :class:`bytes` objects of length 1 (containing just the image to write out)
+            or length 2 (containing the image and mask to write out)
+        """
+        logger.trace("Outputting: (filename: '%s'", filename)  # type:ignore
+        filenames = self.output_filename(filename, self._separate_mask)
+        for fname, img in zip(filenames, image):
+            try:
+                with open(fname, "wb") as outfile:
+                    outfile.write(img)
+            except Exception as err:  # pylint: disable=broad-except
+                logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
-    def close(self):
-        """ Image writer does not need a close method """
+    def pre_encode(self, image: np.ndarray) -> List[bytes]:
+        """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker.
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            A 3 or 4 channel BGR swapped frame
+
+        Returns
+        -------
+        list
+            List of :class:`bytes` objects ready for writing. The list will be of length 1 with
+            image bytes object as the only member unless separate mask has been requested, in which
+            case it will be length 2 with the image in position 0 and mask in position 1
+         """
+        logger.trace("Pre-encoding image")  # type:ignore
+        retval = []
+
+        if self._separate_mask:
+            mask = image[..., -1]
+            image = image[..., :3]
+
+            retval.append(cv2.imencode(self._extension,  # pylint: disable=no-member
+                                       mask,
+                                       self._args)[1])
+
+        retval.insert(0, cv2.imencode(self._extension,  # pylint: disable=no-member
+                                      image,
+                                      self._args)[1])
+        return retval
+
+    def close(self) -> None:
+        """ Does nothing as OpenCV writer does not need a close method """
         return

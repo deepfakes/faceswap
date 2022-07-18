@@ -79,6 +79,21 @@ _DEFAULTS = dict(
         gui_radio=False,
         fixed=True,
     ),
+    separate_mask=dict(
+        default=False,
+        info="Seperate the mask into its own single channel image. This only applies when "
+             "'draw-transparent' is selected. If enabled, the RGB image will be saved into the "
+             "selected output folder whilst the masks will be saved into a sub-folder named "
+             "`masks`. If not enabled then the mask will be included in the alpha-channel of the "
+             "RGBA output.",
+        datatype=bool,
+        rounding=None,
+        min_max=None,
+        choices=[],
+        group="format",
+        gui_radio=False,
+        fixed=True,
+    ),
     optimize=dict(
         default=False,
         info="[gif, jpg and png only] If enabled, indicates that the encoder should make an extra "
