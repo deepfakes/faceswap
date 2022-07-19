@@ -16,7 +16,8 @@ from matplotlib import backend_bases, figure, pyplot as plt, rcParams
 from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread
-from lib.utils import get_dpi, get_folder, get_image_paths, FaceswapError, _image_extensions
+from lib.utils import (deprecation_warning, get_dpi, get_folder, get_image_paths,
+                       FaceswapError, _image_extensions)
 from plugins.plugin_loader import PluginLoader
 
 if sys.version_info < (3, 8):
@@ -51,6 +52,8 @@ class Train():  # pylint:disable=too-few-public-methods
     def __init__(self, arguments: "argparse.Namespace") -> None:
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self._args = arguments
+        self._handle_deprecations()
+
         if self._args.summary:
             # If just outputting summary we don't need to initialize everything
             return
@@ -66,6 +69,15 @@ class Train():  # pylint:disable=too-few-public-methods
         self._preview = Preview()
 
         logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _handle_deprecations(self) -> None:
+        """ Handle the update of deprecated arguments and output warnings. """
+        if self._args.distributed:
+            deprecation_warning("`-d`, `--distributed`",
+                                "Please use `-D`, `--distribution-strategy`")
+            logger.warning("Setting 'distribution-strategy' to 'mirrored'")
+            setattr(self._args, "distribution_strategy", "mirrored")
+            del self._args.distributed
 
     def _get_images(self) -> Dict[Literal["a", "b"], List[str]]:
         """ Check the image folders exist and contains valid extracted faces. Obtain image paths.

@@ -1020,8 +1020,24 @@ class TrainArgs(FaceSwapArgs):
             default=False,
             backend="nvidia",
             group=_("training"),
-            help=_("Use the Tensorflow Mirrored Distrubution Strategy to train on multiple "
-                   "GPUs.")))
+            help=_("[Deprecated - Use '-D, --distribution-strategy' instead] Use the Tensorflow "
+                   "Mirrored Distrubution Strategy to train on multiple GPUs.")))
+        argument_list.append(dict(
+            opts=("-D", "--distribution-strategy"),
+            dest="distribution_strategy",
+            action=Radio,
+            type=str.lower,
+            choices=["central-storage", "mirrored"],
+            backend="nvidia",
+            group=_("training"),
+            help=_("R|Select the distribution stategy to use."
+                   "\nL|central-storage: Centralizes variables on the CPU whilst operations are "
+                   "performed on 1 or more local GPUs. This can help save some VRAM at the cost "
+                   "of some speed by not storing variables on the GPU. Note: Mixed-Precision is "
+                   "not supported on multi-GPU setups."
+                   "\nL|mirrored: Supports synchronous distributed training across multiple local "
+                   "GPUs. A copy of the model and all variables are loaded onto each GPU with "
+                   "batches distributed to each GPU at each iteration.")))
         argument_list.append(dict(
             opts=("-s", "--save-interval"),
             action=Slider,

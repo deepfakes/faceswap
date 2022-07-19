@@ -405,14 +405,11 @@ class Settings():
         if self._use_mixed_precision:
             logger.info("Enabling Mixed Precision Training.")
 
-        distributed = False if not hasattr(arguments, "distributed") else arguments.distributed
-        self._strategy = self._get_strategy(distributed)
+        strategy = None
+        if hasattr(arguments, "distribution_strategy"):
+            strategy = arguments.distribution_strategy
+        self._strategy = self._get_strategy(strategy)
         logger.debug("Initialized %s", self.__class__.__name__)
-
-    @property
-    def use_strategy(self) -> bool:
-        """ bool: ``True`` if a distribution strategy is to be used otherwise ``False``. """
-        return self._strategy is not None
 
     @property
     def use_mixed_precision(self) -> bool:
@@ -512,9 +509,10 @@ class Settings():
                      policy.compute_dtype, policy.variable_dtype)
         return True
 
-    @classmethod
-    def _get_strategy(cls, distributed: bool) -> Optional[tf.distribute.Strategy]:
-        """ If we are running on Nvidia backend and the strategy is not `"default"` then return
+    def _get_strategy(self,
+                      strategy: Optional[Literal["central-storage", "mirrored"]]
+                      ) -> Optional[tf.distribute.Strategy]:
+        """ If we are running on Nvidia backend and the strategy is not ``None`` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.
 
         Notes
@@ -523,11 +521,14 @@ class Settings():
         reductions, however this is only available in Linux, so the method used falls back to
         `Hierarchical Copy All Reduce` if the OS is not Linux.
 
+        Central Storage strategy is not compatible with Mixed Precision. However, in testing it
+        worked fine when using a single GPU, so we monkey-patch out the tests for Mixed-Precision
+        when using this strategy with a single GPU
+
         Parameters
         ----------
-        distributed: bool
-            ``True`` if Tensorflow mirrored strategy should be used for multiple GPU training.
-            ``False`` if the default strategy should be used.
+        strategy: str, optional
+            One of 'central-storage' or 'mirrored'. Pass ``None`` to use the default strategy
 
         Returns
         -------
@@ -537,17 +538,62 @@ class Settings():
         """
         if get_backend() != "nvidia":
             retval = None
-        elif distributed:
-            if platform.system().lower() == "linux":
-                cross_device_ops = tf.distribute.NcclAllReduce()
-            else:
-                cross_device_ops = tf.distribute.HierarchicalCopyAllReduce()
-            logger.debug("cross_device_ops: %s", cross_device_ops)
-            retval = tf.distribute.MirroredStrategy(cross_device_ops=cross_device_ops)
+        if strategy == "mirrored":
+            retval = self._get_mirrored_strategy()
+        elif strategy == "central-storage":
+            retval = self._get_central_storage_strategy()
         else:
             retval = tf.distribute.get_strategy()
         logger.debug("Using strategy: %s", retval)
         return retval
+
+    @classmethod
+    def _get_mirrored_strategy(cls) -> tf.distribute.MirroredStrategy:
+        """ Obtain an instance of a Tensorflow Mirrored Strategy, setting the cross device
+        operations appropriate for the OS in use.
+
+        Returns
+        -------
+        :class:`tensorflow.distribute.MirroredStrategy`
+            The Mirrored Distribution Strategy object with correct cross device operations set
+        """
+        if platform.system().lower() == "linux":
+            cross_device_ops = tf.distribute.NcclAllReduce()
+        else:
+            cross_device_ops = tf.distribute.HierarchicalCopyAllReduce()
+        logger.debug("cross_device_ops: %s", cross_device_ops)
+        return tf.distribute.MirroredStrategy(cross_device_ops=cross_device_ops)
+
+    @classmethod
+    def _get_central_storage_strategy(cls) -> tf.distribute.experimental.CentralStorageStrategy:
+        """ Obtain an instance of a Tensorflow Central Storage Strategy. If the strategy is being
+        run on a single GPU then monkey patch Tensorflows mixed-precision strategy checks to pass
+        successfully.
+
+        Returns
+        -------
+        :class:`tensorflow.distribute.experimental.CentralStorageStrategy`
+            The Central Storage Distribution Strategy object
+        """
+        gpus = tf.config.get_visible_devices("GPU")
+        if len(gpus) == 1:
+            # TODO Remove these monkey patches when Strategy supports mixed-precision
+            from keras.mixed_precision import loss_scale_optimizer  # noqa pylint:disable=import-outside-toplevel
+
+            # Force a return of True on Loss Scale Optimizer Stategy check
+            loss_scale_optimizer.strategy_supports_loss_scaling = lambda: True
+
+            # As LossScaleOptimizer aggregates gradients internally, it passes `False` as the value
+            # for `experimental_aggregate_gradients` in `OptimizerV2.apply_gradients`. This causes
+            # the optimizer to fail when checking against this strategy. We could monkey patch
+            # `Optimizer.apply_gradients`, but it is a lot more code to check, so we just switch
+            # the `experimental_aggregate_gradients` back to `True`. In brief testing this does not
+            # appear to have a negative impact.
+            func = lambda s, grads, wvars, name: s._optimizer.apply_gradients(  # noqa pylint:disable=protected-access
+                 list(zip(grads, wvars.value)), name, experimental_aggregate_gradients=True)
+            loss_scale_optimizer.LossScaleOptimizer._apply_gradients = func  # noqa pylint:disable=protected-access
+
+        return tf.distribute.experimental.CentralStorageStrategy(parameter_device="/cpu:0")
 
     def _get_mixed_precision_layers(self, layers: List[dict]) -> List[str]:
         """ Obtain the names of the layers in a mixed precision model that have their dtype policy
