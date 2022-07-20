@@ -405,7 +405,11 @@ class Settings():
         if self._use_mixed_precision:
             logger.info("Enabling Mixed Precision Training.")
 
-        self._strategy = self._get_strategy(arguments.distribution_strategy)
+        if hasattr(arguments, "distribution_strategy"):
+            strategy = arguments.distribution_strategy
+        else:
+            strategy = "default"
+        self._strategy = self._get_strategy(strategy)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
