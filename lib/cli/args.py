@@ -1027,10 +1027,12 @@ class TrainArgs(FaceSwapArgs):
             dest="distribution_strategy",
             action=Radio,
             type=str.lower,
-            choices=["central-storage", "mirrored"],
+            choices=["default", "central-storage", "mirrored"],
+            default="default",
             backend="nvidia",
             group=_("training"),
             help=_("R|Select the distribution stategy to use."
+                   "\nL|default: Use Tensorflow's default distribution strategy."
                    "\nL|central-storage: Centralizes variables on the CPU whilst operations are "
                    "performed on 1 or more local GPUs. This can help save some VRAM at the cost "
                    "of some speed by not storing variables on the GPU. Note: Mixed-Precision is "

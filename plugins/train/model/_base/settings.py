@@ -405,10 +405,7 @@ class Settings():
         if self._use_mixed_precision:
             logger.info("Enabling Mixed Precision Training.")
 
-        strategy = None
-        if hasattr(arguments, "distribution_strategy"):
-            strategy = arguments.distribution_strategy
-        self._strategy = self._get_strategy(strategy)
+        self._strategy = self._get_strategy(arguments.distribution_strategy)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -510,7 +507,7 @@ class Settings():
         return True
 
     def _get_strategy(self,
-                      strategy: Optional[Literal["central-storage", "mirrored"]]
+                      strategy: Literal["default", "central-storage", "mirrored"]
                       ) -> Optional[tf.distribute.Strategy]:
         """ If we are running on Nvidia backend and the strategy is not ``None`` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.
@@ -527,8 +524,8 @@ class Settings():
 
         Parameters
         ----------
-        strategy: str, optional
-            One of 'central-storage' or 'mirrored'. Pass ``None`` to use the default strategy
+        strategy: str
+            One of 'default', 'central-storage' or 'mirrored'.
 
         Returns
         -------
@@ -538,7 +535,7 @@ class Settings():
         """
         if get_backend() != "nvidia":
             retval = None
-        if strategy == "mirrored":
+        elif strategy == "mirrored":
             retval = self._get_mirrored_strategy()
         elif strategy == "central-storage":
             retval = self._get_central_storage_strategy()
