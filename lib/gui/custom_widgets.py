@@ -238,6 +238,7 @@ class _SysOutRouter():
         self._console = console
         self._out_type = out_type
         self._recolor = re.compile(r".+?(\s\d+:\d+:\d+\s)(?P<lvl>[A-Z]+)\s")
+        self._ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _get_tag(self, string):
@@ -254,6 +255,7 @@ class _SysOutRouter():
 
     def write(self, string):
         """ Capture stdout/stderr """
+        string = self._ansi_escape.sub("", string)
         self._console.insert(tk.END, string, self._get_tag(string))
         self._console.see(tk.END)
 
@@ -315,9 +317,8 @@ class _WidgetRedirector:
         tk_.createcommand(wgt, self.dispatch)
 
     def __repr__(self):
-        return "%s(%s<%s>)" % (self.__class__.__name__,
-                               self.widget.__class__.__name__,
-                               self.widget._w)  # pylint:disable=protected-access
+        return (f"{self.__class__.__name__}({self.widget.__class__.__name__}"
+                f"<{self.widget._w}>)")  # pylint:disable=protected-access
 
     def close(self):
         "de-register operations and revert redirection created by .__init__."
@@ -409,8 +410,7 @@ class _OriginalCommand:
         self.orig_and_operation = (redirect.orig, operation)
 
     def __repr__(self):
-        return "%s(%r, %r)" % (self.__class__.__name__,
-                               self.redirect, self.operation)
+        return f"{self.__class__.__name__}({self.redirect}, {self.operation})"
 
     def __call__(self, *args):
         return self.tk_call(self.orig_and_operation + args)
@@ -619,12 +619,8 @@ class Tooltip:  # pylint:disable=too-few-public-methods
             x_1, y_1 = mouse_x + tip_delta[0], mouse_y + tip_delta[1]
             x_2, y_2 = x_1 + width, y_1 + height
 
-            x_delta = x_2 - s_width
-            if x_delta < 0:
-                x_delta = 0
-            y_delta = y_2 - s_height
-            if y_delta < 0:
-                y_delta = 0
+            x_delta = max(x_2 - s_width, 0)
+            y_delta = max(y_2 - s_height, 0)
 
             offscreen = (x_delta, y_delta) != (0, 0)
 
@@ -670,7 +666,7 @@ class Tooltip:  # pylint:disable=too-few-public-methods
 
         text = self._text
         if self._text_variable and self._text_variable.get():
-            text += "\n\nCurrent value: '{}'".format(self._text_variable.get())
+            text += f"\n\nCurrent value: '{self._text_variable.get()}'"
         label = tk.Label(win,
                          text=text,
                          justify=tk.LEFT,
@@ -687,7 +683,7 @@ class Tooltip:  # pylint:disable=too-few-public-methods
 
         xpos, ypos = tip_pos_calculator(widget, label)
 
-        self._topwidget.wm_geometry("+%d+%d" % (xpos, ypos))
+        self._topwidget.wm_geometry(f"+{xpos}+{ypos}")
 
     def _hide(self):
         """ Hide the tooltip """
@@ -819,7 +815,7 @@ class PopupProgress(tk.Toplevel):
         center = np.array((
             (self.master.winfo_width() // 2) - (self.winfo_width() // 2),
             (self.master.winfo_height() // 2) - (self.winfo_height() // 2))) + offset
-        self.wm_geometry("+{}+{}".format(*center))
+        self.wm_geometry(f"+{center[0]}+{center[1]}")
         get_config().set_cursor_busy()
         self.grab_set()
 

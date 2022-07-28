@@ -8,3 +8,5 @@ faceswap
    plugins/plugins
    scripts
    tools/tools
+   setup
+   update_deps

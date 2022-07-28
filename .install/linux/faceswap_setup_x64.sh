@@ -385,7 +385,7 @@ setup_faceswap() {
     # Run faceswap setup script
     info "Setting up Faceswap..."
     if [ $VERSION != "cpu" ] ; then args="--$VERSION" ; else args="" ; fi
-    python "$DIR_FACESWAP/setup.py" --installer $args
+    python -u "$DIR_FACESWAP/setup.py" --installer $args
 }
 
 create_gui_launcher () {

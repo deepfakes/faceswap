@@ -448,7 +448,7 @@ Function SetupFaceSwap
         StrCpy $0 "$0 --$setupType"
     ${EndIf}
     SetDetailsPrint listonly
-    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR\setup.py$\" $0 && conda deactivate"
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python -u $\"$INSTDIR\setup.py$\" $0 && conda deactivate"
     pop $0
     ExecDos::wait $0
     pop $0

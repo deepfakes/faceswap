@@ -13,6 +13,6 @@ ffmpy==0.2.3
 #nvidia-ml-py>=11.510,<300
 # Pin nvidida-ml-py to <11.515 until we know if bytes->str is an error or permanent change
 nvidia-ml-py<11.515
-tensorflow_probability<0.17
+tensorflow-probability<0.17
 typing-extensions>=4.0.0
 pywin32>=228 ; sys_platform == "win32"
