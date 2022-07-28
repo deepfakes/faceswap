@@ -665,6 +665,10 @@ class Install():  # pylint:disable=too-few-public-methods
                            "<": operator.lt}
         self._env = environment
         self._is_gui = is_gui
+        if self._env.os_version[0] == "Windows":
+            self._installer = self._subproc_installer
+        else:
+            self._installer = self._pexpect_installer
 
         if not self._env.is_installer and not self._env.updater:
             self._ask_continue()
@@ -866,7 +870,7 @@ class Install():  # pylint:disable=too-few-public-methods
             condaexe.append(package)
 
         clean_pkg = package.replace("\"", "")
-        retcode = self._pexpect_installer(condaexe, clean_pkg)
+        retcode = self._installer(condaexe, clean_pkg)
 
         if retcode != 0 and not conda_only:
             logger.info("%s not available in Conda. Installing with pip", package)
@@ -890,7 +894,7 @@ class Install():  # pylint:disable=too-few-public-methods
             pipexe.append("--user")
         pipexe.append(package)
 
-        if self._pexpect_installer(pipexe, package) != 0:
+        if self._installer(pipexe, package) != 0:
             logger.warning("Couldn't install %s with pip. Please install this package manually",
                            package)
 
