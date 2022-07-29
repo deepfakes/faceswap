@@ -97,7 +97,7 @@ class Environment():
     def is_admin(self) -> bool:
         """ Check whether user is admin """
         try:
-            retval = os.getuid() == 0
+            retval = os.getuid() == 0  # type: ignore
         except AttributeError:
             retval = ctypes.windll.shell32.IsUserAnAdmin() != 0  # type: ignore
         return retval
@@ -684,9 +684,14 @@ class Install():  # pylint:disable=too-few-public-methods
         self._install_missing_dep()
         if self._env.updater:
             return
-        logger.info("All python3 dependencies are met.\r\nYou are good to go.\r\n\r\n"
-                    "Enter:  'python faceswap.py -h' to see the options\r\n"
-                    "        'python faceswap.py gui' to launch the GUI")
+        if not _INSTALL_FAILED:
+            logger.info("All python3 dependencies are met.\r\nYou are good to go.\r\n\r\n"
+                        "Enter:  'python faceswap.py -h' to see the options\r\n"
+                        "        'python faceswap.py gui' to launch the GUI")
+        else:
+            logger.error("Some packages failed to install. This may be a temporary error which "
+                         "might be fixed by re-running this script. Otherwise please install "
+                         "these packages manually.")
 
     @classmethod
     def _ask_continue(cls) -> None:
@@ -897,6 +902,8 @@ class Install():  # pylint:disable=too-few-public-methods
         if self._installer(pipexe, package) != 0:
             logger.warning("Couldn't install %s with pip. Please install this package manually",
                            package)
+            global _INSTALL_FAILED  # pylint:disable=global-statement
+            _INSTALL_FAILED = True
 
     def _pexpect_installer(self, command: List[str], package: str) -> int:
         """ Run an install command using pexpect and log output.
@@ -915,7 +922,7 @@ class Install():  # pylint:disable=too-few-public-methods
         int
             The return code from the subprocess
         """
-        import pexpect  # pylint:disable=import-outside-toplevel
+        import pexpect  # pylint:disable=import-outside-toplevel,import-error
         logger.info("Installing %s", package)
 
         proc = pexpect.spawn(" ".join(command),
@@ -969,8 +976,7 @@ class Install():  # pylint:disable=too-few-public-methods
             The return code from the subprocess
         """
         logger.info("Installing %s", package)
-        shell = self._env.os_version[0] == "Windows"
-
+        shell = self._env.os_version[0] == "Windows" and command[0] == "conda"
         with Popen(command, bufsize=0, stdout=PIPE, stderr=STDOUT, shell=shell) as proc:
             last_line_cr = False
             while True:
