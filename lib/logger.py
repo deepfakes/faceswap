@@ -75,7 +75,7 @@ class ColoredFormatter(logging.Formatter):
     """
     def __init__(self, fmt: str, pad_newlines: bool = False, **kwargs) -> None:
         super().__init__(fmt, **kwargs)
-        self._use_color = platform.system().lower() in ("linux", "darwin")
+        self._use_color = self._get_color_compatibility()
         self._level_colors = dict(CRITICAL="\033[31m",  # red
                                   ERROR="\033[31m",  # red
                                   WARNING="\033[33m",  # yellow
@@ -83,6 +83,26 @@ class ColoredFormatter(logging.Formatter):
                                   VERBOSE="\033[34m")  # blue
         self._default_color = "\033[0m"
         self._newline_padding = self._get_newline_padding(pad_newlines, fmt)
+
+    @classmethod
+    def _get_color_compatibility(cls) -> bool:
+        """ Return whether the system supports color ansi codes. Most OSes do other than Windows
+        below Windows 10 version 1511.
+
+        Returns
+        -------
+        bool
+            ``True`` if the system supports color ansi codes otherwise ``False``
+        """
+        if platform.system().lower() != "windows":
+            return True
+        try:
+            win = sys.getwindowsversion()
+            if win.major >= 10 and win.build >= 10586:
+                return True
+        except Exception:  # pylint:disable=broad-except
+            return False
+        return False
 
     def _get_newline_padding(self, pad_newlines: bool, fmt: str) -> int:
         """ Parses the format string to obtain padding for newlines if requested

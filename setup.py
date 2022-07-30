@@ -11,7 +11,8 @@ import operator
 import os
 import re
 import sys
-from subprocess import run, PIPE, Popen, STDOUT
+from shutil import which
+from subprocess import list2cmdline, PIPE, Popen, run, STDOUT
 from typing import Dict, List, Optional, Tuple
 
 from pkg_resources import parse_requirements, Requirement
@@ -25,7 +26,7 @@ _INSTALL_FAILED = False
 _TENSORFLOW_REQUIREMENTS = {">=2.4.0,<2.5.0": ["11.0", "8.0"],
                             ">=2.5.0,<2.9.0": ["11.2", "8.1"]}
 # Packages that are explicitly required for setup.py
-_INSTALLER_REQUIREMENTS = ["pexpect>=4.8.0"]
+_INSTALLER_REQUIREMENTS = [("pexpect>=4.8.0", "!Windows"), ("pywinpty==2.0.2", "Windows")]
 
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
 _CONDA_MAPPING: Dict[str, Tuple[str, str]] = {
@@ -153,9 +154,9 @@ class Environment():
                         requirements.append(package)
 
         # Add required installer packages
-        if self.os_version[0] != "Windows":
-            for inst in _INSTALLER_REQUIREMENTS:
-                requirements.insert(0, inst)
+        for pkg, plat in _INSTALLER_REQUIREMENTS:
+            if self.os_version[0] == plat or (plat[0] == "!" and self.os_version[0] != plat[1:]):
+                requirements.insert(0, pkg)
 
         self.required_packages = [(pkg.unsafe_name, pkg.specs)
                                   for pkg in parse_requirements(requirements)
@@ -666,7 +667,7 @@ class Install():  # pylint:disable=too-few-public-methods
         self._env = environment
         self._is_gui = is_gui
         if self._env.os_version[0] == "Windows":
-            self._installer = self._subproc_installer
+            self._installer = self._pywinpty_installer
         else:
             self._installer = self._pexpect_installer
 
@@ -763,8 +764,8 @@ class Install():  # pylint:disable=too-few-public-methods
 
         Subprocess is used as we do not currently have pexpect
         """
-        setup_packages = [(pkg.unsafe_name, pkg.specs)
-                          for pkg in parse_requirements(_INSTALLER_REQUIREMENTS)]
+        pkgs = [pkg[0] for pkg in _INSTALLER_REQUIREMENTS]
+        setup_packages = [(pkg.unsafe_name, pkg.specs) for pkg in parse_requirements(pkgs)]
 
         for pkg in setup_packages:
             if pkg not in self._env.missing_packages:
@@ -773,6 +774,8 @@ class Install():  # pylint:disable=too-few-public-methods
             pkg_str = self._format_package(*pkg)
             if self._env.is_conda:
                 cmd = ["conda", "install", "-y"]
+                if any(char in pkg_str for char in (" ", "<", ">", "*", "|")):
+                    pkg_str = f"\"{pkg_str}\""
             else:
                 cmd = [sys.executable, "-m", "pip", "install", "--no-cache-dir"]
                 if self._env.is_admin:
@@ -818,21 +821,21 @@ class Install():  # pylint:disable=too-few-public-methods
                     pkg = f"tensorflow-gpu{compat_tf}"
                     conda_only = True
 
-                if self._conda_installer(pkg, channel=channel, conda_only=conda_only):
+                if self._from_conda(pkg, channel=channel, conda_only=conda_only):
                     continue
-            self._pip_installer(pkg)
+            self._from_pip(pkg)
 
     def _install_conda_packages(self) -> None:
         """ Install required conda packages """
         logger.info("Installing Required Conda Packages. This may take some time...")
         for pkg in self._env.conda_missing_packages:
             channel = None if len(pkg) != 2 else pkg[1]
-            self._conda_installer(pkg[0], channel=channel, conda_only=True)
+            self._from_conda(pkg[0], channel=channel, conda_only=True)
 
-    def _conda_installer(self,
-                         package: str,
-                         channel: Optional[str] = None,
-                         conda_only: bool = False) -> bool:
+    def _from_conda(self,
+                    package: str,
+                    channel: Optional[str] = None,
+                    conda_only: bool = False) -> bool:
         """ Install a conda package
 
         Parameters
@@ -885,7 +888,7 @@ class Install():  # pylint:disable=too-few-public-methods
         success = retcode == 0 and success
         return success
 
-    def _pip_installer(self, package: str) -> None:
+    def _from_pip(self, package: str) -> None:
         """ Install a pip package
 
         Parameters
@@ -893,7 +896,7 @@ class Install():  # pylint:disable=too-few-public-methods
         package: str
             The full formatted package, with version, to be installed
         """
-        pipexe = [sys.executable, "-m", "pip", "install", "--no-cache-dir"]
+        pipexe = [sys.executable, "-u", "-m", "pip", "install", "--no-cache-dir"]
         # install as user to solve perm restriction
         if not self._env.is_admin and not self._env.is_virtualenv:
             pipexe.append("--user")
@@ -922,36 +925,132 @@ class Install():  # pylint:disable=too-few-public-methods
         int
             The return code from the subprocess
         """
-        import pexpect  # pylint:disable=import-outside-toplevel,import-error
-        logger.info("Installing %s", package)
+        try:
+            import pexpect  # pylint:disable=import-outside-toplevel,import-error
+            logger.info("Installing %s", package)
+            logger.debug("argv: %s", command)
 
-        proc = pexpect.spawn(" ".join(command),
-                             encoding=self._env.encoding,
-                             codec_errors="replace",
-                             timeout=None)
-        last_line_cr = False
-        while True:
-            try:
-                idx = proc.expect(["\r\n", "\r"])
-                line = proc.before.rstrip()
-                if line and idx == 0:
-                    if last_line_cr:
-                        last_line_cr = False
-                        # Output last line of progress bar and go to next line
+            proc = pexpect.spawn(" ".join(command),
+                                 encoding=self._env.encoding,
+                                 codec_errors="replace",
+                                 timeout=None)
+            last_line_cr = False
+            while True:
+                try:
+                    idx = proc.expect(["\r\n", "\r"])
+                    line = proc.before.rstrip()
+                    if line and idx == 0:
+                        if last_line_cr:
+                            last_line_cr = False
+                            # Output last line of progress bar and go to next line
+                            if not self._is_gui:
+                                print(line)
+                        logger.verbose(line)  # type:ignore
+                    elif line and idx == 1:
+                        last_line_cr = True
+                        logger.debug(line)
                         if not self._is_gui:
-                            print(line)
-                    logger.verbose(line)  # type:ignore
-                elif line and idx == 1:
-                    last_line_cr = True
-                    logger.debug(line)
-                    if not self._is_gui:
-                        print(line, end="\r")
-            except pexpect.EOF:
-                break
-        proc.close()
-        returncode = proc.exitstatus
-        logger.debug("Package: %s, returncode: %s", package, returncode)
-        return returncode
+                            print(line, end="\r")
+                except pexpect.EOF:
+                    break
+            proc.close()
+            returncode = proc.exitstatus
+            logger.debug("Package: %s, returncode: %s", package, returncode)
+            return returncode
+        except Exception as err:  # pylint:disable=broad-except
+            logger.debug("Failed to install with pexpect. Falling back to subprocess. Error: %s",
+                         str(err))
+            return self._subproc_installer(command, package)
+
+    def _pywinpty_installer(self, command: List[str], package: str) -> int:
+        """ Run an install command using pywinpty and log output.
+
+        pywinpty is used so we can get unbuffered output to display updates
+
+        Parameters
+        ----------
+        command: list
+            The command to run
+        package: str
+            The package name that is being installed
+
+        Returns
+        -------
+        int
+            The return code from the subprocess
+        """
+        try:
+            import winpty  # pylint:disable=import-outside-toplevel,import-error
+            logger.info("Installing %s", package)
+            cmd = which(command[0], path=os.environ.get('PATH', os.defpath))
+            # For some reason with WinPTY we need to pass in the full command. Probably a bug
+            cmdline = list2cmdline(command)
+            logger.debug("argv: %s, cmd: '%s', cmdline: '%s'", command, cmd, cmdline)
+
+            proc = winpty.PTY(
+                100,
+                24,
+                backend=winpty.enums.Backend.WinPTY,  # ConPTY hangs and has lots of Ansi Escapes
+                agent_config=winpty.enums.AgentConfig.WINPTY_FLAG_PLAIN_OUTPUT)  # Strip all Ansi
+
+            if not proc.spawn(cmd, cmdline=cmdline):
+                del proc
+                raise RuntimeError("Failed to spawn winpty")
+
+            pbar = re.compile(r"(?:eta\s[\d\W]+)|(?:\s+\|\s+\d+%)\Z")
+            lines = []
+            out = ""
+            eof = False
+            last_line_cr = False
+            num_bytes = 1024
+            while True:
+                try:
+                    from_pty = proc.read(num_bytes)
+                except winpty.WinptyError as err:
+                    if any(val in str(err) for val in ["EOF", "pipe has been ended"]):
+                        # Get remaining bytes. On a comms error, the buffer remains unread so keep
+                        # halving buffer amount until down to 1 when we know we have everything
+                        if num_bytes == 1:
+                            eof = True
+                        from_pty = ""
+                        num_bytes //= 2
+                    else:
+                        raise
+                out += from_pty
+                if "\n" in out:
+                    lines.extend(out.split("\n"))
+                    if out.endswith("\n") or eof:  # Ends on newline or is EOF
+                        out = ""
+                    else:  # roll over semi-consumed line to next read
+                        out = lines[-1]
+                        lines = lines[:-1]
+
+                for line in lines:  # Dump the output to log
+                    line = line.rstrip()
+                    is_cr = bool(pbar.search(line))
+                    if line and not is_cr:
+                        if last_line_cr:
+                            last_line_cr = False
+                            if not self._is_gui:  # Go to next line
+                                print("")
+                        logger.verbose(line)  # type:ignore
+                    elif line:
+                        last_line_cr = True
+                        logger.debug(line)
+                        if not self._is_gui:
+                            print(line, end="\r")
+                lines = []
+                if eof:
+                    returncode = proc.get_exitstatus()
+                    break
+
+            del proc
+            logger.debug("Package: %s, returncode: %s", package, returncode)
+            return returncode
+        except Exception as err:  # pylint:disable=broad-except
+            logger.debug("Failed to install with pexpect. Falling back to subprocess. Error: %s",
+                         str(err))
+            return self._subproc_installer(command, package)
 
     def _subproc_installer(self, command: List[str], package: str) -> int:
         """ Run an install command using subprocess Popen.
@@ -960,8 +1059,6 @@ class Install():  # pylint:disable=too-few-public-methods
         give easy access to the return code, and also dumps stdout to console so we use subprocess
         for Windows. The downside of this is that we cannot do unbuffered reads, so the process can
         look like it hangs.
-
-        #TODO Implement real time read functionality for windows
 
         Parameters
         ----------
@@ -977,12 +1074,15 @@ class Install():  # pylint:disable=too-few-public-methods
         """
         logger.info("Installing %s", package)
         shell = self._env.os_version[0] == "Windows" and command[0] == "conda"
+        logger.debug("argv: %s", command)
+
         with Popen(command, bufsize=0, stdout=PIPE, stderr=STDOUT, shell=shell) as proc:
             last_line_cr = False
             while True:
                 if proc.stdout is not None:
                     line = proc.stdout.readline().decode(self._env.encoding, errors="replace")
-                if line == "" and proc.poll is not None:
+                returncode = proc.poll()
+                if line == "" and returncode is not None:
                     break
 
                 is_cr = line.startswith("\r")
@@ -1000,7 +1100,6 @@ class Install():  # pylint:disable=too-few-public-methods
                     logger.debug(line)
                     if not self._is_gui:
                         print(line, end="\r")
-            returncode = proc.wait()
         logger.debug("Package: %s, returncode: %s", package, returncode)
         return returncode
 
