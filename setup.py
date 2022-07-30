@@ -988,7 +988,7 @@ class Install():  # pylint:disable=too-few-public-methods
             logger.debug("argv: %s, cmd: '%s', cmdline: '%s'", command, cmd, cmdline)
 
             proc = winpty.PTY(
-                100,
+                80 if self._env.is_installer else 100,
                 24,
                 backend=winpty.enums.Backend.WinPTY,  # ConPTY hangs and has lots of Ansi Escapes
                 agent_config=winpty.enums.AgentConfig.WINPTY_FLAG_PLAIN_OUTPUT)  # Strip all Ansi
