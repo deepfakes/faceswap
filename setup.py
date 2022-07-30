@@ -1031,14 +1031,17 @@ class Install():  # pylint:disable=too-few-public-methods
                     if line and not is_cr:
                         if last_line_cr:
                             last_line_cr = False
-                            if not self._is_gui:  # Go to next line
+                            if not self._is_gui and not self._env.is_installer:
+                                # Go to next line
                                 print("")
                         logger.verbose(line)  # type:ignore
                     elif line:
                         last_line_cr = True
                         logger.debug(line)
                         if not self._is_gui:
-                            print(line, end="\r")
+                            # NSIS only updates on line endings, so force new line for installer
+                            print(line,
+                                  end=None if self._env.is_installer else "\r")
                 lines = []
                 if eof:
                     returncode = proc.get_exitstatus()
