@@ -96,8 +96,8 @@ _DEFAULTS = dict(
     color_ab=dict(
         default=8,
         info="Percentage amount to randomly alter the 'a' and 'b' colors of the L*a*b* color "
-             "space of each training image.\nNB: This is ignored if the 'no-augment-color' option is "
-             "enabled",
+             "space of each training image.\nNB: This is ignored if the 'no-augment-color' option"
+             "is enabled",
         datatype=int,
         rounding=1,
         min_max=(0, 50),
