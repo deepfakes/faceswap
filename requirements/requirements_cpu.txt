@@ -1,3 +1,4 @@
 -r _requirements_base.txt
-numpy>=1.21.0,<1.23.0
+numpy>=1.21.0; python_version < '3.8'
+numpy>=1.22.0; python_version >= '3.8'
 tensorflow>=2.7.0,<2.10.0
