@@ -11,6 +11,6 @@ imageio-ffmpeg>=0.4.7
 ffmpy>=0.3.0
 # Exclude badly numbered Python2 version of nvidia-ml-py
 nvidia-ml-py>=11.515,<300
-tensorflow-probability
+tensorflow-probability<0.17
 typing-extensions>=4.0.0
 pywin32>=228 ; sys_platform == "win32"
