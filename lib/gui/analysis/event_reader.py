@@ -734,7 +734,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         if not loss:
             # Need to convert a tensor to a float for TF2.8 logged data. This maybe due to change
             # in logging or may be due to work around put in place in FS training function for the
-            # following bug in TF 2.8 when writing records:
+            # following bug in TF 2.8/2.9 when writing records:
             #  https://github.com/keras-team/keras/issues/16173
             loss = float(tf.make_ndarray(summary.tensor))
 

@@ -86,7 +86,7 @@ def test_adain_normalization(center, scale):
     model = models.Model(inputs, norm(inputs))
     data = [10 * np.random.random(shape) for shape in shapes]
 
-    actual_output = model.predict(data)
+    actual_output = model.predict(data, verbose=0)
     actual_output_shape = actual_output.shape
 
     for expected_dim, actual_dim in zip(expected_output_shape,

@@ -71,7 +71,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
     # check with the functional API
     model = Model(inp, outp)
 
-    actual_output = model.predict(input_data)
+    actual_output = model.predict(input_data, verbose=0)
     actual_output_shape = actual_output.shape
     for expected_dim, actual_dim in zip(expected_output_shape,
                                         actual_output_shape):
@@ -87,7 +87,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
     if model.weights:
         weights = model.get_weights()
         recovered_model.set_weights(weights)
-        _output = recovered_model.predict(input_data)
+        _output = recovered_model.predict(input_data, verbose=0)
         assert_allclose(_output, actual_output, rtol=1e-3)
 
     # test training mode (e.g. useful when the layer has a

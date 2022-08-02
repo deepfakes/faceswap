@@ -97,7 +97,7 @@ class ColoredFormatter(logging.Formatter):
         if platform.system().lower() != "windows":
             return True
         try:
-            win = sys.getwindowsversion()
+            win = sys.getwindowsversion()  # type:ignore # pylint:disable=no-member
             if win.major >= 10 and win.build >= 10586:
                 return True
         except Exception:  # pylint:disable=broad-except

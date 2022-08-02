@@ -6,11 +6,15 @@ import platform
 import sys
 
 from importlib import import_module
+from typing import Callable, TYPE_CHECKING
 
 from lib.gpu_stats import set_exclude_devices, GPUStats
 from lib.logger import crash_log, log_setup
 from lib.utils import (FaceswapError, get_backend, get_tf_version, safe_shutdown,
                        set_backend, set_system_verbosity)
+
+if TYPE_CHECKING:
+    import argparse
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -27,10 +31,10 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         command: str
             The faceswap command that is being executed
         """
-    def __init__(self, command):
+    def __init__(self, command: str) -> None:
         self._command = command.lower()
 
-    def _import_script(self):
+    def _import_script(self) -> Callable:
         """ Imports the relevant script as indicated by :attr:`_command` from the scripts folder.
 
         Returns
@@ -47,17 +51,17 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         script = getattr(module, self._command.title())
         return script
 
-    def _test_for_tf_version(self):
+    def _test_for_tf_version(self) -> None:
         """ Check that the required Tensorflow version is installed.
 
         Raises
         ------
         FaceswapError
-            If Tensorflow is not found, or is not between versions 2.4 and 2.8
+            If Tensorflow is not found, or is not between versions 2.4 and 2.9
         """
         amd_ver = 2.2
-        min_ver = 2.4
-        max_ver = 2.8
+        min_ver = 2.7
+        max_ver = 2.9
         try:
             # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
             os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
@@ -95,7 +99,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 
     @classmethod
-    def _handle_import_error(cls, message):
+    def _handle_import_error(cls, message: str) -> None:
         """ Display the error message to the console and wait for user input to dismiss it, if
         running GUI under Windows, otherwise use standard error handling.
 
@@ -112,15 +116,15 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         else:
             raise FaceswapError(message)
 
-    def _test_for_gui(self):
+    def _test_for_gui(self) -> None:
         """ If running the gui, performs check to ensure necessary prerequisites are present. """
         if self._command != "gui":
             return
         self._test_tkinter()
         self._check_display()
 
-    @staticmethod
-    def _test_tkinter():
+    @classmethod
+    def _test_tkinter(cls) -> None:
         """ If the user is running the GUI, test whether the tkinter app is available on their
         machine. If not exit gracefully.
 
@@ -147,8 +151,8 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             logger.info("Fedora: sudo dnf install python3-tkinter")
             raise FaceswapError("TkInter not found") from err
 
-    @staticmethod
-    def _check_display():
+    @classmethod
+    def _check_display(cls) -> None:
         """ Check whether there is a display to output the GUI to.
 
         If running on Windows then it is assumed that we are not running in headless mode
@@ -164,7 +168,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                             "See https://support.apple.com/en-gb/HT201341")
             raise FaceswapError("No display detected. GUI mode has been disabled.")
 
-    def execute_script(self, arguments):
+    def execute_script(self, arguments: "argparse.Namespace") -> None:
         """ Performs final set up and launches the requested :attr:`_command` with the given
         command line arguments.
 
@@ -205,7 +209,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         finally:
             safe_shutdown(got_error=not success)
 
-    def _configure_backend(self, arguments):
+    def _configure_backend(self, arguments: "argparse.Namespace") -> None:
         """ Configure the backend.
 
         Exclude any GPUs for use by Faceswap when requested.
@@ -245,13 +249,18 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             safe_shutdown(got_error=True)
 
     @classmethod
-    def _setup_amd(cls, arguments):
+    def _setup_amd(cls, arguments: "argparse.Namespace") -> bool:
         """ Test for plaidml and perform setup for AMD.
 
         Parameters
         ----------
         arguments: :class:`argparse.Namespace`
             The command line arguments passed to Faceswap.
+
+        Returns
+        -------
+        bool
+            ``True`` if AMD was set up succesfully otherwise ``False``
         """
         logger.debug("Setting up for AMD")
         try:

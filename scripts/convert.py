@@ -979,7 +979,7 @@ class Predict():
         feed = [feed_faces]
         logger.trace("Input shape(s): %s", [item.shape for item in feed])
 
-        predicted = self._model.model.predict(feed, batch_size=batch_size)
+        predicted = self._model.model.predict(feed, verbose=0, batch_size=batch_size)
         predicted = predicted if isinstance(predicted, list) else [predicted]
 
         if self._model.color_order.lower() == "rgb":

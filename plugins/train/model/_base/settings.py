@@ -21,23 +21,21 @@ from typing import Any, Callable, ContextManager, Dict, List, Optional, TYPE_CHE
 import tensorflow as tf
 
 from lib.model import losses, optimizers
-from lib.utils import get_backend, get_tf_version
+from lib.utils import get_backend
 
 if get_backend() == "amd":
     import keras
     from keras import losses as k_losses
     from keras import backend as K
+    import tensorflow.keras.mixed_precision.experimental as mixedprecision  # noqa pylint:disable=import-error,no-name-in-module,ungrouped-imports
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow import keras
     from tensorflow.keras import losses as k_losses  # pylint:disable=import-error
     from tensorflow.keras import backend as K  # pylint:disable=import-error
+    import tensorflow.keras.mixed_precision as mixedprecision  # noqa pylint:disable=import-error,no-name-in-module
     from lib.model.autoclip import AutoClipper  # pylint:disable=ungrouped-imports
 
-if get_tf_version() < 2.4:
-    import tensorflow.keras.mixed_precision.experimental as mixedprecision  # noqa pylint:disable=import-error,no-name-in-module
-else:
-    import tensorflow.keras.mixed_precision as mixedprecision  # noqa pylint:disable=import-error,no-name-in-module
 
 if sys.version_info < (3, 8):
     from typing_extensions import Literal

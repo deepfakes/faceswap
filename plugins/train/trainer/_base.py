@@ -250,15 +250,17 @@ class TrainerBase():
         logs = {log[0]: log[1]
                 for log in zip(self._model.state.loss_names, loss)}
 
-        self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
-        if get_tf_version() == 2.8:
-            # Bug in TF 2.8 where batch recording got deleted.
+        if get_tf_version() > 2.7:
+            # Bug in TF 2.8/2.9 where batch recording got deleted.
             # ref: https://github.com/keras-team/keras/issues/16173
-            for name, value in logs.items():
-                tf.summary.scalar(
-                    "batch_" + name,
-                    value,
-                    step=self._model._model._train_counter)  # pylint:disable=protected-access
+            with tf.summary.record_if(True), self._tensorboard._train_writer.as_default():  # noqa pylint:disable=protected-access,not-context-manager
+                for name, value in logs.items():
+                    tf.summary.scalar(
+                        "batch_" + name,
+                        value,
+                        step=self._tensorboard._train_step)  # pylint:disable=protected-access
+        else:
+            self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
 
     def _collate_and_store_loss(self, loss):
         """ Collate the loss into totals for each side.
@@ -725,8 +727,8 @@ class _Samples():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Getting Predictions")
         preds = {}
-        standard = self._model.model.predict([feed_a, feed_b])
-        swapped = self._model.model.predict([feed_b, feed_a])
+        standard = self._model.model.predict([feed_a, feed_b], verbose=0)
+        swapped = self._model.model.predict([feed_b, feed_a], verbose=0)
 
         if self._model.config["learn_mask"] and get_backend() == "amd":
             # Ravel results for plaidml

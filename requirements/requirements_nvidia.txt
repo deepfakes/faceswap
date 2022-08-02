@@ -1,3 +1,4 @@
 -r _requirements_base.txt
-tensorflow-gpu>=2.4.0,<2.9.0
+numpy>=1.22.0
+tensorflow-gpu>=2.7.0,<2.10.0
 pynvx==1.0.0 ; sys_platform == "darwin"

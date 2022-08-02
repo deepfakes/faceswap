@@ -25,7 +25,6 @@ _COLORS = {
     "ENDC": "\033[0m"
 }
 
-
 def print_colored(text, color="OK", bold=False):
     """ Print colored text
     This might not work on windows,
@@ -55,7 +54,7 @@ def run_test(name, cmd):
     """ run a test """
     global FAIL_COUNT, TEST_COUNT  # pylint:disable=global-statement
     print_status(f"[?] running {name}")
-    print(f"Cmd: {''.join(cmd)}")
+    print(f"Cmd: {' '.join(cmd)}")
     TEST_COUNT += 1
     try:
         check_call(cmd)
@@ -117,6 +116,31 @@ def sort_args(in_path, out_path, sortby="face", groupby="hist", method="rename")
     return _sort_args.split()
 
 
+def set_train_config(value):
+    """ Update the mixed_precision and autoclip values to given value
+
+    Parameters
+    ----------
+    value: bool
+        The value to set the config parameters to.
+    """
+    old_val, new_val = ("False", "True") if value else ("True", "False")
+    base_path = os.path.split(os.path.dirname(os.path.abspath(__file__)))[0]
+    train_ini = os.path.join(base_path, "config", "train.ini")
+    try:
+        cmd = ["sed", "-i", f"s/autoclip = {old_val}/autoclip = {new_val}/", train_ini]
+        check_call(cmd)
+        cmd = ["sed",
+               "-i",
+               f"s/mixed_precision = {old_val}/mixed_precision = {new_val}/",
+               train_ini]
+        check_call(cmd)
+        print_ok(f"Set autoclip and mixed_precision to `{new_val}`")
+    except CalledProcessError as err:
+        print_fail(f"[-] Test failed with {err}")
+        return False
+
+
 def main():
     """ Main testing script """
     vid_src = "https://faceswap.dev/data/test.mp4"
@@ -150,6 +174,12 @@ def main():
 
     if vid_extract:
         run_test(
+                "Generate configs and test help output",
+                (
+                    py_exe, "faceswap.py", "-h"
+                )
+        )
+        run_test(
             "Sort faces.",
             sort_args(
                 pathjoin(vid_base, "faces"), pathjoin(vid_base, "faces_sorted"),
@@ -165,9 +195,9 @@ def main():
                 "-fc", pathjoin(vid_base, "faces_sorted"),
             )
         )
-
+        set_train_config(True)
         run_test(
-            "Train lightweight model for 1 iteration with WTL.",
+            "Train lightweight model for 1 iteration with WTL, AutoClip, MixedPrecion",
             train_args("lightweight",
                        pathjoin(vid_base, "model"),
                        pathjoin(vid_base, "faces"),
@@ -175,8 +205,9 @@ def main():
                        batchsize=_TRAIN_ARGS[1],
                        extra_args="-wl"))
 
+        set_train_config(False)
         was_trained = run_test(
-            "Train lightweight model for 1 iterations WITHOUT WTL.",
+            "Train lightweight model for 1 iterations WITHOUT WTL, AutoClip, MixedPrecion",
             train_args("lightweight",
                        pathjoin(vid_base, "model"),
                        pathjoin(vid_base, "faces"),

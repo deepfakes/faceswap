@@ -105,7 +105,7 @@ class NvidiaStats(_GPUStats):
             The current GPU driver version
         """
         try:
-            driver = pynvml.nvmlSystemGetDriverVersion().decode("utf-8")
+            driver = pynvml.nvmlSystemGetDriverVersion()
         except pynvml.NVMLError as err:
             self._log("debug", f"Unable to obtain driver. Original error: {str(err)}")
             driver = "No Nvidia driver found"
@@ -120,7 +120,7 @@ class NvidiaStats(_GPUStats):
         list
             The list of connected Nvidia GPU names
         """
-        names = [pynvml.nvmlDeviceGetName(handle).decode("utf-8")
+        names = [pynvml.nvmlDeviceGetName(handle)
                  for handle in self._handles]
         self._log("debug", f"GPU Devices: {names}")
         return names
