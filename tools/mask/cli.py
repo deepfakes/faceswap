@@ -23,8 +23,9 @@ class MaskArgs(FaceSwapArgs):
         """ Return command information """
         return _("Mask tool\nGenerate masks for existing alignments files.")
 
-    def get_argument_list(self):
-        argument_list = list()
+    @staticmethod
+    def get_argument_list():
+        argument_list = []
         argument_list.append(dict(
             opts=("-a", "--alignments"),
             action=FileFullPaths,
@@ -67,6 +68,10 @@ class MaskArgs(FaceSwapArgs):
                    "\nL|components: Mask designed to provide facial segmentation based on the "
                    "positioning of landmark locations. A convex hull is constructed around the "
                    "exterior of the landmarks to create a mask."
+                   "\nL|custom: A dummy mask that fills the mask area with all 1s or 0s "
+                   "(configurable in settings). This is only required if you intend to manually "
+                   "edit the custom masks yourself in the manual tool. This mask does not use the "
+                   "GPU."
                    "\nL|extended: Mask designed to provide facial segmentation based on the "
                    "positioning of landmark locations. A convex hull is constructed around the "
                    "exterior of the landmarks and the mask is extended upwards onto the forehead."
