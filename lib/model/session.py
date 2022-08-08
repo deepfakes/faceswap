@@ -1,8 +1,9 @@
 #!/usr/bin python3
 """ Settings manager for Keras Backend """
 
+from contextlib import nullcontext
 import logging
-from typing import Callable, List, Optional, Union
+from typing import Callable, ContextManager, List, Optional, Union
 
 import numpy as np
 import tensorflow as tf
@@ -50,21 +51,25 @@ class KSession():
     exclude_gpus: list, optional
         A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
         ``None`` to not exclude any GPUs. Default: ``None``
-
+    cpu_mode: bool, optional
+        ``True`` run the model on CPU. Default: ``False``
     """
     def __init__(self,
                  name: str,
                  model_path: str,
                  model_kwargs: Optional[dict] = None,
                  allow_growth: bool = False,
-                 exclude_gpus: Optional[List[int]] = None) -> None:
+                 exclude_gpus: Optional[List[int]] = None,
+                 cpu_mode: bool = False) -> None:
         logger.trace("Initializing: %s (name: %s, model_path: %s, "  # type:ignore
-                     "model_kwargs: %s,  allow_growth: %s, exclude_gpus: %s)",
+                     "model_kwargs: %s,  allow_growth: %s, exclude_gpus: %s, cpu_mode: %s)",
                      self.__class__.__name__, name, model_path, model_kwargs, allow_growth,
-                     exclude_gpus)
+                     exclude_gpus, cpu_mode)
         self._name = name
         self._backend = get_backend()
-        self._set_session(allow_growth, [] if exclude_gpus is None else exclude_gpus)
+        self._context = self._set_session(allow_growth,
+                                          [] if exclude_gpus is None else exclude_gpus,
+                                          cpu_mode)
         self._model_path = model_path
         self._model_kwargs = {} if not model_kwargs else model_kwargs
         self._model: Optional[Model] = None
@@ -94,9 +99,10 @@ class KSession():
             The predictions from the model
         """
         assert self._model is not None
-        if self._backend == "amd" and batch_size is not None:
-            return self._amd_predict_with_optimized_batchsizes(feed, batch_size)
-        return self._model.predict(feed, verbose=0, batch_size=batch_size)
+        with self._context:
+            if self._backend == "amd" and batch_size is not None:
+                return self._amd_predict_with_optimized_batchsizes(feed, batch_size)
+            return self._model.predict(feed, verbose=0, batch_size=batch_size)
 
     def _amd_predict_with_optimized_batchsizes(
             self,
@@ -133,7 +139,10 @@ class KSession():
             return np.concatenate(results)
         return [np.concatenate(x) for x in zip(*results)]
 
-    def _set_session(self, allow_growth: bool, exclude_gpus: list) -> None:
+    def _set_session(self,
+                     allow_growth: bool,
+                     exclude_gpus: list,
+                     cpu_mode: bool) -> ContextManager:
         """ Sets the backend session options.
 
         For AMD backend this does nothing.
@@ -152,13 +161,16 @@ class KSession():
         exclude_gpus: list
             A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
             ``None`` to not exclude any GPUs
+        cpu_mode: bool
+            ``True`` run the model on CPU. Default: ``False``
         """
+        retval = nullcontext()
         if self._backend == "amd":
-            return
+            return retval
         if self._backend == "cpu":
             logger.verbose("Hiding GPUs from Tensorflow")  # type:ignore
             tf.config.set_visible_devices([], "GPU")
-            return
+            return retval
 
         gpus = tf.config.list_physical_devices('GPU')
         if exclude_gpus:
@@ -170,6 +182,10 @@ class KSession():
             for gpu in gpus:
                 logger.info("Setting allow growth for GPU: %s", gpu)
                 tf.config.experimental.set_memory_growth(gpu, True)
+
+        if cpu_mode:
+            retval = tf.device("/device:cpu:0")
+        return retval
 
     def load_model(self) -> None:
         """ Loads a model.
@@ -183,9 +199,10 @@ class KSession():
         it thread safe.
         """
         logger.verbose("Initializing plugin model: %s", self._name)  # type:ignore
-        self._model = k_load_model(self._model_path, compile=False, **self._model_kwargs)
-        if self._backend != "amd":
-            self._model.make_predict_function()
+        with self._context:
+            self._model = k_load_model(self._model_path, compile=False, **self._model_kwargs)
+            if self._backend != "amd":
+                self._model.make_predict_function()
 
     def define_model(self, function: Callable) -> None:
         """ Defines a model from the given function.
@@ -199,7 +216,8 @@ class KSession():
             ``outputs``. The function that generates these results should be passed in, NOT the
             results themselves, as the function needs to be executed within the correct context.
         """
-        self._model = Model(*function())
+        with self._context:
+            self._model = Model(*function())
 
     def load_model_weights(self) -> None:
         """ Load model weights for a defined model inside the correct session.
@@ -213,9 +231,10 @@ class KSession():
         """
         logger.verbose("Initializing plugin model: %s", self._name)  # type:ignore
         assert self._model is not None
-        self._model.load_weights(self._model_path)
-        if self._backend != "amd":
-            self._model.make_predict_function()
+        with self._context:
+            self._model.load_weights(self._model_path)
+            if self._backend != "amd":
+                self._model.make_predict_function()
 
     def append_softmax_activation(self, layer_index: int = -1) -> None:
         """ Append a softmax activation layer to a model
@@ -231,5 +250,6 @@ class KSession():
         """
         logger.debug("Appending Softmax Activation to model: (layer_index: %s)", layer_index)
         assert self._model is not None
-        softmax = Activation("softmax", name="softmax")(self._model.layers[layer_index].output)
-        self._model = Model(inputs=self._model.input, outputs=[softmax])
+        with self._context:
+            softmax = Activation("softmax", name="softmax")(self._model.layers[layer_index].output)
+            self._model = Model(inputs=self._model.input, outputs=[softmax])

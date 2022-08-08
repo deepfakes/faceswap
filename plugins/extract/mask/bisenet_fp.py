@@ -36,9 +36,9 @@ class Mask(Masker):
         self.name = "BiSeNet - Face Parsing"
         self.input_size = 512
         self.color_format = "RGB"
-        self.vram = 2304
-        self.vram_warnings = 256
-        self.vram_per_batch = 64
+        self.vram = 2304 if not self.config["cpu"] else 0
+        self.vram_warnings = 256 if not self.config["cpu"] else 0
+        self.vram_per_batch = 64 if not self.config["cpu"] else 0
         self.batchsize = self.config["batch-size"]
 
         self._segment_indices = self._get_segment_indices()
@@ -107,7 +107,8 @@ class Mask(Masker):
                              self.config["allow_growth"],
                              self._exclude_gpus,
                              self.input_size,
-                             lbls)
+                             lbls,
+                             self.config["cpu"])
 
         placeholder = np.zeros((self.batchsize, self.input_size, self.input_size, 3),
                                dtype="float32")
@@ -535,12 +536,15 @@ class BiSeNet(KSession):
         The input size to the model
     num_classes: int
         The number of segmentation classes to create
+    cpu_mode: bool, optional
+        ``True`` run the model on CPU. Default: ``False``
     """
-    def __init__(self, model_path, allow_growth, exclude_gpus, input_size, num_classes):
+    def __init__(self, model_path, allow_growth, exclude_gpus, input_size, num_classes, cpu_mode):
         super().__init__("BiSeNet Face Parsing",
                          model_path,
                          allow_growth=allow_growth,
-                         exclude_gpus=exclude_gpus)
+                         exclude_gpus=exclude_gpus,
+                         cpu_mode=cpu_mode)
         self._input_size = input_size
         self._num_classes = num_classes
         self._cp = ContextPath()

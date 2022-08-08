@@ -88,6 +88,13 @@ _DEFAULTS = {
         gui_radio=False,
         fixed=True,
     ),
+    "cpu": dict(
+        default=True,
+        info="[Nvidia Only] MTCNN detector still runs fairly quickly on CPU on some setups. "
+             "Enable CPU mode here to use the CPU for this detector to save some VRAM at a speed "
+             "cost.",
+        datatype=bool,
+        group="settings"),
     "threshold_1": dict(
         default=0.6,
         info="First stage threshold for face detection. This stage obtains face candidates.",
