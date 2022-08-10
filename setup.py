@@ -32,8 +32,12 @@ _CONDA_MAPPING: Dict[str, Tuple[str, str]] = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
     "fastcluster": ("fastcluster", "conda-forge"),
     "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
+    "scikit-learn": ("scikit-learn", "conda-forge"),  # Exists in Default but is dependency hell
     "tensorflow-deps": ("tensorflow-deps", "apple"),
     "libblas": ("libblas", "conda-forge")}
+
+# Packages that should be installed first to prevent version conflicts
+_PRIORITY = ["numpy"]
 
 
 class Environment():
@@ -720,6 +724,13 @@ class Install():  # pylint:disable=too-few-public-methods
                 [int(s) for s in spec[1].split(".")])
                                  for spec in specs):
                 self._env.missing_packages.append((key, specs))
+
+        for priority in reversed(_PRIORITY):
+            # Put priority packages at beginning of list
+            package = next((pkg for pkg in self._env.missing_packages if pkg[0] == priority), None)
+            if package:
+                idx = self._env.missing_packages.index(package)
+                self._env.missing_packages.insert(0, self._env.missing_packages.pop(idx))
         logger.debug(self._env.missing_packages)
 
     def _check_conda_missing_dep(self) -> None:

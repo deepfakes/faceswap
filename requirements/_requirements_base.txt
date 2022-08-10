@@ -2,8 +2,8 @@ tqdm>=4.64
 psutil>=5.9.0
 opencv-python>=4.6.0.0
 pillow>=9.2.0
-scikit-learn==1.0.2; python_version < '3.8'
-scikit-learn>=1.1.0; python_version >= '3.8'
+scikit-learn==1.0.2; python_version < '3.9'  # AMD needs version 1.0.2 and 1.1.0 not available in Python 3.7
+scikit-learn>=1.1.0; python_version >= '3.9'
 fastcluster>=1.2.6
 matplotlib>=3.5.1
 imageio>=2.19.3
