@@ -71,7 +71,7 @@ class Environment():
         self._output_runtime_info()
         self._check_pip()
         self._upgrade_pip()
-        self._set_ld_library_path()
+        self._set_env_vars()
 
         self.installed_packages = self.get_installed_packages()
         self.installed_packages.update(self.get_installed_conda_packages())
@@ -342,9 +342,17 @@ class Environment():
             json.dump(config, cnf)
         logger.info("Faceswap config written to: %s", config_file)
 
-    def _set_ld_library_path(self) -> None:
-        """ Update the LD_LIBRARY_PATH environment variable when activating a conda environment
-        and revert it when deactivating. Linux/conda only
+    def _set_env_vars(self) -> None:
+        """ There are some foibles under Conda which need to be worked around in different
+        situations.
+
+        Linux:
+        Update the LD_LIBRARY_PATH environment variable when activating a conda environment
+        and revert it when deactivating.
+
+        Windows + AMD + Python 3.8:
+        Add CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1 environment variable to get around a bug which
+        prevents SciPy from loading in this config: https://github.com/scipy/scipy/issues/14002
 
         Notes
         -----
@@ -353,18 +361,25 @@ class Environment():
         We update the environment variable for all instances using Conda as it shouldn't hurt
         anything and may help avoid conflicts with globally installed Cuda
         """
-        if not self.is_conda or not self.enable_cuda or self.os_version[0].lower() != "linux":
+        if not self.is_conda:
+            return
+
+        linux_update = self.os_version[0].lower() == "linux" and self.enable_cuda
+        windows_update = (self.os_version[0].lower() == "windows" and
+                          self.enable_amd and (3, 8) <= sys.version_info < (3, 9))
+
+        if not linux_update and not windows_update:
             return
 
         conda_prefix = os.environ["CONDA_PREFIX"]
         activate_folder = os.path.join(conda_prefix, "etc", "conda", "activate.d")
         deactivate_folder = os.path.join(conda_prefix, "etc", "conda", "deactivate.d")
-
         os.makedirs(activate_folder, exist_ok=True)
         os.makedirs(deactivate_folder, exist_ok=True)
 
-        activate_script = os.path.join(conda_prefix, activate_folder, "env_vars.sh")
-        deactivate_script = os.path.join(conda_prefix, deactivate_folder, "env_vars.sh")
+        ext = ".bat" if windows_update else ".sh"
+        activate_script = os.path.join(conda_prefix, activate_folder, f"env_vars{ext}")
+        deactivate_script = os.path.join(conda_prefix, deactivate_folder, f"env_vars{ext}")
 
         if os.path.isfile(activate_script):
             # Only create file if it does not already exist. There may be instances where people
@@ -372,20 +387,27 @@ class Environment():
             # people should already know what they are doing.
             return
 
-        conda_libs = os.path.join(conda_prefix, "lib")
-        shebang = "#!/bin/sh\n\n"
+        if linux_update:
+            conda_libs = os.path.join(conda_prefix, "lib")
+            activate = ["#!/bin/sh\n\n",
+                        "export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\n",
+                        f"export LD_LIBRARY_PATH='{conda_libs}':${{LD_LIBRARY_PATH}}\n"]
+            deactivate = ["#!/bin/sh\n\n",
+                          "export LD_LIBRARY_PATH=${OLD_LD_LIBRARY_PATH}\n",
+                          "unset OLD_LD_LIBRARY_PATH\n"]
+            logger.info("Cuda search path set to '%s'", conda_libs)
+
+        if windows_update:
+            activate = ["@ECHO OFF\n",
+                        "set CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1\n"]
+            deactivate = ["@ECHO OFF\n",
+                          "set CONDA_DLL_SEARCH_MODIFICATION_ENABLE=\n"]
+            logger.verbose("CONDA_DLL_SEARCH_MODIFICATION_ENABLE set to 1")  # type: ignore
 
         with open(activate_script, "w", encoding="utf8") as afile:
-            afile.write(f"{shebang}")
-            afile.write("export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\n")
-            afile.write(f"export LD_LIBRARY_PATH='{conda_libs}':${{LD_LIBRARY_PATH}}\n")
-
+            afile.writelines(activate)
         with open(deactivate_script, "w", encoding="utf8") as afile:
-            afile.write(f"{shebang}")
-            afile.write("export LD_LIBRARY_PATH=${OLD_LD_LIBRARY_PATH}\n")
-            afile.write("unset OLD_LD_LIBRARY_PATH\n")
-
-        logger.info("Cuda search path set to '%s'", conda_libs)
+            afile.writelines(deactivate)
 
 
 class Checks():  # pylint:disable=too-few-public-methods
