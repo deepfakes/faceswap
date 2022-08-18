@@ -13,8 +13,10 @@ import zipfile
 from re import finditer
 from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
+from time import time
 from typing import cast, List, Optional, Union, TYPE_CHECKING
 
+import numpy as np
 from tqdm import tqdm
 
 if sys.version_info < (3, 8):
@@ -608,3 +610,96 @@ class GetModel():  # pylint:disable=too-few-public-methods
                     out_file.write(buffer)
         zip_file.close()
         pbar.close()
+
+
+class DebugTimes():
+    """ A simple tool to help debug timings.
+    """
+    def __init__(self):
+        self._times = {}
+        self._steps = {}
+        self._interval = 1
+
+    def step_start(self, name: str, record: bool = True) -> None:
+        """ Start the timer for the given step name.
+
+        Parameters
+        ----------
+        name: str
+            The name of the step to start the timer for
+        record: bool, optional
+            ``True`` to record the step time, ``False`` to not record it.
+            Used for when you have conditional code to time, but do not want to insert if/else
+            statements in the code. Default: `True`
+        """
+        if not record:
+            return
+        self._steps[name] = time()
+
+    def step_end(self, name: str, record: bool = True) -> None:
+        """ Stop the timer and record elapsed time  for the given step name.
+
+        Parameters
+        ----------
+        name: str
+            The name of the step to end the timer for
+        record: bool, optional
+            ``True`` to record the step time, ``False`` to not record it.
+            Used for when you have conditional code to time, but do not want to insert if/else
+            statements in the code. Default: `True`
+        """
+        if not record:
+            return
+        self._times.setdefault(name, []).append(time() - self._steps.pop(name))
+
+    @classmethod
+    def _format_column(cls, text: str, width: int) -> str:
+        """ Pad the given text to be aligned to the given width.
+
+        Parameters
+        ----------
+        text: str
+            The text to be formatted
+        width: int
+            The size of the column to insert the text into
+
+        Returns
+        -------
+        str
+            The text with the correct amount of padding applied
+        """
+        return f"{text}{' ' * (width - len(text))}"
+
+    def summary(self, decimal_places: int = 6, interval: int = 1) -> None:
+        """ Output a summary of step times.
+
+        Parameters
+        ----------
+        decimal_places: int, optional
+            The number of decimal places to display the summary elapsed times to
+        interval: int, optional
+            How many times summary must be called before printing to console. Default: 1
+        """
+        interval = max(1, interval)
+        if interval != self._interval:
+            self._interval += 1
+            return
+
+        name_col = max(len(key) for key in self._times) + 4
+        items_col = 8
+        time_col = decimal_places + 4
+        print("")
+        print("-" * (name_col + items_col + (3 * time_col)))
+        print(f"{self._format_column('Step', name_col)}{self._format_column('Count', items_col)}"
+              f"{self._format_column('Min', time_col)}{self._format_column('Avg', time_col)}"
+              f"{self._format_column('Max', time_col)}")
+        print("-" * (name_col + items_col + (3 * time_col)))
+        for key, val in self._times.items():
+            _min = f"{np.min(val):.{decimal_places}f}"
+            avg = f"{np.mean(val):.{decimal_places}f}"
+            _max = f"{np.max(val):.{decimal_places}f}"
+            num = str(len(val))
+            print(f"{self._format_column(key, name_col)}{self._format_column(num, items_col)}"
+                  f"{self._format_column(_min, time_col)}{self._format_column(avg, time_col)}"
+                  f"{self._format_column(_max, time_col)}")
+        self._interval = 1
