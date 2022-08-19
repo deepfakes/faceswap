@@ -14,7 +14,7 @@ from re import finditer
 from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
 from time import time
-from typing import cast, List, Optional, Union, TYPE_CHECKING
+from typing import cast, Dict, List, Optional, Union, TYPE_CHECKING
 
 import numpy as np
 from tqdm import tqdm
@@ -616,8 +616,8 @@ class DebugTimes():
     """ A simple tool to help debug timings.
     """
     def __init__(self):
-        self._times = {}
-        self._steps = {}
+        self._times: Dict[str, List[float]] = {}
+        self._steps: Dict[str, float] = {}
         self._interval = 1
 
     def step_start(self, name: str, record: bool = True) -> None:
