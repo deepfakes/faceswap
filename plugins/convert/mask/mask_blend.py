@@ -121,7 +121,8 @@ class Mask():  # pylint:disable=too-few-public-methods
 
     def run(self,
             detected_face: DetectedFace,
-            sub_crop_offset: Optional[np.ndarray],
+            source_offset: np.ndarray,
+            target_offset: np.ndarray,
             centering: Literal["legacy", "face", "head"],
             predicted_mask: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
         """ Obtain the requested mask type and perform any defined mask manipulations.
@@ -130,8 +131,10 @@ class Mask():  # pylint:disable=too-few-public-methods
         ----------
         detected_face: :class:`lib.align.DetectedFace`
             The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
-        sub_crop_offset: :class:`numpy.ndarray`, optional
-            The (x, y) offset to crop the mask from the center point.
+        source_offset: :class:`numpy.ndarray`
+            The (x, y) offset for the mask at its stored centering
+        target_offset: :class:`numpy.ndarray`
+            The (x, y) offset for the mask at the requested target centering
         centering: [`"legacy"`, `"face"`, `"head"`]
             The centering to obtain the mask for
         predicted_mask: :class:`numpy.ndarray`, optional
@@ -146,9 +149,14 @@ class Mask():  # pylint:disable=too-few-public-methods
             The mask with no erosion/dilation applied
         """
         logger.trace("Performing mask adjustment: (detected_face: %s, "  # type: ignore
-                     "sub_crop_offset: %s, centering: '%s', predicted_mask: %s",
-                     detected_face, sub_crop_offset, centering, predicted_mask is not None)
-        mask = self._get_mask(detected_face, predicted_mask, centering, sub_crop_offset)
+                     "source_offset: %s, target_offset: %s, centering: '%s', predicted_mask: %s",
+                     detected_face, source_offset, target_offset, centering,
+                     predicted_mask is not None)
+        mask = self._get_mask(detected_face,
+                              predicted_mask,
+                              centering,
+                              source_offset,
+                              target_offset)
         raw_mask = mask.copy()
 
         if self._mask_type != "none":
@@ -165,7 +173,8 @@ class Mask():  # pylint:disable=too-few-public-methods
                   detected_face: DetectedFace,
                   predicted_mask: Optional[np.ndarray],
                   centering: Literal["legacy", "face", "head"],
-                  sub_crop_offset: Optional[np.ndarray]) -> np.ndarray:
+                  source_offset: np.ndarray,
+                  target_offset: np.ndarray) -> np.ndarray:
         """ Return the requested mask with any requested blurring applied.
 
         Parameters
@@ -177,9 +186,10 @@ class Mask():  # pylint:disable=too-few-public-methods
             with a mask, otherwise ``None``
         centering: [`"legacy"`, `"face"`, `"head"`]
             The centering to obtain the mask for
-        sub_crop_offset: :class:`numpy.ndarray`
-            The (x, y) offset to crop the mask from the center point. Set to `None` if the mask
-            does not need to be offset for alternative centering
+        source_offset: :class:`numpy.ndarray`
+            The (x, y) offset for the mask at its stored centering
+        target_offset: :class:`numpy.ndarray`
+            The (x, y) offset for the mask at the requested target centering
 
         Returns
         -------
@@ -191,7 +201,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         elif self._mask_type == "predicted" and predicted_mask is not None:
             mask = self._process_predicted_mask(predicted_mask)
         else:
-            mask = self._get_stored_mask(detected_face, centering, sub_crop_offset)
+            mask = self._get_stored_mask(detected_face, centering, source_offset, target_offset)
 
         logger.trace(mask.shape)  # type: ignore
         return mask
@@ -209,7 +219,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         :class:`numpy.ndarray`
             The processed predicted mask
         """
-        blur_type = self._config["type"]
+        blur_type = self._config["type"].lower()
         if blur_type is not None:
             mask = BlurMask(blur_type,
                             mask,
@@ -220,7 +230,8 @@ class Mask():  # pylint:disable=too-few-public-methods
     def _get_stored_mask(self,
                          detected_face: DetectedFace,
                          centering: Literal["legacy", "face", "head"],
-                         sub_crop_offset: Optional[np.ndarray]) -> np.ndarray:
+                         source_offset: np.ndarray,
+                         target_offset: np.ndarray) -> np.ndarray:
         """ get the requested stored mask from the detected face object.
 
         Parameters
@@ -229,9 +240,10 @@ class Mask():  # pylint:disable=too-few-public-methods
             The DetectedFace object as returned from :class:`scripts.convert.Predictor`.
         centering: [`"legacy"`, `"face"`, `"head"`]
             The centering to obtain the mask for
-        sub_crop_offset: :class:`numpy.ndarray`
-            The (x, y) offset to crop the mask from the center point. Set to `None` if the mask
-            does not need to be offset for alternative centering
+        source_offset: :class:`numpy.ndarray`
+            The (x, y) offset for the mask at its stored centering
+        target_offset: :class:`numpy.ndarray`
+            The (x, y) offset for the mask at the requested target centering
 
         Returns
         -------
@@ -243,42 +255,18 @@ class Mask():  # pylint:disable=too-few-public-methods
                                     blur_type=self._config["type"],
                                     blur_passes=self._config["passes"],
                                     threshold=self._config["threshold"])
-        if sub_crop_offset is not None and np.any(sub_crop_offset):
-            mask.set_sub_crop(sub_crop_offset, centering)
-        mask = self._crop_to_coverage(mask.mask)
-        mask_size = mask.shape[0]
+        mask.set_sub_crop(source_offset, target_offset, centering, self._coverage_ratio)
+        face_mask = mask.mask
+        mask_size = face_mask.shape[0]
         face_size = self._box.shape[0]
         if mask_size != face_size:
             interp = cv2.INTER_CUBIC if mask_size < face_size else cv2.INTER_AREA
-            mask = cv2.resize(mask,
-                              self._box.shape[:2],
-                              interpolation=interp)[..., None].astype("float32") / 255.
+            face_mask = cv2.resize(face_mask,
+                                   self._box.shape[:2],
+                                   interpolation=interp)[..., None].astype("float32") / 255.
         else:
-            mask = np.float32(mask) / 255.
-        return mask
-
-    def _crop_to_coverage(self, mask: np.ndarray) -> np.ndarray:
-        """ Crop the mask to the correct dimensions based on coverage ratio.
-
-        Parameters
-        ----------
-        mask: :class:`numpy.ndarray`
-            The original mask to be cropped
-
-        Returns
-        -------
-        :class:`numpy.ndarray`
-            The cropped mask
-        """
-        if self._coverage_ratio == 1.0:
-            return mask
-        mask_size = mask.shape[0]
-        padding = round((mask_size * (1 - self._coverage_ratio)) / 2)
-        mask_slice = slice(padding, mask_size - padding)
-        mask = mask[mask_slice, mask_slice, :]
-        logger.trace("mask_size: %s, coverage: %s, padding: %s, final shape: %s",  # type: ignore
-                     mask_size, self._coverage_ratio, padding, mask.shape)
-        return mask
+            face_mask = face_mask.astype("float32") / 255.
+        return face_mask
 
     # MASK MANIPULATIONS
     def _erode(self, mask: np.ndarray) -> np.ndarray:

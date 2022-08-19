@@ -318,9 +318,10 @@ class Converter():
             mask_centering = detected_face.mask[self._args.mask_type].stored_centering
         else:
             mask_centering = "face"  # Unused but requires a valid value
-        crop_offset = (reference_face.pose.offset[self._centering] -
-                       reference_face.pose.offset[mask_centering])
-        mask, raw_mask = self._adjustments["mask"].run(detected_face, crop_offset, self._centering,
+        mask, raw_mask = self._adjustments["mask"].run(detected_face,
+                                                       reference_face.pose.offset[mask_centering],
+                                                       reference_face.pose.offset[self._centering],
+                                                       self._centering,
                                                        predicted_mask=predicted_mask)
         logger.trace("Adding mask to alpha channel")
         new_face = np.concatenate((new_face, mask), -1)

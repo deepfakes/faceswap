@@ -128,7 +128,8 @@ class Viewport():
             return None
         if mask.stored_centering != "face":
             face = AlignedFace(detected_face.landmarks_xy)
-            mask.set_sub_crop(face.pose.offset["face"] - face.pose.offset[mask.stored_centering],
+            mask.set_sub_crop(face.pose.offset[mask.stored_centering],
+                              face.pose.offset["face"],
                               centering="face")
         return mask.mask.squeeze()
 

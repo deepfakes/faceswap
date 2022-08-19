@@ -2,13 +2,20 @@
 """ Aligner for faceswap.py """
 
 import logging
+import sys
 from threading import Lock
 
 import cv2
 import numpy as np
 
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
+CenteringType = Literal["face", "head", "legacy"]
 
 _MEAN_FACE = np.array([[0.010086, 0.106454], [0.085135, 0.038915], [0.191003, 0.018748],
                        [0.300643, 0.034489], [0.403270, 0.077391], [0.596729, 0.077391],
@@ -113,6 +120,88 @@ def transform_image(image, matrix, size, padding=0):
     interpolators = get_matrix_scaling(mat)
     retval = cv2.warpAffine(image, mat, (size, size), flags=interpolators[0])
     logger.trace("transformed matrix: %s, final image shape: %s", mat, image.shape)
+    return retval
+
+
+def get_adjusted_center(image_size: int,
+                        source_offset: np.ndarray,
+                        target_offset: np.ndarray,
+                        source_centering: CenteringType) -> np.ndarray:
+    """ Obtain the correct center of a face extracted image to translate between two different
+    extract centerings.
+
+    Parameters
+    ----------
+    image_size: int
+        The size of the image at the given :attr:`source_centering`
+    source_offset: :class:`numpy.ndarray`
+        The pose offset to translate a base extracted face to source centering
+    target_offset: :class:`numpy.ndarray`
+        The pose offset to translate a base extracted face to target centering
+    source_centering: ["face", "head", "legacy"]
+        The centering of the source image
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        The center point of the image at the given size for the target centering
+    """
+    source_size = image_size - (image_size * _EXTRACT_RATIOS[source_centering])
+    offset = target_offset - source_offset
+    offset *= source_size
+    center = np.rint(offset + image_size / 2).astype("int32")
+    logger.trace("image_size: %s, source_offset: %s, target_offset: %s, "  # type: ignore
+                 "source_centering: '%s', adjusted_offset: %s, center: %s", image_size,
+                 source_offset, target_offset, source_centering, offset, center)
+    return center
+
+
+def get_centered_size(source_centering: CenteringType,
+                      target_centering: CenteringType,
+                      size: int,
+                      coverage_ratio: float = 1.0) -> int:
+    """ Obtain the size of a cropped face from an aligned image.
+
+    Given an image of a certain dimensions, returns the dimensions of the sub-crop within that
+    image for the requested centering at the requested coverage ratio
+
+    Notes
+    -----
+    `"legacy"` places the nose in the center of the image (the original method for aligning).
+    `"face"` aligns for the nose to be in the center of the face (top to bottom) but the center
+    of the skull for left to right. `"head"` places the center in the middle of the skull in 3D
+    space.
+
+    The ROI in relation to the source image is calculated by rounding the padding of one side
+    to the nearest integer then applying this padding to the center of the crop, to ensure that
+    any dimensions always have an even number of pixels.
+
+    Parameters
+    ----------
+    source_centering: ["head", "face", "legacy"]
+        The centering that the original image is aligned at
+    target_centering: ["head", "face", "legacy"]
+        The centering that the sub-crop size should be obtained for
+    size: int
+        The size of the source image to obtain the cropped size for
+    coverage_ratio: float, optional
+        The coverage ratio to be applied to the target image. Default: `1.0`
+
+    Returns
+    -------
+    int
+        The pixel size of a sub-crop image from a full head aligned image with the given coverage
+        ratio
+    """
+    if source_centering == target_centering and coverage_ratio == 1.0:
+        retval = size
+    else:
+        src_size = size - (size * _EXTRACT_RATIOS[source_centering])
+        retval = 2 * int(np.rint((src_size / (1 - _EXTRACT_RATIOS[target_centering])
+                                 * coverage_ratio) / 2))
+    logger.trace("source_centering: %s, target_centering: %s, size: %s, "  # type: ignore
+                 "coverage_ratio: %s, source_size: %s, crop_size: %s", source_centering,
+                 target_centering, size, coverage_ratio, src_size, retval)
     return retval
 
 
@@ -616,47 +705,6 @@ class PoseEstimate():
             offset[key] = center - (0.5, 0.5)
         logger.trace("offset: %s", offset)
         return offset
-
-
-def get_centered_size(source_centering, target_centering, size):
-    """ Obtain the size of a cropped face from an aligned image.
-
-    Given an image of a certain dimensions, returns the dimensions of the sub-crop within that
-    image for the requested centering.
-
-    Notes
-    -----
-    `"legacy"` places the nose in the center of the image (the original method for aligning).
-    `"face"` aligns for the nose to be in the center of the face (top to bottom) but the center
-    of the skull for left to right. `"head"` places the center in the middle of the skull in 3D
-    space.
-
-    The ROI in relation to the source image is calculated by rounding the padding of one side
-    to the nearest integer then applying this padding to the center of the crop, to ensure that
-    any dimensions always have an even number of pixels.
-
-    Parameters
-    ----------
-    source_centering: ["head", "face", "legacy"]
-        The centering that the original image is aligned at
-    target_centering: ["head", "face", "legacy"]
-        The centering that the sub-crop size should be obtained for
-    size: int
-        The size of the source image to obtain the cropped size for
-
-    Returns
-    -------
-    int
-        The pixel size of a sub-crop image from a full head aligned image
-    """
-    if source_centering == target_centering:
-        retval = size
-    else:
-        src_size = size - (size * _EXTRACT_RATIOS[source_centering])
-        retval = 2 * int(np.rint(src_size / (1 - _EXTRACT_RATIOS[target_centering]) / 2))
-    logger.trace("source_centering: %s, target_centering: %s, size: %s, crop_size: %s",
-                 source_centering, target_centering, size, retval)
-    return retval
 
 
 def _umeyama(source, destination, estimate_scale):

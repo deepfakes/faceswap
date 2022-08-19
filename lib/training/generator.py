@@ -393,7 +393,8 @@ class _Cache():
                                     threshold=self._config["mask_threshold"])
 
         pose = self._cache[key]["aligned_face"].pose
-        mask.set_sub_crop(pose.offset[self._centering] - pose.offset[mask.stored_centering],
+        mask.set_sub_crop(pose.offset[mask.stored_centering],
+                          pose.offset[self._centering],
                           self._centering)
 
         logger.trace("Caching mask for: %s", filename)
