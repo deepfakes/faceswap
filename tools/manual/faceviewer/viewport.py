@@ -39,8 +39,8 @@ class Viewport():
                                       nose=(27, 36),
                                       jaw=(0, 17),
                                       chin=(8, 11))
-        self._landmarks = dict()
-        self._tk_faces = dict()
+        self._landmarks = {}
+        self._tk_faces = {}
         self._objects = VisibleObjects(self)
         self._hoverbox = HoverBox(self)
         self._active_frame = ActiveFrame(self, tk_edited_variable)
@@ -135,8 +135,8 @@ class Viewport():
 
     def reset(self):
         """ Reset all the cached objects on a face size change. """
-        self._landmarks = dict()
-        self._tk_faces = dict()
+        self._landmarks = {}
+        self._tk_faces = {}
 
     def update(self, refresh_annotations=False):
         """ Update the viewport.
@@ -198,7 +198,7 @@ class Viewport():
 
     def _discard_tk_faces(self):
         """ Remove any :class:`TKFace` objects from the cache that are not currently displayed. """
-        keys = ["{}_{}".format(pnt_x, pnt_y)
+        keys = [f"{pnt_x}_{pnt_y}"
                 for pnt_x, pnt_y in self._objects.visible_grid[:2].T.reshape(-1, 2)]
         for key in list(self._tk_faces):
             if key not in keys:
@@ -303,7 +303,7 @@ class Viewport():
             (`polygon`, `line`). The value is a list containing the (x, y) coordinates of each
             part of the mesh annotation, from the top left corner location.
         """
-        key = "{}_{}".format(frame_index, face_index)
+        key = f"{frame_index}_{face_index}"
         landmarks = self._landmarks.get(key, None)
         if not landmarks or refresh:
             aligned = AlignedFace(face.landmarks_xy,
@@ -311,7 +311,6 @@ class Viewport():
                                   size=self.face_size)
             landmarks = dict(polygon=[], line=[])
             for area, val in self._landmark_mapping.items():
-                # pylint:disable=unsubscriptable-object
                 points = aligned.landmarks[val[0]:val[1]] + top_left
                 shape = "polygon" if area.endswith("eye") or area.startswith("mouth") else "line"
                 landmarks[shape].append(points)
@@ -844,13 +843,13 @@ class ActiveFrame():
         self._canvas.itemconfig("active_highlighter", state="hidden")
 
         for key in ("polygon", "line"):
-            tag = "active_mesh_{}".format(key)
+            tag = f"active_mesh_{key}"
             self._canvas.itemconfig(tag, **self._viewport.mesh_kwargs[key], width=1)
             self._canvas.dtag(tag)
 
         if self._viewport.selected_editor == "mask" and not self._optional_annotations["mask"]:
             for key, tk_face in self._tk_faces.items():
-                if key.startswith("{}_".format(self._last_execution["frame_index"])):
+                if key.startswith(f"{self._last_execution['frame_index']}_"):
                     tk_face.update_mask(None)
 
     def _set_active_objects(self):
@@ -995,7 +994,7 @@ class ActiveFrame():
             for idx, mesh_id in enumerate(mesh_ids[key]):
                 self._canvas.coords(mesh_id, *landmarks[key][idx].flatten())
                 self._canvas.itemconfig(mesh_id, state=state, **kwarg)
-                self._canvas.addtag_withtag("active_mesh_{}".format(key), mesh_id)
+                self._canvas.addtag_withtag(f"active_mesh_{key}", mesh_id)
 
 
 class TKFace():

@@ -68,7 +68,7 @@ class Align(Aligner):
                    det_face.top,
                    det_face.right,
                    det_face.bottom)
-            diff_height_width = det_face.h - det_face.w
+            diff_height_width = det_face.height - det_face.width
             offset_y = int(abs(diff_height_width / 2))
             box_moved = self.move_box(box, [0, offset_y])
             # Make box square.

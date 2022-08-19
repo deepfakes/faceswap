@@ -62,7 +62,7 @@ class Sort():
 
         # If logging is enabled, prepare container
         if self._args.log_changes:
-            self.changes = dict()
+            self.changes = {}
 
             # Assign default sort_log.json value if user didn't specify one
             if self._args.log_file_path == 'sort_log.json':
@@ -97,7 +97,7 @@ class Sort():
     def alignment_dict(filename, image):
         """ Set the image to an ExtractMedia object for alignment """
         height, width = image.shape[:2]
-        face = DetectedFace(x=0, w=width, y=0, h=height)
+        face = DetectedFace(left=0, width=width, top=0, height=height)
         return ExtractMedia(filename, image, detected_faces=[face])
 
     def _get_landmarks(self):
@@ -400,8 +400,7 @@ class Sort():
                                        centering="legacy",
                                        is_aligned=True)
             roi = aligned_face.original_roi
-            size = ((roi[1][0] - roi[0][0]) ** 2 +  # pylint:disable=unsubscriptable-object
-                    (roi[1][1] - roi[0][1]) ** 2) ** 0.5  # pylint:disable=unsubscriptable-object
+            size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
             img_list.append((filename, size))
 
         logger.info("Sorting...")
@@ -481,7 +480,7 @@ class Sort():
         logger.info("Grouping by face-cnn similarity...")
 
         # Groups are of the form: group_num -> reference faces
-        reference_groups = dict()
+        reference_groups = {}
 
         # Bins array, where index is the group number and value is
         # an array containing the file paths to the images in that group.
@@ -569,7 +568,7 @@ class Sort():
         logger.info("Grouping by histogram...")
 
         # Groups are of the form: group_num -> reference histogram
-        reference_groups = dict()
+        reference_groups = {}
 
         # Bins array, where index is the group number and value is
         # an array containing the file paths to the images in that group
@@ -623,7 +622,7 @@ class Sort():
             src = img_list[i] if isinstance(img_list[i], str) else img_list[i][0]
             src_basename = os.path.basename(src)
 
-            dst = os.path.join(output_dir, '{:05d}_{}'.format(i, src_basename))
+            dst = os.path.join(output_dir, f"{i:05d}_{src_basename}")
             try:
                 process_file(src, dst, self.changes)
             except FileNotFoundError as err:
@@ -724,7 +723,7 @@ class Sort():
                             for img in image_list]
             temp_list = list(zip(filename_list, black_pixels))
         else:
-            raise ValueError("{} group_method not found.".format(group_method))
+            raise ValueError(f"{group_method} group_method not found.")
 
         return self.splice_lists(img_list, temp_list)
 
@@ -967,10 +966,10 @@ class Sort():
                 src_basename = os.path.basename(src)
 
                 __src = os.path.join(output_dir,
-                                     '{:05d}_{}'.format(i, src_basename))
+                                     f"{i:05d}_{src_basename}")
                 dst = os.path.join(
                     output_dir,
-                    '{:05d}{}'.format(i, os.path.splitext(src_basename)[1]))
+                    f"{i:05d}{os.path.splitext(src_basename)[1]}")
                 changes[src] = dst
                 return __src, dst
         else:
@@ -979,10 +978,10 @@ class Sort():
                 src_basename = os.path.basename(src)
 
                 src = os.path.join(output_dir,
-                                   '{:05d}_{}'.format(i, src_basename))
+                                   f"{i:05d}_{src_basename}")
                 dst = os.path.join(
                     output_dir,
-                    '{:05d}{}'.format(i, os.path.splitext(src_basename)[1]))
+                    f"{i:05d}{os.path.splitext(src_basename)[1]}")
                 return src, dst
         return renaming
 

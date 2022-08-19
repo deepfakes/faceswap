@@ -188,7 +188,7 @@ class DetectedFaces():
         dict
             The internal variable name as key with the tkinter variable as value
         """
-        retval = dict()
+        retval = {}
         for name in ("unsaved", "edited", "face_count_changed"):
             var = tk.BooleanVar()
             var.set(False)
@@ -219,7 +219,7 @@ class DetectedFaces():
             filename = "alignments.fsa"
             if self._globals.is_video:
                 folder, vid = os.path.split(os.path.splitext(input_location)[0])
-                filename = "{}_{}".format(vid, filename)
+                filename = f"{vid}_{filename}"
             else:
                 folder = input_location
         retval = Alignments(folder, filename)
@@ -407,7 +407,7 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
             progress_queue.put(1)
 
             for face_idx, face in enumerate(self._frame_faces[frame_idx]):
-                output = "{}_{}{}".format(frame_name, str(face_idx), ".png")
+                output = f"{frame_name}_{face_idx}.png"
                 aligned = AlignedFace(face.landmarks_xy,
                                       image=image,
                                       centering="head",
@@ -657,11 +657,11 @@ class FaceUpdate():
         logger.trace("frame_index: %s, face_index %s, pnt_x %s, width %s, pnt_y %s, height %s, "
                      "aligner: %s", frame_index, face_index, pnt_x, width, pnt_y, height, aligner)
         face = self._faces_at_frame_index(frame_index)[face_index]
-        face.x = pnt_x
-        face.w = width
-        face.y = pnt_y
-        face.h = height
-        face.landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
+        face.left = pnt_x
+        face.width = width
+        face.top = pnt_y
+        face.height = height
+        face._landmarks_xy = self._extractor.get_landmarks(frame_index, face_index, aligner)
         self._globals.tk_update.set(True)
 
     def landmark(self, frame_index, face_index, landmark_index, shift_x, shift_y, is_zoomed):
@@ -689,7 +689,7 @@ class FaceUpdate():
             aligned = AlignedFace(face.landmarks_xy,
                                   centering="face",
                                   size=min(self._globals.frame_display_dims))
-            landmark = aligned.landmarks[landmark_index]  # pylint:disable=unsubscriptable-object
+            landmark = aligned.landmarks[landmark_index]
             landmark += (shift_x, shift_y)
             matrix = aligned.adjusted_matrix
             matrix = cv2.invertAffineTransform(matrix)
@@ -728,9 +728,9 @@ class FaceUpdate():
         aligned with the newly adjusted landmarks.
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
-        face.x += shift_x
-        face.y += shift_y
-        face.landmarks_xy += (shift_x, shift_y)
+        face.left += shift_x
+        face.top += shift_y
+        face._landmarks_xy += (shift_x, shift_y)
         self._globals.tk_update.set(True)
 
     def landmarks_rotate(self, frame_index, face_index, angle, center):
@@ -751,8 +751,8 @@ class FaceUpdate():
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
         rot_mat = cv2.getRotationMatrix2D(tuple(center.astype("float32")), angle, 1.)
-        face.landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
-                                          rot_mat).squeeze()
+        face._landmarks_xy = cv2.transform(np.expand_dims(face.landmarks_xy, axis=0),
+                                           rot_mat).squeeze()
         self._globals.tk_update.set(True)
 
     def landmarks_scale(self, frame_index, face_index, scale, center):
@@ -772,7 +772,7 @@ class FaceUpdate():
             The center point of the Landmark's Extract Box
         """
         face = self._faces_at_frame_index(frame_index)[face_index]
-        face.landmarks_xy = ((face.landmarks_xy - center) * scale) + center
+        face._landmarks_xy = ((face.landmarks_xy - center) * scale) + center
         self._globals.tk_update.set(True)
 
     def mask(self, frame_index, face_index, mask, mask_type):
@@ -825,7 +825,7 @@ class FaceUpdate():
         # aligned_face cannot be deep copied, so remove and recreate
         to_copy = self._faces_at_frame_index(idx)
         for face in to_copy:
-            face.aligned = None
+            face._aligned = None  # pylint:disable=protected-access
         copied = deepcopy(to_copy)
 
         for old_face, new_face in zip(to_copy, copied):
@@ -1012,7 +1012,7 @@ class ThumbsCreator():
         vidname = sample_filename[:sample_filename.rfind("_")]
         for idx, frame in enumerate(reader):
             frame_idx = idx + start_index
-            filename = "{}_{:06d}.png".format(vidname, frame_idx + 1)
+            filename = f"{vidname}_{frame_idx + 1:06d}.png"
             self._set_thumbail(filename, frame[..., ::-1], frame_idx)
             if idx == segment_count - 1:
                 # Sometimes extra frames are picked up at the end of a segment, so stop

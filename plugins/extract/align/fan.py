@@ -53,8 +53,8 @@ class Align(Aligner):
         center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
         for index, face in enumerate(detected_faces):
             x_center = (face.left + face.right) / 2.0
-            y_center = (face.top + face.bottom) / 2.0 - face.h * 0.12
-            scale = (face.w + face.h) * self.reference_scale
+            y_center = (face.top + face.bottom) / 2.0 - face.height * 0.12
+            scale = (face.width + face.height) * self.reference_scale
             center_scale[index, :, 0] = np.full(68, x_center, dtype='float32')
             center_scale[index, :, 1] = np.full(68, y_center, dtype='float32')
             center_scale[index, :, 2] = np.full(68, scale, dtype='float32')

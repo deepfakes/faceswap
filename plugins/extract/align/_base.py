@@ -17,7 +17,7 @@ For each source item, the plugin must pass a dict to finalize containing:
 import cv2
 import numpy as np
 
-from tensorflow.python.framework import errors_impl as tf_errors
+from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
 
 from lib.utils import get_backend, FaceswapError
 from plugins.extract._base import Extractor, logger, ExtractMedia
@@ -69,7 +69,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self.set_normalize_method(normalize_method)
 
         self._plugin_type = "align"
-        self._faces_per_filename = dict()  # Tracking for recompiling face batches
+        self._faces_per_filename = {}  # Tracking for recompiling face batches
         self._rollover = None  # Items that are rolled over from the previous batch in get_batch
         self._output_faces = []
         self._additional_keys = []
@@ -122,7 +122,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             A dictionary of lists of :attr:`~plugins.extract._base.Extractor.batchsize`:
         """
         exhausted = False
-        batch = dict()
+        batch = {}
         idx = 0
         while idx < self.batchsize:
             item = self._collect_item(queue)
@@ -200,7 +200,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         for face, landmarks in zip(batch["detected_faces"], batch["landmarks"]):
             if not isinstance(landmarks, np.ndarray):
                 landmarks = np.array(landmarks)
-            face.landmarks_xy = landmarks
+            face._landmarks_xy = landmarks
 
         logger.trace("Item out: %s", {key: val.shape if isinstance(val, np.ndarray) else val
                                       for key, val in batch.items()})
@@ -244,13 +244,13 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         if not self._additional_keys:
             existing_keys = list(batch.keys())
 
-        original_boxes = np.array([(face.x, face.y, face.w, face.h)
+        original_boxes = np.array([(face.left, face.top, face.width, face.height)
                                    for face in batch["detected_faces"]])
         adjusted_boxes = self._get_adjusted_boxes(original_boxes)
-        retval = dict()
+        retval = {}
         for bounding_boxes in adjusted_boxes:
             for face, box in zip(batch["detected_faces"], bounding_boxes):
-                face.x, face.y, face.w, face.h = box
+                face.left, face.top, face.width, face.height = box
 
             result = self.process_input(batch)
             if not self._additional_keys:
@@ -261,7 +261,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         # Place the original bounding box back to detected face objects
         for face, box in zip(batch["detected_faces"], original_boxes):
-            face.x, face.y, face.w, face.h = box
+            face.left, face.top, face.width, face.height = box
 
         batch.update(retval)
         return batch
@@ -356,7 +356,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         if self._normalize_method is None:
             return faces
         logger.trace("Normalizing faces")
-        meth = getattr(self, "_normalize_{}".format(self._normalize_method.lower()))
+        meth = getattr(self, f"_normalize_{self._normalize_method.lower()}")
         faces = [meth(face) for face in faces]
         logger.trace("Normalized faces")
         return faces

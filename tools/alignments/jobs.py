@@ -369,7 +369,7 @@ class Draw():  # pylint:disable=too-few-public-methods
         for area in ("face", "head"):
             face.load_aligned(image, centering=area, force=True)
             color = (0, 255, 0) if area == "face" else (0, 0, 255)
-            top_left = face.aligned.original_roi[0]  # pylint:disable=unsubscriptable-object
+            top_left = face.aligned.original_roi[0]
             top_left = (top_left[0], top_left[1] - 10)
             cv2.putText(image, str(index), top_left, cv2.FONT_HERSHEY_DUPLEX, 1.0, color, 1)
             cv2.polylines(image, [face.aligned.original_roi], True, color, 1)
@@ -385,7 +385,8 @@ class Draw():  # pylint:disable=too-few-public-methods
         face: :class:`lib.align.AlignedFace`
             The aligned face loaded for head centering
         """
-        center = np.int32((face.aligned.size / 2, face.aligned.size / 2)).reshape(1, 2)
+        center = np.array((face.aligned.size / 2,
+                           face.aligned.size / 2)).astype("int32").reshape(1, 2)
         center = np.rint(face.aligned.transform_points(center, invert=True)).astype("int32")
         points = face.aligned.pose.xyz_2d * face.aligned.size
         points = np.rint(face.aligned.transform_points(points, invert=True)).astype("int32")
