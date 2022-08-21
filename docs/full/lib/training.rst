@@ -15,6 +15,15 @@ augmentation module
    :undoc-members:
    :show-inheritance:
 
+cache module
+============
+
+.. automodule:: lib.training.cache
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 generator module
 ================
 

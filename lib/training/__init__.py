@@ -3,4 +3,4 @@
 associated objects. """
 
 from .augmentation import ImageAugmentation  # noqa
-from .generator import TrainingDataGenerator  # noqa
+from .generator import PreviewDataGenerator, TrainingDataGenerator  # noqa

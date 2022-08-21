@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import TYPE_CHECKING, Optional
+from typing import List, Dict, TYPE_CHECKING, Optional
 
 from tqdm import tqdm
 
@@ -71,7 +71,7 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,
                                     re_feed=self._args.re_feed)
-        self._threads = []
+        self._threads: List[MultiThread] = []
         self._verify_output = False
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -101,13 +101,14 @@ class Extract():  # pylint:disable=too-few-public-methods
         skip_list = []
         for idx, filename in enumerate(self._images.file_list):
             if idx % self._skip_num != 0:
-                logger.trace("Adding image '%s' to skip list due to extract_every_n = %s",
-                             filename, self._skip_num)
+                logger.trace("Adding image '%s' to skip list due to "  # type: ignore
+                             "extract_every_n = %s", filename, self._skip_num)
                 skip_list.append(idx)
             # Items may be in the alignments file if skip-existing[-faces] is selected
             elif os.path.basename(filename) in self._alignments.data:
                 self._existing_count += 1
-                logger.trace("Removing image: '%s' due to previously existing", filename)
+                logger.trace("Removing image: '%s' due to previously existing",  # type: ignore
+                             filename)
                 skip_list.append(idx)
         if self._existing_count != 0:
             logger.info("Skipping %s frames due to skip_existing/skip_existing_faces.",
@@ -142,7 +143,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             Any arguments that need to be provided to the background function
         """
         logger.debug("Threading task: (Task: '%s')", task)
-        io_args = tuple() if io_args is None else (io_args, )
+        io_args = tuple() if io_args is None else io_args
         func = getattr(self, f"_{task}")
         io_thread = MultiThread(func, *io_args, thread_count=1)
         io_thread.start()
@@ -165,7 +166,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
 
-    def _reload(self, detected_faces: dict[str, ExtractMedia]) -> None:
+    def _reload(self, detected_faces: Dict[str, ExtractMedia]) -> None:
         """ Reload the images and pair to detected face
 
         When the extraction pipeline is running in serial mode, images are reloaded from disk,
@@ -183,7 +184,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             if load_queue.shutdown.is_set():
                 logger.debug("Reload Queue: Stop signal received. Terminating")
                 break
-            logger.trace("Reloading image: '%s'", filename)
+            logger.trace("Reloading image: '%s'", filename)  # type: ignore
             extract_media = detected_faces.pop(filename, None)
             if not extract_media:
                 logger.warning("Couldn't find faces for: %s", filename)
@@ -231,8 +232,8 @@ class Extract():  # pylint:disable=too-few-public-methods
 
             if not is_final:
                 logger.debug("Reloading images")
-                self._threaded_redirector("reload", detected_faces)
-        if not self._args.skip_saving_faces:
+                self._threaded_redirector("reload", (detected_faces, ))
+        if saver is not None:
             saver.close()
 
     def _check_thread_error(self) -> None:
@@ -263,13 +264,13 @@ class Extract():  # pylint:disable=too-few-public-methods
 
         faces_count = len(extract_media.detected_faces)
         if faces_count == 0:
-            logger.verbose("No faces were detected in image: %s",
+            logger.verbose("No faces were detected in image: %s",  # type: ignore
                            os.path.basename(extract_media.filename))
 
         if not self._verify_output and faces_count > 1:
             self._verify_output = True
 
-    def _output_faces(self, saver: ImagesSaver, extract_media: ExtractMedia) -> None:
+    def _output_faces(self, saver: Optional[ImagesSaver], extract_media: ExtractMedia) -> None:
         """ Output faces to save thread
 
         Set the face filename based on the frame name and put the face to the
@@ -278,12 +279,12 @@ class Extract():  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        saver: lib.images.ImagesSaver
-            The background saver for saving the image
+        saver: :class:`lib.images.ImagesSaver` or ``None``
+            The background saver for saving the image or ``None`` if faces are not to be saved
         extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
             The output from :class:`~plugins.extract.Pipeline.Extractor`
         """
-        logger.trace("Outputting faces for %s", extract_media.filename)
+        logger.trace("Outputting faces for %s", extract_media.filename)  # type: ignore
         final_faces = []
         filename = os.path.splitext(os.path.basename(extract_media.filename))[0]
         extension = ".png"
@@ -299,7 +300,7 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     source_frame_dims=extract_media.image_size))
             image = encode_image(face.aligned.face, extension, metadata=meta)
 
-            if not self._args.skip_saving_faces:
+            if saver is not None:
                 saver.save(output_filename, image)
             final_faces.append(face.to_alignment())
         self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces)
