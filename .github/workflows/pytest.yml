@@ -1,4 +1,4 @@
-name: ci/gh-actions/pytest
+name: ci/build
 
 on:
   push:
