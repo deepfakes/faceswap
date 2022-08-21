@@ -42,6 +42,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         class: Faceswap Script
             The uninitialized script from the faceswap scripts folder.
         """
+        self._set_environment_variables()
         self._test_for_tf_version()
         self._test_for_gui()
         cmd = os.path.basename(sys.argv[0])
@@ -50,6 +51,17 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         module = import_module(mod)
         script = getattr(module, self._command.title())
         return script
+
+    def _set_environment_variables(self) -> None:
+        """ Set the number of threads that numexpr can use and TF environment variables. """
+        # Allocate a decent number of threads to numexpr to suppress warnings
+        cpu_count = os.cpu_count()
+        allocate = cpu_count - cpu_count // 3 if cpu_count is not None else 1
+        os.environ["NUMEXPR_MAX_THREADS"] = str(max(1, allocate))
+
+        # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
+        os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
+        os.environ["KMP_AFFINITY"] = "disabled"
 
     def _test_for_tf_version(self) -> None:
         """ Check that the required Tensorflow version is installed.
@@ -63,9 +75,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         min_ver = 2.7
         max_ver = 2.9
         try:
-            # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
-            os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
-            os.environ["KMP_AFFINITY"] = "disabled"
             import tensorflow as tf  # noqa pylint:disable=import-outside-toplevel,unused-import
         except ImportError as err:
             if "DLL load failed while importing" in str(err):

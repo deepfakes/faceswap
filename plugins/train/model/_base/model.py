@@ -204,11 +204,12 @@ class ModelBase():
         return self.name
 
     @property
-    def output_shapes(self) -> List[List[Tuple]]:
+    def output_shapes(self) -> List[List[Tuple[int, int, int]]]:
         """ list: A list of list of shape tuples for the outputs of the model with the batch
         dimension removed. The outer list contains 2 sub-lists (one for each side "a" and "b").
         The inner sub-lists contain the output shapes for that side. """
-        shapes = [tuple(K.int_shape(output)[-3:]) for output in self.model.outputs]
+        shapes: List[Tuple[int, int, int]] = [tuple(K.int_shape(output)[-3:])  # type: ignore
+                                              for output in self.model.outputs]
         return [shapes[:len(shapes) // 2], shapes[len(shapes) // 2:]]
 
     @property
@@ -477,7 +478,7 @@ class ModelBase():
                      self.model.output_names, new_names)
         self.model.output_names = new_names
 
-    def _legacy_mapping(self) -> Optional[dict]:  # pylint:disable=no-self-use
+    def _legacy_mapping(self) -> Optional[dict]:
         """ The mapping of separate model files to single model layers for transferring of legacy
         weights.
 

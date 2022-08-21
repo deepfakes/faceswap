@@ -1,5 +1,6 @@
 tqdm>=4.64
 psutil>=5.9.0
+numexpr>=2.8.3
 opencv-python>=4.6.0.0
 pillow>=9.2.0
 scikit-learn==1.0.2; python_version < '3.9'  # AMD needs version 1.0.2 and 1.1.0 not available in Python 3.7

@@ -356,26 +356,20 @@ def read_image_batch(filenames, with_metadata=False):
     >>> images = read_image_batch(image_filenames)
     """
     logger.trace("Requested batch: '%s'", filenames)
-    executor = futures.ThreadPoolExecutor()
-    with executor:
+    batch = [None for _ in range(len(filenames))]
+    if with_metadata:
+        meta = [None for _ in range(len(filenames))]
+
+    with futures.ThreadPoolExecutor() as executor:
         images = {executor.submit(read_image, filename,
-                                  raise_error=True, with_metadata=with_metadata): filename
-                  for filename in filenames}
-        batch = [None for _ in range(len(filenames))]
-        if with_metadata:
-            meta = [None for _ in range(len(filenames))]
-        # There is no guarantee that the same filename will not be passed through multiple times
-        # (and when shuffle is true this can definitely happen), so we can't just call
-        # filenames.index().
-        return_indices = {filename: [idx for idx, fname in enumerate(filenames)
-                                     if fname == filename]
-                          for filename in set(filenames)}
+                                  raise_error=True, with_metadata=with_metadata): idx
+                  for idx, filename in enumerate(filenames)}
         for future in futures.as_completed(images):
-            return_idx = return_indices[images[future]].pop()
+            ret_idx = images[future]
             if with_metadata:
-                batch[return_idx], meta[return_idx] = future.result()
+                batch[ret_idx], meta[ret_idx] = future.result()
             else:
-                batch[return_idx] = future.result()
+                batch[ret_idx] = future.result()
 
     batch = np.array(batch)
     retval = (batch, meta) if with_metadata else batch
