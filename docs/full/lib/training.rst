@@ -7,16 +7,16 @@ The training Package handles the processing of faces for feeding into a Faceswap
 .. contents:: Contents
    :local:
 
-augmentation module
-===================
+training.augmentation module
+============================
 
 .. automodule:: lib.training.augmentation
    :members:
    :undoc-members:
    :show-inheritance:
 
-cache module
-============
+training.cache module
+=====================
 
 .. automodule:: lib.training.cache
    :members:
@@ -24,8 +24,8 @@ cache module
    :show-inheritance:
 
 
-generator module
-================
+training.generator module
+=========================
 
 .. automodule:: lib.training.generator
    :members:

@@ -1083,7 +1083,7 @@ class Install():  # pylint:disable=too-few-public-methods
             logger.debug("Package: %s, returncode: %s", package, returncode)
             return returncode
         except Exception as err:  # pylint:disable=broad-except
-            logger.debug("Failed to install with pexpect. Falling back to subprocess. Error: %s",
+            logger.debug("Failed to install with winpty. Falling back to subprocess. Error: %s",
                          str(err))
             return self._subproc_installer(command, package)
 
