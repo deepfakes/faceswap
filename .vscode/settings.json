@@ -1,0 +1,6 @@
+{
+    "python.testing.unittestEnabled": true,
+    "python.testing.pytestEnabled": true,
+    "python.terminal.activateEnvInCurrentTerminal": true,
+    "python.globalModuleInstallation": true
+}
