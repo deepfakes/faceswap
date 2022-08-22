@@ -839,7 +839,7 @@ class Thumbnails():
     def has_thumbnails(self):
         """ bool: ``True`` if all faces in the alignments file contain thumbnail images
         otherwise ``False``. """
-        retval = all(face.get("thumb")
+        retval = all(np.any(face.get("thumb"))
                      for frame in self._alignments_dict.values()
                      for face in frame["faces"])
         logger.trace(retval)
