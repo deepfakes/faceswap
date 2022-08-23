@@ -1038,7 +1038,7 @@ class Installer():
         text: str
             The text to log
         """
-        if text not in self._seen_lines:
+        if text in self._seen_lines:
             return
         logger.verbose(text)  # type:ignore
         self._seen_lines.add(text)
@@ -1225,7 +1225,6 @@ class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
                 break
 
         del proc
-        logger.debug("Package: %s, returncode: %s", self._package, returncode)
         return returncode
 
 
