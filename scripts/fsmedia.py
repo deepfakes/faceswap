@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 import imageio
 
-from lib.align import Alignments as AlignmentsBase
+from lib.align import Alignments as AlignmentsBase, get_centered_size
 from lib.face_filter import FaceFilter as FilterFunc
 from lib.image import count_frames, read_image
 from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
@@ -98,7 +98,7 @@ class Alignments(AlignmentsBase):
         elif input_is_video:
             logger.debug("Alignments from Video File: '%s'", self._args.input_dir)
             folder, filename = os.path.split(self._args.input_dir)
-            filename = "{}_alignments".format(os.path.splitext(filename)[0])
+            filename = f"{os.path.splitext(filename)[0]}_alignments"
         else:
             logger.debug("Alignments from Input Folder: '%s'", self._args.input_dir)
             folder = str(self._args.input_dir)
@@ -119,7 +119,7 @@ class Alignments(AlignmentsBase):
             Any alignments that have already been extracted if skip existing has been selected
             otherwise an empty dictionary
         """
-        data = dict()
+        data = {}
         if not self._is_extract:
             if not self.have_alignments_file:
                 return data
@@ -280,7 +280,7 @@ class Images():
         for i, frame in enumerate(reader):
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
-            filename = "{}_{:06d}.png".format(vidname, i + 1)
+            filename = f"{vidname}_{i + 1:06d}.png"
             logger.trace("Loading video frame: '%s'", filename)
             yield filename, frame
         reader.close()
@@ -358,13 +358,13 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             The list of :class:`PostProcessAction` to be performed
         """
         postprocess_items = self._get_items()
-        actions = list()
+        actions = []
         for action, options in postprocess_items.items():
-            options = dict() if options is None else options
+            options = {} if options is None else options
             args = options.get("args", tuple())
-            kwargs = options.get("kwargs", dict())
+            kwargs = options.get("kwargs", {})
             args = args if isinstance(args, tuple) else tuple()
-            kwargs = kwargs if isinstance(kwargs, dict) else dict()
+            kwargs = kwargs if isinstance(kwargs, dict) else {}
             task = globals()[action](*args, **kwargs)
             if task.valid:
                 logger.debug("Adding Postprocess action: '%s'", task)
@@ -388,7 +388,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             The name of the action to be performed as the key. Any action specific
             arguments and keyword arguments as the value.
         """
-        postprocess_items = dict()
+        postprocess_items = {}
         # Debug Landmarks
         if (hasattr(self._args, 'debug_landmarks') and self._args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
@@ -410,7 +410,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             face_filter = dict(detector=detector,
                                aligner=aligner,
                                multiprocess=not self._args.singleprocess)
-            filter_lists = dict()
+            filter_lists = {}
             if hasattr(self._args, "ref_threshold"):
                 face_filter["ref_threshold"] = self._args.ref_threshold
             for filter_type in ('filter', 'nfilter'):
@@ -481,6 +481,10 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
 
 class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Draw debug landmarks on face output. Extract Only """
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        self._face_size = 0
+        self._legacy_size = 0
 
     def process(self, extract_media):
         """ Draw landmarks on a face.
@@ -499,6 +503,17 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         """
         frame = os.path.splitext(os.path.basename(extract_media.filename))[0]
         for idx, face in enumerate(extract_media.detected_faces):
+            if not self._face_size:
+                self._face_size = get_centered_size(face.aligned.centering,
+                                                    "face",
+                                                    face.aligned.size)
+                logger.debug("set face size: %s", self._face_size)
+            if not self._legacy_size:
+                self._legacy_size = get_centered_size(face.aligned.centering,
+                                                      "legacy",
+                                                      face.aligned.size)
+                logger.debug("set legacy size: %s", self._legacy_size)
+
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)
             # Landmarks
             for (pos_x, pos_y) in face.aligned.landmarks.astype("int32"):
@@ -510,8 +525,11 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
             cv2.line(face.aligned.face, center, tuple(points[0]), (255, 0, 0), 1)
             cv2.line(face.aligned.face, center, tuple(points[2]), (0, 0, 255), 1)
             # Face centering
-            roi = face.aligned.get_cropped_roi("face")
+            roi = face.aligned.get_cropped_roi(face.aligned.size, self._face_size, "face")
             cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 255, 0), 1)
+            # Legacy centering
+            roi = face.aligned.get_cropped_roi(face.aligned.size, self._legacy_size, "legacy")
+            cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 0, 255), 1)
 
 
 class FaceFilter(PostProcessAction):
@@ -599,7 +617,7 @@ class FaceFilter(PostProcessAction):
             The confirmed existing paths to filter files to use
         """
         if not f_args:
-            return list()
+            return []
 
         logger.info("%s: %s", f_type.title(), f_args)
         filter_files = f_args if isinstance(f_args, list) else [f_args]
@@ -627,7 +645,7 @@ class FaceFilter(PostProcessAction):
         """
         if not self._filter:
             return
-        ret_faces = list()
+        ret_faces = []
         for idx, detect_face in enumerate(extract_media.detected_faces):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
             if not self._filter.check(extract_media.image, check_item):
