@@ -1035,19 +1035,31 @@ class Install():  # pylint:disable=too-few-public-methods
             eof = False
             last_line_cr = False
             num_bytes = 1024
+            seen_lines = set()
             while True:
                 try:
                     from_pty = proc.read(num_bytes)
-                except winpty.WinptyError as err:
-                    if any(val in str(err) for val in ["EOF", "pipe has been ended"]):
-                        # Get remaining bytes. On a comms error, the buffer remains unread so keep
-                        # halving buffer amount until down to 1 when we know we have everything
-                        if num_bytes == 1:
-                            eof = True
-                        from_pty = ""
-                        num_bytes //= 2
-                    else:
-                        raise
+                except winpty.WinptyError:
+                    # TODO Reinsert this check
+                    # The error message "pipe has been ended" is language specific so this check
+                    # fails on non english systems. For now we just swallow all errors until no
+                    # bytes are left to read and then check the return code
+                    # if any(val in str(err) for val in ["EOF", "pipe has been ended"]):
+                    #    # Get remaining bytes. On a comms error, the buffer remains unread so keep
+                    #    # halving buffer amount until down to 1 when we know we have everything
+                    #     if num_bytes == 1:
+                    #         eof = True
+                    #     from_pty = ""
+                    #     num_bytes //= 2
+                    # else:
+                    #     raise
+
+                    # Get remaining bytes. On a comms error, the buffer remains unread so keep
+                    # halving buffer amount until down to 1 when we know we have everything
+                    if num_bytes == 1:
+                        eof = True
+                    from_pty = ""
+                    num_bytes //= 2
                 out += from_pty
                 if "\n" in out:
                     lines.extend(out.split("\n"))
@@ -1066,7 +1078,10 @@ class Install():  # pylint:disable=too-few-public-methods
                             if not self._is_gui and not self._env.is_installer:
                                 # Go to next line
                                 print("")
-                        logger.verbose(line)  # type:ignore
+                        if line not in seen_lines:
+                            # Supress repeat "waiting" lines from spamming the logfile
+                            logger.verbose(line)  # type:ignore
+                            seen_lines.add(line)
                     elif line:
                         last_line_cr = True
                         logger.debug(line)
