@@ -132,7 +132,7 @@ class DataGenerator():
         """
         logger.debug("do_shuffle: %s", do_shuffle)
         args = (do_shuffle, )
-        batcher = BackgroundGenerator(self._minibatch, thread_count=1, args=args)
+        batcher = BackgroundGenerator(self._minibatch, args=args)
         return batcher.iterator()
 
     # << INTERNAL METHODS >> #

@@ -582,7 +582,7 @@ class _Feeder():
             iterator[side] = self._load_generator(side,
                                                   True,
                                                   batch_size=batch_size,
-                                                  images=imgs).minibatch_ab()
+                                                  images=imgs).minibatch_ab(do_shuffle=False)
         logger.debug("Set time-lapse feed: %s", self._display_feeds["timelapse"])
 
 
