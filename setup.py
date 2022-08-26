@@ -727,6 +727,7 @@ class Install():  # pylint:disable=too-few-public-methods
             logger.error("Some packages failed to install. This may be a temporary error which "
                          "might be fixed by re-running this script. Otherwise please install "
                          "these packages manually.")
+            sys.exit(1)
 
     @classmethod
     def _ask_continue(cls) -> None:
