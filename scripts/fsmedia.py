@@ -9,6 +9,7 @@ Holds optional pre/post processing functions for convert and extract.
 import logging
 import os
 import sys
+from typing import Any, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
@@ -19,10 +20,19 @@ from lib.face_filter import FaceFilter as FilterFunc
 from lib.image import count_frames, read_image
 from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
 
+if sys.version_info < (3, 8):
+    from typing_extensions import get_args, Literal
+else:
+    from typing import get_args, Literal
+
+if TYPE_CHECKING:
+    from argparse import Namespace
+    from plugins.extract.pipeline import ExtractMedia
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def finalize(images_found, num_faces_detected, verify_output):
+def finalize(images_found: int, num_faces_detected: int, verify_output: bool) -> None:
     """ Output summary statistics at the end of the extract or convert processes.
 
     Parameters
@@ -62,7 +72,10 @@ class Alignments(AlignmentsBase):
         ``True`` if the input to the process is a video, ``False`` if it is a folder of images.
         Default: False
     """
-    def __init__(self, arguments, is_extract, input_is_video=False):
+    def __init__(self,
+                 arguments: "Namespace",
+                 is_extract: bool,
+                 input_is_video: bool = False) -> None:
         logger.debug("Initializing %s: (is_extract: %s, input_is_video: %s)",
                      self.__class__.__name__, is_extract, input_is_video)
         self._args = arguments
@@ -71,7 +84,7 @@ class Alignments(AlignmentsBase):
         super().__init__(folder, filename=filename)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _set_folder_filename(self, input_is_video):
+    def _set_folder_filename(self, input_is_video: bool) -> Tuple[str, str]:
         """ Return the folder and the filename for the alignments file.
 
         If the input is a video, the alignments file will be stored in the same folder
@@ -106,7 +119,7 @@ class Alignments(AlignmentsBase):
         logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
 
-    def _load(self):
+    def _load(self) -> Dict[str, Any]:
         """ Override the parent :func:`~lib.align.Alignments._load` to handle skip existing
         frames and faces on extract.
 
@@ -119,10 +132,10 @@ class Alignments(AlignmentsBase):
             Any alignments that have already been extracted if skip existing has been selected
             otherwise an empty dictionary
         """
-        data = {}
+        data: Dict[str, Any] = {}
+        if not self._is_extract and not self.have_alignments_file:
+            return data
         if not self._is_extract:
-            if not self.have_alignments_file:
-                return data
             data = super()._load()
             return data
 
@@ -146,7 +159,7 @@ class Alignments(AlignmentsBase):
             logger.debug("Frames with no faces selected for redetection: %s", len(del_keys))
             for key in del_keys:
                 if key in data:
-                    logger.trace("Selected for redetection: '%s'", key)
+                    logger.trace("Selected for redetection: '%s'", key)  # type: ignore
                     del data[key]
         return data
 
@@ -160,7 +173,7 @@ class Images():
     arguments: :class:`argparse.Namespace`
         The command line arguments that were passed to Faceswap
     """
-    def __init__(self, arguments):
+    def __init__(self, arguments: "Namespace") -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
         self._is_video = self._check_input_folder()
@@ -169,22 +182,22 @@ class Images():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def is_video(self):
+    def is_video(self) -> bool:
         """bool: ``True`` if the input is a video file otherwise ``False``. """
         return self._is_video
 
     @property
-    def input_images(self):
+    def input_images(self) -> Union[str, List[str]]:
         """str or list: Path to the video file if the input is a video otherwise list of
         image paths. """
         return self._input_images
 
     @property
-    def images_found(self):
+    def images_found(self) -> int:
         """int: The number of frames that exist in the video file, or the folder of images. """
         return self._images_found
 
-    def _count_images(self):
+    def _count_images(self) -> int:
         """ Get the number of Frames from a video file or folder of images.
 
         Returns
@@ -198,7 +211,7 @@ class Images():
             retval = len(self._input_images)
         return retval
 
-    def _check_input_folder(self):
+    def _check_input_folder(self) -> bool:
         """ Check whether the input is a folder or video.
 
         Returns
@@ -218,7 +231,7 @@ class Images():
             retval = False
         return retval
 
-    def _get_input_images(self):
+    def _get_input_images(self) -> Union[str, List[str]]:
         """ Return the list of images or path to video file that is to be processed.
 
         Returns
@@ -233,7 +246,7 @@ class Images():
 
         return input_images
 
-    def load(self):
+    def load(self) -> Generator[Tuple[str, np.ndarray], None, None]:
         """ Generator to load frames from a folder of images or from a video file.
 
         Yields
@@ -247,7 +260,7 @@ class Images():
         for filename, image in iterator():
             yield filename, image
 
-    def _load_disk_frames(self):
+    def _load_disk_frames(self) -> Generator[Tuple[str, np.ndarray], None, None]:
         """ Generator to load frames from a folder of images.
 
         Yields
@@ -264,7 +277,7 @@ class Images():
                 continue
             yield filename, image
 
-    def _load_video_frames(self):
+    def _load_video_frames(self) -> Generator[Tuple[str, np.ndarray], None, None]:
         """ Generator to load frames from a video file.
 
         Yields
@@ -281,11 +294,11 @@ class Images():
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
             filename = f"{vidname}_{i + 1:06d}.png"
-            logger.trace("Loading video frame: '%s'", filename)
+            logger.trace("Loading video frame: '%s'", filename)  # type: ignore
             yield filename, frame
         reader.close()
 
-    def load_one_image(self, filename):
+    def load_one_image(self, filename) -> np.ndarray:
         """ Obtain a single image for the given filename.
 
         Parameters
@@ -299,19 +312,20 @@ class Images():
             The image for the requested filename,
 
         """
-        logger.trace("Loading image: '%s'", filename)
+        logger.trace("Loading image: '%s'", filename)  # type: ignore
         if self._is_video:
             if filename.isdigit():
                 frame_no = filename
             else:
                 frame_no = os.path.splitext(filename)[0][filename.rfind("_") + 1:]
-                logger.trace("Extracted frame_no %s from filename '%s'", frame_no, filename)
+                logger.trace("Extracted frame_no %s from filename '%s'",  # type: ignore
+                             frame_no, filename)
             retval = self._load_one_video_frame(int(frame_no))
         else:
             retval = read_image(filename, raise_error=True)
         return retval
 
-    def _load_one_video_frame(self, frame_no):
+    def _load_one_video_frame(self, frame_no: int) -> np.ndarray:
         """ Obtain a single frame from a video file.
 
         Parameters
@@ -324,7 +338,7 @@ class Images():
         :class:`numpy.ndarray`
             The image for the requested frame index,
         """
-        logger.trace("Loading video frame: %s", frame_no)
+        logger.trace("Loading video frame: %s", frame_no)  # type: ignore
         reader = imageio.get_reader(self._args.input_dir, "ffmpeg")
         reader.set_image_index(frame_no - 1)
         frame = reader.get_next_data()[:, :, ::-1]
@@ -343,13 +357,13 @@ class PostProcess():  # pylint:disable=too-few-public-methods
     arguments: :class:`argparse.Namespace`
         The command line arguments that were passed to Faceswap
     """
-    def __init__(self, arguments):
+    def __init__(self, arguments: "Namespace") -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
         self._actions = self._set_actions()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _set_actions(self):
+    def _set_actions(self) -> List["PostProcessAction"]:
         """ Compile the requested actions to be performed into a list
 
         Returns
@@ -358,7 +372,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             The list of :class:`PostProcessAction` to be performed
         """
         postprocess_items = self._get_items()
-        actions = []
+        actions: List["PostProcessAction"] = []
         for action, options in postprocess_items.items():
             options = {} if options is None else options
             args = options.get("args", tuple())
@@ -370,13 +384,13 @@ class PostProcess():  # pylint:disable=too-few-public-methods
                 logger.debug("Adding Postprocess action: '%s'", task)
                 actions.append(task)
 
-        for action in actions:
-            action_name = camel_case_split(action.__class__.__name__)
+        for ppaction in actions:
+            action_name = camel_case_split(ppaction.__class__.__name__)
             logger.info("Adding post processing item: %s", " ".join(action_name))
 
         return actions
 
-    def _get_items(self):
+    def _get_items(self) -> Dict[str, Optional[Dict[str, Union[tuple, dict]]]]:
         """ Check the passed in command line arguments for requested actions,
 
         For any requested actions, add the item to the actions list along with
@@ -388,7 +402,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             The name of the action to be performed as the key. Any action specific
             arguments and keyword arguments as the value.
         """
-        postprocess_items = {}
+        postprocess_items: Dict[str, Optional[Dict[str, Union[tuple, dict]]]] = {}
         # Debug Landmarks
         if (hasattr(self._args, 'debug_landmarks') and self._args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
@@ -423,7 +437,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
         logger.debug("Postprocess Items: %s", postprocess_items)
         return postprocess_items
 
-    def do_actions(self, extract_media):
+    def do_actions(self, extract_media: "ExtractMedia") -> None:
         """ Perform the requested optional post-processing actions on the given image.
 
         Parameters
@@ -455,19 +469,19 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
     kwargs: dict
         Varies for specific post process action
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         logger.debug("Initializing %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
         self._valid = True  # Set to False if invalid parameters passed in to disable
         logger.debug("Initialized base class %s", self.__class__.__name__)
 
     @property
-    def valid(self):
+    def valid(self) -> bool:
         """bool: ``True`` if the action if the parameters passed in for this action are valid,
         otherwise ``False`` """
         return self._valid
 
-    def process(self, extract_media):
+    def process(self, extract_media: "ExtractMedia") -> None:
         """ Override for specific post processing action
 
         Parameters
@@ -481,12 +495,12 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
 
 class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
     """ Draw debug landmarks on face output. Extract Only """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(self, *args, **kwargs)
         self._face_size = 0
         self._legacy_size = 0
 
-    def process(self, extract_media):
+    def process(self, extract_media: "ExtractMedia") -> None:
         """ Draw landmarks on a face.
 
         Parameters
@@ -494,12 +508,6 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
             The :class:`~plugins.extract.pipeline.ExtractMedia` object that contains the faces to
             draw the landmarks on to
-
-        Returns
-        -------
-        :class:`~plugins.extract.pipeline.ExtractMedia`
-            The original :class:`~plugins.extract.pipeline.ExtractMedia` with landmarks drawn
-            onto the face
         """
         frame = os.path.splitext(os.path.basename(extract_media.filename))[0]
         for idx, face in enumerate(extract_media.detected_faces):
@@ -514,12 +522,12 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
                                                       face.aligned.size)
                 logger.debug("set legacy size: %s", self._legacy_size)
 
-            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)
+            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)  # type: ignore
             # Landmarks
             for (pos_x, pos_y) in face.aligned.landmarks.astype("int32"):
                 cv2.circle(face.aligned.face, (pos_x, pos_y), 1, (0, 255, 255), -1)
             # Pose
-            center = tuple(np.int32((face.aligned.size / 2, face.aligned.size / 2)))
+            center = (face.aligned.size // 2, face.aligned.size // 2)
             points = (face.aligned.pose.xyz_2d * face.aligned.size).astype("int32")
             cv2.line(face.aligned.face, center, tuple(points[1]), (0, 255, 0), 1)
             cv2.line(face.aligned.face, center, tuple(points[0]), (255, 0, 0), 1)
@@ -554,13 +562,18 @@ class FaceFilter(PostProcessAction):
         * **filter_lists** (`dict`) - The filter and nfilter image paths
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         logger.info("Extracting and aligning face for Face Filter...")
         self._filter = self._load_face_filter(**kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _load_face_filter(self, filter_lists, ref_threshold, aligner, detector, multiprocess):
+    def _load_face_filter(self,
+                          filter_lists: Dict[str, str],
+                          ref_threshold: float,
+                          aligner: str,
+                          detector: str,
+                          multiprocess: bool) -> Optional[FilterFunc]:
         """ Set up and load the :class:`~lib.face_filter.FaceFilter`.
 
         Parameters
@@ -586,7 +599,7 @@ class FaceFilter(PostProcessAction):
 
         facefilter = None
         filter_files = [self._set_face_filter(f_type, filter_lists[f_type])
-                        for f_type in ("filter", "nfilter")]
+                        for f_type in get_args(Literal["filter", "nfilter"])]
 
         if any(filters for filters in filter_files):
             facefilter = FilterFunc(filter_files[0],
@@ -597,11 +610,13 @@ class FaceFilter(PostProcessAction):
                                     ref_threshold)
             logger.debug("Face filter: %s", facefilter)
         else:
-            self.valid = False
+            self._valid = False
         return facefilter
 
-    @staticmethod
-    def _set_face_filter(f_type, f_args):
+    @classmethod
+    def _set_face_filter(cls,
+                         f_type: Literal["filter", "nfilter"],
+                         f_args: Union[str, List[str]]) -> List[str]:
         """ Check filter files exist and add the filter file paths to a list.
 
         Parameters
@@ -621,14 +636,14 @@ class FaceFilter(PostProcessAction):
 
         logger.info("%s: %s", f_type.title(), f_args)
         filter_files = f_args if isinstance(f_args, list) else [f_args]
-        filter_files = list(filter(lambda fpath: os.path.exists(fpath), filter_files))
+        filter_files = [fpath for fpath in filter_files if os.path.exists(fpath)]
         if not filter_files:
             logger.warning("Face %s files were requested, but no files could be found. This "
                            "filter will not be applied.", f_type)
         logger.debug("Face Filter files: %s", filter_files)
         return filter_files
 
-    def process(self, extract_media):
+    def process(self, extract_media: "ExtractMedia") -> None:
         """ Filters in or out any wanted or unwanted faces based on command line arguments.
 
         Parameters
@@ -636,12 +651,6 @@ class FaceFilter(PostProcessAction):
         extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
             The :class:`~plugins.extract.pipeline.ExtractMedia` object to perform the
             face filtering on.
-
-        Returns
-        -------
-        :class:`~plugins.extract.pipeline.ExtractMedia`
-            The original :class:`~plugins.extract.pipeline.ExtractMedia` with any requested filters
-            applied
         """
         if not self._filter:
             return
@@ -649,10 +658,10 @@ class FaceFilter(PostProcessAction):
         for idx, detect_face in enumerate(extract_media.detected_faces):
             check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
             if not self._filter.check(extract_media.image, check_item):
-                logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",
+                logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",  # type: ignore
                                extract_media.filename, idx)
                 continue
-            logger.trace("Accepting recognised face. Frame: %s. Face: %s",
+            logger.trace("Accepting recognised face. Frame: %s. Face: %s",  # type: ignore
                          extract_media.filename, idx)
             ret_faces.append(detect_face)
         extract_media.add_detected_faces(ret_faces)

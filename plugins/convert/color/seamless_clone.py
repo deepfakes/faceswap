@@ -16,8 +16,7 @@ class Color(Adjustment):
         and does not have a natural home, so here for now.
     """
 
-    @staticmethod
-    def process(old_face, new_face, raw_mask):
+    def process(self, old_face, new_face, raw_mask):
         height, width, _ = old_face.shape
         height = height // 2
         width = width // 2

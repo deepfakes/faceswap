@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """ Tool to preview swaps and tweak configuration prior to running a convert """
 
+from dataclasses import dataclass, field
 import gettext
 import logging
 import random
 import tkinter as tk
-from tkinter import ttk
+from tkinter import PhotoImage, ttk
+from typing import Any, Callable, cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 import os
 import sys
 
@@ -25,10 +27,21 @@ from lib.convert import Converter
 from lib.utils import FaceswapError
 from lib.queue_manager import queue_manager
 from scripts.fsmedia import Alignments, Images
-from scripts.convert import Predict
+from scripts.convert import Predict, ConvertItem
 
 from plugins.plugin_loader import PluginLoader
 from plugins.convert._config import Config
+from plugins.extract.pipeline import ExtractMedia
+
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
+if TYPE_CHECKING:
+    from argparse import Namespace
+    from lib.align.aligned_face import CenteringType
+    from lib.queue_manager import EventQueue
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -50,14 +63,16 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
+    _w: str
 
-    def __init__(self, arguments):
+    def __init__(self, arguments: "Namespace") -> None:
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         super().__init__()
         self._config_tools = ConfigTools()
         self._lock = Lock()
 
-        self._tk_vars = dict(refresh=tk.BooleanVar(), busy=tk.BooleanVar())
+        self._tk_vars: Dict[Literal["refresh", "busy"],
+                            tk.BooleanVar] = dict(refresh=tk.BooleanVar(), busy=tk.BooleanVar())
         for val in self._tk_vars.values():
             val.set(False)
         self._display = FacesDisplay(256, 64, self._tk_vars)
@@ -74,20 +89,20 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
                             self._tk_vars)
 
         self._initialize_tkinter()
-        self._image_canvas = None
-        self._opts_book = None
-        self._cli_frame = None  # cli frame holds cli options
+        self._image_canvas: Optional[ImagesCanvas] = None
+        self._opts_book: Optional[OptionsBook] = None
+        self._cli_frame: Optional[ActionFrame] = None  # cli frame holds cli options
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def _available_masks(self):
+    def _available_masks(self) -> List[str]:
         """ list: The mask names that are available for every face in the alignments file """
         retval = [key
                   for key, val in self._samples.alignments.mask_summary.items()
                   if val == self._samples.alignments.faces_count]
         return retval
 
-    def _initialize_tkinter(self):
+    def _initialize_tkinter(self) -> None:
         """ Initialize a standalone tkinter instance. """
         logger.debug("Initializing tkinter")
         initialize_config(self, None, None)
@@ -97,10 +112,11 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         self.tk.call(
             "wm",
             "iconphoto",
-            self._w, get_images().icons["favicon"])  # pylint:disable=protected-access
+            self._w,
+            get_images().icons["favicon"])  # pylint:disable=protected-access
         logger.debug("Initialized tkinter")
 
-    def process(self):
+    def process(self) -> None:
         """ The entry point for the Preview tool from :file:`lib.tools.cli`.
 
         Launch the tkinter preview Window and run main loop.
@@ -108,7 +124,7 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         self._build_ui()
         self.mainloop()
 
-    def _refresh(self, *args):
+    def _refresh(self, *args) -> None:
         """ Load new faces to display in preview.
 
         Parameters
@@ -116,21 +132,22 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         *args: tuple
             Unused, but required for tkinter callback.
         """
-        logger.trace("Refreshing swapped faces. args: %s", args)
+        logger.trace("Refreshing swapped faces. args: %s", args)  # type: ignore
         self._tk_vars["busy"].set(True)
         self._config_tools.update_config()
         with self._lock:
+            assert self._cli_frame is not None
             self._patch.converter_arguments = self._cli_frame.convert_args
             self._patch.current_config = self._config_tools.config
         self._patch.trigger.set()
-        logger.trace("Refreshed swapped faces")
+        logger.trace("Refreshed swapped faces")  # type: ignore
 
-    def _build_ui(self):
+    def _build_ui(self) -> None:
         """ Build the elements for displaying preview images and options panels. """
         container = ttk.PanedWindow(self,
                                     orient=tk.VERTICAL)
         container.pack(fill=tk.BOTH, expand=True)
-        container.preview_display = self._display
+        setattr(container, "preview_display", self._display)  # TODO subclass not setattr
         self._image_canvas = ImagesCanvas(container, self._tk_vars)
         container.add(self._image_canvas, weight=3)
 
@@ -177,7 +194,12 @@ class Samples():
         An event to indicate that a converter patch should be run
     """
 
-    def __init__(self, arguments, sample_size, display, lock, trigger_patch):
+    def __init__(self,
+                 arguments: "Namespace",
+                 sample_size: int,
+                 display: "FacesDisplay",
+                 lock: Lock,
+                 trigger_patch: Event) -> None:
         logger.debug("Initializing %s: (arguments: '%s', sample_size: %s, display: %s, lock: %s, "
                      "trigger_patch: %s)", self.__class__.__name__, arguments, sample_size,
                      display, lock, trigger_patch)
@@ -185,8 +207,8 @@ class Samples():
         self._display = display
         self._lock = lock
         self._trigger_patch = trigger_patch
-        self._input_images = []
-        self._predicted_images = []
+        self._input_images: List[ConvertItem] = []
+        self._predicted_images: List[Tuple[ConvertItem, np.ndarray]] = []
 
         self._images = Images(arguments)
         self._alignments = Alignments(arguments,
@@ -212,33 +234,33 @@ class Samples():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def sample_size(self):
+    def sample_size(self) -> int:
         """ int: The number of samples to take from the input video/images """
         return self._sample_size
 
     @property
-    def predicted_images(self):
+    def predicted_images(self) -> List[Tuple[ConvertItem, np.ndarray]]:
         """ list: The predicted faces output from the Faceswap model """
         return self._predicted_images
 
     @property
-    def alignments(self):
+    def alignments(self) -> Alignments:
         """ :class:`~lib.align.Alignments`: The alignments for the preview faces """
         return self._alignments
 
     @property
-    def predictor(self):
+    def predictor(self) -> Predict:
         """ :class:`~scripts.convert.Predict`: The Predictor for the Faceswap model """
         return self._predictor
 
     @property
-    def _random_choice(self):
+    def _random_choice(self) -> List[int]:
         """ list: Random indices from the :attr:`_indices` group """
         retval = [random.choice(indices) for indices in self._indices]
         logger.debug(retval)
         return retval
 
-    def _get_filelist(self):
+    def _get_filelist(self) -> List[str]:
         """ Get a list of files for the input, filtering out those frames which do
         not contain faces.
 
@@ -248,7 +270,7 @@ class Samples():
             A list of filenames of frames that contain faces.
         """
         logger.debug("Filtering file list to frames with faces")
-        if self._images.is_video:
+        if isinstance(self._images.input_images, str):
             filelist = [f"{os.path.splitext(self._images.input_images)[0]}_{frame_no:06d}.png"
                         for frame_no in range(1, self._images.images_found + 1)]
         else:
@@ -266,7 +288,7 @@ class Samples():
             raise FaceswapError(msg) from err
         return retval
 
-    def _get_indices(self):
+    def _get_indices(self) -> List[List[int]]:
         """ Get indices for each sample group.
 
         Obtain :attr:`self.sample_size` evenly sized groups of indices
@@ -291,7 +313,7 @@ class Samples():
                                            for idx, pool in enumerate(retval)])
         return retval
 
-    def generate(self):
+    def generate(self) -> None:
         """ Generate a sample set.
 
         Selects :attr:`sample_size` random faces. Runs them through prediction to obtain the
@@ -301,7 +323,7 @@ class Samples():
         self._predict()
         self._trigger_patch.set()
 
-    def _load_frames(self):
+    def _load_frames(self) -> None:
         """ Load a sample of random frames.
 
         * Picks a random face from each indices group.
@@ -320,14 +342,14 @@ class Samples():
             face = self._alignments.get_faces_in_frame(filename)[0]
             detected_face = DetectedFace()
             detected_face.from_alignment(face, image=image)
-            self._input_images.append({"filename": filename,
-                                       "image": image,
-                                       "detected_faces": [detected_face]})
+            inbound = ExtractMedia(filename=filename, image=image, detected_faces=[detected_face])
+            self._input_images.append(ConvertItem(inbound=inbound))
         self._display.source = self._input_images
         self._display.update_source = True
-        logger.debug("Selected frames: %s", [frame["filename"] for frame in self._input_images])
+        logger.debug("Selected frames: %s",
+                     [frame.inbound.filename for frame in self._input_images])
 
-    def _predict(self):
+    def _predict(self) -> None:
         """ Predict from the loaded frames.
 
         With a threading lock (to prevent stacking), run the selected faces through the Faceswap
@@ -340,7 +362,9 @@ class Samples():
             idx = 0
             while idx < self._sample_size:
                 logger.debug("Predicting face %s of %s", idx + 1, self._sample_size)
-                items = self._predictor.out_queue.get()
+                items: Union[Literal["EOF"],
+                             List[Tuple[ConvertItem,
+                                        np.ndarray]]] = self._predictor.out_queue.get()
                 if items == "EOF":
                     logger.debug("Received EOF")
                     break
@@ -383,8 +407,15 @@ class Patch():
     current_config::class:`lib.config.FaceswapConfig`
         The currently set configuration for the patch queue
     """
-    def __init__(self, arguments, available_masks, samples,
-                 display, lock, trigger, config_tools, tk_vars):
+    def __init__(self,
+                 arguments: "Namespace",
+                 available_masks: List[str],
+                 samples: Samples,
+                 display: "FacesDisplay",
+                 lock: Lock,
+                 trigger: Event,
+                 config_tools: "ConfigTools",
+                 tk_vars: Dict[Literal["refresh", "busy"], tk.BooleanVar]) -> None:
         logger.debug("Initializing %s: (arguments: '%s', available_masks: %s, samples: %s, "
                      "display: %s, lock: %s, trigger: %s, config_tools: %s, tk_vars %s)",
                      self.__class__.__name__, arguments, available_masks, samples, display, lock,
@@ -395,7 +426,7 @@ class Patch():
         self._lock = lock
         self._trigger = trigger
         self.current_config = config_tools.config
-        self.converter_arguments = None  # Updated converter arguments dict
+        self.converter_arguments: Optional[Dict[str, Any]] = None  # Updated converter args dict
 
         configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._converter = Converter(output_size=self._samples.predictor.output_size,
@@ -420,18 +451,19 @@ class Patch():
         logger.debug("Initializing %s", self.__class__.__name__)
 
     @property
-    def trigger(self):
+    def trigger(self) -> Event:
         """ :class:`threading.Event`: The trigger to indicate that a patching run should
         commence. """
         return self._trigger
 
     @property
-    def converter(self):
+    def converter(self) -> Converter:
         """ :class:`lib.convert.Converter`: The converter to use for patching the images. """
         return self._converter
 
     @staticmethod
-    def _generate_converter_arguments(arguments, available_masks):
+    def _generate_converter_arguments(arguments: "Namespace",
+                                      available_masks: List[str]) -> "Namespace":
         """ Add the default converter arguments to the initial arguments. Ensure the mask selection
         is available.
 
@@ -448,7 +480,7 @@ class Patch():
             arguments added
         """
         valid_masks = available_masks + ["none"]
-        converter_arguments = ConvertArgs(None, "convert").get_optional_arguments()
+        converter_arguments = ConvertArgs(None, "convert").get_optional_arguments()  # type: ignore
         for item in converter_arguments:
             value = item.get("default", None)
             # Skip options without a default value
@@ -466,7 +498,12 @@ class Patch():
         logger.debug(arguments)
         return arguments
 
-    def _process(self, trigger_event, shutdown_event, patch_queue_in, samples, tk_vars):
+    def _process(self,
+                 trigger_event: Event,
+                 shutdown_event: Event,
+                 patch_queue_in: "EventQueue",
+                 samples: Samples,
+                 tk_vars: Dict[Literal["refresh", "busy"], tk.BooleanVar]) -> None:
         """ The face patching process.
 
         Runs in a thread, and waits for an event to be set. Once triggered, runs a patching
@@ -478,7 +515,7 @@ class Patch():
             Set by parent process when a patching run should be executed
         shutdown_event :class:`threading.Event`
             Set by parent process if a shutdown has been requested
-        patch_queue_in: :class:`queue.Queue`
+        patch_queue_in: :class:`~lib.queue_manager.EventQueue`
             The input queue for the patching process
         samples: :class:`Samples`
             The Samples for display.
@@ -511,7 +548,7 @@ class Patch():
 
         logger.debug("Closed patch process thread")
 
-    def _update_converter_arguments(self):
+    def _update_converter_arguments(self) -> None:
         """ Update the converter arguments to the currently selected values. """
         logger.debug("Updating Converter cli arguments")
         if self.converter_arguments is None:
@@ -523,31 +560,35 @@ class Patch():
         logger.debug("Updated Converter cli arguments")
 
     @staticmethod
-    def _feed_swapped_faces(patch_queue_in, samples):
+    def _feed_swapped_faces(patch_queue_in: "EventQueue", samples: Samples) -> None:
         """ Feed swapped faces to the converter's in-queue.
 
         Parameters
         ----------
-        patch_queue_in: :class:`queue.Queue`
+        patch_queue_in: :class:`~lib.queue_manager.EventQueue`
             The input queue for the patching process
         samples: :class:`Samples`
             The Samples for display.
         """
-        logger.trace("feeding swapped faces to converter")
+        logger.trace("feeding swapped faces to converter")  # type: ignore
         for item in samples.predicted_images:
             patch_queue_in.put(item)
-        logger.trace("fed %s swapped faces to converter", len(samples.predicted_images))
-        logger.trace("Putting EOF to converter")
+        logger.trace("fed %s swapped faces to converter",  # type: ignore
+                     len(samples.predicted_images))
+        logger.trace("Putting EOF to converter")  # type: ignore
         patch_queue_in.put("EOF")
 
-    def _patch_faces(self, queue_in, queue_out, sample_size):
+    def _patch_faces(self,
+                     queue_in: "EventQueue",
+                     queue_out: "EventQueue",
+                     sample_size: int) -> List[np.ndarray]:
         """ Patch faces.
 
         Run the convert process on the swapped faces and return the patched faces.
 
-        patch_queue_in: :class:`queue.Queue`
+        patch_queue_in: :class:`~lib.queue_manager.EventQueue`
             The input queue for the patching process
-        queue_out: :class:`queue.Queue`
+        queue_out: :class:`~lib.queue_manager.EventQueue`
             The output queue from the patching process
         sample_size: int
             The number of samples to be displayed
@@ -557,18 +598,27 @@ class Patch():
         list
             The swapped faces patched with the selected convert settings
         """
-        logger.trace("Patching faces")
+        logger.trace("Patching faces")  # type: ignore
         self._converter.process(queue_in, queue_out)
         swapped = []
         idx = 0
         while idx < sample_size:
-            logger.trace("Patching image %s of %s", idx + 1, sample_size)
+            logger.trace("Patching image %s of %s", idx + 1, sample_size)  # type: ignore
             item = queue_out.get()
             swapped.append(item[1])
-            logger.trace("Patched image %s of %s", idx + 1, sample_size)
+            logger.trace("Patched image %s of %s", idx + 1, sample_size)  # type: ignore
             idx += 1
-        logger.trace("Patched faces")
+        logger.trace("Patched faces")  # type: ignore
         return swapped
+
+
+@dataclass
+class _Faces:
+    """ Dataclass for holding faces """
+    filenames: List[str] = field(default_factory=list)
+    matrix: List[np.ndarray] = field(default_factory=list)
+    src: List[np.ndarray] = field(default_factory=list)
+    dst: List[np.ndarray] = field(default_factory=list)
 
 
 class FacesDisplay():
@@ -594,40 +644,43 @@ class FacesDisplay():
         The list of :class:`numpy.ndarray` swapped and patched preview images for bottom row of
         display
     """
-    def __init__(self, size, padding, tk_vars):
-        logger.trace("Initializing %s: (size: %s, padding: %s, tk_vars: %s)",
+    def __init__(self,
+                 size: int,
+                 padding: int,
+                 tk_vars: Dict[Literal["refresh", "busy"], tk.BooleanVar]) -> None:
+        logger.trace("Initializing %s: (size: %s, padding: %s, tk_vars: %s)",  # type: ignore
                      self.__class__.__name__, size, padding, tk_vars)
         self._size = size
         self._display_dims = (1, 1)
         self._tk_vars = tk_vars
         self._padding = padding
 
-        self._faces = {}
-        self._centering = None
-        self._faces_source = None
-        self._faces_dest = None
-        self._tk_image = None
+        self._faces = _Faces()
+        self._centering: Optional["CenteringType"] = None
+        self._faces_source: np.ndarray = np.array([])
+        self._faces_dest: np.ndarray = np.array([])
+        self._tk_image: Optional[PhotoImage] = None
 
         # Set from Samples
         self.update_source = False
-        self.source = []  # Source images, filenames + detected faces
+        self.source: List[ConvertItem] = []  # Source images, filenames + detected faces
         # Set from Patch
-        self.destination = []  # Swapped + patched images
+        self.destination: List[np.ndarray] = []  # Swapped + patched images
 
-        logger.trace("Initialized %s", self.__class__.__name__)
+        logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
 
     @property
-    def tk_image(self):
+    def tk_image(self) -> Optional[PhotoImage]:
         """ :class:`PIL.ImageTk.PhotoImage`: The compiled preview display in tkinter display
         format """
         return self._tk_image
 
     @property
-    def _total_columns(self):
-        """ Return the total number of images that are being displayed """
+    def _total_columns(self) -> int:
+        """ int: The total number of images that are being displayed """
         return len(self.source)
 
-    def set_centering(self, centering):
+    def set_centering(self, centering: "CenteringType") -> None:
         """ The centering that the model uses is not known at initialization time.
         Set :attr:`_centering` when the model has been loaded.
 
@@ -638,7 +691,7 @@ class FacesDisplay():
         """
         self._centering = centering
 
-    def set_display_dimensions(self, dimensions):
+    def set_display_dimensions(self, dimensions: Tuple[int, int]) -> None:
         """ Adjust the size of the frame that will hold the preview samples.
 
         Parameters
@@ -648,20 +701,20 @@ class FacesDisplay():
         """
         self._display_dims = dimensions
 
-    def update_tk_image(self):
+    def update_tk_image(self) -> None:
         """ Build the full preview images and compile :attr:`tk_image` for display. """
-        logger.trace("Updating tk image")
+        logger.trace("Updating tk image")  # type: ignore
         self._build_faces_image()
         img = np.vstack((self._faces_source, self._faces_dest))
         size = self._get_scale_size(img)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = Image.fromarray(img)
-        img = img.resize(size, Image.ANTIALIAS)
-        self._tk_image = ImageTk.PhotoImage(img)
+        pilimg = Image.fromarray(img)
+        pilimg = pilimg.resize(size, Image.ANTIALIAS)
+        self._tk_image = ImageTk.PhotoImage(pilimg)
         self._tk_vars["refresh"].set(False)
-        logger.trace("Updated tk image")
+        logger.trace("Updated tk image")  # type: ignore
 
-    def _get_scale_size(self, image):
+    def _get_scale_size(self, image: np.ndarray) -> Tuple[int, int]:
         """ Get the size that the full preview image should be resized to fit in the
         display window.
 
@@ -685,66 +738,64 @@ class FacesDisplay():
         else:
             scale = self._display_dims[1] / float(image.shape[0])
             size = (max(1, int(image.shape[1] * scale)), self._display_dims[1])
-        logger.trace("scale: %s, size: %s", scale, size)
+        logger.trace("scale: %s, size: %s", scale, size)  # type: ignore
         return size
 
-    def _build_faces_image(self):
+    def _build_faces_image(self) -> None:
         """ Compile the source and destination rows of the preview image. """
-        logger.trace("Building Faces Image")
+        logger.trace("Building Faces Image")  # type: ignore
         update_all = self.update_source
         self._faces_from_frames()
         if update_all:
             header = self._header_text()
-            source = np.hstack([self._draw_rect(face) for face in self._faces["src"]])
+            source = np.hstack([self._draw_rect(face) for face in self._faces.src])
             self._faces_source = np.vstack((header, source))
-        self._faces_dest = np.hstack([self._draw_rect(face) for face in self._faces["dst"]])
+        self._faces_dest = np.hstack([self._draw_rect(face) for face in self._faces.dst])
         logger.debug("source row shape: %s, swapped row shape: %s",
                      self._faces_dest.shape, self._faces_source.shape)
 
-    def _faces_from_frames(self):
+    def _faces_from_frames(self) -> None:
         """ Extract the preview faces from the source frames and apply the requisite padding. """
         logger.debug("Extracting faces from frames: Number images: %s", len(self.source))
         if self.update_source:
             self._crop_source_faces()
         self._crop_destination_faces()
         logger.debug("Extracted faces from frames: %s",
-                     {k: len(v) for k, v in self._faces.items()})
+                     {k: len(v) for k, v in self._faces.__dict__.items()})
 
-    def _crop_source_faces(self):
+    def _crop_source_faces(self) -> None:
         """ Extract the source faces from the source frames, along with their filenames and the
         transformation matrix used to extract the faces. """
         logger.debug("Updating source faces")
-        self._faces = {}
-        for image in self.source:
-            detected_face = image["detected_faces"][0]
-            src_img = image["image"]
-            detected_face.load_aligned(src_img, size=self._size, centering=self._centering)
+        self._faces = _Faces()  # Init new class
+        for item in self.source:
+            detected_face = item.inbound.detected_faces[0]
+            src_img = item.inbound.image
+            detected_face.load_aligned(src_img,
+                                       size=self._size,
+                                       centering=cast("CenteringType", self._centering))
             matrix = detected_face.aligned.matrix
-            self._faces.setdefault("filenames",
-                                   []).append(os.path.splitext(image["filename"])[0])
-            self._faces.setdefault("matrix", []).append(matrix)
-            self._faces.setdefault("src", []).append(transform_image(src_img,
-                                                                     matrix,
-                                                                     self._size,
-                                                                     self._padding))
+            self._faces.filenames.append(os.path.splitext(item.inbound.filename)[0])
+            self._faces.matrix.append(matrix)
+            self._faces.src.append(transform_image(src_img, matrix, self._size, self._padding))
         self.update_source = False
         logger.debug("Updated source faces")
 
-    def _crop_destination_faces(self):
+    def _crop_destination_faces(self) -> None:
         """ Extract the swapped faces from the swapped frames using the source face destination
         matrices. """
         logger.debug("Updating destination faces")
-        self._faces["dst"] = []
-        destination = self.destination if self.destination else [np.ones_like(src["image"])
+        self._faces.dst = []
+        destination = self.destination if self.destination else [np.ones_like(src.inbound.image)
                                                                  for src in self.source]
         for idx, image in enumerate(destination):
-            self._faces["dst"].append(transform_image(image,
-                                                      self._faces["matrix"][idx],
-                                                      self._size,
-                                                      self._padding))
+            self._faces.dst.append(transform_image(image,
+                                                   self._faces.matrix[idx],
+                                                   self._size,
+                                                   self._padding))
         logger.debug("Updated destination faces")
 
-    def _header_text(self):
+    def _header_text(self) -> np.ndarray:
         """ Create the header text displaying the frame name for each preview column.
 
         Returns
@@ -756,7 +807,7 @@ class FacesDisplay():
         height = self._size // 8
         font = cv2.FONT_HERSHEY_SIMPLEX
         # Get size of placed text for positioning
-        text_sizes = [cv2.getTextSize(self._faces["filenames"][idx],
+        text_sizes = [cv2.getTextSize(self._faces.filenames[idx],
                                       font,
                                       font_scale,
                                       1)[0]
@@ -766,9 +817,9 @@ class FacesDisplay():
         text_x = [int((self._size - text_sizes[idx][0]) / 2) + self._size * idx
                   for idx in range(self._total_columns)]
         logger.debug("filenames: %s, text_sizes: %s, text_x: %s, text_y: %s",
-                     self._faces["filenames"], text_sizes, text_x, text_y)
+                     self._faces.filenames, text_sizes, text_x, text_y)
         header_box = np.ones((height, self._size * self._total_columns, 3), np.uint8) * 255
-        for idx, text in enumerate(self._faces["filenames"]):
+        for idx, text in enumerate(self._faces.filenames):
             cv2.putText(header_box,
                         text,
                         (text_x[idx], text_y),
@@ -780,7 +831,7 @@ class FacesDisplay():
         logger.debug("header_box.shape: %s", header_box.shape)
         return header_box
 
-    def _draw_rect(self, image):
+    def _draw_rect(self, image: np.ndarray) -> np.ndarray:
         """ Place a white border around a given image.
 
         Parameters
@@ -805,36 +856,39 @@ class ConfigTools():
     tk_vars: dict
         Global tkinter variables. `Refresh` and `Busy` :class:`tkinter.BooleanVar`
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self._config = Config(None)
-        self.tk_vars = {}
+        self.tk_vars: Dict[str, Dict[str, Union[tk.BooleanVar,
+                                                tk.StringVar,
+                                                tk.IntVar,
+                                                tk.DoubleVar]]] = {}
         self._config_dicts = self._get_config_dicts()  # Holds currently saved config
 
     @property
-    def config(self):
+    def config(self) -> Config:
         """ :class:`plugins.convert._config.Config` The convert configuration """
         return self._config
 
     @property
-    def config_dicts(self):
+    def config_dicts(self) -> Dict[str, Any]:
         """ dict: The convert configuration options in dictionary form."""
         return self._config_dicts
 
     @property
-    def sections(self):
+    def sections(self) -> List[str]:
         """ list: The sorted section names that exist within the convert Configuration options. """
         return sorted(set(plugin.split(".")[0] for plugin in self._config.config.sections()
                           if plugin.split(".")[0] != "writer"))
 
     @property
-    def plugins_dict(self):
+    def plugins_dict(self) -> Dict[str, List[str]]:
         """ dict: Dictionary of configuration option sections as key with a list of containing
         plugins as the value """
         return {section: sorted([plugin.split(".")[1] for plugin in self._config.config.sections()
                                  if plugin.split(".")[0] == section])
                 for section in self.sections}
 
-    def update_config(self):
+    def update_config(self) -> None:
         """ Update :attr:`config` with the currently selected values from the GUI. """
         for section, items in self.tk_vars.items():
             for item, value in items.items():
@@ -847,11 +901,11 @@ class ConfigTools():
                     new_value = str(0)
                 old_value = self._config.config[section][item]
                 if new_value != old_value:
-                    logger.trace("Updating config: %s, %s from %s to %s",
+                    logger.trace("Updating config: %s, %s from %s to %s",  # type: ignore
                                  section, item, old_value, new_value)
                     self._config.config[section][item] = new_value
 
-    def _get_config_dicts(self):
+    def _get_config_dicts(self) -> Dict[str, Dict[str, Any]]:
         """ Obtain a custom configuration dictionary for convert configuration items in use
         by the preview tool formatted for control helper.
 
@@ -861,7 +915,7 @@ class ConfigTools():
             Each configuration section as keys, with the values as a dict of option:
             :class:`lib.gui.control_helper.ControlOption` pairs. """
         logger.debug("Formatting Config for GUI")
-        config_dicts = {}
+        config_dicts: Dict[str, Dict[str, Any]] = {}
         for section in self._config.config.sections():
             if section.startswith("writer."):
                 continue
@@ -884,7 +938,7 @@ class ConfigTools():
         logger.debug("Formatted Config for GUI: %s", config_dicts)
         return config_dicts
 
-    def reset_config_to_saved(self, section=None):
+    def reset_config_to_saved(self, section: Optional[str] = None) -> None:
         """ Reset the GUI parameters to their saved values within the configuration file.
 
         Parameters
@@ -905,7 +959,7 @@ class ConfigTools():
                     logger.debug("Setting %s - %s to saved value %s", config_section, item, val)
         logger.debug("Reset to saved config: %s", section)
 
-    def reset_config_to_default(self, section=None):
+    def reset_config_to_default(self, section: Optional[str] = None) -> None:
         """ Reset the GUI parameters to their default configuration values.
 
         Parameters
@@ -927,7 +981,7 @@ class ConfigTools():
                                  config_section, item, default)
         logger.debug("Reset to default: %s", section)
 
-    def save_config(self, section=None):
+    def save_config(self, section: Optional[str] = None) -> None:
         """ Save the configuration ``.ini`` file with the currently stored values.
 
         Notes
@@ -984,7 +1038,9 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
     tk_vars: dict
         Global tkinter variables. `Refresh` and `Busy` :class:`tkinter.BooleanVar`
     """
-    def __init__(self, parent, tk_vars):
+    def __init__(self,
+                 parent: ttk.PanedWindow,
+                 tk_vars: Dict[Literal["refresh", "busy"], tk.BooleanVar]) -> None:
         logger.debug("Initializing %s: (parent: %s,  tk_vars: %s)",
                      self.__class__.__name__, parent, tk_vars)
         super().__init__(parent)
@@ -992,7 +1048,7 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
 
         self._refresh_display_trigger = tk_vars["refresh"]
         self._refresh_display_trigger.trace("w", self._refresh_display_callback)
-        self._display = parent.preview_display
+        self._display: FacesDisplay = parent.preview_display  # type: ignore
         self._canvas = tk.Canvas(self, bd=0, highlightthickness=0)
         self._canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._displaycanvas = self._canvas.create_image(0, 0,
@@ -1001,23 +1057,23 @@ class ImagesCanvas(ttk.Frame):  # pylint:disable=too-many-ancestors
         self.bind("<Configure>", self._resize)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _refresh_display_callback(self, *args):
+    def _refresh_display_callback(self, *args) -> None:
         """ Add a trace to refresh display on callback """
         if not self._refresh_display_trigger.get():
             return
-        logger.trace("Refresh display trigger received: %s", args)
+        logger.trace("Refresh display trigger received: %s", args)  # type: ignore
         self._reload()
 
-    def _resize(self, event):
+    def _resize(self, event: tk.Event) -> None:
         """ Resize the image to fit the frame, maintaining aspect ratio """
-        logger.trace("Resizing preview image")
+        logger.trace("Resizing preview image")  # type: ignore
         framesize = (event.width, event.height)
         self._display.set_display_dimensions(framesize)
         self._reload()
 
-    def _reload(self):
+    def _reload(self) -> None:
         """ Reload the preview image """
-        logger.trace("Reloading preview image")
+        logger.trace("Reloading preview image")  # type: ignore
         self._display.update_tk_image()
         self._canvas.itemconfig(self._displaycanvas, image=self._display.tk_image)
 
@@ -1046,8 +1102,16 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
     tk_vars: dict
         Global tkinter variables. `Refresh` and `Busy` :class:`tkinter.BooleanVar`
     """
-    def __init__(self, parent, available_masks, has_predicted_mask, selected_color,
-                 selected_mask_type, config_tools, patch_callback, refresh_callback, tk_vars):
+    def __init__(self,
+                 parent: ttk.Frame,
+                 available_masks: List[str],
+                 has_predicted_mask: bool,
+                 selected_color: str,
+                 selected_mask_type: str,
+                 config_tools: ConfigTools,
+                 patch_callback: Callable[[], None],
+                 refresh_callback: Callable[[], None],
+                 tk_vars: Dict[Literal["refresh", "busy"], tk.BooleanVar]) -> None:
         logger.debug("Initializing %s: (available_masks: %s, has_predicted_mask: %s, "
                      "selected_color: %s, selected_mask_type: %s, patch_callback: %s, "
                      "refresh_callback: %s, tk_vars: %s)",
@@ -1059,7 +1123,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self.pack(side=tk.LEFT, anchor=tk.N, fill=tk.Y)
         self._options = ["color", "mask_type"]
         self._busy_tkvar = tk_vars["busy"]
-        self._tk_vars = {}
+        self._tk_vars: Dict[str, tk.StringVar] = {}
 
         d_locals = locals()
         defaults = {opt: self._format_to_display(d_locals[f"selected_{opt}"])
@@ -1071,14 +1135,14 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
                                                  has_predicted_mask)
 
     @property
-    def convert_args(self):
+    def convert_args(self) -> Dict[str, Any]:
         """ dict: Currently selected Command line arguments from the :class:`ActionFrame`. """
         return {opt if opt != "color" else "color_adjustment":
                 self._format_from_display(self._tk_vars[opt].get())
                 for opt in self._options}
 
     @staticmethod
-    def _format_from_display(var):
+    def _format_from_display(var: str) -> str:
         """ Format a variable from the display version to the command line action version.
 
         Parameters
@@ -1094,7 +1158,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         return var.replace(" ", "_").lower()
 
     @staticmethod
-    def _format_to_display(var):
+    def _format_to_display(var: str) -> str:
         """ Format a variable from the command line action version to the display version.
         Parameters
         ----------
@@ -1108,8 +1172,12 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         """
         return var.replace("_", " ").replace("-", " ").title()
 
-    def _build_frame(self, defaults, refresh_callback, patch_callback,
-                     available_masks, has_predicted_mask):
+    def _build_frame(self,
+                     defaults: Dict[str, Any],
+                     refresh_callback: Callable[[], None],
+                     patch_callback: Callable[[], None],
+                     available_masks: List[str],
+                     has_predicted_mask: bool) -> ttk.Progressbar:
         """ Build the :class:`ActionFrame`.
 
         Parameters
@@ -1146,7 +1214,11 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Built Action frame")
         return busy_indicator
 
-    def _add_cli_choices(self, parent, defaults, available_masks, has_predicted_mask):
+    def _add_cli_choices(self,
+                         parent: ttk.Frame,
+                         defaults: Dict[str, Any],
+                         available_masks: List[str],
+                         has_predicted_mask: bool) -> None:
         """ Create :class:`lib.gui.control_helper.ControlPanel` object for the command
         line options.
 
@@ -1163,7 +1235,10 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         panel_kwargs = dict(blank_nones=False, label_width=10, style="CPanel")
         ControlPanel(parent, cp_options, header_text=None, **panel_kwargs)
 
-    def _get_control_panel_options(self, defaults, available_masks, has_predicted_mask):
+    def _get_control_panel_options(self,
+                                   defaults: Dict[str, Any],
+                                   available_masks: List[str],
+                                   has_predicted_mask: bool) -> List[ControlPanelOption]:
         """ Create :class:`lib.gui.control_helper.ControlPanelOption` objects for the command
         line options.
 
@@ -1179,7 +1254,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         list
             The list of `lib.gui.control_helper.ControlPanelOption` objects for the Action Frame
         """
-        cp_options = []
+        cp_options: List[ControlPanelOption] = []
         for opt in self._options:
             if opt == "mask_type":
                 choices = self._create_mask_choices(defaults, available_masks, has_predicted_mask)
@@ -1196,8 +1271,11 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
             cp_options.append(cp_option)
         return cp_options
 
-    @staticmethod
-    def _create_mask_choices(defaults, available_masks, has_predicted_mask):
+    @classmethod
+    def _create_mask_choices(cls,
+                             defaults: Dict[str, Any],
+                             available_masks: List[str],
+                             has_predicted_mask: bool) -> List[str]:
         """ Set the mask choices and default mask based on available masks.
 
         Parameters
@@ -1225,8 +1303,10 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("Final mask choices: %s", available_masks)
         return available_masks
 
-    @staticmethod
-    def _add_refresh_button(parent, refresh_callback):
+    @classmethod
+    def _add_refresh_button(cls,
+                            parent: ttk.Frame,
+                            refresh_callback: Callable[[], None]) -> None:
         """ Add a button to refresh the images.
 
         Parameters
@@ -1237,7 +1317,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         btn = ttk.Button(parent, text="Update Samples", command=refresh_callback)
         btn.pack(padx=5, pady=5, side=tk.TOP, fill=tk.X, anchor=tk.N)
 
-    def _add_patch_callback(self, patch_callback):
+    def _add_patch_callback(self, patch_callback: Callable[[], None]) -> None:
         """ Add callback to re-patch images on action option change.
 
         Parameters
@@ -1248,7 +1328,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         for tk_var in self._tk_vars.values():
             tk_var.trace("w", patch_callback)
 
-    def _add_busy_indicator(self, parent):
+    def _add_busy_indicator(self, parent: ttk.Frame) -> ttk.Progressbar:
         """ Place progress bar into bottom bar to indicate when processing.
 
         Parameters
@@ -1268,7 +1348,7 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._busy_tkvar.trace("w", self._busy_indicator_trace)
         return pbar
 
-    def _busy_indicator_trace(self, *args):
+    def _busy_indicator_trace(self, *args) -> None:
         """ Show or hide busy indicator based on whether the preview is updating.
 
         Parameters
@@ -1276,25 +1356,25 @@ class ActionFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         args: unused
             Required for tkinter event, but unused
         """
-        logger.trace("Busy indicator trace: %s", args)
+        logger.trace("Busy indicator trace: %s", args)  # type: ignore
         if self._busy_tkvar.get():
             self._start_busy_indicator()
         else:
             self._stop_busy_indicator()
 
-    def _stop_busy_indicator(self):
+    def _stop_busy_indicator(self) -> None:
         """ Stop and hide progress bar """
         logger.debug("Stopping busy indicator")
         self._busy_indicator.stop()
         self._busy_indicator.pack_forget()
 
-    def _start_busy_indicator(self):
+    def _start_busy_indicator(self) -> None:
         """ Start and display progress bar """
         logger.debug("Starting busy indicator")
         self._busy_indicator.pack(side=tk.LEFT, padx=5, pady=(5, 10), fill=tk.X, expand=True)
         self._busy_indicator.start()
 
-    def _add_actions(self, parent):
+    def _add_actions(self, parent: ttk.Frame) -> None:
         """ Add Action Buttons to the :class:`ActionFrame`
 
         Parameters
@@ -1344,20 +1424,23 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
     config_tools: :class:`ConfigTools`
         Tools for loading and saving configuration files
     """
-    def __init__(self, parent, config_tools, patch_callback):
+    def __init__(self,
+                 parent: ttk.Frame,
+                 config_tools: ConfigTools,
+                 patch_callback: Callable[[], None]) -> None:
         logger.debug("Initializing %s: (parent: %s, config: %s)",
                      self.__class__.__name__, parent, config_tools)
         super().__init__(parent)
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config_tools = config_tools
 
-        self._tabs = {}
+        self._tabs: Dict[str, Dict[str, Union[ttk.Notebook, ConfigFrame]]] = {}
         self._build_tabs()
         self._build_sub_tabs()
         self._add_patch_callback(patch_callback)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _build_tabs(self):
+    def _build_tabs(self) -> None:
         """ Build the notebook tabs for the each configuration section. """
         logger.debug("Build Tabs")
         for section in self.config_tools.sections:
@@ -1365,7 +1448,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
             self._tabs[section] = {"tab": tab}
             self.add(tab, text=section.replace("_", " ").title())
 
-    def _build_sub_tabs(self):
+    def _build_sub_tabs(self) -> None:
         """ Build the notebook sub tabs for each convert section's plugin. """
         for section, plugins in self.config_tools.plugins_dict.items():
             for plugin in plugins:
@@ -1373,9 +1456,10 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
                 config_dict = self.config_tools.config_dicts[config_key]
                 tab = ConfigFrame(self, config_key, config_dict)
                 self._tabs[section][plugin] = tab
-                self._tabs[section]["tab"].add(tab, text=plugin.replace("_", " ").title())
+                text = plugin.replace("_", " ").title()
+                cast(ttk.Notebook, self._tabs[section]["tab"]).add(tab, text=text)
 
-    def _add_patch_callback(self, patch_callback):
+    def _add_patch_callback(self, patch_callback: Callable[[], None]) -> None:
         """ Add callback to re-patch images on configuration option change.
 
         Parameters
@@ -1401,7 +1485,10 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         The options for this section/plugin
     """
 
-    def __init__(self, parent, config_key, options):
+    def __init__(self,
+                 parent: OptionsBook,
+                 config_key: str,
+                 options: Dict[str, Any]):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(parent)
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -1415,7 +1502,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._build_frame(parent, config_key)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _build_frame(self, parent, config_key):
+    def _build_frame(self, parent: OptionsBook, config_key: str) -> None:
         """ Build the options frame for this command
 
         Parameters
@@ -1434,14 +1521,14 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._add_actions(parent, config_key)
         logger.debug("Added Config Frame")
 
-    def _add_frame_separator(self):
+    def _add_frame_separator(self) -> None:
         """ Add a separator between top and bottom frames. """
         logger.debug("Add frame seperator")
         sep = ttk.Frame(self._action_frame, height=2, relief=tk.RIDGE)
         sep.pack(fill=tk.X, pady=5, side=tk.TOP)
         logger.debug("Added frame seperator")
 
-    def _add_actions(self, parent, config_key):
+    def _add_actions(self, parent: OptionsBook, config_key: str) -> None:
         """ Add Action Buttons.
 
         Parameters
@@ -1471,7 +1558,7 @@ class ConfigFrame(ttk.Frame):  # pylint: disable=too-many-ancestors
 
             btnutl = ttk.Button(btn_frame,
                                 image=img,
-                                command=lambda cmd=action: cmd(config_key))
+                                command=lambda cmd=action: cmd(config_key))  # type: ignore
             btnutl.pack(padx=2, side=tk.RIGHT)
             Tooltip(btnutl, text=text, wrap_length=200)
         logger.debug("Added util buttons")
