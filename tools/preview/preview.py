@@ -6,7 +6,7 @@ import gettext
 import logging
 import random
 import tkinter as tk
-from tkinter import PhotoImage, ttk
+from tkinter import ttk
 from typing import Any, Callable, cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 import os
 import sys
@@ -659,7 +659,7 @@ class FacesDisplay():
         self._centering: Optional["CenteringType"] = None
         self._faces_source: np.ndarray = np.array([])
         self._faces_dest: np.ndarray = np.array([])
-        self._tk_image: Optional[PhotoImage] = None
+        self._tk_image: Optional[ImageTk.PhotoImage] = None
 
         # Set from Samples
         self.update_source = False
@@ -670,7 +670,7 @@ class FacesDisplay():
         logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
 
     @property
-    def tk_image(self) -> Optional[PhotoImage]:
+    def tk_image(self) -> Optional[ImageTk.PhotoImage]:
         """ :class:`PIL.ImageTk.PhotoImage`: The compiled preview display in tkinter display
         format """
         return self._tk_image
