@@ -117,12 +117,8 @@ class Convert():  # pylint:disable=too-few-public-methods
 
     @property
     def _queue_size(self) -> int:
-        """ int: Size of the converter queues. 16 for single process otherwise 32 """
-        # TODO why do we need such big queues?
-        if self._args.singleprocess:
-            retval = 16
-        else:
-            retval = 32
+        """ int: Size of the converter queues. 2 for single process otherwise 4 """
+        retval = 2 if self._args.singleprocess or self._args.jobs == 1 else 4
         logger.debug(retval)
         return retval
 
@@ -206,7 +202,6 @@ class Convert():  # pylint:disable=too-few-public-methods
         :class:`lib.multithreading.MultiThread`
             The threads that perform the patching of swapped faces onto the output frames
         """
-        # TODO Check if multiple threads actually speeds anything up
         save_queue = queue_manager.get_queue("convert_out")
         patch_queue = queue_manager.get_queue("patch")
         return MultiThread(self._converter.process, patch_queue, save_queue,
