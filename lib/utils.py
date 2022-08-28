@@ -13,6 +13,7 @@ import zipfile
 from re import finditer
 from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
+from threading import get_ident
 from time import time
 from typing import cast, Dict, List, Optional, Union, TYPE_CHECKING
 
@@ -645,7 +646,8 @@ class DebugTimes():
         """
         if not record:
             return
-        self._steps[name] = time()
+        storename = name + str(get_ident())
+        self._steps[storename] = time()
 
     def step_end(self, name: str, record: bool = True) -> None:
         """ Stop the timer and record elapsed time  for the given step name.
@@ -661,7 +663,8 @@ class DebugTimes():
         """
         if not record:
             return
-        self._times.setdefault(name, []).append(time() - self._steps.pop(name))
+        storename = name + str(get_ident())
+        self._times.setdefault(name, []).append(time() - self._steps.pop(storename))
 
     @classmethod
     def _format_column(cls, text: str, width: int) -> str:
