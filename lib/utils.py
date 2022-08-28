@@ -614,11 +614,22 @@ class GetModel():  # pylint:disable=too-few-public-methods
 
 class DebugTimes():
     """ A simple tool to help debug timings.
+
+    Parameters
+    ----------
+    min: bool, Optional
+        Display minimum time in summary stats. Default: ``True``
+    mean: bool, Optional
+        Display mean time in summary stats. Default: ``True``
+    max: bool, Optional
+        Display maximum time in summary stats. Default: ``True``
     """
-    def __init__(self):
+    def __init__(self,
+                 show_min: bool = True, show_mean: bool = True, show_max: bool = True) -> None:
         self._times: Dict[str, List[float]] = {}
         self._steps: Dict[str, float] = {}
         self._interval = 1
+        self._display = dict(min=show_min, mean=show_mean, max=show_max)
 
     def step_start(self, name: str, record: bool = True) -> None:
         """ Start the timer for the given step name.
@@ -687,19 +698,28 @@ class DebugTimes():
 
         name_col = max(len(key) for key in self._times) + 4
         items_col = 8
-        time_col = decimal_places + 4
+        time_col = (decimal_places + 4) * sum(1 for v in self._display.values() if v)
+        separator = "-" * (name_col + items_col + time_col)
         print("")
-        print("-" * (name_col + items_col + (3 * time_col)))
-        print(f"{self._format_column('Step', name_col)}{self._format_column('Count', items_col)}"
-              f"{self._format_column('Min', time_col)}{self._format_column('Avg', time_col)}"
-              f"{self._format_column('Max', time_col)}")
-        print("-" * (name_col + items_col + (3 * time_col)))
+        print(separator)
+        header = (f"{self._format_column('Step', name_col)}"
+                  f"{self._format_column('Count', items_col)}")
+        header += f"{self._format_column('Min', time_col)}" if self._display["min"] else ""
+        header += f"{self._format_column('Avg', time_col)}" if self._display["mean"] else ""
+        header += f"{self._format_column('Max', time_col)}" if self._display["max"] else ""
+        print(header)
+        print(separator)
         for key, val in self._times.items():
-            _min = f"{np.min(val):.{decimal_places}f}"
-            avg = f"{np.mean(val):.{decimal_places}f}"
-            _max = f"{np.max(val):.{decimal_places}f}"
             num = str(len(val))
-            print(f"{self._format_column(key, name_col)}{self._format_column(num, items_col)}"
-                  f"{self._format_column(_min, time_col)}{self._format_column(avg, time_col)}"
-                  f"{self._format_column(_max, time_col)}")
+            contents = f"{self._format_column(key, name_col)}{self._format_column(num, items_col)}"
+            if self._display["min"]:
+                _min = f"{np.min(val):.{decimal_places}f}"
+                contents += f"{self._format_column(_min, time_col)}"
+            if self._display["mean"]:
+                avg = f"{np.mean(val):.{decimal_places}f}"
+                contents += f"{self._format_column(avg, time_col)}"
+            if self._display["max"]:
+                _max = f"{np.max(val):.{decimal_places}f}"
+                contents += f"{self._format_column(_max, time_col)}"
+            print(contents)
         self._interval = 1

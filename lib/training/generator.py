@@ -69,8 +69,8 @@ class DataGenerator():
         self._side = side
         self._images = images
         self._batch_size = batch_size
-        self._process_size = max([model.input_shape[1]] + [img[1]
-                                 for img in model.output_shapes[0]])
+        self._process_size = max(img[1]
+                                 for img in model.model.input_shape + model.model.output_shape)
         self._output_sizes = [shape[0] for shape in model.output_shapes[0] if shape[-1] != 1]
         self._coverage_ratio = model.coverage_ratio
         self._color_order = model.color_order.lower()
@@ -399,7 +399,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         self._no_warp = model.command_line_arguments.no_warp
         self._warp_to_landmarks = (not self._no_warp
                                    and model.command_line_arguments.warp_to_landmarks)
-        self._model_input_size = model.input_shape[1]
+        self._model_input_size = max(img[1] for img in model.model.input_shape)
 
         if self._warp_to_landmarks:
             self._face_cache.pre_fill(images, side)
@@ -695,6 +695,6 @@ class PreviewDataGenerator(DataGenerator):
         samples = self._create_samples(images, detected_faces)
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', "  # type: ignore
-                     "feed: %s, targets: %s, samples: %s)", filenames, self._side,
+                     "feed: %s, targets: %s)", filenames, self._side,
                      [f.shape for f in feed], [t.shape for t in samples])
         return feed, samples
