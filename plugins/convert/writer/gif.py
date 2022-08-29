@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """ Animated GIF writer for faceswap.py converter """
 import os
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, TYPE_CHECKING
 
 import cv2
 import imageio
 
 from ._base import Output, logger
+
+if TYPE_CHECKING:
+    from imageio.plugins.pillowmulti import GIFFormat
 
 
 class Writer(Output):
@@ -28,12 +31,12 @@ class Writer(Output):
     def __init__(self,
                  output_folder: str,
                  total_count: int,
-                 frame_ranges: Optional[List[Tuple[int]]],
+                 frame_ranges: Optional[List[Tuple[int, int]]],
                  **kwargs) -> None:
         logger.debug("total_count: %s, frame_ranges: %s", total_count, frame_ranges)
         super().__init__(output_folder, **kwargs)
         self.frame_order: List[int] = self._set_frame_order(total_count, frame_ranges)
-        self._output_dimensions: Optional[str] = None  # Fix dims on 1st received frame
+        self._output_dimensions: Optional[Tuple[int, int]] = None  # Fix dims on 1st received frame
         # Need to know dimensions of first frame, so set writer then
         self._writer: Optional[imageio.plugins.pillowmulti.GIFFormat.Writer] = None
         self._gif_file: Optional[str] = None  # Set filename based on first file seen
@@ -46,7 +49,8 @@ class Writer(Output):
         return kwargs
 
     @staticmethod
-    def _set_frame_order(total_count: int, frame_ranges: Optional[List[Tuple[int]]]) -> List[int]:
+    def _set_frame_order(total_count: int,
+                         frame_ranges: Optional[List[Tuple[int, int]]]) -> List[int]:
         """ Obtain the full list of frames to be converted in order.
 
         Parameters
@@ -71,7 +75,7 @@ class Writer(Output):
         logger.debug("frame_order: %s", retval)
         return retval
 
-    def _get_writer(self) -> imageio.plugins.pillowmulti.GIFFormat.Writer:
+    def _get_writer(self) -> "GIFFormat.Writer":
         """ Obtain the GIF writer with the requested GIF encoding options.
 
         Returns
@@ -80,7 +84,6 @@ class Writer(Output):
             The imageio GIF writer
         """
         logger.debug("writer config: %s", self.config)
-
         return imageio.get_writer(self._gif_file,
                                   mode="i",
                                   **self._gif_params)
@@ -96,7 +99,8 @@ class Writer(Output):
         image: :class:`numpy.ndarray`
             The converted image to be written
         """
-        logger.trace("Received frame: (filename: '%s', shape: %s", filename, image.shape)
+        logger.trace("Received frame: (filename: '%s', shape: %s",  # type: ignore
+                     filename, image.shape)
         if not self._gif_file:
             self._set_gif_filename(filename)
             self._set_dimensions(image.shape[:2])
@@ -140,7 +144,7 @@ class Writer(Output):
         self._gif_file = retval
         logger.info("Outputting to: '%s'", self._gif_file)
 
-    def _set_dimensions(self, frame_dims: str) -> None:
+    def _set_dimensions(self, frame_dims: Tuple[int, int]) -> None:
         """ Set the attribute :attr:`_output_dimensions` based on the first frame received. This
         protects against different sized images coming in and ensure all images get written to the
         Gif at the sema dimensions. """
@@ -151,16 +155,18 @@ class Writer(Output):
     def _save_from_cache(self) -> None:
         """ Writes any consecutive frames to the GIF container that are ready to be output
         from the cache. """
+        assert self._writer is not None
         while self.frame_order:
             if self.frame_order[0] not in self.cache:
-                logger.trace("Next frame not ready. Continuing")
+                logger.trace("Next frame not ready. Continuing")  # type: ignore
                 break
             save_no = self.frame_order.pop(0)
             save_image = self.cache.pop(save_no)
-            logger.trace("Rendering from cache. Frame no: %s", save_no)
+            logger.trace("Rendering from cache. Frame no: %s", save_no)  # type: ignore
             self._writer.append_data(save_image[:, :, ::-1])
-        logger.trace("Current cache size: %s", len(self.cache))
+        logger.trace("Current cache size: %s", len(self.cache))  # type: ignore
 
     def close(self) -> None:
         """ Close the GIF writer on completion. """
-        self._writer.close()
+        if self._writer is not None:
+            self._writer.close()

@@ -69,9 +69,10 @@ class DataGenerator():
         self._side = side
         self._images = images
         self._batch_size = batch_size
-        self._process_size = max([model.input_shape[1]] + [img[1]
-                                 for img in model.output_shapes[0]])
-        self._output_sizes = [shape[0] for shape in model.output_shapes[0] if shape[-1] != 1]
+
+        self._process_size = max(img[1] for img in model.input_shapes + model.output_shapes)
+        self._output_sizes = self._get_output_sizes(model)
+
         self._coverage_ratio = model.coverage_ratio
         self._color_order = model.color_order.lower()
         self._use_mask = self._config["mask_type"] and (self._config["penalized_mask_loss"] or
@@ -101,6 +102,27 @@ class DataGenerator():
         if self._config["penalized_mask_loss"] and mults:
             channels += len(mults)
         return channels
+
+    def _get_output_sizes(self, model: "ModelBase") -> List[int]:
+        """ Obtain the size of each output tensor for the model.
+
+        Parameters
+        ----------
+        model: :class:`~plugins.train.model.ModelBase`
+            The model that this data generator is feeding
+
+        Returns
+        -------
+        list
+            A list of integers for the model output size for the current side
+        """
+        out_shapes = model.output_shapes
+        split = len(out_shapes) // 2
+        side_out = out_shapes[:split] if self._side == "a" else out_shapes[split:]
+        retval = [shape[1] for shape in side_out if shape[-1] != 1]
+        logger.debug("side: %s, model output shapes: %s, output sizes: %s",
+                     self._side, model.output_shapes, retval)
+        return retval
 
     def minibatch_ab(self, do_shuffle: bool = True) -> Generator[BatchType, None, None]:
         """ A Background iterator to return augmented images, samples and targets.
@@ -132,7 +154,7 @@ class DataGenerator():
         """
         logger.debug("do_shuffle: %s", do_shuffle)
         args = (do_shuffle, )
-        batcher = BackgroundGenerator(self._minibatch, thread_count=1, args=args)
+        batcher = BackgroundGenerator(self._minibatch, args=args)
         return batcher.iterator()
 
     # << INTERNAL METHODS >> #
@@ -312,7 +334,6 @@ class DataGenerator():
         batch = self._buffer()
         self._crop_to_coverage(filenames, raw_faces, detected_faces, batch)
         self._apply_mask(detected_faces, batch)
-
         return self.process_batch(filenames, raw_faces, detected_faces, batch)
 
     def process_batch(self,
@@ -399,7 +420,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         self._no_warp = model.command_line_arguments.no_warp
         self._warp_to_landmarks = (not self._no_warp
                                    and model.command_line_arguments.warp_to_landmarks)
-        self._model_input_size = model.input_shape[1]
+        self._model_input_size = max(img[1] for img in model.input_shapes)
 
         if self._warp_to_landmarks:
             self._face_cache.pre_fill(images, side)
@@ -695,6 +716,6 @@ class PreviewDataGenerator(DataGenerator):
         samples = self._create_samples(images, detected_faces)
 
         logger.trace("Processed batch: (filenames: %s, side: '%s', "  # type: ignore
-                     "feed: %s, targets: %s, samples: %s)", filenames, self._side,
+                     "feed: %s, targets: %s)", filenames, self._side,
                      [f.shape for f in feed], [t.shape for t in samples])
         return feed, samples

@@ -582,7 +582,7 @@ class _Feeder():
             iterator[side] = self._load_generator(side,
                                                   True,
                                                   batch_size=batch_size,
-                                                  images=imgs).minibatch_ab()
+                                                  images=imgs).minibatch_ab(do_shuffle=False)
         logger.debug("Set time-lapse feed: %s", self._display_feeds["timelapse"])
 
 
@@ -665,7 +665,8 @@ class _Samples():  # pylint:disable=too-few-public-methods
         """
         scale = target_size / sample.shape[1]
         if scale == 1.0:
-            return sample
+            # cv2 complains if we don't do this :/
+            return np.ascontiguousarray(sample)
         logger.debug("Resizing sample: (side: '%s', sample.shape: %s, target_size: %s, scale: %s)",
                      side, sample.shape, target_size, scale)
         interpn = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA

@@ -10,7 +10,7 @@ import sys
 import time
 
 from collections import OrderedDict
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
 
@@ -204,13 +204,18 @@ class ModelBase():
         return self.name
 
     @property
-    def output_shapes(self) -> List[List[Tuple[int, int, int]]]:
-        """ list: A list of list of shape tuples for the outputs of the model with the batch
-        dimension removed. The outer list contains 2 sub-lists (one for each side "a" and "b").
-        The inner sub-lists contain the output shapes for that side. """
-        shapes: List[Tuple[int, int, int]] = [tuple(K.int_shape(output)[-3:])  # type: ignore
-                                              for output in self.model.outputs]
-        return [shapes[:len(shapes) // 2], shapes[len(shapes) // 2:]]
+    def input_shapes(self) -> List[Tuple[None, int, int, int]]:
+        """ list: A flattened list corresponding to all of the inputs to the model. """
+        shapes = [cast(Tuple[None, int, int, int], K.int_shape(inputs))
+                  for inputs in self.model.inputs]
+        return shapes
+
+    @property
+    def output_shapes(self) -> List[Tuple[None, int, int, int]]:
+        """ list: A flattened list corresponding to all of the outputs of the model. """
+        shapes = [cast(Tuple[None, int, int, int], K.int_shape(output))
+                  for output in self.model.outputs]
+        return shapes
 
     @property
     def iterations(self) -> int:
