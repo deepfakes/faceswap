@@ -48,10 +48,10 @@ class Writer(Output):
         filetype = self.config["format"]
         args: Tuple[int, ...] = tuple()
         if filetype == "jpg" and self.config["jpg_quality"] > 0:
-            args = (cv2.IMWRITE_JPEG_QUALITY,  # pylint: disable=no-member
+            args = (cv2.IMWRITE_JPEG_QUALITY,
                     self.config["jpg_quality"])
         if filetype == "png" and self.config["png_compress_level"] > -1:
-            args = (cv2.IMWRITE_PNG_COMPRESSION,  # pylint: disable=no-member
+            args = (cv2.IMWRITE_PNG_COMPRESSION,
                     self.config["png_compress_level"])
         logger.debug(args)
         return args
@@ -99,11 +99,11 @@ class Writer(Output):
             mask = image[..., -1]
             image = image[..., :3]
 
-            retval.append(cv2.imencode(self._extension,  # pylint: disable=no-member
+            retval.append(cv2.imencode(self._extension,
                                        mask,
                                        self._args)[1])
 
-        retval.insert(0, cv2.imencode(self._extension,  # pylint: disable=no-member
+        retval.insert(0, cv2.imencode(self._extension,
                                       image,
                                       self._args)[1])
         return retval

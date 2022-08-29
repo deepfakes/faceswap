@@ -623,7 +623,7 @@ class Mask():
             The threshold amount to minimize/maximize mask values to 0 and 100. Percentage value.
             Default: 0
         """
-        logger.trace("blur_kernel: %s, blur_type: %s, blur_passes: %s, ",  # type: ignore
+        logger.trace("blur_kernel: %s, blur_type: %s, blur_passes: %s, "  # type: ignore
                      "threshold: %s", blur_kernel, blur_type, blur_passes, threshold)
         if blur_type is not None:
             blur_kernel += 0 if blur_kernel == 0 or blur_kernel % 2 == 1 else 1
@@ -676,7 +676,7 @@ class Mask():
             slice(max(roi[0] * -1, 0),
                   crop_size - min(crop_size, max(0, roi[2] - self.stored_size)))]
 
-        logger.trace("src_size: %s, coverage_ratio: %s, sub_crop_size: %s, ",  # type: ignore
+        logger.trace("src_size: %s, coverage_ratio: %s, sub_crop_size: %s, "  # type: ignore
                      "sub_crop_slices: %s", roi, coverage_ratio, self._sub_crop_size,
                      self._sub_crop_slices)
 

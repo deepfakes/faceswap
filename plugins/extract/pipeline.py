@@ -11,6 +11,8 @@ plugins either in parallel or in series, giving easy access to input and output.
  """
 
 import logging
+import sys
+from typing import cast, List, Optional, Tuple, TYPE_CHECKING
 
 import cv2
 
@@ -18,6 +20,15 @@ from lib.gpu_stats import GPUStats
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import get_backend
 from plugins.plugin_loader import PluginLoader
+
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
+if TYPE_CHECKING:
+    import numpy as np
+    from lib.align.detected_face import DetectedFace
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 _INSTANCES = -1  # Tracking for multiple instances of pipeline
@@ -577,15 +588,15 @@ class Extractor():
         if get_backend() != "nvidia":
             logger.debug("Backend is not Nvidia. Not updating batchsize requirements")
             return
-        if sum([plugin.vram for plugin in self._active_plugins]) == 0:
+        if sum(plugin.vram for plugin in self._active_plugins) == 0:
             logger.debug("No plugins use VRAM. Not updating batchsize requirements.")
             return
 
-        batch_required = sum([plugin.vram_per_batch * plugin.batchsize
-                              for plugin in self._active_plugins])
+        batch_required = sum(plugin.vram_per_batch * plugin.batchsize
+                             for plugin in self._active_plugins)
         gpu_plugins = [p for p in self._current_phase if self._vram_per_phase[p] > 0]
         scaling = self._parallel_scaling.get(len(gpu_plugins), self._scaling_fallback)
-        plugins_required = sum([self._vram_per_phase[p] for p in gpu_plugins]) * scaling
+        plugins_required = sum(self._vram_per_phase[p] for p in gpu_plugins) * scaling
         if plugins_required + batch_required <= self._vram_stats["vram_free"]:
             logger.debug("Plugin requirements within threshold: (plugins_required: %sMB, "
                          "vram_free: %sMB)", plugins_required, self._vram_stats["vram_free"])
@@ -674,44 +685,50 @@ class ExtractMedia():
         The original frame
     detected_faces: list, optional
         A list of :class:`~lib.align.DetectedFace` objects. Detected faces can be added
-        later with :func:`add_detected_faces`. Default: ``None``
+        later with :func:`add_detected_faces`. Setting ``None`` will default to an empty list.
+        Default: ``None``
     """
 
-    def __init__(self, filename, image, detected_faces=None):
-        logger.trace("Initializing %s: (filename: '%s', image shape: %s, detected_faces: %s)",
-                     self.__class__.__name__, filename, image.shape, detected_faces)
+    def __init__(self,
+                 filename: str,
+                 image: "np.ndarray",
+                 detected_faces: Optional[List["DetectedFace"]] = None) -> None:
+        logger.trace("Initializing %s: (filename: '%s', image shape: %s, "  # type: ignore
+                     "detected_faces: %s)", self.__class__.__name__, filename, image.shape,
+                     detected_faces)
         self._filename = filename
-        self._image = image
-        self._image_shape = image.shape
-        self._detected_faces = detected_faces
+        self._image: Optional["np.ndarray"] = image
+        self._image_shape = cast(Tuple[int, int, int], image.shape)
+        self._detected_faces: List["DetectedFace"] = ([] if detected_faces is None
+                                                      else detected_faces)
 
     @property
-    def filename(self):
+    def filename(self) -> str:
         """ str: The base name of the :attr:`image` filename. """
         return self._filename
 
     @property
-    def image(self):
+    def image(self) -> "np.ndarray":
         """ :class:`numpy.ndarray`: The source frame for this object. """
+        assert self._image is not None
         return self._image
 
     @property
-    def image_shape(self):
+    def image_shape(self) -> Tuple[int, int, int]:
         """ tuple: The shape of the stored :attr:`image`. """
         return self._image_shape
 
     @property
-    def image_size(self):
+    def image_size(self) -> Tuple[int, int]:
         """ tuple: The (`height`, `width`) of the stored :attr:`image`. """
         return self._image_shape[:2]
 
     @property
-    def detected_faces(self):
-        """list: A list of :class:`~lib.align.DetectedFace` objects in the
-        :attr:`image`. """
+    def detected_faces(self) -> List["DetectedFace"]:
+        """list: A list of :class:`~lib.align.DetectedFace` objects in the :attr:`image`. """
         return self._detected_faces
 
-    def get_image_copy(self, color_format):
+    def get_image_copy(self, color_format: Literal["BGR", "RGB", "GRAY"]) -> "np.ndarray":
         """ Get a copy of the image in the requested color format.
 
         Parameters
@@ -724,11 +741,12 @@ class ExtractMedia():
         :class:`numpy.ndarray`:
             A copy of :attr:`image` in the requested :attr:`color_format`
         """
-        logger.trace("Requested color format '%s' for frame '%s'", color_format, self._filename)
+        logger.trace("Requested color format '%s' for frame '%s'",  # type: ignore
+                     color_format, self._filename)
         image = getattr(self, f"_image_as_{color_format.lower()}")()
         return image
 
-    def add_detected_faces(self, faces):
+    def add_detected_faces(self, faces: List["DetectedFace"]) -> None:
         """ Add detected faces to the object. Called at the end of each extraction phase.
 
         Parameters
@@ -736,21 +754,21 @@ class ExtractMedia():
         faces: list
             A list of :class:`~lib.align.DetectedFace` objects
         """
-        logger.trace("Adding detected faces for filename: '%s'. (faces: %s, lrtb: %s)",
-                     self._filename, faces,
+        logger.trace("Adding detected faces for filename: '%s'. "  # type: ignore
+                     "(faces: %s, lrtb: %s)", self._filename, faces,
                      [(face.left, face.right, face.top, face.bottom) for face in faces])
         self._detected_faces = faces
 
-    def remove_image(self):
+    def remove_image(self) -> None:
         """ Delete the image and reset :attr:`image` to ``None``.
 
         Required for multi-phase extraction to avoid the frames stacking RAM.
         """
-        logger.trace("Removing image for filename: '%s'", self._filename)
+        logger.trace("Removing image for filename: '%s'", self._filename)  # type: ignore
         del self._image
         self._image = None
 
-    def set_image(self, image):
+    def set_image(self, image: "np.ndarray") -> None:
         """ Add the image back into :attr:`image`
 
         Required for multi-phase extraction adds the image back to this object.
@@ -760,33 +778,33 @@ class ExtractMedia():
         image: :class:`numpy.ndarry`
             The original frame to be re-applied to for this :attr:`filename`
         """
-        logger.trace("Reapplying image: (filename: `%s`, image shape: %s)",
+        logger.trace("Reapplying image: (filename: `%s`, image shape: %s)",  # type: ignore
                      self._filename, image.shape)
         self._image = image
 
-    def _image_as_bgr(self):
+    def _image_as_bgr(self) -> "np.ndarray":
         """ Get a copy of the source frame in BGR format.
 
         Returns
         -------
         :class:`numpy.ndarray`:
             A copy of :attr:`image` in BGR color format """
-        return self._image[..., :3].copy()
+        return self.image[..., :3].copy()
 
-    def _image_as_rgb(self):
+    def _image_as_rgb(self) -> "np.ndarray":
         """ Get a copy of the source frame in RGB format.
 
         Returns
         -------
         :class:`numpy.ndarray`:
             A copy of :attr:`image` in RGB color format """
-        return self._image[..., 2::-1].copy()
+        return self.image[..., 2::-1].copy()
 
-    def _image_as_gray(self):
+    def _image_as_gray(self) -> "np.ndarray":
         """ Get a copy of the source frame in gray-scale format.
 
         Returns
         -------
         :class:`numpy.ndarray`:
             A copy of :attr:`image` in gray-scale color format """
-        return cv2.cvtColor(self._image.copy(), cv2.COLOR_BGR2GRAY)
+        return cv2.cvtColor(self.image.copy(), cv2.COLOR_BGR2GRAY)

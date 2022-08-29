@@ -644,7 +644,7 @@ class AlignedFace():
             if centering not in self._cache.cropped_roi:
                 center = get_adjusted_center(image_size,
                                              self.pose.offset[self._source_centering],
-                                             self.pose.offset[self.centering],
+                                             self.pose.offset[centering],
                                              self._source_centering)
                 padding = target_size // 2
                 roi = np.array([center - padding, center + padding]).ravel()
