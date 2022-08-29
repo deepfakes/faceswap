@@ -69,9 +69,10 @@ class DataGenerator():
         self._side = side
         self._images = images
         self._batch_size = batch_size
-        self._process_size = max(img[1]
-                                 for img in model.model.input_shape + model.model.output_shape)
-        self._output_sizes = [shape[0] for shape in model.output_shapes[0] if shape[-1] != 1]
+
+        self._process_size = max(img[1] for img in model.input_shapes + model.output_shapes)
+        self._output_sizes = [shape[1] for shape in model.output_shapes if shape[-1] != 1]
+
         self._coverage_ratio = model.coverage_ratio
         self._color_order = model.color_order.lower()
         self._use_mask = self._config["mask_type"] and (self._config["penalized_mask_loss"] or
@@ -399,7 +400,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         self._no_warp = model.command_line_arguments.no_warp
         self._warp_to_landmarks = (not self._no_warp
                                    and model.command_line_arguments.warp_to_landmarks)
-        self._model_input_size = max(img[1] for img in model.model.input_shape)
+        self._model_input_size = max(img[1] for img in model.input_shapes)
 
         if self._warp_to_landmarks:
             self._face_cache.pre_fill(images, side)
