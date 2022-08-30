@@ -799,7 +799,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
                       side: Literal["a", "b"],
                       images: np.ndarray,
                       prediction_size: int,
-                      color: Tuple[int, int, int]) -> np.ndarray:
+                      color: Tuple[float, float, float]) -> np.ndarray:
         """ Add a frame overlay to preview images indicating the region of interest.
 
         This applies the red border that appears in the preview images.
