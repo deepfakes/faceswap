@@ -632,12 +632,12 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Showing sample")
         feeds: Dict[Literal["a", "b"], np.ndarray] = {}
         for idx, side in enumerate(get_args(Literal["a", "b"])):
+            feed = self.images[side][0]
             input_shape = self._model.model.input_shape[idx][1:]
-            if input_shape[0] / self.images[side][0].shape[1] != 1.0:
-                feeds[side] = self._resize_sample(side, self.images[side][1], input_shape[0])
-                feeds[side] = feeds[side].reshape((-1, ) + input_shape)
+            if input_shape[0] / feed.shape[1] != 1.0:
+                feeds[side] = self._resize_sample(side, feed, input_shape[0])
             else:
-                feeds[side] = self.images[side][0]
+                feeds[side] = feed
 
         preds = self._get_predictions(feeds["a"], feeds["b"])
         return self._compile_preview(preds)
@@ -787,7 +787,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
             predictions = [pred[..., ::-1] if pred.shape[-1] == 3 else pred
                            for pred in predictions]
 
-        full = self._process_full(side, full, predictions[0].shape[1], (0, 0, 255))
+        full = self._process_full(side, full, predictions[0].shape[1], (0., 0., 1.0))
         images = [faces] + predictions
         if self._display_mask:
             images = self._compile_masked(images, samples[-1])

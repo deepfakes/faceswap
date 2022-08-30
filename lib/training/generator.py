@@ -72,6 +72,7 @@ class DataGenerator():
 
         self._process_size = max(img[1] for img in model.input_shapes + model.output_shapes)
         self._output_sizes = self._get_output_sizes(model)
+        self._model_input_size = max(img[1] for img in model.input_shapes)
 
         self._coverage_ratio = model.coverage_ratio
         self._color_order = model.color_order.lower()
@@ -323,7 +324,7 @@ class DataGenerator():
 
         Returns
         -------
-        list
+        :class:`numpy.ndarray`
             4-dimensional array of faces to feed the training the model.
         list
             List of 4-dimensional :class:`numpy.ndarray`. The number of channels here will vary.
@@ -334,7 +335,13 @@ class DataGenerator():
         batch = self._buffer()
         self._crop_to_coverage(filenames, raw_faces, detected_faces, batch)
         self._apply_mask(detected_faces, batch)
-        return self.process_batch(filenames, raw_faces, detected_faces, batch)
+        feed, targets = self.process_batch(filenames, raw_faces, detected_faces, batch)
+
+        logger.trace("Processed %s batch side %s. (filenames: %s, feed: %s, "  # type: ignore
+                     "targets: %s)", self.__class__.__name__, self._side, filenames,
+                     feed.shape, [t.shape for t in targets])
+
+        return feed, targets
 
     def process_batch(self,
                       filenames: List[str],
@@ -420,7 +427,6 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         self._no_warp = model.command_line_arguments.no_warp
         self._warp_to_landmarks = (not self._no_warp
                                    and model.command_line_arguments.warp_to_landmarks)
-        self._model_input_size = max(img[1] for img in model.input_shapes)
 
         if self._warp_to_landmarks:
             self._face_cache.pre_fill(images, side)
@@ -481,7 +487,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
 
         Returns
         -------
-        feed: list
+        feed: :class:`numpy.ndarray`
             4-dimensional array of faces to feed the training the model (:attr:`x` parameter for
             :func:`keras.models.model.train_on_batch`.). The array returned is in the format
             (`batch size`, `height`, `width`, `channels`).
@@ -535,10 +541,6 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
                                               for image in warped]))
         else:
             feed = self._to_float32(warped)
-
-        logger.trace("Processed batch: (filenames: %s, side: '%s', "  # type: ignore
-                     "feed: %s, targets: %s)", filenames, self._side,
-                     [f.shape for f in feed], [t.shape for t in targets])
 
         return feed, targets
 
@@ -692,7 +694,7 @@ class PreviewDataGenerator(DataGenerator):
 
         Returns
         -------
-        feed: list
+        feed: :class:`numpy.ndarray`
             List of 4-dimensional :class:`numpy.ndarray` objects at model input size for feeding
             the model's predict function. The first 3 channels are (rgb/bgr). The 4th channel is
             the face mask.
@@ -711,11 +713,8 @@ class PreviewDataGenerator(DataGenerator):
             mask = np.zeros_like(batch[..., 0])[..., None] + 255
             batch = np.concatenate([batch, mask], axis=-1)
 
-        feed = self._to_float32(batch[..., :4])
+        feed = self._to_float32(batch[..., :4])  # Don't resize here: we want masks at output res.
 
         samples = self._create_samples(images, detected_faces)
 
-        logger.trace("Processed batch: (filenames: %s, side: '%s', "  # type: ignore
-                     "feed: %s, targets: %s)", filenames, self._side,
-                     [f.shape for f in feed], [t.shape for t in samples])
         return feed, samples
