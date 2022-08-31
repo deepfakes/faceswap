@@ -3,7 +3,21 @@
 
 import logging
 import os
+import sys
 from importlib import import_module
+from typing import Callable, List, Type, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from plugins.extract.detect._base import Detector
+    from plugins.extract.align._base import Aligner
+    from plugins.extract.mask._base import Masker
+    from plugins.train.model._base import ModelBase
+    from plugins.train.trainer._base import TrainerBase
+
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -21,7 +35,7 @@ class PluginLoader():
     >>> aligner = PluginLoader.get_aligner('cv2-dnn')
     """
     @staticmethod
-    def get_detector(name, disable_logging=False):
+    def get_detector(name: str, disable_logging: bool = False) -> Type["Detector"]:
         """ Return requested detector plugin
 
         Parameters
@@ -40,7 +54,7 @@ class PluginLoader():
         return PluginLoader._import("extract.detect", name, disable_logging)
 
     @staticmethod
-    def get_aligner(name, disable_logging=False):
+    def get_aligner(name: str, disable_logging: bool = False) -> Type["Aligner"]:
         """ Return requested aligner plugin
 
         Parameters
@@ -59,7 +73,7 @@ class PluginLoader():
         return PluginLoader._import("extract.align", name, disable_logging)
 
     @staticmethod
-    def get_masker(name, disable_logging=False):
+    def get_masker(name: str, disable_logging: bool = False) -> Type["Masker"]:
         """ Return requested masker plugin
 
         Parameters
@@ -78,7 +92,7 @@ class PluginLoader():
         return PluginLoader._import("extract.mask", name, disable_logging)
 
     @staticmethod
-    def get_model(name, disable_logging=False):
+    def get_model(name: str, disable_logging: bool = False) -> "ModelBase":
         """ Return requested training model plugin
 
         Parameters
@@ -97,7 +111,7 @@ class PluginLoader():
         return PluginLoader._import("train.model", name, disable_logging)
 
     @staticmethod
-    def get_trainer(name, disable_logging=False):
+    def get_trainer(name: str, disable_logging: bool = False) -> "TrainerBase":
         """ Return requested training trainer plugin
 
         Parameters
@@ -116,7 +130,7 @@ class PluginLoader():
         return PluginLoader._import("train.trainer", name, disable_logging)
 
     @staticmethod
-    def get_converter(category, name, disable_logging=False):
+    def get_converter(category: str, name: str, disable_logging: bool = False) -> Callable:
         """ Return requested converter plugin
 
         Converters work slightly differently to other faceswap plugins. They are created to do a
@@ -136,10 +150,10 @@ class PluginLoader():
         :class:`plugins.convert` object:
             A converter sub plugin
         """
-        return PluginLoader._import("convert.{}".format(category), name, disable_logging)
+        return PluginLoader._import(f"convert.{category}", name, disable_logging)
 
     @staticmethod
-    def _import(attr, name, disable_logging):
+    def _import(attr: str, name: str, disable_logging: bool):
         """ Import the plugin's module
 
         Parameters
@@ -164,12 +178,14 @@ class PluginLoader():
         return getattr(module, ttl)
 
     @staticmethod
-    def get_available_extractors(extractor_type, add_none=False, extend_plugin=False):
+    def get_available_extractors(extractor_type: Literal["align", "detect", "mask"],
+                                 add_none: bool = False,
+                                 extend_plugin: bool = False) -> List[str]:
         """ Return a list of available extractors of the given type
 
         Parameters
         ----------
-        extractor_type: {'aligner', 'detector', 'masker'}
+        extractor_type: {'align', 'detect', 'mask'}
             The type of extractor to return the plugins for
         add_none: bool, optional
             Append "none" to the list of returned plugins. Default: False
@@ -207,7 +223,7 @@ class PluginLoader():
         return extractors
 
     @staticmethod
-    def get_available_models():
+    def get_available_models() -> List[str]:
         """ Return a list of available training models
 
         Returns
@@ -224,7 +240,7 @@ class PluginLoader():
         return models
 
     @staticmethod
-    def get_default_model():
+    def get_default_model() -> str:
         """ Return the default training model plugin name
 
         Returns
@@ -237,7 +253,7 @@ class PluginLoader():
         return 'original' if 'original' in models else models[0]
 
     @staticmethod
-    def get_available_convert_plugins(convert_category, add_none=True):
+    def get_available_convert_plugins(convert_category: str, add_none: bool = True) -> List[str]:
         """ Return a list of available converter plugins in the given category
 
         Parameters
