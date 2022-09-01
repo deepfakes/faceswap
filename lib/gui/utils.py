@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """ Utility functions for the GUI """
+from dataclasses import dataclass, field
 import logging
 import os
 import platform
@@ -8,6 +9,8 @@ import tkinter as tk
 
 from tkinter import filedialog
 from threading import Event, Thread
+from typing import (Any, Callable, cast, Dict, IO, List, Optional,
+                    Sequence, Tuple, Type, TYPE_CHECKING, Union)
 from queue import Queue
 
 import numpy as np
@@ -18,14 +21,30 @@ from ._config import Config as UserConfig
 from .project import Project, Tasks
 from .theme import Style
 
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
+if TYPE_CHECKING:
+    from types import TracebackType
+    from .options import CliOptions
+    from .custom_widgets import StatusBar
+    from .command import CommandNotebook
+    from .command import ToolsNotebook
+    from lib.multithreading import _ErrorType
+
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_CONFIG = None
-_IMAGES = None
-_PREVIEW_TRIGGER = None
+_CONFIG: Optional["Config"] = None
+_IMAGES: Optional["Images"] = None
+_PREVIEW_TRIGGER: Optional["PreviewTrigger"] = None
 PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
 
 
-def initialize_config(root, cli_opts, statusbar):
+def initialize_config(root: tk.Tk,
+                      cli_opts: "CliOptions",
+                      statusbar: "StatusBar") -> Optional["Config"]:
     """ Initialize the GUI Master :class:`Config` and add to global constant.
 
     This should only be called once on first GUI startup. Future access to :class:`Config`
@@ -35,10 +54,16 @@ def initialize_config(root, cli_opts, statusbar):
     ----------
     root: :class:`tkinter.Tk`
         The root Tkinter object
-    cli_opts: :class:`lib.gui.options.CliOpts`
+    cli_opts: :class:`lib.gui.options.CliOptions`
         The command line options object
     statusbar: :class:`lib.gui.custom_widgets.StatusBar`
         The GUI Status bar
+
+    Returns
+    -------
+    :class:`Config` or ``None``
+        ``None`` if the config has already been initialized otherwise the global configuration
+        options
     """
     global _CONFIG  # pylint: disable=global-statement
     if _CONFIG is not None:
@@ -49,7 +74,7 @@ def initialize_config(root, cli_opts, statusbar):
     return _CONFIG
 
 
-def get_config():
+def get_config() -> "Config":
     """ Get the Master GUI configuration.
 
     Returns
@@ -57,10 +82,11 @@ def get_config():
     :class:`Config`
         The Master GUI Config
     """
+    assert _CONFIG is not None
     return _CONFIG
 
 
-def initialize_images():
+def initialize_images() -> None:
     """ Initialize the :class:`Images` handler  and add to global constant.
 
     This should only be called once on first GUI startup. Future access to :class:`Images`
@@ -73,7 +99,7 @@ def initialize_images():
     _IMAGES = Images()
 
 
-def get_images():
+def get_images() -> "Images":
     """ Get the Master GUI Images handler.
 
     Returns
@@ -81,7 +107,14 @@ def get_images():
     :class:`Images`
         The Master GUI Images handler
     """
+    assert _IMAGES is not None
     return _IMAGES
+
+
+_FileType = Literal["default", "alignments", "config_project", "config_task",
+                    "config_all", "csv", "image", "ini", "state", "log", "video"]
+_HandleType = Literal["open", "save", "filename", "filename_multi", "save_filename",
+                      "context", "dir"]
 
 
 class FileHandler():  # pylint:disable=too-few-public-methods
@@ -89,7 +122,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
 
     Parameters
     ----------
-    handle_type: ['open', 'save', 'filename', 'filename_multi', 'save_filename', 'context', `dir`]
+    handle_type: ['open', 'save', 'filename', 'filename_multi', 'save_filename', 'context', 'dir']
         The type of file dialog to return. `open` and `save` will perform the open and save actions
         and return the file. `filename` returns the filename from an `open` dialog.
         `filename_multi` allows for multi-selection of files and returns a list of files selected.
@@ -113,7 +146,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         Required for context handling file dialog, otherwise unused. Default: ``None``
     action: str, optional
         Required for context handling file dialog, otherwise unused. Default: ``None``
-    variable: :class:`tkinter.StringVar`, optional
+    variable: str, optional
         Required for context handling file dialog, otherwise unused. The variable to associate
         with this file dialog. Default: ``None``
 
@@ -130,8 +163,15 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     '/path/to/selected/video.mp4'
     """
 
-    def __init__(self, handle_type, file_type, title=None, initial_folder=None, initial_file=None,
-                 command=None, action=None, variable=None):
+    def __init__(self,
+                 handle_type: _HandleType,
+                 file_type: _FileType,
+                 title: Optional[str] = None,
+                 initial_folder: Optional[str] = None,
+                 initial_file: Optional[str] = None,
+                 command: Optional[str] = None,
+                 action: Optional[str] = None,
+                 variable: Optional[str] = None) -> None:
         logger.debug("Initializing %s: (handle_type: '%s', file_type: '%s', title: '%s', "
                      "initial_folder: '%s', initial_file: '%s', command: '%s', action: '%s', "
                      "variable: %s)", self.__class__.__name__, handle_type, file_type, title,
@@ -152,11 +192,11 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def _filetypes(self):
+    def _filetypes(self) -> Dict[str, List[Tuple[str, str]]]:
         """ dict: The accepted extensions for each file type for opening/saving """
         all_files = ("All files", "*.*")
         filetypes = dict(
-            default=(all_files,),
+            default=[all_files],
             alignments=[("Faceswap Alignments", "*.fsa"), all_files],
             config_project=[("Faceswap Project files", "*.fsw"), all_files],
             config_task=[("Faceswap Task files", "*.fst"), all_files],
@@ -193,11 +233,11 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                 multi = [f"{key.title()} Files"]
                 multi.append(" ".join([ftype[1]
                                        for ftype in filetypes[key] if ftype[0] != "All files"]))
-                filetypes[key].insert(0, tuple(multi))
+                filetypes[key].insert(0, cast(Tuple[str, str], tuple(multi)))
         return filetypes
 
     @property
-    def _contexts(self):
+    def _contexts(self) -> Dict[str, Dict[str, Union[str, Dict[str, str]]]]:
         """dict: Mapping of commands, actions and their corresponding file dialog for context
         handle types. """
         return dict(effmpeg=dict(input={"extract": "filename",
@@ -218,7 +258,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                                          "slice": "save_filename"}))
 
     @classmethod
-    def _set_dummy_master(cls):
+    def _set_dummy_master(cls) -> Optional[tk.Frame]:
         """ Add an option to force black font on Linux file dialogs KDE issue that displays light
         font on white background).
 
@@ -232,21 +272,22 @@ class FileHandler():  # pylint:disable=too-few-public-methods
             The dummy master frame for Linux systems, otherwise ``None``
         """
         if platform.system().lower() == "linux":
-            retval = tk.Frame()
-            retval.option_add("*foreground", "black")
+            frame = tk.Frame()
+            frame.option_add("*foreground", "black")
+            retval: Optional[tk.Frame] = frame
         else:
             retval = None
         return retval
 
-    def _remove_dummy_master(self):
+    def _remove_dummy_master(self) -> None:
         """ Destroy the dummy master widget on Linux systems. """
-        if platform.system().lower() != "linux":
+        if platform.system().lower() != "linux" or self._dummy_master is None:
             return
         self._dummy_master.destroy()
         del self._dummy_master
         self._dummy_master = None
 
-    def _set_defaults(self):
+    def _set_defaults(self) -> Dict[str, Optional[str]]:
         """ Set the default file type for the file dialog. Generally the first found file type
         will be used, but this is overridden if it is not appropriate.
 
@@ -255,16 +296,24 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         dict:
             The default file extension for each file type
         """
-        defaults = {key: next(ext for ext in val[0][1].split(" ")).replace("*", "")
-                    for key, val in self._filetypes.items()}
+        defaults: Dict[str, Optional[str]] = {
+            key: next(ext for ext in val[0][1].split(" ")).replace("*", "")
+            for key, val in self._filetypes.items()}
         defaults["default"] = None
         defaults["video"] = ".mp4"
         defaults["image"] = ".png"
         logger.debug(defaults)
         return defaults
 
-    def _set_kwargs(self, title, initial_folder, initial_file, file_type, command, action,
-                    variable=None):
+    def _set_kwargs(self,
+                    title: Optional[str],
+                    initial_folder: Optional[str],
+                    initial_file: Optional[str],
+                    file_type: _FileType,
+                    command: Optional[str],
+                    action: Optional[str],
+                    variable: Optional[str] = None
+                    ) -> Dict[str, Union[None, tk.Frame, str, List[Tuple[str, str]]]]:
         """ Generate the required kwargs for the requested file dialog browser.
 
         Parameters
@@ -284,7 +333,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
             Required for context handling file dialog, otherwise unused.
         action: str
             Required for context handling file dialog, otherwise unused.
-        variable: :class:`tkinter.StringVar`, optional
+        variable: str, optional
             Required for context handling file dialog, otherwise unused. The variable to associate
             with this file dialog. Default: ``None``
 
@@ -297,9 +346,11 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                      "file_type: '%s', command: '%s': action: '%s', variable: '%s')",
                      title, initial_folder, initial_file, file_type, command, action, variable)
 
-        kwargs = dict(master=self._dummy_master)
+        kwargs: Dict[str, Union[None, tk.Frame, str,
+                                List[Tuple[str, str]]]] = dict(master=self._dummy_master)
 
         if self._handletype.lower() == "context":
+            assert command is not None and action is not None and variable is not None
             self._set_context_handletype(command, action, variable)
 
         if title is not None:
@@ -323,7 +374,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         logger.debug("Set Kwargs: %s", kwargs)
         return kwargs
 
-    def _set_context_handletype(self, command, action, variable):
+    def _set_context_handletype(self, command: str, action: str, variable: str) -> None:
         """ Sets the correct handle type  based on context.
 
         Parameters
@@ -332,53 +383,55 @@ class FileHandler():  # pylint:disable=too-few-public-methods
             The command that is being executed. Used to look up the context actions
         action: str
             The action that is being performed. Used to look up the correct file dialog
-        variable: :class:`tkinter.StringVar`
+        variable: str
             The variable associated with this file dialog
         """
         if self._contexts[command].get(variable, None) is not None:
-            handletype = self._contexts[command][variable][action]
+            handletype = cast(Dict[str, Dict[str, Dict[str, str]]],
+                              self._contexts)[command][variable][action]
         else:
-            handletype = self._contexts[command][action]
+            handletype = cast(Dict[str, Dict[str, str]],
+                              self._contexts)[command][action]
         logger.debug(handletype)
-        self._handletype = handletype
+        self._handletype = cast(_HandleType, handletype)
 
-    def _open(self):
+    def _open(self) -> Optional[IO]:
         """ Open a file. """
         logger.debug("Popping Open browser")
-        return filedialog.askopenfile(**self._kwargs)
+        return filedialog.askopenfile(**self._kwargs)  # type: ignore
 
-    def _save(self):
+    def _save(self) -> Optional[IO]:
         """ Save a file. """
         logger.debug("Popping Save browser")
-        return filedialog.asksaveasfile(**self._kwargs)
+        return filedialog.asksaveasfile(**self._kwargs)  # type: ignore
 
-    def _dir(self):
+    def _dir(self) -> str:
         """ Get a directory location. """
         logger.debug("Popping Dir browser")
         return filedialog.askdirectory(**self._kwargs)
 
-    def _savedir(self):
+    def _savedir(self) -> str:
         """ Get a save directory location. """
         logger.debug("Popping SaveDir browser")
         return filedialog.askdirectory(**self._kwargs)
 
-    def _filename(self):
+    def _filename(self) -> str:
         """ Get an existing file location. """
         logger.debug("Popping Filename browser")
         return filedialog.askopenfilename(**self._kwargs)
 
-    def _filename_multi(self):
+    def _filename_multi(self) -> Tuple[str, ...]:
         """ Get multiple existing file locations. """
         logger.debug("Popping Filename browser")
         return filedialog.askopenfilenames(**self._kwargs)
 
-    def _save_filename(self):
+    def _save_filename(self) -> str:
         """ Get a save file location. """
         logger.debug("Popping Save Filename browser")
         return filedialog.asksaveasfilename(**self._kwargs)
 
     @staticmethod
-    def _nothing():  # pylint: disable=useless-return
+    def _nothing() -> None:  # pylint: disable=useless-return
         """ Method that does nothing, used for disabling open/save pop up.  """
         logger.debug("Popping Nothing browser")
         return
@@ -390,22 +443,27 @@ class Images():
     This class should be initialized on GUI startup through :func:`initialize_images`. Any further
     access to this class should be through :func:`get_images`.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._pathpreview = os.path.join(PATHCACHE, "preview")
-        self._pathoutput = None
-        self._previewoutput = None
-        self._previewtrain = {}
-        self._previewcache = dict(modified=None,  # cache for extract and convert
-                                  images=None,
-                                  filenames=[],
-                                  placeholder=None)
+        self._pathoutput: Optional[str] = None
+        self._batch_mode = False
+        self._previewoutput: Optional[Tuple[Image.Image, ImageTk.PhotoImage]] = None
+        self._previewtrain: Dict[str, List[Union[Image.Image,
+                                                 ImageTk.PhotoImage,
+                                                 None,
+                                                 float]]] = {}
+        self._previewcache: Dict[str, Union[None, float, np.ndarray, List[str]]] = dict(
+            modified=None,  # cache for extract and convert
+            images=None,
+            filenames=[],
+            placeholder=None)
         self._errcount = 0
         self._icons = self._load_icons()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def previewoutput(self):
+    def previewoutput(self) -> Optional[Tuple[Image.Image, ImageTk.PhotoImage]]:
         """ Tuple or ``None``: First item in the tuple is the extract or convert preview image
         (:class:`PIL.Image`), the second item is the image in a format that tkinter can display
         (:class:`PIL.ImageTK.PhotoImage`).
@@ -415,7 +473,7 @@ class Images():
         return self._previewoutput
 
     @property
-    def previewtrain(self):
+    def previewtrain(self) -> Dict[str, List[Union[Image.Image, ImageTk.PhotoImage, None, float]]]:
         """ dict or ``None``: The training preview images. Dictionary key is the image name
         (`str`). Dictionary values are a `list` of the training image (:class:`PIL.Image`), the
         image formatted for tkinter display (:class:`PIL.ImageTK.PhotoImage`), the last
@@ -427,7 +485,7 @@ class Images():
         return self._previewtrain
 
     @property
-    def icons(self):
+    def icons(self) -> Dict[str, ImageTk.PhotoImage]:
         """ dict: The faceswap icons for all parts of the GUI. The dictionary key is the icon
         name (`str`) the value is the icon sized and formatted for display
         (:class:`PIL.ImageTK.PhotoImage`).
@@ -442,7 +500,7 @@ class Images():
         return self._icons
 
     @staticmethod
-    def _load_icons():
+    def _load_icons() -> Dict[str, ImageTk.PhotoImage]:
         """ Scan the icons cache folder and load the icons into :attr:`icons` for retrieval
         throughout the GUI.
 
@@ -454,7 +512,7 @@ class Images():
         """
         size = get_config().user_config_dict.get("icon_size", 16)
         size = int(round(size * get_config().scaling_factor))
-        icons = {}
+        icons: Dict[str, ImageTk.PhotoImage] = {}
         pathicons = os.path.join(PATHCACHE, "icons")
         for fname in os.listdir(pathicons):
             name, ext = os.path.splitext(fname)
@@ -466,7 +524,7 @@ class Images():
         logger.debug(icons)
         return icons
 
-    def set_faceswap_output_path(self, location):
+    def set_faceswap_output_path(self, location: str, batch_mode: bool = False) -> None:
         """ Set the path that will contain the output from an Extract or Convert task.
 
         Required so that the GUI can fetch output images to display for return in
@@ -476,10 +534,13 @@ class Images():
         ----------
         location: str
             The output location that has been specified for an Extract or Convert task
+        batch_mode: bool
+            ``True`` if extracting in batch mode otherwise False
         """
         self._pathoutput = location
+        self._batch_mode = batch_mode
 
-    def delete_preview(self):
+    def delete_preview(self) -> None:
         """ Delete the preview files in the cache folder and reset the image cache.
 
         Should be called when terminating tasks, or when Faceswap starts up or shuts down.
@@ -490,7 +551,7 @@ class Images():
                 fullitem = os.path.join(self._pathpreview, item)
                 logger.debug("Deleting: '%s'", fullitem)
                 os.remove(fullitem)
-        for fname in self._previewcache["filenames"]:
+        for fname in cast(List[str], self._previewcache["filenames"]):
             if os.path.basename(fname) == ".gui_preview.jpg":
                 logger.debug("Deleting: '%s'", fname)
                 try:
@@ -499,10 +560,11 @@ class Images():
                     logger.debug("File does not exist: %s", fname)
         self._clear_image_cache()
 
-    def _clear_image_cache(self):
+    def _clear_image_cache(self) -> None:
         """ Clear all cached images. """
         logger.debug("Clearing image cache")
         self._pathoutput = None
+        self._batch_mode = False
         self._previewoutput = None
         self._previewtrain = {}
         self._previewcache = dict(modified=None,  # cache for extract and convert
@@ -511,7 +573,7 @@ class Images():
                                   placeholder=None)
 
     @staticmethod
-    def _get_images(image_path):
+    def _get_images(image_path: str) -> List[str]:
         """ Get the images stored within the given directory.
 
         Parameters
@@ -528,13 +590,13 @@ class Images():
         logger.debug("Getting images: '%s'", image_path)
         if not os.path.isdir(image_path):
             logger.debug("Folder does not exist")
-            return None
+            return []
         files = [os.path.join(image_path, f)
                  for f in os.listdir(image_path) if f.lower().endswith((".png", ".jpg"))]
         logger.debug("Image files: %s", files)
         return files
 
-    def load_latest_preview(self, thumbnail_size, frame_dims):
+    def load_latest_preview(self, thumbnail_size: int, frame_dims: Tuple[int, int]) -> None:
         """ Load the latest preview image for extract and convert.
 
         Retrieves the latest preview images from the faceswap output folder, resizes to thumbnails
@@ -550,7 +612,9 @@ class Images():
         """
         logger.debug("Loading preview image: (thumbnail_size: %s, frame_dims: %s)",
                      thumbnail_size, frame_dims)
-        image_files = self._get_images(self._pathoutput)
+        assert self._pathoutput is not None
+        image_path = self._get_newest_folder() if self._batch_mode else self._pathoutput
+        image_files = self._get_images(image_path)
         gui_preview = os.path.join(self._pathoutput, ".gui_preview.jpg")
         if not image_files or (len(image_files) == 1 and gui_preview not in image_files):
             logger.debug("No preview to display")
@@ -582,7 +646,27 @@ class Images():
         logger.debug("Displaying preview: %s", self._previewcache["filenames"])
         self._previewoutput = (show_image, ImageTk.PhotoImage(show_image))
 
-    def _get_newest_filenames(self, image_files):
+    def _get_newest_folder(self) -> str:
+        """ Obtain the most recent folder created in the extraction output folder when processing
+        in batch mode.
+
+        Returns
+        -------
+        str
+            The most recently modified folder within the parent output folder. If no folders have
+            been created, returns the parent output folder
+
+        """
+        assert self._pathoutput is not None
+        folders = [os.path.join(self._pathoutput, folder)
+                   for folder in os.listdir(self._pathoutput)
+                   if os.path.isdir(os.path.join(self._pathoutput, folder))]
+        folders.sort(key=os.path.getmtime)
+        retval = folders[-1] if folders else self._pathoutput
+        logger.debug("sorted folders: %s, return value: %s", folders, retval)
+        return retval
+
+    def _get_newest_filenames(self, image_files: List[str]) -> List[str]:
         """ Return image filenames that have been modified since the last check.
 
         Parameters
@@ -599,16 +683,19 @@ class Images():
             retval = image_files
         else:
             retval = [fname for fname in image_files
-                      if os.path.getmtime(fname) > self._previewcache["modified"]]
+                      if os.path.getmtime(fname) > cast(float, self._previewcache["modified"])]
         if not retval:
             logger.debug("No new images in output folder")
         else:
-            self._previewcache["modified"] = max([os.path.getmtime(img) for img in retval])
+            self._previewcache["modified"] = max(os.path.getmtime(img) for img in retval)
             logger.debug("Number new images: %s, Last Modified: %s",
                          len(retval), self._previewcache["modified"])
         return retval
 
-    def _load_images_to_cache(self, image_files, frame_dims, thumbnail_size):
+    def _load_images_to_cache(self,
+                              image_files: List[str],
+                              frame_dims: Tuple[int, int],
+                              thumbnail_size: int) -> bool:
         """ Load preview images to the image cache.
 
         Load new images and append to cache, filtering the cache the number of thumbnails that will
@@ -634,7 +721,7 @@ class Images():
         logger.debug("num_images: %s", num_images)
         if num_images == 0:
             return False
-        samples = []
+        samples: List[np.ndarray] = []
         start_idx = len(image_files) - num_images if len(image_files) > num_images else 0
         show_files = sorted(image_files, key=os.path.getctime)[start_idx:]
         dropped_files = []
@@ -667,39 +754,77 @@ class Images():
                 dropped_files.append(fname)
                 continue
 
-            if img.size[0] != img.size[1]:
-                # Pad to square
-                new_img = Image.new("RGB", (thumbnail_size, thumbnail_size))
-                new_img.paste(img, ((thumbnail_size - img.size[0])//2,
-                                    (thumbnail_size - img.size[1])//2))
-                img = new_img
-            draw = ImageDraw.Draw(img)
-            draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
-            samples.append(np.array(img))
+            samples.append(self._pad_and_border(img, thumbnail_size))
 
-        samples = np.array(samples)
-        if not np.any(samples):
+        return self._process_samples(samples,
+                                     [fname for fname in show_files if fname not in dropped_files],
+                                     num_images)
+
+    def _pad_and_border(self, image: Image.Image, size: int) -> np.ndarray:
+        """ Pad rectangle images to a square and draw borders
+
+        Parameters
+        ----------
+        image: :class:`PIL.Image`
+            The image to process
+        size: int
+            The size of the image as it should be displayed
+
+        Returns
+        -------
+        :class:`PIL.Image`:
+            The processed image
+        """
+        if image.size[0] != image.size[1]:
+            # Pad to square
+            new_img = Image.new("RGB", (size, size))
+            new_img.paste(image, ((size - image.size[0]) // 2, (size - image.size[1]) // 2))
+            image = new_img
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(((0, 0), (size, size)), outline="#E5E5E5", width=1)
+        retval = np.array(image)
+        logger.trace("image shape: %s", retval.shape)  # type: ignore
+        return retval
+
+    def _process_samples(self,
+                         samples: List[np.ndarray],
+                         filenames: List[str],
+                         num_images: int) -> bool:
+        """ Process the latest sample images into a displayable image.
+
+        Parameters
+        ----------
+        samples: list
+            The list of extract/convert preview images to display
+        filenames: list
+            The full path to the filenames corresponding to the images
+        num_images: int
+            The number of images that should be displayed
+
+        Returns
+        -------
+        bool
+            ``True`` if samples succesfully compiled otherwise ``False``
+        """
+        asamples = np.array(samples)
+        if not np.any(asamples):
             logger.debug("No preview images collected.")
             return False
 
-        if dropped_files:
-            logger.debug("Removing dropped files: %s", dropped_files)
-            show_files = [fname for fname in show_files if fname not in dropped_files]
-
-        self._previewcache["filenames"] = (self._previewcache["filenames"] +
-                                           show_files)[-num_images:]
-        cache = self._previewcache["images"]
+        self._previewcache["filenames"] = (cast(List[str], self._previewcache["filenames"]) +
+                                           filenames)[-num_images:]
+        cache = cast(Optional[np.ndarray], self._previewcache["images"])
         if cache is None:
             logger.debug("Creating new cache")
-            cache = samples[-num_images:]
+            cache = asamples[-num_images:]
         else:
             logger.debug("Appending to existing cache")
-            cache = np.concatenate((cache, samples))[-num_images:]
+            cache = np.concatenate((cache, asamples))[-num_images:]
         self._previewcache["images"] = cache
-        logger.debug("Cache shape: %s", self._previewcache["images"].shape)
+        logger.debug("Cache shape: %s", cast(np.ndarray, self._previewcache["images"]).shape)
         return True
 
-    def _place_previews(self, frame_dims):
+    def _place_previews(self, frame_dims: Tuple[int, int]) -> Image.Image:
         """ Format the preview thumbnails stored in the cache into a grid fitting the display
         panel.
 
@@ -709,13 +834,14 @@ class Images():
             The (width (`int`), height (`int`)) of the display panel that will display the preview
 
         Returns
+        -------
         :class:`PIL.Image`:
             The final preview display image
         """
         if self._previewcache.get("images", None) is None:
             logger.debug("No images in cache. Returning None")
             return None
-        samples = self._previewcache["images"].copy()
+        samples = cast(np.ndarray, self._previewcache["images"]).copy()
         num_images, thumbnail_size = samples.shape[:2]
         if self._previewcache["placeholder"] is None:
             self._create_placeholder(thumbnail_size)
@@ -729,16 +855,16 @@ class Images():
         remainder = (cols * rows) - num_images
         if remainder != 0:
             logger.debug("Padding sample display. Remainder: %s", remainder)
-            placeholder = np.concatenate([np.expand_dims(self._previewcache["placeholder"],
-                                                         0)] * remainder)
+            placeholder = np.concatenate([np.expand_dims(
+                cast(np.ndarray, self._previewcache["placeholder"]), 0)] * remainder)
             samples = np.concatenate((samples, placeholder))
 
-        display = np.vstack([np.hstack(samples[row * cols: (row + 1) * cols])
+        display = np.vstack([np.hstack(cast(Sequence, samples[row * cols: (row + 1) * cols]))
                              for row in range(rows)])
         logger.debug("display shape: %s", display.shape)
         return Image.fromarray(display)
 
-    def _create_placeholder(self, thumbnail_size):
+    def _create_placeholder(self, thumbnail_size: int) -> None:
         """ Create a placeholder image for when there are fewer thumbnails available
         than columns to display them.
 
@@ -755,7 +881,7 @@ class Images():
         self._previewcache["placeholder"] = placeholder
         logger.debug("Created placeholder. shape: %s", placeholder.shape)
 
-    def load_training_preview(self):
+    def load_training_preview(self) -> None:
         """ Load the training preview images.
 
         Reads the training image currently stored in the cache folder and loads them to
@@ -776,6 +902,8 @@ class Images():
             try:
                 logger.debug("Displaying preview: '%s'", img)
                 size = self._get_current_size(name)
+                if not size:
+                    return
                 self._previewtrain[name] = [Image.open(img), None, modified]
                 self.resize_image(name, size)
                 self._errcount = 0
@@ -790,9 +918,9 @@ class Images():
                 else:
                     logger.error("Error reading the preview file for '%s'", img)
                     print(f"Error reading the preview file for {name}")
-                    self._previewtrain[name] = None
+                    del self._previewtrain[name]
 
-    def _get_current_size(self, name):
+    def _get_current_size(self, name: str) -> Optional[Tuple[int, int]]:
         """ Return the size of the currently displayed training preview image.
 
         Parameters
@@ -808,16 +936,16 @@ class Images():
             The height of the training image
         """
         logger.debug("Getting size: '%s'", name)
-        if not self._previewtrain.get(name, None):
+        if not self._previewtrain.get(name):
             return None
-        img = self._previewtrain[name][1]
+        img = cast(Image.Image, self._previewtrain[name][1])
         if not img:
             return None
         logger.debug("Got size: (name: '%s', width: '%s', height: '%s')",
                      name, img.width(), img.height())
         return img.width(), img.height()
 
-    def resize_image(self, name, frame_dims):
+    def resize_image(self, name: str, frame_dims: Tuple[int, int]):
         """ Resize the training preview image based on the passed in frame size.
 
         If the canvas that holds the preview image changes, update the image size
@@ -831,7 +959,7 @@ class Images():
             The (width (`int`), height (`int`)) of the display panel that will display the preview
         """
         logger.debug("Resizing image: (name: '%s', frame_dims: %s", name, frame_dims)
-        displayimg = self._previewtrain[name][0]
+        displayimg = cast(Image.Image, self._previewtrain[name][0])
         if frame_dims:
             frameratio = float(frame_dims[0]) / float(frame_dims[1])
             imgratio = float(displayimg.size[0]) / float(displayimg.size[1])
@@ -858,6 +986,18 @@ class Images():
         self._previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
 
 
+@dataclass
+class _GuiObjects:
+    """ Data class for commonly accessed GUI Objects """
+    cli_opts: "CliOptions"
+    tk_vars: Dict[str, Union[tk.BooleanVar, tk.StringVar]]
+    project: Project
+    tasks: Tasks
+    status_bar: "StatusBar"
+    default_options: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    command_notebook: Optional["CommandNotebook"] = None
+
+
 class Config():
     """ The centralized configuration class for holding items that should be made available to all
     parts of the GUI.
@@ -874,22 +1014,21 @@ class Config():
     statusbar: :class:`lib.gui.custom_widgets.StatusBar`
         The GUI Status bar
     """
-    def __init__(self, root, cli_opts, statusbar):
+    def __init__(self, root: tk.Tk, cli_opts: "CliOptions", statusbar: "StatusBar") -> None:
         logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s)",
                      self.__class__.__name__, root, cli_opts, statusbar)
-        self._default_font = tk.font.nametofont("TkDefaultFont").configure()["family"]
+        self._default_font = cast(dict, tk.font.nametofont("TkDefaultFont").configure())["family"]
         self._constants = dict(
             root=root,
             scaling_factor=self._get_scaling(root),
             default_font=self._default_font)
-        self._gui_objects = dict(
+        self._gui_objects = _GuiObjects(
             cli_opts=cli_opts,
             tk_vars=self._set_tk_vars(),
             project=Project(self, FileHandler),
             tasks=Tasks(self, FileHandler),
-            default_options=None,
-            status_bar=statusbar,
-            command_notebook=None)  # set in command.py
+            status_bar=statusbar)
+
         self._user_config = UserConfig(None)
         self._style = Style(self.default_font, root, PATHCACHE)
         self._user_theme = self._style.user_theme
@@ -897,96 +1036,100 @@ class Config():
 
     # Constants
     @property
-    def root(self):
+    def root(self) -> tk.Tk:
         """ :class:`tkinter.Tk`: The root tkinter window. """
         return self._constants["root"]
 
     @property
-    def scaling_factor(self):
+    def scaling_factor(self) -> float:
         """ float: The scaling factor for current display. """
         return self._constants["scaling_factor"]
 
     @property
-    def pathcache(self):
+    def pathcache(self) -> str:
         """ str: The path to the GUI cache folder """
         return PATHCACHE
 
     # GUI Objects
     @property
-    def cli_opts(self):
+    def cli_opts(self) -> "CliOptions":
         """ :class:`lib.gui.options.CliOptions`: The command line options for this GUI Session. """
-        return self._gui_objects["cli_opts"]
+        return self._gui_objects.cli_opts
 
     @property
-    def tk_vars(self):
+    def tk_vars(self) -> Dict[str, Union[tk.StringVar, tk.BooleanVar]]:
         """ dict: The global tkinter variables. """
-        return self._gui_objects["tk_vars"]
+        return self._gui_objects.tk_vars
 
     @property
-    def project(self):
+    def project(self) -> Project:
         """ :class:`lib.gui.project.Project`: The project session handler. """
-        return self._gui_objects["project"]
+        return self._gui_objects.project
 
     @property
-    def tasks(self):
+    def tasks(self) -> Tasks:
         """ :class:`lib.gui.project.Tasks`: The session tasks handler. """
-        return self._gui_objects["tasks"]
+        return self._gui_objects.tasks
 
     @property
-    def default_options(self):
+    def default_options(self) -> Dict[str, Dict[str, Any]]:
         """ dict: The default options for all tabs """
-        return self._gui_objects["default_options"]
+        return self._gui_objects.default_options
 
     @property
-    def statusbar(self):
+    def statusbar(self) -> "StatusBar":
         """ :class:`lib.gui.custom_widgets.StatusBar`: The GUI StatusBar
         :class:`tkinter.ttk.Frame`. """
-        return self._gui_objects["status_bar"]
+        return self._gui_objects.status_bar
 
     @property
-    def command_notebook(self):
-        """ :class:`lib.gui.command.CommandNoteboook`: The main Faceswap Command Notebook. """
-        return self._gui_objects["command_notebook"]
+    def command_notebook(self) -> Optional["CommandNotebook"]:
+        """ :class:`lib.gui.command.CommandNotebook`: The main Faceswap Command Notebook. """
+        return self._gui_objects.command_notebook
 
     # Convenience GUI Objects
     @property
-    def tools_notebook(self):
+    def tools_notebook(self) -> "ToolsNotebook":
         """ :class:`lib.gui.command.ToolsNotebook`: The Faceswap Tools sub-Notebook. """
+        assert self.command_notebook is not None
         return self.command_notebook.tools_notebook
 
     @property
-    def modified_vars(self):
+    def modified_vars(self) -> Dict[str, "tk.BooleanVar"]:
         """ dict: The command notebook modified tkinter variables. """
+        assert self.command_notebook is not None
         return self.command_notebook.modified_vars
 
     @property
-    def _command_tabs(self):
+    def _command_tabs(self) -> Dict[str, int]:
         """ dict: Command tab titles with their IDs. """
+        assert self.command_notebook is not None
         return self.command_notebook.tab_names
 
     @property
-    def _tools_tabs(self):
+    def _tools_tabs(self) -> Dict[str, int]:
         """ dict: Tools command tab titles with their IDs. """
+        assert self.command_notebook is not None
         return self.command_notebook.tools_tab_names
 
     # Config
     @property
-    def user_config(self):
+    def user_config(self) -> UserConfig:
         """ dict: The GUI config in dict form. """
         return self._user_config
 
     @property
-    def user_config_dict(self):
+    def user_config_dict(self) -> Dict[str, Any]:  # TODO Dataclass
         """ dict: The GUI config in dict form. """
         return self._user_config.config_dict
 
     @property
-    def user_theme(self):
+    def user_theme(self) -> Dict[str, Any]:  # TODO Dataclass
         """ dict: The GUI theme selection options. """
         return self._user_theme
 
     @property
-    def default_font(self):
+    def default_font(self) -> Tuple[str, int]:
         """ tuple: The selected font as configured in user settings. First item is the font (`str`)
         second item the font size (`int`). """
         font = self.user_config_dict["font"]
@@ -994,7 +1137,7 @@ class Config():
         return (font, self.user_config_dict["font_size"])
 
     @staticmethod
-    def _get_scaling(root):
+    def _get_scaling(root) -> float:
         """ Get the display DPI.
 
         Returns
@@ -1007,7 +1150,7 @@ class Config():
         logger.debug("dpi: %s, scaling: %s'", dpi, scaling)
         return scaling
 
-    def set_default_options(self):
+    def set_default_options(self) -> None:
         """ Set the default options for :mod:`lib.gui.projects`
 
         The Default GUI options are stored on Faceswap startup.
@@ -1017,10 +1160,10 @@ class Config():
         """
         default = self.cli_opts.get_option_values()
         logger.debug(default)
-        self._gui_objects["default_options"] = default
+        self._gui_objects.default_options = default
         self.project.set_default_options()
 
-    def set_command_notebook(self, notebook):
+    def set_command_notebook(self, notebook: "CommandNotebook") -> None:
         """ Set the command notebook to the :attr:`command_notebook` attribute
         and enable the modified callback for :attr:`project`.
 
@@ -1030,10 +1173,10 @@ class Config():
             The main command notebook for the Faceswap GUI
         """
         logger.debug("Setting commane notebook: %s", notebook)
-        self._gui_objects["command_notebook"] = notebook
+        self._gui_objects.command_notebook = notebook
         self.project.set_modified_callback()
 
-    def set_active_tab_by_name(self, name):
+    def set_active_tab_by_name(self, name: str) -> None:
         """ Sets the :attr:`command_notebook` or :attr:`tools_notebook` to active based on given
         name.
 
@@ -1042,6 +1185,7 @@ class Config():
         name: str
             The name of the tab to set active
         """
+        assert self.command_notebook is not None
         name = name.lower()
         if name in self._command_tabs:
             tab_id = self._command_tabs[name]
@@ -1056,7 +1200,7 @@ class Config():
             logger.debug("Name couldn't be found. Setting to id 0: %s", name)
             self.command_notebook.select(0)
 
-    def set_modified_true(self, command):
+    def set_modified_true(self, command: str) -> None:
         """ Set the modified variable to ``True`` for the given command in :attr:`modified_vars`.
 
         Parameters
@@ -1072,11 +1216,11 @@ class Config():
         tkvar.set(True)
         logger.debug("Set modified var to True for: '%s'", command)
 
-    def refresh_config(self):
+    def refresh_config(self) -> None:
         """ Reload the user config from file. """
         self._user_config = UserConfig(None)
 
-    def set_cursor_busy(self, widget=None):
+    def set_cursor_busy(self, widget: Optional[tk.Widget] = None) -> None:
         """ Set the root or widget cursor to busy.
 
         Parameters
@@ -1086,11 +1230,11 @@ class Config():
             cursor busy for the whole of the GUI. Default: ``None``.
         """
         logger.debug("Setting cursor to busy. widget: %s", widget)
-        widget = self.root if widget is None else widget
-        widget.config(cursor="watch")
-        widget.update_idletasks()
+        component = self.root if widget is None else widget
+        component.config(cursor="watch")  # type: ignore
+        component.update_idletasks()
 
-    def set_cursor_default(self, widget=None):
+    def set_cursor_default(self, widget: Optional[tk.Widget] = None) -> None:
         """ Set the root or widget cursor to default.
 
         Parameters
@@ -1100,18 +1244,18 @@ class Config():
             cursor busy for the whole of the GUI. Default: ``None``
         """
         logger.debug("Setting cursor to default. widget: %s", widget)
-        widget = self.root if widget is None else widget
-        widget.config(cursor="")
-        widget.update_idletasks()
+        component = self.root if widget is None else widget
+        component.config(cursor="")  # type: ignore
+        component.update_idletasks()
 
     @staticmethod
-    def _set_tk_vars():
+    def _set_tk_vars() -> Dict[str, Union[tk.StringVar, tk.BooleanVar]]:
         """ Set the global tkinter variables stored for easy access in :class:`Config`.
 
         The variables are available through :attr:`tk_vars`.
         """
         display = tk.StringVar()
-        display.set(None)
+        display.set("")
 
         runningtask = tk.BooleanVar()
         runningtask.set(False)
@@ -1120,10 +1264,10 @@ class Config():
         istraining.set(False)
 
         actioncommand = tk.StringVar()
-        actioncommand.set(None)
+        actioncommand.set("")
 
         generatecommand = tk.StringVar()
-        generatecommand.set(None)
+        generatecommand.set("")
 
         console_clear = tk.BooleanVar()
         console_clear.set(False)
@@ -1135,21 +1279,22 @@ class Config():
         updatepreview.set(False)
 
         analysis_folder = tk.StringVar()
-        analysis_folder.set(None)
+        analysis_folder.set("")
 
-        tk_vars = dict(display=display,
-                       runningtask=runningtask,
-                       istraining=istraining,
-                       action=actioncommand,
-                       generate=generatecommand,
-                       console_clear=console_clear,
-                       refreshgraph=refreshgraph,
-                       updatepreview=updatepreview,
-                       analysis_folder=analysis_folder)
+        tk_vars: Dict[str, Union[tk.StringVar, tk.BooleanVar]] = dict(
+            display=display,
+            runningtask=runningtask,
+            istraining=istraining,
+            action=actioncommand,
+            generate=generatecommand,
+            console_clear=console_clear,
+            refreshgraph=refreshgraph,
+            updatepreview=updatepreview,
+            analysis_folder=analysis_folder)
         logger.debug(tk_vars)
         return tk_vars
 
-    def set_root_title(self, text=None):
+    def set_root_title(self, text: Optional[str] = None) -> None:
         """ Set the main title text for Faceswap.
 
         The title will always begin with 'Faceswap.py'. Additional text can be appended.
@@ -1163,7 +1308,7 @@ class Config():
         title += f" - {text}" if text is not None and text else ""
         self.root.title(title)
 
-    def set_geometry(self, width, height, fullscreen=False):
+    def set_geometry(self, width: int, height: int, fullscreen: bool = False) -> None:
         """ Set the geometry for the root tkinter object.
 
         Parameters
@@ -1205,36 +1350,49 @@ class LongRunningTask(Thread):
         The widget that this :class:`LongRunningTask` is associated with. Used for setting the busy
         cursor in the correct location. Default: ``None``.
     """
-    def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, *, daemon=True,
+    _target: Callable
+    _args: Tuple
+    _kwargs: Dict[str, Any]
+    _name: str
+
+    def __init__(self,
+                 target: Optional[Callable] = None,
+                 name: Optional[str] = None,
+                 args: Tuple = (),
+                 kwargs: Optional[Dict[str, Any]] = None,
+                 *,
+                 daemon: bool = True,
                  widget=None):
-        logger.debug("Initializing %s: (group: %s, target: %s, name: %s, args: %s, kwargs: %s, "
-                     "daemon: %s)", self.__class__.__name__, group, target, name, args, kwargs,
+        logger.debug("Initializing %s: (target: %s, name: %s, args: %s, kwargs: %s, "
+                     "daemon: %s)", self.__class__.__name__, target, name, args, kwargs,
                      daemon)
-        super().__init__(group=group, target=target, name=name, args=args, kwargs=kwargs,
+        super().__init__(target=target, name=name, args=args, kwargs=kwargs,
                          daemon=daemon)
-        self.err = None
+        self.err: "_ErrorType" = None
         self._widget = widget
         self._config = get_config()
         self._config.set_cursor_busy(widget=self._widget)
         self._complete = Event()
-        self._queue = Queue()
+        self._queue: Queue = Queue()
         logger.debug("Initialized %s", self.__class__.__name__,)
 
     @property
-    def complete(self):
+    def complete(self) -> Event:
         """ :class:`threading.Event`:  Event is set if the thread has completed its task,
         otherwise it is unset.
         """
         return self._complete
 
-    def run(self):
+    def run(self) -> None:
         """ Commence the given task in a background thread. """
         try:
             if self._target:
                 retval = self._target(*self._args, **self._kwargs)
                 self._queue.put(retval)
         except Exception:  # pylint: disable=broad-except
-            self.err = sys.exc_info()
+            self.err = cast(Tuple[Type[BaseException], BaseException, "TracebackType"],
+                            sys.exc_info())
+            assert self.err is not None
             logger.debug("Error in thread (%s): %s", self._name,
                          self.err[1].with_traceback(self.err[2]))
         finally:
@@ -1243,7 +1401,7 @@ class LongRunningTask(Thread):
             # an argument that has a member that points to the thread.
             del self._target, self._args, self._kwargs
 
-    def get_result(self):
+    def get_result(self) -> Any:
         """ Return the result from the given task.
 
         Returns
@@ -1275,14 +1433,14 @@ class PreviewTrigger():
 
     Writes a file to the cache folder that is picked up by the main process.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
         self._trigger_files = dict(update=os.path.join(PATHCACHE, ".preview_trigger"),
                                    mask_toggle=os.path.join(PATHCACHE, ".preview_mask_toggle"))
         logger.debug("Initialized: %s (trigger_files: %s)",
                      self.__class__.__name__, self._trigger_files)
 
-    def set(self, trigger_type):
+    def set(self, trigger_type: Literal["update", "mask_toggle"]):
         """ Place the trigger file into the cache folder
 
         Parameters
@@ -1297,7 +1455,7 @@ class PreviewTrigger():
                 pass
             logger.debug("Set preview trigger: %s", trigger)
 
-    def clear(self, trigger_type=None):
+    def clear(self, trigger_type: Optional[Literal["update", "mask_toggle"]] = None) -> None:
         """ Remove the trigger file from the cache folder.
 
         Parameters
@@ -1316,7 +1474,7 @@ class PreviewTrigger():
                 logger.debug("Removed preview trigger: %s", trigger)
 
 
-def preview_trigger():
+def preview_trigger() -> PreviewTrigger:
     """ Set the global preview trigger if it has not already been set and return.
 
     Returns

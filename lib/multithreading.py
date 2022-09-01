@@ -70,7 +70,7 @@ class FSThread(threading.Thread):
                  target: Optional[Callable] = None,
                  name: Optional[str] = None,
                  args: Tuple = (),
-                 kwargs: Dict[str, Any] = None,
+                 kwargs: Optional[Dict[str, Any]] = None,
                  *,
                  daemon: Optional[bool] = None) -> None:
         super().__init__(target=target, name=name, args=args, kwargs=kwargs, daemon=daemon)
