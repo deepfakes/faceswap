@@ -902,8 +902,6 @@ class Images():
             try:
                 logger.debug("Displaying preview: '%s'", img)
                 size = self._get_current_size(name)
-                if not size:
-                    return
                 self._previewtrain[name] = [Image.open(img), None, modified]
                 self.resize_image(name, size)
                 self._errcount = 0
@@ -945,7 +943,7 @@ class Images():
                      name, img.width(), img.height())
         return img.width(), img.height()
 
-    def resize_image(self, name: str, frame_dims: Tuple[int, int]):
+    def resize_image(self, name: str, frame_dims: Optional[Tuple[int, int]]) -> None:
         """ Resize the training preview image based on the passed in frame size.
 
         If the canvas that holds the preview image changes, update the image size
@@ -955,8 +953,9 @@ class Images():
         ----------
         name: str
             The name of the training image to be resized
-        frame_dims: tuple
-            The (width (`int`), height (`int`)) of the display panel that will display the preview
+        frame_dims: tuple, optional
+            The (width (`int`), height (`int`)) of the display panel that will display the preview.
+            ``None`` if the frame dimensions are not known.
         """
         logger.debug("Resizing image: (name: '%s', frame_dims: %s", name, frame_dims)
         displayimg = cast(Image.Image, self._previewtrain[name][0])
