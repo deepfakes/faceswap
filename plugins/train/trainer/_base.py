@@ -789,8 +789,13 @@ class _Samples():  # pylint:disable=too-few-public-methods
 
         full = self._process_full(side, full, predictions[0].shape[1], (0., 0., 1.0))
         images = [faces] + predictions
+
         if self._display_mask:
             images = self._compile_masked(images, samples[-1])
+        elif self._model.config["learn_mask"]:
+            # Remove masks when learn mask is selected but mask toggle is off
+            images = [batch[..., :3] for batch in images]
+
         images = [self._overlay_foreground(full.copy(), image) for image in images]
 
         return images
