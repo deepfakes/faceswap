@@ -92,7 +92,7 @@ class PluginLoader():
         return PluginLoader._import("extract.mask", name, disable_logging)
 
     @staticmethod
-    def get_model(name: str, disable_logging: bool = False) -> "ModelBase":
+    def get_model(name: str, disable_logging: bool = False) -> Type["ModelBase"]:
         """ Return requested training model plugin
 
         Parameters
