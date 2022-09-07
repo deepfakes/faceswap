@@ -658,9 +658,11 @@ class Images():
 
         """
         assert self._pathoutput is not None
-        folders = [os.path.join(self._pathoutput, folder)
-                   for folder in os.listdir(self._pathoutput)
-                   if os.path.isdir(os.path.join(self._pathoutput, folder))]
+        folders = [] if not os.path.exists(self._pathoutput) else [
+            os.path.join(self._pathoutput, folder)
+            for folder in os.listdir(self._pathoutput)
+            if os.path.isdir(os.path.join(self._pathoutput, folder))]
+
         folders.sort(key=os.path.getmtime)
         retval = folders[-1] if folders else self._pathoutput
         logger.debug("sorted folders: %s, return value: %s", folders, retval)
