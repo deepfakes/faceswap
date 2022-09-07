@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 # <<< IMAGE IO >>> #
 
-class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
+class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
     """ Monkey patch imageio ffmpeg to use keyframes whilst seeking """
     def __init__(self, format, request):
         super().__init__(format, request)
@@ -250,7 +250,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
             self._read_gen.__next__()  # we already have meta data
 
 
-imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader
+imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader  # type: ignore
 
 
 def read_image(filename, raise_error=False, with_metadata=False):

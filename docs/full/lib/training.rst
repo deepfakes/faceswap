@@ -31,3 +31,21 @@ training.generator module
    :members:
    :undoc-members:
    :show-inheritance:
+
+
+training.preview_cv module
+==========================
+
+.. automodule:: lib.training.preview_cv
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+training.preview_tk module
+==========================
+
+.. automodule:: lib.training.preview_tk
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -163,7 +163,9 @@ class TrainerBase():
 
     def train_one_step(self,
                        viewer: Optional[Callable[[np.ndarray, str], None]],
-                       timelapse_kwargs: Optional[Dict[str, str]]) -> None:
+                       timelapse_kwargs: Optional[Dict[Literal["input_a",
+                                                               "input_b",
+                                                               "output"], str]]) -> None:
         """ Running training on a batch of images for each side.
 
         Triggered from the training cycle in :class:`scripts.train.Train`.
@@ -326,7 +328,9 @@ class TrainerBase():
 
     def _update_viewers(self,
                         viewer: Optional[Callable[[np.ndarray, str], None]],
-                        timelapse_kwargs: Optional[Dict[str, str]]) -> None:
+                        timelapse_kwargs: Optional[Dict[Literal["input_a",
+                                                                "input_b",
+                                                                "output"], str]]) -> None:
         """ Update the preview viewer and timelapse output
 
         Parameters
@@ -1046,7 +1050,9 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         self._feeder.set_timelapse_feed(images, batchsize)
         logger.debug("Set up time-lapse")
 
-    def output_timelapse(self, timelapse_kwargs: Dict[str, str]) -> None:
+    def output_timelapse(self, timelapse_kwargs: Dict[Literal["input_a",
+                                                              "input_b",
+                                                              "output"], str]) -> None:
         """ Generate the time-lapse samples and output the created time-lapse to the specified
         output folder.
 
@@ -1058,7 +1064,7 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Ouputting time-lapse")
         if not self._output_file:
-            self._setup(**timelapse_kwargs)
+            self._setup(**cast(Dict[str, str], timelapse_kwargs))
 
         logger.debug("Getting time-lapse samples")
         self._samples.images = self._feeder.generate_preview(is_timelapse=True)

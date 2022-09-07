@@ -111,7 +111,7 @@ class PluginLoader():
         return PluginLoader._import("train.model", name, disable_logging)
 
     @staticmethod
-    def get_trainer(name: str, disable_logging: bool = False) -> "TrainerBase":
+    def get_trainer(name: str, disable_logging: bool = False) -> Type["TrainerBase"]:
         """ Return requested training trainer plugin
 
         Parameters
