@@ -707,7 +707,9 @@ class PreviewDataGenerator(DataGenerator):
                      "batch: %s, detected_faces: %s)", self._side, filenames, images.shape,
                      batch.shape, len(detected_faces))
 
-        self._set_color_order(batch)  # Switch color order for RGB models
+        # Switch color order for RGB models
+        self._set_color_order(batch)
+        self._set_color_order(images)
 
         if not self._use_mask:
             mask = np.zeros_like(batch[..., 0])[..., None] + 255
