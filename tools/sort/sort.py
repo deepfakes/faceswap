@@ -38,8 +38,10 @@ class Sort():  # pylint:disable=too-few-public-methods
         line arguments
     """
     def __init__(self, arguments: Namespace) -> None:
+        logger.debug("Initializing: %s (args: %s)", self.__class__.__name__, arguments)
         self._args = arguments
         self._input_locations = self._get_input_locations()
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     def _get_input_locations(self) -> List[str]:
         """ Obtain the full path to input locations. Will be a list of locations if batch mode is
@@ -56,7 +58,7 @@ class Sort():  # pylint:disable=too-few-public-methods
         retval = [os.path.join(self._args.input_dir, fname)
                   for fname in os.listdir(self._args.input_dir)
                   if os.path.isdir(os.path.join(self._args.input_dir, fname))]
-        logger.info("Input locations: %s", retval)
+        logger.debug("Input locations: %s", retval)
         return retval
 
     def _output_for_input(self, input_location: str) -> str:
@@ -75,7 +77,7 @@ class Sort():  # pylint:disable=too-few-public-methods
             return self._args.output_dir
 
         retval = os.path.join(self._args.output_dir, os.path.basename(input_location))
-        logger.info("Returning output: '%s' for input: '%s'", retval, input_location)
+        logger.debug("Returning output: '%s' for input: '%s'", retval, input_location)
         return retval
 
     def process(self) -> None:
