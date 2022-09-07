@@ -562,7 +562,7 @@ class _Bindings():  # pylint: disable=too-few-public-methods
             self._canvas.tag_bind(self._canvas.image_id, "<Button-4>", self._on_bound_zoom)
             self._canvas.tag_bind(self._canvas.image_id, "<Button-5>", self._on_bound_zoom)
         else:
-            self._canvas.tag_bind(self._canvas.image_id, "<MouseWheel>", self._on_bound_zoom)
+            self._canvas.bind("<MouseWheel>", self._on_bound_zoom)
 
         self._canvas.tag_bind(self._canvas.image_id, "<Button-1>", self._on_mouse_click)
         self._canvas.tag_bind(self._canvas.image_id, "<B1-Motion>", self._on_mouse_drag)
