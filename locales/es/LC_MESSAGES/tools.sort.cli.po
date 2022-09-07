@@ -5,17 +5,18 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
-"POT-Creation-Date: 2021-08-07 12:34+0100\n"
-"PO-Revision-Date: 2021-08-07 12:38+0100\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2022-09-07 12:34+0100\n"
+"PO-Revision-Date: 2022-09-07 12:35+0100\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 2.4.3\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.0.1\n"
 
 #: tools/sort/cli.py:14
 msgid "This command lets you sort images using various methods."
@@ -26,7 +27,7 @@ msgstr ""
 msgid "Sort faces using a number of different techniques"
 msgstr "Clasificar los rostros mediante diferentes técnicas"
 
-#: tools/sort/cli.py:33 tools/sort/cli.py:40
+#: tools/sort/cli.py:33 tools/sort/cli.py:40 tools/sort/cli.py:47
 msgid "data"
 msgstr "datos"
 
@@ -38,11 +39,21 @@ msgstr "Directorio de entrada de caras alineadas."
 msgid "Output directory for sorted aligned faces."
 msgstr "Directorio de salida para las caras alineadas ordenadas."
 
-#: tools/sort/cli.py:50 tools/sort/cli.py:99
+#: tools/sort/cli.py:48
+msgid ""
+"R|If selected then the input_dir should be a parent folder containing "
+"multiple folders of faces you wish to sort. The faces will be output to "
+"separate sub-folders in the output_dir if 'rename' has been selected"
+msgstr ""
+"R|Si se selecciona, input_dir debe ser una carpeta principal que contenga "
+"varias carpetas de caras que desea ordenar. Las caras se enviarán a "
+"subcarpetas separadas en output_dir si se ha seleccionado 'cambiar nombre'"
+
+#: tools/sort/cli.py:60 tools/sort/cli.py:109
 msgid "sort settings"
 msgstr "ajustes de ordenación"
 
-#: tools/sort/cli.py:52
+#: tools/sort/cli.py:62
 msgid ""
 "R|Sort by method. Choose how images are sorted. \n"
 "L|'blur': Sort faces by blurriness.\n"
@@ -114,12 +125,12 @@ msgstr ""
 "imagen es negra .\n"
 "Por defecto: face"
 
-#: tools/sort/cli.py:88 tools/sort/cli.py:115 tools/sort/cli.py:127
-#: tools/sort/cli.py:138
+#: tools/sort/cli.py:98 tools/sort/cli.py:125 tools/sort/cli.py:137
+#: tools/sort/cli.py:148
 msgid "output"
 msgstr "salida"
 
-#: tools/sort/cli.py:89
+#: tools/sort/cli.py:99
 msgid ""
 "Keeps the original files in the input directory. Be careful when using this "
 "with rename grouping and no specified output directory as this would keep "
@@ -130,7 +141,7 @@ msgstr ""
 "de salida, ya que esto mantendría los archivos originales y renombrados en "
 "el mismo directorio."
 
-#: tools/sort/cli.py:101
+#: tools/sort/cli.py:111
 msgid ""
 "Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' and 'hist' methods. The lower the value the more discriminating the "
@@ -151,7 +162,7 @@ msgstr ""
 "podría resultar en la creación de muchos directorios. Por defecto: 'face-"
 "cnn' = 7.2, 'hist' = 0.3"
 
-#: tools/sort/cli.py:116
+#: tools/sort/cli.py:126
 msgid ""
 "R|Default: rename.\n"
 "L|'folders': files are sorted using the -s/--sort-by method, then they are "
@@ -165,7 +176,7 @@ msgstr ""
 "L|'rename': los archivos se ordenan utilizando el método -s/--sort-by y "
 "luego se renombran."
 
-#: tools/sort/cli.py:129
+#: tools/sort/cli.py:139
 msgid ""
 "Group by method. When -fp/--final-processing by folders choose the how the "
 "images are grouped after sorting. Default: hist"
@@ -173,7 +184,8 @@ msgstr ""
 "Método de agrupamiento. Elija la forma de agrupar las imágenes, en el caso "
 "de hacerlo por carpetas, después de la clasificación. Por defecto: hist"
 
-#: tools/sort/cli.py:140
+#: tools/sort/cli.py:150
+#, python-format
 msgid ""
 "Integer value. Number of folders that will be used to group by blur, face-"
 "yaw and black-pixels. For blur folder 0 will be the least blurry, while the "
@@ -199,11 +211,11 @@ msgstr ""
 "de píxeles negros. Para 10, la primera carpeta tendrá las caras con 0 a 10%% "
 "de píxeles negros, la segunda de 11 a 20%%, etc. Valor por defecto: 5"
 
-#: tools/sort/cli.py:154 tools/sort/cli.py:164
+#: tools/sort/cli.py:164 tools/sort/cli.py:174
 msgid "settings"
 msgstr "ajustes"
 
-#: tools/sort/cli.py:156
+#: tools/sort/cli.py:166
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -215,7 +227,7 @@ msgstr ""
 "se especifica ningún archivo de registro con '--log-file', se creará un "
 "archivo 'sort_log.json' en el directorio de entrada."
 
-#: tools/sort/cli.py:167
+#: tools/sort/cli.py:177
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "

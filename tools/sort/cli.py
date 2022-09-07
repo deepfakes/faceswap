@@ -40,6 +40,16 @@ class SortArgs(FaceSwapArgs):
             group=_("data"),
             help=_("Output directory for sorted aligned faces.")))
         argument_list.append(dict(
+            opts=("-B", "--batch-mode"),
+            action="store_true",
+            dest="batch_mode",
+            default=False,
+            group=_("data"),
+            help=_("R|If selected then the input_dir should be a parent folder containing "
+                   "multiple folders of faces you wish to sort. The faces "
+                   "will be output to separate sub-folders in the output_dir if 'rename' has been "
+                   "selected")))
+        argument_list.append(dict(
             opts=('-s', '--sort-by'),
             action=Radio,
             type=str,
