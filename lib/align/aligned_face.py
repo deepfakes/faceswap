@@ -421,6 +421,21 @@ class AlignedFace():
         return self._cache.original_roi[0]
 
     @property
+    def original_roi_2(self) -> np.ndarray:
+        """ :class:`numpy.ndarray`: The location of the extracted face box within the original
+        frame. """
+        with self._cache.lock("original_roi"):
+            if self._cache.original_roi is None:
+                roi = np.array([[0, 0],
+                                [0, self._size - 1],
+                                [self._size - 1, self._size - 1],
+                                [self._size - 1, 0]])
+                roi = np.rint(self.transform_points(roi, invert=True)).astype("int32")
+                logger.trace("original roi: %s", roi)  # type: ignore
+                self._cache.original_roi = roi
+        return self._cache.original_roi
+        
+    @property
     def landmarks(self) -> np.ndarray:
         """ :class:`numpy.ndarray`: The 68 point facial landmarks aligned to the extracted face
         box. """

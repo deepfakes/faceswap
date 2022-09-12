@@ -811,6 +811,24 @@ class ExtractMedia():
         logger.trace("Reapplying image: (filename: `%s`, image shape: %s)",  # type: ignore
                      self._filename, image.shape)
         self._image = image
+    
+    def scale_image(self, scale):
+        """ Scale :attr:`image`
+
+        Required for conversion with max scale.
+
+        Parameters
+        ----------
+        scale: float
+            The scale to be applied to :attr:`image`
+        """
+        interp = cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA
+        dims = (round((self.image_shape[1] / 2 * scale) * 2),
+                round((self.image_shape[0] / 2 * scale) * 2))
+        self._image = cv2.resize(self._image, dims, interpolation=interp)
+        self._image_shape = cast(Tuple[int, int, int],self._image.shape)
+        for face in self._detected_faces:
+            face.scale_face(scale)
 
     def _image_as_bgr(self) -> "np.ndarray":
         """ Get a copy of the source frame in BGR format.

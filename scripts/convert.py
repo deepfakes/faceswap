@@ -108,6 +108,8 @@ class Convert():  # pylint:disable=too-few-public-methods
         self._converter = Converter(self._predictor.output_size,
                                     self._predictor.coverage_ratio,
                                     self._predictor.centering,
+                                    self._predictor.max_scale,
+                                    self._images.is_video,
                                     self._disk_io.draw_transparent,
                                     self._disk_io.pre_encode,
                                     arguments,
@@ -729,6 +731,7 @@ class Predict():
         self._sizes = self._get_io_sizes()
         self._coverage_ratio = self._model.coverage_ratio
         self._centering = self._model.config["centering"]
+        self._max_scale = self._args.max_scale
 
         self._thread = self._launch_predictor()
         logger.debug("Initialized %s: (out_queue: %s)", self.__class__.__name__, self._out_queue)
@@ -768,6 +771,11 @@ class Predict():
     def centering(self) -> "CenteringType":
         """ str: The centering that the model was trained on (`"head", "face"` or `"legacy"`) """
         return self._centering
+    
+    @property
+    def max_scale(self) -> float:
+        """ float: The max scale of dest face to model output. """
+        return self._max_scale
 
     @property
     def has_predicted_mask(self) -> bool:

@@ -16,6 +16,8 @@ if sys.version_info < (3, 8):
 else:
     from typing import Literal
 
+from lib.align import AlignedFace
+
 if TYPE_CHECKING:
     from argparse import Namespace
     from lib.align.aligned_face import AlignedFace, CenteringType
@@ -82,6 +84,8 @@ class Converter():
                  output_size: int,
                  coverage_ratio: float,
                  centering: "CenteringType",
+                 max_scale: float,
+                 is_video: bool,
                  draw_transparent: bool,
                  pre_encode: Optional[Callable[[np.ndarray], List[bytes]]],
                  arguments: "Namespace",
@@ -97,6 +101,8 @@ class Converter():
         self._writer_pre_encode = pre_encode
         self._args = arguments
         self._configfile = configfile
+        self._max_scale = max_scale
+        self._is_video = is_video
 
         self._scale = arguments.output_scale / 100
         self._adjustments = Adjustments()
@@ -238,6 +244,18 @@ class Converter():
         """
         logger.trace("Patching image: '%s'", predicted.inbound.filename)  # type: ignore
         frame_size = (predicted.inbound.image.shape[1], predicted.inbound.image.shape[0])
+        if self._max_scale and len(predicted.reference_faces) and not self._is_video:
+            s = self._max_scale / max((max(rf.original_roi_2[1][0]-rf.original_roi_2[0][0], rf.original_roi_2[1][1]-rf.original_roi_2[0][1]) / self._output_size) for rf in predicted.reference_faces)
+            if s < 1:
+                predicted.inbound.scale_image(s)
+                frame_size = (predicted.inbound.image.shape[1], predicted.inbound.image.shape[0])
+                predicted.reference_faces = [AlignedFace(rf._frame_landmarks,
+                                                   image=predicted.inbound.image,
+                                                   centering=rf._centering,
+                                                   size=rf._size,
+                                                   coverage_ratio=rf._coverage_ratio,
+                                                   dtype="float32") for rf in predicted.reference_faces]
+
         new_image, background = self._get_new_image(predicted, frame_size)
         patched_face = self._post_warp_adjustments(background, new_image)
         patched_face = self._scale_image(patched_face)

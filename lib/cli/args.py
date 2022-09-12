@@ -778,6 +778,16 @@ class ConvertArgs(ExtractConvertArgs):
                    "will be discarded unless '-k' (--keep-unchanged) is selected. NB: If you are "
                    "converting from images, then the filenames must end with the frame-number!")))
         argument_list.append(dict(
+            opts=("-ms", "--max-scale"),
+            action=Slider,
+            min_max=(0.0, 5.0),
+            rounding=1,
+            type=float,
+            dest=("max_scale"),
+            default=0.0,
+            group=_("Frame Processing"),
+            help=_("Max scale of converted face relative to model output size. Resizes frame to match dest face size. Set to 0 to keep frames unchanged.")))
+        argument_list.append(dict(
             opts=("-a", "--input-aligned-dir"),
             action=DirFullPaths,
             dest="input_aligned_dir",

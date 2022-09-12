@@ -134,6 +134,13 @@ class DetectedFace():
         """int: Bottom point (in pixels) of face detection bounding box within the parent image """
         assert self.top is not None and self.height is not None
         return self.top + self.height
+    
+    def scale_face(self, scale) -> None:
+        self.left = int(self.left * scale)
+        self.width = int(self.width * scale)
+        self.top = int(self.top * scale)
+        self.height = int(self.height * scale)
+        self._landmarks_xy *= scale
 
     def add_mask(self,
                  name: str,
