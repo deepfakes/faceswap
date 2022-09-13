@@ -37,15 +37,12 @@ def _get_cli_opts():
         if os.path.exists(cli_file):
             mod = ".".join(("tools", tool_name, "cli"))
             module = import_module(mod)
-            cliarg_class = getattr(module, "{}Args".format(tool_name.title()))
+            cliarg_class = getattr(module, f"{tool_name.title()}Args")
             help_text = getattr(module, "_HELPTEXT")
             yield tool_name, help_text, cliarg_class
 
 
 if __name__ == "__main__":
-    print(_("Please backup your data and/or test the tool you want to use with a smaller data set "
-            "to make sure you understand how it works."))
-
     PARSER = FullHelpArgumentParser()
     SUBPARSER = PARSER.add_subparsers()
     for tool, helptext, cli_args in _get_cli_opts():

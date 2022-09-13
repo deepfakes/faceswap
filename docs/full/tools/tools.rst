@@ -14,6 +14,7 @@ Subpackages
    :maxdepth: 1
 
    manual
+   sort
 
 alignments module
 =================

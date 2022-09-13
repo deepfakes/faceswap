@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-09-07 12:34+0100\n"
+"POT-Creation-Date: 2022-09-13 12:49+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,129 +21,243 @@ msgstr ""
 msgid "This command lets you sort images using various methods."
 msgstr ""
 
-#: tools/sort/cli.py:23
-msgid "Sort faces using a number of different techniques"
+#: tools/sort/cli.py:20
+msgid ""
+" Adjust the '-t' ('--threshold') parameter to control the strength of "
+"grouping."
 msgstr ""
 
-#: tools/sort/cli.py:33 tools/sort/cli.py:40 tools/sort/cli.py:47
-msgid "data"
+#: tools/sort/cli.py:21
+msgid ""
+" Adjust the '-b' ('--bins') parameter to control the number of bins for "
+"grouping. Each image is allocated to a bin by the percentage of color pixels "
+"that appear in the image."
 msgstr ""
 
-#: tools/sort/cli.py:34
-msgid "Input directory of aligned faces."
+#: tools/sort/cli.py:24
+msgid ""
+" Adjust the '-b' ('--bins') parameter to control the number of bins for "
+"grouping. Each image is allocated to a bin by the number of degrees the face "
+"is orientated from center."
+msgstr ""
+
+#: tools/sort/cli.py:27
+msgid ""
+" Adjust the '-b' ('--bins') parameter to control the number of bins for "
+"grouping. The minimum and maximum values are taken for the chosen sort "
+"metric. The bins are then populated with the results from the group sorting."
+msgstr ""
+
+#: tools/sort/cli.py:31
+msgid "faces by blurriness."
+msgstr ""
+
+#: tools/sort/cli.py:32
+msgid "faces by fft filtered blurriness."
+msgstr ""
+
+#: tools/sort/cli.py:33
+msgid ""
+"faces by the estimated distance of the alignments from an 'average' face. "
+"This can be useful for eliminating misaligned faces. Sorts from most like an "
+"average face to least like an average face."
+msgstr ""
+
+#: tools/sort/cli.py:36
+msgid ""
+"faces using VGG Face2 by face similarity. This uses a pairwise clustering "
+"algorithm to check the distances between 512 features on every face in your "
+"set and order them appropriately."
+msgstr ""
+
+#: tools/sort/cli.py:39
+msgid "faces by their landmarks."
+msgstr ""
+
+#: tools/sort/cli.py:40
+msgid "Like 'face-cnn' but sorts by dissimilarity."
 msgstr ""
 
 #: tools/sort/cli.py:41
-msgid "Output directory for sorted aligned faces."
+msgid "faces by Yaw (rotation left to right)."
+msgstr ""
+
+#: tools/sort/cli.py:42
+msgid "faces by Pitch (rotation up and down)."
+msgstr ""
+
+#: tools/sort/cli.py:43
+msgid "faces by their color histogram."
+msgstr ""
+
+#: tools/sort/cli.py:44
+msgid "Like 'hist' but sorts by dissimilarity."
+msgstr ""
+
+#: tools/sort/cli.py:45
+msgid ""
+"images by the average intensity of the converted grayscale color channel."
+msgstr ""
+
+#: tools/sort/cli.py:46
+msgid ""
+"images by their number of black pixels. Useful when faces are near borders "
+"and a large part of the image is black."
 msgstr ""
 
 #: tools/sort/cli.py:48
 msgid ""
-"R|If selected then the input_dir should be a parent folder containing "
-"multiple folders of faces you wish to sort. The faces will be output to "
-"separate sub-folders in the output_dir if 'rename' has been selected"
+"images by the average intensity of the converted Y color channel. Bright "
+"lighting and oversaturated images will be ranked first."
 msgstr ""
 
-#: tools/sort/cli.py:60 tools/sort/cli.py:109
+#: tools/sort/cli.py:50
+msgid ""
+"images by the average intensity of the converted Cg color channel. Green "
+"images will be ranked first and red images will be last."
+msgstr ""
+
+#: tools/sort/cli.py:52
+msgid ""
+"images by the average intensity of the converted Co color channel. Orange "
+"images will be ranked first and blue images will be last."
+msgstr ""
+
+#: tools/sort/cli.py:54
+msgid ""
+"images by their size in the original frame. Faces further from the camera "
+"and from lower resolution sources will be sorted first, whilst faces closer "
+"to the camera and from higher resolution sources will be sorted last."
+msgstr ""
+
+#: tools/sort/cli.py:57
+msgid " option is deprecated. Use 'yaw'"
+msgstr ""
+
+#: tools/sort/cli.py:58
+msgid " option is deprecated. Use 'color-black'"
+msgstr ""
+
+#: tools/sort/cli.py:80
+msgid "Sort faces using a number of different techniques"
+msgstr ""
+
+#: tools/sort/cli.py:90 tools/sort/cli.py:97 tools/sort/cli.py:108
+#: tools/sort/cli.py:146
+msgid "data"
+msgstr ""
+
+#: tools/sort/cli.py:91
+msgid "Input directory of aligned faces."
+msgstr ""
+
+#: tools/sort/cli.py:98
+msgid ""
+"Output directory for sorted aligned faces. If not provided and 'keep' is "
+"selected then a new folder called 'sorted' will be created within the input "
+"folder to house the output. If not provided and 'keep' is not selected then "
+"the images will be sorted in-place, overwriting the original contents of the "
+"'input_dir'"
+msgstr ""
+
+#: tools/sort/cli.py:109
+msgid ""
+"R|If selected then the input_dir should be a parent folder containing "
+"multiple folders of faces you wish to sort. The faces will be output to "
+"separate sub-folders in the output_dir"
+msgstr ""
+
+#: tools/sort/cli.py:118
 msgid "sort settings"
 msgstr ""
 
-#: tools/sort/cli.py:62
+#: tools/sort/cli.py:120
 msgid ""
-"R|Sort by method. Choose how images are sorted. \n"
-"L|'blur': Sort faces by blurriness.\n"
-"L|'blur-fft': Sort faces by fft filtered blurriness.\n"
-"L|'distance' Sort faces by the estimated distance of the alignments from an "
-"'average' face. This can be useful for eliminating misaligned faces.\n"
-"L|'face': Use VGG Face to sort by face similarity. This uses a pairwise "
-"clustering algorithm to check the distances between 512 features on every "
-"face in your set and order them appropriately.\n"
-"L|'face-cnn': Sort faces by their landmarks. You can adjust the threshold "
-"with the '-t' (--ref_threshold) option.\n"
-"L|'face-cnn-dissim': Like 'face-cnn' but sorts by dissimilarity.\n"
-"L|'face-yaw': Sort faces by Yaw (rotation left to right).\n"
-"L|'hist': Sort faces by their color histogram. You can adjust the threshold "
-"with the '-t' (--ref_threshold) option.\n"
-"L|'hist-dissim': Like 'hist' but sorts by dissimilarity.\n"
-"L|'color-gray': Sort images by the average intensity of the converted "
-"grayscale color channel.\n"
-"L|'color-luma': Sort images by the average intensity of the converted Y "
-"color channel. Bright lighting and oversaturated images will be ranked "
-"first.\n"
-"L|'color-green': Sort images by the average intensity of the converted Cg "
-"color channel. Green images will be ranked first and red images will be "
-"last.\n"
-"L|'color-orange': Sort images by the average intensity of the converted Co "
-"color channel. Orange images will be ranked first and blue images will be "
-"last.\n"
-"L|'size': Sort images by their size in the original frame. Faces closer to "
-"the camera and from higher resolution sources will be sorted first, whilst "
-"faces further from the camera and from lower resolution sources will be "
-"sorted last.\n"
-"L|'black-pixels': Sort images by their number of black pixels. Useful when "
-"faces are near borders and a large part of the image is black.\n"
-"Default: face"
+"R|Choose how images are sorted. Selecting a sort method gives the images a "
+"new filename based on the order the image appears within the given method.\n"
+"L|'none': Don't sort the images. When a 'group-by' method is selected, "
+"selecting 'none' means that the files will be moved/copied into their "
+"respective bins, but the files will keep their original filenames. Selecting "
+"'none' for both 'sort-by' and 'group-by' will do nothing"
 msgstr ""
 
-#: tools/sort/cli.py:98 tools/sort/cli.py:125 tools/sort/cli.py:137
-#: tools/sort/cli.py:148
+#: tools/sort/cli.py:133 tools/sort/cli.py:160 tools/sort/cli.py:189
+msgid "group settings"
+msgstr ""
+
+#: tools/sort/cli.py:135
+msgid ""
+"R|Selecting a group by method will move/copy files into numbered bins based "
+"on the selected method.\n"
+"L|'none': Don't bin the images. Folders will be sorted by the selected 'sort-"
+"by' but will not be binned, instead they will be sorted into a single "
+"folder.  Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
+msgstr ""
+
+#: tools/sort/cli.py:147
+msgid ""
+"Whether to keep the original files in their original location. Choosing a "
+"'sort-by' method means that the files have to be renamed. Selecting 'keep' "
+"means that the original files will be kept, and the renamed files will be "
+"created in the specified output folder. Unselecting keep means that the "
+"original files will be moved and renamed based on the selected sort/group "
+"criteria."
+msgstr ""
+
+#: tools/sort/cli.py:162
+msgid ""
+"R|Float value. Minimum threshold to use for grouping comparison with 'face-"
+"cnn' 'hist' and 'face' methods.\n"
+"The lower the value the more discriminating the grouping is. Leaving -1.0 "
+"will allow Faceswap to choose the default value.\n"
+"L|For 'face-cnn' 7.2 should be enough, with 4 being very discriminating. \n"
+"L|For 'hist' 0.3 should be enough, with 0.2 being very discriminating. \n"
+"L|For 'face' between 0.1 (few bins) to 0.4 (more bins) should be about "
+"right.\n"
+"Be careful setting a value that's too extrene in a directory with many "
+"images, as this could result in a lot of folders being created. Defaults: "
+"face-cnn 7.2, hist 0.3, face 0.25"
+msgstr ""
+
+#: tools/sort/cli.py:179
 msgid "output"
 msgstr ""
 
-#: tools/sort/cli.py:99
+#: tools/sort/cli.py:180
 msgid ""
-"Keeps the original files in the input directory. Be careful when using this "
-"with rename grouping and no specified output directory as this would keep "
-"the original and renamed files in the same directory."
+"Deprecated and no longer used. The final processing will be dictated by the "
+"sort/group by methods and whether 'keep_original' is selected."
 msgstr ""
 
-#: tools/sort/cli.py:111
-msgid ""
-"Float value. Minimum threshold to use for grouping comparison with 'face-"
-"cnn' and 'hist' methods. The lower the value the more discriminating the "
-"grouping is. Leaving -1.0 will allow the program set the default value "
-"automatically. For face-cnn 7.2 should be enough, with 4 being very "
-"discriminating. For hist 0.3 should be enough, with 0.2 being very "
-"discriminating. Be careful setting a value that's too low in a directory "
-"with many images, as this could result in a lot of directories being "
-"created. Defaults: face-cnn 7.2, hist 0.3"
-msgstr ""
-
-#: tools/sort/cli.py:126
-msgid ""
-"R|Default: rename.\n"
-"L|'folders': files are sorted using the -s/--sort-by method, then they are "
-"organized into folders using the -g/--group-by grouping method.\n"
-"L|'rename': files are sorted using the -s/--sort-by then they are renamed."
-msgstr ""
-
-#: tools/sort/cli.py:139
-msgid ""
-"Group by method. When -fp/--final-processing by folders choose the how the "
-"images are grouped after sorting. Default: hist"
-msgstr ""
-
-#: tools/sort/cli.py:150
+#: tools/sort/cli.py:191
 #, python-format
 msgid ""
-"Integer value. Number of folders that will be used to group by blur, face-"
-"yaw and black-pixels. For blur folder 0 will be the least blurry, while the "
-"last folder will be the blurriest. For face-yaw the number of bins is by how "
-"much 180 degrees is divided. So if you use 18, then each folder will be a 10 "
-"degree increment. Folder 0 will contain faces looking the most to the left "
-"whereas the last folder will contain the faces looking the most to the "
-"right. If the number of images doesn't divide evenly into the number of "
-"bins, the remaining images get put in the last bin. For black-pixels it "
-"represents the divider of the percentage of black pixels. For 10, first "
-"folder will have the faces with 0 to 10%% black pixels, second 11 to 20%%, "
-"etc. Default value: 5"
+"R|Integer value. Used to control the number of bins created for grouping by: "
+"any 'blur' methods, 'color' methods or 'face metric' methods ('distance', "
+"'size') and 'orientation; methods ('yaw', 'pitch'). For any other grouping "
+"methods see the '-t' ('--threshold') option.\n"
+"L|For 'face metric' methods the bins are filled, according the the "
+"distribution of faces between the minimum and maximum chosen metric.\n"
+"L|For 'color' methods the number of bins represents the divider of the "
+"percentage of colored pixels. Eg. For a bin number of '5': The first folder "
+"will have the faces with 0%% to 20%% colored pixels, second 21%% to 40%%, "
+"etc. Any empty bins will be deleted, so you may end up with fewer bins than "
+"selected.\n"
+"L|For 'blur' methods folder 0 will be the least blurry, while the last "
+"folder will be the blurriest.\n"
+"L|For 'orientation' methods the number of bins is dictated by how much 180 "
+"degrees is divided. Eg. If 18 is selected, then each folder will be a 10 "
+"degree increment. Folder 0 will contain faces looking the most to the left/"
+"down whereas the last folder will contain the faces looking the most to the "
+"right/up. NB: Some bins may be empty if faces do not fit the criteria.\n"
+"Default value: 5"
 msgstr ""
 
-#: tools/sort/cli.py:164 tools/sort/cli.py:174
+#: tools/sort/cli.py:213 tools/sort/cli.py:223
 msgid "settings"
 msgstr ""
 
-#: tools/sort/cli.py:166
+#: tools/sort/cli.py:215
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -151,7 +265,7 @@ msgid ""
 "directory."
 msgstr ""
 
-#: tools/sort/cli.py:177
+#: tools/sort/cli.py:226
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "

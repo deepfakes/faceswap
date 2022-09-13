@@ -12,6 +12,63 @@ _ = _LANG.gettext
 
 
 _HELPTEXT = _("This command lets you sort images using various methods.")
+_SORT_METHODS = (
+    "none", "blur", "blur-fft", "distance", "face", "face-cnn", "face-cnn-dissim",
+    "yaw", "pitch", "hist", "hist-dissim", "color-black", "color-gray", "color-luma",
+    "color-green", "color-orange", "size", "face-yaw", "black-pixels")
+
+_GPTHRESHOLD = _(" Adjust the '-t' ('--threshold') parameter to control the strength of grouping.")
+_GPCOLOR = _(" Adjust the '-b' ('--bins') parameter to control the number of bins for grouping. "
+             "Each image is allocated to a bin by the percentage of color pixels that appear in "
+             "the image.")
+_GPDEGREES = _(" Adjust the '-b' ('--bins') parameter to control the number of bins for grouping. "
+               "Each image is allocated to a bin by the number of degrees the face is orientated "
+               "from center.")
+_GPLINEAR = _(" Adjust the '-b' ('--bins') parameter to control the number of bins for grouping. "
+              "The minimum and maximum values are taken for the chosen sort metric. The bins "
+              "are then populated with the results from the group sorting.")
+_METHOD_TEXT = {
+    "blur": _("faces by blurriness."),
+    "blur-fft": _("faces by fft filtered blurriness."),
+    "distance": _("faces by the estimated distance of the alignments from an 'average' face. This "
+                  "can be useful for eliminating misaligned faces. Sorts from most like an "
+                  "average face to least like an average face."),
+    "face": _("faces using VGG Face2 by face similarity. This uses a pairwise clustering "
+              "algorithm to check the distances between 512 features on every face in your set "
+              "and order them appropriately."),
+    "face-cnn": _("faces by their landmarks."),
+    "face-cnn-dissim": _("Like 'face-cnn' but sorts by dissimilarity."),
+    "yaw": _("faces by Yaw (rotation left to right)."),
+    "pitch": _("faces by Pitch (rotation up and down)."),
+    "hist": _("faces by their color histogram."),
+    "hist-dissim": _("Like 'hist' but sorts by dissimilarity."),
+    "color-gray": _("images by the average intensity of the converted grayscale color channel."),
+    "color-black": _("images by their number of black pixels. Useful when faces are near borders "
+                     "and a large part of the image is black."),
+    "color-luma": _("images by the average intensity of the converted Y color channel. Bright "
+                    "lighting and oversaturated images will be ranked first."),
+    "color-green": _("images by the average intensity of the converted Cg color channel. Green "
+                     "images will be ranked first and red images will be last."),
+    "color-orange": _("images by the average intensity of the converted Co color channel. Orange "
+                      "images will be ranked first and blue images will be last."),
+    "size": _("images by their size in the original frame. Faces further from the camera and from "
+              "lower resolution sources will be sorted first, whilst faces closer to the camera "
+              "and from higher resolution sources will be sorted last."),
+    "face-yaw": _(" option is deprecated. Use 'yaw'"),
+    "black-pixels": _(" option is deprecated. Use 'color-black'")}
+
+_BIN_TYPES = [
+    (("face", "face-cnn", "face-cnn-dissim", "hist", "hist-dissim"), _GPTHRESHOLD),
+    (("color-black", "color-gray", "color-luma", "color-green", "color-orange"), _GPCOLOR),
+    (("yaw", "pitch"), _GPDEGREES),
+    (("blur", "blur-fft", "distance", "size"), _GPLINEAR)]
+_SORT_HELP = ""
+_GROUP_HELP = ""
+
+for method in sorted(_METHOD_TEXT):
+    _SORT_HELP += f"\nL|{method}: {_('Sort')} {_METHOD_TEXT[method]}"
+    _GROUP_HELP += (f"\nL|{method}: {_('Group')} {_METHOD_TEXT[method]} "
+                    f"{next((x[1] for x in _BIN_TYPES if method in x[0]), '')}")
 
 
 class SortArgs(FaceSwapArgs):
@@ -25,7 +82,7 @@ class SortArgs(FaceSwapArgs):
     @staticmethod
     def get_argument_list():
         """ Put the arguments in a list so that they are accessible from both argparse and gui """
-        argument_list = list()
+        argument_list = []
         argument_list.append(dict(
             opts=('-i', '--input'),
             action=DirFullPaths,
@@ -38,7 +95,11 @@ class SortArgs(FaceSwapArgs):
             action=DirFullPaths,
             dest="output_dir",
             group=_("data"),
-            help=_("Output directory for sorted aligned faces.")))
+            help=_("Output directory for sorted aligned faces. If not provided and 'keep' is "
+                   "selected then a new folder called 'sorted' will be created within the input "
+                   "folder to house the output. If not provided and 'keep' is not selected then "
+                   "the images will be sorted in-place, overwriting the original contents of the "
+                   "'input_dir'")))
         argument_list.append(dict(
             opts=("-B", "--batch-mode"),
             action="store_true",
@@ -47,97 +108,77 @@ class SortArgs(FaceSwapArgs):
             group=_("data"),
             help=_("R|If selected then the input_dir should be a parent folder containing "
                    "multiple folders of faces you wish to sort. The faces "
-                   "will be output to separate sub-folders in the output_dir if 'rename' has been "
-                   "selected")))
+                   "will be output to separate sub-folders in the output_dir")))
         argument_list.append(dict(
             opts=('-s', '--sort-by'),
             action=Radio,
             type=str,
-            choices=("blur", "blur-fft", "distance", "face", "face-cnn", "face-cnn-dissim",
-                     "face-yaw", "hist", "hist-dissim", "color-gray", "color-luma", "color-green",
-                     "color-orange", "size", "black-pixels"),
+            choices=_SORT_METHODS,
             dest='sort_method',
             group=_("sort settings"),
             default="face",
-            help=_("R|Sort by method. Choose how images are sorted. "
-                   "\nL|'blur': Sort faces by blurriness."
-                   "\nL|'blur-fft': Sort faces by fft filtered blurriness."
-                   "\nL|'distance' Sort faces by the estimated distance of the alignments from an "
-                   "'average' face. This can be useful for eliminating misaligned faces."
-                   "\nL|'face': Use VGG Face to sort by face similarity. This uses a pairwise "
-                   "clustering algorithm to check the distances between 512 features on every "
-                   "face in your set and order them appropriately."
-                   "\nL|'face-cnn': Sort faces by their landmarks. You can adjust the threshold "
-                   "with the '-t' (--ref_threshold) option."
-                   "\nL|'face-cnn-dissim': Like 'face-cnn' but sorts by dissimilarity."
-                   "\nL|'face-yaw': Sort faces by Yaw (rotation left to right)."
-                   "\nL|'hist': Sort faces by their color histogram. You can adjust the threshold "
-                   "with the '-t' (--ref_threshold) option."
-                   "\nL|'hist-dissim': Like 'hist' but sorts by dissimilarity."
-                   "\nL|'color-gray': Sort images by the average intensity of the converted "
-                   "grayscale color channel."
-                   "\nL|'color-luma': Sort images by the average intensity of the converted Y "
-                   "color channel. Bright lighting and oversaturated images will be ranked first."
-                   "\nL|'color-green': Sort images by the average intensity of the converted Cg "
-                   "color channel. Green images will be ranked first and red images will be last."
-                   "\nL|'color-orange': Sort images by the average intensity of the converted Co "
-                   "color channel. Orange images will be ranked first and blue images will be "
-                   "last."
-                   "\nL|'size': Sort images by their size in the original frame. Faces closer to "
-                   "the camera and from higher resolution sources will be sorted first, whilst "
-                   "faces further from the camera and from lower resolution sources will be "
-                   "sorted last."
-                   "\nL|'black-pixels': Sort images by their number of black pixels. Useful when "
-                   "faces are near borders and a large part of the image is black."
+            help=_("R|Choose how images are sorted. Selecting a sort method gives the images a "
+                   "new filename based on the order the image appears within the given method."
+                   "\nL|'none': Don't sort the images. When a 'group-by' method is selected, "
+                   "selecting 'none' means that the files will be moved/copied into their "
+                   "respective bins, but the files will keep their original filenames. Selecting "
+                   "'none' for both 'sort-by' and 'group-by' will do nothing" + _SORT_HELP +
                    "\nDefault: face")))
+        argument_list.append(dict(
+            opts=('-g', '--group-by'),
+            action=Radio,
+            type=str,
+            choices=_SORT_METHODS,
+            dest='group_method',
+            group=_("group settings"),
+            default="none",
+            help=_("R|Selecting a group by method will move/copy files into numbered bins based "
+                   "on the selected method."
+                   "\nL|'none': Don't bin the images. Folders will be sorted by the selected "
+                   "'sort-by' but will not be binned, instead they will be sorted into a single "
+                   "folder.  Selecting 'none' for both 'sort-by' and 'group-by' will do nothing" +
+                   _GROUP_HELP + "\nDefault: none")))
         argument_list.append(dict(
             opts=('-k', '--keep'),
             action='store_true',
             dest='keep_original',
             default=False,
-            group=_("output"),
-            help=_("Keeps the original files in the input directory. Be careful when using this "
-                   "with rename grouping and no specified output directory as this would keep the "
-                   "original and renamed files in the same directory.")))
+            group=_("data"),
+            help=_("Whether to keep the original files in their original location. Choosing a "
+                   "'sort-by' method means that the files have to be renamed. Selecting 'keep' "
+                   "means that the original files will be kept, and the renamed files will be "
+                   "created in the specified output folder. Unselecting keep means that the "
+                   "original files will be moved and renamed based on the selected sort/group "
+                   "criteria.")))
         argument_list.append(dict(
-            opts=('-t', '--ref_threshold'),
+            opts=('-t', '--threshold'),
             action=Slider,
             min_max=(-1.0, 10.0),
             rounding=2,
             type=float,
-            dest='min_threshold',
-            group=_("sort settings"),
+            dest='threshold',
+            group=_("group settings"),
             default=-1.0,
-            help=_("Float value. Minimum threshold to use for grouping comparison with 'face-cnn' "
-                   "and 'hist' methods. The lower the value the more discriminating the grouping "
-                   "is. Leaving -1.0 will allow the program set the default value automatically. "
-                   "For face-cnn 7.2 should be enough, with 4 being very discriminating. For hist "
-                   "0.3 should be enough, with 0.2 being very discriminating. Be careful setting "
-                   "a value that's too low in a directory with many images, as this could result "
-                   "in a lot of directories being created. Defaults: face-cnn 7.2, hist 0.3")))
+            help=_("R|Float value. Minimum threshold to use for grouping comparison with "
+                   "'face-cnn' 'hist' and 'face' methods."
+                   "\nThe lower the value the more discriminating the grouping is. Leaving "
+                   "-1.0 will allow Faceswap to choose the default value."
+                   "\nL|For 'face-cnn' 7.2 should be enough, with 4 being very discriminating. "
+                   "\nL|For 'hist' 0.3 should be enough, with 0.2 being very discriminating. "
+                   "\nL|For 'face' between 0.1 (few bins) to 0.4 (more bins) should "
+                   "be about right."
+                   "\nBe careful setting a value that's too extrene in a directory "
+                   "with many images, as this could result in a lot of folders being created. "
+                   "Defaults: face-cnn 7.2, hist 0.3, face 0.25")))
         argument_list.append(dict(
             opts=('-fp', '--final-process'),
             action=Radio,
             type=str,
             choices=("folders", "rename"),
             dest='final_process',
-            default="rename",
             group=_("output"),
-            help=_("R|Default: rename."
-                   "\nL|'folders': files are sorted using the -s/--sort-by method, then they are "
-                   "organized into folders using the -g/--group-by grouping method."
-                   "\nL|'rename': files are sorted using the -s/--sort-by then they are "
-                   "renamed.")))
-        argument_list.append(dict(
-            opts=('-g', '--group-by'),
-            action=Radio,
-            type=str,
-            choices=("blur", "blur-fft", "face-cnn", "face-yaw", "hist", "black-pixels"),
-            dest='group_method',
-            group=_("output"),
-            default="hist",
-            help=_("Group by method. When -fp/--final-processing by folders choose the how the "
-                   "images are grouped after sorting. Default: hist")))
+            help=_("Deprecated and no longer used. The final processing will be dictated by the "
+                   "sort/group by methods and whether 'keep_original' is selected.")))
         argument_list.append(dict(
             opts=('-b', '--bins'),
             action=Slider,
@@ -145,19 +186,27 @@ class SortArgs(FaceSwapArgs):
             rounding=1,
             type=int,
             dest='num_bins',
-            group=_("output"),
+            group=_("group settings"),
             default=5,
-            help=_("Integer value. Number of folders that will be used to group by blur, "
-                   "face-yaw and black-pixels. For blur folder 0 will be the least blurry, while "
-                   "the last folder will be the blurriest. For face-yaw the number of bins is by "
-                   "how much 180 degrees is divided. So if you use 18, then each folder will be "
-                   "a 10 degree increment. Folder 0 will contain faces looking the most to the "
-                   "left whereas the last folder will contain the faces looking the most to the "
-                   "right. If the number of images doesn't divide evenly into the number of "
-                   "bins, the remaining images get put in the last bin. For black-pixels it "
-                   "represents the divider of the percentage of black pixels. For 10, first "
-                   "folder will have the faces with 0 to 10%% black pixels, second 11 to 20%%, "
-                   "etc. Default value: 5")))
+            help=_("R|Integer value. Used to control the number of bins created for grouping by: "
+                   "any 'blur' methods, 'color' methods or 'face metric' methods ('distance', "
+                   "'size') and 'orientation; methods ('yaw', 'pitch'). For any other grouping "
+                   "methods see the '-t' ('--threshold') option."
+                   "\nL|For 'face metric' methods the bins are filled, according the the "
+                   "distribution of faces between the minimum and maximum chosen metric."
+                   "\nL|For 'color' methods the number of bins represents the divider of the "
+                   "percentage of colored pixels. Eg. For a bin number of '5': The first folder "
+                   "will have the faces with 0%% to 20%% colored pixels, second 21%% to 40%%, "
+                   "etc. Any empty bins will be deleted, so you may end up with fewer bins than "
+                   "selected."
+                   "\nL|For 'blur' methods folder 0 will be the least blurry, while "
+                   "the last folder will be the blurriest."
+                   "\nL|For 'orientation' methods the number of bins is dictated by how much 180 "
+                   "degrees is divided. Eg. If 18 is selected, then each folder will be a 10 "
+                   "degree increment. Folder 0 will contain faces looking the most to the "
+                   "left/down whereas the last folder will contain the faces looking the most to "
+                   "the right/up. NB: Some bins may be empty if faces do not fit the criteria."
+                   "\nDefault value: 5")))
         argument_list.append(dict(
             opts=('-l', '--log-changes'),
             action='store_true',
