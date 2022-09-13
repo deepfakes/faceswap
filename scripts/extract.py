@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, _video_extensions
+from lib.utils import get_folder, _image_extensions, _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
@@ -75,8 +75,11 @@ class Extract():  # pylint:disable=too-few-public-methods
 
         retval = [os.path.join(self._args.input_dir, fname)
                   for fname in os.listdir(self._args.input_dir)
-                  if os.path.isdir(os.path.join(self._args.input_dir, fname))
-                  or os.path.splitext(fname)[-1].lower() in _video_extensions]
+                  if (os.path.isdir(os.path.join(self._args.input_dir, fname))  # folder images
+                      and any(os.path.splitext(iname)[-1].lower() in _image_extensions
+                              for iname in os.listdir(os.path.join(self._args.input_dir, fname))))
+                  or os.path.splitext(fname)[-1].lower() in _video_extensions]  # video
+
         logger.debug("Input locations: %s", retval)
         return retval
 
