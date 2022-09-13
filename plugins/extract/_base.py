@@ -4,7 +4,7 @@
 """
 import logging
 
-from tensorflow.python.framework import errors_impl as tf_errors
+from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager
@@ -106,6 +106,7 @@ class Extractor():
                      "configfile: %s, instance: %s, )", self.__class__.__name__, git_model_id,
                      model_filename, exclude_gpus, configfile, instance)
 
+        self._is_initialized = False
         self._instance = instance
         self._exclude_gpus = exclude_gpus
         self.config = _get_config(".".join(self.__module__.split(".")[-2:]), configfile=configfile)
@@ -370,6 +371,12 @@ class Extractor():
         """
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
+        if self._is_initialized:
+            # When batch processing, plugins will be initialized on first job in batch
+            logger.debug("Plugin already initialized: %s (%s)",
+                         self.name, self._plugin_type.title())
+            return
+
         logger.info("Initializing %s (%s)...", self.name, self._plugin_type.title())
         self.queue_size = 1
         name = self.name.replace(" ", "_").lower()
@@ -391,6 +398,7 @@ class Extractor():
                        "option to `True`.")
                 raise FaceswapError(msg) from err
             raise err
+        self._is_initialized = True
         logger.info("Initialized %s (%s) with batchsize of %s",
                     self.name, self._plugin_type.title(), self.batchsize)
 

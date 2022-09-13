@@ -418,7 +418,7 @@ class AlignedFace():
                 roi = np.rint(self.transform_points(roi, invert=True)).astype("int32")
                 logger.trace("original roi: %s", roi)  # type: ignore
                 self._cache.original_roi = roi
-        return self._cache.original_roi[0]
+        return self._cache.original_roi
 
     @property
     def landmarks(self) -> np.ndarray:

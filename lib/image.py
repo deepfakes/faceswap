@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
 # <<< IMAGE IO >>> #
 
-class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
+class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
     """ Monkey patch imageio ffmpeg to use keyframes whilst seeking """
     def __init__(self, format, request):
         super().__init__(format, request)
@@ -250,7 +250,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):
             self._read_gen.__next__()  # we already have meta data
 
 
-imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader
+imageio.plugins.ffmpeg.FfmpegFormat.Reader = FfmpegReader  # type: ignore
 
 
 def read_image(filename, raise_error=False, with_metadata=False):
@@ -1226,6 +1226,29 @@ class FacesLoader(ImagesLoader):
         logger.debug("Initializing %s: (path: %s, count: %s)", self.__class__.__name__,
                      path, count)
         super().__init__(path, queue_size=8, skip_list=skip_list, count=count)
+
+    def _get_count_and_filelist(self, fast_count, count):
+        """ Override default implementation to only return png files from the source folder
+
+        Parameters
+        ----------
+        fast_count: bool
+            Not used for faces loader
+        count: int
+            The number of images that the loader will encounter if already known, otherwise
+            ``None``
+        """
+        if isinstance(self.location, (list, tuple)):
+            file_list = self.location
+        else:
+            file_list = get_image_paths(self.location)
+
+        self._file_list = [fname for fname in file_list
+                           if os.path.splitext(fname)[-1].lower() == ".png"]
+        self._count = len(self.file_list) if count is None else count
+
+        logger.debug("count: %s", self.count)
+        logger.trace("filelist: %s", self.file_list)
 
     def _from_folder(self):
         """ Generator for loading images from a folder

@@ -6,18 +6,16 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import List, Dict, TYPE_CHECKING, Optional
+from argparse import Namespace
+from typing import List, Dict, Optional
 
 from tqdm import tqdm
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver
 from lib.multithreading import MultiThread
-from lib.utils import get_folder
+from lib.utils import get_folder, _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, finalize
-
-if TYPE_CHECKING:
-    import argparse
 
 
 tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
@@ -42,23 +40,14 @@ class Extract():  # pylint:disable=too-few-public-methods
         The arguments to be passed to the extraction process as generated from Faceswap's command
         line arguments
     """
-    def __init__(self, arguments: argparse.Namespace) -> None:
+    def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (args: %s", self.__class__.__name__, arguments)
         self._args = arguments
-        self._output_dir = None if self._args.skip_saving_faces else get_folder(
-            self._args.output_dir)
+        self._input_locations = self._get_input_locations()
+        self._validate_batchmode()
 
-        logger.info("Output Directory: %s", self._args.output_dir)
-        self._images = ImagesLoader(self._args.input_dir, fast_count=True)
-        self._alignments = Alignments(self._args, True, self._images.is_video)
-
-        self._existing_count = 0
-        self._set_skip_list()
-
-        self._post_process = PostProcess(arguments)
         configfile = self._args.configfile if hasattr(self._args, "configfile") else None
         normalization = None if self._args.normalization == "none" else self._args.normalization
-
         maskers = ["components", "extended"]
         maskers += self._args.masker if self._args.masker else []
         self._extractor = Extractor(self._args.detector,
@@ -71,6 +60,127 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,
                                     re_feed=self._args.re_feed)
+
+    def _get_input_locations(self) -> List[str]:
+        """ Obtain the full path to input locations. Will be a list of locations if batch mode is
+        selected, or a containing a single location if batch mode is not selected.
+
+        Returns
+        -------
+        list:
+            The list of input location paths
+        """
+        if not self._args.batch_mode or os.path.isfile(self._args.input_dir):
+            return [self._args.input_dir]  # Not batch mode or a single file
+
+        retval = [os.path.join(self._args.input_dir, fname)
+                  for fname in os.listdir(self._args.input_dir)
+                  if os.path.isdir(os.path.join(self._args.input_dir, fname))
+                  or os.path.splitext(fname)[-1].lower() in _video_extensions]
+        logger.debug("Input locations: %s", retval)
+        return retval
+
+    def _validate_batchmode(self):
+        """ Validate the command line arguments.
+
+        If batch-mode selected and there is only one object to extract from, then batch mode is
+        disabled
+
+        If processing in batch mode, some of the given arguments may not make sense, in which case
+        a warning is shown and those options are reset.
+
+        """
+        if not self._args.batch_mode:
+            return
+
+        if os.path.isfile(self._args.input_dir):
+            logger.warning("Batch mode selected but input is not a folder. Switching to normal "
+                           "mode")
+            self._args.batch_mode = False
+
+        if not self._input_locations:
+            logger.error("Batch mode selected, but no valid files found in input location: '%s'. "
+                         "Exiting.", self._args.input_dir)
+            sys.exit(1)
+
+        if self._args.alignments_path:
+            logger.warning("Custom alignments path not supported for batch mode. "
+                           "Reverting to default.")
+            self._args.alignments_path = None
+
+    def _output_for_input(self, input_location: str) -> str:
+        """ Obtain the path to an output folder for faces for a given input location.
+
+        If not running in batch mode, then the user supplied output location will be returned,
+        otherwise a sub-folder within the user supplied output location will be returned based on
+        the input filename
+
+        Parameters
+        ----------
+        input_location: str
+            The full path to an input video or folder of images
+        """
+        if not self._args.batch_mode:
+            return self._args.output_dir
+
+        retval = os.path.join(self._args.output_dir,
+                              os.path.splitext(os.path.basename(input_location))[0])
+        logger.debug("Returning output: '%s' for input: '%s'", retval, input_location)
+        return retval
+
+    def process(self):
+        """ The entry point for triggering the Extraction Process.
+
+        Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
+        """
+        logger.info('Starting, this may take a while...')
+        inputs = self._input_locations
+        if self._args.batch_mode:
+            logger.info("Batch mode selected processing: %s", self._input_locations)
+        for job_no, location in enumerate(self._input_locations):
+            if self._args.batch_mode:
+                logger.info("Processing job %s of %s: '%s'", job_no + 1, len(inputs), location)
+                arguments = Namespace(**self._args.__dict__)
+                arguments.input_dir = location
+                arguments.output_dir = self._output_for_input(location)
+            else:
+                arguments = self._args
+            extract = _Extract(self._extractor, arguments)
+            extract.process()
+            self._extractor.reset_phase_index()
+
+
+class _Extract():  # pylint:disable=too-few-public-methods
+    """ The Actual extraction process.
+
+    This class is called by the parent :class:`Extract` process
+
+    Parameters
+    ----------
+    extractor: :class:`~plugins.extract.pipeline.Extractor`
+        The extractor pipeline for running extractions
+    arguments: :class:`argparse.Namespace`
+        The arguments to be passed to the extraction process as generated from Faceswap's command
+        line arguments
+    """
+    def __init__(self,
+                 extractor: Extractor,
+                 arguments: Namespace) -> None:
+        logger.debug("Initializing %s: (extractor: %s, args: %s)", self.__class__.__name__,
+                     extractor, arguments)
+        self._args = arguments
+        self._output_dir = None if self._args.skip_saving_faces else get_folder(
+            self._args.output_dir)
+
+        logger.info("Output Directory: %s", self._output_dir)
+        self._images = ImagesLoader(self._args.input_dir, fast_count=True)
+        self._alignments = Alignments(self._args, True, self._images.is_video)
+        self._extractor = extractor
+
+        self._existing_count = 0
+        self._set_skip_list()
+
+        self._post_process = PostProcess(arguments)
         self._threads: List[MultiThread] = []
         self._verify_output = False
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -121,7 +231,6 @@ class Extract():  # pylint:disable=too-few-public-methods
 
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
         """
-        logger.info('Starting, this may take a while...')
         # from lib.queue_manager import queue_manager ; queue_manager.debug_monitor(3)
         self._threaded_redirector("load")
         self._run_extraction()

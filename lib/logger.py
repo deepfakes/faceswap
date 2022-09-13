@@ -396,7 +396,7 @@ def _file_handler(loglevel,
     :class:`logging.RotatingFileHandler`
         The logging file handler
     """
-    if log_file is not None:
+    if log_file:
         filename = log_file
     else:
         filename = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), "faceswap")

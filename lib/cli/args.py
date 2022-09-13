@@ -378,6 +378,15 @@ class ExtractArgs(ExtractConvertArgs):
 
         argument_list: List[Dict[str, Any]] = []
         argument_list.append(dict(
+            opts=("-b", "--batch-mode"),
+            action="store_true",
+            dest="batch_mode",
+            default=False,
+            group=_("Data"),
+            help=_("R|If selected then the input_dir should be a parent folder containing "
+                   "multiple videos and/or folders of images you wish to extract from. The faces "
+                   "will be output to separate sub-folders in the output_dir.")))
+        argument_list.append(dict(
             opts=("-D", "--detector"),
             action=Radio,
             type=str.lower,

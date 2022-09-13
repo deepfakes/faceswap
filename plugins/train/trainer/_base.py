@@ -163,7 +163,9 @@ class TrainerBase():
 
     def train_one_step(self,
                        viewer: Optional[Callable[[np.ndarray, str], None]],
-                       timelapse_kwargs: Optional[Dict[str, str]]) -> None:
+                       timelapse_kwargs: Optional[Dict[Literal["input_a",
+                                                               "input_b",
+                                                               "output"], str]]) -> None:
         """ Running training on a batch of images for each side.
 
         Triggered from the training cycle in :class:`scripts.train.Train`.
@@ -326,7 +328,9 @@ class TrainerBase():
 
     def _update_viewers(self,
                         viewer: Optional[Callable[[np.ndarray, str], None]],
-                        timelapse_kwargs: Optional[Dict[str, str]]) -> None:
+                        timelapse_kwargs: Optional[Dict[Literal["input_a",
+                                                                "input_b",
+                                                                "output"], str]]) -> None:
         """ Update the preview viewer and timelapse output
 
         Parameters
@@ -632,12 +636,12 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Showing sample")
         feeds: Dict[Literal["a", "b"], np.ndarray] = {}
         for idx, side in enumerate(get_args(Literal["a", "b"])):
+            feed = self.images[side][0]
             input_shape = self._model.model.input_shape[idx][1:]
-            if input_shape[0] / self.images[side][0].shape[1] != 1.0:
-                feeds[side] = self._resize_sample(side, self.images[side][1], input_shape[0])
-                feeds[side] = feeds[side].reshape((-1, ) + input_shape)
+            if input_shape[0] / feed.shape[1] != 1.0:
+                feeds[side] = self._resize_sample(side, feed, input_shape[0])
             else:
-                feeds[side] = self.images[side][0]
+                feeds[side] = feed
 
         preds = self._get_predictions(feeds["a"], feeds["b"])
         return self._compile_preview(preds)
@@ -787,10 +791,15 @@ class _Samples():  # pylint:disable=too-few-public-methods
             predictions = [pred[..., ::-1] if pred.shape[-1] == 3 else pred
                            for pred in predictions]
 
-        full = self._process_full(side, full, predictions[0].shape[1], (0, 0, 255))
+        full = self._process_full(side, full, predictions[0].shape[1], (0., 0., 1.0))
         images = [faces] + predictions
+
         if self._display_mask:
             images = self._compile_masked(images, samples[-1])
+        elif self._model.config["learn_mask"]:
+            # Remove masks when learn mask is selected but mask toggle is off
+            images = [batch[..., :3] for batch in images]
+
         images = [self._overlay_foreground(full.copy(), image) for image in images]
 
         return images
@@ -799,7 +808,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
                       side: Literal["a", "b"],
                       images: np.ndarray,
                       prediction_size: int,
-                      color: Tuple[int, int, int]) -> np.ndarray:
+                      color: Tuple[float, float, float]) -> np.ndarray:
         """ Add a frame overlay to preview images indicating the region of interest.
 
         This applies the red border that appears in the preview images.
@@ -1041,7 +1050,9 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         self._feeder.set_timelapse_feed(images, batchsize)
         logger.debug("Set up time-lapse")
 
-    def output_timelapse(self, timelapse_kwargs: Dict[str, str]) -> None:
+    def output_timelapse(self, timelapse_kwargs: Dict[Literal["input_a",
+                                                              "input_b",
+                                                              "output"], str]) -> None:
         """ Generate the time-lapse samples and output the created time-lapse to the specified
         output folder.
 
@@ -1053,7 +1064,7 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         """
         logger.debug("Ouputting time-lapse")
         if not self._output_file:
-            self._setup(**timelapse_kwargs)
+            self._setup(**cast(Dict[str, str], timelapse_kwargs))
 
         logger.debug("Getting time-lapse samples")
         self._samples.images = self._feeder.generate_preview(is_timelapse=True)
