@@ -74,3 +74,11 @@ class Config(FaceswapConfig):
             info="Filters out faces who's landmarks are above this distance from an 'average' "
                  "face. Values above 16 tend to be fairly safe. Values above 10 will remove more "
                  "false positives, but may also filter out some faces at extreme angles.")
+        self.add_item(
+            section=section,
+            title="save_filtered",
+            datatype=bool,
+            default=False,
+            group="filters",
+            info="If enabled, saves any filtered out images into a sub-folder during the "
+                 "extraction process. If disabled, filtered faces are deleted.")

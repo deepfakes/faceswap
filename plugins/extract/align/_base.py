@@ -122,7 +122,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self._output_faces: List[DetectedFace] = []
         self._filter = AlignedFilter(min_scale=self.config["aligner_min_scale"],
                                      max_scale=self.config["aligner_max_scale"],
-                                     distance=self.config["aligner_distance"])
+                                     distance=self.config["aligner_distance"],
+                                     save_output=self.config["save_filtered"])
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_normalize_method(self,
@@ -211,7 +212,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             logger.debug(item)  # type:ignore
 
         # TODO Move to end of process not beginning
-        self._filter.output_counts()
+        if exhausted:
+            self._filter.output_counts()
 
         return exhausted, batch
 
@@ -277,10 +279,11 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             if len(self._output_faces) != self._faces_per_filename[filename]:
                 continue
 
-            self._output_faces = self._filter(self._output_faces, min(frame.shape[:2]))
+            self._output_faces, folders = self._filter(self._output_faces, min(frame.shape[:2]))
 
             output = self._extract_media.pop(filename)
             output.add_detected_faces(self._output_faces)
+            output.add_sub_folders(folders)
             self._output_faces = []
 
             logger.trace("Final Output: (filename: '%s', image shape: %s, "  # type:ignore
@@ -524,21 +527,31 @@ class AlignedFilter():
     max_scale: float
         Filters out faces that have been aligned at above this value as a multiplier of the
         minimum frame dimension. Set to ``0`` for off.
-    distance: float:
+    distance: float
         Filters out faces that are further than this distance from an "average" face. Set to
         ``0`` for off.
+    save_output: bool
+        ``True`` if the filtered faces should be kept as they are being saved. ``False`` if they
+        should be deleted
     """
-    def __init__(self, min_scale: float, max_scale: float, distance: float):
-        logger.debug("Initializing %s: (min_scale: %s, max_scale: %s, distance: %s)",
-                     self.__class__.__name__, min_scale, max_scale, distance)
+    def __init__(self,
+                 min_scale: float,
+                 max_scale: float,
+                 distance: float,
+                 save_output: bool) -> None:
+        logger.debug("Initializing %s: (min_scale: %s, max_scale: %s, distance: %s, "
+                     "save_output: %s)", self.__class__.__name__, min_scale, max_scale, distance,
+                     save_output)
         self._min_scale = min_scale
         self._max_scale = max_scale
         self._distance = distance / 100.
+        self._save_output = save_output
         self._active = max_scale > 0.0 or min_scale > 0.0 or distance > 0.0
         self._counts: Dict[str, int] = dict(min_scale=0, max_scale=0, distance=0)
         logger.debug("Initialized %s: ", self.__class__.__name__)
 
-    def __call__(self, faces: List[DetectedFace], minimum_dimension: int) -> List[DetectedFace]:
+    def __call__(self, faces: List[DetectedFace], minimum_dimension: int
+                 ) -> Tuple[List[DetectedFace], List[Optional[str]]]:
         """ Apply the filter to the incoming batch
 
         Parameters
@@ -550,32 +563,45 @@ class AlignedFilter():
 
         Returns
         -------
-        list
-            The filtered list of detected face objects
-
+        detected_faces: list
+            The filtered list of detected face objects, if saving filtered faces has not been
+            selected or the full list of detected faces
+        sub_folders: list
+            List of ``Nones`` if saving filtered faces has not been selected or list of ``Nones``
+            and sub folder names corresponding the filtered face location
         """
+        sub_folders: List[Optional[str]] = [None for _ in range(len(faces))]
         if not self._active:
-            return faces
+            return faces, sub_folders
 
         max_size = minimum_dimension * self._max_scale
         min_size = minimum_dimension * self._min_scale
         retval: List[DetectedFace] = []
-        for face in faces:
+        for idx, face in enumerate(faces):
             test = AlignedFace(landmarks=face.landmarks_xy, centering="face")
             if self._min_scale > 0.0 or self._max_scale > 0.0:
                 roi = test.original_roi
                 size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
                 if self._min_scale > 0.0 and size < min_size:
                     self._counts["min_scale"] += 1
+                    if self._save_output:
+                        retval.append(face)
+                        sub_folders[idx] = "_align_filt_min_scale"
                     continue
                 if self._max_scale > 0.0 and size > max_size:
                     self._counts["max_scale"] += 1
+                    if self._save_output:
+                        retval.append(face)
+                        sub_folders[idx] = "_align_filt_max_scale"
                     continue
             if 0.0 < self._distance < test.average_distance:
                 self._counts["distance"] += 1
+                if self._save_output:
+                    retval.append(face)
+                    sub_folders[idx] = "_align_filt_distance"
                 continue
             retval.append(face)
-        return retval
+        return retval, sub_folders
 
     def output_counts(self):
         """ Output the counts of filtered items """

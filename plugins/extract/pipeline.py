@@ -754,6 +754,7 @@ class ExtractMedia():
         self._detected_faces: List["DetectedFace"] = ([] if detected_faces is None
                                                       else detected_faces)
         self._frame_metadata: Dict[str, Any] = {}
+        self._sub_folders: List[Optional[str]] = []
 
     @property
     def filename(self) -> str:
@@ -795,6 +796,13 @@ class ExtractMedia():
         assert self._frame_metadata is not None
         return self._frame_metadata
 
+    @property
+    def sub_folders(self) -> List[Optional[str]]:
+        """ list: The sub_folders that the faces should be output to. Used when binning filter
+        output is enabled. The list corresponds to the list of detected faces
+        """
+        return self._sub_folders
+
     def get_image_copy(self, color_format: Literal["BGR", "RGB", "GRAY"]) -> "np.ndarray":
         """ Get a copy of the image in the requested color format.
 
@@ -825,6 +833,19 @@ class ExtractMedia():
                      "(faces: %s, lrtb: %s)", self._filename, faces,
                      [(face.left, face.right, face.top, face.bottom) for face in faces])
         self._detected_faces = faces
+
+    def add_sub_folders(self, folders: List[Optional[str]]) -> None:
+        """ Add detected faces to the object. Called at the end of each extraction phase.
+
+        Parameters
+        ----------
+        folders: list
+            A list of str sub folder names or ``None`` if no sub folder is required. Should
+            correspond to the detected faces list
+        """
+        logger.trace("Adding sub folders for filename: '%s'. "  # type: ignore
+                     "(folders: %s)", self._filename, folders,)
+        self._sub_folders = folders
 
     def remove_image(self) -> None:
         """ Delete the image and reset :attr:`image` to ``None``.
