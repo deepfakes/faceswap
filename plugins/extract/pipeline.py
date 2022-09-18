@@ -76,7 +76,7 @@ class Extractor():
         exactly what angles to check. Can also pass in ``'on'`` to increment at 90 degree
         intervals. Default: ``None``
     min_size: int, optional
-        Used to set the :attr:`plugins.extract.detect.min_size` attribute Filters out faces
+        Used to set the :attr:`plugins.extract.detect.min_size` attribute. Filters out faces
         detected below this size. Length, in pixels across the diagonal of the bounding box. Set
         to ``0`` for off. Default: ``0``
     normalize_method: {`None`, 'clahe', 'hist', 'mean'}, optional
@@ -103,8 +103,8 @@ class Extractor():
                  multiprocess: bool = False,
                  exclude_gpus: Optional[List[int]] = None,
                  rotate_images: Optional[List[int]] = None,
-                 min_size: int = 20,
-                 normalize_method: Optional[str] = None,
+                 min_size: int = 0,
+                 normalize_method:  Optional[Literal["none", "clahe", "hist", "mean"]] = None,
                  re_feed: int = 0,
                  image_is_aligned: bool = False) -> None:
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, configfile: %s, "
@@ -541,9 +541,25 @@ class Extractor():
     def _load_align(self,
                     aligner: Optional[str],
                     configfile: Optional[str],
-                    normalize_method: Optional[str],
+                    normalize_method: Optional[Literal["none", "clahe", "hist", "mean"]],
                     re_feed: int) -> Optional["Aligner"]:
-        """ Set global arguments and load aligner plugin """
+        """ Set global arguments and load aligner plugin
+
+        Parameters
+        ----------
+        aligner: str
+            The aligner plugin to load or ``None`` for no aligner
+        configfile: str
+            Optional full path to custom config file
+        normalize_method: str
+            Optional normalization method to use
+        re_feed: int
+            The number of times to adjust the image and re-feed to get an average score
+
+        Returns
+        -------
+        Aligner plugin if one is specified otherwise ``None``
+        """
         if aligner is None or aligner.lower() == "none":
             logger.debug("No aligner selected. Returning None")
             return None
@@ -637,7 +653,10 @@ class Extractor():
                           - plugins_required) // len(gpu_plugins)
         self._set_plugin_batchsize(gpu_plugins, available_vram)
 
-    def set_aligner_normalization_method(self, method: str) -> None:
+    def set_aligner_normalization_method(self, method: Optional[Literal["none",
+                                                                        "clahe",
+                                                                        "hist",
+                                                                        "mean"]]) -> None:
         """ Change the normalization method for faces fed into the aligner.
 
         Parameters

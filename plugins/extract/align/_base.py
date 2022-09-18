@@ -12,15 +12,58 @@ For each source item, the plugin must pass a dict to finalize containing:
 >>>  "landmarks": [list of 68 point face landmarks]
 >>>  "detected_faces": [<list of DetectedFace objects>]}
 """
+import sys
 
+from dataclasses import dataclass, field
+from typing import Any, cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
 
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module # noqa
 
+from lib.align import AlignedFace, DetectedFace
 from lib.utils import get_backend, FaceswapError
 from plugins.extract._base import Extractor, logger, ExtractMedia
+
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
+if TYPE_CHECKING:
+    from queue import Queue
+
+
+@dataclass
+class AlignerBatch:
+    """ Dataclass for holding items flowing through the aligner.
+
+    Parameters
+    ----------
+    image: list
+        List of :class:`numpy.ndarray` containing the original frame
+    detected_faces: list
+        List of :class:`~lib.align.DetectedFace` objects
+    filename: list
+        List of original frame filenames for the batch
+    feed: list
+        List of feed images to feed the aligner net for each re-feed increment
+    prediction: list
+        List of predictions. Direct output from the aligner net
+    landmarks: list
+        List of 68 point :class:`numpy.ndarray` landmark points returned from the aligner
+    data: dict
+        Any aligner specific data required during the processing phase. List of dictionaries for
+        holding data on each sub-batch if re-feed > 1
+    """
+    image: List[np.ndarray] = field(default_factory=list)
+    detected_faces: List[DetectedFace] = field(default_factory=list)
+    filename: List[str] = field(default_factory=list)
+    feed: List[np.ndarray] = field(default_factory=list)
+    prediction: np.ndarray = np.empty([])
+    landmarks: np.ndarray = np.empty([])
+    data: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class Aligner(Extractor):  # pylint:disable=abstract-method
@@ -55,8 +98,13 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     plugins.extract.mask._base : Masker parent class for extraction plugins.
     """
 
-    def __init__(self, git_model_id=None, model_filename=None,
-                 configfile=None, instance=0, normalize_method=None, re_feed=0, **kwargs):
+    def __init__(self,
+                 git_model_id: Optional[int] = None,
+                 model_filename: Optional[str] = None,
+                 configfile: Optional[str] = None,
+                 instance: int = 0,
+                 normalize_method: Optional[Literal["none", "clahe", "hist", "mean"]] = None,
+                 re_feed: int = 0, **kwargs) -> None:
         logger.debug("Initializing %s: (normalize_method: %s, re_feed: %s)",
                      self.__class__.__name__, normalize_method, re_feed)
         super().__init__(git_model_id,
@@ -64,18 +112,21 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          configfile=configfile,
                          instance=instance,
                          **kwargs)
-        self._normalize_method = None
+        self._normalize_method: Optional[Literal["clahe", "hist", "mean"]] = None
         self._re_feed = re_feed
         self.set_normalize_method(normalize_method)
 
         self._plugin_type = "align"
-        self._faces_per_filename = {}  # Tracking for recompiling face batches
-        self._rollover = None  # Items that are rolled over from the previous batch in get_batch
-        self._output_faces = []
-        self._additional_keys = []
+        self._faces_per_filename: Dict[str, int] = {}  # Tracking for recompiling batches
+        self._rollover: Optional[ExtractMedia] = None  # batch rollover items
+        self._output_faces: List[DetectedFace] = []
+        self._filter = AlignedFilter(min_scale=self.config["aligner_min_scale"],
+                                     max_scale=self.config["aligner_max_scale"],
+                                     distance=self.config["aligner_distance"])
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_normalize_method(self, method):
+    def set_normalize_method(self,
+                             method: Optional[Literal["none", "clahe", "hist", "mean"]]) -> None:
         """ Set the normalization method for feeding faces into the aligner.
 
         Parameters
@@ -84,10 +135,10 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             The normalization method to apply to faces prior to feeding into the model
         """
         method = None if method is None or method.lower() == "none" else method
-        self._normalize_method = method
+        self._normalize_method = cast(Optional[Literal["clahe", "hist", "mean"]], method)
 
     # << QUEUE METHODS >>> #
-    def get_batch(self, queue):
+    def get_batch(self, queue: "Queue") -> Tuple[bool, AlignerBatch]:
         """ Get items for inputting into the aligner from the queue in batches
 
         Items are returned from the ``queue`` in batches of
@@ -122,12 +173,13 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             A dictionary of lists of :attr:`~plugins.extract._base.Extractor.batchsize`:
         """
         exhausted = False
-        batch = {}
+        batch = AlignerBatch()
         idx = 0
         while idx < self.batchsize:
             item = self._collect_item(queue)
             if item == "EOF":
-                logger.trace("EOF received")
+                logger.trace("EOF received")  # type:ignore
+                self._filter.output_counts()
                 exhausted = True
                 break
             # Put frames with no faces into the out queue to keep TQDM consistent
@@ -137,9 +189,9 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
             converted_image = item.get_image_copy(self.color_format)
             for f_idx, face in enumerate(item.detected_faces):
-                batch.setdefault("image", []).append(converted_image)
-                batch.setdefault("detected_faces", []).append(face)
-                batch.setdefault("filename", []).append(item.filename)
+                batch.image.append(converted_image)
+                batch.detected_faces.append(face)
+                batch.filename.append(item.filename)
                 idx += 1
                 if idx == self.batchsize:
                     frame_faces = len(item.detected_faces)
@@ -148,36 +200,48 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                             item.filename,
                             item.image,
                             detected_faces=item.detected_faces[f_idx + 1:])
-                        logger.trace("Rolled over %s faces of %s to next batch for '%s'",
-                                     len(self._rollover.detected_faces), frame_faces,
+                        logger.trace("Rolled over %s faces of %s to next batch "  # type:ignore
+                                     "for '%s'", len(self._rollover.detected_faces), frame_faces,
                                      item.filename)
                     break
         if batch:
-            logger.trace("Returning batch: %s", {k: v.shape if isinstance(v, np.ndarray) else v
-                                                 for k, v in batch.items()})
+            logger.trace("Returning batch: %s", {k: v.shape  # type:ignore
+                                                 if isinstance(v, np.ndarray) else v
+                                                 for k, v in batch.__dict__.items()})
         else:
-            logger.trace(item)
+            logger.trace(item)  # type:ignore
         return exhausted, batch
 
-    def _collect_item(self, queue):
-        """ Collect the item from the :attr:`_rollover` dict or from the queue
-            Add face count per frame to self._faces_per_filename for joining
-            batches back up in finalize """
+    def _collect_item(self, queue: "Queue") -> Union[Literal["EOF"], ExtractMedia]:
+        """ Collect the item from the :attr:`_rollover` dict or from the queue. Add face count per
+        frame to self._faces_per_filename for joining batches back up in finalize
+
+        Parameters
+        ----------
+        queue: :class:`queue.Queue`
+            The input queue to the aligner. Should contain
+            :class:`~plugins.extract.pipeline.ExtractMedia` objects
+
+        Returns
+        -------
+        :class:`~plugins.extract.pipeline.ExtractMedia` or EOF
+            The next extract media object, or EOF if pipe has ended
+        """
         if self._rollover is not None:
-            logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",
+            logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",  # type:ignore
                          self._rollover.filename, len(self._rollover.detected_faces))
             item = self._rollover
             self._rollover = None
         else:
             item = self._get_item(queue)
             if item != "EOF":
-                logger.trace("Getting from queue: (filename: %s, faces: %s)",
+                logger.trace("Getting from queue: (filename: %s, faces: %s)",  # type:ignore
                              item.filename, len(item.detected_faces))
                 self._faces_per_filename[item.filename] = len(item.detected_faces)
         return item
 
     # <<< FINALIZE METHODS >>> #
-    def finalize(self, batch):
+    def finalize(self, batch: AlignerBatch) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Aligner
 
         This should be called as the final task of each `plugin`.
@@ -186,9 +250,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         Parameters
         ----------
-        batch : dict
-            The final ``dict`` from the `plugin` process. It must contain the `keys`:
-            ``detected_faces``, ``landmarks``, ``filename``
+        batch : :class:`AlignerBatch`
+            The final batch item from the `plugin` process.
 
         Yields
         ------
@@ -197,32 +260,35 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             and landmarks for the detected faces found in the frame.
         """
 
-        for face, landmarks in zip(batch["detected_faces"], batch["landmarks"]):
+        for face, landmarks in zip(batch.detected_faces, batch.landmarks):
             if not isinstance(landmarks, np.ndarray):
                 landmarks = np.array(landmarks)
             face._landmarks_xy = landmarks
 
-        logger.trace("Item out: %s", {key: val.shape if isinstance(val, np.ndarray) else val
-                                      for key, val in batch.items()})
+        logger.trace("Item out: %s", {key: val.shape  # type:ignore
+                                      if isinstance(val, np.ndarray) else val
+                                      for key, val in batch.__dict__.items()})
 
-        for filename, face in zip(batch["filename"], batch["detected_faces"]):
+        for frame, filename, face in zip(batch.image, batch.filename, batch.detected_faces):
             self._output_faces.append(face)
             if len(self._output_faces) != self._faces_per_filename[filename]:
                 continue
+
+            self._output_faces = self._filter(self._output_faces, min(frame.shape[:2]))
 
             output = self._extract_media.pop(filename)
             output.add_detected_faces(self._output_faces)
             self._output_faces = []
 
-            logger.trace("Final Output: (filename: '%s', image shape: %s, detected_faces: %s, "
-                         "item: %s)",
+            logger.trace("Final Output: (filename: '%s', image shape: %s, "  # type:ignore
+                         "detected_faces: %s, item: %s)",
                          output.filename, output.image_shape, output.detected_faces, output)
             yield output
 
     # <<< PROTECTED METHODS >>> #
 
     # << PROCESS_INPUT WRAPPER >>
-    def _process_input(self, batch):
+    def _process_input(self, batch: AlignerBatch) -> AlignerBatch:
         """ Process the input to the aligner model multiple times based on the user selected
         `re-feed` command line option. This adjusts the bounding box for the face to be fed
         into the model by a random amount within 0.05 pixels of the detected face's shortest axis.
@@ -233,40 +299,32 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         Parameters
         ----------
-        batch: dict
+        batch: :class:`AlignerBatch`
             Contains the batch that is currently being passed through the plugin process
 
         Returns
         -------
-        dict
+        :class:`AlignerBatch`
             The batch with input processed
         """
-        if not self._additional_keys:
-            existing_keys = list(batch.keys())
-
         original_boxes = np.array([(face.left, face.top, face.width, face.height)
-                                   for face in batch["detected_faces"]])
+                                   for face in batch.detected_faces])
         adjusted_boxes = self._get_adjusted_boxes(original_boxes)
-        retval = {}
+
+        # Put in random re-feed data to the bounding boxes
         for bounding_boxes in adjusted_boxes:
-            for face, box in zip(batch["detected_faces"], bounding_boxes):
+            for face, box in zip(batch.detected_faces, bounding_boxes):
                 face.left, face.top, face.width, face.height = box
 
-            result = self.process_input(batch)
-            if not self._additional_keys:
-                self._additional_keys = [key for key in result if key not in existing_keys]
-            for key in self._additional_keys:
-                retval.setdefault(key, []).append(batch[key])
-                del batch[key]
+            self.process_input(batch)
 
         # Place the original bounding box back to detected face objects
-        for face, box in zip(batch["detected_faces"], original_boxes):
+        for face, box in zip(batch.detected_faces, original_boxes):
             face.left, face.top, face.width, face.height = box
 
-        batch.update(retval)
         return batch
 
-    def _get_adjusted_boxes(self, original_boxes):
+    def _get_adjusted_boxes(self, original_boxes: np.ndarray) -> np.ndarray:
         """ Obtain an array of adjusted bounding boxes based on the number of re-feed iterations
         that have been selected and the minimum dimension of the original bounding box.
 
@@ -288,14 +346,30 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         rands = np.random.rand(self._re_feed, *original_boxes.shape) * 2 - 1
         new_boxes = np.rint(original_boxes + (rands * max_shift[None, :, None])).astype("int32")
         retval = np.concatenate((original_boxes[None, ...], new_boxes))
-        logger.trace(retval)
+        logger.trace(retval)  # type:ignore
         return retval
 
     # <<< PREDICT WRAPPER >>> #
-    def _predict(self, batch):
-        """ Just return the aligner's predict function """
+    def _predict(self, batch: AlignerBatch) -> AlignerBatch:
+        """ Just return the aligner's predict function
+
+        Parameters
+        ----------
+        batch: :class:`AlignerBatch`
+            The current batch to find alignments for
+
+        Returns
+        -------
+        :class:`AlignerBatch`
+            The batch item with the :attr:`prediction` populated
+
+        Raises
+        ------
+        FaceswapError
+            If GPU resources are exhausted
+        """
         try:
-            batch["prediction"] = [self.predict(feed) for feed in batch["feed"]]
+            batch.prediction = np.array([self.predict(feed) for feed in batch.feed])
             return batch
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
@@ -325,45 +399,72 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                     raise FaceswapError(msg) from err
             raise
 
-    def _process_output(self, batch):
+    def _process_output(self, batch: AlignerBatch) -> AlignerBatch:
         """ Process the output from the aligner model multiple times based on the user selected
         `re-feed amount` configuration option, then average the results for final prediction.
 
         Parameters
         ----------
-        batch : dict
+        batch : :class:`AlignerBatch`
             Contains the batch that is currently being passed through the plugin process
+
+        Returns
+        -------
+        :class:`AlignerBatch`
+            The batch item with :attr:`landmarks` populated
         """
         landmarks = []
         for idx in range(self._re_feed + 1):
-            subbatch = {key: val
-                        for key, val in batch.items()
-                        if key not in ["feed", "prediction"] + self._additional_keys}
-            subbatch["prediction"] = batch["prediction"][idx]
-            for key in self._additional_keys:
-                subbatch[key] = batch[key][idx]
+            # Create a pseudo object that only populates the data, feed and prediction slots with
+            # the current re-feed iteration
+            subbatch = AlignerBatch(image=batch.image,
+                                    detected_faces=batch.detected_faces,
+                                    filename=batch.filename,
+                                    feed=[batch.feed[idx]],
+                                    prediction=batch.prediction[idx],
+                                    data=[batch.data[idx]])
             self.process_output(subbatch)
-            landmarks.append(subbatch["landmarks"])
-        batch["landmarks"] = np.average(landmarks, axis=0)
+            landmarks.append(subbatch.landmarks)
+        batch.landmarks = np.average(landmarks, axis=0)
         return batch
 
     # <<< FACE NORMALIZATION METHODS >>> #
-    def _normalize_faces(self, faces):
+    def _normalize_faces(self, faces: List[np.ndarray]) -> List[np.ndarray]:
         """ Normalizes the face for feeding into model
-
         The normalization method is dictated by the normalization command line argument
+
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The faces to normalize
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The normalized faces
         """
         if self._normalize_method is None:
             return faces
-        logger.trace("Normalizing faces")
+        logger.trace("Normalizing faces")  # type:ignore
         meth = getattr(self, f"_normalize_{self._normalize_method.lower()}")
         faces = [meth(face) for face in faces]
-        logger.trace("Normalized faces")
+        logger.trace("Normalized faces")  # type:ignore
         return faces
 
-    @staticmethod
-    def _normalize_mean(face):
-        """ Normalize Face to the Mean """
+    @classmethod
+    def _normalize_mean(cls, face: np.ndarray) -> np.ndarray:
+        """ Normalize Face to the Mean
+
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The faces to normalize
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The normalized faces
+        """
         face = face / 255.0
         for chan in range(3):
             layer = face[:, :, chan]
@@ -371,17 +472,114 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             face[:, :, chan] = layer
         return face * 255.0
 
-    @staticmethod
-    def _normalize_hist(face):
-        """ Equalize the RGB histogram channels """
+    @classmethod
+    def _normalize_hist(cls, face: np.ndarray) -> np.ndarray:
+        """ Equalize the RGB histogram channels
+
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The faces to normalize
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The normalized faces
+        """
         for chan in range(3):
             face[:, :, chan] = cv2.equalizeHist(face[:, :, chan])
         return face
 
-    @staticmethod
-    def _normalize_clahe(face):
-        """ Perform Contrast Limited Adaptive Histogram Equalization """
+    @classmethod
+    def _normalize_clahe(cls, face: np.ndarray) -> np.ndarray:
+        """ Perform Contrast Limited Adaptive Histogram Equalization
+
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The faces to normalize
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The normalized faces
+        """
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
         for chan in range(3):
             face[:, :, chan] = clahe.apply(face[:, :, chan])
         return face
+
+
+class AlignedFilter():
+    """ Applies filters on the output of the aligner
+
+    Parameters
+    ----------
+    min_scale: float
+        Filters out faces that have been aligned at below this value as a multiplier of the
+        minimum frame dimension. Set to ``0`` for off.
+    max_scale: float
+        Filters out faces that have been aligned at above this value as a multiplier of the
+        minimum frame dimension. Set to ``0`` for off.
+    distance: float:
+        Filters out faces that are further than this distance from an "average" face. Set to
+        ``0`` for off.
+    """
+    def __init__(self, min_scale: float, max_scale: float, distance: float):
+        logger.debug("Initializing %s: (min_scale: %s, max_scale: %s, distance: %s)",
+                     self.__class__.__name__, min_scale, max_scale, distance)
+        self._min_scale = min_scale
+        self._max_scale = max_scale
+        self._distance = distance / 100.
+        self._active = max_scale > 0.0 or min_scale > 0.0 or distance > 0.0
+        self._counts: Dict[str, int] = dict(min_scale=0, max_scale=0, distance=0)
+        logger.debug("Initialized %s: ", self.__class__.__name__)
+
+    def __call__(self, faces: List[DetectedFace], minimum_dimension: int) -> List[DetectedFace]:
+        """ Apply the filter to the incoming batch
+
+        Parameters
+        ----------
+        batch: list
+            List of detected face objects to filter out on size
+        minimum_dimension: int
+            The minimum (height, width) of the original frame
+
+        Returns
+        -------
+        list
+            The filtered list of detected face objects
+
+        """
+        if not self._active:
+            return faces
+
+        max_size = minimum_dimension * self._max_scale
+        min_size = minimum_dimension * self._min_scale
+        retval: List[DetectedFace] = []
+        for face in faces:
+            test = AlignedFace(landmarks=face.landmarks_xy, centering="face")
+            if self._min_scale > 0.0 or self._max_scale > 0.0:
+                roi = test.original_roi
+                size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
+                if self._min_scale > 0.0 and size < min_size:
+                    self._counts["min_scale"] += 1
+                    continue
+                if self._max_scale > 0.0 and size > max_size:
+                    self._counts["max_scale"] += 1
+                    continue
+            if 0.0 < self._distance < test.average_distance:
+                self._counts["distance"] += 1
+                continue
+            retval.append(face)
+        return retval
+
+    def output_counts(self):
+        """ Output the counts of filtered items """
+        if not self._active:
+            return
+        counts = [f"{key} ({getattr(self, f'_{key}'):.2f}): {count}"
+                  for key, count in self._counts.items()
+                  if count > 0]
+        if counts:
+            logger.info("Aligner filtered: [%s)", ", ".join(counts))

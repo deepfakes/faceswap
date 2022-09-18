@@ -83,7 +83,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Input locations: %s", retval)
         return retval
 
-    def _validate_batchmode(self):
+    def _validate_batchmode(self) -> None:
         """ Validate the command line arguments.
 
         If batch-mode selected and there is only one object to extract from, then batch mode is
@@ -330,7 +330,8 @@ class _Extract():  # pylint:disable=too-few-public-methods
             for idx, extract_media in enumerate(tqdm(self._extractor.detected_faces(),
                                                      total=self._images.process_count,
                                                      file=sys.stdout,
-                                                     desc=desc)):
+                                                     desc=desc,
+                                                     leave=False)):
                 self._check_thread_error()
                 if is_final:
                     self._output_processing(extract_media, size)

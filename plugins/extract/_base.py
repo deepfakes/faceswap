@@ -3,7 +3,7 @@
 :mod:`~plugins.extract.mask` Plugins
 """
 import logging
-
+from typing import Dict
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
 from lib.multithreading import MultiThread
@@ -144,7 +144,7 @@ class Extractor():
         self._threads = []
         """ list: Internal threads for this plugin """
 
-        self._extract_media = {}
+        self._extract_media: Dict[str, ExtractMedia] = {}
         """ dict: The :class:`plugins.extract.pipeline.ExtractMedia` objects currently being
         processed. Stored at input for pairing back up on output of extractor process """
 
