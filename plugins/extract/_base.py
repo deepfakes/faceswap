@@ -453,7 +453,10 @@ class Extractor():
                 # Process input items to batches
                 exhausted, batch = self.get_batch(in_queue)
                 if exhausted:
-                    if batch:
+                    # TODO Move all batch items to common dataclass. Currently migrated:
+                    # Align
+                    if (isinstance(batch, dict) and batch or
+                            not isinstance(batch, dict) and batch.filename):
                         # Put the final batch
                         batch = function(batch)
                         out_queue.put(batch)

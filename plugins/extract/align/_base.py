@@ -179,7 +179,6 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             item = self._collect_item(queue)
             if item == "EOF":
                 logger.trace("EOF received")  # type:ignore
-                self._filter.output_counts()
                 exhausted = True
                 break
             # Put frames with no faces into the out queue to keep TQDM consistent
@@ -204,12 +203,16 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                                      "for '%s'", len(self._rollover.detected_faces), frame_faces,
                                      item.filename)
                     break
-        if batch:
-            logger.trace("Returning batch: %s", {k: v.shape  # type:ignore
-                                                 if isinstance(v, np.ndarray) else v
+        if batch.filename:
+            logger.trace("Returning batch: %s", {k: len(v)  # type:ignore
+                                                 if isinstance(v, list) else v
                                                  for k, v in batch.__dict__.items()})
         else:
-            logger.trace(item)  # type:ignore
+            logger.debug(item)  # type:ignore
+
+        # TODO Move to end of process not beginning
+        self._filter.output_counts()
+
         return exhausted, batch
 
     def _collect_item(self, queue: "Queue") -> Union[Literal["EOF"], ExtractMedia]:
