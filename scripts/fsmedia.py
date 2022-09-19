@@ -27,6 +27,7 @@ else:
 
 if TYPE_CHECKING:
     from argparse import Namespace
+    from lib.align import AlignedFace
     from plugins.extract.pipeline import ExtractMedia
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -499,6 +500,105 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         super().__init__(self, *args, **kwargs)
         self._face_size = 0
         self._legacy_size = 0
+        self._font = cv2.FONT_HERSHEY_SIMPLEX
+        self._font_scale = 0.0
+        self._font_pad = 0
+
+    def _initialize_font(self, size: int) -> None:
+        """ Set the font scaling sizes on first call
+
+        Parameters
+        ----------
+        size: int
+            The pixel size of the saved aligned face
+        """
+        self._font_scale = size / 512
+        self._font_pad = size // 64
+
+    def _border_text(self,
+                     image: np.ndarray,
+                     text: str,
+                     color: Tuple[int, int, int],
+                     position: Tuple[int, int]) -> None:
+        """ Create text on an image with a black border
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The image to put bordered text on to
+        text: str
+            The text to place the image
+        color: tuple
+            The color of the text
+        position: tuple
+            The (x, y) co-ordinates to place the text
+        """
+        thickness = 2
+        for idx in range(2):
+            text_color = (0, 0, 0) if idx == 0 else color
+            cv2.putText(image,
+                        text,
+                        position,
+                        self._font,
+                        self._font_scale,
+                        text_color,
+                        thickness,
+                        lineType=cv2.LINE_AA)
+            thickness //= 2
+
+    def _annotate_face_box(self, face: "AlignedFace") -> None:
+        """ Annotate the face extract box and print the original size in pixels
+
+        face: :class:`~lib.align.AlignedFace`
+            The object containing the aligned face to annotate
+        """
+        assert face.face is not None
+        color = (0, 255, 0)
+        roi = face.get_cropped_roi(face.size, self._face_size, "face")
+        cv2.rectangle(face.face, tuple(roi[:2]), tuple(roi[2:]), color, 1)
+
+        # Size in top right corner
+        roi_pnts = np.array([[roi[0], roi[1]],
+                             [roi[0], roi[3]],
+                             [roi[2], roi[3]],
+                             [roi[2], roi[1]]])
+        orig_roi = face.transform_points(roi_pnts, invert=True)
+        size = int(round(((orig_roi[1][0] - orig_roi[0][0]) ** 2 +
+                          (orig_roi[1][1] - orig_roi[0][1]) ** 2) ** 0.5))
+        text_img = face.face.copy()
+        text = f"{size}px"
+        text_size = cv2.getTextSize(text, self._font, self._font_scale, 1)[0]
+        pos_x = roi[2] - (text_size[0] + self._font_pad)
+        pos_y = roi[1] + text_size[1] + self._font_pad
+
+        self._border_text(text_img, text, color, (pos_x, pos_y))
+        cv2.addWeighted(text_img, 0.75, face.face, 0.25, 0, face.face)
+
+    def _print_stats(self, face: "AlignedFace") -> None:
+        """ Print various metrics on the output face images
+
+        Parameters
+        ----------
+        face: :class:`~lib.align.AlignedFace`
+            The loaded aligned face
+        """
+        assert face.face is not None
+        text_image = face.face.copy()
+        texts = [f"pitch: {face.pose.pitch:.2f}",
+                 f"yaw: {face.pose.yaw:.2f}",
+                 f"distance: {face.average_distance:.2f}"]
+        colors = [(255, 0, 0), (0, 0, 255), (255, 255, 255)]
+        text_sizes = [cv2.getTextSize(text, self._font, self._font_scale, 1)[0] for text in texts]
+        init_y = self._font_pad + text_sizes[0][1]
+        final_y = face.size - text_sizes[-1][1]
+        pos_y = [init_y, init_y + text_sizes[0][1] + self._font_pad, final_y]
+        pos_x = self._font_pad
+
+        for idx, text in enumerate(texts):
+            self._border_text(text_image, text, colors[idx], (pos_x, pos_y[idx]))
+
+        # Apply text to face
+        cv2.addWeighted(text_image, 0.75, face.face, 0.25, 0, face.face)
 
     def process(self, extract_media: "ExtractMedia") -> None:
         """ Draw landmarks on a face.
@@ -521,6 +621,8 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
                                                       "legacy",
                                                       face.aligned.size)
                 logger.debug("set legacy size: %s", self._legacy_size)
+            if not self._font_scale:
+                self._initialize_font(face.aligned.size)
 
             logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)  # type: ignore
             # Landmarks
@@ -533,11 +635,11 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
             cv2.line(face.aligned.face, center, tuple(points[0]), (255, 0, 0), 1)
             cv2.line(face.aligned.face, center, tuple(points[2]), (0, 0, 255), 1)
             # Face centering
-            roi = face.aligned.get_cropped_roi(face.aligned.size, self._face_size, "face")
-            cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 255, 0), 1)
+            self._annotate_face_box(face.aligned)
             # Legacy centering
             roi = face.aligned.get_cropped_roi(face.aligned.size, self._legacy_size, "legacy")
             cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 0, 255), 1)
+            self._print_stats(face.aligned)
 
 
 class FaceFilter(PostProcessAction):
