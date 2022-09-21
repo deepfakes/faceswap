@@ -46,8 +46,9 @@ class Environment():
     Parameters
     ----------
     updater: bool, Optional
-        ``True`` of the script is being called by Faceswap's internal updater. ``False`` if full
-        setup is running. Default: ``False``
+        ``True`` if the script is being called by Faceswap's internal updater.
+        ``False`` if full setup is running.
+        Default: ``False``
     """
     def __init__(self, updater: bool = False) -> None:
         self.conda_required_packages: List[Tuple[str, ...]] = [("tk", )]
