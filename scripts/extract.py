@@ -416,6 +416,9 @@ class _Extract():  # pylint:disable=too-few-public-methods
             if saver is not None:
                 sub_folder = extract_media.sub_folders[idx]
                 saver.save(output_filename, image, sub_folder)
+            if extract_media.sub_folders[idx]:  # This is a filtered out face being binned
+                continue
             final_faces.append(face.to_alignment())
+
         self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces)
         del extract_media

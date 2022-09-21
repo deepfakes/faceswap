@@ -165,7 +165,7 @@ class SortArgs(FaceSwapArgs):
                    "-1.0 will allow Faceswap to choose the default value."
                    "\nL|For 'face-cnn' 7.2 should be enough, with 4 being very discriminating. "
                    "\nL|For 'hist' 0.3 should be enough, with 0.2 being very discriminating. "
-                   "\nL|For 'face' between 0.1 (few bins) to 0.4 (more bins) should "
+                   "\nL|For 'face' between 0.1 (more bins) to 0.5 (fewer bins) should "
                    "be about right."
                    "\nBe careful setting a value that's too extrene in a directory "
                    "with many images, as this could result in a lot of folders being created. "

@@ -41,7 +41,7 @@ class Config(FaceswapConfig):
             datatype=float,
             min_max=(0.0, 1.0),
             rounding=2,
-            default=0.05,
+            default=0.07,
             group="filters",
             info="Filters out faces below this size. This is a multiplier of the minimum "
                  "dimension of the frame (i.e. 1280x720 = 720). If the original face extract "
@@ -69,10 +69,10 @@ class Config(FaceswapConfig):
             datatype=float,
             min_max=(0.0, 25.0),
             rounding=1,
-            default=16,
+            default=15,
             group="filters",
             info="Filters out faces who's landmarks are above this distance from an 'average' "
-                 "face. Values above 16 tend to be fairly safe. Values above 10 will remove more "
+                 "face. Values above 15 tend to be fairly safe. Values above 10 will remove more "
                  "false positives, but may also filter out some faces at extreme angles.")
         self.add_item(
             section=section,
@@ -81,4 +81,6 @@ class Config(FaceswapConfig):
             default=False,
             group="filters",
             info="If enabled, saves any filtered out images into a sub-folder during the "
-                 "extraction process. If disabled, filtered faces are deleted.")
+                 "extraction process. If disabled, filtered faces are deleted. Note: The faces "
+                 "will always be filtered out of the alignments file, regardless of whether you "
+                 "keep the faces or not.")
