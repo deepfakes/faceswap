@@ -76,6 +76,18 @@ class Config(FaceswapConfig):
                  "false positives, but may also filter out some faces at extreme angles.")
         self.add_item(
             section=section,
+            title="aligner_roll",
+            datatype=float,
+            min_max=(0.0, 45.0),
+            rounding=1,
+            default=15.0,
+            group="filters",
+            info="Filters out faces who's calculated roll is greater than zero +/- this value in "
+            "degrees. Aligned faces should have a roll value close to zero. Values that are a "
+            "significant distance from 0 degrees tend to be misaligned images. These can usually "
+            "be safely disgarded.")
+        self.add_item(
+            section=section,
             title="save_filtered",
             datatype=bool,
             default=False,

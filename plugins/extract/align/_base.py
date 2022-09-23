@@ -123,6 +123,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self._filter = AlignedFilter(min_scale=self.config["aligner_min_scale"],
                                      max_scale=self.config["aligner_max_scale"],
                                      distance=self.config["aligner_distance"],
+                                     roll=self.config["aligner_roll"],
                                      save_output=self.config["save_filtered"])
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -530,6 +531,9 @@ class AlignedFilter():
     distance: float
         Filters out faces that are further than this distance from an "average" face. Set to
         ``0`` for off.
+    roll: float
+        Filters out faces with a roll value outside of 0 +/- the value given here. Set to ``0``
+        for off.
     save_output: bool
         ``True`` if the filtered faces should be kept as they are being saved. ``False`` if they
         should be deleted
@@ -538,16 +542,18 @@ class AlignedFilter():
                  min_scale: float,
                  max_scale: float,
                  distance: float,
+                 roll: float,
                  save_output: bool) -> None:
-        logger.debug("Initializing %s: (min_scale: %s, max_scale: %s, distance: %s, "
+        logger.debug("Initializing %s: (min_scale: %s, max_scale: %s, distance: %s, roll, %s"
                      "save_output: %s)", self.__class__.__name__, min_scale, max_scale, distance,
-                     save_output)
+                     roll, save_output)
         self._min_scale = min_scale
         self._max_scale = max_scale
         self._distance = distance / 100.
+        self._roll = roll
         self._save_output = save_output
         self._active = max_scale > 0.0 or min_scale > 0.0 or distance > 0.0
-        self._counts: Dict[str, int] = dict(min_scale=0, max_scale=0, distance=0)
+        self._counts: Dict[str, int] = dict(min_scale=0, max_scale=0, distance=0, roll=0)
         logger.debug("Initialized %s: ", self.__class__.__name__)
 
     def __call__(self, faces: List[DetectedFace], minimum_dimension: int
@@ -574,34 +580,98 @@ class AlignedFilter():
         if not self._active:
             return faces, sub_folders
 
-        max_size = minimum_dimension * self._max_scale
-        min_size = minimum_dimension * self._min_scale
         retval: List[DetectedFace] = []
         for idx, face in enumerate(faces):
-            test = AlignedFace(landmarks=face.landmarks_xy, centering="face")
-            if self._min_scale > 0.0 or self._max_scale > 0.0:
-                roi = test.original_roi
-                size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
-                if self._min_scale > 0.0 and size < min_size:
-                    self._counts["min_scale"] += 1
-                    if self._save_output:
-                        retval.append(face)
-                        sub_folders[idx] = "_align_filt_min_scale"
-                    continue
-                if self._max_scale > 0.0 and size > max_size:
-                    self._counts["max_scale"] += 1
-                    if self._save_output:
-                        retval.append(face)
-                        sub_folders[idx] = "_align_filt_max_scale"
-                    continue
-            if 0.0 < self._distance < test.average_distance:
+            aligned = AlignedFace(landmarks=face.landmarks_xy, centering="face")
+
+            min_max = self._scale_test(aligned, minimum_dimension)
+            if min_max in ("min", "max"):
+                self._counts[f"{min_max}_scale"] += 1
+                if self._save_output:
+                    retval.append(face)
+                    sub_folders[idx] = f"_align_filt_{min_max}_scale"
+                continue
+
+            if 0.0 < self._distance < aligned.average_distance:
                 self._counts["distance"] += 1
                 if self._save_output:
                     retval.append(face)
                     sub_folders[idx] = "_align_filt_distance"
                 continue
+
+            if not -self._roll <= aligned.pose.roll <= self._roll:
+                self._counts["roll"] += 1
+                if self._save_output:
+                    retval.append(face)
+                    sub_folders[idx] = "_align_filt_roll"
+                continue
+
             retval.append(face)
         return retval, sub_folders
+
+    def _scale_test(self,
+                    face: AlignedFace,
+                    minimum_dimension: int) -> Optional[Literal["min", "max"]]:
+        """ Test if a face is below or above the min/max size thresholds. Returns as soon as a test
+        fails.
+
+        Parameters
+        ----------
+        face: :class:`~lib.aligned.AlignedFace`
+            The aligned face to test the original size of.
+
+        minimum_dimension: int
+            The minimum (height, width) of the original frame
+
+        Returns
+        -------
+        "min", "max" or ``None``
+            Returns min or max if the face failed the minimum or maximum test respectively.
+            ``None`` if all tests passed
+        """
+
+        if self._min_scale <= 0.0 and self._max_scale <= 0.0:
+            return None
+
+        roi = face.original_roi
+        size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
+
+        if self._min_scale > 0.0 and size < minimum_dimension * self._min_scale:
+            return "min"
+
+        if self._max_scale > 0.0 and size > minimum_dimension * self._max_scale:
+            return "max"
+
+        return None
+
+    def filtered_mask(self, faces: List[DetectedFace], minimum_dimension: int) -> List[bool]:
+        """ Obtain a list of boolean values for the given faces indicating whether they pass the
+        filter test.
+
+        Parameters
+        ----------
+        faces: list
+            List of detected face objects to test the filters for
+        minimum_dimension: int
+            The minimum (height, width) of the original frame
+
+        Returns
+        -------
+        list
+            List of bools corresponding to any of the input DetectedFace objects that passed a
+            test. ``False`` the face passed the test. ``True`` it failed
+        """
+        retval = [False for _ in range(len(faces))]
+        for idx, face in enumerate(faces):
+            aligned = AlignedFace(landmarks=face.landmarks_xy)
+            if self._scale_test(aligned, minimum_dimension) is not None:
+                retval[idx] = True
+                continue
+            if 0.0 < self._distance < aligned.average_distance:
+                retval[idx] = True
+                continue
+
+        return retval
 
     def output_counts(self):
         """ Output the counts of filtered items """
