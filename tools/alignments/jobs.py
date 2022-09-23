@@ -2,6 +2,7 @@
 """ Tools for manipulating the alignments serialized file """
 
 import logging
+from operator import itemgetter
 import os
 import sys
 from datetime import datetime
@@ -850,10 +851,10 @@ class FromFaces():  # pylint:disable=too-few-public-methods
 
     def _sort_alignments(self,
                          alignments: Dict[str, Dict[str, List[Tuple[int,
-                                                               AlignmentFileDict,
-                                                               str,
-                                                               dict]]]]
-                         ) -> Dict[str, Dict[str, List[AlignmentFileDict]]] :
+                                                              AlignmentFileDict,
+                                                              str,
+                                                              dict]]]]
+                         ) -> Dict[str, Dict[str, List[AlignmentFileDict]]]:
         """ Sort the faces into face index order as they appeared in the original alignments file.
 
         If the face index stored in the png header does not match it's position in the alignments
@@ -878,10 +879,11 @@ class FromFaces():  # pylint:disable=too-few-public-methods
             this_file: Dict[str, List[AlignmentFileDict]] = {}
             for frame in tqdm(sorted(frames), desc=f"Sorting {fname}", leave=False):
                 this_file[frame] = []
-                for real_idx, (f_id, alignment, f_path, f_src) in enumerate(sorted(frames[frame])):
+                for real_idx, (f_id, almt, f_path, f_src) in enumerate(sorted(frames[frame],
+                                                                              key=itemgetter(0))):
                     if real_idx != f_id:
-                        self._update_png_header(f_path, real_idx, alignment, f_src)
-                    this_file[frame].append(alignment)
+                        self._update_png_header(f_path, real_idx, almt, f_src)
+                    this_file[frame].append(almt)
             aln_sorted[fname] = this_file
         return aln_sorted
 

@@ -67,9 +67,9 @@ class Config(FaceswapConfig):
             section=section,
             title="aligner_distance",
             datatype=float,
-            min_max=(0.0, 25.0),
+            min_max=(0.0, 45.0),
             rounding=1,
-            default=15,
+            default=22.5,
             group="filters",
             info="Filters out faces who's landmarks are above this distance from an 'average' "
                  "face. Values above 15 tend to be fairly safe. Values above 10 will remove more "
