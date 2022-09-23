@@ -172,7 +172,7 @@ class SortPitch(SortAlignedMetric):
 
 
 class SortYaw(SortPitch):
-    """ Sorting mechansim for sorting a face by yaw (left to right). Same logic as sort yaw, but
+    """ Sorting mechansim for sorting a face by yaw (left to right). Same logic as sort pitch, but
     with different metric """
     def _get_metric(self, aligned_face: AlignedFace) -> float:
         """ Obtain the yaw metric for the given face
@@ -188,6 +188,25 @@ class SortYaw(SortPitch):
             The yaw metric for the current face
         """
         return aligned_face.pose.yaw
+
+
+class SortRoll(SortPitch):
+    """ Sorting mechansim for sorting a face by roll (rotation). Same logic as sort pitch, but
+    with different metric """
+    def _get_metric(self, aligned_face: AlignedFace) -> float:
+        """ Obtain the roll metric for the given face
+
+        Parameters
+        ----------
+        aligned_face: :class:`lib.align.AlignedFace`
+            The aligned face to extract the metric from
+
+        Returns
+        -------
+        float
+            The yaw metric for the current face
+        """
+        return aligned_face.pose.roll
 
 
 class SortSize(SortAlignedMetric):

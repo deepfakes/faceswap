@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-09-21 00:58+0100\n"
+"POT-Creation-Date: 2022-09-23 14:16+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -87,71 +87,78 @@ msgid "faces by Pitch (rotation up and down)."
 msgstr ""
 
 #: tools/sort/cli.py:43
-msgid "faces by their color histogram."
-msgstr ""
-
-#: tools/sort/cli.py:44
-msgid "Like 'hist' but sorts by dissimilarity."
+msgid ""
+"faces by Roll (rotation). Aligned faces should have a roll value close to "
+"zero. The further the Roll value from zero the higher liklihood the face is "
+"misaligned."
 msgstr ""
 
 #: tools/sort/cli.py:45
+msgid "faces by their color histogram."
+msgstr ""
+
+#: tools/sort/cli.py:46
+msgid "Like 'hist' but sorts by dissimilarity."
+msgstr ""
+
+#: tools/sort/cli.py:47
 msgid ""
 "images by the average intensity of the converted grayscale color channel."
 msgstr ""
 
-#: tools/sort/cli.py:46
+#: tools/sort/cli.py:48
 msgid ""
 "images by their number of black pixels. Useful when faces are near borders "
 "and a large part of the image is black."
 msgstr ""
 
-#: tools/sort/cli.py:48
+#: tools/sort/cli.py:50
 msgid ""
 "images by the average intensity of the converted Y color channel. Bright "
 "lighting and oversaturated images will be ranked first."
 msgstr ""
 
-#: tools/sort/cli.py:50
+#: tools/sort/cli.py:52
 msgid ""
 "images by the average intensity of the converted Cg color channel. Green "
 "images will be ranked first and red images will be last."
 msgstr ""
 
-#: tools/sort/cli.py:52
+#: tools/sort/cli.py:54
 msgid ""
 "images by the average intensity of the converted Co color channel. Orange "
 "images will be ranked first and blue images will be last."
 msgstr ""
 
-#: tools/sort/cli.py:54
+#: tools/sort/cli.py:56
 msgid ""
 "images by their size in the original frame. Faces further from the camera "
 "and from lower resolution sources will be sorted first, whilst faces closer "
 "to the camera and from higher resolution sources will be sorted last."
 msgstr ""
 
-#: tools/sort/cli.py:57
+#: tools/sort/cli.py:59
 msgid " option is deprecated. Use 'yaw'"
 msgstr ""
 
-#: tools/sort/cli.py:58
+#: tools/sort/cli.py:60
 msgid " option is deprecated. Use 'color-black'"
 msgstr ""
 
-#: tools/sort/cli.py:80
+#: tools/sort/cli.py:82
 msgid "Sort faces using a number of different techniques"
 msgstr ""
 
-#: tools/sort/cli.py:90 tools/sort/cli.py:97 tools/sort/cli.py:108
-#: tools/sort/cli.py:146
+#: tools/sort/cli.py:92 tools/sort/cli.py:99 tools/sort/cli.py:110
+#: tools/sort/cli.py:148
 msgid "data"
 msgstr ""
 
-#: tools/sort/cli.py:91
+#: tools/sort/cli.py:93
 msgid "Input directory of aligned faces."
 msgstr ""
 
-#: tools/sort/cli.py:98
+#: tools/sort/cli.py:100
 msgid ""
 "Output directory for sorted aligned faces. If not provided and 'keep' is "
 "selected then a new folder called 'sorted' will be created within the input "
@@ -160,18 +167,18 @@ msgid ""
 "'input_dir'"
 msgstr ""
 
-#: tools/sort/cli.py:109
+#: tools/sort/cli.py:111
 msgid ""
 "R|If selected then the input_dir should be a parent folder containing "
 "multiple folders of faces you wish to sort. The faces will be output to "
 "separate sub-folders in the output_dir"
 msgstr ""
 
-#: tools/sort/cli.py:118
+#: tools/sort/cli.py:120
 msgid "sort settings"
 msgstr ""
 
-#: tools/sort/cli.py:120
+#: tools/sort/cli.py:122
 msgid ""
 "R|Choose how images are sorted. Selecting a sort method gives the images a "
 "new filename based on the order the image appears within the given method.\n"
@@ -181,11 +188,11 @@ msgid ""
 "'none' for both 'sort-by' and 'group-by' will do nothing"
 msgstr ""
 
-#: tools/sort/cli.py:133 tools/sort/cli.py:160 tools/sort/cli.py:189
+#: tools/sort/cli.py:135 tools/sort/cli.py:162 tools/sort/cli.py:191
 msgid "group settings"
 msgstr ""
 
-#: tools/sort/cli.py:135
+#: tools/sort/cli.py:137
 msgid ""
 "R|Selecting a group by method will move/copy files into numbered bins based "
 "on the selected method.\n"
@@ -194,7 +201,7 @@ msgid ""
 "folder.  Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
 msgstr ""
 
-#: tools/sort/cli.py:147
+#: tools/sort/cli.py:149
 msgid ""
 "Whether to keep the original files in their original location. Choosing a "
 "'sort-by' method means that the files have to be renamed. Selecting 'keep' "
@@ -204,7 +211,7 @@ msgid ""
 "criteria."
 msgstr ""
 
-#: tools/sort/cli.py:162
+#: tools/sort/cli.py:164
 msgid ""
 "R|Float value. Minimum threshold to use for grouping comparison with 'face-"
 "cnn' 'hist' and 'face' methods.\n"
@@ -219,17 +226,17 @@ msgid ""
 "face-cnn 7.2, hist 0.3, face 0.25"
 msgstr ""
 
-#: tools/sort/cli.py:179
+#: tools/sort/cli.py:181
 msgid "output"
 msgstr ""
 
-#: tools/sort/cli.py:180
+#: tools/sort/cli.py:182
 msgid ""
 "Deprecated and no longer used. The final processing will be dictated by the "
 "sort/group by methods and whether 'keep_original' is selected."
 msgstr ""
 
-#: tools/sort/cli.py:191
+#: tools/sort/cli.py:193
 #, python-format
 msgid ""
 "R|Integer value. Used to control the number of bins created for grouping by: "
@@ -253,11 +260,11 @@ msgid ""
 "Default value: 5"
 msgstr ""
 
-#: tools/sort/cli.py:213 tools/sort/cli.py:223
+#: tools/sort/cli.py:215 tools/sort/cli.py:225
 msgid "settings"
 msgstr ""
 
-#: tools/sort/cli.py:215
+#: tools/sort/cli.py:217
 msgid ""
 "Logs file renaming changes if grouping by renaming, or it logs the file "
 "copying/movement if grouping by folders. If no log file is specified  with "
@@ -265,7 +272,7 @@ msgid ""
 "directory."
 msgstr ""
 
-#: tools/sort/cli.py:226
+#: tools/sort/cli.py:228
 msgid ""
 "Specify a log file to use for saving the renaming or grouping information. "
 "If specified extension isn't 'json' or 'yaml', then json will be used as the "
