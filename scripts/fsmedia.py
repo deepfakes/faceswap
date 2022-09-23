@@ -112,7 +112,7 @@ class Alignments(AlignmentsBase):
         elif input_is_video:
             logger.debug("Alignments from Video File: '%s'", self._args.input_dir)
             folder, filename = os.path.split(self._args.input_dir)
-            filename = f"{os.path.splitext(filename)[0]}_alignments"
+            filename = f"{os.path.splitext(filename)[0]}_alignments.fsa"
         else:
             logger.debug("Alignments from Input Folder: '%s'", self._args.input_dir)
             folder = str(self._args.input_dir)
@@ -586,12 +586,14 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         text_image = face.face.copy()
         texts = [f"pitch: {face.pose.pitch:.2f}",
                  f"yaw: {face.pose.yaw:.2f}",
+                 f"roll: {face.pose.roll: .2f}",
                  f"distance: {face.average_distance:.2f}"]
-        colors = [(255, 0, 0), (0, 0, 255), (255, 255, 255)]
+        colors = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (255, 255, 255)]
         text_sizes = [cv2.getTextSize(text, self._font, self._font_scale, 1)[0] for text in texts]
-        init_y = self._font_pad + text_sizes[0][1]
+
         final_y = face.size - text_sizes[-1][1]
-        pos_y = [init_y, init_y + text_sizes[0][1] + self._font_pad, final_y]
+        pos_y = [(size[1] + self._font_pad) * (idx + 1)
+                 for idx, size in enumerate(text_sizes)][:-1] + [final_y]
         pos_x = self._font_pad
 
         for idx, text in enumerate(texts):
