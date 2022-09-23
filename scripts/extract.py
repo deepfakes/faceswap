@@ -402,21 +402,28 @@ class _Extract():  # pylint:disable=too-few-public-methods
         filename = os.path.splitext(os.path.basename(extract_media.filename))[0]
         extension = ".png"
 
-        for idx, face in enumerate(extract_media.detected_faces):
-            output_filename = f"{filename}_{idx}{extension}"
+        skip_idx = 0
+        for face_id, face in enumerate(extract_media.detected_faces):
+            real_face_id = face_id - skip_idx
+            output_filename = f"{filename}_{real_face_id}{extension}"
             meta = dict(alignments=face.to_png_meta(),
                         source=dict(alignments_version=self._alignments.version,
                                     original_filename=output_filename,
-                                    face_index=idx,
+                                    face_index=real_face_id,
                                     source_filename=os.path.basename(extract_media.filename),
                                     source_is_video=self._images.is_video,
                                     source_frame_dims=extract_media.image_size))
             image = encode_image(face.aligned.face, extension, metadata=meta)
 
+            sub_folder = extract_media.sub_folders[face_id]
+            # Binned faces shouldn't risk filename clash, so just use original id
+            out_name = output_filename if not sub_folder else f"{filename}_{face_id}{extension}"
+
             if saver is not None:
-                sub_folder = extract_media.sub_folders[idx]
-                saver.save(output_filename, image, sub_folder)
-            if extract_media.sub_folders[idx]:  # This is a filtered out face being binned
+                saver.save(out_name, image, sub_folder)
+
+            if sub_folder:  # This is a filtered out face being binned
+                skip_idx += 1
                 continue
             final_faces.append(face.to_alignment())
 
