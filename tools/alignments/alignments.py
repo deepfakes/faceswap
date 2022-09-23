@@ -33,8 +33,12 @@ class Alignments():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         self._args = arguments
         job = self._args.job
-        alignment_file = self._find_alignments()
-        self.alignments = None if job == "from-faces" else AlignmentData(alignment_file)
+
+        if job == "from-faces":
+            self.alignments = None
+        else:
+            self.alignments = AlignmentData(self._find_alignments())
+
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _find_alignments(self) -> str:
