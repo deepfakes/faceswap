@@ -80,10 +80,11 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         The name of the model file to be loaded
     normalize_method: {`None`, 'clahe', 'hist', 'mean'}, optional
         Normalize the images fed to the aligner. Default: ``None``
-    re_feed: int
+    re_feed: int, optional
         The number of times to re-feed a slightly adjusted bounding box into the aligner.
         Default: `0`
-
+    disable_filter: bool, optional
+        Disable all aligner filters regardless of config option. Default: ``False``
     Other Parameters
     ----------------
     configfile: str, optional
@@ -104,9 +105,11 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                  configfile: Optional[str] = None,
                  instance: int = 0,
                  normalize_method: Optional[Literal["none", "clahe", "hist", "mean"]] = None,
-                 re_feed: int = 0, **kwargs) -> None:
-        logger.debug("Initializing %s: (normalize_method: %s, re_feed: %s)",
-                     self.__class__.__name__, normalize_method, re_feed)
+                 re_feed: int = 0,
+                 disable_filter: bool = False,
+                 **kwargs) -> None:
+        logger.debug("Initializing %s: (normalize_method: %s, re_feed: %s, disable_filter: %s)",
+                     self.__class__.__name__, normalize_method, re_feed, disable_filter)
         super().__init__(git_model_id,
                          model_filename,
                          configfile=configfile,
@@ -124,7 +127,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                                      max_scale=self.config["aligner_max_scale"],
                                      distance=self.config["aligner_distance"],
                                      roll=self.config["aligner_roll"],
-                                     save_output=self.config["save_filtered"])
+                                     save_output=self.config["save_filtered"],
+                                     disable=disable_filter)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_normalize_method(self,
@@ -537,22 +541,25 @@ class AlignedFilter():
     save_output: bool
         ``True`` if the filtered faces should be kept as they are being saved. ``False`` if they
         should be deleted
+    disable: bool, Optional
+        ``True`` to disable the filter regardless of config options. Default: ``False``
     """
     def __init__(self,
                  min_scale: float,
                  max_scale: float,
                  distance: float,
                  roll: float,
-                 save_output: bool) -> None:
+                 save_output: bool,
+                 disable: bool = False) -> None:
         logger.debug("Initializing %s: (min_scale: %s, max_scale: %s, distance: %s, roll, %s"
-                     "save_output: %s)", self.__class__.__name__, min_scale, max_scale, distance,
-                     roll, save_output)
+                     "save_output: %s, disable: %s)", self.__class__.__name__, min_scale,
+                     max_scale, distance, roll, save_output, disable)
         self._min_scale = min_scale
         self._max_scale = max_scale
         self._distance = distance / 100.
         self._roll = roll
         self._save_output = save_output
-        self._active = max_scale > 0.0 or min_scale > 0.0 or distance > 0.0
+        self._active = not disable and (max_scale > 0.0 or min_scale > 0.0 or distance > 0.0)
         self._counts: Dict[str, int] = dict(min_scale=0, max_scale=0, distance=0, roll=0)
         logger.debug("Initialized %s: ", self.__class__.__name__)
 

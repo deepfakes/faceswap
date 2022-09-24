@@ -85,6 +85,8 @@ class Extractor():
     re_feed: int
         The number of times to re-feed a slightly adjusted bounding box into the aligner.
         Default: `0`
+    disable_filter: bool, optional
+        Disable all aligner filters regardless of config option. Default: ``False``
     image_is_aligned: bool, optional
         Used to set the :attr:`plugins.extract.mask.image_is_aligned` attribute. Indicates to the
         masker that the fed in image is an aligned face rather than a frame. Default: ``False``
@@ -106,13 +108,14 @@ class Extractor():
                  min_size: int = 0,
                  normalize_method:  Optional[Literal["none", "clahe", "hist", "mean"]] = None,
                  re_feed: int = 0,
-                 image_is_aligned: bool = False) -> None:
+                 disable_filter: bool = False,
+                 image_is_aligned: bool = False,) -> None:
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, configfile: %s, "
                      "multiprocess: %s, exclude_gpus: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s, re_feed: %s, image_is_aligned: %s)",
-                     self.__class__.__name__, detector, aligner, masker, configfile, multiprocess,
-                     exclude_gpus, rotate_images, min_size, normalize_method, re_feed,
-                     image_is_aligned)
+                     "normalize_method: %s, re_feed: %s, disable_filter: %s, "
+                     "image_is_aligned: %s)", self.__class__.__name__, detector, aligner, masker,
+                     configfile, multiprocess, exclude_gpus, rotate_images, min_size,
+                     normalize_method, re_feed, disable_filter, image_is_aligned)
         self._instance = _get_instance()
         maskers = [cast(Optional[str],
                    masker)] if not isinstance(masker, list) else cast(List[Optional[str]], masker)
@@ -125,7 +128,11 @@ class Extractor():
         self._scaling_fallback = 0.4
         self._vram_stats = self._get_vram_stats()
         self._detect = self._load_detect(detector, rotate_images, min_size, configfile)
-        self._align = self._load_align(aligner, configfile, normalize_method, re_feed)
+        self._align = self._load_align(aligner,
+                                       configfile,
+                                       normalize_method,
+                                       re_feed,
+                                       disable_filter)
         self._mask = [self._load_mask(mask, image_is_aligned, configfile) for mask in maskers]
         self._is_parallel = self._set_parallel_processing(multiprocess)
         self._phases = self._set_phases(multiprocess)
@@ -542,7 +549,8 @@ class Extractor():
                     aligner: Optional[str],
                     configfile: Optional[str],
                     normalize_method: Optional[Literal["none", "clahe", "hist", "mean"]],
-                    re_feed: int) -> Optional["Aligner"]:
+                    re_feed: int,
+                    disable_filter: bool) -> Optional["Aligner"]:
         """ Set global arguments and load aligner plugin
 
         Parameters
@@ -555,6 +563,8 @@ class Extractor():
             Optional normalization method to use
         re_feed: int
             The number of times to adjust the image and re-feed to get an average score
+        disable_filter: bool
+            Disable all aligner filters regardless of config option
 
         Returns
         -------
@@ -569,6 +579,7 @@ class Extractor():
                                                         configfile=configfile,
                                                         normalize_method=normalize_method,
                                                         re_feed=re_feed,
+                                                        disable_filter=disable_filter,
                                                         instance=self._instance)
         return plugin
 
