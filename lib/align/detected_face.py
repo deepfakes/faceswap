@@ -6,7 +6,7 @@ import sys
 import os
 
 from hashlib import sha1
-from typing import Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 from zlib import compress, decompress
 
 import cv2
@@ -104,6 +104,7 @@ class DetectedFace():
         self.top = top
         self.height = height
         self._landmarks_xy = landmarks_xy
+        self._identity: Dict[Literal["vggface2"], np.ndarray] = {}
         self.thumbnail: Optional[np.ndarray] = None
         self.mask = {} if mask is None else mask
         self._training_masks: Optional[Tuple[bytes, Tuple[int, int, int]]] = None
@@ -134,6 +135,11 @@ class DetectedFace():
         """int: Bottom point (in pixels) of face detection bounding box within the parent image """
         assert self.top is not None and self.height is not None
         return self.top + self.height
+
+    @property
+    def identity(self) -> Dict[Literal["vggface2"], np.ndarray]:
+        """ dict: Identity mechanism as key, identity embedding as value. """
+        return self._identity
 
     def add_mask(self,
                  name: str,
@@ -172,6 +178,23 @@ class DetectedFace():
         fsmask = Mask(storage_size=storage_size, storage_centering=storage_centering)
         fsmask.add(mask, affine_matrix, interpolator)
         self.mask[name] = fsmask
+
+    def add_identity(self, name: Literal["vggface2"], embedding: np.ndarray, ) -> None:
+        """ Add an identity embedding to this detected face. If an identity already exists for the
+        given :attr:`name` it will be overwritten
+
+        Parameters
+        ----------
+        name: str
+            The name of the mechanism that calculated the identity
+        embedding: numpy.ndarray
+            The identity embedding
+        """
+        logger.trace("name: '%s', embedding shape: %s",  # type: ignore
+                     name, embedding.shape)
+        assert name == "vggface2"
+        assert embedding.shape[0] == 512
+        self._identity[name] = embedding
 
     def get_landmark_mask(self,
                           area: Literal["eye", "face", "mouth"],
@@ -271,6 +294,7 @@ class DetectedFace():
                                       landmarks_xy=self.landmarks_xy,
                                       mask={name: mask.to_dict()
                                             for name, mask in self.mask.items()},
+                                      identity={k: v.tolist() for k, v in self._identity.items()},
                                       thumb=self.thumbnail)
         logger.trace("Returning: %s", alignment)  # type: ignore
         return alignment
@@ -306,6 +330,8 @@ class DetectedFace():
         landmarks = alignment["landmarks_xy"]
         if not isinstance(landmarks, np.ndarray):
             landmarks = np.array(landmarks, dtype="float32")
+        self._identity = {cast(Literal["vggface2"], k): np.array(v, dtype="float32")
+                          for k, v in alignment.get("identity", {}).items()}
         self._landmarks_xy = landmarks.copy()
 
         if with_thumb:
@@ -340,7 +366,8 @@ class DetectedFace():
             y=self.top,
             h=self.height,
             landmarks_xy=self.landmarks_xy.tolist(),
-            mask={name: mask.to_png_meta() for name, mask in self.mask.items()})
+            mask={name: mask.to_png_meta() for name, mask in self.mask.items()},
+            identity={k: v.tolist() for k, v in self._identity.items()})
         return alignment
 
     def from_png_meta(self, alignment: PNGHeaderAlignmentsDict) -> None:
@@ -361,9 +388,14 @@ class DetectedFace():
         for name, mask_dict in alignment["mask"].items():
             self.mask[name] = Mask()
             self.mask[name].from_dict(mask_dict)
+        self._identity = {}
+        for key, val in alignment.get("identity", {}).items():
+            assert key in ["vggface2"]
+            self._identity[cast(Literal["vggface2"], key)] = np.array(val, dtype="float32")
         logger.trace("Created from png exif header: (left: %s, width: %s, top: %s "  # type: ignore
-                     " height: %s, andmarks: %s, mask: %s)", self.left, self.width, self.top,
-                     self.height, self.landmarks_xy, self.mask)
+                     " height: %s, landmarks: %s, mask: %s, identity: %s)", self.left, self.width,
+                     self.top, self.height, self.landmarks_xy, self.mask,
+                     {k: v.shape for k, v in self._identity.items()})
 
     def _image_to_face(self, image: np.ndarray) -> None:
         """ set self.image to be the cropped face from detected bounding box """

@@ -6,7 +6,7 @@ import logging
 import operator
 import sys
 
-from typing import Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Dict, List, Optional, TYPE_CHECKING, Union
 
 import numpy as np
 from tqdm import tqdm
@@ -20,11 +20,6 @@ if TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderAlignmentsDict
 
 logger = logging.getLogger(__name__)
-
-
-ImgMetaType = Generator[Tuple[str,
-                              Optional[np.ndarray],
-                              Optional["PNGHeaderAlignmentsDict"]], None, None]
 
 
 class SortAlignedMetric(SortMethod):  # pylint:disable=too-few-public-methods

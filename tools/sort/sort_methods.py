@@ -15,7 +15,7 @@ import numpy as np
 from tqdm import tqdm
 
 from lib.align import AlignedFace, DetectedFace
-from lib.image import FacesLoader, ImagesLoader, read_image_meta_batch
+from lib.image import FacesLoader, ImagesLoader, read_image_meta_batch, update_existing_metadata
 from lib.utils import FaceswapError
 from plugins.extract.recognition.vgg_face2_keras import Cluster, VGGFace2 as VGGFace
 
@@ -26,7 +26,7 @@ else:
 
 if TYPE_CHECKING:
     from argparse import Namespace
-    from lib.align.alignments import PNGHeaderAlignmentsDict
+    from lib.align.alignments import PNGHeaderAlignmentsDict, PNGHeaderSourceDict
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ class InfoLoader():
         self._iterator = None
         self._description = "Reading image statistics..."
         self._loader = ImagesLoader(input_dir) if info_type == "face" else FacesLoader(input_dir)
+        self._cached_source_data: Dict[str, "PNGHeaderSourceDict"] = {}
         if self._loader.count == 0:
             logger.error("No images to process in location: '%s'", input_dir)
             sys.exit(1)
@@ -100,12 +101,18 @@ class InfoLoader():
         iterator = self._get_iterator()
         return iterator
 
-    @classmethod
-    def _get_alignments(cls, metadata: Dict[str, Any]) -> Optional["PNGHeaderAlignmentsDict"]:
-        """ Obtain the alignments from a PNG Header
+    def _get_alignments(self,
+                        filename: str,
+                        metadata: Dict[str, Any]) -> Optional["PNGHeaderAlignmentsDict"]:
+        """ Obtain the alignments from a PNG Header.
+
+        The other image metadata is cached locally in case a sort method needs to write back to the
+        PNG header
 
         Parameters
         ----------
+        filename: str
+            Full path to the image PNG file
         metadata: dict
             The header data from a PNG file
 
@@ -114,8 +121,9 @@ class InfoLoader():
         dict or ``None``
             The alignments dictionary from the PNG header, if it exists, otherwise ``None``
         """
-        if not metadata or not metadata.get("alignments"):
+        if not metadata or not metadata.get("alignments") or not metadata.get("source"):
             return None
+        self._cached_source_data[filename] = metadata["source"]
         return metadata["alignments"]
 
     def _metadata_reader(self) -> ImgMetaType:
@@ -134,7 +142,7 @@ class InfoLoader():
                                        total=self._loader.count,
                                        desc=self._description,
                                        leave=False):
-            alignments = self._get_alignments(metadata.get("itxt", {}))
+            alignments = self._get_alignments(filename, metadata.get("itxt", {}))
             yield filename, None, alignments
 
     def _full_data_reader(self) -> ImgMetaType:
@@ -153,7 +161,7 @@ class InfoLoader():
                                               desc=self._description,
                                               total=self._loader.count,
                                               leave=False):
-            alignments = self._get_alignments(metadata)
+            alignments = self._get_alignments(filename, metadata)
             yield filename, image, alignments
 
     def _image_data_reader(self) -> ImgMetaType:
@@ -173,6 +181,28 @@ class InfoLoader():
                                     total=self._loader.count,
                                     leave=False):
             yield filename, image, None
+
+    def update_png_header(self, filename: str, alignments: "PNGHeaderAlignmentsDict") -> None:
+        """ Update the PNG header of the given file with the given alignments.
+
+        NB: Header information can only be updated if the face is already on at least alignment
+        version 2.2. If below this version, then the header is not updated
+
+
+        Parameters
+        ----------
+        filename: str
+            Full path to the PNG file to update
+        alignments: dict
+            The alignments to update into the PNG header
+        """
+        vers = self._cached_source_data[filename]["alignments_version"]
+        if vers < 2.2:
+            return
+
+        self._cached_source_data[filename]["alignments_version"] = 2.3 if vers == 2.2 else vers
+        header = dict(alignments=alignments, source=self._cached_source_data[filename])
+        update_existing_metadata(filename, header)
 
 
 class SortMethod():
@@ -805,13 +835,17 @@ class SortFace(SortMethod):
         self._vgg_face = VGGFace(exclude_gpus=arguments.exclude_gpus)
         self._vgg_face.init_model()
         threshold = arguments.threshold
+        self._output_update_info = True
         self._threshold: Optional[float] = 0.25 if threshold < 0 else threshold
 
     def score_image(self,
                     filename: str,
                     image: Optional[np.ndarray],
                     alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
-        """ Processing logic for sort by face method
+        """ Processing logic for sort by face method.
+
+        Reads header information from the PNG file to look for VGGFace2 embedding. If it does not
+        exist, the embedding is obtained and added back into the PNG Header.
 
         Parameters
         ----------
@@ -822,23 +856,37 @@ class SortFace(SortMethod):
         alignments: dict or ``None``
             The alignments dictionary for the aligned face or ``None``
         """
-        if self._log_once:
-            msg = "Grouping" if self._is_group else "Sorting"
-            logger.info("%s by identity similarity...", msg)
-            self._log_once = False
-
         if not alignments:
             msg = ("The images to be sorted do not contain alignment data. Images must have "
                    "been generated by Faceswap's Extract process.\nIf you are sorting an "
                    "older faceset, then you should re-extract the faces from your source "
                    "alignments file to generate this data.")
             raise FaceswapError(msg)
+
+        if self._log_once:
+            msg = "Grouping" if self._is_group else "Sorting"
+            logger.info("%s by identity similarity...", msg)
+            self._log_once = False
+
+        if alignments.get("identity", {}).get("vggface2"):
+            embedding = np.array(alignments["identity"]["vggface2"], dtype="float32")
+            self._result.append((filename, embedding))
+            return
+
+        if self._output_update_info:
+            logger.info("VGG Face2 Embeddings are being written to the image header. "
+                        "Sorting by this method will be quicker next time")
+            self._output_update_info = False
+
         face = AlignedFace(np.array(alignments["landmarks_xy"], dtype="float32"),
                            image=image,
                            centering="legacy",
                            size=self._vgg_face.input_size,
                            is_aligned=True).face
-        self._result.append((filename, self._vgg_face.predict(face)))
+        embedding = self._vgg_face.predict(face)
+        alignments.setdefault("identity", {})["vggface2"] = embedding.tolist()
+        self._iterator.update_png_header(filename, alignments)
+        self._result.append((filename, embedding))
 
     def sort(self) -> None:
         """ Sort by dendogram.
