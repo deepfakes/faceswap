@@ -492,7 +492,8 @@ class SortMultiMethod(SortMethod):
     def _get_file_iterator(self, input_dir: str) -> InfoLoader:
         """ Override to get a group specific iterator. If the sorter and grouper use the same kind
         of iterator, use that. Otherwise return the 'all' iterator, as which ever way it is cut all
-        outputs will be required
+        outputs will be required. Monkey patch the actual loader used into the children in case of
+        any callbacks.
 
         Parameters
         ----------
@@ -505,8 +506,12 @@ class SortMultiMethod(SortMethod):
             The correct InfoLoader iterator for the current sort method
         """
         if self._sorter.loader_type == self._grouper.loader_type:
-            return InfoLoader(input_dir, self._sorter.loader_type)
-        return InfoLoader(input_dir, "all")
+            retval = InfoLoader(input_dir, self._sorter.loader_type)
+        else:
+            retval = InfoLoader(input_dir, "all")
+        self._sorter._iterator = retval  # pylint: disable=protected-access
+        self._grouper._iterator = retval  # pylint: disable=protected-access
+        return retval
 
     def score_image(self,
                     filename: str,
