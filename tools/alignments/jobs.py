@@ -13,6 +13,7 @@ from sklearn import decomposition
 from tqdm import tqdm
 
 from .media import Faces, Frames
+from .jobs_faces import FaceToFile
 
 if sys.version_info < (3, 8):
     from typing_extensions import Literal
@@ -21,7 +22,7 @@ else:
 
 if TYPE_CHECKING:
     from argparse import Namespace
-    from lib.align.alignments import PNGHeaderSourceDict
+    from lib.align.alignments import PNGHeaderDict
     from .media import AlignmentData
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ class Check():
         logger.debug("type: '%s', source_dir: '%s'", self._type, source_dir)
         return source_dir
 
-    def _get_items(self) -> Union[List[Dict[str, str]], List[Dict[str, "PNGHeaderSourceDict"]]]:
+    def _get_items(self) -> Union[List[Dict[str, str]], List[Tuple[str, "PNGHeaderDict"]]]:
         """ Set the correct items to process
 
         Returns
@@ -93,7 +94,7 @@ class Check():
         assert self._type is not None
         items: Union[Frames, Faces] = globals()[self._type.title()](self._source_dir)
         self._is_video = items.is_video
-        return cast(Union[List[Dict[str, str]], List[Dict[str, "PNGHeaderSourceDict"]]],
+        return cast(Union[List[Dict[str, str]], List[Tuple[str, "PNGHeaderDict"]]],
                     items.file_list_sorted)
 
     def process(self) -> None:
@@ -101,6 +102,13 @@ class Check():
         assert self._type is not None
         logger.info("[CHECK %s]", self._type.upper())
         items_output = self._compile_output()
+
+        if self._type == "faces":
+            filelist = cast(List[Tuple[str, "PNGHeaderDict"]], self._items)
+            check_update = FaceToFile(self._alignments, [val[1] for val in filelist])
+            if check_update():
+                self._alignments.save()
+
         self._output_results(items_output)
 
     def _validate(self) -> None:
@@ -185,12 +193,13 @@ class Check():
             The frame name and the face id of any frames which have multiple faces
         """
         self.output_message = "Multiple faces in frame"
-        for item in tqdm(cast(List[Tuple[str, "PNGHeaderSourceDict"]], self._items),
+        for item in tqdm(cast(List[Tuple[str, "PNGHeaderDict"]], self._items),
                          desc=self.output_message,
                          leave=False):
-            if not self._alignments.frame_has_multiple_faces(item["source_filename"]):
+            src = item[1]["source"]
+            if not self._alignments.frame_has_multiple_faces(src["source_filename"]):
                 continue
-            retval = (item[0], item[1]["face_index"])
+            retval = (item[0], src["face_index"])
             logger.trace("Returning: '%s'", retval)  # type:ignore
             yield retval
 
@@ -222,7 +231,7 @@ class Check():
             The frame name of any frames in alignments with no matching file
         """
         self.output_message = "Missing frames that are in alignments file"
-        frames = set(item["frame_fullname"] for item in self._items)
+        frames = set(item["frame_fullname"] for item in cast(List[Dict[str, str]], self._items))
         for frame in tqdm(self._alignments.data.keys(), desc=self.output_message, leave=False):
             if frame not in frames:
                 logger.debug("Returning: '%s'", frame)

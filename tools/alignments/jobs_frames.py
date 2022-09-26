@@ -237,9 +237,10 @@ class Extract():  # pylint:disable=too-few-public-methods
         meta = self._alignments.video_meta_data
         has_meta = all(val is not None for val in meta.values())
         if has_meta:
-            retval = None
+            retval: Optional[int] = len(cast(Dict[str, Union[List[int], List[float]]],
+                                        meta["pts_time"]))
         else:
-            retval = len(cast(Dict[str, Union[List[int], List[float]]], meta["pts_time"]))
+            retval = None
         logger.debug("Frame count from alignments file: (has_meta: %s, %s", has_meta, retval)
         return retval
 

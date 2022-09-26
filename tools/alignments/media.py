@@ -21,7 +21,7 @@ from lib.utils import _image_extensions, _video_extensions, FaceswapError
 
 if TYPE_CHECKING:
     import numpy as np
-    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict, PNGHeaderSourceDict
+    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -151,14 +151,12 @@ class MediaLoader():
         return retval
 
     def sorted_items(self) -> Union[List[Dict[str, str]],
-                                    List[Tuple[str, "PNGHeaderSourceDict"]],
                                     List[Tuple[str, "PNGHeaderDict"]]]:
         """ Override for specific folder processing """
         raise NotImplementedError()
 
     def process_folder(self) -> Union[Generator[Dict[str, str], None, None],
-                                      Generator[Tuple[str, "PNGHeaderDict"], None, None],
-                                      Generator[Tuple[str, "PNGHeaderSourceDict"], None, None]]:
+                                      Generator[Tuple[str, "PNGHeaderDict"], None, None]]:
         """ Override for specific folder processing """
         raise NotImplementedError()
 
@@ -265,21 +263,12 @@ class Faces(MediaLoader):
         The alignments object that contains the faces. Used to update legacy hash based faces
         for <v2.1 alignments to png header based version. Pass in ``None`` to not update legacy
         faces (raises error instead). Default: ``None``
-    with_alignments: bool, optional
-        By default, only the source information stored in the PNG header will be returned in
-        :attr:`file_list_sorted`. Set to ``True`` to include alignment information as well.
-        Default:``False``
     """
-    def __init__(self,
-                 folder: str,
-                 alignments: Optional[Alignments] = None,
-                 with_alignments: bool = False) -> None:
+    def __init__(self, folder: str, alignments: Optional[Alignments] = None) -> None:
         self._alignments = alignments
-        self._with_alignments = with_alignments
         super().__init__(folder)
 
-    def process_folder(self) -> Union[Generator[Tuple[str, "PNGHeaderDict"], None, None],
-                                      Generator[Tuple[str, "PNGHeaderSourceDict"], None, None]]:
+    def process_folder(self) -> Generator[Tuple[str, "PNGHeaderDict"], None, None]:
         """ Iterate through the faces folder pulling out various information for each face.
 
         Yields
@@ -321,13 +310,11 @@ class Faces(MediaLoader):
                         f"Some of the faces being passed in from '{self.folder}' could not be "
                         f"matched to the alignments file '{self._alignments.file}'\nPlease double "
                         "check your sources and try again.")
-                sub_dict = data if self._with_alignments else data["source"]
+                sub_dict = data
             else:
-                sub_dict = (metadata["itxt"] if self._with_alignments
-                            else metadata["itxt"]["source"])
+                sub_dict = cast("PNGHeaderDict", metadata["itxt"])
 
-            retval: Union[Tuple[str, "PNGHeaderDict"], Tuple[str, "PNGHeaderSourceDict"]]
-            retval = (os.path.basename(fullpath), sub_dict)  # type:ignore
+            retval = (os.path.basename(fullpath), sub_dict)
             yield retval
 
     def load_items(self) -> Dict[str, List[int]]:
@@ -339,19 +326,13 @@ class Faces(MediaLoader):
             The source filename as key with list of face indices for the frame as value
         """
         faces: Dict[str, List[int]] = {}
-        for face in cast(Union[List[Tuple[str, "PNGHeaderDict"]],
-                               List[Tuple[str, "PNGHeaderSourceDict"]]],
-                         self.file_list_sorted):
-            src: "PNGHeaderSourceDict" = cast(
-                "PNGHeaderDict",
-                face[1])["source"] if self._with_alignments else cast("PNGHeaderSourceDict",
-                                                                      face[1])
+        for face in cast(List[Tuple[str, "PNGHeaderDict"]], self.file_list_sorted):
+            src = face[1]["source"]
             faces.setdefault(src["source_filename"], []).append(src["face_index"])
         logger.trace(faces)  # type: ignore
         return faces
 
-    def sorted_items(self) -> Union[List[Tuple[str, "PNGHeaderDict"]],
-                                    List[Tuple[str, "PNGHeaderSourceDict"]]]:
+    def sorted_items(self) -> List[Tuple[str, "PNGHeaderDict"]]:
         """ Return the items sorted by the saved file name.
 
         Returns
@@ -359,9 +340,7 @@ class Faces(MediaLoader):
         list
             List of `dict` objects for each face found, sorted by the face's current filename
         """
-        items = cast(Union[List[Tuple[str, "PNGHeaderDict"]],
-                           List[Tuple[str, "PNGHeaderSourceDict"]]],
-                     sorted(self.process_folder(), key=itemgetter(0)))
+        items = sorted(self.process_folder(), key=itemgetter(0))
         logger.trace(items)  # type: ignore
         return items
 

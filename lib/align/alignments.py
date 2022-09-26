@@ -190,7 +190,7 @@ class Alignments():
         pts_time: List[float] = []
         keyframes: List[int] = []
         for idx, key in enumerate(sorted(self.data)):
-            if not self.data[key]["video_meta"]:
+            if not self.data[key].get("video_meta", {}):
                 return retval
             meta = self.data[key]["video_meta"]
             pts_time.append(cast(float, meta["pts_time"]))

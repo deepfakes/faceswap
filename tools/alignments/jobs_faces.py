@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments using extracted Faces as a source """
-import os
 import logging
+import os
+import sys
 from argparse import Namespace
 from operator import itemgetter
-from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from tqdm import tqdm
@@ -15,10 +16,15 @@ from scripts.fsmedia import Alignments
 
 from .media import Faces
 
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
 if TYPE_CHECKING:
     from .media import AlignmentData
     from lib.align.alignments import (AlignmentDict, AlignmentFileDict,
-                                      PNGHeaderDict, PNGHeaderSourceDict)
+                                      PNGHeaderDict, PNGHeaderAlignmentsDict)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +43,7 @@ class FromFaces():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (alignments: %s, arguments: %s)",
                      self.__class__.__name__, alignments, arguments)
         self._faces_dir = arguments.faces_dir
-        self._faces = Faces(arguments.faces_dir, with_alignments=True)
+        self._faces = Faces(arguments.faces_dir)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self) -> None:
@@ -240,7 +246,7 @@ class Rename():  # pylint:disable=too-few-public-methods
                      self.__class__.__name__, arguments, faces)
         self._alignments = alignments
 
-        kwargs: Dict[str, Union[bool, "AlignmentData"]] = dict(with_alignments=False)
+        kwargs = {}
         if alignments.version < 2.1:
             # Update headers of faces generated with hash based alignments
             kwargs["alignments"] = alignments
@@ -254,13 +260,18 @@ class Rename():  # pylint:disable=too-few-public-methods
     def process(self) -> None:
         """ Process the face renaming """
         logger.info("[RENAME FACES]")  # Tidy up cli output
-        filelist = cast(List[Tuple[str, "PNGHeaderSourceDict"]], self._faces.file_list_sorted)
-        rename_mappings = sorted([(face[0], face[1]["original_filename"])
+        filelist = cast(List[Tuple[str, "PNGHeaderDict"]], self._faces.file_list_sorted)
+        rename_mappings = sorted([(face[0], face[1]["source"]["original_filename"])
                                   for face in filelist
-                                  if face[0] != face[1]["original_filename"]],
+                                  if face[0] != face[1]["source"]["original_filename"]],
                                  key=lambda x: x[1])
         rename_count = self._rename_faces(rename_mappings)
         logger.info("%s faces renamed", rename_count)
+
+        filelist = cast(List[Tuple[str, "PNGHeaderDict"]], self._faces.file_list_sorted)
+        copyback = FaceToFile(self._alignments, [val[1] for val in filelist])
+        if copyback():
+            self._alignments.save()
 
     def _rename_faces(self, filename_mappings: List[Tuple[str, str]]) -> int:
         """ Rename faces back to their original name as exists in the alignments file.
@@ -325,7 +336,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
 
-        kwargs: Dict[str, Union[bool, "AlignmentData"]] = dict(with_alignments=False)
+        kwargs = {}
         if alignments.version < 2.1:
             # Update headers of faces generated with hash based alignments
             kwargs["alignments"] = alignments
@@ -367,10 +378,11 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         to like this and has a tendency to throw permission errors, so this remains single threaded
         for now.
         """
-        filelist = cast(List[Tuple[str, "PNGHeaderSourceDict"]], self._items.file_list_sorted)
         items = cast(Dict[str, List[int]], self._items.items)
+        srcs = [(x[0], x[1]["source"])
+                for x in cast(List[Tuple[str, "PNGHeaderDict"]], self._items.file_list_sorted)]
         to_update = [  # Items whose face index has changed
-            x for x in filelist
+            x for x in srcs
             if x[1]["face_index"] != items[x[1]["source_filename"]].index(x[1]["face_index"])]
 
         for item in tqdm(to_update, desc="Updating PNG Headers", leave=False):
@@ -400,3 +412,80 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
             update_existing_metadata(fullpath, meta)
 
         logger.info("%s Extracted face(s) had their header information updated", len(to_update))
+
+
+class FaceToFile():  # pylint:disable=too-few-public-methods
+    """ Updates any optional/missing keys in the alignments file with any data that has been
+    populated in a PNGHeader. Includes masks and identity fields.
+
+    Parameters
+    ---------
+    alignments: :class:`tools.alignments.media.AlignmentsData`
+        The loaded alignments containing faces to be removed
+    face_data: list
+        List of :class:`PNGHeaderDict` objects
+    """
+    def __init__(self, alignments: "AlignmentData", face_data: List["PNGHeaderDict"]) -> None:
+        logger.debug("Initializing %s: alignments: %s, face_data: %s",
+                     self.__class__.__name__, alignments, len(face_data))
+        self._alignments = alignments
+        self._face_alignments = face_data
+        self._updatable_keys: List[Literal["identity", "mask"]] = ["identity", "mask"]
+        self._counts: Dict[str, int] = {}
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def _check_and_update(self,
+                          alignment: "PNGHeaderAlignmentsDict",
+                          face: "AlignmentFileDict") -> None:
+        """ Check whether the key requires updating and update it.
+
+        alignment: dict
+            The alignment dictionary from the PNG Header
+        face: dict
+            The alignment dictionary for the face from the alignments file
+        """
+        for key in self._updatable_keys:
+            if key == "mask":
+                exist_masks = face["mask"]
+                for mask_name, mask_data in alignment["mask"].items():
+                    if mask_name in exist_masks:
+                        continue
+                    exist_masks[mask_name] = mask_data
+                    count_key = f"mask_{mask_name}"
+                    self._counts[count_key] = self._counts.get(count_key, 0) + 1
+                continue
+
+            if not face.get(key, {}) and alignment.get(key):
+                face[key] = alignment[key]
+                self._counts[key] = self._counts.get(key, 0) + 1
+
+    def __call__(self) -> bool:
+        """ Parse through the face data updating any entries in the alignments file.
+
+        Returns
+        -------
+        bool
+            ``True`` if any alignment information was updated otherwise ``False``
+        """
+        for meta in tqdm(self._face_alignments,
+                         desc="Updating Alignments File from PNG Header",
+                         leave=False):
+            src = meta["source"]
+            alignment = meta["alignments"]
+            if not any(alignment.get(key, {}) for key in self._updatable_keys):
+                continue
+
+            faces = self._alignments.get_faces_in_frame(src["source_filename"])
+            if len(faces) < src["face_index"] + 1:  # list index out of range
+                logger.debug("Skipped face '%s'. Index does not exist in alignments file",
+                             src["original_filename"])
+                continue
+
+            face = faces[src["face_index"]]
+            self._check_and_update(alignment, face)
+
+        retval = False
+        if self._counts:
+            retval = True
+            logger.info("Updated alignments file from PNG Data: %s", self._counts)
+        return retval
