@@ -427,5 +427,6 @@ class _Extract():  # pylint:disable=too-few-public-methods
                 continue
             final_faces.append(face.to_alignment())
 
-        self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces)
+        self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces,
+                                                                               video_meta={})
         del extract_media
