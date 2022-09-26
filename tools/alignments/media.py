@@ -3,8 +3,10 @@
     for alignments tool """
 
 import logging
+from operator import itemgetter
 import os
 import sys
+from typing import cast, Generator, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 from tqdm import tqdm
@@ -17,52 +19,58 @@ from lib.image import (count_frames, generate_thumbnail, ImagesLoader,
                        png_write_meta, read_image, read_image_meta_batch)
 from lib.utils import _image_extensions, _video_extensions, FaceswapError
 
+if TYPE_CHECKING:
+    import numpy as np
+    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict, PNGHeaderSourceDict
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class AlignmentData(Alignments):
-    """ Class to hold the alignment data """
+    """ Class to hold the alignment data
 
-    def __init__(self, alignments_file):
+    Paramaters
+    ----------
+    alignments_file: str
+        Full path to an alignments file
+    """
+    def __init__(self, alignments_file: str) -> None:
         logger.debug("Initializing %s: (alignments file: '%s')",
                      self.__class__.__name__, alignments_file)
         logger.info("[ALIGNMENT DATA]")  # Tidy up cli output
         folder, filename = self.check_file_exists(alignments_file)
         super().__init__(folder, filename=filename)
-        logger.verbose("%s items loaded", self.frames_count)
+        logger.verbose("%s items loaded", self.frames_count)  # type: ignore
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @staticmethod
-    def check_file_exists(alignments_file):
-        """ Check the alignments file exists"""
+    def check_file_exists(alignments_file: str) -> Tuple[str, str]:
+        """ Check the alignments file exists
+
+        Paramaters
+        ----------
+        alignments_file: str
+            Full path to an alignments file
+
+        Returns
+        -------
+        folder: str
+            The full path to the folder containing the alignments file
+        filename: str
+            The filename of the alignments file
+        """
         folder, filename = os.path.split(alignments_file)
         if not os.path.isfile(alignments_file):
             logger.error("ERROR: alignments file not found at: '%s'", alignments_file)
             sys.exit(0)
         if folder:
-            logger.verbose("Alignments file exists at '%s'", alignments_file)
+            logger.verbose("Alignments file exists at '%s'", alignments_file)  # type: ignore
         return folder, filename
 
-    def save(self):
+    def save(self) -> None:
         """ Backup copy of old alignments and save new alignments """
         self.backup()
         super().save()
-
-    def reload(self):
-        """ Read the alignments data from the correct format """
-        logger.debug("Re-loading alignments")
-        self._data = self._load()
-        logger.debug("Re-loaded alignments")
-
-    def set_filename(self, filename):
-        """ Set the :attr:`_file` to the given filename.
-
-        Parameters
-        ----------
-        filename: str
-            The full path and filename to set the alignments file name to
-        """
-        self._file = filename
 
 
 class MediaLoader():
@@ -76,25 +84,25 @@ class MediaLoader():
         If the total frame count is known it can be passed in here which will skip
         analyzing a video file. If the count is not passed in, it will be calculated.
     """
-    def __init__(self, folder, count=None):
+    def __init__(self, folder: str, count: Optional[int] = None):
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
         self._count = count
         self.folder = folder
-        self.vid_reader = self.check_input_folder()
+        self._vid_reader = self.check_input_folder()
         self.file_list_sorted = self.sorted_items()
         self.items = self.load_items()
-        logger.verbose("%s items loaded", self.count)
+        logger.verbose("%s items loaded", self.count)  # type: ignore
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def is_video(self):
-        """ Return whether source is a video or not """
-        return self.vid_reader is not None
+    def is_video(self) -> bool:
+        """ bool: Return whether source is a video or not """
+        return self._vid_reader is not None
 
     @property
-    def count(self):
-        """ Number of faces or frames """
+    def count(self) -> int:
+        """ int: Number of faces or frames """
         if self._count is not None:
             return self._count
         if self.is_video:
@@ -103,16 +111,21 @@ class MediaLoader():
             self._count = len(self.file_list_sorted)
         return self._count
 
-    def check_input_folder(self):
+    def check_input_folder(self) -> Optional[cv2.VideoCapture]:
         """ makes sure that the frames or faces folder exists
-            If frames folder contains a video file return imageio reader object """
+            If frames folder contains a video file return imageio reader object
+
+        Returns
+        -------
+        :class:`cv2.VideoCapture`
+            Object for reading a video stream
+        """
         err = None
         loadtype = self.__class__.__name__
         if not self.folder:
-            err = "ERROR: A {} folder must be specified".format(loadtype)
+            err = f"ERROR: A {loadtype} folder must be specified"
         elif not os.path.exists(self.folder):
-            err = ("ERROR: The {} location {} could not be "
-                   "found".format(loadtype, self.folder))
+            err = f"ERROR: The {loadtype} location {self.folder} could not be found"
         if err:
             logger.error(err)
             sys.exit(0)
@@ -120,61 +133,87 @@ class MediaLoader():
         if (loadtype == "Frames" and
                 os.path.isfile(self.folder) and
                 os.path.splitext(self.folder)[1].lower() in _video_extensions):
-            logger.verbose("Video exists at: '%s'", self.folder)
+            logger.verbose("Video exists at: '%s'", self.folder)  # type: ignore
             retval = cv2.VideoCapture(self.folder)  # pylint: disable=no-member
             # TODO ImageIO single frame seek seems slow. Look into this
             # retval = imageio.get_reader(self.folder, "ffmpeg")
         else:
-            logger.verbose("Folder exists at '%s'", self.folder)
+            logger.verbose("Folder exists at '%s'", self.folder)  # type: ignore
             retval = None
         return retval
 
     @staticmethod
-    def valid_extension(filename):
-        """ Check whether passed in file has a valid extension """
+    def valid_extension(filename) -> bool:
+        """ bool: Check whether passed in file has a valid extension """
         extension = os.path.splitext(filename)[1]
         retval = extension.lower() in _image_extensions
-        logger.trace("Filename has valid extension: '%s': %s", filename, retval)
+        logger.trace("Filename has valid extension: '%s': %s", filename, retval)  # type: ignore
         return retval
 
-    @staticmethod
-    def sorted_items():
+    def sorted_items(self) -> Union[List[Dict[str, str]],
+                                    List[Tuple[str, "PNGHeaderSourceDict"]],
+                                    List[Tuple[str, "PNGHeaderDict"]]]:
         """ Override for specific folder processing """
-        return list()
+        raise NotImplementedError()
 
-    @staticmethod
-    def process_folder():
+    def process_folder(self) -> Union[Generator[Dict[str, str], None, None],
+                                      Generator[Tuple[str, "PNGHeaderDict"], None, None],
+                                      Generator[Tuple[str, "PNGHeaderSourceDict"], None, None]]:
         """ Override for specific folder processing """
-        return list()
+        raise NotImplementedError()
 
-    @staticmethod
-    def load_items():
+    def load_items(self) -> Union[Dict[str, List[int]],
+                                  Dict[str, Tuple[str, str]]]:
         """ Override for specific item loading """
-        return dict()
+        raise NotImplementedError()
 
-    def load_image(self, filename):
-        """ Load an image """
+    def load_image(self, filename: str) -> "np.ndarray":
+        """ Load an image
+
+        Parameters
+        ----------
+        filename: str
+            The filename of the image to load
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The loaded image
+        """
         if self.is_video:
             image = self.load_video_frame(filename)
         else:
             src = os.path.join(self.folder, filename)
-            logger.trace("Loading image: '%s'", src)
+            logger.trace("Loading image: '%s'", src)  # type: ignore
             image = read_image(src, raise_error=True)
         return image
 
-    def load_video_frame(self, filename):
-        """ Load a requested frame from video """
+    def load_video_frame(self, filename: str) -> "np.ndarray":
+        """ Load a requested frame from video
+
+        Parameters
+        ----------
+        filename: str
+            The frame name to load
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The loaded image
+        """
+        assert self._vid_reader is not None
         frame = os.path.splitext(filename)[0]
-        logger.trace("Loading video frame: '%s'", frame)
+        logger.trace("Loading video frame: '%s'", frame)  # type: ignore
         frame_no = int(frame[frame.rfind("_") + 1:]) - 1
-        self.vid_reader.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
-        _, image = self.vid_reader.read()
+        self._vid_reader.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
+        _, image = self._vid_reader.read()
         # TODO imageio single frame seek seems slow. Look into this
-        # self.vid_reader.set_image_index(frame_no)
-        # image = self.vid_reader.get_next_data()[:, :, ::-1]
+        # self._vid_reader.set_image_index(frame_no)
+        # image = self._vid_reader.get_next_data()[:, :, ::-1]
         return image
 
-    def stream(self, skip_list=None):
+    def stream(self, skip_list: Optional[List[int]] = None
+               ) -> Generator[Tuple[str, "np.ndarray"], None, None]:
         """ Load the images in :attr:`folder` in the order they are received from
         :class:`lib.image.ImagesLoader` in a background thread.
 
@@ -198,11 +237,14 @@ class MediaLoader():
             yield filename, image
 
     @staticmethod
-    def save_image(output_folder, filename, image, metadata=None):
+    def save_image(output_folder: str,
+                   filename: str,
+                   image: "np.ndarray",
+                   metadata: Optional["PNGHeaderDict"] = None) -> None:
         """ Save an image """
         output_file = os.path.join(output_folder, filename)
         output_file = os.path.splitext(output_file)[0] + ".png"
-        logger.trace("Saving image: '%s'", output_file)
+        logger.trace("Saving image: '%s'", output_file)  # type: ignore
         if metadata:
             encoded_image = cv2.imencode(".png", image)[1]
             encoded_image = png_write_meta(encoded_image.tobytes(), metadata)
@@ -223,12 +265,21 @@ class Faces(MediaLoader):
         The alignments object that contains the faces. Used to update legacy hash based faces
         for <v2.1 alignments to png header based version. Pass in ``None`` to not update legacy
         faces (raises error instead). Default: ``None``
+    with_alignments: bool, optional
+        By default, only the source information stored in the PNG header will be returned in
+        :attr:`file_list_sorted`. Set to ``True`` to include alignment information as well.
+        Default:``False``
     """
-    def __init__(self, folder, alignments=None):
+    def __init__(self,
+                 folder: str,
+                 alignments: Optional[Alignments] = None,
+                 with_alignments: bool = False) -> None:
         self._alignments = alignments
+        self._with_alignments = with_alignments
         super().__init__(folder)
 
-    def process_folder(self):
+    def process_folder(self) -> Union[Generator[Tuple[str, "PNGHeaderDict"], None, None],
+                                      Generator[Tuple[str, "PNGHeaderSourceDict"], None, None]]:
         """ Iterate through the faces folder pulling out various information for each face.
 
         Yields
@@ -267,17 +318,19 @@ class Faces(MediaLoader):
                 data = update_legacy_png_header(fullpath, self._alignments)
                 if not data:
                     raise FaceswapError(
-                        "Some of the faces being passed in from '{}' could not be matched to the "
-                        "alignments file '{}'\nPlease double check your sources and try "
-                        "again.".format(self.folder, self._alignments.file))
-                retval = data["source"]
+                        f"Some of the faces being passed in from '{self.folder}' could not be "
+                        f"matched to the alignments file '{self._alignments.file}'\nPlease double "
+                        "check your sources and try again.")
+                sub_dict = data if self._with_alignments else data["source"]
             else:
-                retval = metadata["itxt"]["source"]
+                sub_dict = (metadata["itxt"] if self._with_alignments
+                            else metadata["itxt"]["source"])
 
-            retval["current_filename"] = os.path.basename(fullpath)
+            retval: Union[Tuple[str, "PNGHeaderDict"], Tuple[str, "PNGHeaderSourceDict"]]
+            retval = (os.path.basename(fullpath), sub_dict)  # type:ignore
             yield retval
 
-    def load_items(self):
+    def load_items(self) -> Dict[str, List[int]]:
         """ Load the face names into dictionary.
 
         Returns
@@ -285,13 +338,20 @@ class Faces(MediaLoader):
         dict
             The source filename as key with list of face indices for the frame as value
         """
-        faces = dict()
-        for face in self.file_list_sorted:
-            faces.setdefault(face["source_filename"], list()).append(face["face_index"])
-        logger.trace(faces)
+        faces: Dict[str, List[int]] = {}
+        for face in cast(Union[List[Tuple[str, "PNGHeaderDict"]],
+                               List[Tuple[str, "PNGHeaderSourceDict"]]],
+                         self.file_list_sorted):
+            src: "PNGHeaderSourceDict" = cast(
+                "PNGHeaderDict",
+                face[1])["source"] if self._with_alignments else cast("PNGHeaderSourceDict",
+                                                                      face[1])
+            faces.setdefault(src["source_filename"], []).append(src["face_index"])
+        logger.trace(faces)  # type: ignore
         return faces
 
-    def sorted_items(self):
+    def sorted_items(self) -> Union[List[Tuple[str, "PNGHeaderDict"]],
+                                    List[Tuple[str, "PNGHeaderSourceDict"]]]:
         """ Return the items sorted by the saved file name.
 
         Returns
@@ -299,22 +359,36 @@ class Faces(MediaLoader):
         list
             List of `dict` objects for each face found, sorted by the face's current filename
         """
-        items = sorted(self.process_folder(), key=lambda x: (x["current_filename"]))
-        logger.trace(items)
+        items = cast(Union[List[Tuple[str, "PNGHeaderDict"]],
+                           List[Tuple[str, "PNGHeaderSourceDict"]]],
+                     sorted(self.process_folder(), key=itemgetter(0)))
+        logger.trace(items)  # type: ignore
         return items
 
 
 class Frames(MediaLoader):
     """ Object to hold the frames that are to be checked against """
 
-    def process_folder(self):
-        """ Iterate through the frames folder pulling the base filename """
+    def process_folder(self) -> Generator[Dict[str, str], None, None]:
+        """ Iterate through the frames folder pulling the base filename
+
+        Yields
+        ------
+        dict
+            The full framename, the filename and the file extension of the frame
+        """
         iterator = self.process_video if self.is_video else self.process_frames
         for item in iterator():
             yield item
 
-    def process_frames(self):
-        """ Process exported Frames """
+    def process_frames(self) -> Generator[Dict[str, str], None, None]:
+        """ Process exported Frames
+
+        Yields
+        ------
+        dict
+            The full framename, the filename and the file extension of the frame
+        """
         logger.info("Loading file list from %s", self.folder)
         for frame in os.listdir(self.folder):
             if not self.valid_extension(frame):
@@ -325,69 +399,122 @@ class Frames(MediaLoader):
             retval = {"frame_fullname": frame,
                       "frame_name": filename,
                       "frame_extension": file_extension}
-            logger.trace(retval)
+            logger.trace(retval)  # type: ignore
             yield retval
 
-    def process_video(self):
-        """Dummy in frames for video """
+    def process_video(self) -> Generator[Dict[str, str], None, None]:
+        """Dummy in frames for video
+
+        Yields
+        ------
+        dict
+            The full framename, the filename and the file extension of the frame
+        """
         logger.info("Loading video frames from %s", self.folder)
         vidname = os.path.splitext(os.path.basename(self.folder))[0]
         for i in range(self.count):
             idx = i + 1
             # Keep filename format for outputted face
-            filename = "{}_{:06d}".format(vidname, idx)
-            retval = {"frame_fullname": "{}.png".format(filename),
+            filename = f"{vidname}_{idx:06d}"
+            retval = {"frame_fullname": f"{filename}.png",
                       "frame_name": filename,
                       "frame_extension": ".png"}
-            logger.trace(retval)
+            logger.trace(retval)  # type: ignore
             yield retval
 
-    def load_items(self):
-        """ Load the frame info into dictionary """
-        frames = dict()
-        for frame in self.file_list_sorted:
+    def load_items(self) -> Dict[str, Tuple[str, str]]:
+        """ Load the frame info into dictionary
+
+        Returns
+        -------
+        dict
+            Fullname as key, tuple of frame name and extension as value
+        """
+        frames: Dict[str, Tuple[str, str]] = {}
+        for frame in cast(List[Dict[str, str]], self.file_list_sorted):
             frames[frame["frame_fullname"]] = (frame["frame_name"],
                                                frame["frame_extension"])
-        logger.trace(frames)
+        logger.trace(frames)  # type: ignore
         return frames
 
-    def sorted_items(self):
-        """ Return the items sorted by filename """
+    def sorted_items(self) -> List[Dict[str, str]]:
+        """ Return the items sorted by filename
+
+        Returns
+        -------
+        list
+            The sorted list of frame information
+        """
         items = sorted(self.process_folder(), key=lambda x: (x["frame_name"]))
-        logger.trace(items)
+        logger.trace(items)  # type: ignore
         return items
 
 
 class ExtractedFaces():
-    """ Holds the extracted faces and matrix for
-        alignments """
-    def __init__(self, frames, alignments, size=512):
-        logger.trace("Initializing %s: size: %s", self.__class__.__name__, size)
+    """ Holds the extracted faces and matrix for alignments
+
+    Parameters
+    ----------
+    frames: :class:`Frames`
+        The frames object to extract faces from
+    alignments: :class:`AlignmentData`
+        The alignment data corresponding to the frames
+    size: int, optional
+        The extract face size. Default: 512
+    """
+    def __init__(self, frames: Frames, alignments: AlignmentData, size: int = 512) -> None:
+        logger.trace("Initializing %s: size: %s",  # type: ignore
+                     self.__class__.__name__, size)
         self.size = size
         self.padding = int(size * 0.1875)
         self.alignments = alignments
         self.frames = frames
-        self.current_frame = None
-        self.faces = list()
-        logger.trace("Initialized %s", self.__class__.__name__)
+        self.current_frame: Optional[str] = None
+        self.faces: List[DetectedFace] = []
+        logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
 
-    def get_faces(self, frame, image=None):
-        """ Return faces and transformed landmarks
-            for each face in a given frame with it's alignments"""
-        logger.trace("Getting faces for frame: '%s'", frame)
+    def get_faces(self, frame: str, image: Optional["np.ndarray"] = None) -> None:
+        """ Obtain faces and transformed landmarks for each face in a given frame with its
+        alignments
+
+        Parameters
+        ----------
+        frame: str
+            The frame name to obtain faces for
+        image: :class:`numpy.ndarray`, optional
+            The image to extract the face from, if we already have it, otherwise ``None`` to
+            load the image. Default: ``None``
+        """
+        logger.trace("Getting faces for frame: '%s'", frame)  # type: ignore
         self.current_frame = None
         alignments = self.alignments.get_faces_in_frame(frame)
-        logger.trace("Alignments for frame: (frame: '%s', alignments: %s)", frame, alignments)
+        logger.trace("Alignments for frame: (frame: '%s', alignments: %s)",  # type: ignore
+                     frame, alignments)
         if not alignments:
-            self.faces = list()
+            self.faces = []
             return
         image = self.frames.load_image(frame) if image is None else image
         self.faces = [self.extract_one_face(alignment, image) for alignment in alignments]
         self.current_frame = frame
 
-    def extract_one_face(self, alignment, image):
-        """ Extract one face from image """
-        logger.trace("Extracting one face: (frame: '%s', alignment: %s)",
+    def extract_one_face(self,
+                         alignment: "AlignmentFileDict",
+                         image: "np.ndarray") -> DetectedFace:
+        """ Extract one face from image
+
+        Parameters
+        ----------
+        alignment: dict
+            The alignment for a single face
+        image: :class:`numpy.ndarray`
+            The image to extract the face from
+
+        Returns
+        -------
+        :class:`~lib.align.DetectedFace`
+            The detected face object for the given alignment with the aligned face loaded
+        """
+        logger.trace("Extracting one face: (frame: '%s', alignment: %s)",  # type: ignore
                      self.current_frame, alignment)
         face = DetectedFace()
         face.from_alignment(alignment, image=image)
@@ -395,20 +522,51 @@ class ExtractedFaces():
         face.thumbnail = generate_thumbnail(face.aligned.face, size=80, quality=60)
         return face
 
-    def get_faces_in_frame(self, frame, update=False, image=None):
-        """ Return the faces for the selected frame """
-        logger.trace("frame: '%s', update: %s", frame, update)
+    def get_faces_in_frame(self,
+                           frame: str,
+                           update: bool = False,
+                           image: Optional["np.ndarray"] = None) -> List[DetectedFace]:
+        """ Return the faces for the selected frame
+
+        Parameters
+        ----------
+        frame: str
+            The frame name to get the faces for
+        update: bool, optional
+            ``True`` if the faces should be refreshed regardless of current frame. ``False`` to not
+            force a refresh. Default ``False``
+        image: :class:`numpy.ndarray`, optional
+            Image to load faces from if it exists, otherwise ``None`` to load the image.
+            Default: ``None``
+
+        Returns
+        -------
+        list
+            List of :class:`~lib.align.DetectedFace` objects for the frame, with the aligned face
+            loaded
+        """
+        logger.trace("frame: '%s', update: %s", frame, update)  # type: ignore
         if self.current_frame != frame or update:
             self.get_faces(frame, image=image)
         return self.faces
 
-    def get_roi_size_for_frame(self, frame):
-        """ Return the size of the original extract box for
-            the selected frame """
-        logger.trace("frame: '%s'", frame)
+    def get_roi_size_for_frame(self, frame: str) -> List[int]:
+        """ Return the size of the original extract box for the selected frame.
+
+        Parameters
+        ----------
+        frame: str
+            The frame to obtain the original sized bounding boxes for
+
+        Returns
+        -------
+        list
+            List of original pixel sizes of faces held within the frame
+        """
+        logger.trace("frame: '%s'", frame)  # type: ignore
         if self.current_frame != frame:
             self.get_faces(frame)
-        sizes = list()
+        sizes = []
         for face in self.faces:
             roi = face.aligned.original_roi.squeeze()
             top_left, top_right = roi[0], roi[3]
@@ -419,5 +577,5 @@ class ExtractedFaces():
             else:
                 length = int(((len_x ** 2) + (len_y ** 2)) ** 0.5)
             sizes.append(length)
-        logger.trace("sizes: '%s'", sizes)
+        logger.trace("sizes: '%s'", sizes)  # type: ignore
         return sizes

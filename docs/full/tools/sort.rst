@@ -25,10 +25,10 @@ sort_methods module
    :show-inheritance:
 
 
-sort_methods_algigned module
-============================
+sort_methods_aligned module
+===========================
 
-.. automodule:: tools.sort.sort_methods_algigned
+.. automodule:: tools.sort.sort_methods_aligned
    :members:
    :undoc-members:
    :show-inheritance:

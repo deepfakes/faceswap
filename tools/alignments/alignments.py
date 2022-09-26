@@ -8,9 +8,9 @@ from typing import Any, TYPE_CHECKING
 
 from lib.utils import _video_extensions
 from .media import AlignmentData
-from .jobs import (Check, Draw, Extract, FromFaces, Rename,  # noqa pylint: disable=unused-import
-                   RemoveFaces, Sort, Spatial)
-
+from .jobs import Check, Sort, Spatial  # noqa pylint: disable=unused-import
+from .jobs_faces import FromFaces, RemoveFaces, Rename  # noqa pylint: disable=unused-import
+from .jobs_frames import Draw, Extract  # noqa pylint: disable=unused-import
 
 if TYPE_CHECKING:
     from argparse import Namespace
