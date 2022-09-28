@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver
 from lib.multithreading import MultiThread
-from lib.utils import get_folder, _video_extensions
+from lib.utils import get_folder, _image_extensions, _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
@@ -75,12 +75,15 @@ class Extract():  # pylint:disable=too-few-public-methods
 
         retval = [os.path.join(self._args.input_dir, fname)
                   for fname in os.listdir(self._args.input_dir)
-                  if os.path.isdir(os.path.join(self._args.input_dir, fname))
-                  or os.path.splitext(fname)[-1].lower() in _video_extensions]
+                  if (os.path.isdir(os.path.join(self._args.input_dir, fname))  # folder images
+                      and any(os.path.splitext(iname)[-1].lower() in _image_extensions
+                              for iname in os.listdir(os.path.join(self._args.input_dir, fname))))
+                  or os.path.splitext(fname)[-1].lower() in _video_extensions]  # video
+
         logger.debug("Input locations: %s", retval)
         return retval
 
-    def _validate_batchmode(self):
+    def _validate_batchmode(self) -> None:
         """ Validate the command line arguments.
 
         If batch-mode selected and there is only one object to extract from, then batch mode is
@@ -327,7 +330,8 @@ class _Extract():  # pylint:disable=too-few-public-methods
             for idx, extract_media in enumerate(tqdm(self._extractor.detected_faces(),
                                                      total=self._images.process_count,
                                                      file=sys.stdout,
-                                                     desc=desc)):
+                                                     desc=desc,
+                                                     leave=False)):
                 self._check_thread_error()
                 if is_final:
                     self._output_processing(extract_media, size)
@@ -398,19 +402,31 @@ class _Extract():  # pylint:disable=too-few-public-methods
         filename = os.path.splitext(os.path.basename(extract_media.filename))[0]
         extension = ".png"
 
-        for idx, face in enumerate(extract_media.detected_faces):
-            output_filename = f"{filename}_{idx}{extension}"
+        skip_idx = 0
+        for face_id, face in enumerate(extract_media.detected_faces):
+            real_face_id = face_id - skip_idx
+            output_filename = f"{filename}_{real_face_id}{extension}"
             meta = dict(alignments=face.to_png_meta(),
                         source=dict(alignments_version=self._alignments.version,
                                     original_filename=output_filename,
-                                    face_index=idx,
+                                    face_index=real_face_id,
                                     source_filename=os.path.basename(extract_media.filename),
                                     source_is_video=self._images.is_video,
                                     source_frame_dims=extract_media.image_size))
             image = encode_image(face.aligned.face, extension, metadata=meta)
 
+            sub_folder = extract_media.sub_folders[face_id]
+            # Binned faces shouldn't risk filename clash, so just use original id
+            out_name = output_filename if not sub_folder else f"{filename}_{face_id}{extension}"
+
             if saver is not None:
-                saver.save(output_filename, image)
+                saver.save(out_name, image, sub_folder)
+
+            if sub_folder:  # This is a filtered out face being binned
+                skip_idx += 1
+                continue
             final_faces.append(face.to_alignment())
-        self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces)
+
+        self._alignments.data[os.path.basename(extract_media.filename)] = dict(faces=final_faces,
+                                                                               video_meta={})
         del extract_media

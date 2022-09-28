@@ -11,6 +11,7 @@ import sys
 from ast import literal_eval
 from bisect import bisect
 from concurrent import futures
+from typing import Optional
 from zlib import crc32
 
 import cv2
@@ -1422,7 +1423,7 @@ class ImagesSaver(ImageIO):
             executor.submit(self._save, *item)
         executor.shutdown()
 
-    def _save(self, filename, image):
+    def _save(self, filename: str, image: bytes, sub_folder: Optional[str]) -> None:
         """ Save a single image inside a ThreadPoolExecutor
 
         Parameters
@@ -1430,21 +1431,28 @@ class ImagesSaver(ImageIO):
         filename: str
             The filename of the image to be saved. NB: Any folders passed in with the filename
             will be stripped and replaced with :attr:`location`.
-        image: numpy.ndarray
-            The image to be saved
+        image: bytes
+            The encoded image to be saved
+        subfolder: str or ``None``
+            If the file should be saved in a subfolder in the output location, the subfolder should
+            be provided here. ``None`` for no subfolder.
         """
-        filename = os.path.join(self.location, os.path.basename(filename))
+        location = os.path.join(self.location, sub_folder) if sub_folder else self._location
+        if sub_folder and not os.path.exists(location):
+            os.makedirs(location)
+
+        filename = os.path.join(location, os.path.basename(filename))
         try:
             if self._as_bytes:
                 with open(filename, "wb") as out_file:
                     out_file.write(image)
             else:
                 cv2.imwrite(filename, image)
-            logger.trace("Saved image: '%s'", filename)
+            logger.trace("Saved image: '%s'", filename)  # type:ignore
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
-    def save(self, filename, image):
+    def save(self, filename: str, image: bytes, sub_folder: Optional[str] = None) -> None:
         """ Save the given image in the background thread
 
         Ensure that :func:`close` is called once all save operations are complete.
@@ -1452,13 +1460,17 @@ class ImagesSaver(ImageIO):
         Parameters
         ----------
         filename: str
-            The filename of the image to be saved
-        image: numpy.ndarray
-            The image to be saved
+            The filename of the image to be saved. NB: Any folders passed in with the filename
+            will be stripped and replaced with :attr:`location`.
+        image: bytes
+            The encoded image to be saved
+        subfolder: str, optional
+            If the file should be saved in a subfolder in the output location, the subfolder should
+            be provided here. ``None`` for no subfolder. Default: ``None``
         """
         self._set_thread()
-        logger.trace("Putting to save queue: '%s'", filename)
-        self._queue.put((filename, image))
+        logger.trace("Putting to save queue: '%s'", filename)  # type:ignore
+        self._queue.put((filename, image, sub_folder))
 
     def close(self):
         """ Signal to the Save Threads that they should be closed and cleanly shutdown

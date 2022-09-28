@@ -14,7 +14,7 @@ _ = _LANG.gettext
 _HELPTEXT = _("This command lets you sort images using various methods.")
 _SORT_METHODS = (
     "none", "blur", "blur-fft", "distance", "face", "face-cnn", "face-cnn-dissim",
-    "yaw", "pitch", "hist", "hist-dissim", "color-black", "color-gray", "color-luma",
+    "yaw", "pitch", "roll", "hist", "hist-dissim", "color-black", "color-gray", "color-luma",
     "color-green", "color-orange", "size", "face-yaw", "black-pixels")
 
 _GPTHRESHOLD = _(" Adjust the '-t' ('--threshold') parameter to control the strength of grouping.")
@@ -40,6 +40,8 @@ _METHOD_TEXT = {
     "face-cnn-dissim": _("Like 'face-cnn' but sorts by dissimilarity."),
     "yaw": _("faces by Yaw (rotation left to right)."),
     "pitch": _("faces by Pitch (rotation up and down)."),
+    "roll": _("faces by Roll (rotation). Aligned faces should have a roll value close to zero. "
+              "The further the Roll value from zero the higher liklihood the face is misaligned."),
     "hist": _("faces by their color histogram."),
     "hist-dissim": _("Like 'hist' but sorts by dissimilarity."),
     "color-gray": _("images by the average intensity of the converted grayscale color channel."),
@@ -60,7 +62,7 @@ _METHOD_TEXT = {
 _BIN_TYPES = [
     (("face", "face-cnn", "face-cnn-dissim", "hist", "hist-dissim"), _GPTHRESHOLD),
     (("color-black", "color-gray", "color-luma", "color-green", "color-orange"), _GPCOLOR),
-    (("yaw", "pitch"), _GPDEGREES),
+    (("yaw", "pitch", "roll"), _GPDEGREES),
     (("blur", "blur-fft", "distance", "size"), _GPLINEAR)]
 _SORT_HELP = ""
 _GROUP_HELP = ""
@@ -165,7 +167,7 @@ class SortArgs(FaceSwapArgs):
                    "-1.0 will allow Faceswap to choose the default value."
                    "\nL|For 'face-cnn' 7.2 should be enough, with 4 being very discriminating. "
                    "\nL|For 'hist' 0.3 should be enough, with 0.2 being very discriminating. "
-                   "\nL|For 'face' between 0.1 (few bins) to 0.4 (more bins) should "
+                   "\nL|For 'face' between 0.1 (more bins) to 0.5 (fewer bins) should "
                    "be about right."
                    "\nBe careful setting a value that's too extrene in a directory "
                    "with many images, as this could result in a lot of folders being created. "

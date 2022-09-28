@@ -3,6 +3,8 @@
 import sys
 import gettext
 
+from typing import Any, List, Dict
+
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths, Radio, Slider
 
@@ -30,7 +32,8 @@ class AlignmentsArgs(FaceSwapArgs):
         return _("Alignments tool\nThis tool allows you to perform numerous actions on or using "
                  "an alignments file against its corresponding faceset/frame source.")
 
-    def get_argument_list(self) -> dict:
+    @staticmethod
+    def get_argument_list() -> List[Dict[str, Any]]:
         """ Collect the argparse argument options.
 
         Returns
@@ -106,11 +109,13 @@ class AlignmentsArgs(FaceSwapArgs):
             type=str,
             group=_("data"),
             # hacky solution to not require alignments file if creating alignments from faces:
-            required="from-faces" not in sys.argv,
+            required=not any(val in sys.argv for val in ["from-faces", "-fr", "-frames_folder"]),
             filetypes="alignments",
-            help=_("Full path to the alignments file to be processed. This is required for all "
-                   "jobs except for 'from-faces' when the alignments file will be generated in "
-                   "the specified faces folder.")))
+            help=_("Full path to the alignments file to be processed. If you have input a "
+                   "'frames_dir' and don't provide this option, the process will try to find the "
+                   "alignments file at the default location. All jobs require an alignments file "
+                   "with the exception of 'from-faces' when the alignments file will be generated "
+                   "in the specified faces folder.")))
         argument_list.append(dict(
             opts=("-fc", "-faces_folder"),
             action=DirFullPaths,

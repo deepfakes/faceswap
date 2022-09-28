@@ -18,7 +18,7 @@ from lib.serializer import Serializer, get_serializer_from_filename
 from lib.utils import deprecation_warning
 
 from .sort_methods import SortBlur, SortColor, SortFace, SortHistogram, SortMultiMethod
-from .sort_methods_aligned import SortDistance, SortFaceCNN, SortPitch, SortSize, SortYaw
+from .sort_methods_aligned import SortDistance, SortFaceCNN, SortPitch, SortSize, SortYaw, SortRoll
 
 if TYPE_CHECKING:
     from .sort_methods import SortMethod
@@ -132,6 +132,7 @@ class _Sort():  # pylint:disable=too-few-public-methods
                                distance=SortDistance,
                                yaw=SortYaw,
                                pitch=SortPitch,
+                               roll=SortRoll,
                                size=SortSize,
                                face=SortFace,
                                face_cnn=SortFaceCNN,

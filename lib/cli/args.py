@@ -371,7 +371,8 @@ class ExtractArgs(ExtractConvertArgs):
             The list of optional command line options for the Extract command
         """
         if get_backend() == "cpu":
-            default_detector = default_aligner = "cv2-dnn"
+            default_detector = "mtcnn"
+            default_aligner = "cv2-dnn"
         else:
             default_detector = "s3fd"
             default_aligner = "fan"

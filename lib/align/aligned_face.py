@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import logging
 import sys
 from threading import Lock
-from typing import Dict, Optional, Tuple
+from typing import cast, Dict, Optional, Tuple
 
 
 import cv2
@@ -674,7 +674,7 @@ class PoseEstimate():
         self._camera_matrix = self._get_camera_matrix()
         self._rotation, self._translation = self._solve_pnp(landmarks)
         self._offset = self._get_offset()
-        self._pitch_yaw: Tuple[int, int] = (0, 0)
+        self._pitch_yaw_roll: Tuple[float, float, float] = (0, 0, 0)
 
     @property
     def xyz_2d(self) -> np.ndarray:
@@ -701,24 +701,31 @@ class PoseEstimate():
     @property
     def pitch(self) -> float:
         """ float: The pitch of the aligned face in eular angles """
-        if not any(self._pitch_yaw):
-            self._get_pitch_yaw()
-        return self._pitch_yaw[0]
+        if not any(self._pitch_yaw_roll):
+            self._get_pitch_yaw_roll()
+        return self._pitch_yaw_roll[0]
 
     @property
     def yaw(self) -> float:
         """ float: The yaw of the aligned face in eular angles """
-        if not any(self._pitch_yaw):
-            self._get_pitch_yaw()
-        return self._pitch_yaw[1]
+        if not any(self._pitch_yaw_roll):
+            self._get_pitch_yaw_roll()
+        return self._pitch_yaw_roll[1]
 
-    def _get_pitch_yaw(self) -> None:
-        """ Obtain the yaw and pitch from the :attr:`_rotation` in eular angles. """
+    @property
+    def roll(self) -> float:
+        """ float: The roll of the aligned face in eular angles """
+        if not any(self._pitch_yaw_roll):
+            self._get_pitch_yaw_roll()
+        return self._pitch_yaw_roll[2]
+
+    def _get_pitch_yaw_roll(self) -> None:
+        """ Obtain the yaw, roll and pitch from the :attr:`_rotation` in eular angles. """
         proj_matrix = np.zeros((3, 4), dtype="float32")
         proj_matrix[:3, :3] = cv2.Rodrigues(self._rotation)[0]
         euler = cv2.decomposeProjectionMatrix(proj_matrix)[-1]
-        self._pitch_yaw = (euler[0][0], euler[1][0])
-        logger.trace("yaw_pitch: %s", self._pitch_yaw)  # type: ignore
+        self._pitch_yaw_roll = cast(Tuple[float, float, float], tuple(euler.squeeze()))
+        logger.trace("yaw_pitch: %s", self._pitch_yaw_roll)  # type: ignore
 
     @classmethod
     def _get_camera_matrix(cls) -> np.ndarray:
