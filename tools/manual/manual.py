@@ -315,7 +315,7 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
         self._initialize_face_options()
         frame = ttk.Frame(self)
         frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        panels = dict()
+        panels = {}
         for name, editor in self._display_frame.editors.items():
             logger.debug("Initializing control panel for '%s' editor", name)
             controls = editor.controls
@@ -421,7 +421,7 @@ class TkGlobals():
         dict
             The variable name as key, the variable as value
         """
-        retval = dict()
+        retval = {}
         for name in ("frame_index", "transport_index", "face_index", "filter_distance"):
             var = tk.IntVar()
             var.set(10 if name == "filter_distance" else 0)
@@ -687,7 +687,7 @@ class Aligner():
         logger.debug("Launching aligner initialization thread")
         thread = MultiThread(self._init_aligner,
                              thread_count=1,
-                             name="{}.init_aligner".format(self.__class__.__name__))
+                             name=f"{self.__class__.__name__}.init_aligner")
         thread.start()
         logger.debug("Launched aligner initialization thread")
         return thread
@@ -705,7 +705,8 @@ class Aligner():
                                 ["components", "extended"],
                                 exclude_gpus=exclude_gpus,
                                 multiprocess=True,
-                                normalize_method="hist")
+                                normalize_method="hist",
+                                disable_filter=True)
             if plugin:
                 aligner.set_batchsize("align", 1)  # Set the batchsize to 1
             aligner.launch()
@@ -852,7 +853,7 @@ class FrameLoader():
                              frames_location,
                              video_meta_data,
                              thread_count=1,
-                             name="{}.init_frames".format(self.__class__.__name__))
+                             name=f"{self.__class__.__name__}.init_frames")
         thread.start()
         return thread
 

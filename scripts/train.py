@@ -63,8 +63,8 @@ class Train():  # pylint:disable=too-few-public-methods
         gui_cache = os.path.join(
             os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
         self._gui_triggers: Dict[Literal["mask", "refresh"], str] = dict(
-            mask=os.path.join(gui_cache, ".preview_trigger"),
-            refresh=os.path.join(gui_cache, ".preview_mask_toggle"))
+            mask=os.path.join(gui_cache, ".preview_mask_toggle"),
+            refresh=os.path.join(gui_cache, ".preview_trigger"))
         self._stop: bool = False
         self._save_now: bool = False
         self._preview = PreviewInterface(self._args.preview)

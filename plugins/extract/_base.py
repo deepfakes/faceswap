@@ -3,7 +3,7 @@
 :mod:`~plugins.extract.mask` Plugins
 """
 import logging
-
+from typing import Dict
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
 from lib.multithreading import MultiThread
@@ -144,7 +144,7 @@ class Extractor():
         self._threads = []
         """ list: Internal threads for this plugin """
 
-        self._extract_media = {}
+        self._extract_media: Dict[str, ExtractMedia] = {}
         """ dict: The :class:`plugins.extract.pipeline.ExtractMedia` objects currently being
         processed. Stored at input for pairing back up on output of extractor process """
 
@@ -453,7 +453,10 @@ class Extractor():
                 # Process input items to batches
                 exhausted, batch = self.get_batch(in_queue)
                 if exhausted:
-                    if batch:
+                    # TODO Move all batch items to common dataclass. Currently migrated:
+                    # Align
+                    if (isinstance(batch, dict) and batch or
+                            not isinstance(batch, dict) and batch.filename):
                         # Put the final batch
                         batch = function(batch)
                         out_queue.put(batch)

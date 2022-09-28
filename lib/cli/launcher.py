@@ -63,6 +63,22 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         os.environ["TF_MIN_GPU_MULTIPROCESSOR_COUNT"] = "4"
         os.environ["KMP_AFFINITY"] = "disabled"
 
+        # If running under CPU on Windows, the following error can be encountered:
+        # OMP: Error #15: Initializing libiomp5md.dll, but found libiomp5 already initialized.
+        # OMP: Hint This means that multiple copies of the OpenMP runtime have been linked into
+        # the program. That is dangerous, since it can degrade performance or cause incorrect
+        # results. The best thing to do is to ensure that only a single OpenMP runtime is linked
+        # into the process, e.g. by avoiding static linking of the OpenMP runtime in any library.
+        # As an unsafe, unsupported, undocumented workaround you can set the environment variable
+        # KMP_DUPLICATE_LIB_OK=TRUE to allow the program to continue to execute, but that may cause
+        # crashes or silently produce incorrect results. For more information,
+        # please see http://www.intel.com/software/products/support/.
+        #
+        # TODO find a better way than just allowing multiple libs
+        if get_backend() == "cpu" and platform.system() == "Windows":
+            logger.debug("Setting `KMP_DUPLICATE_LIB_OK` environment variable to `TRUE`")
+            os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
     def _test_for_tf_version(self) -> None:
         """ Check that the required Tensorflow version is installed.
 
