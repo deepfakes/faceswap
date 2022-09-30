@@ -4,35 +4,43 @@
 Architecture and Pre-Trained Model ported from PyTorch to Keras by TorzDF from
 https://github.com/zllrunning/face-parsing.PyTorch
 """
+import logging
+from typing import cast, List, Optional, Tuple
+
 import numpy as np
 
 from lib.model.session import KSession
 from lib.utils import get_backend
 from plugins.extract._base import _get_config
-from ._base import Masker, logger
+from ._base import BatchType, Masker, MaskerBatch
 
 if get_backend() == "amd":
     from keras import backend as K
     from keras.layers import (
         Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
         MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
+    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow.keras import backend as K  # pylint:disable=import-error
     from tensorflow.keras.layers import (  # pylint:disable=no-name-in-module,import-error
         Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
         MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
+    from tensorflow import Tensor
+
+logger = logging.getLogger(__name__)
 
 
 class Mask(Masker):
     """ Neural network to process face image into a segmentation mask of the face """
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self._is_faceswap, version = self._check_weights_selection(kwargs.get("configfile"))
 
         git_model_id = 14
         model_filename = f"bisnet_face_parsing_v{version}.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
 
+        self.model: KSession
         self.name = "BiSeNet - Face Parsing"
         self.input_size = 512
         self.color_format = "RGB"
@@ -46,7 +54,7 @@ class Mask(Masker):
         # Separate storage for face and head masks
         self._storage_name = f"{self._storage_name}_{self._storage_centering}"
 
-    def _check_weights_selection(self, configfile):
+    def _check_weights_selection(self, configfile: Optional[str]) -> Tuple[bool, int]:
         """ Check which weights have been selected.
 
         This is required for passing along the correct file name for the corresponding weights
@@ -70,7 +78,7 @@ class Mask(Masker):
         version = 1 if not is_faceswap else 2 if config.get("include_hair") else 3
         return is_faceswap, version
 
-    def _get_segment_indices(self):
+    def _get_segment_indices(self) -> List[int]:
         """ Obtain the segment indices to include within the face mask area based on user
         configuration settings.
 
@@ -100,8 +108,9 @@ class Mask(Masker):
         logger.debug("Selected segment indices: %s", retval)
         return retval
 
-    def init_model(self):
+    def init_model(self) -> None:
         """ Initialize the BiSeNet Face Parsing model. """
+        assert isinstance(self.model_path, str)
         lbls = 5 if self._is_faceswap else 19
         self.model = BiSeNet(self.model_path,
                              self.config["allow_growth"],
@@ -114,27 +123,25 @@ class Mask(Masker):
                                dtype="float32")
         self.model.predict(placeholder)
 
-    def process_input(self, batch):
+    def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
+        assert isinstance(batch, MaskerBatch)
         mean = (0.384, 0.314, 0.279) if self._is_faceswap else (0.485, 0.456, 0.406)
         std = (0.324, 0.286, 0.275) if self._is_faceswap else (0.229, 0.224, 0.225)
 
-        batch["feed"] = ((np.array([feed.face[..., :3]
-                                    for feed in batch["feed_faces"]],
-                                   dtype="float32") / 255.0) - mean) / std
-        logger.trace("feed shape: %s", batch["feed"].shape)
-        return batch
+        batch.feed = ((np.array([cast(np.ndarray, feed.face)[..., :3]
+                                 for feed in batch.feed_faces],
+                                dtype="float32") / 255.0) - mean) / std
+        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
 
-    def predict(self, batch):
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        batch["prediction"] = self.model.predict(batch["feed"])[0]
-        return batch
+        return self.model.predict(feed)[0]
 
-    def process_output(self, batch):
+    def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """
-        pred = batch["prediction"].argmax(-1).astype("uint8")
-        batch["prediction"] = np.isin(pred, self._segment_indices).astype("float32")
-        return batch
+        pred = batch.prediction.argmax(-1).astype("uint8")
+        batch.prediction = np.isin(pred, self._segment_indices).astype("float32")
 
 # BiSeNet Face-Parsing Model
 
@@ -164,7 +171,7 @@ class Mask(Masker):
 _NAME_TRACKER = set()
 
 
-def _get_name(name, start_idx=1):
+def _get_name(name: str, start_idx: int = 1) -> str:
     """ Auto numbering to keep track of layer names.
 
     Names are kept the same as the PyTorch original model, to enable easier porting of weights.
@@ -218,8 +225,13 @@ class ConvBn():  # pylint:disable=too-few-public-methods
         The starting index for naming the layers within the block. See :func:`_get_name` for
         more information. Default: `1`
     """
-    def __init__(self, filters,
-                 kernel_size=3, strides=1, padding=1, activation=True, prefix="", start_idx=1):
+    def __init__(self, filters: int,
+                 kernel_size: int = 3,
+                 strides: int = 1,
+                 padding: int = 1,
+                 activation: int = True,
+                 prefix: str = "",
+                 start_idx: int = 1) -> None:
         self._filters = filters
         self._kernel_size = kernel_size
         self._strides = strides
@@ -228,7 +240,7 @@ class ConvBn():  # pylint:disable=too-few-public-methods
         self._prefix = f"{prefix}." if prefix else prefix
         self._start_idx = start_idx
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Convolutional Batch Normalization block.
 
         Parameters
@@ -268,7 +280,7 @@ class ResNet18():  # pylint:disable=too-few-public-methods
     def __init__(self):
         self._feature_index = 1 if K.image_data_format() == "channels_first" else -1
 
-    def _basic_block(self, inputs, prefix, filters, strides=1):
+    def _basic_block(self, inputs: Tensor, prefix: str, filters: int, strides: int = 1) -> Tensor:
         """ The basic building block for ResNet 18.
 
         Parameters
@@ -306,7 +318,12 @@ class ResNet18():  # pylint:disable=too-few-public-methods
         var_x = Activation("relu", name=f"{prefix}.relu")(var_x)
         return var_x
 
-    def _basic_layer(self, inputs, prefix, filters, num_blocks, strides=1):
+    def _basic_layer(self,
+                     inputs: Tensor,
+                     prefix: str,
+                     filters: int,
+                     num_blocks: int,
+                     strides: int = 1) -> Tensor:
         """ The basic layer for ResNet 18. Recursively builds from :func:`_basic_block`.
 
         Parameters
@@ -333,7 +350,7 @@ class ResNet18():  # pylint:disable=too-few-public-methods
             var_x = self._basic_block(var_x, f"{prefix}.{i + 1}", filters, strides=1)
         return var_x
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the ResNet 18 block.
 
         Parameters
@@ -367,10 +384,10 @@ class AttentionRefinementModule():  # pylint:disable=too-few-public-methods
         The dimensionality of the output space (i.e. the number of output filters in the
         convolution).
     """
-    def __init__(self, filters):
+    def __init__(self, filters: int) -> None:
         self._filters = filters
 
-    def __call__(self, inputs, feats):
+    def __call__(self, inputs: Tensor, feats: int) -> Tensor:
         """ Call the Attention Refinement block.
 
         Parameters
@@ -401,7 +418,7 @@ class ContextPath():  # pylint:disable=too-few-public-methods
     def __init__(self):
         self._resnet = ResNet18()
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Context Path block.
 
         Parameters
@@ -444,10 +461,10 @@ class FeatureFusionModule():  # pylint:disable=too-few-public-methods
         The dimensionality of the output space (i.e. the number of output filters in the
         convolution).
     """
-    def __init__(self, filters):
+    def __init__(self, filters: int) -> None:
         self._filters = filters
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the Feature Fusion block.
 
         Parameters
@@ -492,12 +509,12 @@ class BiSeNetOutput():  # pylint:disable=too-few-public-methods
     label, str, optional
         The label for this output (for naming). Default: `""` (i.e. empty string, or no label)
     """
-    def __init__(self, filters, num_classes, label=""):
+    def __init__(self, filters: int, num_classes: int, label: str = "") -> None:
         self._filters = filters
         self._num_classes = num_classes
         self._label = label
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the BiSeNet Output block.
 
         Parameters
@@ -539,7 +556,13 @@ class BiSeNet(KSession):
     cpu_mode: bool, optional
         ``True`` run the model on CPU. Default: ``False``
     """
-    def __init__(self, model_path, allow_growth, exclude_gpus, input_size, num_classes, cpu_mode):
+    def __init__(self,
+                 model_path: str,
+                 allow_growth: bool,
+                 exclude_gpus: Optional[List[int]],
+                 input_size: int,
+                 num_classes: int,
+                 cpu_mode: bool) -> None:
         super().__init__("BiSeNet Face Parsing",
                          model_path,
                          allow_growth=allow_growth,
@@ -551,7 +574,7 @@ class BiSeNet(KSession):
         self.define_model(self._model_definition)
         self.load_model_weights()
 
-    def _model_definition(self):
+    def _model_definition(self) -> Tuple[Tensor, List[Tensor]]:
         """ Definition of the VGG Obstructed Model.
 
         Returns
@@ -562,12 +585,12 @@ class BiSeNet(KSession):
         """
         input_ = Input((self._input_size, self._input_size, 3))
 
-        feat_res8, feat_cp8, feat_cp16 = self._cp(input_)
-        feat_fuse = FeatureFusionModule(256)([feat_res8, feat_cp8])
+        features = self._cp(input_)  # res8, cp8, cp16
+        feat_fuse = FeatureFusionModule(256)([features[0], features[1]])
 
         feat_out = BiSeNetOutput(256, self._num_classes)(feat_fuse)
-        feat_out16 = BiSeNetOutput(64, self._num_classes, label="16")(feat_cp8)
-        feat_out32 = BiSeNetOutput(64, self._num_classes, label="32")(feat_cp16)
+        feat_out16 = BiSeNetOutput(64, self._num_classes, label="16")(features[1])
+        feat_out32 = BiSeNetOutput(64, self._num_classes, label="32")(features[2])
 
         height, width = K.int_shape(input_)[1:3]
         f_h, f_w = K.int_shape(feat_out)[1:3]

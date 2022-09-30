@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ MTCNN Face detection plugin """
-
 from __future__ import absolute_import, division, print_function
+import logging
 from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
@@ -9,13 +9,17 @@ import numpy as np
 
 from lib.model.session import KSession
 from lib.utils import get_backend
-from ._base import Detector, logger
+from ._base import BatchType, Detector
 
 if get_backend() == "amd":
     from keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU
+    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU  # noqa pylint:disable=no-name-in-module,import-error
+    from tensorflow import Tensor
+
+logger = logging.getLogger(__name__)
 
 
 class Detect(Detector):
@@ -60,35 +64,29 @@ class Detect(Detector):
 
     def init_model(self) -> None:
         """ Initialize MTCNN Model. """
+        assert isinstance(self.model_path, list)
         self.model = MTCNN(self.model_path,
                            self.config["allow_growth"],
                            self._exclude_gpus,
                            self.config["cpu"],
-                           **self.kwargs)
+                           **self.kwargs)  # type:ignore
 
-    def process_input(self, batch: dict) -> dict:
+    def process_input(self, batch: BatchType) -> None:
         """ Compile the detection image(s) for prediction
 
         Parameters
         ----------
-        batch: dict
+        batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             Contains the batch that is currently being passed through the plugin process
-
-        Returns
-        -------
-        dict
-            The batch with input processed
-
         """
-        batch["feed"] = (batch["image"] - 127.5) / 127.5
-        return batch
+        batch.feed = (np.array(batch.image, dtype="float32") - 127.5) / 127.5
 
-    def predict(self, batch: dict) -> dict:
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions
 
         Parameters
         ----------
-        batch: dict
+        batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             Contains the batch to pass through the MTCNN model
 
         Returns
@@ -96,26 +94,21 @@ class Detect(Detector):
         dict
             The batch with the predictions added to the dictionary
         """
-        prediction, points = self.model.detect_faces(batch["feed"])
-        logger.trace("filename: %s, prediction: %s, mtcnn_points: %s",  # type:ignore
-                     batch["filename"], prediction, points)
-        batch["prediction"], batch["mtcnn_points"] = prediction, points
-        return batch
+        assert isinstance(self.model, MTCNN)
+        prediction, points = self.model.detect_faces(feed)
+        logger.trace("prediction: %s, mtcnn_points: %s",  # type:ignore
+                     prediction, points)
+        return prediction
 
-    def process_output(self, batch: dict) -> dict:
+    def process_output(self, batch: BatchType) -> None:
         """ MTCNN performs no post processing so the original batch is returned
 
         Parameters
         ----------
-        batch: dict
+        batch: :class:`~plugins.extract.detect._base.DetectorBatch`
             Contains the batch to apply postprocessing to
-
-        Returns
-        -------
-        dict
-            The originally received batch
         """
-        return batch
+        return
 
 
 # MTCNN Detector
@@ -174,7 +167,7 @@ class PNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: List[int],
+                 exclude_gpus: Optional[List[int]],
                  cpu_mode: bool,
                  input_size: int,
                  min_size: int,
@@ -198,7 +191,7 @@ class PNet(KSession):
         self._pnet_input: Optional[List[np.ndarray]] = None
 
     @staticmethod
-    def model_definition():
+    def model_definition() -> Tuple[List[Tensor], List[Tensor]]:
         """ Keras P-Network Definition for MTCNN """
         input_ = Input(shape=(None, None, 3))
         var_x = Conv2D(10, (3, 3), strides=1, padding='valid', name='conv1')(input_)
@@ -354,7 +347,7 @@ class RNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: List[int],
+                 exclude_gpus: Optional[List[int]],
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
@@ -370,7 +363,7 @@ class RNet(KSession):
         self._threshold = threshold
 
     @staticmethod
-    def model_definition():
+    def model_definition() -> Tuple[List[Tensor], List[Tensor]]:
         """ Keras R-Network Definition for MTCNN """
         input_ = Input(shape=(24, 24, 3))
         var_x = Conv2D(28, (3, 3), strides=1, padding='valid', name='conv1')(input_)
@@ -485,7 +478,7 @@ class ONet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: List[int],
+                 exclude_gpus: Optional[List[int]],
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
@@ -501,7 +494,7 @@ class ONet(KSession):
         self._threshold = threshold
 
     @staticmethod
-    def model_definition():
+    def model_definition() -> Tuple[List[Tensor], List[Tensor]]:
         """ Keras O-Network for MTCNN """
         input_ = Input(shape=(48, 48, 3))
         var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv1')(input_)
@@ -638,7 +631,7 @@ class MTCNN():  # pylint: disable=too-few-public-methods
     def __init__(self,
                  model_path: List[str],
                  allow_growth: bool,
-                 exclude_gpus: List[int],
+                 exclude_gpus: Optional[List[int]],
                  cpu_mode: bool,
                  input_size: int = 640,
                  minsize: int = 20,
@@ -673,7 +666,7 @@ class MTCNN():  # pylint: disable=too-few-public-methods
 
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def detect_faces(self, batch: np.ndarray) -> Tuple[List[np.ndarray], List[np.ndarray]]:
+    def detect_faces(self, batch: np.ndarray) -> Tuple[np.ndarray, Tuple[np.ndarray]]:
         """Detects faces in an image, and returns bounding boxes and points for them.
 
         Parameters
@@ -691,7 +684,7 @@ class MTCNN():  # pylint: disable=too-few-public-methods
         rectangles = self._rnet(batch, rectangles)
 
         ret_boxes, ret_points = zip(*self._onet(batch, rectangles))
-        return ret_boxes, ret_points
+        return np.array(ret_boxes, dtype="object"), ret_points
 
 
 def nms(rectangles: np.ndarray,

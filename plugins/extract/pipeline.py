@@ -104,7 +104,7 @@ class Extractor():
                  configfile: Optional[str] = None,
                  multiprocess: bool = False,
                  exclude_gpus: Optional[List[int]] = None,
-                 rotate_images: Optional[List[int]] = None,
+                 rotate_images: Optional[str] = None,
                  min_size: int = 0,
                  normalize_method:  Optional[Literal["none", "clahe", "hist", "mean"]] = None,
                  re_feed: int = 0,
@@ -275,8 +275,7 @@ class Extractor():
         out_queue = self._output_queue
         while True:
             try:
-                if self._check_and_raise_error():
-                    break
+                self._check_and_raise_error()
                 faces = out_queue.get(True, 1)
                 if faces == "EOF":
                     break
@@ -392,7 +391,18 @@ class Extractor():
     def _set_flow(detector: Optional[str],
                   aligner: Optional[str],
                   masker: List[Optional[str]]) -> List[str]:
-        """ Set the flow list based on the input plugins """
+        """ Set the flow list based on the input plugins
+
+        Parameters
+        ----------
+        detector: str or ``None``
+            The name of a detector plugin as exists in :mod:`plugins.extract.detect`
+        aligner: str or ``None
+            The name of an aligner plugin as exists in :mod:`plugins.extract.align`
+        masker: str or list or ``None
+            The name of a masker plugin(s) as exists in :mod:`plugins.extract.mask`.
+            This can be a single masker or a list of multiple maskers
+        """
         logger.debug("detector: %s, aligner: %s, masker: %s", detector, aligner, masker)
         retval = []
         if detector is not None and detector.lower() != "none":
@@ -585,7 +595,7 @@ class Extractor():
 
     def _load_detect(self,
                      detector: Optional[str],
-                     rotation: Optional[List[int]],
+                     rotation: Optional[str],
                      min_size: int,
                      configfile: Optional[str]) -> Optional["Detector"]:
         """ Set global arguments and load detector plugin """
@@ -729,12 +739,10 @@ class Extractor():
         for plugin in self._active_plugins:
             plugin.join()
 
-    def _check_and_raise_error(self) -> bool:
+    def _check_and_raise_error(self) -> None:
         """ Check all threads for errors and raise if one occurs """
         for plugin in self._active_plugins:
-            if plugin.check_and_raise_error():
-                return True
-        return False
+            plugin.check_and_raise_error()
 
 
 class ExtractMedia():

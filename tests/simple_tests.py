@@ -25,6 +25,7 @@ _COLORS = {
     "ENDC": "\033[0m"
 }
 
+
 def print_colored(text, color="OK", bold=False):
     """ Print colored text
     This might not work on windows,

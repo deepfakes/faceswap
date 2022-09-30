@@ -1,30 +1,37 @@
 #!/usr/bin/env python3
 """ VGG Obstructed face mask plugin """
+import logging
+from typing import cast, List, Optional, Tuple
 
 import numpy as np
 
-
 from lib.model.session import KSession
 from lib.utils import get_backend
-from ._base import Masker, logger
+from ._base import BatchType, Masker, MaskerBatch
+
+logger = logging.getLogger(__name__)
+
 
 if get_backend() == "amd":
     from keras.layers import (
         Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
         ZeroPadding2D)
+    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
 else:
     # Ignore linting errors from Tensorflow's thoroughly broken import system
     from tensorflow.keras.layers import (  # pylint:disable=no-name-in-module,import-error
         Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
         ZeroPadding2D)
+    from tensorflow import Tensor
 
 
 class Mask(Masker):
     """ Neural network to process face image into a segmentation mask of the face """
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         git_model_id = 5
         model_filename = "Nirkin_500_softmax_v1.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+        self.model: KSession
         self.name = "VGG Obstructed"
         self.input_size = 500
         self.vram = 3936
@@ -32,7 +39,8 @@ class Mask(Masker):
         self.vram_per_batch = 304
         self.batchsize = self.config["batch-size"]
 
-    def init_model(self):
+    def init_model(self) -> None:
+        assert isinstance(self.model_path, str)
         self.model = VGGObstructed(self.model_path,
                                    allow_growth=self.config["allow_growth"],
                                    exclude_gpus=self._exclude_gpus)
@@ -41,22 +49,22 @@ class Mask(Masker):
                                dtype="float32")
         self.model.predict(placeholder)
 
-    def process_input(self, batch):
+    def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
-        input_ = [feed.face[..., :3] for feed in batch["feed_faces"]]
-        batch["feed"] = input_ - np.mean(input_, axis=(1, 2))[:, None, None, :]
-        logger.trace("feed shape: %s", batch["feed"].shape)
-        return batch
+        assert isinstance(batch, MaskerBatch)
+        input_ = [cast(np.ndarray, feed.face)[..., :3] for feed in batch.feed_faces]
+        batch.feed = input_ - np.mean(input_, axis=(1, 2))[:, None, None, :]
+        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
 
-    def predict(self, batch):
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        predictions = self.model.predict(batch["feed"])
-        batch["prediction"] = predictions[..., 0] * -1.0 + 1.0
-        return batch
+        predictions = self.model.predict(feed)
+        assert isinstance(predictions, np.ndarray)
+        return predictions[..., 0] * -1.0 + 1.0
 
-    def process_output(self, batch):
+    def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """
-        return batch
+        return
 
 
 class VGGObstructed(KSession):
@@ -84,7 +92,10 @@ class VGGObstructed(KSession):
     Model file sourced from:
     https://github.com/YuvalNirkin/face_segmentation/releases/download/1.0/face_seg_fcn8s.zip
     """
-    def __init__(self, model_path, allow_growth, exclude_gpus):
+    def __init__(self,
+                 model_path: str,
+                 allow_growth: bool,
+                 exclude_gpus: Optional[List[int]]) -> None:
         super().__init__("VGG Obstructed",
                          model_path,
                          allow_growth=allow_growth,
@@ -93,7 +104,7 @@ class VGGObstructed(KSession):
         self.load_model_weights()
 
     @classmethod
-    def _model_definition(cls):
+    def _model_definition(cls) -> Tuple[Tensor, Tensor]:
         """ Definition of the VGG Obstructed Model.
 
         Returns
@@ -158,13 +169,13 @@ class _ConvBlock():  # pylint:disable=too-few-public-methods
     iterations: int
         The number of consecutive Conv2D layers to create
     """
-    def __init__(self, level, filters, iterations):
+    def __init__(self, level: int, filters: int, iterations: int) -> None:
         self._name = f"conv{level}_"
         self._level = level
         self._filters = filters
         self._iterator = range(1, iterations + 1)
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Tensor) -> Tensor:
         """ Call the convolutional loop.
 
         Parameters
@@ -203,12 +214,12 @@ class _ScorePool():  # pylint:disable=too-few-public-methods
     crop: int
         The amount of 2D cropping to apply
     """
-    def __init__(self, level, scale, crop):
+    def __init__(self, level: int, scale: float, crop: int) -> None:
         self._name = f"_pool{level}"
         self._cropping = ((crop, crop), (crop, crop))
         self._scale = scale
 
-    def __call__(self, inputs):
+    def __call__(self, inputs: Tensor) -> Tensor:
         """ Score pool block.
 
         Parameters

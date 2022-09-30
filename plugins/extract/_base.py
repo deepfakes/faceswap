@@ -3,7 +3,13 @@
 :mod:`~plugins.extract.mask` Plugins
 """
 import logging
-from typing import Dict
+import sys
+
+from dataclasses import dataclass, field
+from typing import (Any, Callable, Dict, Generator, List, Optional,
+                    Sequence, Union, Tuple, TYPE_CHECKING)
+
+import numpy as np
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
 from lib.multithreading import MultiThread
@@ -12,13 +18,27 @@ from lib.utils import GetModel, FaceswapError
 from ._config import Config
 from .pipeline import ExtractMedia
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
 
+if TYPE_CHECKING:
+    from queue import Queue
+    import cv2
+    from lib.align import DetectedFace
+    from lib.model.session import KSession
+    from .align._base import AlignerBatch
+    from .detect._base import DetectorBatch
+    from .mask._base import MaskerBatch
+
+
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 # TODO CPU mode
 # TODO Run with warnings mode
 
 
-def _get_config(plugin_name, configfile=None):
+def _get_config(plugin_name: str, configfile: Optional[str] = None) -> Dict[str, Any]:
     """ Return the configuration for the requested model
 
     Parameters
@@ -35,6 +55,43 @@ def _get_config(plugin_name, configfile=None):
        A dictionary of configuration items from the configuration file
     """
     return Config(plugin_name, configfile=configfile).config_dict
+
+
+BatchType = Union["DetectorBatch", "AlignerBatch", "MaskerBatch"]
+
+
+@dataclass
+class ExtractorBatch:
+    """ Dataclass for holding a batch flowing through post Detector plugins.
+
+    The batch size for post Detector plugins is not the same as the overall batch size.
+    An image may contain 0 or more detected faces, and these need to be split and recombined
+    to be able to utilize a plugin's internal batch size.
+
+    Plugin types will inherit from this class and add required keys.
+
+    Parameters
+    ----------
+    image: list
+        List of :class:`numpy.ndarray` containing the original frames
+    detected_faces: list
+        List of :class:`~lib.align.DetectedFace` objects
+    filename: list
+        List of original frame filenames for the batch
+    feed: :class:`numpy.nd.array`
+        Batch of feed images to feed the net with
+    prediction: :class:`numpy.nd.array`
+        Batch of predictions. Direct output from the aligner net
+    data: dict
+        Any specific data required during the processing phase for a particular plugin
+    """
+    image: List[np.ndarray] = field(default_factory=list)
+    detected_faces: Sequence[Union["DetectedFace",
+                             List["DetectedFace"]]] = field(default_factory=list)
+    filename: List[str] = field(default_factory=list)
+    feed: np.ndarray = np.array([])
+    prediction: np.ndarray = np.array([])
+    data: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class Extractor():
@@ -100,12 +157,15 @@ class Extractor():
     plugins.extract.pipeline : The extract pipeline that configures and calls all plugins
 
     """
-    def __init__(self, git_model_id=None, model_filename=None, exclude_gpus=None, configfile=None,
-                 instance=0):
+    def __init__(self,
+                 git_model_id: Optional[int] = None,
+                 model_filename: Optional[Union[str, List[str]]] = None,
+                 exclude_gpus: Optional[List[int]] = None,
+                 configfile: Optional[str] = None,
+                 instance: int = 0) -> None:
         logger.debug("Initializing %s: (git_model_id: %s, model_filename: %s, exclude_gpus: %s, "
                      "configfile: %s, instance: %s, )", self.__class__.__name__, git_model_id,
                      model_filename, exclude_gpus, configfile, instance)
-
         self._is_initialized = False
         self._instance = instance
         self._exclude_gpus = exclude_gpus
@@ -117,20 +177,19 @@ class Extractor():
         be a list of strings """
 
         # << SET THE FOLLOWING IN PLUGINS __init__ IF DIFFERENT FROM DEFAULT >> #
-        self.name = None
-        self.input_size = None
-        self.color_format = "BGR"
-        self.vram = None
-        self.vram_warnings = None  # Will run at this with warnings
-        self.vram_per_batch = None
+        self.name: Optional[str] = None
+        self.input_size = 0
+        self.color_format: Literal["BGR", "RGB", "GRAY"] = "BGR"
+        self.vram = 0
+        self.vram_warnings = 0  # Will run at this with warnings
+        self.vram_per_batch = 0
 
         # << THE FOLLOWING ARE SET IN self.initialize METHOD >> #
         self.queue_size = 1
         """ int: Queue size for all internal queues. Set in :func:`initialize()` """
 
-        self.model = None
-        """varies: The model for this plugin.
-        Set in the plugin's :func:`init_model()` method """
+        self.model: Optional[Union["KSession", "cv2.dnn.Net"]] = None
+        """varies: The model for this plugin. Set in the plugin's :func:`init_model()` method """
 
         # For detectors that support batching, this should be set to  the calculated batch size
         # that the amount of available VRAM will support.
@@ -138,10 +197,10 @@ class Extractor():
         """ int: Batchsize for feeding this model. The number of images the model should
         feed through at once. """
 
-        self._queues = {}
+        self._queues: Dict[str, "Queue"] = {}
         """ dict: in + out queues and internal queues for this plugin, """
 
-        self._threads = []
+        self._threads: List[MultiThread] = []
         """ list: Internal threads for this plugin """
 
         self._extract_media: Dict[str, ExtractMedia] = {}
@@ -149,82 +208,82 @@ class Extractor():
         processed. Stored at input for pairing back up on output of extractor process """
 
         # << THE FOLLOWING PROTECTED ATTRIBUTES ARE SET IN PLUGIN TYPE _base.py >>> #
-        self._plugin_type = None
-        """ str: Plugin type. ``detect`` or ``align``
-        set in ``<plugin_type>._base`` """
+        self._plugin_type: Optional[Literal["align", "detect", "recognition", "mask"]] = None
+        """ str: Plugin type. ``detect`, ``align``, ``recognise`` or ``mask`` set in
+        ``<plugin_type>._base`` """
+
+        # << Objects for splitting frame's detected faces and rejoining them >>
+        # << for post-detector pliugins                                      >>
+        self._faces_per_filename: Dict[str, int] = {}  # Tracking for recompiling batches
+        self._rollover: Optional[ExtractMedia] = None  # batch rollover items
+        self._output_faces: List["DetectedFace"] = []  # Recompiled output faces from plugin
 
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< OVERIDABLE METHODS >>> #
-    def init_model(self):
+    def init_model(self) -> None:
         """ **Override method**
 
         Override this method to execute the specific model initialization method """
         raise NotImplementedError
 
-    def process_input(self, batch):
+    def process_input(self, batch: BatchType) -> None:
         """ **Override method**
 
         Override this method for specific extractor pre-processing of image
 
         Parameters
         ----------
-        batch : dict
+        batch : :class:`ExtractorBatch`
             Contains the batch that is currently being passed through the plugin process
-
-        Notes
-        -----
-        When preparing an input to the model a key ``feed`` must be added
-        to the :attr:`batch` ``dict`` which contains this input.
         """
         raise NotImplementedError
 
-    def predict(self, batch):
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ **Override method**
 
         Override this method for specific extractor model prediction function
 
         Parameters
         ----------
-        batch : dict
-            Contains the batch that is currently being passed through the plugin process
+        feed: :class:`numpy.ndarray`
+            The feed images for the batch
 
         Notes
         -----
-        Input for :func:`predict` should have been set in :func:`process_input` with the addition
-        of a ``feed`` key to the :attr:`batch` ``dict``.
+        Input for :func:`predict` should have been set in :func:`process_input`
 
-        Output from the model should add the key ``prediction`` to the :attr:`batch` ``dict``.
+        Output from the model should populate the key :attr:`prediction` of the :attr:`batch`.
 
         For Detect:
-            the expected output for the ``prediction`` key of the :attr:`batch` dict should be a
+            the expected output for the :attr:`prediction` of the :attr:`batch` should be a
             ``list`` of :attr:`batchsize` of detected face points. These points should be either
             a ``list``, ``tuple`` or ``numpy.ndarray`` with the first 4 items being the `left`,
             `top`, `right`, `bottom` points, in that order
         """
         raise NotImplementedError
 
-    def process_output(self, batch):
+    def process_output(self, batch: BatchType) -> None:
         """ **Override method**
 
         Override this method for specific extractor model post predict function
 
         Parameters
         ----------
-        batch : dict
+        batch: :class:`ExtractorBatch`
             Contains the batch that is currently being passed through the plugin process
 
         Notes
         -----
         For Align:
-            The key ``landmarks`` must be returned in the :attr:`batch` ``dict`` from this method.
-            This should be a ``list`` or ``numpy.ndarray`` of :attr:`batchsize` containing a
-            ``list``, ``tuple`` or ``numpy.ndarray`` of `(x, y)` coordinates of the 68 point
+            The :attr:`landmarks` must be populated in :attr:`batch` from this method.
+            This should be a ``list`` or :class:`numpy.ndarray` of :attr:`batchsize` containing a
+            ``list``, ``tuple`` or :class:`numpy.ndarray` of `(x, y)` coordinates of the 68 point
             landmarks as calculated from the :attr:`model`.
         """
         raise NotImplementedError
 
-    def _predict(self, batch):
+    def _predict(self, batch: BatchType) -> BatchType:
         """ **Override method** (at `<plugin_type>` level)
 
         This method should be overridden at the `<plugin_type>` level (IE.
@@ -236,12 +295,12 @@ class Extractor():
 
         Parameters
         ----------
-        batch : dict
+        batch: :class:`ExtractorBatch`
             Contains the batch that is currently being passed through the plugin process
         """
         raise NotImplementedError
 
-    def _process_input(self, batch):
+    def _process_input(self, batch: BatchType) -> BatchType:
         """ **Override method** (at `<plugin_type>` level)
 
         This method should be overridden at the `<plugin_type>` level (IE.
@@ -255,17 +314,18 @@ class Extractor():
 
         Parameters
         ----------
-        batch : dict
+        batch: :class:`ExtractorBatch`
             Contains the batch that is currently being passed through the plugin process
 
         Notes
         -----
-        When preparing an input to the model a key ``feed`` must be added
-        to the :attr:`batch` ``dict`` which contains this input.
+        When preparing an input to the model a the attribute :attr:`feed` must be added
+        to the :attr:`batch` which contains this input.
         """
-        return self.process_input(batch)
+        self.process_input(batch)
+        return batch
 
-    def _process_output(self, batch):
+    def _process_output(self, batch: BatchType) -> BatchType:
         """ **Override method** (at `<plugin_type>` level)
 
         This method should be overridden at the `<plugin_type>` level (IE.
@@ -279,12 +339,13 @@ class Extractor():
 
         Parameters
         ----------
-        batch : dict
+        batch: :class:`ExtractorBatch`
             Contains the batch that is currently being passed through the plugin process
         """
-        return self.process_output(batch)
+        self.process_output(batch)
+        return batch
 
-    def finalize(self, batch):
+    def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ **Override method** (at `<plugin_type>` level)
 
         This method should be overridden at the `<plugin_type>` level (IE.
@@ -296,13 +357,12 @@ class Extractor():
 
         Parameters
         ----------
-        batch : dict
+        batch: :class:`ExtractorBatch`
             Contains the batch that is currently being passed through the plugin process
-
         """
         raise NotImplementedError
 
-    def get_batch(self, queue):
+    def get_batch(self, queue: "Queue") -> Tuple[bool, BatchType]:
         """ **Override method** (at `<plugin_type>` level)
 
         This method should be overridden at the `<plugin_type>` level (IE.
@@ -320,7 +380,7 @@ class Extractor():
         raise NotImplementedError
 
     # <<< THREADING METHODS >>> #
-    def start(self):
+    def start(self) -> None:
         """ Start all threads
 
         Exposed for :mod:`~plugins.extract.pipeline` to start plugin's threads
@@ -328,7 +388,7 @@ class Extractor():
         for thread in self._threads:
             thread.start()
 
-    def join(self):
+    def join(self) -> None:
         """ Join all threads
 
         Exposed for :mod:`~plugins.extract.pipeline` to join plugin's threads
@@ -337,22 +397,56 @@ class Extractor():
             thread.join()
             del thread
 
-    def check_and_raise_error(self):
+    def check_and_raise_error(self) -> None:
         """ Check all threads for errors
 
         Exposed for :mod:`~plugins.extract.pipeline` to check plugin's threads for errors
         """
         for thread in self._threads:
-            err = thread.check_and_raise_error()
-            if err is not None:
-                logger.debug("thread_error_detected")
-                return True
-        return False
+            thread.check_and_raise_error()
+
+    def rollover_collector(self, queue: "Queue") -> Union[Literal["EOF"], ExtractMedia]:
+        """ For extractors after the Detectors, the number of detected faces per frame vs extractor
+        batch size mean that faces will need to be split/re-joined with frames. The rollover
+        collector can be used to rollover items that don't fit in a batch.
+
+        Collect the item from the :attr:`_rollover` dict or from the queue. Add face count per
+        frame to self._faces_per_filename for joining batches back up in finalize
+
+        Parameters
+        ----------
+        queue: :class:`queue.Queue`
+            The input queue to the aligner. Should contain
+            :class:`~plugins.extract.pipeline.ExtractMedia` objects
+
+        Returns
+        -------
+        :class:`~plugins.extract.pipeline.ExtractMedia` or EOF
+            The next extract media object, or EOF if pipe has ended
+        """
+        if self._rollover is not None:
+            logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",  # type:ignore
+                         self._rollover.filename, len(self._rollover.detected_faces))
+            item: Union[Literal["EOF"], ExtractMedia] = self._rollover
+            self._rollover = None
+        else:
+            next_item = self._get_item(queue)
+            # Rollover collector should only be used at entry to plugin
+            assert isinstance(next_item, (ExtractMedia, str))
+            item = next_item
+            if item != "EOF":
+                logger.trace("Getting from queue: (filename: %s, faces: %s)",  # type:ignore
+                             item.filename, len(item.detected_faces))
+                self._faces_per_filename[item.filename] = len(item.detected_faces)
+        return item
 
     # <<< PROTECTED ACCESS METHODS >>> #
     # <<< INIT METHODS >>> #
     @classmethod
-    def _get_model(cls, git_model_id, model_filename):
+    def _get_model(cls,
+                   git_model_id: Optional[int],
+                   model_filename: Optional[Union[str, List[str]]]
+                   ) -> Optional[Union[str, List[str]]]:
         """ Check if model is available, if not, download and unzip it """
         if model_filename is None:
             logger.debug("No model_filename specified. Returning None")
@@ -364,13 +458,14 @@ class Extractor():
         return model.model_path
 
     # <<< PLUGIN INITIALIZATION >>> #
-    def initialize(self, *args, **kwargs):
+    def initialize(self, *args, **kwargs) -> None:
         """ Initialize the extractor plugin
 
             Should be called from :mod:`~plugins.extract.pipeline`
         """
         logger.debug("initialize %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
+        assert self._plugin_type is not None and self.name is not None
         if self._is_initialized:
             # When batch processing, plugins will be initialized on first job in batch
             logger.debug("Plugin already initialized: %s (%s)",
@@ -402,7 +497,10 @@ class Extractor():
         logger.info("Initialized %s (%s) with batchsize of %s",
                     self.name, self._plugin_type.title(), self.batchsize)
 
-    def _add_queues(self, in_queue, out_queue, queues):
+    def _add_queues(self,
+                    in_queue: "Queue",
+                    out_queue: "Queue",
+                    queues: List[str]) -> None:
         """ Add the queues
             in_queue and out_queue should be previously created queue manager queues.
             queues should be a list of queue names """
@@ -414,8 +512,9 @@ class Extractor():
                 maxsize=self.queue_size)
 
     # <<< THREAD METHODS >>> #
-    def _compile_threads(self):
+    def _compile_threads(self) -> None:
         """ Compile the threads into self._threads list """
+        assert self.name is not None
         logger.debug("Compiling %s threads", self._plugin_type)
         name = self.name.replace(" ", "_").lower()
         base_name = f"{self._plugin_type}_{name}"
@@ -433,7 +532,11 @@ class Extractor():
                          self._queues["out"])
         logger.debug("Compiled %s threads: %s", self._plugin_type, self._threads)
 
-    def _add_thread(self, name, function, in_queue, out_queue):
+    def _add_thread(self,
+                    name: str,
+                    function: Callable[[BatchType], BatchType],
+                    in_queue: "Queue",
+                    out_queue: "Queue") -> None:
         """ Add a MultiThread thread to self._threads """
         logger.debug("Adding thread: (name: %s, function: %s, in_queue: %s, out_queue: %s)",
                      name, function, in_queue, out_queue)
@@ -444,27 +547,64 @@ class Extractor():
                                          out_queue=out_queue))
         logger.debug("Added thread: %s", name)
 
-    def _thread_process(self, function, in_queue, out_queue):
-        """ Perform a plugin function in a thread """
-        func_name = function.__name__
-        logger.debug("threading: (function: '%s')", func_name)
+    def _obtain_batch_item(self, function: Callable[[BatchType], BatchType],
+                           in_queue: "Queue",
+                           out_queue: "Queue") -> Optional[BatchType]:
+        """ Obtain the batch item from the in queue for the current process.
+
+        Parameters
+        ----------
+        function: callable
+            The current plugin function being run
+        in_queue: :class:`queue.Queue`
+            The input queue for the function
+        out_queue: :class:`queue.Queue`
+            The output queue from the function
+
+        Returns
+        -------
+        :class:`ExtractorBatch` or ``None``
+            The batch, if one exists, or ``None`` if queue is exhausted
+        """
+        batch: Union[Literal["EOF"], BatchType, ExtractMedia]
+        if function.__name__ == "_process_input":  # Process input items to batches
+            exhausted, batch = self.get_batch(in_queue)
+            if exhausted:
+                if batch.filename:
+                    # Put the final batch
+                    batch = function(batch)
+                    out_queue.put(batch)
+                return None
+        else:
+            batch = self._get_item(in_queue)
+            if batch == "EOF":
+                return None
+
+        # ExtractMedia should only ever be the output of _get_item at the entry to a
+        # plugin's pipeline (ie in _process_input)
+        assert not isinstance(batch, ExtractMedia)
+        return batch
+
+    def _thread_process(self,
+                        function: Callable[[BatchType], BatchType],
+                        in_queue: "Queue",
+                        out_queue: "Queue") -> None:
+        """ Perform a plugin function in a thread
+
+        Parameters
+        ----------
+        function: callable
+            The current plugin function being run
+        in_queue: :class:`queue.Queue`
+            The input queue for the function
+        out_queue: :class:`queue.Queue`
+            The output queue from the function
+         """
+        logger.debug("threading: (function: '%s')", function.__name__)
         while True:
-            if func_name == "_process_input":
-                # Process input items to batches
-                exhausted, batch = self.get_batch(in_queue)
-                if exhausted:
-                    # TODO Move all batch items to common dataclass. Currently migrated:
-                    # Align
-                    if (isinstance(batch, dict) and batch or
-                            not isinstance(batch, dict) and batch.filename):
-                        # Put the final batch
-                        batch = function(batch)
-                        out_queue.put(batch)
-                    break
-            else:
-                batch = self._get_item(in_queue)
-                if batch == "EOF":
-                    break
+            batch = self._obtain_batch_item(function, in_queue, out_queue)
+            if batch is None:
+                break
             try:
                 batch = function(batch)
             except tf_errors.UnknownError as err:
@@ -479,7 +619,7 @@ class Extractor():
                            "`allow_growth option to `True`.")
                     raise FaceswapError(msg) from err
                 raise err
-            if func_name == "_process_output":
+            if function.__name__ == "_process_output":
                 # Process output items to individual items from batch
                 for item in self.finalize(batch):
                     out_queue.put(item)
@@ -489,19 +629,14 @@ class Extractor():
         out_queue.put("EOF")
 
     # <<< QUEUE METHODS >>> #
-    def _get_item(self, queue):
+    def _get_item(self, queue: "Queue") -> Union[Literal["EOF"], ExtractMedia, BatchType]:
         """ Yield one item from a queue """
         item = queue.get()
         if isinstance(item, ExtractMedia):
-            logger.trace("filename: '%s', image shape: %s, detected_faces: %s, queue: %s, "
-                         "item: %s",
+            logger.trace("filename: '%s', image shape: %s, detected_faces: %s, "  # type:ignore
+                         "queue: %s, item: %s",
                          item.filename, item.image_shape, item.detected_faces, queue, item)
             self._extract_media[item.filename] = item
         else:
-            logger.trace("item: %s, queue: %s", item, queue)
+            logger.trace("item: %s, queue: %s", item, queue)  # type:ignore
         return item
-
-    @staticmethod
-    def _dict_lists_to_list_dicts(dictionary):
-        """ Convert a dictionary of lists to a list of dictionaries """
-        return [dict(zip(dictionary, val)) for val in zip(*dictionary.values())]

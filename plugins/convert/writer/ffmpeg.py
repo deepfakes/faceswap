@@ -87,9 +87,9 @@ class Writer(Output):
 
     @property
     def _audio_codec(self) -> Optional[str]:
-        """ str or ``None``: The audio codec to use. This will either be ``"copy"`` (the default) or
-        ``None`` if skip muxing has been selected in configuration options, or if frame ranges have
-        been passed in the command line arguments. """
+        """ str or ``None``: The audio codec to use. This will either be ``"copy"`` (the default)
+        or ``None`` if skip muxing has been selected in configuration options, or if frame ranges
+        have been passed in the command line arguments. """
         retval: Optional[str] = "copy"
         if self.config["skip_mux"]:
             logger.info("Skipping audio muxing due to configuration settings.")

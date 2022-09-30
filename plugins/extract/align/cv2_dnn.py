@@ -23,15 +23,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import logging
 from typing import cast, List, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
 
-from ._base import Aligner, AlignerBatch, logger
+from ._base import Aligner, AlignerBatch, BatchType
 
 if TYPE_CHECKING:
     from lib.align.detected_face import DetectedFace
+
+logger = logging.getLogger(__name__)
 
 
 class Align(Aligner):
@@ -41,6 +44,7 @@ class Align(Aligner):
         model_filename = "cnn-facial-landmark_v1.pb"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
 
+        self.model: cv2.dnn.Net
         self.name = "cv2-DNN Aligner"
         self.input_size = 128
         self.color_format = "RGB"
@@ -53,7 +57,7 @@ class Align(Aligner):
         self.model = cv2.dnn.readNetFromTensorflow(self.model_path)  # pylint: disable=no-member
         self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
 
-    def process_input(self, batch: AlignerBatch) -> None:
+    def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction
 
         Parameters
@@ -66,10 +70,11 @@ class Align(Aligner):
         :class:`AlignerBatch`
             The batch item with the :attr:`feed` populated and any required :attr:`data` added
         """
+        assert isinstance(batch, AlignerBatch)
         faces, roi, offsets = self.align_image(batch)
         faces = self._normalize_faces(faces)
         batch.data.append(dict(roi=roi, offsets=offsets))
-        batch.feed.append(np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2)))
+        batch.feed = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2))
 
     def _get_box_and_offset(self, face: "DetectedFace") -> Tuple[List[int], int]:
         """Obtain the bounding box and offset from a detected face.
@@ -240,12 +245,12 @@ class Align(Aligner):
                      image.shape, padded_image.shape, box, offsets)
         return padded_image, offsets
 
-    def predict(self, batch: AlignerBatch) -> np.ndarray:
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Predict the 68 point landmarks
 
         Parameters
         ----------
-        batch: :class:`numpy.ndarray`
+        feed: :class:`numpy.ndarray`
             The batch to feed into the aligner
 
         Returns
@@ -253,26 +258,21 @@ class Align(Aligner):
         :class:`numpy.ndarray`
             The predictions from the aligner
         """
-        logger.trace("Predicting Landmarks")  # type:ignore
-        self.model.setInput(batch)
+        assert isinstance(self.model, cv2.dnn.Net)
+        self.model.setInput(feed)
         retval = self.model.forward()
         return retval
 
-    def process_output(self, batch: AlignerBatch) -> AlignerBatch:
+    def process_output(self, batch: BatchType) -> None:
         """ Process the output from the model
 
         Parameters
         ----------
         batch: :class:`AlignerBatch`
             The current batch from the model with :attr:`predictions` populated
-
-        Returns
-        -------
-        :class:`AlignerBatch`
-            The current batch with the :attr:`landmarks` populated
         """
+        assert isinstance(batch, AlignerBatch)
         self.get_pts_from_predict(batch)
-        return batch
 
     @classmethod
     def get_pts_from_predict(cls, batch: AlignerBatch):

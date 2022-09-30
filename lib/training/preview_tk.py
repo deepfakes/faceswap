@@ -71,8 +71,8 @@ class _Taskbar(tk.Frame):
 
     @property
     def save_var(self) -> tk.BooleanVar:
-        """:class:`tkinter.IntVar`: Variable which is set to ``True`` when the save button has been.
-        pressed """
+        """:class:`tkinter.IntVar`: Variable which is set to ``True`` when the save button has
+        been. pressed """
         retval = self._vars["save"]
         assert isinstance(retval, tk.BooleanVar)
         return retval

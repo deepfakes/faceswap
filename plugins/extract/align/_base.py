@@ -12,10 +12,11 @@ For each source item, the plugin must pass a dict to finalize containing:
 >>>  "landmarks": [list of 68 point face landmarks]
 >>>  "detected_faces": [<list of DetectedFace objects>]}
 """
+import logging
 import sys
 
 from dataclasses import dataclass, field
-from typing import Any, cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -24,7 +25,7 @@ from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disab
 
 from lib.align import AlignedFace, DetectedFace
 from lib.utils import get_backend, FaceswapError
-from plugins.extract._base import Extractor, logger, ExtractMedia
+from plugins.extract._base import BatchType, Extractor, ExtractMedia, ExtractorBatch
 
 if sys.version_info < (3, 8):
     from typing_extensions import Literal
@@ -34,36 +35,26 @@ else:
 if TYPE_CHECKING:
     from queue import Queue
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
-class AlignerBatch:
+class AlignerBatch(ExtractorBatch):
     """ Dataclass for holding items flowing through the aligner.
+
+    Inherits from :class:`~plugins.extract._base.ExtractorBatch`
 
     Parameters
     ----------
-    image: list
-        List of :class:`numpy.ndarray` containing the original frame
-    detected_faces: list
-        List of :class:`~lib.align.DetectedFace` objects
-    filename: list
-        List of original frame filenames for the batch
-    feed: list
-        List of feed images to feed the aligner net for each re-feed increment
-    prediction: list
-        List of predictions. Direct output from the aligner net
     landmarks: list
         List of 68 point :class:`numpy.ndarray` landmark points returned from the aligner
-    data: dict
-        Any aligner specific data required during the processing phase. List of dictionaries for
-        holding data on each sub-batch if re-feed > 1
+    refeeds: list
+        List of :class:`numpy.ndarrays` for holding each of the feeds that will be put through the
+        model for each refeed
     """
-    image: List[np.ndarray] = field(default_factory=list)
-    detected_faces: List[DetectedFace] = field(default_factory=list)
-    filename: List[str] = field(default_factory=list)
-    feed: List[np.ndarray] = field(default_factory=list)
-    prediction: np.ndarray = np.empty([])
-    landmarks: np.ndarray = np.empty([])
-    data: List[Dict[str, Any]] = field(default_factory=list)
+    detected_faces: List["DetectedFace"] = field(default_factory=list)
+    landmarks: np.ndarray = np.array([])
+    refeeds: List[np.ndarray] = field(default_factory=list)
 
 
 class Aligner(Extractor):  # pylint:disable=abstract-method
@@ -120,9 +111,6 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self.set_normalize_method(normalize_method)
 
         self._plugin_type = "align"
-        self._faces_per_filename: Dict[str, int] = {}  # Tracking for recompiling batches
-        self._rollover: Optional[ExtractMedia] = None  # batch rollover items
-        self._output_faces: List[DetectedFace] = []
         self._filter = AlignedFilter(min_scale=self.config["aligner_min_scale"],
                                      max_scale=self.config["aligner_max_scale"],
                                      distance=self.config["aligner_distance"],
@@ -175,14 +163,14 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         -------
         exhausted, bool
             ``True`` if queue is exhausted, ``False`` if not
-        batch, dict
-            A dictionary of lists of :attr:`~plugins.extract._base.Extractor.batchsize`:
+        batch, :class:`~plugins.extract._base.ExtractorBatch`
+            The batch object for the current batch
         """
         exhausted = False
         batch = AlignerBatch()
         idx = 0
         while idx < self.batchsize:
-            item = self._collect_item(queue)
+            item = self.rollover_collector(queue)
             if item == "EOF":
                 logger.trace("EOF received")  # type:ignore
                 exhausted = True
@@ -211,7 +199,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                     break
         if batch.filename:
             logger.trace("Returning batch: %s", {k: len(v)  # type:ignore
-                                                 if isinstance(v, list) else v
+                                                 if isinstance(v, (list, np.ndarray)) else v
                                                  for k, v in batch.__dict__.items()})
         else:
             logger.debug(item)  # type:ignore
@@ -222,36 +210,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         return exhausted, batch
 
-    def _collect_item(self, queue: "Queue") -> Union[Literal["EOF"], ExtractMedia]:
-        """ Collect the item from the :attr:`_rollover` dict or from the queue. Add face count per
-        frame to self._faces_per_filename for joining batches back up in finalize
-
-        Parameters
-        ----------
-        queue: :class:`queue.Queue`
-            The input queue to the aligner. Should contain
-            :class:`~plugins.extract.pipeline.ExtractMedia` objects
-
-        Returns
-        -------
-        :class:`~plugins.extract.pipeline.ExtractMedia` or EOF
-            The next extract media object, or EOF if pipe has ended
-        """
-        if self._rollover is not None:
-            logger.trace("Getting from _rollover: (filename: `%s`, faces: %s)",  # type:ignore
-                         self._rollover.filename, len(self._rollover.detected_faces))
-            item = self._rollover
-            self._rollover = None
-        else:
-            item = self._get_item(queue)
-            if item != "EOF":
-                logger.trace("Getting from queue: (filename: %s, faces: %s)",  # type:ignore
-                             item.filename, len(item.detected_faces))
-                self._faces_per_filename[item.filename] = len(item.detected_faces)
-        return item
-
     # <<< FINALIZE METHODS >>> #
-    def finalize(self, batch: AlignerBatch) -> Generator[ExtractMedia, None, None]:
+    def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Aligner
 
         This should be called as the final task of each `plugin`.
@@ -270,10 +230,11 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             and landmarks for the detected faces found in the frame.
         """
 
+        assert isinstance(batch, AlignerBatch)
         for face, landmarks in zip(batch.detected_faces, batch.landmarks):
             if not isinstance(landmarks, np.ndarray):
                 landmarks = np.array(landmarks)
-            face._landmarks_xy = landmarks
+            face.add_landmarks_xy(landmarks)
 
         logger.trace("Item out: %s", {key: val.shape  # type:ignore
                                       if isinstance(val, np.ndarray) else val
@@ -299,7 +260,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     # <<< PROTECTED METHODS >>> #
 
     # << PROCESS_INPUT WRAPPER >>
-    def _process_input(self, batch: AlignerBatch) -> AlignerBatch:
+    def _process_input(self, batch: BatchType) -> AlignerBatch:
         """ Process the input to the aligner model multiple times based on the user selected
         `re-feed` command line option. This adjusts the bounding box for the face to be fed
         into the model by a random amount within 0.05 pixels of the detected face's shortest axis.
@@ -318,6 +279,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         :class:`AlignerBatch`
             The batch with input processed
         """
+        assert isinstance(batch, AlignerBatch)
         original_boxes = np.array([(face.left, face.top, face.width, face.height)
                                    for face in batch.detected_faces])
         adjusted_boxes = self._get_adjusted_boxes(original_boxes)
@@ -328,6 +290,9 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 face.left, face.top, face.width, face.height = box
 
             self.process_input(batch)
+            # Move the populated feed into the batch refeed list. It will be overwritten at next
+            # iteration
+            batch.refeeds.append(batch.feed)
 
         # Place the original bounding box back to detected face objects
         for face, box in zip(batch.detected_faces, original_boxes):
@@ -361,7 +326,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         return retval
 
     # <<< PREDICT WRAPPER >>> #
-    def _predict(self, batch: AlignerBatch) -> AlignerBatch:
+    def _predict(self, batch: BatchType) -> AlignerBatch:
         """ Just return the aligner's predict function
 
         Parameters
@@ -379,8 +344,9 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         FaceswapError
             If GPU resources are exhausted
         """
+        assert isinstance(batch, AlignerBatch)
         try:
-            batch.prediction = np.array([self.predict(feed) for feed in batch.feed])
+            batch.prediction = np.array([self.predict(feed) for feed in batch.refeeds])
             return batch
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
@@ -410,7 +376,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                     raise FaceswapError(msg) from err
             raise
 
-    def _process_output(self, batch: AlignerBatch) -> AlignerBatch:
+    def _process_output(self, batch: BatchType) -> AlignerBatch:
         """ Process the output from the aligner model multiple times based on the user selected
         `re-feed amount` configuration option, then average the results for final prediction.
 
@@ -424,6 +390,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         :class:`AlignerBatch`
             The batch item with :attr:`landmarks` populated
         """
+        assert isinstance(batch, AlignerBatch)
         landmarks = []
         for idx in range(self._re_feed + 1):
             # Create a pseudo object that only populates the data, feed and prediction slots with
@@ -431,7 +398,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             subbatch = AlignerBatch(image=batch.image,
                                     detected_faces=batch.detected_faces,
                                     filename=batch.filename,
-                                    feed=[batch.feed[idx]],
+                                    feed=batch.refeeds[idx],
                                     prediction=batch.prediction[idx],
                                     data=[batch.data[idx]])
             self.process_output(subbatch)

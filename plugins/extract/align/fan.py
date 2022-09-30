@@ -3,16 +3,19 @@
     Code adapted and modified from:
     https://github.com/1adrianb/face-alignment
 """
+import logging
 from typing import cast, List, TYPE_CHECKING
 
 import cv2
 import numpy as np
 
 from lib.model.session import KSession
-from ._base import Aligner, AlignerBatch, logger
+from ._base import Aligner, AlignerBatch, BatchType
 
 if TYPE_CHECKING:
     from lib.align import DetectedFace
+
+logger = logging.getLogger(__name__)
 
 
 class Align(Aligner):
@@ -21,6 +24,7 @@ class Align(Aligner):
         git_model_id = 13
         model_filename = "face-alignment-network_2d4_keras_v2.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+        self.model: KSession
         self.name = "FAN"
         self.input_size = 256
         self.color_format = "RGB"
@@ -32,6 +36,8 @@ class Align(Aligner):
 
     def init_model(self) -> None:
         """ Initialize FAN model """
+        assert isinstance(self.name, str)
+        assert isinstance(self.model_path, str)
         self.model = KSession(self.name,
                               self.model_path,
                               allow_growth=self.config["allow_growth"],
@@ -42,7 +48,7 @@ class Align(Aligner):
         placeholder = np.zeros(placeholder_shape, dtype="float32")
         self.model.predict(placeholder)
 
-    def process_input(self, batch: AlignerBatch) -> None:
+    def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction
 
         Parameters
@@ -50,13 +56,14 @@ class Align(Aligner):
         batch: :class:`AlignerBatch`
             The current batch to process input for
         """
-        logger.debug("Aligning faces around center")
+        assert isinstance(batch, AlignerBatch)
+        logger.trace("Aligning faces around center")  # type:ignore
         center_scale = self.get_center_scale(batch.detected_faces)
         faces = self.crop(batch, center_scale)
         logger.trace("Aligned image around center")  # type:ignore
         faces = self._normalize_faces(faces)
         batch.data.append(dict(center_scale=center_scale))
-        batch.feed.append(np.array(faces, dtype="float32")[..., :3] / 255.0)
+        batch.feed = np.array(faces, dtype="float32")[..., :3] / 255.0
 
     def get_center_scale(self, detected_faces: List["DetectedFace"]) -> np.ndarray:
         """ Get the center and set scale of bounding box
@@ -71,7 +78,7 @@ class Align(Aligner):
         :class:`numpy.ndarray`
             The center and scale of the bounding box
         """
-        logger.debug("Calculating center and scale")
+        logger.trace("Calculating center and scale")  # type:ignore
         center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
         for index, face in enumerate(detected_faces):
             x_center = (cast(int, face.left) + face.right) / 2.0
@@ -185,7 +192,7 @@ class Align(Aligner):
         logger.trace("Transformed Points: %s", retval)  # type:ignore
         return retval
 
-    def predict(self, batch: np.ndarray) -> np.ndarray:
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Predict the 68 point landmarks
 
         Parameters
@@ -198,30 +205,25 @@ class Align(Aligner):
         :class:`numpy.ndarray`
             The predictions from the aligner
         """
-        logger.debug("Predicting Landmarks")
+        logger.trace("Predicting Landmarks")  # type:ignore
         # TODO Remove lazy transpose and change points from predict to use the correct
         # order
-        retval = self.model.predict(batch)[-1].transpose(0, 3, 1, 2)
+        retval = self.model.predict(feed)[-1].transpose(0, 3, 1, 2)
         logger.trace(retval.shape)  # type:ignore
         return retval
 
-    def process_output(self, batch: AlignerBatch) -> AlignerBatch:
+    def process_output(self, batch: BatchType) -> None:
         """ Process the output from the model
 
         Parameters
         ----------
         batch: :class:`AlignerBatch`
             The current batch from the model with :attr:`predictions` populated
-
-        Returns
-        -------
-        :class:`AlignerBatch`
-            The current batch with the :attr:`landmarks` populated
         """
+        assert isinstance(batch, AlignerBatch)
         self.get_pts_from_predict(batch)
-        return batch
 
-    def get_pts_from_predict(self, batch: AlignerBatch):
+    def get_pts_from_predict(self, batch: AlignerBatch) -> None:
         """ Get points from predictor and populate the :attr:`landmarks` property of the
         :class:`AlignerBatch`
 
@@ -230,7 +232,7 @@ class Align(Aligner):
         batch: :class:`AlignerBatch`
             The current batch from the model with :attr:`predictions` populated
         """
-        logger.debug("Obtain points from prediction")
+        logger.trace("Obtain points from prediction")  # type:ignore
         num_images, num_landmarks = batch.prediction.shape[:2]
         image_slice = np.repeat(np.arange(num_images)[:, None], num_landmarks, axis=1)
         landmark_slice = np.repeat(np.arange(num_landmarks)[None, :], num_images, axis=0)

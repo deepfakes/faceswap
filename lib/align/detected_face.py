@@ -179,6 +179,18 @@ class DetectedFace():
         fsmask.add(mask, affine_matrix, interpolator)
         self.mask[name] = fsmask
 
+    def add_landmarks_xy(self, landmarks: np.ndarray) -> None:
+        """ Add landmarks to the detected face object. If landmarks alread exist, they will be
+        overwritten.
+
+        Parameters
+        ----------
+        landmarks: :class:`numpy.ndarray`
+            The 68 point face landmarks to add for the face
+        """
+        logger.trace("landmarks shape: '%s'", landmarks.shape)  # type: ignore
+        self._landmarks_xy = landmarks
+
     def add_identity(self, name: Literal["vggface2"], embedding: np.ndarray, ) -> None:
         """ Add an identity embedding to this detected face. If an identity already exists for the
         given :attr:`name` it will be overwritten

@@ -78,9 +78,9 @@ class Config(FaceswapConfig):
             section=section,
             title="aligner_roll",
             datatype=float,
-            min_max=(0.0, 45.0),
+            min_max=(0.0, 90.0),
             rounding=1,
-            default=15.0,
+            default=45.0,
             group="filters",
             info="Filters out faces who's calculated roll is greater than zero +/- this value in "
             "degrees. Aligned faces should have a roll value close to zero. Values that are a "

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """ Components Mask for faceswap.py """
-
+import logging
 import numpy as np
-from ._base import Masker, logger
+from ._base import BatchType, Masker
+
+logger = logging.getLogger(__name__)
 
 
 class Mask(Masker):
@@ -21,22 +23,20 @@ class Mask(Masker):
         # Separate storage for face and head masks
         self._storage_name = f"{self._storage_name}_{self._storage_centering}"
 
-    def init_model(self):
+    def init_model(self) -> None:
         logger.debug("No mask model to initialize")
 
-    def process_input(self, batch):
+    def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
-        batch["feed"] = np.zeros((self.batchsize, self.input_size, self.input_size, 1),
-                                 dtype="float32")
-        return batch
+        batch.feed = np.zeros((self.batchsize, self.input_size, self.input_size, 1),
+                              dtype="float32")
 
-    def predict(self, batch):
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
         if self.config["fill"]:
-            batch["feed"][:] = 1.0
-        batch["prediction"] = batch["feed"]
-        return batch
+            feed[:] = 1.0
+        return feed
 
-    def process_output(self, batch):
+    def process_output(self, batch: BatchType) -> None:
         """ Compile found faces for output """
-        return batch
+        return
