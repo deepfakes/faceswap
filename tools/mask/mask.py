@@ -499,9 +499,9 @@ class Mask():  # pylint:disable=too-few-public-methods
                 detected_face.load_aligned(detected_face.image, centering=centering, force=True)
                 face = detected_face.aligned.face
             assert face is not None
-            mask = cv2.resize(detected_face.mask[mask_type].mask,
-                              (face.shape[1], face.shape[0]),
-                              interpolation=cv2.INTER_CUBIC)[..., None]
+            imask = cv2.resize(detected_face.mask[mask_type].mask,
+                               (face.shape[1], face.shape[0]),
+                               interpolation=cv2.INTER_CUBIC)[..., None]
         else:
             face = np.array(detected_face.image)  # cv2 fails if this comes as imageio.core.Array
             imask = mask.get_full_frame_mask(face.shape[1], face.shape[0])
