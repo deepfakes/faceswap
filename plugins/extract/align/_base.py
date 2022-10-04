@@ -607,7 +607,7 @@ class AlignedFilter():
         if self._min_scale <= 0.0 and self._max_scale <= 0.0:
             return None
 
-        roi = face.original_roi
+        roi = face.original_roi.astype("int64")
         size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
 
         if self._min_scale > 0.0 and size < minimum_dimension * self._min_scale:
