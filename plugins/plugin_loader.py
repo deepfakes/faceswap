@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from plugins.extract.detect._base import Detector
     from plugins.extract.align._base import Aligner
     from plugins.extract.mask._base import Masker
+    from plugins.extract.recognition._base import Identity
     from plugins.train.model._base import ModelBase
     from plugins.train.trainer._base import TrainerBase
 
@@ -90,6 +91,25 @@ class PluginLoader():
             An extraction masker plugin
         """
         return PluginLoader._import("extract.mask", name, disable_logging)
+
+    @staticmethod
+    def get_recognition(name: str, disable_logging: bool = False) -> Type["Identity"]:
+        """ Return requested recognition plugin
+
+        Parameters
+        ----------
+        name: str
+            The name of the requested reccognition plugin
+        disable_logging: bool, optional
+            Whether to disable the INFO log message that the plugin is being imported.
+            Default: `False`
+
+        Returns
+        -------
+        :class:`plugins.extract.recognition` object:
+            An extraction recognition plugin
+        """
+        return PluginLoader._import("extract.recognition", name, disable_logging)
 
     @staticmethod
     def get_model(name: str, disable_logging: bool = False) -> Type["ModelBase"]:

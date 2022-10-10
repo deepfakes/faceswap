@@ -50,9 +50,11 @@ class Extract():  # pylint:disable=too-few-public-methods
         normalization = None if self._args.normalization == "none" else self._args.normalization
         maskers = ["components", "extended"]
         maskers += self._args.masker if self._args.masker else []
+        recognition = "vgg_face2" if arguments.identity else None
         self._extractor = Extractor(self._args.detector,
                                     self._args.aligner,
                                     maskers,
+                                    recognition=recognition,
                                     configfile=configfile,
                                     multiprocess=not self._args.singleprocess,
                                     exclude_gpus=self._args.exclude_gpus,

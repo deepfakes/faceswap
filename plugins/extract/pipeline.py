@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from plugins.extract.detect._base import Detector
     from plugins.extract.align._base import Aligner
     from plugins.extract.mask._base import Masker
+    from plugins.extract.recognition._base import Identity
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 _INSTANCES = -1  # Tracking for multiple instances of pipeline
@@ -61,6 +62,9 @@ class Extractor():
     masker: str or list or ``None
         The name of a masker plugin(s) as exists in :mod:`plugins.extract.mask`.
         This can be a single masker or a list of multiple maskers
+    recognition: str or ``None``
+        The name of the recognition plugin to use. ``None`` to not do face recognition.
+        Default: ``None``
     configfile: str, optional
         The path to a custom ``extract.ini`` configfile. If ``None`` then the system
         :file:`config/extract.ini` file will be used.
@@ -101,6 +105,7 @@ class Extractor():
                  detector: Optional[str],
                  aligner: Optional[str],
                  masker: Optional[Union[str, List[str]]],
+                 recognition: Optional[str] = None,
                  configfile: Optional[str] = None,
                  multiprocess: bool = False,
                  exclude_gpus: Optional[List[int]] = None,
@@ -110,16 +115,16 @@ class Extractor():
                  re_feed: int = 0,
                  disable_filter: bool = False,
                  image_is_aligned: bool = False,) -> None:
-        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, configfile: %s, "
-                     "multiprocess: %s, exclude_gpus: %s, rotate_images: %s, min_size: %s, "
-                     "normalize_method: %s, re_feed: %s, disable_filter: %s, "
+        logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, recognition: %s, "
+                     "configfile: %s, multiprocess: %s, exclude_gpus: %s, rotate_images: %s, "
+                     "min_size: %s, normalize_method: %s, re_feed: %s, disable_filter: %s, "
                      "image_is_aligned: %s)", self.__class__.__name__, detector, aligner, masker,
-                     configfile, multiprocess, exclude_gpus, rotate_images, min_size,
+                     recognition, configfile, multiprocess, exclude_gpus, rotate_images, min_size,
                      normalize_method, re_feed, disable_filter, image_is_aligned)
         self._instance = _get_instance()
         maskers = [cast(Optional[str],
                    masker)] if not isinstance(masker, list) else cast(List[Optional[str]], masker)
-        self._flow = self._set_flow(detector, aligner, maskers)
+        self._flow = self._set_flow(detector, aligner, maskers, recognition)
         self._exclude_gpus = exclude_gpus
         # We only ever need 1 item in each queue. This is 2 items cached (1 in queue 1 waiting
         # for queue) at each point. Adding more just stacks RAM with no speed benefit.
@@ -133,6 +138,7 @@ class Extractor():
                                        normalize_method,
                                        re_feed,
                                        disable_filter)
+        self._recognition = self._load_recognition(recognition, configfile)
         self._mask = [self._load_mask(mask, image_is_aligned, configfile) for mask in maskers]
         self._is_parallel = self._set_parallel_processing(multiprocess)
         self._phases = self._set_phases(multiprocess)
@@ -390,7 +396,8 @@ class Extractor():
     @staticmethod
     def _set_flow(detector: Optional[str],
                   aligner: Optional[str],
-                  masker: List[Optional[str]]) -> List[str]:
+                  masker: List[Optional[str]],
+                  recognition: Optional[str]) -> List[str]:
         """ Set the flow list based on the input plugins
 
         Parameters
@@ -402,13 +409,18 @@ class Extractor():
         masker: str or list or ``None
             The name of a masker plugin(s) as exists in :mod:`plugins.extract.mask`.
             This can be a single masker or a list of multiple maskers
+        recognition: str or ``None``
+            The name of the recognition plugin to use. ``None`` to not do face recognition.
         """
-        logger.debug("detector: %s, aligner: %s, masker: %s", detector, aligner, masker)
+        logger.debug("detector: %s, aligner: %s, masker: %s recognition: %s",
+                     detector, aligner, masker, recognition)
         retval = []
         if detector is not None and detector.lower() != "none":
             retval.append("detect")
         if aligner is not None and aligner.lower() != "none":
             retval.append("align")
+        if recognition is not None and recognition.lower() != "none":
+            retval.append("recognition")
         retval.extend([f"mask_{idx}"
                        for idx, mask in enumerate(masker)
                        if mask is not None and mask.lower() != "none"])
@@ -625,6 +637,20 @@ class Extractor():
                                                       image_is_aligned=image_is_aligned,
                                                       configfile=configfile,
                                                       instance=self._instance)
+        return plugin
+
+    def _load_recognition(self,
+                          recognition: Optional[str],
+                          configfile: Optional[str]) -> Optional["Identity"]:
+        """ Set global arguments and load recognition plugin """
+        if recognition is None or recognition.lower() == "none":
+            logger.debug("No recognition selected. Returning None")
+            return None
+        recognition_name = recognition.replace("-", "_").lower()
+        logger.debug("Loading Recognition: '%s'", recognition_name)
+        plugin = PluginLoader.get_recognition(recognition_name)(exclude_gpus=self._exclude_gpus,
+                                                                configfile=configfile,
+                                                                instance=self._instance)
         return plugin
 
     def _launch_plugin(self, phase: str) -> None:

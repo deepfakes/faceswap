@@ -496,6 +496,13 @@ class ExtractArgs(ExtractConvertArgs):
                    "increments of that size up to 360, or pass in a list of numbers to enumerate "
                    "exactly what angles to check.")))
         argument_list.append(dict(
+            opts=("-I", "--identity"),
+            action="store_true",
+            default=False,
+            group=_("Plugins"),
+            help=_("Obtain and store face identity encodings from VGGFace2. Slows down extract a "
+                   "little, but will save time if using 'sort by face'")))
+        argument_list.append(dict(
             opts=("-min", "--min-size"),
             action=Slider,
             min_max=(0, 1080),

@@ -17,7 +17,7 @@ from tqdm import tqdm
 from lib.align import AlignedFace, DetectedFace
 from lib.image import FacesLoader, ImagesLoader, read_image_meta_batch, update_existing_metadata
 from lib.utils import FaceswapError
-from plugins.extract.recognition.vgg_face2_keras import Cluster, VGGFace2 as VGGFace
+from plugins.extract.recognition.vgg_face2 import Cluster, Recognition as VGGFace
 
 if sys.version_info < (3, 8):
     from typing_extensions import Literal
@@ -888,7 +888,8 @@ class SortFace(SortMethod):
                            centering="legacy",
                            size=self._vgg_face.input_size,
                            is_aligned=True).face
-        embedding = self._vgg_face.predict(face)
+        assert face is not None
+        embedding = self._vgg_face.predict(face[None, ...])[0]
         alignments.setdefault("identity", {})["vggface2"] = embedding.tolist()
         self._iterator.update_png_header(filename, alignments)
         self._result.append((filename, embedding))

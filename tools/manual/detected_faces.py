@@ -850,6 +850,7 @@ class FaceUpdate():
         face = self._frame_faces[frame_index][face_index]
         face.load_aligned(None, force=True)  # Update average distance
         face.mask = self._extractor.get_masks(frame_index, face_index)
+        face._identity = {}
 
         aligned = AlignedFace(face.landmarks_xy,
                               image=self._globals.current_frame["image"],

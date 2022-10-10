@@ -4,9 +4,8 @@
 import logging
 import sys
 
-from typing import Dict, Generator, List, Tuple, Optional
+from typing import cast, Dict, Generator, List, Tuple, Optional
 
-import cv2
 import numpy as np
 import psutil
 from fastcluster import linkage, linkage_vector
@@ -14,7 +13,7 @@ from fastcluster import linkage, linkage_vector
 from lib.model.layers import L2_normalize
 from lib.model.session import KSession
 from lib.utils import FaceswapError
-from plugins.extract._base import Extractor
+from ._base import BatchType, RecogBatch, Identity
 
 
 if sys.version_info < (3, 8):
@@ -25,7 +24,7 @@ else:
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class VGGFace2(Extractor):  # pylint:disable=abstract-method
+class Recognition(Identity):
     """ VGG Face feature extraction.
 
     Extracts feature vectors from faces in order to compare similarity.
@@ -42,53 +41,47 @@ class VGGFace2(Extractor):  # pylint:disable=abstract-method
     https://creativecommons.org/licenses/by-nc/4.0/
     """
 
-    def __init__(self, *args, **kwargs):  # pylint:disable=unused-argument
+    def __init__(self, *args, **kwargs) -> None:  # pylint:disable=unused-argument
         logger.debug("Initializing %s", self.__class__.__name__)
         git_model_id = 10
-        model_filename = ["vggface2_resnet50_v2.h5"]
+        model_filename = "vggface2_resnet50_v2.h5"
         super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
-        self._plugin_type = "recognition"
-        self.name = "VGG_Face2"
+        self.model: KSession
+        self.name: str = "VGGFace2"
         self.input_size = 224
-        self._bins = {}
+        self.color_format = "BGR"
+
+        self.vram = 2468 if not self.config["cpu"] else 0
+        self.vram_warnings = 192 if not self.config["cpu"] else 0
+        self.vram_per_batch = 32 if not self.config["cpu"] else 0
+        self.batchsize = self.config["batch-size"]
+
         # Average image provided in https://github.com/ox-vgg/vgg_face2
         self._average_img = np.array([91.4953, 103.8827, 131.0912])
-        self._iterator = self._get_bin()
-
         logger.debug("Initialized %s", self.__class__.__name__)
 
     # <<< GET MODEL >>> #
-    def init_model(self):
+    def init_model(self) -> None:
         """ Initialize VGG Face 2 Model. """
+        assert isinstance(self.model_path, str)
         model_kwargs = dict(custom_objects={'L2_normalize': L2_normalize})
         self.model = KSession(self.name,
                               self.model_path,
                               model_kwargs=model_kwargs,
                               allow_growth=self.config["allow_growth"],
-                              exclude_gpus=self._exclude_gpus)
+                              exclude_gpus=self._exclude_gpus,
+                              cpu_mode=self.config["cpu"])
         self.model.load_model()
 
-    @classmethod
-    def _get_bin(cls) -> Generator[int, None, None]:
-        """ Generator that yields incremented integers
+    def process_input(self, batch: BatchType) -> None:
+        """ Compile the detected faces for prediction """
+        assert isinstance(batch, RecogBatch)
+        batch.feed = np.array([cast(np.ndarray, feed.face)[..., :3]
+                               for feed in batch.feed_faces],
+                              dtype="float32") - self._average_img
+        logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
 
-        Yields
-        ------
-        int
-            An integer 1 larger than the last integer returned
-        """
-
-        i = 0
-        while True:
-            yield i
-            i += 1
-
-    @property
-    def next_bin(self) -> int:
-        """ int: The next available bin id in the iterator """
-        return next(self._iterator)
-
-    def predict(self, batch):
+    def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Return encodings for given image from vgg_face2.
 
         Parameters
@@ -101,51 +94,13 @@ class VGGFace2(Extractor):  # pylint:disable=abstract-method
         numpy.ndarray
             The encodings for the face
         """
-        face = batch
-        if face.shape[0] != self.input_size:
-            face = self._resize_face(face)
-        face = face[None, :, :, :3] - self._average_img
-        preds = self.model.predict(face)
-        return preds[0, :]
+        retval = self.model.predict(feed)
+        assert isinstance(retval, np.ndarray)
+        return retval
 
-    def _resize_face(self, face):
-        """ Resize incoming face to model_input_size.
-
-        Parameters
-        ----------
-        face: numpy.ndarray
-            The face to be fed through the predictor. Should be in BGR channel order
-
-        Returns
-        -------
-        numpy.ndarray
-            The face resized to model input size
-        """
-        sizes = (self.input_size, self.input_size)
-        interpolation = cv2.INTER_CUBIC if face.shape[0] < self.input_size else cv2.INTER_AREA
-        face = cv2.resize(face, dsize=sizes, interpolation=interpolation)
-        return face
-
-    @staticmethod
-    def find_cosine_similiarity(source_face, test_face):
-        """ Find the cosine similarity between two faces.
-
-        Parameters
-        ----------
-        source_face: numpy.ndarray
-            The first face to test against :attr:`test_face`
-        test_face: numpy.ndarray
-            The second face to test against :attr:`source_face`
-
-        Returns
-        -------
-        float:
-            The cosine similarity between the two faces
-        """
-        var_a = np.matmul(np.transpose(source_face), test_face)
-        var_b = np.sum(np.multiply(source_face, source_face))
-        var_c = np.sum(np.multiply(test_face, test_face))
-        return 1 - (var_a / (np.sqrt(var_b) * np.sqrt(var_c)))
+    def process_output(self, batch: BatchType) -> None:
+        """ No output processing for  vgg_face2 """
+        return
 
 
 class Cluster():  # pylint: disable=too-few-public-methods

@@ -31,10 +31,9 @@ if TYPE_CHECKING:
     from .align._base import AlignerBatch
     from .detect._base import DetectorBatch
     from .mask._base import MaskerBatch
-
+    from .recognition._base import RecogBatch
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-# TODO CPU mode
 # TODO Run with warnings mode
 
 
@@ -57,7 +56,7 @@ def _get_config(plugin_name: str, configfile: Optional[str] = None) -> Dict[str,
     return Config(plugin_name, configfile=configfile).config_dict
 
 
-BatchType = Union["DetectorBatch", "AlignerBatch", "MaskerBatch"]
+BatchType = Union["DetectorBatch", "AlignerBatch", "MaskerBatch", "RecogBatch"]
 
 
 @dataclass

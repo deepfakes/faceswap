@@ -104,7 +104,7 @@ class DetectedFace():
         self.top = top
         self.height = height
         self._landmarks_xy = landmarks_xy
-        self._identity: Dict[Literal["vggface2"], np.ndarray] = {}
+        self._identity: Dict[str, np.ndarray] = {}
         self.thumbnail: Optional[np.ndarray] = None
         self.mask = {} if mask is None else mask
         self._training_masks: Optional[Tuple[bytes, Tuple[int, int, int]]] = None
@@ -137,7 +137,7 @@ class DetectedFace():
         return self.top + self.height
 
     @property
-    def identity(self) -> Dict[Literal["vggface2"], np.ndarray]:
+    def identity(self) -> Dict[str, np.ndarray]:
         """ dict: Identity mechanism as key, identity embedding as value. """
         return self._identity
 
@@ -191,7 +191,7 @@ class DetectedFace():
         logger.trace("landmarks shape: '%s'", landmarks.shape)  # type: ignore
         self._landmarks_xy = landmarks
 
-    def add_identity(self, name: Literal["vggface2"], embedding: np.ndarray, ) -> None:
+    def add_identity(self, name: str, embedding: np.ndarray, ) -> None:
         """ Add an identity embedding to this detected face. If an identity already exists for the
         given :attr:`name` it will be overwritten
 
