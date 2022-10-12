@@ -55,18 +55,18 @@ class SessionTKVars:
     smoothamount: :class:`tkinter.DoubleVar`
         The amount of smoothing to apply for smoothed data
     """
-    buildgraph = tk.BooleanVar()
-    status = tk.StringVar()
-    display = tk.StringVar()
-    scale = tk.StringVar()
-    raw = tk.BooleanVar()
-    trend = tk.BooleanVar()
-    avg = tk.BooleanVar()
-    smoothed = tk.BooleanVar()
-    outliers = tk.BooleanVar()
+    buildgraph: tk.BooleanVar
+    status: tk.StringVar
+    display: tk.StringVar
+    scale: tk.StringVar
+    raw: tk.BooleanVar
+    trend: tk.BooleanVar
+    avg: tk.BooleanVar
+    smoothed: tk.BooleanVar
+    outliers: tk.BooleanVar
+    avgiterations: tk.IntVar
+    smoothamount: tk.DoubleVar
     loss_keys: Dict[str, tk.BooleanVar] = field(default_factory=dict)
-    avgiterations = tk.IntVar()
-    smoothamount = tk.DoubleVar()
 
 
 class SessionPopUp(tk.Toplevel):
@@ -115,7 +115,17 @@ class SessionPopUp(tk.Toplevel):
             The tkinter Variables for the pop up graph
         """
         logger.debug("Setting tk graph build variable and internal variables")
-        retval = SessionTKVars()
+        retval = SessionTKVars(buildgraph=tk.BooleanVar(),
+                               status=tk.StringVar(),
+                               display=tk.StringVar(),
+                               scale=tk.StringVar(),
+                               raw=tk.BooleanVar(),
+                               trend=tk.BooleanVar(),
+                               avg=tk.BooleanVar(),
+                               smoothed=tk.BooleanVar(),
+                               outliers=tk.BooleanVar(),
+                               avgiterations=tk.IntVar(),
+                               smoothamount=tk.DoubleVar())
         retval.buildgraph.set(False)
         retval.buildgraph.trace("w", self._graph_build)
         return retval
