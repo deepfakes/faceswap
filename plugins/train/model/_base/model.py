@@ -129,6 +129,10 @@ class ModelBase():
                                 "Mask to use. Please select a mask or disable Penalized Mask "
                                 "Loss.")
 
+        if self.config["learn_mask"] and self.config["mask_type"] is None:
+            raise FaceswapError("'Learn Mask' has been selected but you have not chosen a Mask to "
+                                "use. Please select a mask or disable 'Learn Mask'.")
+
         self._mixed_precision = self.config["mixed_precision"] and get_backend() != "amd"
         # self._io = IO(self, model_dir, self._is_predict, self.config["save_optimizer"])
         # TODO - Re-enable saving of optimizer once this bug is fixed:
