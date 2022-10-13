@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import colorchooser, ttk
 from itertools import zip_longest
 from functools import partial
+from typing import Any, Dict
 
 from _tkinter import Tcl_Obj, TclError
 
@@ -23,7 +24,7 @@ _ = _LANG.gettext
 # We store Tooltips, ContextMenus and Commands globally when they are created
 # Because we need to add them back to newly cloned widgets (they are not easily accessible from
 # original config or are prone to getting destroyed when the original widget is destroyed)
-_RECREATE_OBJECTS = dict(tooltips={}, commands={}, contextmenus={})
+_RECREATE_OBJECTS: Dict[str, Dict[str, Any]] = dict(tooltips={}, commands={}, contextmenus={})
 
 
 def _get_tooltip(widget, text=None, text_variable=None):
