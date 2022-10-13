@@ -20,6 +20,7 @@
   - [Running faceswap](#running-faceswap)
   - [Create a desktop shortcut](#create-a-desktop-shortcut)
   - [Updating faceswap](#updating-faceswap)
+- [macOS x64 (#macos-64-install-guide)
 - [macOS (Apple Silicon) Install Guide](#macos-apple-silicon-install-guide)
   - [Prerequisites](#prerequisites-2)
     - [OS](#os)
@@ -161,6 +162,49 @@ It's good to keep faceswap up to date as new features are added and bugs are fix
 - Enter the faceswap folder: `cd faceswap`
 - Enter the following `git pull --all`
 - Once the latest version has downloaded, make sure your dependencies are up to date. There is a script to help with this: `python update_deps.py`
+# macOS x64 Install Guide
+macOS (Apple Silicon) Install Guide
+
+Prerequisites
+
+OS
+
+macOS 12.0+
+
+XCode Tools
+
+xcode-select --install
+XQuartz
+
+Download and install from:
+
+https://www.xquartz.org/
+Conda
+
+Download and install the latest Conda env from:
+
+https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
+Install Conda:
+
+$ chmod +x ~/Downloads/Miniconda3-latest-MacOSX-x86_64.sh
+$ sh ~/Downloads/Miniconda3-latest-MacOSX-x86_64.sh
+restart shell
+
+Setup
+
+Create and Activate the Environment (with ML acceleration INTEL )
+
+$ conda create --name faceswap python=3.8
+$ conda activate faceswap
+faceswap
+
+Download the faceswap repo and enter the faceswap folder:
+$ git clone --depth 1 https://github.com/deepfakes/faceswap.git
+$ cd faceswap
+Easy install
+
+$ python setup.py
+If you have issues/errors follow the Manual install steps below.
 
 # macOS (Apple Silicon) Install Guide
 
