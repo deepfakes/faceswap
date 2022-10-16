@@ -139,28 +139,51 @@ theme module
    :undoc-members:
    :show-inheritance:
 
-utils module
-============
+utils package
+=============
 
-.. rubric:: Module Summary
+.. rubric:: Package Summary
 
 .. autosummary::
    :nosignatures:
-   
-   ~lib.gui.utils.Config
-   ~lib.gui.utils.FileHandler
-   ~lib.gui.utils.Images
-   ~lib.gui.utils.LongRunningTask
-   ~lib.gui.utils.get_config
-   ~lib.gui.utils.get_images
-   ~lib.gui.utils.initialize_config
-   ~lib.gui.utils.initialize_images
 
-.. rubric:: Module
+   ~lib.gui.utils.config.Config
+   ~lib.gui.utils.config.initialize_config
+   ~lib.gui.utils.config.get_config
+   ~lib.gui.utils.file_handler.FileHandler
+   ~lib.gui.utils.image.Images
+   ~lib.gui.utils.image.get_images
+   ~lib.gui.utils.image.initialize_images
+   ~lib.gui.utils.misc.LongRunningTask
 
-.. automodule:: lib.gui.utils
+
+.. rubric:: config Module
+
+.. automodule:: lib.gui.utils.config
    :members:
    :undoc-members:
    :show-inheritance:
 
 
+.. rubric:: file_handler Module
+
+.. automodule:: lib.gui.utils.file_handler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+.. rubric:: image Module
+
+.. automodule:: lib.gui.utils.image
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+.. rubric:: misc Module
+
+.. automodule:: lib.gui.utils.misc
+   :members:
+   :undoc-members:
+   :show-inheritance:

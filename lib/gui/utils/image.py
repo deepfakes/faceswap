@@ -157,7 +157,7 @@ class Images():
         """
         logger.debug("Deleting previews")
         for item in os.listdir(self._pathpreview):
-            if item.startswith(".gui_training_preview") and item.endswith(".jpg"):
+            if item.startswith(".gui_training_preview") and item.endswith((".jpg", ".png")):
                 fullitem = os.path.join(self._pathpreview, item)
                 logger.debug("Deleting: '%s'", fullitem)
                 os.remove(fullitem)
