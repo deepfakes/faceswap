@@ -102,12 +102,12 @@ def get_clean_fonts():
         A list of valid fonts for the system
     """
     fmanager = font_manager.FontManager()
-    fonts = dict()
+    fonts = {}
     for font in fmanager.ttflist:
         if str(font.weight) in ("400", "normal", "regular"):
-            fonts.setdefault(font.name, dict())["regular"] = True
+            fonts.setdefault(font.name, {})["regular"] = True
         if str(font.weight) in ("700", "bold"):
-            fonts.setdefault(font.name, dict())["bold"] = True
+            fonts.setdefault(font.name, {})["bold"] = True
     valid_fonts = {key for key, val in fonts.items() if len(val) == 2}
     retval = sorted(list(valid_fonts.intersection(tk_font.families())))
     if not retval:
@@ -115,5 +115,5 @@ def get_clean_fonts():
         # prefixed
         logger.debug("No bold/regular fonts found. Running simple filter")
         retval = sorted([fnt for fnt in tk_font.families()
-                         if not fnt.startswith("@") and not any([ord(c) > 127 for c in fnt])])
+                         if not fnt.startswith("@") and not any(ord(c) > 127 for c in fnt)])
     return ["default"] + retval

@@ -144,7 +144,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         bool: `True` if filename has been successfully set otherwise ``False``
         """
         logger.debug("filename: '%s', sess_type: '%s'", filename, sess_type)
-        handler = "config_{}".format(sess_type)
+        handler = f"config_{sess_type}"
 
         if filename is None:
             logger.debug("Popping file handler")
@@ -156,7 +156,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
             cfgfile.close()
 
         if not os.path.isfile(filename):
-            msg = "File does not exist: '{}'".format(filename)
+            msg = f"File does not exist: '{filename}'"
             logger.error(msg)
             return False
         ext = os.path.splitext(filename)[1]
@@ -209,7 +209,7 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
         opts = self._options.get(command, None)
         retval = {command: opts}
         if not opts:
-            self._config.tk_vars["console_clear"].set(True)
+            self._config.tk_vars.console_clear.set(True)
             logger.info("No  %s section found in file", command)
             retval = None
         logger.debug(retval)
@@ -380,10 +380,9 @@ class _GuiSession():  # pylint:disable=too-few-public-methods
             True if :attr:`filename` successfully set otherwise ``False``
         """
         logger.debug("Popping save as file handler. session_type: '%s'", session_type)
-        title = "Save {}As...".format("{} ".format(session_type.title())
-                                      if session_type != "all" else "")
+        title = f"Save {f'{session_type.title()} ' if session_type != 'all' else ''}As..."
         cfgfile = self._file_handler("save",
-                                     "config_{}".format(session_type),
+                                     f"config_{session_type}",
                                      title=title,
                                      initial_folder=self._dirname).return_file
         if not cfgfile:
@@ -432,7 +431,7 @@ class Tasks(_GuiSession):
     """
     def __init__(self, config, file_handler):
         super().__init__(config, file_handler)
-        self._tasks = dict()
+        self._tasks = {}
 
     @property
     def _is_project(self):
@@ -539,7 +538,7 @@ class Tasks(_GuiSession):
             logger.debug("Not a .fsw file: '%s'", filename)
             return filename
 
-        new_filename = "{}.fst".format(fname)
+        new_filename = f"{fname}.fst"
         logger.debug("Renaming '%s' to '%s'", filename, new_filename)
         os.rename(filename, new_filename)
         self._del_from_recent(filename, save=True)
@@ -612,7 +611,7 @@ class Tasks(_GuiSession):
         called by :class:`Project` when a project has been loaded which is in fact a task.
         """
         logger.debug("Clearing stored tasks")
-        self._tasks = dict()
+        self._tasks = {}
 
     def add_project_task(self, filename, command, options):
         """ Add an individual task from a loaded :class:`Project` to the internal :attr:`_tasks`
@@ -684,7 +683,7 @@ class Project(_GuiSession):
     @property
     def _project_modified(self):
         """bool: ``True`` if the project has been modified otherwise ``False``. """
-        return any([var.get() for var in self._modified_vars.values()])
+        return any(var.get() for var in self._modified_vars.values())
 
     @property
     def _tasks(self):

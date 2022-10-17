@@ -342,7 +342,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def _add_callback(self) -> None:
         """ Add the variable trace to update graph on refresh button press or save iteration. """
-        get_config().tk_vars["refreshgraph"].trace("w", self.refresh)  # type:ignore
+        get_config().tk_vars.refresh_graph.trace("w", self.refresh)  # type:ignore
 
     def build(self) -> None:
         """ Build the Training graph. """
@@ -352,7 +352,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def refresh(self, *args) -> None:  # pylint: disable=unused-argument
         """ Read the latest loss data and apply to current graph """
-        refresh_var = cast(tk.BooleanVar, get_config().tk_vars["refreshgraph"])
+        refresh_var = cast(tk.BooleanVar, get_config().tk_vars.refresh_graph)
         if not refresh_var.get() and self._thread is None:
             return
 
@@ -529,7 +529,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
             self.pack(side=tk.BOTTOM, fill=tk.X)
 
     @staticmethod
-    def _Button(frame: ttk.Frame,  # pylint:disable=arguments-differ
+    def _Button(frame: ttk.Frame,  # pylint:disable=arguments-differ,arguments-renamed
                 text: str,
                 image_file: str,
                 toggle: bool,

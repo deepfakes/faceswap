@@ -88,6 +88,14 @@ display\_analysis module
    :undoc-members:
    :show-inheritance:
 
+display\_command module
+=======================
+
+.. automodule:: lib.gui.display_command
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 display\_graph module
 =====================
 

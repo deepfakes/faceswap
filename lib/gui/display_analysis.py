@@ -63,9 +63,9 @@ class Analysis(DisplayPage):  # pylint: disable=too-many-ancestors
             The dictionary of variable names to tkinter variables
         """
         return dict(selected_id=tk.StringVar(),
-                    refresh_graph=get_config().tk_vars["refreshgraph"],
-                    is_training=get_config().tk_vars["istraining"],
-                    analysis_folder=get_config().tk_vars["analysis_folder"])
+                    refresh_graph=get_config().tk_vars.refresh_graph,
+                    is_training=get_config().tk_vars.is_training,
+                    analysis_folder=get_config().tk_vars.analysis_folder)
 
     def on_tab_select(self):
         """ Callback for when the analysis tab is selected.

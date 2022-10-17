@@ -141,7 +141,7 @@ class ConsoleOut(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._console = _ReadOnlyText(self, relief=tk.FLAT)
         rc_menu = ContextMenu(self._console)
         rc_menu.cm_bind()
-        self._console_clear = get_config().tk_vars['console_clear']
+        self._console_clear = get_config().tk_vars.console_clear
         self._set_console_clear_var_trace()
         self._debug = debug
         self._build_console()

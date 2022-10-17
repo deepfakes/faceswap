@@ -25,7 +25,7 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
         ttk.Frame.__init__(self, parent)
 
         self._parent = parent
-        self.runningtask = parent.runningtask
+        self.running_task = parent.running_task
         self.helptext = helptext
         self.tabname = tab_name
 
@@ -56,12 +56,11 @@ class DisplayPage(ttk.Frame):  # pylint: disable=too-many-ancestors
                 logger.debug("Adding: (%s: %s)", key, val)
                 self.vars[key] = val
 
-    @staticmethod
-    def set_vars():
+    def set_vars(self):
         """ Override to return a dict of page specific variables """
         return {}
 
-    def on_tab_select(self):  # pylint:disable=no-self-use
+    def on_tab_select(self):
         """ Override for specific actions when the current tab is selected """
         logger.debug("Returning as 'on_tab_select' not implemented for %s",
                      self.__class__.__name__)
@@ -183,8 +182,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         self.update_idletasks()
         self._update_page()
 
-    @staticmethod
-    def set_vars():
+    def set_vars(self):
         """ Analysis specific vars """
         enabled = tk.BooleanVar()
         enabled.set(True)
@@ -265,7 +263,7 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
 
     def _update_page(self):
         """ Update the latest preview item """
-        if not self.runningtask.get() or not self._tab_is_active:
+        if not self.running_task.get() or not self._tab_is_active:
             return
         if self.vars["enabled"].get():
             logger.trace("Updating page: %s", self.__class__.__name__)

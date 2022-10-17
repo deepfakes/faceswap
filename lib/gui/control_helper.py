@@ -343,12 +343,12 @@ class ControlPanelOption():
         if not config.user_config_dict["auto_load_model_stats"]:
             logger.debug("Session updating disabled by user config")
             return
-        if config.tk_vars["runningtask"].get():
+        if config.tk_vars.running_task.get():
             logger.debug("Task running. Not updating session")
             return
         folder = var.get()
         logger.debug("Setting analysis model folder callback: '%s'", folder)
-        get_config().tk_vars["analysis_folder"].set(folder)
+        get_config().tk_vars.analysis_folder.set(folder)
 
 
 class ControlPanel(ttk.Frame):  # pylint:disable=too-many-ancestors

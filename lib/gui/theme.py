@@ -196,7 +196,7 @@ class _Widgets():
             The color of the input field's border
         """
         # All the stock down arrow images are bad
-        images = dict()
+        images = {}
         for state in ("active", "normal"):
             images[f"arrow_{state}"] = self._images.get_image(
                 (20, 20),
@@ -343,7 +343,7 @@ class _Widgets():
                      "control_backgrounds: %s, control_foregrounds: %s, control_borders: %s)",
                      key, trough_color, border_color, control_backgrounds, control_foregrounds,
                      control_borders)
-        images = dict()
+        images = {}
         for idx, state in enumerate(("normal", "disabled", "active")):
             # Create arrow and slider widgets for each state
             img_args = ((16, 16), control_backgrounds[idx])
@@ -370,7 +370,7 @@ class _Widgets():
                     ("disabled", images[f"img_{lookup}_disabled"]),
                     ("pressed !disabled", images[f"img_{lookup}_active"]),
                     ("active !disabled", images[f"img_{lookup}_active"]))
-            kwargs = dict(border=1, sticky="ns") if element == "thumb" else dict()
+            kwargs = dict(border=1, sticky="ns") if element == "thumb" else {}
             self._style.element_create(*args, **kwargs)
 
         # Get a configurable trough

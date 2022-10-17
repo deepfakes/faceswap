@@ -73,13 +73,14 @@ class Images():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def previewoutput(self) -> Optional[Tuple[Image.Image, ImageTk.PhotoImage]]:
-        """ Tuple or ``None``: First item in the tuple is the extract or convert preview image
+    def previewoutput(self) -> Tuple[Image.Image, ImageTk.PhotoImage]:
+        """ Tuple: First item in the tuple is the extract or convert preview image
         (:class:`PIL.Image`), the second item is the image in a format that tkinter can display
         (:class:`PIL.ImageTK.PhotoImage`).
 
         The value of the property is ``None`` if no extract or convert task is running or there are
         no files available in the output folder. """
+        assert self._previewoutput is not None
         return self._previewoutput
 
     @property

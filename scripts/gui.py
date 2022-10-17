@@ -144,7 +144,7 @@ class FaceswapGui(tk.Tk):
         if not self._config.project.confirm_close():
             return
 
-        if self._config.tk_vars["runningtask"].get():
+        if self._config.tk_vars.running_task.get():
             self.wrapper.task.terminate()
 
         self._last_session.save()
@@ -161,7 +161,7 @@ class FaceswapGui(tk.Tk):
         -------
         bool: ``True`` if user confirms close, ``False`` if user cancels close
         """
-        if not self._config.tk_vars["runningtask"].get():
+        if not self._config.tk_vars.running_task.get():
             logger.debug("No tasks currently running")
             return True
 

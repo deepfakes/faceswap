@@ -35,7 +35,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         sensitive parameter that returns a certain dialog based on the current options. `dir` asks
         for a folder location.
     file_type: ['default', 'alignments', 'config_project', 'config_task', 'config_all', 'csv', \
-               'image', 'ini', 'state', 'log', 'video']
+               'image', 'ini', 'state', 'log', 'video'] or ``None``
         The type of file that this dialog is for. `default` allows selection of any files. Other
         options limit the file type selection
     title: str, optional
@@ -70,7 +70,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
 
     def __init__(self,
                  handle_type: _HANDLETYPE,
-                 file_type: _FILETYPE,
+                 file_type: Optional[_FILETYPE],
                  title: Optional[str] = None,
                  initial_folder: Optional[str] = None,
                  initial_file: Optional[str] = None,
@@ -214,7 +214,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                     title: Optional[str],
                     initial_folder: Optional[str],
                     initial_file: Optional[str],
-                    file_type: _FILETYPE,
+                    file_type: Optional[_FILETYPE],
                     command: Optional[str],
                     action: Optional[str],
                     variable: Optional[str] = None
@@ -231,7 +231,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
             The filename to set with the file dialog. If `None` then tkinter no initial filename
             is.
         file_type: ['default', 'alignments', 'config_project', 'config_task', 'config_all', \
-                    'csv',  'image', 'ini', 'state', 'log', 'video']
+                    'csv',  'image', 'ini', 'state', 'log', 'video'] or ``None``
             The type of file that this dialog is for. `default` allows selection of any files.
             Other options limit the file type selection
         command: str
@@ -269,6 +269,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
 
         if self._handletype.lower() in (
                 "open", "save", "filename", "filename_multi", "save_filename"):
+            assert file_type is not None
             kwargs["filetypes"] = self._filetypes[file_type]
             if self._defaults.get(file_type):
                 kwargs['defaultextension'] = self._defaults[file_type]

@@ -528,8 +528,8 @@ class Calculations():
     """
     def __init__(self, session_id,
                  display: str = "loss",
-                 loss_keys: str = "loss",
-                 selections: str = "raw",
+                 loss_keys: Union[List[str], str] = "loss",
+                 selections: Union[List[str], str] = "raw",
                  avg_samples: int = 500,
                  smooth_amount: float = 0.90,
                  flatten_outliers: bool = False) -> None:

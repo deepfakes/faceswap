@@ -35,8 +35,8 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         super().__init__(parent)
         parent.add(self)
         tk_vars = get_config().tk_vars
-        self._wrapper_var = tk_vars["display"]
-        self._runningtask = tk_vars["runningtask"]
+        self._wrapper_var = tk_vars.display
+        self._running_task = tk_vars.running_task
 
         self._set_wrapper_var_trace()
         self._add_static_tabs()
@@ -46,10 +46,10 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def runningtask(self):
+    def running_task(self):
         """ :class:`tkinter.BooleanVar`: The global tkinter variable that indicates whether a
         Faceswap task is currently running or not. """
-        return self._runningtask
+        return self._running_task
 
     def _set_wrapper_var_trace(self):
         """ Sets the trigger to update the displayed notebook's pages when the global tkinter
@@ -95,7 +95,7 @@ class DisplayNotebook(ttk.Notebook):  # pylint: disable=too-many-ancestors
         command: str
             The Faceswap command that is being executed
         """
-        build_tabs = getattr(self, "_{}_tabs".format(command))
+        build_tabs = getattr(self, f"_{command}_tabs")
         build_tabs()
 
     def _extract_tabs(self, command="extract"):

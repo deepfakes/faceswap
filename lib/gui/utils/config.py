@@ -6,7 +6,7 @@ import sys
 import tkinter as tk
 
 from dataclasses import dataclass, field
-from typing import Any, cast, Dict, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, cast, Dict, Optional, Tuple, TYPE_CHECKING
 
 from lib.gui._config import Config as UserConfig
 from lib.gui.project import Project, Tasks
@@ -69,11 +69,92 @@ def get_config() -> "Config":
     return _CONFIG
 
 
+class GlobalVariables():
+    """ Global tkinter variables accessible from all parts of the GUI. Should only be accessed from
+    :attr:`get_config().tk_vars` """
+    def __init__(self) -> None:
+        logger.debug("Initializing %s", self.__class__.__name__)
+        self._display = tk.StringVar()
+        self._running_task = tk.BooleanVar()
+        self._is_training = tk.BooleanVar()
+        self._action_command = tk.StringVar()
+        self._generate_command = tk.StringVar()
+        self._console_clear = tk.BooleanVar()
+        self._refresh_graph = tk.BooleanVar()
+        self._update_preview = tk.BooleanVar()
+        self._analysis_folder = tk.StringVar()
+
+        self._initialize_variables()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def display(self) -> tk.StringVar:
+        """ :class:`tkinter.StringVar`: The current Faceswap command running """
+        return self._display
+
+    @property
+    def running_task(self) -> tk.BooleanVar:
+        """ :class:`tkinter.BooleanVar`: ``True`` if a Faceswap task is running otherwise
+        ``False`` """
+        return self._running_task
+
+    @property
+    def is_training(self) -> tk.BooleanVar:
+        """ :class:`tkinter.BooleanVar`: ``True`` if Faceswap is currently training otherwise
+        ``False`` """
+        return self._is_training
+
+    @property
+    def action_command(self) -> tk.StringVar:
+        """ :class:`tkinter.StringVar`: The command line action to perform """
+        return self._action_command
+
+    @property
+    def generate_command(self) -> tk.StringVar:
+        """ :class:`tkinter.StringVar`: The command line action to generate """
+        return self._generate_command
+
+    @property
+    def console_clear(self) -> tk.BooleanVar:
+        """ :class:`tkinter.BooleanVar`: ``True`` if the console should be cleared otherwise
+        ``False`` """
+        return self._console_clear
+
+    @property
+    def refresh_graph(self) -> tk.BooleanVar:
+        """ :class:`tkinter.BooleanVar`:  ``True`` if the training graph should be refreshed
+        otherwise ``False`` """
+        return self._refresh_graph
+
+    @property
+    def update_preview(self) -> tk.BooleanVar:
+        """ :class:`tkinter.BooleanVar`:  ``True`` if the preview should be refreshed
+        otherwise ``False`` """
+        return self._update_preview
+
+    @property
+    def analysis_folder(self) -> tk.StringVar:
+        """ :class:`tkinter.StringVar`: Full path the analysis folder"""
+        return self._analysis_folder
+
+    def _initialize_variables(self) -> None:
+        """ Initialize the default variable values"""
+        self._display.set("")
+        self._running_task.set(False)
+        self._is_training.set(False)
+        self._action_command.set("")
+        self._generate_command.set("")
+        self._console_clear.set(False)
+        self._refresh_graph.set(False)
+        self._update_preview.set(False)
+        self._analysis_folder.set("")
+
+
 @dataclass
 class _GuiObjects:
     """ Data class for commonly accessed GUI Objects """
     cli_opts: "CliOptions"
-    tk_vars: Dict[str, Union[tk.BooleanVar, tk.StringVar]]
+    tk_vars: GlobalVariables
     project: Project
     tasks: Tasks
     status_bar: "StatusBar"
@@ -107,7 +188,7 @@ class Config():
             default_font=self._default_font)
         self._gui_objects = _GuiObjects(
             cli_opts=cli_opts,
-            tk_vars=self._set_tk_vars(),
+            tk_vars=GlobalVariables(),
             project=Project(self, FileHandler),
             tasks=Tasks(self, FileHandler),
             status_bar=statusbar)
@@ -140,7 +221,7 @@ class Config():
         return self._gui_objects.cli_opts
 
     @property
-    def tk_vars(self) -> Dict[str, Union[tk.StringVar, tk.BooleanVar]]:
+    def tk_vars(self) -> GlobalVariables:
         """ dict: The global tkinter variables. """
         return self._gui_objects.tk_vars
 
@@ -330,52 +411,6 @@ class Config():
         component = self.root if widget is None else widget
         component.config(cursor="")  # type: ignore
         component.update_idletasks()
-
-    @staticmethod
-    def _set_tk_vars() -> Dict[str, Union[tk.StringVar, tk.BooleanVar]]:
-        """ Set the global tkinter variables stored for easy access in :class:`Config`.
-
-        The variables are available through :attr:`tk_vars`.
-        """
-        display = tk.StringVar()
-        display.set("")
-
-        runningtask = tk.BooleanVar()
-        runningtask.set(False)
-
-        istraining = tk.BooleanVar()
-        istraining.set(False)
-
-        actioncommand = tk.StringVar()
-        actioncommand.set("")
-
-        generatecommand = tk.StringVar()
-        generatecommand.set("")
-
-        console_clear = tk.BooleanVar()
-        console_clear.set(False)
-
-        refreshgraph = tk.BooleanVar()
-        refreshgraph.set(False)
-
-        updatepreview = tk.BooleanVar()
-        updatepreview.set(False)
-
-        analysis_folder = tk.StringVar()
-        analysis_folder.set("")
-
-        tk_vars: Dict[str, Union[tk.StringVar, tk.BooleanVar]] = dict(
-            display=display,
-            runningtask=runningtask,
-            istraining=istraining,
-            action=actioncommand,
-            generate=generatecommand,
-            console_clear=console_clear,
-            refreshgraph=refreshgraph,
-            updatepreview=updatepreview,
-            analysis_folder=analysis_folder)
-        logger.debug(tk_vars)
-        return tk_vars
 
     def set_root_title(self, text: Optional[str] = None) -> None:
         """ Set the main title text for Faceswap.

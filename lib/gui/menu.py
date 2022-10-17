@@ -347,7 +347,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
     @staticmethod
     def clear_console():
         """ Clear the console window """
-        get_config().tk_vars["console_clear"].set(True)
+        get_config().tk_vars.console_clear.set(True)
 
     def output_sysinfo(self):
         """ Output system information to console """

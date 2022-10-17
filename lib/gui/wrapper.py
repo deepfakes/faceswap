@@ -32,56 +32,56 @@ class ProcessWrapper():
         self.pathscript = os.path.realpath(os.path.dirname(sys.argv[0]))
         self.command = None
         self.statusbar = get_config().statusbar
-        self._training_session_location = dict()
+        self._training_session_location = {}
         self.task = FaceswapControl(self)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def set_callbacks(self):
         """ Set the tkinter variable callbacks """
         logger.debug("Setting tk variable traces")
-        self.tk_vars["action"].trace("w", self.action_command)
-        self.tk_vars["generate"].trace("w", self.generate_command)
+        self.tk_vars.action_command.trace("w", self.action_command)
+        self.tk_vars.generate_command.trace("w", self.generate_command)
 
     def action_command(self, *args):
         """ The action to perform when the action button is pressed """
-        if not self.tk_vars["action"].get():
+        if not self.tk_vars.action_command.get():
             return
-        category, command = self.tk_vars["action"].get().split(",")
+        category, command = self.tk_vars.action_command.get().split(",")
 
-        if self.tk_vars["runningtask"].get():
+        if self.tk_vars.running_task.get():
             self.task.terminate()
         else:
             self.command = command
             args = self.prepare(category)
             self.task.execute_script(command, args)
-        self.tk_vars["action"].set(None)
+        self.tk_vars.action_command.set("")
 
     def generate_command(self, *args):
         """ Generate the command line arguments and output """
-        if not self.tk_vars["generate"].get():
+        if not self.tk_vars.generate_command.get():
             return
-        category, command = self.tk_vars["generate"].get().split(",")
+        category, command = self.tk_vars.generate_command.get().split(",")
         args = self.build_args(category, command=command, generate=True)
-        self.tk_vars["console_clear"].set(True)
+        self.tk_vars.console_clear.set(True)
         logger.debug(" ".join(args))
         print(" ".join(args))
-        self.tk_vars["generate"].set(None)
+        self.tk_vars.generate_command.set("")
 
     def prepare(self, category):
         """ Prepare the environment for execution """
         logger.debug("Preparing for execution")
-        self.tk_vars["runningtask"].set(True)
-        self.tk_vars["console_clear"].set(True)
+        self.tk_vars.running_task.set(True)
+        self.tk_vars.console_clear.set(True)
         if self.command == "train":
-            self.tk_vars["istraining"].set(True)
+            self.tk_vars.is_training.set(True)
         print("Loading...")
 
-        self.statusbar.message.set("Executing - {}.py".format(self.command))
+        self.statusbar.message.set(f"Executing - {self.command}.py")
         mode = "indeterminate" if self.command in ("effmpeg", "train") else "determinate"
         self.statusbar.start(mode)
 
         args = self.build_args(category)
-        self.tk_vars["display"].set(self.command)
+        self.tk_vars.display.set(self.command)
         logger.debug("Prepared for execution")
         return args
 
@@ -94,7 +94,7 @@ class ProcessWrapper():
         logger.debug("Build cli arguments: (category: %s, command: %s, generate: %s)",
                      category, command, generate)
         command = self.command if not command else command
-        script = "{}.{}".format(category, "py")
+        script = f"{category}.py"
         pathexecscript = os.path.join(self.pathscript, script)
 
         args = [sys.executable] if generate else [sys.executable, "-u"]
@@ -110,7 +110,7 @@ class ProcessWrapper():
             args.append("-gui")  # Indicate to Faceswap that we are running the GUI
         if generate:
             # Delimit args with spaces
-            args = ['"{}"'.format(arg) if " " in arg and not arg.startswith(("[", "("))
+            args = [f'"{arg}"' if " " in arg and not arg.startswith(("[", "("))
                     and not arg.endswith(("]", ")")) else arg
                     for arg in args]
         logger.debug("Built cli arguments: (%s)", args)
@@ -135,13 +135,13 @@ class ProcessWrapper():
     def terminate(self, message):
         """ Finalize wrapper when process has exited """
         logger.debug("Terminating Faceswap processes")
-        self.tk_vars["runningtask"].set(False)
+        self.tk_vars.running_task.set(False)
         if self.task.command == "train":
-            self.tk_vars["istraining"].set(False)
+            self.tk_vars.is_training.set(False)
             Session.stop_training()
         self.statusbar.stop()
         self.statusbar.message.set(message)
-        self.tk_vars["display"].set(None)
+        self.tk_vars.display.set("")
         get_images().delete_preview()
         preview_trigger().clear(trigger_type=None)
         self.command = None
@@ -202,11 +202,12 @@ class FaceswapControl():
                         (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
                         (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
                     continue
-                if self.command == "train" and self.wrapper.tk_vars["istraining"].get():
+                if self.command == "train" and self.wrapper.tk_vars.is_training.get():
                     if "[saved models]" in output.strip().lower():
                         logger.debug("Trigger GUI Training update")
-                        logger.trace("tk_vars: %s", {itm: var.get()
-                                                     for itm, var in self.wrapper.tk_vars.items()})
+                        logger.trace("tk_vars: %s",
+                                     {itm: var.get()
+                                      for itm, var in self.wrapper.tk_vars.__dict__.items()})
                         if not Session.is_training:
                             # Don't initialize session until after the first save as state
                             # file must exist first
@@ -215,10 +216,10 @@ class FaceswapControl():
                                 self._session_info["model_folder"],
                                 self._session_info["model_name"],
                                 is_training=True)
-                        self.wrapper.tk_vars["updatepreview"].set(True)
-                        self.wrapper.tk_vars["refreshgraph"].set(True)
+                        self.wrapper.tk_vars.update_preview.set(True)
+                        self.wrapper.tk_vars.refresh_graph.set(True)
                     if "[preview updated]" in output.strip().lower():
-                        self.wrapper.tk_vars["updatepreview"].set(True)
+                        self.wrapper.tk_vars.update_preview.set(True)
                         continue
                 print(output.rstrip())
         returncode = self.process.poll()
@@ -282,8 +283,8 @@ class FaceswapControl():
             logger.trace("Not loss message. Returning False")
             return False
 
-        message = "Total Iterations: {} | ".format(int(loss[0][0]))
-        message += "  ".join(["{}: {}".format(itm[1], itm[2]) for itm in loss])
+        message = f"Total Iterations: {int(loss[0][0])} | "
+        message += "  ".join([f"{itm[1]}: {itm[2]}" for itm in loss])
         if not message:
             logger.trace("Error creating loss message. Returning False")
             return False
@@ -298,9 +299,8 @@ class FaceswapControl():
         self.train_stats["iterations"] = iterations
 
         elapsed = self.calc_elapsed()
-        message = "Elapsed: {} | Session Iterations: {}  {}".format(
-            elapsed,
-            self.train_stats["iterations"], message)
+        message = (f"Elapsed: {elapsed} | "
+                   f"Session Iterations: {self.train_stats['iterations']}  {message}")
         self.statusbar.progress_update(message, 0, False)
         logger.trace("Succesfully captured loss: %s", message)
         return True
@@ -312,14 +312,14 @@ class FaceswapControl():
         try:
             hrs = int(elapsed_time // 3600)
             if hrs < 10:
-                hrs = "{0:02d}".format(hrs)
-            mins = "{0:02d}".format((int(elapsed_time % 3600) // 60))
-            secs = "{0:02d}".format((int(elapsed_time % 3600) % 60))
+                hrs = f"{hrs:02d}"
+            mins = f"{(int(elapsed_time % 3600) // 60):02d}"
+            secs = f"{(int(elapsed_time % 3600) % 60):02d}"
         except ZeroDivisionError:
             hrs = "00"
             mins = "00"
             secs = "00"
-        return "{}:{}:{}".format(hrs, mins, secs)
+        return f"{hrs}:{mins}:{secs}"
 
     def capture_tqdm(self, string):
         """ Capture tqdm output for progress bar """
@@ -332,20 +332,16 @@ class FaceswapControl():
             logger.trace("tqdm initializing. Skipping")
             return True
         description = tqdm["dsc"].strip()
-        description = description if description == "" else "{}  |  ".format(description[:-1])
-        processtime = "Elapsed: {}  Remaining: {}".format(tqdm["tme"].split("<")[0],
-                                                          tqdm["tme"].split("<")[1])
-        message = "{}{}  |  {}  |  {}  |  {}".format(description,
-                                                     processtime,
-                                                     tqdm["rte"],
-                                                     tqdm["itm"],
-                                                     tqdm["pct"])
+        description = description if description == "" else f"{description[:-1]}  |  "
+        processtime = (f"Elapsed: {tqdm['tme'].split('<')[0]}  "
+                       f"Remaining: {tqdm['tme'].split('<')[1]}")
+        msg = f"{description}{processtime}  |  {tqdm['rte']}  |  {tqdm['itm']}  |  {tqdm['pct']}"
 
         position = tqdm["pct"].replace("%", "")
         position = int(position) if position.isdigit() else 0
 
-        self.statusbar.progress_update(message, position, True)
-        logger.trace("Succesfully captured tqdm message: %s", message)
+        self.statusbar.progress_update(msg, position, True)
+        logger.trace("Succesfully captured tqdm message: %s", msg)
         return True
 
     def capture_ffmpeg(self, string):
@@ -358,7 +354,7 @@ class FaceswapControl():
 
         message = ""
         for item in ffmpeg:
-            message += "{}: {}  ".format(item[0], item[1])
+            message += f"{item[0]}: {item[1]}  "
         if not message:
             logger.trace("Error creating ffmpeg message. Returning False")
             return False
@@ -375,7 +371,7 @@ class FaceswapControl():
             self.thread = LongRunningTask(target=self.terminate_in_thread,
                                           args=(self.command, self.process))
             if self.command == "train":
-                self.wrapper.tk_vars["istraining"].set(False)
+                self.wrapper.tk_vars.is_training.set(False)
             self.thread.start()
             self.config.root.after(1000, self.terminate)
         elif not self.thread.complete.is_set():
@@ -448,7 +444,7 @@ class FaceswapControl():
             print("Killed")
         else:
             for child in alive:
-                msg = "Process {} survived SIGKILL. Giving up".format(child)
+                msg = f"Process {child} survived SIGKILL. Giving up"
                 logger.debug(msg)
                 print(msg)
 
@@ -460,12 +456,12 @@ class FaceswapControl():
         if returncode in (0, 3221225786):
             status = "Ready"
         elif returncode == -15:
-            status = "Terminated - {}.py".format(self.command)
+            status = f"Terminated - {self.command}.py"
         elif returncode == -9:
-            status = "Killed - {}.py".format(self.command)
+            status = f"Killed - {self.command}.py"
         elif returncode == -6:
-            status = "Aborted - {}.py".format(self.command)
+            status = f"Aborted - {self.command}.py"
         else:
-            status = "Failed - {}.py. Return Code: {}".format(self.command, returncode)
+            status = f"Failed - {self.command}.py. Return Code: {returncode}"
         logger.debug("Set final status: %s", status)
         return status

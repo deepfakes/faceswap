@@ -682,7 +682,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
         logger.info("Saved config: '%s'", config.configfile)
 
         if category == "gui":
-            if not get_config().tk_vars["runningtask"].get():
+            if not get_config().tk_vars.running_task.get():
                 get_config().root.rebuild()
             else:
                 logger.info("Can't redraw GUI whilst a task is running. GUI Settings will be "
