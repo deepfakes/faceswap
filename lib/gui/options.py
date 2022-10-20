@@ -301,4 +301,5 @@ class CliOptions():
                 yield opt
 
         if command in ("extract", "convert") and output_dir is not None:
-            get_images().set_faceswap_output_path(output_dir, batch_mode=batch_mode)
+            get_images().preview_extract.set_faceswap_output_path(output_dir,
+                                                                  batch_mode=batch_mode)

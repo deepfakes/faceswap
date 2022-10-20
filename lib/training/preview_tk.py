@@ -27,23 +27,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# TODO Embed this object in GUI
 
-
-class _Taskbar(tk.Frame):
+class _Taskbar():
     """ Taskbar at bottom of Preview window
 
     Parameters
     ----------
     parent: :class:`tkinter.Frame`
         The parent frame that holds the canvas and taskbar
-    is_standalone: bool
-        ``True`` if preview is a pop-up window otherwise ``False``
+    taskbar: :class:`tkinter.ttk.Frame` or ``None``
+        None if preview is a pop-up window otherwise ttk.Frame if taskbar is managed by the GUI
     """
-    def __init__(self, parent: tk.Frame, is_standalone: bool) -> None:
-        logger.debug("Initializing %s (parent: '%s', is_standalone: %s)",
-                     self.__class__.__name__, parent, is_standalone)
-        super().__init__(parent)
+    def __init__(self, parent: tk.Frame, taskbar: Optional[ttk.Frame]) -> None:
+        logger.debug("Initializing %s (parent: '%s', taskbar: %s)",
+                     self.__class__.__name__, parent, taskbar)
+        self._is_standalone = taskbar is None
+        self._gui_mapped: List[tk.Widget] = []
+        self._frame = tk.Frame(parent) if taskbar is None else taskbar
+
         self._min_max_scales = (20, 400)
         self._vars = dict(save=tk.BooleanVar(),
                           scale=tk.StringVar(),
@@ -54,9 +55,11 @@ class _Taskbar(tk.Frame):
         self._scale = self._add_scale_combo()
         self._slider = self._add_scale_slider()
         self._add_interpolator_radio()
-        if is_standalone:
+
+        if self._is_standalone:
             self._add_save_button()
-        self.pack(side=tk.BOTTOM, fill=tk.X, padx=2, pady=2)
+            self._frame.pack(side=tk.BOTTOM, fill=tk.X, padx=2, pady=2)
+
         logger.debug("Initialized %s ('%s')", self.__class__.__name__, self)
 
     @property
@@ -100,6 +103,14 @@ class _Taskbar(tk.Frame):
         assert isinstance(retval, tk.IntVar)
         return retval
 
+    def _track_widget(self, widget: tk.Widget) -> None:
+        """ If running embedded in the GUI track the widgets so that they can be destroyed if
+        the preview is disabled """
+        if self._is_standalone:
+            return
+        logger.debug("Tracking option bar widget for GUI: %s", widget)
+        self._gui_mapped.append(widget)
+
     def _add_scale_combo(self) -> ttk.Combobox:
         """ Add a scale combo for selecting zoom amount.
 
@@ -110,13 +121,14 @@ class _Taskbar(tk.Frame):
         """
         logger.debug("Adding scale combo")
         self.scale_var.set("100%")
-        scale = ttk.Combobox(self,
+        scale = ttk.Combobox(self._frame,
                              textvariable=self.scale_var,
                              values=["Fit"],
                              state="readonly",
                              width=10)
         scale.pack(side=tk.RIGHT)
         scale.bind("<FocusIn>", self._clear_combo_focus)  # Remove auto-focus on widget text box
+        self._track_widget(scale)
         logger.debug("Added scale combo: '%s'", scale)
         return scale
 
@@ -138,29 +150,35 @@ class _Taskbar(tk.Frame):
         """
         logger.debug("Adding scale slider")
         self.slider_var.set(100)
-        slider = tk.Scale(self,
+        slider = tk.Scale(self._frame,
                           orient=tk.HORIZONTAL,
                           to=self.max_scale,
                           showvalue=False,
                           variable=self.slider_var,
                           command=self._on_slider_update)
         slider.pack(side=tk.RIGHT)
+        self._track_widget(slider)
         logger.debug("Added scale slider: '%s'", slider)
         return slider
 
     def _add_interpolator_radio(self) -> None:
         """ Add a radio box to choose interpolator """
-        frame = tk.Frame(self)
+        frame = tk.Frame(self._frame)
         for text, mode in self._interpolators:
+            logger.debug("Adding %s radio button", text)
             radio = tk.Radiobutton(frame, text=text, value=mode, variable=self.interpolator_var)
             radio.pack(side=tk.LEFT, anchor=tk.W)
+            self._track_widget(radio)
+
+            logger.debug("Added %s radio button", radio)
         self.interpolator_var.set(cv2.INTER_NEAREST)
         frame.pack(side=tk.RIGHT)
+        self._track_widget(frame)
 
     def _add_save_button(self) -> None:
         """ Add a save button for saving out original preview """
         logger.debug("Adding save button")
-        button = tk.Button(self,
+        button = tk.Button(self._frame,
                            text="Save",
                            cursor="hand2",
                            command=lambda: self.save_var.set(True))
@@ -202,12 +220,28 @@ class _Taskbar(tk.Frame):
         logger.debug("Set min/max scale. min_max_scales: %s, scale combo choices: %s",
                      self._min_max_scales, choices)
 
-    def cycle_interpolators(self, *args):  # pylint:disable=unused-argument
+    def cycle_interpolators(self, *args) -> None:  # pylint:disable=unused-argument
         """ Cycle interpolators on a keypress callback """
         current = next(i for i in self._interpolators if i[1] == self.interpolator_var.get())
         next_idx = self._interpolators.index(current) + 1
         next_idx = 0 if next_idx == len(self._interpolators) else next_idx
         self.interpolator_var.set(self._interpolators[next_idx][1])
+
+    def destroy_widgets(self) -> None:
+        """ Remove the taskbar widgets when the preview within the GUI has been disabled """
+        if self._is_standalone:
+            return
+
+        for widget in self._gui_mapped:
+            if widget.winfo_ismapped():
+                logger.debug("Removing widget: %s", widget)
+                widget.pack_forget()
+                widget.destroy()
+                del widget
+
+        for var in list(self._vars):
+            logger.debug("Deleting tk variable: %s", var)
+            del self._vars[var]
 
 
 class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
@@ -221,16 +255,20 @@ class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
         The variable that holds the value from the scale combo box
     screen_dimensions: tuple
         The (`width`, `height`) of the displaying monitor
+    is_standalone: bool
+        ``True`` if the preview is standalone, ``False`` if it is in the GUI
     """
     def __init__(self,
                  parent: tk.Frame,
                  scale_var: tk.StringVar,
-                 screen_dimensions: Tuple[int, int]) -> None:
+                 screen_dimensions: Tuple[int, int],
+                 is_standalone: bool) -> None:
         logger.debug("Initializing %s (parent: '%s', scale_var: %s, screen_dimensions: %s)",
                      self.__class__.__name__, parent, scale_var, screen_dimensions)
         frame = tk.Frame(parent)
         super().__init__(frame)
 
+        self._is_standalone = is_standalone
         self._screen_dimensions = screen_dimensions
         self._var_scale = scale_var
         self._configure_scrollbars(frame)
@@ -292,7 +330,9 @@ class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
 
         self.configure(scrollregion=self.bbox("all"))
         self.update_idletasks()
+
         assert self._image is not None
+        self._center_image(self.width / 2, self.height / 2)
 
         # Move to top left when resizing into screen dimensions (initial startup)
         if self.width > self._screen_dimensions[0]:
@@ -334,7 +374,10 @@ class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
                      center_image)
         self._image = image
         self.itemconfig(self.image_id, image=self._image)
-        self.config(width=self._image.width(), height=self._image.height())
+
+        if self._is_standalone:  # canvas size should not be updated inside GUI
+            self.config(width=self._image.width(), height=self._image.height())
+
         self.update_idletasks()
         if center_image:
             self._center_image(self.width / 2, self.height / 2)
@@ -348,11 +391,15 @@ class _Image():
     Parameters
     ----------
     save_variable: :class:`tkinter.BooleanVar`
-        Variable that indicates a save preview has been requested
+        Variable that indicates a save preview has been requested in standalone mode
+    is_standalone: bool
+        ``True`` if the preview is running in standalone mode. ``False`` if it is running in the
+        GUI
     """
-    def __init__(self, save_variable: tk.BooleanVar) -> None:
-        logger.debug("Initializing %s: (save_variable: %s)",
-                     self.__class__.__name__, save_variable)
+    def __init__(self, save_variable: tk.BooleanVar, is_standalone: bool) -> None:
+        logger.debug("Initializing %s: (save_variable: %s, is_standalone: %s)",
+                     self.__class__.__name__, save_variable, is_standalone)
+        self._is_standalone = is_standalone
         self._source: Optional["np.ndarray"] = None
         self._display: Optional[ImageTk.PhotoImage] = None
         self._scale = 1.0
@@ -396,7 +443,7 @@ class _Image():
         """ Obtain the scaled image and set to :attr:`display_image` """
         logger.debug("Setting display image. Scale: %s", self._scale)
         image = self.source[..., 2::-1]  # TO RGB
-        if self._scale != 1.0:
+        if self._scale not in (0.0, 1.0):  # Scale will be 0,0 on initial load in GUI
             interp = self._interpolation if self._scale > 1.0 else cv2.INTER_NEAREST
             dims = (int(round(self.source.shape[1] * self._scale, 0)),
                     int(round(self.source.shape[0] * self._scale, 0)))
@@ -449,19 +496,25 @@ class _Image():
         Parameters
         ----------
         args: tuple
-            Tuple containing either the key press event (Ctrl+s shortcut) or the tk variable
-            arguments (save button press)
+            Tuple containing either the key press event (Ctrl+s shortcut), the tk variable
+            arguments (standalone save button press) or the folder location (GUI save button press)
         """
-        if not self._save_var.get() and not isinstance(args[0], tk.Event):
+        if self._is_standalone and not self._save_var.get() and not isinstance(args[0], tk.Event):
             return
 
-        root_path = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])))
+        if self._is_standalone:
+            root_path = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])))
+        else:
+            root_path = args[0]
+
         now = datetime.now().strftime("%Y-%m-%d_%H.%M.%S")
         filename = os.path.join(root_path, f"preview_{now}.png")
         cv2.imwrite(filename, self.source)
         print("")
         logger.info("Saved preview to: '%s'", filename)
-        self._save_var.set(False)
+
+        if self._is_standalone:
+            self._save_var.set(False)
 
 
 class _Bindings():  # pylint: disable=too-few-public-methods
@@ -475,8 +528,14 @@ class _Bindings():  # pylint: disable=too-few-public-methods
         The taskbar widget which holds the scaling variables
     image: :class:`_Image`
         The object which holds the source and display version of the preview image
+    is_standalone: bool
+        ``True`` if the preview is standalone, ``False`` if it is embedded in the GUI
     """
-    def __init__(self, canvas: _PreviewCanvas, taskbar: _Taskbar, image: _Image) -> None:
+    def __init__(self,
+                 canvas: _PreviewCanvas,
+                 taskbar: _Taskbar,
+                 image: _Image,
+                 is_standalone: bool) -> None:
         logger.debug("Initializing %s (canvas: '%s', taskbar: '%s', image: '%s')",
                      self.__class__.__name__, canvas, taskbar, image)
         self._canvas = canvas
@@ -485,7 +544,7 @@ class _Bindings():  # pylint: disable=too-few-public-methods
 
         self._drag_data: List[float] = [0., 0.]
         self._set_mouse_bindings()
-        self._set_key_bindings()
+        self._set_key_bindings(is_standalone)
         logger.debug("Initialized %s", self.__class__.__name__,)
 
     def _on_bound_zoom(self, event: tk.Event) -> None:
@@ -568,15 +627,21 @@ class _Bindings():  # pylint: disable=too-few-public-methods
         self._canvas.tag_bind(self._canvas.image_id, "<B1-Motion>", self._on_mouse_drag)
         logger.debug("Bound mouse events")
 
-    def _set_key_bindings(self) -> None:
-        # TODO set bind location for GUI
+    def _set_key_bindings(self, is_standalone: bool) -> None:
         """ Set the keyboard bindings.
 
         Up/Down/Left/Right: Moves image
         +/-: Zooms image
         ctrl+s: Save
         i: Cycle interpolators
+
+        Parameters
+        ----------
+        ``True`` if the preview is standalone, ``False`` if it is embedded in the GUI
         """
+        if not is_standalone:
+            # Don't bind keys for GUI as it adds complication
+            return
         logger.debug("Binding key events")
         root = self._canvas.winfo_toplevel()
         for key in ("Left", "Right", "Up", "Down"):
@@ -598,6 +663,9 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
     parent: tkinter widget, optional
         If this viewer is being called from the GUI the parent widget should be passed in here.
         If this is a standalone pop-up window then pass ``None``. Default: ``None``
+    taskbar: :class:`tkinter.ttk.Frame`, optional
+        If this viewer is being called from the GUI the parent's option frame should be passed in
+        here. If this is a standalone pop-up window then pass ``None``. Default: ``None``
     triggers: dict, optional
         Dictionary of event triggers for pop-up preview. Not required when running inside the GUI.
         Default: `None`
@@ -605,37 +673,70 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
     def __init__(self,
                  preview_buffer: "PreviewBuffer",
                  parent: Optional[tk.Widget] = None,
+                 taskbar: Optional[ttk.Frame] = None,
                  triggers: Optional["TriggerType"] = None) -> None:
         logger.debug("Initializing %s (parent: '%s')", self.__class__.__name__, parent)
         super().__init__(preview_buffer, triggers=triggers)
         self._is_standalone = parent is None
-        self._initialized = not self._is_standalone
+        self._initialized = False
         self._root = parent if parent is not None else tk.Tk()
         self._master_frame = tk.Frame(self._root)
 
-        self._taskbar = _Taskbar(self._master_frame, self._is_standalone)
+        self._taskbar = _Taskbar(self._master_frame, taskbar)
 
         self._screen_dimensions = self._get_geometry()
         self._canvas = _PreviewCanvas(self._master_frame,
                                       self._taskbar.scale_var,
-                                      self._screen_dimensions)
+                                      self._screen_dimensions,
+                                      self._is_standalone)
 
-        self._image = _Image(self._taskbar.save_var)
+        self._image = _Image(self._taskbar.save_var, self._is_standalone)
 
-        _Bindings(self._canvas, self._taskbar, self._image)
+        _Bindings(self._canvas, self._taskbar, self._image, self._is_standalone)
 
         self._taskbar.scale_var.trace("w", self._set_scale)
         self._taskbar.interpolator_var.trace("w", self._set_interpolation)
 
         self._process_triggers()
-        self._master_frame.pack(fill=tk.BOTH, expand=True)
-        logger.debug("Initialized %s", self.__class__.__name__)
+
+        if self._is_standalone:
+            self.pack(fill=tk.BOTH, expand=True)
+
         self._output_helptext()
+
+        logger.debug("Initialized %s", self.__class__.__name__)
+
         self._launch()
 
-    @classmethod
-    def _output_helptext(cls) -> None:
+    @property
+    def master_frame(self) -> tk.Frame:
+        """ :class:`tkinter.Frame`: The master frame that holds the preview window """
+        return self._master_frame
+
+    def pack(self, *args, **kwargs):
+        """ Redirect calls to pack the widget to pack the actual :attr:`_master_frame`.
+
+        Takes standard :class:`tkinter.Frame` pack arguments
+        """
+        logger.debug("Packing master frame: (args: %s, kwargs: %s)", args, kwargs)
+        self._master_frame.pack(*args, **kwargs)
+
+    def save(self, location: str) -> None:
+        """ Save action to be performed when save button pressed from the GUI.
+
+        location: str
+            Full path to the folder to save the preview image to
+        """
+        self._image.save_preview(location)
+
+    def remove_option_controls(self) -> None:
+        """ Remove the taskbar options controls when the preview is disabled in the GUI """
+        self._taskbar.destroy_widgets()
+
+    def _output_helptext(self) -> None:
         """ Output the keybindings to Console. """
+        if not self._is_standalone:
+            return
         logger.info("---------------------------------------------------")
         logger.info("  Preview key bindings:")
         logger.info("    Zoom:              +/-")
@@ -645,7 +746,8 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
         logger.info("---------------------------------------------------")
 
     def _get_geometry(self) -> Tuple[int, int]:
-        """ Obtain the geometry of the current screen.
+        """ Obtain the geometry of the current screen (standalone) or the dimensions of the widget
+        holding the preview window (GUI).
 
         Just pulling screen width and height does not account for multiple monitors, so dummy in a
         window to pull actual dimensions before hiding it again.
@@ -655,9 +757,14 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
         Tuple
             The (`width`, `height`) of the current monitor's display
         """
-        # TODO skip when loading in GUI?
-        logger.debug("Obtaining screen geometry")
+        if not self._is_standalone:
+            root = self._root.winfo_toplevel()  # Get dims of whole GUI
+            retval = root.winfo_width(), root.winfo_height()
+            logger.debug("Obtained frame geometry: %s", retval)
+            return retval
+
         assert isinstance(self._root, tk.Tk)
+        logger.debug("Obtaining screen geometry")
         self._root.update_idletasks()
         self._root.attributes("-fullscreen", True)
         self._root.state("iconic")
@@ -807,9 +914,13 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
 
         self._root.after(1000, self._display_preview)
 
-        if not self._initialized:
+        if not self._initialized and self._is_standalone:
             self._initialize_window()
             self._root.mainloop()
+        if not self._initialized:  # Set initialized to True for GUI
+            self._set_min_max_scales()
+            self._taskbar.scale_var.set("Fit")
+            self._initialized = True
 
 
 def main():

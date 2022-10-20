@@ -8,7 +8,9 @@ import sys
 import tkinter as tk
 
 from tkinter import ttk
-from typing import cast, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Optional, Tuple
+
+from lib.training.preview_tk import PreviewTk
 
 from .display_graph import TrainingGraph
 from .display_page import DisplayOptionalPage
@@ -22,9 +24,6 @@ if sys.version_info < (3, 8):
 else:
     from typing import get_args, Literal
 
-if TYPE_CHECKING:
-    from PIL import Image
-
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 # LOCALES
@@ -34,14 +33,24 @@ _ = _LANG.gettext
 
 class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ Tab to display output preview images for extract and convert """
+    def __init__(self, *args, **kwargs) -> None:
+        logger.debug("Initializing %s (args: %s, kwargs: %s)",
+                     self.__class__.__name__, args, kwargs)
+        self._preview = get_images().preview_extract
+        super().__init__(*args, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def display_item_set(self) -> None:
         """ Load the latest preview if available """
         logger.trace("Loading latest preview")  # type:ignore
-        size = 256 if self.command == "convert" else 128
-        get_images().load_latest_preview(thumbnail_size=int(size * get_config().scaling_factor),
-                                         frame_dims=(self.winfo_width(), self.winfo_height()))
-        self.display_item = get_images().previewoutput
+        size = int(256 if self.command == "convert" else 128 * get_config().scaling_factor)
+        if not self._preview.load_latest_preview(thumbnail_size=size,
+                                                 frame_dims=(self.winfo_width(),
+                                                             self.winfo_height())):
+            logger.trace("Preview not updated")  # type:ignore
+            return
+        logger.debug("Preview loaded")
+        self.display_item = True
 
     def display_item_process(self) -> None:
         """ Display the preview """
@@ -55,7 +64,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Add the preview label child """
         logger.debug("Adding child")
         preview = self.subnotebook_add_page(self.tabname, widget=None)
-        lblpreview = ttk.Label(preview, image=get_images().previewoutput[1])
+        lblpreview = ttk.Label(preview, image=self._preview.image)
         lblpreview.pack(side=tk.TOP, anchor=tk.NW)
         Tooltip(lblpreview, text=self.helptext, wrap_length=200)
 
@@ -63,7 +72,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         """ Update the preview image on the label """
         logger.trace("Updating preview")  # type:ignore
         for widget in self.subnotebook_get_widgets():
-            widget.configure(image=get_images().previewoutput[1])
+            widget.configure(image=self._preview.image)
 
     def save_items(self) -> None:
         """ Open save dialogue and save preview """
@@ -73,22 +82,37 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         filename = "extract_convert_preview"
         now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = os.path.join(location, f"{filename}_{now}.png")
-        get_images().previewoutput[0].save(filename)
-        logger.debug("Saved preview to %s", filename)
+        self._preview.save(filename)
         print(f"Saved preview to {filename}")
 
 
 class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     """ Training preview image(s) """
     def __init__(self, *args, **kwargs) -> None:
-        self.update_preview = get_config().tk_vars.update_preview
+        logger.debug("Initializing %s (args: %s, kwargs: %s)",
+                     self.__class__.__name__, args, kwargs)
+        self._preview = get_images().preview_train
+        self._display: Optional[PreviewTk] = None
         super().__init__(*args, **kwargs)
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     def add_options(self) -> None:
         """ Add the additional options """
         self._add_option_refresh()
         self._add_option_mask_toggle()
         super().add_options()
+
+    def subnotebook_hide(self) -> None:
+        """ Override default subnotebook hide action to also remove the embedded option bar
+        control and reset the training image buffer """
+        if self.subnotebook and self.subnotebook.winfo_ismapped():
+            logger.debug("Removing preview controls from options bar")
+            if self._display is not None:
+                self._display.remove_option_controls()
+            super().subnotebook_hide()
+            del self._display
+            self._display = None
+            self._preview.reset()
 
     def _add_option_refresh(self) -> None:
         """ Add refresh button to refresh preview immediately """
@@ -117,131 +141,33 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def display_item_set(self) -> None:
         """ Load the latest preview if available """
+        # TODO This seems to be triggering faster than the waittime
         logger.trace("Loading latest preview")  # type:ignore
-        if not self.update_preview.get():
+        if not self._preview.load():
             logger.trace("Preview not updated")  # type:ignore
             return
-        get_images().load_training_preview()
-        self.display_item = get_images().previewtrain
+        logger.debug("Preview loaded")
+        self.display_item = True
 
     def display_item_process(self) -> None:
         """ Display the preview(s) resized as appropriate """
-        logger.trace("Displaying preview")  # type:ignore
-        sortednames = sorted(list(get_images().previewtrain.keys()))
-        existing = self.subnotebook_get_titles_ids()
-        should_update = self.update_preview.get()
+        if self.subnotebook.children:
+            return
 
-        for name in sortednames:
-            if name not in existing:
-                self.add_child(name)
-            elif should_update:
-                tab_id = existing[name]
-                self.update_child(tab_id, name)
-
-        if should_update:
-            self.update_preview.set(False)
-
-    def add_child(self, name: str) -> None:
-        """ Add the preview canvas child
-
-        Parameters
-        ----------
-        name: str
-            The name of the notebook tab to add
-        """
-        logger.debug("Adding child")
-        preview = PreviewTrainCanvas(self.subnotebook, name)
-        preview = self.subnotebook_add_page(name, widget=preview)
-        Tooltip(preview, text=self.helptext, wrap_length=200)
-        self.vars["modified"].set(get_images().previewtrain[name][2])
-
-    def update_child(self, tab_id: int, name: str) -> None:
-        """ Update the preview canvas
-
-        Parameters
-        ----------
-        tab_id: int
-            The index of the tab to update
-        name: str
-            The name of the tab to update
-        """
-        logger.debug("Updating preview")
-        if self.vars["modified"].get() != get_images().previewtrain[name][2]:
-            self.vars["modified"].set(get_images().previewtrain[name][2])
-            widget = self.subnotebook_page_from_id(tab_id)
-            widget.reload()
+        logger.debug("Displaying preview")
+        self._display = PreviewTk(self._preview.buffer, self.subnotebook, self.optsframe, None)
+        self.subnotebook_add_page(self.tabname, widget=self._display.master_frame)
 
     def save_items(self) -> None:
         """ Open save dialogue and save preview """
+        if self._display is None:
+            return
+
         location = FileHandler("dir", None).return_file
         if not location:
             return
-        for preview in self.subnotebook.children.values():
-            preview.save_preview(location)
 
-
-class PreviewTrainCanvas(ttk.Frame):  # pylint: disable=too-many-ancestors
-    """ Canvas to hold a training preview image
-
-    Parameters
-    ----------
-    parent: :class:`tkinter.ttk.Notebook`
-        The notebook that the training image canvas belongs to
-    previewname: str
-        The name of the preview image displayed in the canvas
-    """
-    def __init__(self, parent: ttk.Notebook, previewname: str) -> None:
-        logger.debug("Initializing %s: (previewname: '%s')", self.__class__.__name__, previewname)
-        ttk.Frame.__init__(self, parent)
-
-        self.name = previewname
-        get_images().resize_image(self.name, None)
-        self.previewimage = get_images().previewtrain[self.name][1]
-
-        self.canvas = tk.Canvas(self, bd=0, highlightthickness=0)
-        self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.imgcanvas = self.canvas.create_image(0,
-                                                  0,
-                                                  image=self.previewimage,
-                                                  anchor=tk.NW)
-        self.bind("<Configure>", self.resize)
-        logger.debug("Initialized %s:", self.__class__.__name__)
-
-    def resize(self, event: tk.Event) -> None:
-        """  Resize the image to fit the frame, maintaining aspect ratio
-
-        Parameters
-        ----------
-        event: :class:`tkinter.Event`
-            The resize event object
-        """
-        logger.trace("Resizing preview image")  # type:ignore
-        framesize: Optional[Tuple[int, int]] = (event.width, event.height)
-        # Sometimes image is resized before frame is drawn
-        framesize = None if framesize == (1, 1) else framesize
-        get_images().resize_image(self.name, framesize)
-        self.reload()
-
-    def reload(self) -> None:
-        """ Reload the preview image """
-        logger.trace("Reloading preview image")  # type:ignore
-        self.previewimage = get_images().previewtrain[self.name][1]
-        self.canvas.itemconfig(self.imgcanvas, image=self.previewimage)
-
-    def save_preview(self, location: str) -> None:
-        """ Save the figure to file.
-
-        Parameters
-        ----------
-        location: str
-            The full path to the location to save the preview image
-        """
-        filename = self.name
-        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(location, f"{filename}_{now}.png")
-        cast("Image.Image", get_images().previewtrain[self.name][0]).save(filename)
-        logger.debug("Saved preview to %s", filename)
-        print(f"Saved preview to {filename}")
+        self._display.save(location)
 
 
 class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors

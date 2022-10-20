@@ -190,12 +190,8 @@ class DisplayOptionalPage(DisplayPage):  # pylint: disable=too-many-ancestors
         ready = tk.BooleanVar()
         ready.set(False)
 
-        modified = tk.DoubleVar()
-        modified.set(None)
-
         tk_vars = {"enabled": enabled,
-                   "ready": ready,
-                   "modified": modified}
+                   "ready": ready}
         logger.debug(tk_vars)
         return tk_vars
 

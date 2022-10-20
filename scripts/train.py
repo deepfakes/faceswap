@@ -12,6 +12,7 @@ from typing import cast, Callable, Dict, List, Optional, TYPE_CHECKING
 import cv2
 import numpy as np
 
+from lib.gui.utils.image import TRAININGPREVIEW
 from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
@@ -507,7 +508,7 @@ class Train():  # pylint:disable=too-few-public-methods
                 logger.debug("Saved preview to: '%s'", img)
             if self._args.redirect_gui:
                 logger.debug("Generating preview for GUI")
-                img = ".gui_training_preview.png"
+                img = TRAININGPREVIEW
                 imgfile = os.path.join(scriptpath, "lib", "gui", ".cache", "preview", img)
                 cv2.imwrite(imgfile, image)  # pylint: disable=no-member
                 logger.debug("Generated preview for GUI: '%s'", imgfile)

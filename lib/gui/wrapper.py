@@ -184,9 +184,58 @@ class FaceswapControl():
         self.thread_stderr()
         logger.debug("Executed Faceswap")
 
-    def read_stdout(self):
-        """ Read stdout from the subprocess. If training, pass the loss
-        values to Queue """
+    def _process_progress_stdout(self, output: str) -> bool:
+        """ Process stdout for any faceswap processes that update the status/progress bar(s)
+
+        Parameters
+        ----------
+        output: str
+            The output line read from stdout
+
+        Returns
+        -------
+        bool
+            ``True`` if all actions have been completed on the output line otherwise ``False``
+        """
+        if self.command == "train" and self.capture_loss(output):
+            return True
+
+        if self.command == "effmpeg" and self.capture_ffmpeg(output):
+            return True
+
+        if self.command not in ("train", "effmpeg") and self.capture_tqdm(output):
+            return True
+
+        return False
+
+    def _process_training_stdout(self, output: str) -> None:
+        """ Process any triggers that are required to update the GUI when Faceswap is running a
+        training session.
+
+        Parameters
+        ----------
+        output: str
+            The output line read from stdout
+        """
+        if self.command != "train" or not self.wrapper.tk_vars.is_training.get():
+            return
+
+        if "[saved models]" not in output.strip().lower():
+            return
+
+        logger.debug("Trigger GUI Training update")
+        logger.trace("tk_vars: %s", {itm: var.get()  # type:ignore
+                                     for itm, var in self.wrapper.tk_vars.__dict__.items()})
+        if not Session.is_training:
+            # Don't initialize session until after the first save as state file must exist first
+            logger.debug("Initializing curret training session")
+            Session.initialize_session(self._session_info["model_folder"],
+                                       self._session_info["model_name"],
+                                       is_training=True)
+        self.wrapper.tk_vars.refresh_graph.set(True)
+
+    def read_stdout(self) -> None:
+        """ Read stdout from the subprocess. """
         logger.debug("Opening stdout reader")
         while True:
             try:
@@ -195,33 +244,17 @@ class FaceswapControl():
                 if str(err).lower().startswith("i/o operation on closed file"):
                     break
                 raise
+
             if output == "" and self.process.poll() is not None:
                 break
+
+            if output and self._process_progress_stdout(output):
+                continue
+
             if output:
-                if ((self.command == "train" and self.capture_loss(output)) or
-                        (self.command == "effmpeg" and self.capture_ffmpeg(output)) or
-                        (self.command not in ("train", "effmpeg") and self.capture_tqdm(output))):
-                    continue
-                if self.command == "train" and self.wrapper.tk_vars.is_training.get():
-                    if "[saved models]" in output.strip().lower():
-                        logger.debug("Trigger GUI Training update")
-                        logger.trace("tk_vars: %s",
-                                     {itm: var.get()
-                                      for itm, var in self.wrapper.tk_vars.__dict__.items()})
-                        if not Session.is_training:
-                            # Don't initialize session until after the first save as state
-                            # file must exist first
-                            logger.debug("Initializing curret training session")
-                            Session.initialize_session(
-                                self._session_info["model_folder"],
-                                self._session_info["model_name"],
-                                is_training=True)
-                        self.wrapper.tk_vars.update_preview.set(True)
-                        self.wrapper.tk_vars.refresh_graph.set(True)
-                    if "[preview updated]" in output.strip().lower():
-                        self.wrapper.tk_vars.update_preview.set(True)
-                        continue
+                self._process_training_stdout(output)
                 print(output.rstrip())
+
         returncode = self.process.poll()
         message = self.set_final_status(returncode)
         self.wrapper.terminate(message)

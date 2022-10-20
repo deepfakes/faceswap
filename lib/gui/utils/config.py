@@ -81,7 +81,6 @@ class GlobalVariables():
         self._generate_command = tk.StringVar()
         self._console_clear = tk.BooleanVar()
         self._refresh_graph = tk.BooleanVar()
-        self._update_preview = tk.BooleanVar()
         self._analysis_folder = tk.StringVar()
 
         self._initialize_variables()
@@ -127,12 +126,6 @@ class GlobalVariables():
         return self._refresh_graph
 
     @property
-    def update_preview(self) -> tk.BooleanVar:
-        """ :class:`tkinter.BooleanVar`:  ``True`` if the preview should be refreshed
-        otherwise ``False`` """
-        return self._update_preview
-
-    @property
     def analysis_folder(self) -> tk.StringVar:
         """ :class:`tkinter.StringVar`: Full path the analysis folder"""
         return self._analysis_folder
@@ -146,7 +139,6 @@ class GlobalVariables():
         self._generate_command.set("")
         self._console_clear.set(False)
         self._refresh_graph.set(False)
-        self._update_preview.set(False)
         self._analysis_folder.set("")
 
 

@@ -4,10 +4,13 @@
 import logging
 import os
 import sys
-from typing import cast, Dict, List, Optional, Sequence, Tuple, Union
+from typing import cast, Dict, List, Optional, Sequence, Tuple
 
+import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageTk
+
+from lib.training.preview_cv import PreviewBuffer
 
 from .config import get_config, PATHCACHE
 
@@ -20,6 +23,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 _IMAGES: Optional["Images"] = None
 _PREVIEW_TRIGGER: Optional["PreviewTrigger"] = None
+TRAININGPREVIEW = ".gui_training_preview.png"
 
 
 def initialize_images() -> None:
@@ -47,99 +51,150 @@ def get_images() -> "Images":
     return _IMAGES
 
 
-class Images():
-    """ The centralized image repository for holding all icons and images required by the GUI.
+def _get_previews(image_path: str) -> List[str]:
+    """ Get the images stored within the given directory.
 
-    This class should be initialized on GUI startup through :func:`initialize_images`. Any further
-    access to this class should be through :func:`get_images`.
+    Parameters
+    ----------
+    image_path: str
+        The folder containing images to be scanned
+
+    Returns
+    -------
+    list:
+        The image filenames stored within the given folder
+
     """
-    def __init__(self) -> None:
-        logger.debug("Initializing %s", self.__class__.__name__)
-        self._pathpreview = os.path.join(PATHCACHE, "preview")
-        self._pathoutput: Optional[str] = None
-        self._batch_mode = False
-        self._previewoutput: Optional[Tuple[Image.Image, ImageTk.PhotoImage]] = None
-        self._previewtrain: Dict[str, List[Union[Image.Image,
-                                                 ImageTk.PhotoImage,
-                                                 None,
-                                                 float]]] = {}
-        self._previewcache: Dict[str, Union[None, float, np.ndarray, List[str]]] = dict(
-            modified=None,  # cache for extract and convert
-            images=None,
-            filenames=[],
-            placeholder=None)
-        self._errcount = 0
-        self._icons = self._load_icons()
+    logger.debug("Getting images: '%s'", image_path)
+    if not os.path.isdir(image_path):
+        logger.debug("Folder does not exist")
+        return []
+    files = [os.path.join(image_path, f)
+             for f in os.listdir(image_path) if f.lower().endswith((".png", ".jpg"))]
+    logger.debug("Image files: %s", files)
+    return files
+
+
+class PreviewTrain():
+    """ Handles the loading of the training preview image(s) and adding to the display buffer
+
+    Parameters
+    ----------
+    cache_path: str
+        Full path to the cache folder that contains the preview images
+    """
+    def __init__(self, cache_path: str) -> None:
+        logger.debug("Initializing %s: (cache_path: '%s')", self.__class__.__name__, cache_path)
+        self._buffer = PreviewBuffer()
+        self._cache_path = cache_path
+        self._modified: float = 0.0
+        self._error_count: int = 0
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def previewoutput(self) -> Tuple[Image.Image, ImageTk.PhotoImage]:
-        """ Tuple: First item in the tuple is the extract or convert preview image
-        (:class:`PIL.Image`), the second item is the image in a format that tkinter can display
-        (:class:`PIL.ImageTK.PhotoImage`).
+    def buffer(self) -> PreviewBuffer:
+        """ :class:`~lib.training.PreviewBuffer` The preview buffer for the training preview
+        image. """
+        return self._buffer
 
-        The value of the property is ``None`` if no extract or convert task is running or there are
-        no files available in the output folder. """
-        assert self._previewoutput is not None
-        return self._previewoutput
+    def load(self) -> bool:
+        """ Load the latest training preview image(s) from disk and add to :attr:`buffer` """
+        logger.trace("Loading Training preview images")  # type:ignore
+        image_files = _get_previews(self._cache_path)
+        filename = next((fname for fname in image_files
+                         if os.path.basename(fname) == TRAININGPREVIEW), "")
+        if not filename:
+            logger.trace("No preview to display")  # type:ignore
+            return False
+        try:
+            modified = os.path.getmtime(filename)
+            if modified <= self._modified:
+                logger.trace("preview '%s' not updated. Current timestamp: %s, "  # type:ignore
+                             "existing timestamp: %s", filename, modified, self._modified)
+                return False
+
+            logger.debug("Loading preview: '%s'", filename)
+            img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+            self._modified = modified
+            self._buffer.add_image(os.path.basename(filename), img)
+            self._error_count = 0
+        except ValueError:
+            # This is probably an error reading the file whilst it's being saved so ignore it
+            # for now and only pick up if there have been multiple consecutive fails
+            logger.warning("Unable to display preview: (image: '%s', attempt: %s)",
+                           img, self._error_count)
+            if self._error_count < 10:
+                self._error_count += 1
+            else:
+                logger.error("Error reading the preview file for '%s'", filename)
+            return False
+
+        logger.debug("Loaded preview: '%s' (%s)", filename, img.shape)
+        return True
+
+    def reset(self) -> None:
+        """ Reset the preview buffer when the display page has been disabled.
+
+        Notes
+        -----
+        The buffer requires resetting, otherwise the re-enabled preview window hangs waiting for a
+        training image that has already been marked as processed
+        """
+        logger.debug("Resetting training preview")
+        del self._buffer
+        self._buffer = PreviewBuffer()
+        self._modified = 0.0
+        self._error_count = 0
+
+
+class PreviewExtract():
+    """ Handles the loading of preview images for extract and convert
+
+    Parameters
+    ----------
+    cache_path: str
+        Full path to the cache folder that contains the preview images
+    """
+    def __init__(self, cache_path: str) -> None:
+        logger.debug("Initializing %s: (cache_path: '%s')", self.__class__.__name__, cache_path)
+        self._cache_path = cache_path
+
+        self._batch_mode = False
+        self._output_path = ""
+
+        self._modified: float = 0.0
+        self._filenames: List[str] = []
+        self._images: Optional[np.ndarray] = None
+        self._placeholder: Optional[np.ndarray] = None
+
+        self._preview_image: Optional[Image.Image] = None
+        self._preview_image_tk: Optional[ImageTk.PhotoImage] = None
+
+        logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def previewtrain(self) -> Dict[str, List[Union[Image.Image, ImageTk.PhotoImage, None, float]]]:
-        """ dict or ``None``: The training preview images. Dictionary key is the image name
-        (`str`). Dictionary values are a `list` of the training image (:class:`PIL.Image`), the
-        image formatted for tkinter display (:class:`PIL.ImageTK.PhotoImage`), the last
-        modification time of the image (`float`).
+    def image(self) -> ImageTk.PhotoImage:
+        """:class:`PIL.ImageTk.PhotoImage` The preview image for displaying in a tkinter canvas """
+        assert self._preview_image_tk is not None
+        return self._preview_image_tk
 
-        The value of this property is ``None`` if training is not running or there are no preview
-        images available.
+    def save(self, filename: str) -> None:
+        """ Save the currently displaying preview image to the given location
+
+        Parameters
+        ----------
+        filename: str
+            The full path to the filename to save the preview image to
         """
-        return self._previewtrain
-
-    @property
-    def icons(self) -> Dict[str, ImageTk.PhotoImage]:
-        """ dict: The faceswap icons for all parts of the GUI. The dictionary key is the icon
-        name (`str`) the value is the icon sized and formatted for display
-        (:class:`PIL.ImageTK.PhotoImage`).
-
-        Example
-        -------
-        >>> icons = get_images().icons
-        >>> save = icons["save"]
-        >>> button = ttk.Button(parent, image=save)
-        >>> button.pack()
-        """
-        return self._icons
-
-    @staticmethod
-    def _load_icons() -> Dict[str, ImageTk.PhotoImage]:
-        """ Scan the icons cache folder and load the icons into :attr:`icons` for retrieval
-        throughout the GUI.
-
-        Returns
-        -------
-        dict:
-            The icons formatted as described in :attr:`icons`
-
-        """
-        size = get_config().user_config_dict.get("icon_size", 16)
-        size = int(round(size * get_config().scaling_factor))
-        icons: Dict[str, ImageTk.PhotoImage] = {}
-        pathicons = os.path.join(PATHCACHE, "icons")
-        for fname in os.listdir(pathicons):
-            name, ext = os.path.splitext(fname)
-            if ext != ".png":
-                continue
-            img = Image.open(os.path.join(pathicons, fname))
-            img = ImageTk.PhotoImage(img.resize((size, size), resample=Image.HAMMING))
-            icons[name] = img
-        logger.debug(icons)
-        return icons
+        logger.debug("Saving preview to %s", filename)
+        assert self._preview_image is not None
+        self._preview_image.save(filename)
 
     def set_faceswap_output_path(self, location: str, batch_mode: bool = False) -> None:
         """ Set the path that will contain the output from an Extract or Convert task.
 
         Required so that the GUI can fetch output images to display for return in
-        :attr:`previewoutput`.
+        :attr:`preview_image`.
 
         Parameters
         ----------
@@ -148,114 +203,8 @@ class Images():
         batch_mode: bool
             ``True`` if extracting in batch mode otherwise False
         """
-        self._pathoutput = location
+        self._output_path = location
         self._batch_mode = batch_mode
-
-    def delete_preview(self) -> None:
-        """ Delete the preview files in the cache folder and reset the image cache.
-
-        Should be called when terminating tasks, or when Faceswap starts up or shuts down.
-        """
-        logger.debug("Deleting previews")
-        for item in os.listdir(self._pathpreview):
-            if item.startswith(".gui_training_preview") and item.endswith((".jpg", ".png")):
-                fullitem = os.path.join(self._pathpreview, item)
-                logger.debug("Deleting: '%s'", fullitem)
-                os.remove(fullitem)
-        for fname in cast(List[str], self._previewcache["filenames"]):
-            if os.path.basename(fname) == ".gui_preview.jpg":
-                logger.debug("Deleting: '%s'", fname)
-                try:
-                    os.remove(fname)
-                except FileNotFoundError:
-                    logger.debug("File does not exist: %s", fname)
-        self._clear_image_cache()
-
-    def _clear_image_cache(self) -> None:
-        """ Clear all cached images. """
-        logger.debug("Clearing image cache")
-        self._pathoutput = None
-        self._batch_mode = False
-        self._previewoutput = None
-        self._previewtrain = {}
-        self._previewcache = dict(modified=None,  # cache for extract and convert
-                                  images=None,
-                                  filenames=[],
-                                  placeholder=None)
-
-    @staticmethod
-    def _get_images(image_path: str) -> List[str]:
-        """ Get the images stored within the given directory.
-
-        Parameters
-        ----------
-        image_path: str
-            The folder containing images to be scanned
-
-        Returns
-        -------
-        list:
-            The image filenames stored within the given folder
-
-        """
-        logger.debug("Getting images: '%s'", image_path)
-        if not os.path.isdir(image_path):
-            logger.debug("Folder does not exist")
-            return []
-        files = [os.path.join(image_path, f)
-                 for f in os.listdir(image_path) if f.lower().endswith((".png", ".jpg"))]
-        logger.debug("Image files: %s", files)
-        return files
-
-    def load_latest_preview(self, thumbnail_size: int, frame_dims: Tuple[int, int]) -> None:
-        """ Load the latest preview image for extract and convert.
-
-        Retrieves the latest preview images from the faceswap output folder, resizes to thumbnails
-        and lays out for display. Places the images into :attr:`previewoutput` for loading into
-        the display panel.
-
-        Parameters
-        ----------
-        thumbnail_size: int
-            The size of each thumbnail that should be created
-        frame_dims: tuple
-            The (width (`int`), height (`int`)) of the display panel that will display the preview
-        """
-        logger.debug("Loading preview image: (thumbnail_size: %s, frame_dims: %s)",
-                     thumbnail_size, frame_dims)
-        assert self._pathoutput is not None
-        image_path = self._get_newest_folder() if self._batch_mode else self._pathoutput
-        image_files = self._get_images(image_path)
-        gui_preview = os.path.join(self._pathoutput, ".gui_preview.jpg")
-        if not image_files or (len(image_files) == 1 and gui_preview not in image_files):
-            logger.debug("No preview to display")
-            return
-        # Filter to just the gui_preview if it exists in folder output
-        image_files = [gui_preview] if gui_preview in image_files else image_files
-        logger.debug("Image Files: %s", len(image_files))
-
-        image_files = self._get_newest_filenames(image_files)
-        if not image_files:
-            return
-
-        if not self._load_images_to_cache(image_files, frame_dims, thumbnail_size):
-            logger.debug("Failed to load any preview images")
-            if gui_preview in image_files:
-                # Reset last modified for failed loading of a gui preview image so it is picked
-                # up next time
-                self._previewcache["modified"] = None
-            return
-
-        if image_files == [gui_preview]:
-            # Delete the preview image so that the main scripts know to output another
-            logger.debug("Deleting preview image")
-            os.remove(image_files[0])
-        show_image = self._place_previews(frame_dims)
-        if not show_image:
-            self._previewoutput = None
-            return
-        logger.debug("Displaying preview: %s", self._previewcache["filenames"])
-        self._previewoutput = (show_image, ImageTk.PhotoImage(show_image))
 
     def _get_newest_folder(self) -> str:
         """ Obtain the most recent folder created in the extraction output folder when processing
@@ -268,14 +217,13 @@ class Images():
             been created, returns the parent output folder
 
         """
-        assert self._pathoutput is not None
-        folders = [] if not os.path.exists(self._pathoutput) else [
-            os.path.join(self._pathoutput, folder)
-            for folder in os.listdir(self._pathoutput)
-            if os.path.isdir(os.path.join(self._pathoutput, folder))]
+        folders = [] if not os.path.exists(self._output_path) else [
+            os.path.join(self._output_path, folder)
+            for folder in os.listdir(self._output_path)
+            if os.path.isdir(os.path.join(self._output_path, folder))]
 
         folders.sort(key=os.path.getmtime)
-        retval = folders[-1] if folders else self._pathoutput
+        retval = folders[-1] if folders else self._output_path
         logger.debug("sorted folders: %s, return value: %s", folders, retval)
         return retval
 
@@ -292,18 +240,84 @@ class Images():
         list:
             A list of images that have been modified since the last check
         """
-        if self._previewcache["modified"] is None:
+        if not self._modified:
             retval = image_files
         else:
             retval = [fname for fname in image_files
-                      if os.path.getmtime(fname) > cast(float, self._previewcache["modified"])]
+                      if os.path.getmtime(fname) > self._modified]
         if not retval:
             logger.debug("No new images in output folder")
         else:
-            self._previewcache["modified"] = max(os.path.getmtime(img) for img in retval)
+            self._modified = max(os.path.getmtime(img) for img in retval)
             logger.debug("Number new images: %s, Last Modified: %s",
-                         len(retval), self._previewcache["modified"])
+                         len(retval), self._modified)
         return retval
+
+    def _pad_and_border(self, image: Image.Image, size: int) -> np.ndarray:
+        """ Pad rectangle images to a square and draw borders
+
+        Parameters
+        ----------
+        image: :class:`PIL.Image`
+            The image to process
+        size: int
+            The size of the image as it should be displayed
+
+        Returns
+        -------
+        :class:`numpy.ndarray`:
+            The processed image
+        """
+        if image.size[0] != image.size[1]:
+            # Pad to square
+            new_img = Image.new("RGB", (size, size))
+            new_img.paste(image, ((size - image.size[0]) // 2, (size - image.size[1]) // 2))
+            image = new_img
+        draw = ImageDraw.Draw(image)
+        draw.rectangle(((0, 0), (size, size)), outline="#E5E5E5", width=1)
+        retval = np.array(image)
+        logger.trace("image shape: %s", retval.shape)  # type: ignore
+        return retval
+
+    def _process_samples(self,
+                         samples: List[np.ndarray],
+                         filenames: List[str],
+                         num_images: int) -> bool:
+        """ Process the latest sample images into a displayable image.
+
+        Parameters
+        ----------
+        samples: list
+            The list of extract/convert preview images to display
+        filenames: list
+            The full path to the filenames corresponding to the images
+        num_images: int
+            The number of images that should be displayed
+
+        Returns
+        -------
+        bool
+            ``True`` if samples succesfully compiled otherwise ``False``
+        """
+        asamples = np.array(samples)
+        if not np.any(asamples):
+            logger.debug("No preview images collected.")
+            return False
+
+        self._filenames = (self._filenames + filenames)[-num_images:]
+        cache = self._images
+
+        if cache is None:
+            logger.debug("Creating new cache")
+            cache = asamples[-num_images:]
+        else:
+            logger.debug("Appending to existing cache")
+            cache = np.concatenate((cache, asamples))[-num_images:]
+
+        self._images = cache
+        assert self._images is not None
+        logger.debug("Cache shape: %s", self._images.shape)
+        return True
 
     def _load_images_to_cache(self,
                               image_files: List[str],
@@ -311,8 +325,8 @@ class Images():
                               thumbnail_size: int) -> bool:
         """ Load preview images to the image cache.
 
-        Load new images and append to cache, filtering the cache the number of thumbnails that will
-        fit  inside the display panel.
+        Load new images and append to cache, filtering the cache to the number of thumbnails that
+        will fit inside the display panel.
 
         Parameters
         ----------
@@ -373,69 +387,22 @@ class Images():
                                      [fname for fname in show_files if fname not in dropped_files],
                                      num_images)
 
-    def _pad_and_border(self, image: Image.Image, size: int) -> np.ndarray:
-        """ Pad rectangle images to a square and draw borders
+    def _create_placeholder(self, thumbnail_size: int) -> None:
+        """ Create a placeholder image for when there are fewer thumbnails available
+        than columns to display them.
 
         Parameters
         ----------
-        image: :class:`PIL.Image`
-            The image to process
-        size: int
-            The size of the image as it should be displayed
-
-        Returns
-        -------
-        :class:`PIL.Image`:
-            The processed image
+        thumbnail_size: int
+            The size of the thumbnail that the placeholder should replicate
         """
-        if image.size[0] != image.size[1]:
-            # Pad to square
-            new_img = Image.new("RGB", (size, size))
-            new_img.paste(image, ((size - image.size[0]) // 2, (size - image.size[1]) // 2))
-            image = new_img
-        draw = ImageDraw.Draw(image)
-        draw.rectangle(((0, 0), (size, size)), outline="#E5E5E5", width=1)
-        retval = np.array(image)
-        logger.trace("image shape: %s", retval.shape)  # type: ignore
-        return retval
-
-    def _process_samples(self,
-                         samples: List[np.ndarray],
-                         filenames: List[str],
-                         num_images: int) -> bool:
-        """ Process the latest sample images into a displayable image.
-
-        Parameters
-        ----------
-        samples: list
-            The list of extract/convert preview images to display
-        filenames: list
-            The full path to the filenames corresponding to the images
-        num_images: int
-            The number of images that should be displayed
-
-        Returns
-        -------
-        bool
-            ``True`` if samples succesfully compiled otherwise ``False``
-        """
-        asamples = np.array(samples)
-        if not np.any(asamples):
-            logger.debug("No preview images collected.")
-            return False
-
-        self._previewcache["filenames"] = (cast(List[str], self._previewcache["filenames"]) +
-                                           filenames)[-num_images:]
-        cache = cast(Optional[np.ndarray], self._previewcache["images"])
-        if cache is None:
-            logger.debug("Creating new cache")
-            cache = asamples[-num_images:]
-        else:
-            logger.debug("Appending to existing cache")
-            cache = np.concatenate((cache, asamples))[-num_images:]
-        self._previewcache["images"] = cache
-        logger.debug("Cache shape: %s", cast(np.ndarray, self._previewcache["images"]).shape)
-        return True
+        logger.debug("Creating placeholder. thumbnail_size: %s", thumbnail_size)
+        placeholder = Image.new("RGB", (thumbnail_size, thumbnail_size))
+        draw = ImageDraw.Draw(placeholder)
+        draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
+        placeholder = np.array(placeholder)
+        self._placeholder = placeholder
+        logger.debug("Created placeholder. shape: %s", placeholder.shape)
 
     def _place_previews(self, frame_dims: Tuple[int, int]) -> Image.Image:
         """ Format the preview thumbnails stored in the cache into a grid fitting the display
@@ -451,12 +418,12 @@ class Images():
         :class:`PIL.Image`:
             The final preview display image
         """
-        if self._previewcache.get("images", None) is None:
+        if self._images is None:
             logger.debug("No images in cache. Returning None")
             return None
-        samples = cast(np.ndarray, self._previewcache["images"]).copy()
+        samples = self._images.copy()
         num_images, thumbnail_size = samples.shape[:2]
-        if self._previewcache["placeholder"] is None:
+        if self._placeholder is None:
             self._create_placeholder(thumbnail_size)
 
         logger.debug("num_images: %s, thumbnail_size: %s", num_images, thumbnail_size)
@@ -465,11 +432,12 @@ class Images():
         if cols == 0 or rows == 0:
             logger.debug("Cols or Rows is zero. No items to display")
             return None
+
         remainder = (cols * rows) - num_images
         if remainder != 0:
             logger.debug("Padding sample display. Remainder: %s", remainder)
-            placeholder = np.concatenate([np.expand_dims(
-                cast(np.ndarray, self._previewcache["placeholder"]), 0)] * remainder)
+            assert self._placeholder is not None
+            placeholder = np.concatenate([np.expand_dims(self._placeholder, 0)] * remainder)
             samples = np.concatenate((samples, placeholder))
 
         display = np.vstack([np.hstack(cast(Sequence, samples[row * cols: (row + 1) * cols]))
@@ -477,125 +445,159 @@ class Images():
         logger.debug("display shape: %s", display.shape)
         return Image.fromarray(display)
 
-    def _create_placeholder(self, thumbnail_size: int) -> None:
-        """ Create a placeholder image for when there are fewer thumbnails available
-        than columns to display them.
+    def load_latest_preview(self, thumbnail_size: int, frame_dims: Tuple[int, int]) -> bool:
+        """ Load the latest preview image for extract and convert.
+
+        Retrieves the latest preview images from the faceswap output folder, resizes to thumbnails
+        and lays out for display. Places the images into :attr:`preview_image` for loading into
+        the display panel.
 
         Parameters
         ----------
         thumbnail_size: int
-            The size of the thumbnail that the placeholder should replicate
-        """
-        logger.debug("Creating placeholder. thumbnail_size: %s", thumbnail_size)
-        placeholder = Image.new("RGB", (thumbnail_size, thumbnail_size))
-        draw = ImageDraw.Draw(placeholder)
-        draw.rectangle(((0, 0), (thumbnail_size, thumbnail_size)), outline="#E5E5E5", width=1)
-        placeholder = np.array(placeholder)
-        self._previewcache["placeholder"] = placeholder
-        logger.debug("Created placeholder. shape: %s", placeholder.shape)
-
-    def load_training_preview(self) -> None:
-        """ Load the training preview images.
-
-        Reads the training image currently stored in the cache folder and loads them to
-        :attr:`previewtrain` for retrieval in the GUI.
-        """
-        logger.debug("Loading Training preview images")
-        image_files = self._get_images(self._pathpreview)
-        modified = None
-        if not image_files:
-            logger.debug("No preview to display")
-            self._previewtrain = {}
-            return
-        for img in image_files:
-            modified = os.path.getmtime(img) if modified is None else modified
-            name = os.path.basename(img)
-            name = os.path.splitext(name)[0]
-            name = name[name.rfind("_") + 1:].title()
-            try:
-                logger.debug("Displaying preview: '%s'", img)
-                size = self._get_current_size(name)
-                self._previewtrain[name] = [Image.open(img), None, modified]
-                self.resize_image(name, size)
-                self._errcount = 0
-            except ValueError:
-                # This is probably an error reading the file whilst it's
-                # being saved  so ignore it for now and only pick up if
-                # there have been multiple consecutive fails
-                logger.warning("Unable to display preview: (image: '%s', attempt: %s)",
-                               img, self._errcount)
-                if self._errcount < 10:
-                    self._errcount += 1
-                else:
-                    logger.error("Error reading the preview file for '%s'", img)
-                    print(f"Error reading the preview file for {name}")
-                    del self._previewtrain[name]
-
-    def _get_current_size(self, name: str) -> Optional[Tuple[int, int]]:
-        """ Return the size of the currently displayed training preview image.
-
-        Parameters
-        ----------
-        name: str
-            The name of the training image to get the size for
+            The size of each thumbnail that should be created
+        frame_dims: tuple
+            The (width (`int`), height (`int`)) of the display panel that will display the preview
 
         Returns
         -------
-        width: int
-            The width of the training image
-        height: int
-            The height of the training image
+        bool
+            ``True`` if a preview was succesfully loaded otherwise ``False``
         """
-        logger.debug("Getting size: '%s'", name)
-        if not self._previewtrain.get(name):
-            return None
-        img = cast(Image.Image, self._previewtrain[name][1])
-        if not img:
-            return None
-        logger.debug("Got size: (name: '%s', width: '%s', height: '%s')",
-                     name, img.width(), img.height())
-        return img.width(), img.height()
+        logger.debug("Loading preview image: (thumbnail_size: %s, frame_dims: %s)",
+                     thumbnail_size, frame_dims)
+        image_path = self._get_newest_folder() if self._batch_mode else self._output_path
+        image_files = _get_previews(image_path)
+        gui_preview = os.path.join(self._output_path, ".gui_preview.jpg")
+        if not image_files or (len(image_files) == 1 and gui_preview not in image_files):
+            logger.debug("No preview to display")
+            return False
+        # Filter to just the gui_preview if it exists in folder output
+        image_files = [gui_preview] if gui_preview in image_files else image_files
+        logger.debug("Image Files: %s", len(image_files))
 
-    def resize_image(self, name: str, frame_dims: Optional[Tuple[int, int]]) -> None:
-        """ Resize the training preview image based on the passed in frame size.
+        image_files = self._get_newest_filenames(image_files)
+        if not image_files:
+            return False
 
-        If the canvas that holds the preview image changes, update the image size
-        to fit the new canvas and refresh :attr:`previewtrain`.
+        if not self._load_images_to_cache(image_files, frame_dims, thumbnail_size):
+            logger.debug("Failed to load any preview images")
+            if gui_preview in image_files:
+                # Reset last modified for failed loading of a gui preview image so it is picked
+                # up next time
+                self._modified = 0.0
+            return False
 
-        Parameters
-        ----------
-        name: str
-            The name of the training image to be resized
-        frame_dims: tuple, optional
-            The (width (`int`), height (`int`)) of the display panel that will display the preview.
-            ``None`` if the frame dimensions are not known.
-        """
-        logger.debug("Resizing image: (name: '%s', frame_dims: %s", name, frame_dims)
-        displayimg = cast(Image.Image, self._previewtrain[name][0])
-        if frame_dims:
-            frameratio = float(frame_dims[0]) / float(frame_dims[1])
-            imgratio = float(displayimg.size[0]) / float(displayimg.size[1])
+        if image_files == [gui_preview]:
+            # Delete the preview image so that the main scripts know to output another
+            logger.debug("Deleting preview image")
+            os.remove(image_files[0])
+        show_image = self._place_previews(frame_dims)
+        if not show_image:
+            self._preview_image = None
+            self._preview_image_tk = None
+            return False
 
-            if frameratio <= imgratio:
-                scale = frame_dims[0] / float(displayimg.size[0])
-                size = (frame_dims[0], int(displayimg.size[1] * scale))
-            else:
-                scale = frame_dims[1] / float(displayimg.size[1])
-                size = (int(displayimg.size[0] * scale), frame_dims[1])
-            logger.debug("Scaling: (scale: %s, size: %s", scale, size)
+        logger.debug("Displaying preview: %s", self._filenames)
+        self._preview_image = show_image
+        self._preview_image_tk = ImageTk.PhotoImage(show_image)
+        return True
 
-            # Hacky fix to force a reload if it happens to find corrupted
-            # data, probably due to reading the image whilst it is partially
-            # saved. If it continues to fail, then eventually raise.
-            for i in range(0, 1000):
+    def delete_previews(self) -> None:
+        """ Remove any image preview files """
+        for fname in self._filenames:
+            if os.path.basename(fname) == ".gui_preview.jpg":
+                logger.debug("Deleting: '%s'", fname)
                 try:
-                    displayimg = displayimg.resize(size, Image.ANTIALIAS)
-                except OSError:
-                    if i == 999:
-                        raise
-                    continue
-                break
-        self._previewtrain[name][1] = ImageTk.PhotoImage(displayimg)
+                    os.remove(fname)
+                except FileNotFoundError:
+                    logger.debug("File does not exist: %s", fname)
+
+
+class Images():
+    """ The centralized image repository for holding all icons and images required by the GUI.
+
+    This class should be initialized on GUI startup through :func:`initialize_images`. Any further
+    access to this class should be through :func:`get_images`.
+    """
+    def __init__(self) -> None:
+        logger.debug("Initializing %s", self.__class__.__name__)
+        self._pathpreview = os.path.join(PATHCACHE, "preview")
+        self._pathoutput: Optional[str] = None
+        self._batch_mode = False
+        self._preview_train = PreviewTrain(self._pathpreview)
+        self._preview_extract = PreviewExtract(self._pathpreview)
+        self._icons = self._load_icons()
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def preview_train(self) -> PreviewTrain:
+        """ :class:`PreviewTrain` The object handling the training preview images """
+        return self._preview_train
+
+    @property
+    def preview_extract(self) -> PreviewExtract:
+        """ :class:`PreviewTrain` The object handling the training preview images """
+        return self._preview_extract
+
+    @property
+    def icons(self) -> Dict[str, ImageTk.PhotoImage]:
+        """ dict: The faceswap icons for all parts of the GUI. The dictionary key is the icon
+        name (`str`) the value is the icon sized and formatted for display
+        (:class:`PIL.ImageTK.PhotoImage`).
+
+        Example
+        -------
+        >>> icons = get_images().icons
+        >>> save = icons["save"]
+        >>> button = ttk.Button(parent, image=save)
+        >>> button.pack()
+        """
+        return self._icons
+
+    @staticmethod
+    def _load_icons() -> Dict[str, ImageTk.PhotoImage]:
+        """ Scan the icons cache folder and load the icons into :attr:`icons` for retrieval
+        throughout the GUI.
+
+        Returns
+        -------
+        dict:
+            The icons formatted as described in :attr:`icons`
+
+        """
+        size = get_config().user_config_dict.get("icon_size", 16)
+        size = int(round(size * get_config().scaling_factor))
+        icons: Dict[str, ImageTk.PhotoImage] = {}
+        pathicons = os.path.join(PATHCACHE, "icons")
+        for fname in os.listdir(pathicons):
+            name, ext = os.path.splitext(fname)
+            if ext != ".png":
+                continue
+            img = Image.open(os.path.join(pathicons, fname))
+            img = ImageTk.PhotoImage(img.resize((size, size), resample=Image.HAMMING))
+            icons[name] = img
+        logger.debug(icons)
+        return icons
+
+    def delete_preview(self) -> None:
+        """ Delete the preview files in the cache folder and reset the image cache.
+
+        Should be called when terminating tasks, or when Faceswap starts up or shuts down.
+        """
+        logger.debug("Deleting previews")
+        for item in os.listdir(self._pathpreview):
+            if item.startswith(os.path.splitext(TRAININGPREVIEW)[0]) and item.endswith((".jpg",
+                                                                                        ".png")):
+                fullitem = os.path.join(self._pathpreview, item)
+                logger.debug("Deleting: '%s'", fullitem)
+                os.remove(fullitem)
+
+        self._preview_extract.delete_previews()
+        del self._preview_train
+        del self._preview_extract
+        self._preview_train = PreviewTrain(self._pathpreview)
+        self._preview_extract = PreviewExtract(self._pathpreview)
 
 
 class PreviewTrigger():
