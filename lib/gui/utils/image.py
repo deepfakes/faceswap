@@ -115,14 +115,15 @@ class PreviewTrain():
 
             logger.debug("Loading preview: '%s'", filename)
             img = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+            assert img is not None
             self._modified = modified
             self._buffer.add_image(os.path.basename(filename), img)
             self._error_count = 0
-        except ValueError:
+        except (ValueError, AssertionError):
             # This is probably an error reading the file whilst it's being saved so ignore it
             # for now and only pick up if there have been multiple consecutive fails
-            logger.warning("Unable to display preview: (image: '%s', attempt: %s)",
-                           img, self._error_count)
+            logger.debug("Unable to display preview: (image: '%s', attempt: %s)",
+                         img, self._error_count)
             if self._error_count < 10:
                 self._error_count += 1
             else:
