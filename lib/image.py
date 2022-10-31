@@ -11,7 +11,7 @@ import sys
 from ast import literal_eval
 from bisect import bisect
 from concurrent import futures
-from typing import Optional
+from typing import Optional, TYPE_CHECKING, Union
 from zlib import crc32
 
 import cv2
@@ -23,6 +23,9 @@ from tqdm import tqdm
 from lib.multithreading import MultiThread
 from lib.queue_manager import queue_manager, QueueEmpty
 from lib.utils import convert_to_secs, FaceswapError, _video_extensions, get_image_paths
+
+if TYPE_CHECKING:
+    from lib.align.alignments import PNGHeaderDict
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -552,7 +555,9 @@ def update_existing_metadata(filename, metadata):
     os.replace(tmp_filename, filename)
 
 
-def encode_image(image, extension, metadata=None):
+def encode_image(image: np.ndarray,
+                 extension: str,
+                 metadata: Optional["PNGHeaderDict"] = None) -> bytes:
     """ Encode an image.
 
     Parameters
@@ -580,7 +585,7 @@ def encode_image(image, extension, metadata=None):
         raise ValueError("Metadata is only supported for .png images")
     retval = cv2.imencode(extension, image)[1]
     if metadata:
-        retval = np.frombuffer(png_write_meta(retval.tobytes(), metadata), dtype="uint8")
+        retval = png_write_meta(retval.tobytes(), metadata)
     return retval
 
 
@@ -1032,7 +1037,7 @@ class ImagesLoader(ImageIO):
             If the given location is a file and does not have a valid video extension.
 
         """
-        if os.path.isdir(self.location):
+        if not isinstance(self.location, str) or os.path.isdir(self.location):
             retval = False
         elif os.path.splitext(self.location)[1].lower() in _video_extensions:
             retval = True
@@ -1423,7 +1428,10 @@ class ImagesSaver(ImageIO):
             executor.submit(self._save, *item)
         executor.shutdown()
 
-    def _save(self, filename: str, image: bytes, sub_folder: Optional[str]) -> None:
+    def _save(self,
+              filename: str,
+              image: Union[bytes, np.ndarray],
+              sub_folder: Optional[str]) -> None:
         """ Save a single image inside a ThreadPoolExecutor
 
         Parameters
@@ -1431,8 +1439,8 @@ class ImagesSaver(ImageIO):
         filename: str
             The filename of the image to be saved. NB: Any folders passed in with the filename
             will be stripped and replaced with :attr:`location`.
-        image: bytes
-            The encoded image to be saved
+        image: bytes or :class:`numpy.ndarray`
+            The encoded image or numpy array to be saved
         subfolder: str or ``None``
             If the file should be saved in a subfolder in the output location, the subfolder should
             be provided here. ``None`` for no subfolder.
@@ -1444,15 +1452,19 @@ class ImagesSaver(ImageIO):
         filename = os.path.join(location, os.path.basename(filename))
         try:
             if self._as_bytes:
+                assert isinstance(image, bytes)
                 with open(filename, "wb") as out_file:
                     out_file.write(image)
             else:
                 cv2.imwrite(filename, image)
             logger.trace("Saved image: '%s'", filename)  # type:ignore
         except Exception as err:  # pylint: disable=broad-except
-            logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
+            logger.error("Failed to save image '%s'. Original Error: %s", filename, str(err))
 
-    def save(self, filename: str, image: bytes, sub_folder: Optional[str] = None) -> None:
+    def save(self,
+             filename: str,
+             image: Union[bytes, np.ndarray],
+             sub_folder: Optional[str] = None) -> None:
         """ Save the given image in the background thread
 
         Ensure that :func:`close` is called once all save operations are complete.

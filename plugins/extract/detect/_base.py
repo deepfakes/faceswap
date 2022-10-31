@@ -159,6 +159,10 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 exhausted = True
                 break
             assert isinstance(item, ExtractMedia)
+            # Put items that are already aligned into the out queue
+            if item.is_aligned:
+                self._queues["out"].put(item)
+                continue
             batch.filename.append(item.filename)
             image, scale, pad = self._compile_detection_image(item)
             batch.image.append(image)

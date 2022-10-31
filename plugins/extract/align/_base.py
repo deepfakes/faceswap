@@ -175,8 +175,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                 logger.trace("EOF received")  # type:ignore
                 exhausted = True
                 break
-            # Put frames with no faces into the out queue to keep TQDM consistent
-            if not item.detected_faces:
+            # Put frames with no faces or are already aligned into the out queue
+            if not item.detected_faces or item.is_aligned:
                 self._queues["out"].put(item)
                 continue
 
@@ -192,7 +192,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                         self._rollover = ExtractMedia(
                             item.filename,
                             item.image,
-                            detected_faces=item.detected_faces[f_idx + 1:])
+                            detected_faces=item.detected_faces[f_idx + 1:],
+                            is_aligned=item.is_aligned)
                         logger.trace("Rolled over %s faces of %s to next batch "  # type:ignore
                                      "for '%s'", len(self._rollover.detected_faces), frame_faces,
                                      item.filename)
@@ -536,7 +537,7 @@ class AlignedFilter():
 
         Parameters
         ----------
-        batch: list
+        faces: list
             List of detected face objects to filter out on size
         minimum_dimension: int
             The minimum (height, width) of the original frame
@@ -655,4 +656,4 @@ class AlignedFilter():
                   for key, count in self._counts.items()
                   if count > 0]
         if counts:
-            logger.info("Aligner filtered: [%s)", ", ".join(counts))
+            logger.info("Aligner filtered: (%s)", ", ".join(counts))

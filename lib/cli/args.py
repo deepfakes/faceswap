@@ -521,11 +521,10 @@ class ExtractArgs(ExtractConvertArgs):
             default=None,
             nargs="+",
             group=_("Face Processing"),
-            help=_("Optionally filter out people who you do not wish to process by passing in an "
-                   "image of that person. Should be a front portrait with a single person in the "
-                   "image. Multiple images can be added space separated. NB: Using face filter "
-                   "will significantly decrease extraction speed and its accuracy cannot be "
-                   "guaranteed.")))
+            help=_("Optionally filter out people who you do not wish to extract by passing in "
+                   "images of those people. Should be a small variety of images at different "
+                   "angles and in different conditions. Multiple images can be added space "
+                   "separated.")))
         argument_list.append(dict(
             opts=("-f", "--filter"),
             action=FilesFullPaths,
@@ -534,11 +533,10 @@ class ExtractArgs(ExtractConvertArgs):
             default=None,
             nargs="+",
             group=_("Face Processing"),
-            help=_("Optionally select people you wish to process by passing in an image of that "
-                   "person. Should be a front portrait with a single person in the image. "
-                   "Multiple images can be added space separated. NB: Using face filter will "
-                   "significantly decrease extraction speed and its accuracy cannot be "
-                   "guaranteed.")))
+            help=_("Optionally select people you wish to extract by passing in images of that "
+                   "person. Should be a small variety of images at different angles and in "
+                   "different conditions. Multiple identities can be filtered. Multiple images "
+                   "can be added space separated.")))
         argument_list.append(dict(
             opts=("-l", "--ref_threshold"),
             action=Slider,
@@ -546,12 +544,10 @@ class ExtractArgs(ExtractConvertArgs):
             rounding=2,
             type=float,
             dest="ref_threshold",
-            default=0.4,
+            default=0.65,
             group=_("Face Processing"),
             help=_("For use with the optional nfilter/filter files. Threshold for positive face "
-                   "recognition. Lower values are stricter. NB: Using face filter will "
-                   "significantly decrease extraction speed and its accuracy cannot be "
-                   "guaranteed.")))
+                   "recognition. Higher values are stricter.")))
         argument_list.append(dict(
             opts=("-sz", "--size"),
             action=Slider,

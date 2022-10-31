@@ -16,14 +16,8 @@ import numpy as np
 import imageio
 
 from lib.align import Alignments as AlignmentsBase, get_centered_size
-from lib.face_filter import FaceFilter as FilterFunc
 from lib.image import count_frames, read_image
 from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
-
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -408,33 +402,6 @@ class PostProcess():  # pylint:disable=too-few-public-methods
         if (hasattr(self._args, 'debug_landmarks') and self._args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
 
-        # Face Filter post processing
-        if ((hasattr(self._args, "filter") and self._args.filter is not None) or
-                (hasattr(self._args, "nfilter") and
-                 self._args.nfilter is not None)):
-
-            if hasattr(self._args, "detector"):
-                detector = self._args.detector.replace("-", "_").lower()
-            else:
-                detector = "cv2_dnn"
-            if hasattr(self._args, "aligner"):
-                aligner = self._args.aligner.replace("-", "_").lower()
-            else:
-                aligner = "cv2_dnn"
-
-            face_filter = dict(detector=detector,
-                               aligner=aligner,
-                               multiprocess=not self._args.singleprocess)
-            filter_lists = {}
-            if hasattr(self._args, "ref_threshold"):
-                face_filter["ref_threshold"] = self._args.ref_threshold
-            for filter_type in ('filter', 'nfilter'):
-                filter_args = getattr(self._args, filter_type, None)
-                filter_args = None if not filter_args else filter_args
-                filter_lists[filter_type] = filter_args
-            face_filter["filter_lists"] = filter_lists
-            postprocess_items["FaceFilter"] = {"kwargs": face_filter}
-
         logger.debug("Postprocess Items: %s", postprocess_items)
         return postprocess_items
 
@@ -642,130 +609,3 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
             roi = face.aligned.get_cropped_roi(face.aligned.size, self._legacy_size, "legacy")
             cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 0, 255), 1)
             self._print_stats(face.aligned)
-
-
-class FaceFilter(PostProcessAction):
-    """ Filter in or out faces based on input image(s). Extract or Convert
-
-    Parameters
-    -----------
-    args: tuple
-        Unused
-    kwargs: dict
-        Keyword arguments for face filter:
-
-        * **detector** (`str`) - The detector to use
-
-        * **aligner** (`str`) - The aligner to use
-
-        * **multiprocess** (`bool`) - Whether to run the extraction pipeline in single process \
-        mode or not
-
-        * **ref_threshold** (`float`) - The reference threshold for a positive match
-
-        * **filter_lists** (`dict`) - The filter and nfilter image paths
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        logger.info("Extracting and aligning face for Face Filter...")
-        self._filter = self._load_face_filter(**kwargs)
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def _load_face_filter(self,
-                          filter_lists: Dict[str, str],
-                          ref_threshold: float,
-                          aligner: str,
-                          detector: str,
-                          multiprocess: bool) -> Optional[FilterFunc]:
-        """ Set up and load the :class:`~lib.face_filter.FaceFilter`.
-
-        Parameters
-        ----------
-        filter_lists: dict
-            The filter and nfilter image paths
-        ref_threshold: float
-            The reference threshold for a positive match
-        aligner: str
-            The aligner to use
-        detector: str
-            The detector to use
-        multiprocess: bool
-            Whether to run the extraction pipeline in single process mode or not
-
-        Returns
-        -------
-        :class:`~lib.face_filter.FaceFilter`
-            The face filter
-        """
-        if not any(val for val in filter_lists.values()):
-            return None
-
-        facefilter = None
-        filter_files = [self._set_face_filter(f_type, filter_lists[f_type])
-                        for f_type in get_args(Literal["filter", "nfilter"])]
-
-        if any(filters for filters in filter_files):
-            facefilter = FilterFunc(filter_files[0],
-                                    filter_files[1],
-                                    detector,
-                                    aligner,
-                                    multiprocess,
-                                    ref_threshold)
-            logger.debug("Face filter: %s", facefilter)
-        else:
-            self._valid = False
-        return facefilter
-
-    @classmethod
-    def _set_face_filter(cls,
-                         f_type: Literal["filter", "nfilter"],
-                         f_args: Union[str, List[str]]) -> List[str]:
-        """ Check filter files exist and add the filter file paths to a list.
-
-        Parameters
-        ----------
-        f_type: {"filter", "nfilter"}
-            The type of filter to create this list for
-        f_args: str or list
-            The filter image(s) to use
-
-        Returns
-        -------
-        list
-            The confirmed existing paths to filter files to use
-        """
-        if not f_args:
-            return []
-
-        logger.info("%s: %s", f_type.title(), f_args)
-        filter_files = f_args if isinstance(f_args, list) else [f_args]
-        filter_files = [fpath for fpath in filter_files if os.path.exists(fpath)]
-        if not filter_files:
-            logger.warning("Face %s files were requested, but no files could be found. This "
-                           "filter will not be applied.", f_type)
-        logger.debug("Face Filter files: %s", filter_files)
-        return filter_files
-
-    def process(self, extract_media: "ExtractMedia") -> None:
-        """ Filters in or out any wanted or unwanted faces based on command line arguments.
-
-        Parameters
-        ----------
-        extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
-            The :class:`~plugins.extract.pipeline.ExtractMedia` object to perform the
-            face filtering on.
-        """
-        if not self._filter:
-            return
-        ret_faces = []
-        for idx, detect_face in enumerate(extract_media.detected_faces):
-            check_item = detect_face["face"] if isinstance(detect_face, dict) else detect_face
-            if not self._filter.check(extract_media.image, check_item):
-                logger.verbose("Skipping not recognized face: (Frame: %s Face %s)",  # type: ignore
-                               extract_media.filename, idx)
-                continue
-            logger.trace("Accepting recognised face. Frame: %s. Face: %s",  # type: ignore
-                         extract_media.filename, idx)
-            ret_faces.append(detect_face)
-        extract_media.add_detected_faces(ret_faces)

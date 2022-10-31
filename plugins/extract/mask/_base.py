@@ -61,9 +61,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         https://github.com/deepfakes-models/faceswap-models for more information
     model_filename: str
         The name of the model file to be loaded
-    image_is_aligned: bool, optional
-        Indicates that the passed in image is an aligned face rather than a frame.
-        Default: ``False``
 
     Other Parameters
     ----------------
@@ -84,10 +81,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                  model_filename: Optional[str] = None,
                  configfile: Optional[str] = None,
                  instance: int = 0,
-                 image_is_aligned=False,
                  **kwargs) -> None:
-        logger.debug("Initializing %s: (configfile: %s, image_is_aligned: %s)",
-                     self.__class__.__name__, configfile, image_is_aligned)
+        logger.debug("Initializing %s: (configfile: %s)", self.__class__.__name__, configfile)
         super().__init__(git_model_id,
                          model_filename,
                          configfile=configfile,
@@ -97,7 +92,6 @@ class Masker(Extractor):  # pylint:disable=abstract-method
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
         self._plugin_type = "mask"
-        self._image_is_aligned = image_is_aligned
         self._storage_name = self.__module__.rsplit(".", maxsplit=1)[-1].replace("_", "-")
         self._storage_centering: "CenteringType" = "face"  # Centering to store the mask at
         self._storage_size = 128  # Size to store masks at. Leave this at default
@@ -154,7 +148,7 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                 image = item.get_image_copy(self.color_format)
                 roi = np.ones((*item.image_size[:2], 1), dtype="float32")
 
-                if not self._image_is_aligned:
+                if not item.is_aligned:
                     # Add the ROI mask to image so we can get the ROI mask with a single warp
                     image = np.concatenate([image, roi], axis=-1)
 
@@ -164,10 +158,10 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                                         size=self.input_size,
                                         coverage_ratio=self.coverage_ratio,
                                         dtype="float32",
-                                        is_aligned=self._image_is_aligned)
+                                        is_aligned=item.is_aligned)
 
                 assert feed_face.face is not None
-                if not self._image_is_aligned:
+                if not item.is_aligned:
                     # Split roi mask from feed face alpha channel
                     roi_mask = feed_face.face[..., 3]
                     feed_face._face = feed_face.face[..., :3]  # pylint:disable=protected-access
@@ -189,7 +183,8 @@ class Masker(Extractor):  # pylint:disable=abstract-method
                         self._rollover = ExtractMedia(
                             item.filename,
                             item.image,
-                            detected_faces=item.detected_faces[f_idx + 1:])
+                            detected_faces=item.detected_faces[f_idx + 1:],
+                            is_aligned=item.is_aligned)
                         logger.trace("Rolled over %s faces of %s to next batch "  # type:ignore
                                      "for '%s'", len(self._rollover.detected_faces), frame_faces,
                                      item.filename)
