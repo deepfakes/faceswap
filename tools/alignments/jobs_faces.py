@@ -155,7 +155,8 @@ class FromFaces():  # pylint:disable=too-few-public-methods
                 for real_idx, (f_id, almt, f_path, f_src) in enumerate(sorted(frames[frame],
                                                                               key=itemgetter(0))):
                     if real_idx != f_id:
-                        self._update_png_header(f_path, real_idx, almt, f_src)
+                        full_path = os.path.join(self._faces_dir, f_path)
+                        self._update_png_header(full_path, real_idx, almt, f_src)
                     this_file[frame]["faces"].append(almt)
             aln_sorted[fname] = this_file
         return aln_sorted
