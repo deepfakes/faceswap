@@ -68,6 +68,7 @@ class PNGHeaderSourceDict(TypedDict):
     face_index: int
     source_filename: str
     source_is_video: bool
+    source_frame_dims: Optional[Tuple[int, int]]
 
 
 class AlignmentDict(TypedDict):

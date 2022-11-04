@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-10-10 13:05+0100\n"
+"POT-Creation-Date: 2022-11-02 10:39+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -46,7 +46,7 @@ msgid "Path to store the logfile. Leave blank to store in the faceswap folder"
 msgstr ""
 
 #: lib/cli/args.py:320 lib/cli/args.py:329 lib/cli/args.py:337
-#: lib/cli/args.py:386 lib/cli/args.py:672 lib/cli/args.py:681
+#: lib/cli/args.py:386 lib/cli/args.py:668 lib/cli/args.py:677
 msgid "Data"
 msgstr ""
 
@@ -82,8 +82,8 @@ msgstr ""
 
 #: lib/cli/args.py:396 lib/cli/args.py:412 lib/cli/args.py:424
 #: lib/cli/args.py:463 lib/cli/args.py:481 lib/cli/args.py:493
-#: lib/cli/args.py:502 lib/cli/args.py:691 lib/cli/args.py:718
-#: lib/cli/args.py:756
+#: lib/cli/args.py:502 lib/cli/args.py:687 lib/cli/args.py:714
+#: lib/cli/args.py:752
 msgid "Plugins"
 msgstr ""
 
@@ -180,9 +180,9 @@ msgid ""
 "little, but will save time if using 'sort by face'"
 msgstr ""
 
-#: lib/cli/args.py:513 lib/cli/args.py:523 lib/cli/args.py:536
-#: lib/cli/args.py:550 lib/cli/args.py:793 lib/cli/args.py:807
-#: lib/cli/args.py:820 lib/cli/args.py:834
+#: lib/cli/args.py:513 lib/cli/args.py:523 lib/cli/args.py:535
+#: lib/cli/args.py:548 lib/cli/args.py:789 lib/cli/args.py:803
+#: lib/cli/args.py:816 lib/cli/args.py:830
 msgid "Face Processing"
 msgstr ""
 
@@ -192,52 +192,48 @@ msgid ""
 "diagonal of the bounding box. Set to 0 for off"
 msgstr ""
 
-#: lib/cli/args.py:524 lib/cli/args.py:808
+#: lib/cli/args.py:524
 msgid ""
-"Optionally filter out people who you do not wish to process by passing in an "
-"image of that person. Should be a front portrait with a single person in the "
-"image. Multiple images can be added space separated. NB: Using face filter "
-"will significantly decrease extraction speed and its accuracy cannot be "
-"guaranteed."
+"Optionally filter out people who you do not wish to extract by passing in "
+"images of those people. Should be a small variety of images at different "
+"angles and in different conditions. A folder containing the required images "
+"or multiple image files, space separated, can be selected."
 msgstr ""
 
-#: lib/cli/args.py:537 lib/cli/args.py:821
+#: lib/cli/args.py:536
 msgid ""
-"Optionally select people you wish to process by passing in an image of that "
-"person. Should be a front portrait with a single person in the image. "
-"Multiple images can be added space separated. NB: Using face filter will "
-"significantly decrease extraction speed and its accuracy cannot be "
-"guaranteed."
+"Optionally select people you wish to extract by passing in images of that "
+"person. Should be a small variety of images at different angles and in "
+"different conditions A folder containing the required images or multiple "
+"image files, space separated, can be selected."
 msgstr ""
 
-#: lib/cli/args.py:551 lib/cli/args.py:835
+#: lib/cli/args.py:549
 msgid ""
 "For use with the optional nfilter/filter files. Threshold for positive face "
-"recognition. Lower values are stricter. NB: Using face filter will "
-"significantly decrease extraction speed and its accuracy cannot be "
-"guaranteed."
+"recognition. Higher values are stricter."
 msgstr ""
 
-#: lib/cli/args.py:562 lib/cli/args.py:574 lib/cli/args.py:586
-#: lib/cli/args.py:598
+#: lib/cli/args.py:558 lib/cli/args.py:570 lib/cli/args.py:582
+#: lib/cli/args.py:594
 msgid "output"
 msgstr ""
 
-#: lib/cli/args.py:563
+#: lib/cli/args.py:559
 msgid ""
 "The output size of extracted faces. Make sure that the model you intend to "
 "train supports your required size. This will only need to be changed for hi-"
 "res models."
 msgstr ""
 
-#: lib/cli/args.py:575
+#: lib/cli/args.py:571
 msgid ""
 "Extract every 'nth' frame. This option will skip frames when extracting "
 "faces. For example a value of 1 will extract faces from every frame, a value "
 "of 10 will extract faces from every 10th frame."
 msgstr ""
 
-#: lib/cli/args.py:587
+#: lib/cli/args.py:583
 msgid ""
 "Automatically save the alignments file after a set amount of frames. By "
 "default the alignments file is only saved at the end of the extraction "
@@ -247,57 +243,57 @@ msgid ""
 "turn off"
 msgstr ""
 
-#: lib/cli/args.py:599
+#: lib/cli/args.py:595
 msgid "Draw landmarks on the ouput faces for debugging purposes."
 msgstr ""
 
-#: lib/cli/args.py:605 lib/cli/args.py:614 lib/cli/args.py:622
-#: lib/cli/args.py:629 lib/cli/args.py:847 lib/cli/args.py:858
-#: lib/cli/args.py:866 lib/cli/args.py:885 lib/cli/args.py:891
+#: lib/cli/args.py:601 lib/cli/args.py:610 lib/cli/args.py:618
+#: lib/cli/args.py:625 lib/cli/args.py:843 lib/cli/args.py:854
+#: lib/cli/args.py:862 lib/cli/args.py:881 lib/cli/args.py:887
 msgid "settings"
 msgstr ""
 
-#: lib/cli/args.py:606
+#: lib/cli/args.py:602
 msgid ""
 "Don't run extraction in parallel. Will run each part of the extraction "
 "process separately (one after the other) rather than all at the smae time. "
 "Useful if VRAM is at a premium."
 msgstr ""
 
-#: lib/cli/args.py:615
+#: lib/cli/args.py:611
 msgid ""
 "Skips frames that have already been extracted and exist in the alignments "
 "file"
 msgstr ""
 
-#: lib/cli/args.py:623
+#: lib/cli/args.py:619
 msgid "Skip frames that already have detected faces in the alignments file"
 msgstr ""
 
-#: lib/cli/args.py:630
+#: lib/cli/args.py:626
 msgid "Skip saving the detected faces to disk. Just create an alignments file"
 msgstr ""
 
-#: lib/cli/args.py:652
+#: lib/cli/args.py:648
 msgid ""
 "Swap the original faces in a source video/images to your final faces.\n"
 "Conversion plugins can be configured in the 'Settings' Menu"
 msgstr ""
 
-#: lib/cli/args.py:673
+#: lib/cli/args.py:669
 msgid ""
 "Only required if converting from images to video. Provide The original video "
 "that the source frames were extracted from (for extracting the fps and "
 "audio)."
 msgstr ""
 
-#: lib/cli/args.py:682
+#: lib/cli/args.py:678
 msgid ""
 "Model directory. The directory containing the trained model you wish to use "
 "for conversion."
 msgstr ""
 
-#: lib/cli/args.py:692
+#: lib/cli/args.py:688
 msgid ""
 "R|Performs color adjustment to the swapped face. Some of these options have "
 "configurable settings in '/config/convert.ini' or 'Settings > Configure "
@@ -318,7 +314,7 @@ msgid ""
 "L|none: Don't perform color adjustment."
 msgstr ""
 
-#: lib/cli/args.py:719
+#: lib/cli/args.py:715
 msgid ""
 "R|Masker to use. NB: The mask you require must exist within the alignments "
 "file. You can add additional masks with the Mask Tool.\n"
@@ -355,7 +351,7 @@ msgid ""
 "will use the mask that was created by the trained model."
 msgstr ""
 
-#: lib/cli/args.py:757
+#: lib/cli/args.py:753
 msgid ""
 "R|The plugin to use to output the converted images. The writers are "
 "configurable in '/config/convert.ini' or 'Settings > Configure Convert "
@@ -370,18 +366,18 @@ msgid ""
 "more formats."
 msgstr ""
 
-#: lib/cli/args.py:776 lib/cli/args.py:783 lib/cli/args.py:877
+#: lib/cli/args.py:772 lib/cli/args.py:779 lib/cli/args.py:873
 msgid "Frame Processing"
 msgstr ""
 
-#: lib/cli/args.py:777
+#: lib/cli/args.py:773
 #, python-format
 msgid ""
 "Scale the final output frames by this amount. 100%% will output the frames "
 "at source dimensions. 50%% at half size 200%% at double size"
 msgstr ""
 
-#: lib/cli/args.py:784
+#: lib/cli/args.py:780
 msgid ""
 "Frame ranges to apply transfer to e.g. For frames 10 to 50 and 90 to 100 use "
 "--frame-ranges 10-50 90-100. Frames falling outside of the selected range "
@@ -389,7 +385,7 @@ msgid ""
 "converting from images, then the filenames must end with the frame-number!"
 msgstr ""
 
-#: lib/cli/args.py:794
+#: lib/cli/args.py:790
 msgid ""
 "If you have not cleansed your alignments file, then you can filter out faces "
 "by defining a folder here that contains the faces extracted from your input "
@@ -399,7 +395,33 @@ msgid ""
 "alignments file."
 msgstr ""
 
-#: lib/cli/args.py:848
+#: lib/cli/args.py:804
+msgid ""
+"Optionally filter out people who you do not wish to process by passing in an "
+"image of that person. Should be a front portrait with a single person in the "
+"image. Multiple images can be added space separated. NB: Using face filter "
+"will significantly decrease extraction speed and its accuracy cannot be "
+"guaranteed."
+msgstr ""
+
+#: lib/cli/args.py:817
+msgid ""
+"Optionally select people you wish to process by passing in an image of that "
+"person. Should be a front portrait with a single person in the image. "
+"Multiple images can be added space separated. NB: Using face filter will "
+"significantly decrease extraction speed and its accuracy cannot be "
+"guaranteed."
+msgstr ""
+
+#: lib/cli/args.py:831
+msgid ""
+"For use with the optional nfilter/filter files. Threshold for positive face "
+"recognition. Lower values are stricter. NB: Using face filter will "
+"significantly decrease extraction speed and its accuracy cannot be "
+"guaranteed."
+msgstr ""
+
+#: lib/cli/args.py:844
 msgid ""
 "The maximum number of parallel processes for performing conversion. "
 "Converting images is system RAM heavy so it is possible to run out of memory "
@@ -409,13 +431,13 @@ msgid ""
 "your system. If singleprocess is enabled this setting will be ignored."
 msgstr ""
 
-#: lib/cli/args.py:859
+#: lib/cli/args.py:855
 msgid ""
 "[LEGACY] This only needs to be selected if a legacy model is being loaded or "
 "if there are multiple models in the model folder"
 msgstr ""
 
-#: lib/cli/args.py:867
+#: lib/cli/args.py:863
 msgid ""
 "Enable On-The-Fly Conversion. NOT recommended. You should generate a clean "
 "alignments file for your destination video. However, if you wish you can "
@@ -424,51 +446,51 @@ msgid ""
 "alignments file is found, this option will be ignored."
 msgstr ""
 
-#: lib/cli/args.py:878
+#: lib/cli/args.py:874
 msgid ""
 "When used with --frame-ranges outputs the unchanged frames that are not "
 "processed instead of discarding them."
 msgstr ""
 
-#: lib/cli/args.py:886
+#: lib/cli/args.py:882
 msgid "Swap the model. Instead converting from of A -> B, converts B -> A"
 msgstr ""
 
-#: lib/cli/args.py:892
+#: lib/cli/args.py:888
 msgid "Disable multiprocessing. Slower but less resource intensive."
 msgstr ""
 
-#: lib/cli/args.py:908
+#: lib/cli/args.py:904
 msgid ""
 "Train a model on extracted original (A) and swap (B) faces.\n"
 "Training models can take a long time. Anything from 24hrs to over a week\n"
 "Model plugins can be configured in the 'Settings' Menu"
 msgstr ""
 
-#: lib/cli/args.py:927 lib/cli/args.py:936
+#: lib/cli/args.py:923 lib/cli/args.py:932
 msgid "faces"
 msgstr ""
 
-#: lib/cli/args.py:928
+#: lib/cli/args.py:924
 msgid ""
 "Input directory. A directory containing training images for face A. This is "
 "the original face, i.e. the face that you want to remove and replace with "
 "face B."
 msgstr ""
 
-#: lib/cli/args.py:937
+#: lib/cli/args.py:933
 msgid ""
 "Input directory. A directory containing training images for face B. This is "
 "the swap face, i.e. the face that you want to place onto the head of person "
 "A."
 msgstr ""
 
-#: lib/cli/args.py:945 lib/cli/args.py:957 lib/cli/args.py:973
-#: lib/cli/args.py:998 lib/cli/args.py:1008
+#: lib/cli/args.py:941 lib/cli/args.py:953 lib/cli/args.py:969
+#: lib/cli/args.py:994 lib/cli/args.py:1004
 msgid "model"
 msgstr ""
 
-#: lib/cli/args.py:946
+#: lib/cli/args.py:942
 msgid ""
 "Model directory. This is where the training data will be stored. You should "
 "always specify a new folder for new models. If starting a new model, select "
@@ -477,7 +499,7 @@ msgid ""
 "the existing model."
 msgstr ""
 
-#: lib/cli/args.py:958
+#: lib/cli/args.py:954
 msgid ""
 "R|Load the weights from a pre-existing model into a newly created model. For "
 "most models this will load weights from the Encoder of the given model into "
@@ -491,7 +513,7 @@ msgid ""
 "to train."
 msgstr ""
 
-#: lib/cli/args.py:974
+#: lib/cli/args.py:970
 msgid ""
 "R|Select which trainer to use. Trainers can be configured from the Settings "
 "menu or the config folder.\n"
@@ -514,7 +536,7 @@ msgid ""
 "susceptible to color differences."
 msgstr ""
 
-#: lib/cli/args.py:999
+#: lib/cli/args.py:995
 msgid ""
 "Output a summary of the model and exit. If a model folder is provided then a "
 "summary of the saved model is displayed. Otherwise a summary of the model "
@@ -522,7 +544,7 @@ msgid ""
 "displayed."
 msgstr ""
 
-#: lib/cli/args.py:1009
+#: lib/cli/args.py:1005
 msgid ""
 "Freeze the weights of the model. Freezing weights means that some of the "
 "parameters in the model will no longer continue to learn, but those that are "
@@ -531,12 +553,12 @@ msgid ""
 "layers."
 msgstr ""
 
-#: lib/cli/args.py:1022 lib/cli/args.py:1034 lib/cli/args.py:1045
-#: lib/cli/args.py:1056 lib/cli/args.py:1139
+#: lib/cli/args.py:1018 lib/cli/args.py:1030 lib/cli/args.py:1041
+#: lib/cli/args.py:1052 lib/cli/args.py:1135
 msgid "training"
 msgstr ""
 
-#: lib/cli/args.py:1023
+#: lib/cli/args.py:1019
 msgid ""
 "Batch size. This is the number of images processed through the model for "
 "each side per iteration. NB: As the model is fed 2 sides at a time, the "
@@ -544,7 +566,7 @@ msgid ""
 "number that you set here. Larger batches require more GPU RAM."
 msgstr ""
 
-#: lib/cli/args.py:1035
+#: lib/cli/args.py:1031
 msgid ""
 "Length of training in iterations. This is only really used for automation. "
 "There is no 'correct' number of iterations a model should be trained for. "
@@ -553,13 +575,13 @@ msgid ""
 "can set that value here."
 msgstr ""
 
-#: lib/cli/args.py:1046
+#: lib/cli/args.py:1042
 msgid ""
 "[Deprecated - Use '-D, --distribution-strategy' instead] Use the Tensorflow "
 "Mirrored Distrubution Strategy to train on multiple GPUs."
 msgstr ""
 
-#: lib/cli/args.py:1057
+#: lib/cli/args.py:1053
 msgid ""
 "R|Select the distribution stategy to use.\n"
 "L|default: Use Tensorflow's default distribution strategy.\n"
@@ -572,25 +594,25 @@ msgid ""
 "batches distributed to each GPU at each iteration."
 msgstr ""
 
-#: lib/cli/args.py:1074 lib/cli/args.py:1084
+#: lib/cli/args.py:1070 lib/cli/args.py:1080
 msgid "Saving"
 msgstr ""
 
-#: lib/cli/args.py:1075
+#: lib/cli/args.py:1071
 msgid "Sets the number of iterations between each model save."
 msgstr ""
 
-#: lib/cli/args.py:1085
+#: lib/cli/args.py:1081
 msgid ""
 "Sets the number of iterations before saving a backup snapshot of the model "
 "in it's current state. Set to 0 for off."
 msgstr ""
 
-#: lib/cli/args.py:1092 lib/cli/args.py:1103 lib/cli/args.py:1114
+#: lib/cli/args.py:1088 lib/cli/args.py:1099 lib/cli/args.py:1110
 msgid "timelapse"
 msgstr ""
 
-#: lib/cli/args.py:1093
+#: lib/cli/args.py:1089
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -599,7 +621,7 @@ msgid ""
 "timelapse-input-B parameter."
 msgstr ""
 
-#: lib/cli/args.py:1104
+#: lib/cli/args.py:1100
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. "
@@ -608,7 +630,7 @@ msgid ""
 "timelapse-input-A parameter."
 msgstr ""
 
-#: lib/cli/args.py:1115
+#: lib/cli/args.py:1111
 msgid ""
 "Optional for creating a timelapse. Timelapse will save an image of your "
 "selected faces into the timelapse-output folder at every save iteration. If "
@@ -616,53 +638,53 @@ msgid ""
 "model folder /timelapse/"
 msgstr ""
 
-#: lib/cli/args.py:1124 lib/cli/args.py:1131
+#: lib/cli/args.py:1120 lib/cli/args.py:1127
 msgid "preview"
 msgstr ""
 
-#: lib/cli/args.py:1125
+#: lib/cli/args.py:1121
 msgid "Show training preview output. in a separate window."
 msgstr ""
 
-#: lib/cli/args.py:1132
+#: lib/cli/args.py:1128
 msgid ""
 "Writes the training result to a file. The image will be stored in the root "
 "of your FaceSwap folder."
 msgstr ""
 
-#: lib/cli/args.py:1140
+#: lib/cli/args.py:1136
 msgid ""
 "Disables TensorBoard logging. NB: Disabling logs means that you will not be "
 "able to use the graph or analysis for this session in the GUI."
 msgstr ""
 
-#: lib/cli/args.py:1147 lib/cli/args.py:1156 lib/cli/args.py:1165
-#: lib/cli/args.py:1174
+#: lib/cli/args.py:1143 lib/cli/args.py:1152 lib/cli/args.py:1161
+#: lib/cli/args.py:1170
 msgid "augmentation"
 msgstr ""
 
-#: lib/cli/args.py:1148
+#: lib/cli/args.py:1144
 msgid ""
 "Warps training faces to closely matched Landmarks from the opposite face-set "
 "rather than randomly warping the face. This is the 'dfaker' way of doing "
 "warping."
 msgstr ""
 
-#: lib/cli/args.py:1157
+#: lib/cli/args.py:1153
 msgid ""
 "To effectively learn, a random set of images are flipped horizontally. "
 "Sometimes it is desirable for this not to occur. Generally this should be "
 "left off except for during 'fit training'."
 msgstr ""
 
-#: lib/cli/args.py:1166
+#: lib/cli/args.py:1162
 msgid ""
 "Color augmentation helps make the model less susceptible to color "
 "differences between the A and B sets, at an increased training time cost. "
 "Enable this option to disable color augmentation."
 msgstr ""
 
-#: lib/cli/args.py:1175
+#: lib/cli/args.py:1171
 msgid ""
 "Warping is integral to training the Neural Network. This option should only "
 "be enabled towards the very end of training to try to bring out more detail. "
@@ -670,6 +692,6 @@ msgid ""
 "likely to kill a model and lead to terrible results."
 msgstr ""
 
-#: lib/cli/args.py:1200
+#: lib/cli/args.py:1196
 msgid "Output to Shell console instead of GUI console"
 msgstr ""

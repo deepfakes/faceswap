@@ -172,6 +172,7 @@ class CliOptions():
                           actions.FileFullPaths,
                           actions.FilesFullPaths,
                           actions.DirOrFileFullPaths,
+                          actions.DirOrFilesFullPaths,
                           actions.SaveFileFullPaths,
                           actions.ContextFullPaths):
             return None
@@ -190,6 +191,8 @@ class CliOptions():
             retval["browser"] = ["save"]
         elif action == actions.DirOrFileFullPaths:
             retval["browser"] = ["folder", "load"]
+        elif action == actions.DirOrFilesFullPaths:
+            retval["browser"] = ["folder", "multi_load"]
         elif action == actions.ContextFullPaths and action_option:
             retval["browser"] = ["context"]
             retval["command"] = command

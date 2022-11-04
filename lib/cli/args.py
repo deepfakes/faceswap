@@ -16,8 +16,8 @@ from lib.gpu_stats import GPUStats
 
 from plugins.plugin_loader import PluginLoader
 
-from .actions import (DirFullPaths, DirOrFileFullPaths, FileFullPaths, FilesFullPaths, MultiOption,
-                      Radio, SaveFileFullPaths, Slider)
+from .actions import (DirFullPaths, DirOrFileFullPaths, DirOrFilesFullPaths, FileFullPaths,
+                      FilesFullPaths, MultiOption, Radio, SaveFileFullPaths, Slider)
 from .launcher import ScriptExecutor
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -515,30 +515,28 @@ class ExtractArgs(ExtractConvertArgs):
                    "diagonal of the bounding box. Set to 0 for off")))
         argument_list.append(dict(
             opts=("-n", "--nfilter"),
-            action=FilesFullPaths,
+            action=DirOrFilesFullPaths,
             filetypes="image",
             dest="nfilter",
             default=None,
             nargs="+",
             group=_("Face Processing"),
-            help=_("Optionally filter out people who you do not wish to process by passing in an "
-                   "image of that person. Should be a front portrait with a single person in the "
-                   "image. Multiple images can be added space separated. NB: Using face filter "
-                   "will significantly decrease extraction speed and its accuracy cannot be "
-                   "guaranteed.")))
+            help=_("Optionally filter out people who you do not wish to extract by passing in "
+                   "images of those people. Should be a small variety of images at different "
+                   "angles and in different conditions. A folder containing the required images "
+                   "or multiple image files, space separated, can be selected.")))
         argument_list.append(dict(
             opts=("-f", "--filter"),
-            action=FilesFullPaths,
+            action=DirOrFilesFullPaths,
             filetypes="image",
             dest="filter",
             default=None,
             nargs="+",
             group=_("Face Processing"),
-            help=_("Optionally select people you wish to process by passing in an image of that "
-                   "person. Should be a front portrait with a single person in the image. "
-                   "Multiple images can be added space separated. NB: Using face filter will "
-                   "significantly decrease extraction speed and its accuracy cannot be "
-                   "guaranteed.")))
+            help=_("Optionally select people you wish to extract by passing in images of that "
+                   "person. Should be a small variety of images at different angles and in "
+                   "different conditions A folder containing the required images or multiple "
+                   "image files, space separated, can be selected.")))
         argument_list.append(dict(
             opts=("-l", "--ref_threshold"),
             action=Slider,
@@ -546,12 +544,10 @@ class ExtractArgs(ExtractConvertArgs):
             rounding=2,
             type=float,
             dest="ref_threshold",
-            default=0.4,
+            default=0.60,
             group=_("Face Processing"),
             help=_("For use with the optional nfilter/filter files. Threshold for positive face "
-                   "recognition. Lower values are stricter. NB: Using face filter will "
-                   "significantly decrease extraction speed and its accuracy cannot be "
-                   "guaranteed.")))
+                   "recognition. Higher values are stricter.")))
         argument_list.append(dict(
             opts=("-sz", "--size"),
             action=Slider,

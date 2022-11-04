@@ -801,7 +801,8 @@ class Aligner():
         for plugin, aligner in self._aligners.items():
             if plugin == "mask":
                 continue
-            aligner.set_aligner_normalization_method(method)
+            logger.debug("Setting to: '%s'", method)
+            aligner.aligner.set_normalize_method(method)
 
 
 class FrameLoader():

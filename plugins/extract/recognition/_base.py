@@ -16,6 +16,7 @@ To get a :class:`~lib.align.DetectedFace` object use the function:
 >>> face = self.to_detected_face(<face left>, <face top>, <face right>, <face bottom>)
 """
 import logging
+import sys
 
 from dataclasses import dataclass, field
 from typing import Generator, List, Optional, Tuple, TYPE_CHECKING
@@ -23,14 +24,20 @@ from typing import Generator, List, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disable=no-name-in-module  # noqa
 
-from lib.align import AlignedFace
+from lib.align import AlignedFace, DetectedFace
+from lib.image import read_image_meta
 from lib.utils import FaceswapError, get_backend
 from plugins.extract._base import BatchType, Extractor, ExtractorBatch
 from plugins.extract.pipeline import ExtractMedia
 
+if sys.version_info < (3, 8):
+    from typing_extensions import get_args, Literal
+else:
+    from typing import get_args, Literal
+
+
 if TYPE_CHECKING:
     from queue import Queue
-    from lib.align import DetectedFace
     from lib.align.aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)
@@ -58,9 +65,6 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         https://github.com/deepfakes-models/faceswap-models for more information
     model_filename: str
         The name of the model file to be loaded
-    image_is_aligned: bool, optional
-        Indicates that the passed in image is an aligned face rather than a frame.
-        Default: ``False``
 
     Other Parameters
     ----------------
@@ -81,7 +85,6 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                  model_filename: Optional[str] = None,
                  configfile: Optional[str] = None,
                  instance: int = 0,
-                 image_is_aligned=False,
                  **kwargs):
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(git_model_id,
@@ -94,8 +97,26 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         self.coverage_ratio = 1.0  # Override for model specific coverage_ratio
 
         self._plugin_type = "recognition"
-        self._image_is_aligned = image_is_aligned
+        self._filter = IdentityFilter(self.config["save_filtered"])
         logger.debug("Initialized _base %s", self.__class__.__name__)
+
+    def _get_detected_from_aligned(self, item: ExtractMedia) -> None:
+        """ Obtain detected face objects for when loading in aligned faces and a detected face
+        object does not exist
+
+        Parameters
+        ----------
+        item: :class:`~plugins.extract.pipeline.ExtractMedia`
+            The extract media to populate the detected face for
+         """
+        detected_face = DetectedFace()
+        meta = read_image_meta(item.filename).get("itxt", {}).get("alignments")
+        if meta:
+            detected_face.from_png_meta(meta)
+        item.add_detected_faces([detected_face])
+        self._faces_per_filename[item.filename] += 1  # Track this added face
+        logger.debug("Obtained detected face: (filename: %s, detected_face: %s)",
+                     item.filename, item.detected_faces)
 
     def get_batch(self, queue: "Queue") -> Tuple[bool, RecogBatch]:
         """ Get items for inputting into the recognition from the queue in batches
@@ -140,9 +161,12 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                 exhausted = True
                 break
             # Put frames with no faces into the out queue to keep TQDM consistent
-            if not item.detected_faces:
+            if not item.is_aligned and not item.detected_faces:
                 self._queues["out"].put(item)
                 continue
+            if item.is_aligned and not item.detected_faces:
+                self._get_detected_from_aligned(item)
+
             for f_idx, face in enumerate(item.detected_faces):
 
                 image = item.get_image_copy(self.color_format)
@@ -152,7 +176,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                                         size=self.input_size,
                                         coverage_ratio=self.coverage_ratio,
                                         dtype="float32",
-                                        is_aligned=self._image_is_aligned)
+                                        is_aligned=item.is_aligned)
 
                 batch.detected_faces.append(face)
                 batch.feed_faces.append(feed_face)
@@ -164,7 +188,8 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                         self._rollover = ExtractMedia(
                             item.filename,
                             item.image,
-                            detected_faces=item.detected_faces[f_idx + 1:])
+                            detected_faces=item.detected_faces[f_idx + 1:],
+                            is_aligned=item.is_aligned)
                         logger.trace("Rolled over %s faces of %s to next batch "  # type:ignore
                                      "for '%s'", len(self._rollover.detected_faces), frame_faces,
                                      item.filename)
@@ -175,6 +200,11 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                           for k, v in batch.__dict__.items()})
         else:
             logger.trace(item)  # type:ignore
+
+        # TODO Move to end of process not beginning
+        if exhausted:
+            self._filter.output_counts()
+
         return exhausted, batch
 
     def _predict(self, batch: BatchType) -> RecogBatch:
@@ -239,15 +269,226 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         logger.trace("Item out: %s",  # type: ignore
                      {key: val.shape if isinstance(val, np.ndarray) else val
                                       for key, val in batch.__dict__.items()})
+
         for filename, face in zip(batch.filename, batch.detected_faces):
             self._output_faces.append(face)
             if len(self._output_faces) != self._faces_per_filename[filename]:
                 continue
 
             output = self._extract_media.pop(filename)
+            self._output_faces = self._filter(self._output_faces, output.sub_folders)
+
             output.add_detected_faces(self._output_faces)
             self._output_faces = []
             logger.trace("Yielding: (filename: '%s', image: %s, "  # type:ignore
                          "detected_faces: %s)", output.filename, output.image_shape,
                          len(output.detected_faces))
             yield output
+
+    def add_identity_filters(self,
+                             filters: np.ndarray,
+                             nfilters: np.ndarray,
+                             threshold: float) -> None:
+        """ Add identity encodings to filter by identity in the recognition plugin
+
+        Parameters
+        ----------
+        filters: :class:`numpy.ndarray`
+            The array of filter embeddings to use
+        nfilters: :class:`numpy.ndarray`
+            The array of nfilter embeddings to use
+        threshold: float
+            The threshold for a positive filter match
+        """
+        logger.debug("Adding identity filters")
+        self._filter.add_filters(filters, nfilters, threshold)
+        logger.debug("Added identity filters")
+
+
+class IdentityFilter():
+    """ Applies filters on the output of the recognition plugin
+
+    Parameters
+    ----------
+    save_output: bool
+        ``True`` if the filtered faces should be kept as they are being saved. ``False`` if they
+        should be deleted
+    """
+    def __init__(self, save_output: bool) -> None:
+        logger.debug("Initializing %s: (save_output: %s)", self.__class__.__name__, save_output)
+        self._save_output = save_output
+        self._filter: Optional[np.ndarray] = None
+        self._nfilter: Optional[np.ndarray] = None
+        self._threshold = 0.0
+        self._filter_enabled: bool = False
+        self._nfilter_enabled: bool = False
+        self._active: bool = False
+        self._counts = 0
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    def add_filters(self, filters: np.ndarray, nfilters: np.ndarray, threshold) -> None:
+        """ Add identity encodings to the filter and set whether each filter is enabled
+
+        Parameters
+        ----------
+        filters: :class:`numpy.ndarray`
+            The array of filter embeddings to use
+        nfilters: :class:`numpy.ndarray`
+            The array of nfilter embeddings to use
+        threshold: float
+            The threshold for a positive filter match
+        """
+        logger.debug("Adding filters: %s, nfilters: %s, threshold: %s",
+                     filters.shape, nfilters.shape, threshold)
+        self._filter = filters
+        self._nfilter = nfilters
+        self._threshold = threshold
+        self._filter_enabled = bool(np.any(self._filter))
+        self._nfilter_enabled = bool(np.any(self._nfilter))
+        self._active = self._filter_enabled or self._nfilter_enabled
+        logger.debug("filter active: %s, nfilter active: %s, all active: %s",
+                     self._filter_enabled, self._nfilter_enabled, self._active)
+
+    @classmethod
+    def _find_cosine_similiarity(cls,
+                                 source_identities: np.ndarray,
+                                 test_identity: np.ndarray) -> np.ndarray:
+        """ Find the cosine similarity between a source face identity and a test face identity
+
+        Parameters
+        ---------
+        source_identities: :class:`numpy.ndarray`
+            The identity encoding for the source face identities
+        test_identity: :class:`numpy.ndarray`
+            The identity encoding for the face identity to test against the sources
+
+        Returns
+        -------
+        :class:`numpy.ndarray`:
+            The cosine similarity between a face identity and the source identities
+        """
+        s_norm = np.linalg.norm(source_identities, axis=1)
+        i_norm = np.linalg.norm(test_identity)
+        retval = source_identities @ test_identity / (s_norm * i_norm)
+        return retval
+
+    def _get_matches(self,
+                     filter_type: Literal["filter", "nfilter"],
+                     identities: np.ndarray) -> np.ndarray:
+        """ Obtain the average and minimum distances for each face against the source identities
+        to test against
+
+        Parameters
+        ----------
+        filter_type ["filter", "nfilter"]
+            The filter type to use for calculating the distance
+        identities: :class:`numpy.ndarray`
+            The identity encodings for the current face(s) being checked
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            Boolean array. ``True`` if identity should be filtered otherwise ``False``
+        """
+        encodings = self._filter if filter_type == "filter" else self._nfilter
+        assert encodings is not None
+        distances = np.array([self._find_cosine_similiarity(encodings, identity)
+                              for identity in identities])
+        is_match = np.any(distances >= self._threshold, axis=-1)
+        # Invert for filter (set the `True` match to `False` for should filter)
+        retval = np.invert(is_match) if filter_type == "filter" else is_match
+        logger.trace("filter_type: %s, distances shape: %s, is_match: %s, ",  # type: ignore
+                     "retval: %s", filter_type, distances.shape, is_match, retval)
+        return retval
+
+    def _filter_faces(self,
+                      faces: List[DetectedFace],
+                      sub_folders: List[Optional[str]],
+                      should_filter: List[bool]) -> List[DetectedFace]:
+        """ Filter the detected faces, either removing filtered faces from the list of detected
+        faces or setting the output subfolder to `"_identity_filt"` for any filtered faces if
+        saving output is enabled.
+
+        Parameters
+        ----------
+        faces: list
+            List of detected face objects to filter out on size
+        sub_folders: list
+            List of subfolder locations for any faces that have already been filtered when
+            config option `save_filtered` has been enabled.
+        should_filter: list
+            List of 'bool' corresponding to face that have not already been marked for filtering.
+            ``True`` indicates face should be filtered, ``False`` indicates face should be kept
+
+        Returns
+        -------
+        detected_faces: list
+            The filtered list of detected face objects, if saving filtered faces has not been
+            selected or the full list of detected faces
+        """
+        retval: List[DetectedFace] = []
+        self._counts += sum(should_filter)
+        for idx, face in enumerate(faces):
+            fldr = sub_folders[idx]
+            if fldr is not None:
+                # Saving to sub folder is selected and face is already filtered
+                # so this face was excluded from identity check
+                retval.append(face)
+                continue
+            to_filter = should_filter.pop(0)
+            if not to_filter or self._save_output:
+                # Keep the face if not marked as filtered or we are to output to a subfolder
+                retval.append(face)
+            if to_filter and self._save_output:
+                sub_folders[idx] = "_identity_filt"
+
+        return retval
+
+    def __call__(self,
+                 faces: List[DetectedFace],
+                 sub_folders: List[Optional[str]]) -> List[DetectedFace]:
+        """ Call the identity filter function
+
+        Parameters
+        ----------
+        faces: list
+            List of detected face objects to filter out on size
+        sub_folders: list
+            List of subfolder locations for any faces that have already been filtered when
+            config option `save_filtered` has been enabled.
+
+        Returns
+        -------
+        detected_faces: list
+            The filtered list of detected face objects, if saving filtered faces has not been
+            selected or the full list of detected faces
+        """
+        if not self._active:
+            return faces
+
+        identities = np.array([face.identity["vggface2"] for face, fldr in zip(faces, sub_folders)
+                               if fldr is None])
+        logger.trace("face_count: %s, already_filtered: %s, identity_shape: %s",  # type: ignore
+                     len(faces), sum(x is not None for x in sub_folders), identities.shape)
+
+        if not np.any(identities):
+            logger.trace("All faces already filtered: %s", sub_folders)  # type: ignore
+            return faces
+
+        should_filter: List[np.ndarray] = []
+        for f_type in get_args(Literal["filter", "nfilter"]):
+            if not getattr(self, f"_{f_type}_enabled"):
+                continue
+            should_filter.append(self._get_matches(f_type, identities))
+
+        # If any of the filter or nfilter evaluate to 'should filter' then filter out face
+        final_filter: List[bool] = np.array(should_filter).max(axis=0).tolist()
+        logger.trace("should_filter: %s, final_filter: %s",  # type: ignore
+                     should_filter, final_filter)
+        return self._filter_faces(faces, sub_folders, final_filter)
+
+    def output_counts(self):
+        """ Output the counts of filtered items """
+        if not self._active or not self._counts:
+            return
+        logger.info("Identity filtered (%s): %s", self._threshold, self._counts)

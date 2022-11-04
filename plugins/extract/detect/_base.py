@@ -159,18 +159,28 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 exhausted = True
                 break
             assert isinstance(item, ExtractMedia)
+            # Put items that are already aligned into the out queue
+            if item.is_aligned:
+                self._queues["out"].put(item)
+                continue
             batch.filename.append(item.filename)
             image, scale, pad = self._compile_detection_image(item)
             batch.image.append(image)
             batch.scale.append(scale)
             batch.pad.append(pad)
 
-        if batch:
+        if batch.filename:
             logger.trace("Returning batch: %s",  # type: ignore
                          {k: len(v) if isinstance(v, (list, np.ndarray)) else v
                           for k, v in batch.__dict__.items()})
         else:
             logger.trace(item)  # type:ignore
+
+        if not exhausted and not batch.filename:
+            # This occurs when face filter is fed aligned faces.
+            # Need to re-run until EOF is hit
+            return self.get_batch(queue)
+
         return exhausted, batch
 
     # <<< FINALIZE METHODS>>> #

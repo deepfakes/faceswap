@@ -7,18 +7,22 @@ import logging
 import os
 import sys
 from argparse import Namespace
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple, TYPE_CHECKING, Union
 
+import numpy as np
 from tqdm import tqdm
+from lib.align.alignments import PNGHeaderDict
 
-from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver
+from lib.image import encode_image, generate_thumbnail, ImagesLoader, ImagesSaver, read_image_meta
 from lib.multithreading import MultiThread
 from lib.utils import get_folder, _image_extensions, _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from scripts.fsmedia import Alignments, PostProcess, finalize
 
+if TYPE_CHECKING:
+    from lib.align.alignments import PNGHeaderAlignmentsDict
 
-tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning
+# tqdm.monitor_interval = 0  # workaround for TqdmSynchronisationWarning  # TODO?
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -50,7 +54,9 @@ class Extract():  # pylint:disable=too-few-public-methods
         normalization = None if self._args.normalization == "none" else self._args.normalization
         maskers = ["components", "extended"]
         maskers += self._args.masker if self._args.masker else []
-        recognition = "vgg_face2" if arguments.identity else None
+        recognition = ("vgg_face2"
+                       if arguments.identity or arguments.filter or arguments.nfilter
+                       else None)
         self._extractor = Extractor(self._args.detector,
                                     self._args.aligner,
                                     maskers,
@@ -62,6 +68,10 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,
                                     re_feed=self._args.re_feed)
+        self._filter = Filter(self._args.ref_threshold,
+                              self._args.filter,
+                              self._args.nfilter,
+                              self._extractor)
 
     def _get_input_locations(self) -> List[str]:
         """ Obtain the full path to input locations. Will be a list of locations if batch mode is
@@ -133,7 +143,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Returning output: '%s' for input: '%s'", retval, input_location)
         return retval
 
-    def process(self):
+    def process(self) -> None:
         """ The entry point for triggering the Extraction Process.
 
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
@@ -155,96 +165,358 @@ class Extract():  # pylint:disable=too-few-public-methods
             self._extractor.reset_phase_index()
 
 
-class _Extract():  # pylint:disable=too-few-public-methods
-    """ The Actual extraction process.
-
-    This class is called by the parent :class:`Extract` process
+class Filter():
+    """ Obtains and holds face identity embeddings for any filter/nfilter image files
+    passed in from the command line.
 
     Parameters
     ----------
+    filter_files: list or ``None``
+        The list of filter file(s) passed in as command line arguments
+    nfilter_files: list or ``None``
+        The list of nfilter file(s) passed in as command line arguments
     extractor: :class:`~plugins.extract.pipeline.Extractor`
-        The extractor pipeline for running extractions
-    arguments: :class:`argparse.Namespace`
-        The arguments to be passed to the extraction process as generated from Faceswap's command
-        line arguments
+        The extractor pipeline for obtaining face identity from images
     """
     def __init__(self,
-                 extractor: Extractor,
-                 arguments: Namespace) -> None:
-        logger.debug("Initializing %s: (extractor: %s, args: %s)", self.__class__.__name__,
-                     extractor, arguments)
-        self._args = arguments
-        self._output_dir = None if self._args.skip_saving_faces else get_folder(
-            self._args.output_dir)
+                 threshold: float,
+                 filter_files: Optional[List[str]],
+                 nfilter_files: Optional[List[str]],
+                 extractor: Extractor) -> None:
+        logger.debug("Initializing %s: (threshold: %s, filter_files: %s, nfilter_files: %s "
+                     "extractor: %s)", self.__class__.__name__, threshold, filter_files,
+                     nfilter_files, extractor)
+        self._threshold = threshold
+        self._filter_files, self._nfilter_files = self._validate_inputs(filter_files,
+                                                                        nfilter_files)
 
-        logger.info("Output Directory: %s", self._output_dir)
-        self._images = ImagesLoader(self._args.input_dir, fast_count=True)
-        self._alignments = Alignments(self._args, True, self._images.is_video)
+        if not self._filter_files and not self._nfilter_files:
+            logger.debug("Filter not selected. Exiting %s", self.__class__.__name__)
+            return
+
+        self._embeddings: List[np.ndarray] = [np.array([]) for _ in self._filter_files]
+        self._nembeddings: List[np.ndarray] = [np.array([]) for _ in self._nfilter_files]
         self._extractor = extractor
 
-        self._existing_count = 0
-        self._set_skip_list()
-
-        self._post_process = PostProcess(arguments)
-        self._threads: List[MultiThread] = []
-        self._verify_output = False
+        self._get_embeddings()
+        self._extractor.recognition.add_identity_filters(self.embeddings,
+                                                         self.n_embeddings,
+                                                         self._threshold)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def _save_interval(self) -> Optional[int]:
-        """ int: The number of frames to be processed between each saving of the alignments file if
-        it has been provided, otherwise ``None`` """
-        if hasattr(self._args, "save_interval"):
-            return self._args.save_interval
-        return None
+    def active(self):
+        """ bool: ``True`` if filter files have been passed in command line arguments. ``False`` if
+        no filter files have been provided """
+        return bool(self._filter_files) or bool(self._nfilter_files)
 
     @property
-    def _skip_num(self) -> int:
-        """ int: Number of frames to skip if extract_every_n has been provided """
-        return self._args.extract_every_n if hasattr(self._args, "extract_every_n") else 1
+    def embeddings(self) -> np.ndarray:
+        """ :class:`numpy.ndarray`: The filter embeddings"""
+        if self._embeddings and all(np.any(e) for e in self._embeddings):
+            retval = np.concatenate(self._embeddings, axis=0)
+        else:
+            retval = np.array([])
+        return retval
 
-    def _set_skip_list(self) -> None:
-        """ Add the skip list to the image loader
+    @property
+    def n_embeddings(self) -> np.ndarray:
+        """ :class:`numpy.ndarray`: The n-filter embeddings"""
+        if self._nembeddings and all(np.any(e) for e in self._nembeddings):
+            retval = np.concatenate(self._nembeddings, axis=0)
+        else:
+            retval = np.array([])
+        return retval
 
-        Checks against `extract_every_n` and the existence of alignments data (can exist if
-        `skip_existing` or `skip_existing_faces` has been provided) and compiles a list of frame
-        indices that should not be processed, providing these to :class:`lib.image.ImagesLoader`.
+    @classmethod
+    def _validate_inputs(cls,
+                         filter_files: Optional[List[str]],
+                         nfilter_files: Optional[List[str]]) -> Tuple[List[str], List[str]]:
+        """ Validates that the given filter/nfilter files exist, are image files and are unique
+
+        Parameters
+        ----------
+        filter_files: list or ``None``
+            The list of filter file(s) passed in as command line arguments
+        nfilter_files: list or ``None``
+            The list of nfilter file(s) passed in as command line arguments
+
+        Returns
+        -------
+        filter_files: list
+            List of full paths to filter files
+        nfilter_files: list
+            List of full paths to nfilter files
         """
-        if self._skip_num == 1 and not self._alignments.data:
-            logger.debug("No frames to be skipped")
+        error = False
+        retval: List[List[str]] = []
+
+        for files in (filter_files, nfilter_files):
+
+            if isinstance(files, list) and len(files) == 1 and os.path.isdir(files[0]):
+                # Get images from folder, if folder passed in
+                dirname = files[0]
+                files = [os.path.join(dirname, fname)
+                         for fname in os.listdir(dirname)
+                         if os.path.splitext(fname)[-1].lower() in _image_extensions]
+                logger.debug("Collected files from folder '%s': %s", dirname,
+                             [os.path.basename(f) for f in files])
+
+            filt_files = [] if files is None else files
+            for file in filt_files:
+                if (not os.path.isfile(file) or
+                        os.path.splitext(file)[-1].lower() not in _image_extensions):
+                    logger.warning("Filter file '%s' does not exist or is not an image file", file)
+                    error = True
+            retval.append(filt_files)
+
+        filters = retval[0]
+        nfilters = retval[1]
+        f_fnames = set(os.path.basename(fname) for fname in filters)
+        n_fnames = set(os.path.basename(fname) for fname in nfilters)
+        if f_fnames.intersection(n_fnames):
+            error = True
+            logger.warning("filter and nfilter filenames should be unique. The following "
+                           "filenames exist in both folders: %s", f_fnames.intersection(n_fnames))
+
+        if error:
+            logger.error("There was a problem processing filter files. See the above warnings for "
+                         "details")
+            sys.exit(1)
+        logger.debug("filter_files: %s, nfilter_files: %s", retval[0], retval[1])
+
+        return filters, nfilters
+
+    @classmethod
+    def _identity_from_extracted(cls, filename) -> Tuple[np.ndarray, bool]:
+        """ Test whether the given image is a faceswap extracted face and contains identity
+        information. If so, return the identity embedding
+
+        Parameters
+        ----------
+        filename: str
+            Full path to the image file to load
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The identity embeddings, if they can be obtained from the image header, otherwise an
+            empty array
+        bool
+            ``True`` if the image is a faceswap extracted image otherwise ``False``
+        """
+        if os.path.splitext(filename)[-1].lower() != ".png":
+            logger.debug("'%s' not a png. Returning empty array", filename)
+            return np.array([]), False
+
+        meta = read_image_meta(filename)
+        if "itxt" not in meta or "alignments" not in meta["itxt"]:
+            logger.debug("'%s' does not contain faceswap data. Returning empty array", filename)
+            return np.array([]), False
+
+        align: "PNGHeaderAlignmentsDict" = meta["itxt"]["alignments"]
+        if "identity" not in align or "vggface2" not in align["identity"]:
+            logger.debug("'%s' does not contain identity data. Returning empty array", filename)
+            return np.array([]), True
+
+        retval = np.array(align["identity"]["vggface2"])
+        logger.debug("Obtained identity for '%s'. Shape: %s", filename, retval.shape)
+
+        return retval, True
+
+    def _process_extracted(self, item: ExtractMedia) -> None:
+        """ Process the output from the extraction pipeline.
+
+        If no face has been detected, or multiple faces are detected for the inclusive filter,
+        embeddings and filenames are removed from the filter.
+
+        if a single face is detected or multiple faces are detected for the exclusive filter,
+        embeddings are added to the relevent filter list
+
+        Parameters
+        ----------
+        item: :class:`plugins.extract.Pipeline.ExtracMedia`
+            The output from the extraction pipeline containing the identity encodings
+        """
+        is_filter = item.filename in self._filter_files
+        lbl = "filter" if is_filter else "nfilter"
+        filelist = self._filter_files if is_filter else self._nfilter_files
+        embeddings = self._embeddings if is_filter else self._nembeddings
+        identities = np.array([face.identity["vggface2"] for face in item.detected_faces])
+        idx = filelist.index(item.filename)
+
+        if len(item.detected_faces) == 0:
+            logger.warning("No faces detected for %s in file '%s'. Image will not be used",
+                           lbl, os.path.basename(item.filename))
+            filelist.pop(idx)
+            embeddings.pop(idx)
             return
-        skip_list = []
-        for idx, filename in enumerate(self._images.file_list):
-            if idx % self._skip_num != 0:
-                logger.trace("Adding image '%s' to skip list due to "  # type: ignore
-                             "extract_every_n = %s", filename, self._skip_num)
-                skip_list.append(idx)
-            # Items may be in the alignments file if skip-existing[-faces] is selected
-            elif os.path.basename(filename) in self._alignments.data:
-                self._existing_count += 1
-                logger.trace("Removing image: '%s' due to previously existing",  # type: ignore
-                             filename)
-                skip_list.append(idx)
-        if self._existing_count != 0:
-            logger.info("Skipping %s frames due to skip_existing/skip_existing_faces.",
-                        self._existing_count)
-        logger.debug("Adding skip list: %s", skip_list)
+
+        if len(item.detected_faces) == 1:
+            logger.debug("Adding identity for %s from file '%s'", lbl, item.filename)
+            embeddings[idx] = identities
+            return
+
+        if len(item.detected_faces) > 1 and is_filter:
+            logger.warning("%s faces detected for filter in '%s'. These identies will not be used",
+                           len(item.detected_faces), os.path.basename(item.filename))
+            filelist.pop(idx)
+            embeddings.pop(idx)
+            return
+
+        if len(item.detected_faces) > 1 and not is_filter:
+            logger.warning("%s faces detected for nfilter in '%s'. All of these identies will be "
+                           "used", len(item.detected_faces), os.path.basename(item.filename))
+            embeddings[idx] = identities
+            return
+
+    def _identity_from_extractor(self, file_list: List[str], aligned: List[str]) -> None:
+        """ Obtain the identity embeddings from the extraction pipeline
+
+        Parameters
+        ----------
+        filesile_list: list
+            List of full path to images to run through the extraction pipeline
+        aligned: list
+            List of full path to images that exist in attr:`filelist` that are faceswap aligned
+            images
+        """
+        logger.info("Extracting faces to obtain identity from images")
+        logger.debug("Files requiring full extraction: %s",
+                     [fname for fname in file_list if fname not in aligned])
+        logger.debug("Aligned files requiring identity info: %s", aligned)
+
+        loader = PipelineLoader(file_list, self._extractor, aligned_filenames=aligned)
+        loader.launch()
+
+        for phase in range(self._extractor.passes):
+            is_final = self._extractor.final_pass
+            detected_faces: Dict[str, ExtractMedia] = {}
+            self._extractor.launch()
+            desc = "Obtaining reference face Identity"
+            if self._extractor.passes > 1:
+                desc = (f"{desc } pass {phase + 1} of {self._extractor.passes}: "
+                        f"{self._extractor.phase_text}")
+            for extract_media in tqdm(self._extractor.detected_faces(),
+                                      total=len(file_list),
+                                      file=sys.stdout,
+                                      desc=desc):
+                if is_final:
+                    self._process_extracted(extract_media)
+                else:
+                    extract_media.remove_image()
+                    # cache extract_media for next run
+                    detected_faces[extract_media.filename] = extract_media
+
+            if not is_final:
+                logger.debug("Reloading images")
+                loader.reload(detected_faces)
+
+        self._extractor.reset_phase_index()
+
+    def _get_embeddings(self) -> None:
+        """ Obtain the embeddings for the given filter lists """
+        needs_extraction: List[str] = []
+        aligned: List[str] = []
+
+        for files, embed in zip((self._filter_files, self._nfilter_files),
+                                (self._embeddings, self._nembeddings)):
+            for idx, file in enumerate(files):
+                identity, is_aligned = self._identity_from_extracted(file)
+                if np.any(identity):
+                    logger.debug("Obtained identity from png header: '%s'", file)
+                    embed[idx] = identity[None, ...]
+                    continue
+
+                needs_extraction.append(file)
+                if is_aligned:
+                    aligned.append(file)
+
+        if needs_extraction:
+            self._identity_from_extractor(needs_extraction, aligned)
+
+        if not self._nfilter_files and not self._filter_files:
+            logger.error("No faces were detected from your selected identity filter files")
+            sys.exit(1)
+
+        logger.debug("Filter: (filenames: %s, shape: %s), nFilter: (filenames: %s, shape: %s)",
+                     [os.path.basename(f) for f in self._filter_files],
+                     self.embeddings.shape,
+                     [os.path.basename(f) for f in self._nfilter_files],
+                     self.n_embeddings.shape)
+
+
+class PipelineLoader():
+    """ Handles loading and reloading images into the extraction pipeline.
+
+    Parameters
+    ----------
+    path: str or list of str
+        Full path to a folder of images or a video file or a list of image files
+    extractor: :class:`~plugins.extract.pipeline.Extractor`
+        The extractor pipeline for obtaining face identity from images
+    aligned_filenames: list, optional
+        Used for when the loader is used for getting face filter embeddings. List of full path to
+        image files that exist in :attr:`path` that are aligned faceswap images
+    """
+    def __init__(self,
+                 path: Union[str, List[str]],
+                 extractor: Extractor,
+                 aligned_filenames: Optional[List[str]] = None) -> None:
+        logger.debug("Initializing %s: (path: %s, extractor: %s, aligned_filenames: %s)",
+                     self.__class__.__name__, path, extractor, aligned_filenames)
+        self._images = ImagesLoader(path, fast_count=True)
+        self._extractor = extractor
+        self._threads: List[MultiThread] = []
+        self._aligned_filenames = [] if aligned_filenames is None else aligned_filenames
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def is_video(self) -> bool:
+        """ bool: ``True`` if the input location is a video file, ``False`` if it is a folder of
+        images """
+        return self._images.is_video
+
+    @property
+    def file_list(self) -> List[str]:
+        """ list: A full list of files in the source location. If the input is a video
+        then this is a list of dummy filenames as corresponding to an alignments file """
+        return self._images.file_list
+
+    @property
+    def process_count(self) -> int:
+        """ int: The number of images or video frames to be processed (IE the total count less
+        items that are to be skipped from the :attr:`skip_list`)"""
+        return self._images.process_count
+
+    def add_skip_list(self, skip_list: List[int]) -> None:
+        """ Add a skip list to the :class:`ImagesLoader`
+
+        Parameters
+        ----------
+        skip_list: list
+            A list of indices corresponding to the frame indices that should be skipped by the
+            :func:`load` function.
+        """
         self._images.add_skip_list(skip_list)
 
-    def process(self) -> None:
-        """ The entry point for triggering the Extraction Process.
-
-        Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
-        """
-        # from lib.queue_manager import queue_manager ; queue_manager.debug_monitor(3)
+    def launch(self) -> None:
+        """ Launch the image loading pipeline """
         self._threaded_redirector("load")
-        self._run_extraction()
+
+    def reload(self, detected_faces: Dict[str, ExtractMedia]) -> None:
+        """ Reload images for multiple pipeline passes """
+        self._threaded_redirector("reload", (detected_faces, ))
+
+    def check_thread_error(self) -> None:
+        """ Check if any errors have occurred in the running threads and raise their errors """
+        for thread in self._threads:
+            thread.check_and_raise_error()
+
+    def join(self) -> None:
+        """ Join all open loader threads """
         for thread in self._threads:
             thread.join()
-        self._alignments.save()
-        finalize(self._images.process_count + self._existing_count,
-                 self._alignments.faces_count,
-                 self._verify_output)
 
     def _threaded_redirector(self, task: str, io_args: Optional[tuple] = None) -> None:
         """ Redirect image input/output tasks to relevant queues in background thread
@@ -275,7 +547,8 @@ class _Extract():  # pylint:disable=too-few-public-methods
             if load_queue.shutdown.is_set():
                 logger.debug("Load Queue: Stop signal received. Terminating")
                 break
-            item = ExtractMedia(filename, image[..., :3])
+            is_aligned = filename in self._aligned_filenames
+            item = ExtractMedia(filename, image[..., :3], is_aligned=is_aligned)
             load_queue.put(item)
         load_queue.put("EOF")
         logger.debug("Load Images: Complete")
@@ -308,6 +581,97 @@ class _Extract():  # pylint:disable=too-few-public-methods
         load_queue.put("EOF")
         logger.debug("Reload Images: Complete")
 
+
+class _Extract():  # pylint:disable=too-few-public-methods
+    """ The Actual extraction process.
+
+    This class is called by the parent :class:`Extract` process
+
+    Parameters
+    ----------
+    extractor: :class:`~plugins.extract.pipeline.Extractor`
+        The extractor pipeline for running extractions
+    arguments: :class:`argparse.Namespace`
+        The arguments to be passed to the extraction process as generated from Faceswap's command
+        line arguments
+    """
+    def __init__(self,
+                 extractor: Extractor,
+                 arguments: Namespace) -> None:
+        logger.debug("Initializing %s: (extractor: %s, args: %s)", self.__class__.__name__,
+                     extractor, arguments)
+        self._args = arguments
+        self._output_dir = None if self._args.skip_saving_faces else get_folder(
+            self._args.output_dir)
+
+        logger.info("Output Directory: %s", self._output_dir)
+        self._loader = PipelineLoader(self._args.input_dir, extractor)
+
+        self._alignments = Alignments(self._args, True, self._loader.is_video)
+        self._extractor = extractor
+
+        self._existing_count = 0
+        self._set_skip_list()
+
+        self._post_process = PostProcess(arguments)
+        self._verify_output = False
+        logger.debug("Initialized %s", self.__class__.__name__)
+
+    @property
+    def _save_interval(self) -> Optional[int]:
+        """ int: The number of frames to be processed between each saving of the alignments file if
+        it has been provided, otherwise ``None`` """
+        if hasattr(self._args, "save_interval"):
+            return self._args.save_interval
+        return None
+
+    @property
+    def _skip_num(self) -> int:
+        """ int: Number of frames to skip if extract_every_n has been provided """
+        return self._args.extract_every_n if hasattr(self._args, "extract_every_n") else 1
+
+    def _set_skip_list(self) -> None:
+        """ Add the skip list to the image loader
+
+        Checks against `extract_every_n` and the existence of alignments data (can exist if
+        `skip_existing` or `skip_existing_faces` has been provided) and compiles a list of frame
+        indices that should not be processed, providing these to :class:`lib.image.ImagesLoader`.
+        """
+        if self._skip_num == 1 and not self._alignments.data:
+            logger.debug("No frames to be skipped")
+            return
+        skip_list = []
+        for idx, filename in enumerate(self._loader.file_list):
+            if idx % self._skip_num != 0:
+                logger.trace("Adding image '%s' to skip list due to "  # type: ignore
+                             "extract_every_n = %s", filename, self._skip_num)
+                skip_list.append(idx)
+            # Items may be in the alignments file if skip-existing[-faces] is selected
+            elif os.path.basename(filename) in self._alignments.data:
+                self._existing_count += 1
+                logger.trace("Removing image: '%s' due to previously existing",  # type: ignore
+                             filename)
+                skip_list.append(idx)
+        if self._existing_count != 0:
+            logger.info("Skipping %s frames due to skip_existing/skip_existing_faces.",
+                        self._existing_count)
+        logger.debug("Adding skip list: %s", skip_list)
+        self._loader.add_skip_list(skip_list)
+
+    def process(self) -> None:
+        """ The entry point for triggering the Extraction Process.
+
+        Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
+        """
+        # from lib.queue_manager import queue_manager ; queue_manager.debug_monitor(3)
+        self._loader.launch()
+        self._run_extraction()
+        self._loader.join()
+        self._alignments.save()
+        finalize(self._loader.process_count + self._existing_count,
+                 self._alignments.faces_count,
+                 self._verify_output)
+
     def _run_extraction(self) -> None:
         """ The main Faceswap Extraction process
 
@@ -318,23 +682,19 @@ class _Extract():  # pylint:disable=too-few-public-methods
         size = self._args.size if hasattr(self._args, "size") else 256
         saver = None if self._args.skip_saving_faces else ImagesSaver(self._output_dir,
                                                                       as_bytes=True)
-        exception = False
-
         for phase in range(self._extractor.passes):
-            if exception:
-                break
             is_final = self._extractor.final_pass
-            detected_faces = {}
+            detected_faces: Dict[str, ExtractMedia] = {}
             self._extractor.launch()
-            self._check_thread_error()
+            self._loader.check_thread_error()
             ph_desc = "Extraction" if self._extractor.passes == 1 else self._extractor.phase_text
             desc = f"Running pass {phase + 1} of {self._extractor.passes}: {ph_desc}"
             for idx, extract_media in enumerate(tqdm(self._extractor.detected_faces(),
-                                                     total=self._images.process_count,
+                                                     total=self._loader.process_count,
                                                      file=sys.stdout,
                                                      desc=desc,
                                                      leave=False)):
-                self._check_thread_error()
+                self._loader.check_thread_error()
                 if is_final:
                     self._output_processing(extract_media, size)
                     self._output_faces(saver, extract_media)
@@ -347,14 +707,9 @@ class _Extract():  # pylint:disable=too-few-public-methods
 
             if not is_final:
                 logger.debug("Reloading images")
-                self._threaded_redirector("reload", (detected_faces, ))
+                self._loader.reload(detected_faces)
         if saver is not None:
             saver.close()
-
-    def _check_thread_error(self) -> None:
-        """ Check if any errors have occurred in the running threads and their errors """
-        for thread in self._threads:
-            thread.check_and_raise_error()
 
     def _output_processing(self, extract_media: ExtractMedia, size: int) -> None:
         """ Prepare faces for output
@@ -402,24 +757,26 @@ class _Extract():  # pylint:disable=too-few-public-methods
         logger.trace("Outputting faces for %s", extract_media.filename)  # type: ignore
         final_faces = []
         filename = os.path.splitext(os.path.basename(extract_media.filename))[0]
-        extension = ".png"
 
         skip_idx = 0
         for face_id, face in enumerate(extract_media.detected_faces):
             real_face_id = face_id - skip_idx
-            output_filename = f"{filename}_{real_face_id}{extension}"
-            meta = dict(alignments=face.to_png_meta(),
-                        source=dict(alignments_version=self._alignments.version,
-                                    original_filename=output_filename,
-                                    face_index=real_face_id,
-                                    source_filename=os.path.basename(extract_media.filename),
-                                    source_is_video=self._images.is_video,
-                                    source_frame_dims=extract_media.image_size))
-            image = encode_image(face.aligned.face, extension, metadata=meta)
+            output_filename = f"{filename}_{real_face_id}.png"
+            aligned = face.aligned.face
+            assert aligned is not None
+            meta: PNGHeaderDict = dict(
+                alignments=face.to_png_meta(),
+                source=dict(alignments_version=self._alignments.version,
+                            original_filename=output_filename,
+                            face_index=real_face_id,
+                            source_filename=os.path.basename(extract_media.filename),
+                            source_is_video=self._loader.is_video,
+                            source_frame_dims=extract_media.image_size))
+            image = encode_image(aligned, ".png", metadata=meta)
 
             sub_folder = extract_media.sub_folders[face_id]
             # Binned faces shouldn't risk filename clash, so just use original id
-            out_name = output_filename if not sub_folder else f"{filename}_{face_id}{extension}"
+            out_name = output_filename if not sub_folder else f"{filename}_{face_id}.png"
 
             if saver is not None:
                 saver.save(out_name, image, sub_folder)

@@ -19,7 +19,7 @@ from plugins.extract.pipeline import Extractor, ExtractMedia
 if TYPE_CHECKING:
     from argparse import Namespace
     from lib.align.aligned_face import CenteringType
-    from lib.align.alignments import AlignmentFileDict
+    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict, PNGHeaderSourceDict
     from lib.queue_manager import EventQueue
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
@@ -125,9 +125,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             logger.debug("Update type `output` selected. Not launching extractor")
             return None
         logger.debug("masker: %s", self._mask_type)
-        extractor = Extractor(None, None, self._mask_type,
-                              exclude_gpus=exclude_gpus,
-                              image_is_aligned=self._input_is_faces)
+        extractor = Extractor(None, None, self._mask_type, exclude_gpus=exclude_gpus)
         extractor.launch()
         logger.debug(extractor)
         return extractor
@@ -172,7 +170,7 @@ class Mask():  # pylint:disable=too-few-public-methods
     def _process_face(self,
                       filename: str,
                       image: np.ndarray,
-                      metadata: Dict[str, Any]) -> Optional["ExtractMedia"]:
+                      metadata: "PNGHeaderDict") -> Optional["ExtractMedia"]:
         """ Process a single face when masking from face images
 
         filename: str
@@ -190,12 +188,12 @@ class Mask():  # pylint:disable=too-few-public-methods
         """
         frame_name = metadata["source"]["source_filename"]
         face_index = metadata["source"]["face_index"]
-        alignment = self._alignments.get_faces_in_frame(frame_name)
-        if not alignment or face_index > len(alignment) - 1:
+        alignments = self._alignments.get_faces_in_frame(frame_name)
+        if not alignments or face_index > len(alignments) - 1:
             self._counts["skip"] += 1
             logger.warning("Skipping Face not found in alignments file: '%s'", filename)
             return None
-        alignment = alignment[face_index]
+        alignment = alignments[face_index]
         self._counts["face"] += 1
 
         if self._check_for_missing(frame_name, face_index, alignment):
@@ -207,7 +205,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             self._save(frame_name, face_index, detected_face)
             return None
 
-        media = ExtractMedia(filename, image, detected_faces=[detected_face])
+        media = ExtractMedia(filename, image, detected_faces=[detected_face], is_aligned=True)
         media.add_frame_metadata(metadata["source"])
         self._counts["update"] += 1
         return media
@@ -236,7 +234,7 @@ class Mask():  # pylint:disable=too-few-public-methods
                     logger.warning("Legacy face not found in alignments file. This face has not "
                                    "been updated: '%s'", filename)
                     continue
-            if "source_frame_dims" not in metadata["source"]:
+            if not metadata.get("source_frame_dims"):
                 logger.error("The faces need to be re-extracted as at least some of them do not "
                              "contain information required to correctly generate masks.")
                 logger.error("You can re-extract the face-set by using the Alignments Tool's "
@@ -404,8 +402,8 @@ class Mask():  # pylint:disable=too-few-public-methods
                          frame_name, face_index)
 
             self._alignments.update_face(frame_name, face_index, face.to_alignment())
-            metadata = dict(alignments=face.to_png_meta(),
-                            source=extractor_output.frame_metadata)
+            metadata: "PNGHeaderDict" = dict(alignments=face.to_png_meta(),
+                                             source=extractor_output.frame_metadata)
             self._faces_saver.save(extractor_output.filename,
                                    encode_image(extractor_output.image, ".png", metadata=metadata))
 
