@@ -636,15 +636,16 @@ class AlignedFilter():
             List of bools corresponding to any of the input DetectedFace objects that passed a
             test. ``False`` the face passed the test. ``True`` it failed
         """
-        retval = [False for _ in range(len(faces))]
+        retval = [True for _ in range(len(faces))]
         for idx, face in enumerate(faces):
             aligned = AlignedFace(landmarks=face.landmarks_xy)
             if self._scale_test(aligned, minimum_dimension) is not None:
-                retval[idx] = True
                 continue
             if 0.0 < self._distance < aligned.average_distance:
-                retval[idx] = True
                 continue
+            if not -self._roll <= aligned.pose.roll <= self._roll:
+                continue
+            retval[idx] = False
 
         return retval
 

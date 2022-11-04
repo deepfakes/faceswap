@@ -171,17 +171,17 @@ class Filter():
 
     Parameters
     ----------
-    filter_files: str, list or ``None``
+    filter_files: list or ``None``
         The list of filter file(s) passed in as command line arguments
-    nfilter_files: str, list or ``None``
+    nfilter_files: list or ``None``
         The list of nfilter file(s) passed in as command line arguments
     extractor: :class:`~plugins.extract.pipeline.Extractor`
         The extractor pipeline for obtaining face identity from images
     """
     def __init__(self,
                  threshold: float,
-                 filter_files: Optional[Union[str, List[str]]],
-                 nfilter_files: Optional[Union[str, List[str]]],
+                 filter_files: Optional[List[str]],
+                 nfilter_files: Optional[List[str]],
                  extractor: Extractor) -> None:
         logger.debug("Initializing %s: (threshold: %s, filter_files: %s, nfilter_files: %s "
                      "extractor: %s)", self.__class__.__name__, threshold, filter_files,
@@ -230,16 +230,15 @@ class Filter():
 
     @classmethod
     def _validate_inputs(cls,
-                         filter_files: Optional[Union[str, List[str]]],
-                         nfilter_files: Optional[Union[str, List[str]]]) -> Tuple[List[str],
-                                                                                  List[str]]:
+                         filter_files: Optional[List[str]],
+                         nfilter_files: Optional[List[str]]) -> Tuple[List[str], List[str]]:
         """ Validates that the given filter/nfilter files exist, are image files and are unique
 
         Parameters
         ----------
-        filter_files: str, list or ``None``
+        filter_files: list or ``None``
             The list of filter file(s) passed in as command line arguments
-        nfilter_files: str, list or ``None``
+        nfilter_files: list or ``None``
             The list of nfilter file(s) passed in as command line arguments
 
         Returns
@@ -251,9 +250,19 @@ class Filter():
         """
         error = False
         retval: List[List[str]] = []
+
         for files in (filter_files, nfilter_files):
-            filt_files = [files] if isinstance(files, str) else files
-            filt_files = [] if filt_files is None else filt_files
+
+            if isinstance(files, list) and len(files) == 1 and os.path.isdir(files[0]):
+                # Get images from folder, if folder passed in
+                dirname = files[0]
+                files = [os.path.join(dirname, fname)
+                         for fname in os.listdir(dirname)
+                         if os.path.splitext(fname)[-1].lower() in _image_extensions]
+                logger.debug("Collected files from folder '%s': %s", dirname,
+                             [os.path.basename(f) for f in files])
+
+            filt_files = [] if files is None else files
             for file in filt_files:
                 if (not os.path.isfile(file) or
                         os.path.splitext(file)[-1].lower() not in _image_extensions):
@@ -297,7 +306,7 @@ class Filter():
             ``True`` if the image is a faceswap extracted image otherwise ``False``
         """
         if os.path.splitext(filename)[-1].lower() != ".png":
-            logger.info("'%s' not a png. Returning empty array", filename)
+            logger.debug("'%s' not a png. Returning empty array", filename)
             return np.array([]), False
 
         meta = read_image_meta(filename)
@@ -748,12 +757,11 @@ class _Extract():  # pylint:disable=too-few-public-methods
         logger.trace("Outputting faces for %s", extract_media.filename)  # type: ignore
         final_faces = []
         filename = os.path.splitext(os.path.basename(extract_media.filename))[0]
-        extension = ".png"
 
         skip_idx = 0
         for face_id, face in enumerate(extract_media.detected_faces):
             real_face_id = face_id - skip_idx
-            output_filename = f"{filename}_{real_face_id}{extension}"
+            output_filename = f"{filename}_{real_face_id}.png"
             aligned = face.aligned.face
             assert aligned is not None
             meta: PNGHeaderDict = dict(
@@ -764,11 +772,11 @@ class _Extract():  # pylint:disable=too-few-public-methods
                             source_filename=os.path.basename(extract_media.filename),
                             source_is_video=self._loader.is_video,
                             source_frame_dims=extract_media.image_size))
-            image = encode_image(aligned, extension, metadata=meta)
+            image = encode_image(aligned, ".png", metadata=meta)
 
             sub_folder = extract_media.sub_folders[face_id]
             # Binned faces shouldn't risk filename clash, so just use original id
-            out_name = output_filename if not sub_folder else f"{filename}_{face_id}{extension}"
+            out_name = output_filename if not sub_folder else f"{filename}_{face_id}.png"
 
             if saver is not None:
                 saver.save(out_name, image, sub_folder)

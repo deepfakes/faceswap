@@ -169,12 +169,18 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             batch.scale.append(scale)
             batch.pad.append(pad)
 
-        if batch:
+        if batch.filename:
             logger.trace("Returning batch: %s",  # type: ignore
                          {k: len(v) if isinstance(v, (list, np.ndarray)) else v
                           for k, v in batch.__dict__.items()})
         else:
             logger.trace(item)  # type:ignore
+
+        if not exhausted and not batch.filename:
+            # This occurs when face filter is fed aligned faces.
+            # Need to re-run until EOF is hit
+            return self.get_batch(queue)
+
         return exhausted, batch
 
     # <<< FINALIZE METHODS>>> #

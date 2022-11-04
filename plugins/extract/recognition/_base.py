@@ -406,8 +406,8 @@ class IdentityFilter():
                       sub_folders: List[Optional[str]],
                       should_filter: List[bool]) -> List[DetectedFace]:
         """ Filter the detected faces, either removing filtered faces from the list of detected
-        faces or setting the output subfolder to `"_identity"` for any filtered faces if saving
-        output is enabled.
+        faces or setting the output subfolder to `"_identity_filt"` for any filtered faces if
+        saving output is enabled.
 
         Parameters
         ----------
@@ -440,7 +440,7 @@ class IdentityFilter():
                 # Keep the face if not marked as filtered or we are to output to a subfolder
                 retval.append(face)
             if to_filter and self._save_output:
-                sub_folders[idx] = "_identity"
+                sub_folders[idx] = "_identity_filt"
 
         return retval
 
@@ -491,4 +491,4 @@ class IdentityFilter():
         """ Output the counts of filtered items """
         if not self._active or not self._counts:
             return
-        logger.info("Identity filtered: (%s)", self._counts)
+        logger.info("Identity filtered (%s): %s", self._threshold, self._counts)
