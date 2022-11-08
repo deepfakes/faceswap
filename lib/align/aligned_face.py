@@ -234,6 +234,11 @@ class _FaceCache:  # pylint:disable=too-many-instance-attributes
     average_distance: float, optional
         The average distance of the core landmarks (18-67) from the mean face that was used for
         aligning the image.  Default: `0.0`
+    relative_eye_mouth_position: float, optional
+        A float value representing the relative position of the lowest eye/eye-brow point to the
+        highest mouth point. Positive values indicate that eyes/eyebrows are aligned above the
+        mouth, negative values indicate that eyes/eyebrows are misaligned below the mouth.
+        Default: `0.0`
     adjusted_matrix: :class:`numpy.ndarray`, optional
         The 3x2 transformation matrix for extracting and aligning the core face area out of the
         original frame with padding and sizing applied. Default: ``None``
@@ -251,6 +256,7 @@ class _FaceCache:  # pylint:disable=too-many-instance-attributes
     landmarks: Optional[np.ndarray] = None
     landmarks_normalized: Optional[np.ndarray] = None
     average_distance: float = 0.0
+    relative_eye_mouth_position: float = 0.0
     adjusted_matrix: Optional[np.ndarray] = None
     interpolators: Tuple[int, int] = (0, 0)
     cropped_roi: Dict[CenteringType, np.ndarray] = field(default_factory=dict)
@@ -463,6 +469,22 @@ class AlignedFace():
                 logger.trace("average_distance: %s", average_distance)  # type: ignore
                 self._cache.average_distance = average_distance
         return self._cache.average_distance
+
+    @property
+    def relative_eye_mouth_position(self) -> float:
+        """ float: Value representing the relative position of the lowest eye/eye-brow point to the
+        highest mouth point. Positive values indicate that eyes/eyebrows are aligned above the
+        mouth, negative values indicate that eyes/eyebrows are misaligned below the mouth. """
+        with self._cache.lock("relative_eye_mouth_position"):
+            if not self._cache.relative_eye_mouth_position:
+                lowest_eyes = np.max(self.normalized_landmarks[np.r_[17:27, 36:48], 1])
+                highest_mouth = np.min(self.normalized_landmarks[48:68, 1])
+                position = highest_mouth - lowest_eyes
+                logger.trace("lowest_eyes: %s, highest_mouth: %s, "  # type: ignore
+                             "relative_eye_mouth_position: %s", lowest_eyes, highest_mouth,
+                             position)
+                self._cache.relative_eye_mouth_position = position
+        return self._cache.relative_eye_mouth_position
 
     @classmethod
     def _padding_from_coverage(cls, size: int, coverage_ratio: float) -> Dict[CenteringType, int]:
