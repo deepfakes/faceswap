@@ -88,6 +88,17 @@ class Config(FaceswapConfig):
             "be safely disgarded.")
         self.add_item(
             section=section,
+            title="filter_refeed",
+            datatype=bool,
+            default=True,
+            group="filters",
+            info="If enabled, and re-feed has been selected for extraction, then interim "
+                 "alignments will be filtered prior to averaging the final landmarks. This can "
+                 "help improve the final alignments by removing any obvious misaligns from the "
+                 "interim results, and may also help pick up difficult alignments. If disabled, "
+                 "then all re-feed results will be averaged.")
+        self.add_item(
+            section=section,
             title="save_filtered",
             datatype=bool,
             default=False,
