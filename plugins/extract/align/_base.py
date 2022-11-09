@@ -621,7 +621,7 @@ class AlignedFilter():
                 self._counts["features"] += 1
                 if self._save_output:
                     retval.append(face)
-                    sub_folders[idx] = "_align_features"
+                    sub_folders[idx] = "_align_filt_features"
                 continue
 
             min_max = self._scale_test(aligned, minimum_dimension)
@@ -639,7 +639,7 @@ class AlignedFilter():
                     sub_folders[idx] = "_align_filt_distance"
                 continue
 
-            if not 0.0 < abs(aligned.pose.roll) < self._roll:
+            if self._roll != 0.0 and not 0.0 < abs(aligned.pose.roll) < self._roll:
                 self._counts["roll"] += 1
                 if self._save_output:
                     retval.append(face)
@@ -710,7 +710,7 @@ class AlignedFilter():
                 continue
             if 0.0 < self._distance < aligned.average_distance:
                 continue
-            if not 0.0 < abs(aligned.pose.roll) < self._roll:
+            if self._roll != 0.0 and not 0.0 < abs(aligned.pose.roll) < self._roll:
                 continue
             retval[idx] = False
 
