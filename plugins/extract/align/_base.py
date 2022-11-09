@@ -111,7 +111,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self.set_normalize_method(normalize_method)
 
         self._plugin_type = "align"
-        self._filter = AlignedFilter(min_scale=self.config["aligner_min_scale"],
+        self._filter = AlignedFilter(feature_filter=self.config["aligner_features"],
+                                     min_scale=self.config["aligner_min_scale"],
                                      max_scale=self.config["aligner_max_scale"],
                                      distance=self.config["aligner_distance"],
                                      roll=self.config["aligner_roll"],
@@ -537,6 +538,9 @@ class AlignedFilter():
 
     Parameters
     ----------
+    feature_filter: bool
+        ``True`` to enable filter to check relative position of eyes/eyebrows and mouth. ``False``
+        to disable.
     min_scale: float
         Filters out faces that have been aligned at below this value as a multiplier of the
         minimum frame dimension. Set to ``0`` for off.
@@ -556,22 +560,33 @@ class AlignedFilter():
         ``True`` to disable the filter regardless of config options. Default: ``False``
     """
     def __init__(self,
+                 feature_filter: bool,
                  min_scale: float,
                  max_scale: float,
                  distance: float,
                  roll: float,
                  save_output: bool,
                  disable: bool = False) -> None:
-        logger.debug("Initializing %s: (min_scale: %s, max_scale: %s, distance: %s, roll, %s"
-                     "save_output: %s, disable: %s)", self.__class__.__name__, min_scale,
-                     max_scale, distance, roll, save_output, disable)
+        logger.debug("Initializing %s: (feature_filter: %s, min_scale: %s, max_scale: %s, "
+                     "distance: %s, roll, %s, save_output: %s, disable: %s)",
+                     self.__class__.__name__, feature_filter, min_scale, max_scale, distance, roll,
+                     save_output, disable)
+        self._features = feature_filter
         self._min_scale = min_scale
         self._max_scale = max_scale
         self._distance = distance / 100.
         self._roll = roll
         self._save_output = save_output
-        self._active = not disable and (max_scale > 0.0 or min_scale > 0.0 or distance > 0.0)
-        self._counts: Dict[str, int] = dict(min_scale=0, max_scale=0, distance=0, roll=0)
+        self._active = not disable and (feature_filter or
+                                        max_scale > 0.0 or
+                                        min_scale > 0.0 or
+                                        distance > 0.0 or
+                                        roll > 0.0)
+        self._counts: Dict[str, int] = dict(features=0,
+                                            min_scale=0,
+                                            max_scale=0,
+                                            distance=0,
+                                            roll=0)
         logger.debug("Initialized %s: ", self.__class__.__name__)
 
     def __call__(self, faces: List[DetectedFace], minimum_dimension: int
@@ -602,6 +617,13 @@ class AlignedFilter():
         for idx, face in enumerate(faces):
             aligned = AlignedFace(landmarks=face.landmarks_xy, centering="face")
 
+            if self._features and aligned.relative_eye_mouth_position < 0.0:
+                self._counts["features"] += 1
+                if self._save_output:
+                    retval.append(face)
+                    sub_folders[idx] = "_align_filt_features"
+                continue
+
             min_max = self._scale_test(aligned, minimum_dimension)
             if min_max in ("min", "max"):
                 self._counts[f"{min_max}_scale"] += 1
@@ -617,7 +639,7 @@ class AlignedFilter():
                     sub_folders[idx] = "_align_filt_distance"
                 continue
 
-            if not 0.0 < abs(aligned.pose.roll) < self._roll:
+            if self._roll != 0.0 and not 0.0 < abs(aligned.pose.roll) < self._roll:
                 self._counts["roll"] += 1
                 if self._save_output:
                     retval.append(face)
@@ -682,11 +704,13 @@ class AlignedFilter():
         retval = [True for _ in range(len(faces))]
         for idx, (face, dim) in enumerate(zip(faces, minimum_dimension)):
             aligned = AlignedFace(landmarks=face.landmarks_xy)
+            if self._features and aligned.relative_eye_mouth_position < 0.0:
+                continue
             if self._scale_test(aligned, dim) is not None:
                 continue
             if 0.0 < self._distance < aligned.average_distance:
                 continue
-            if not 0.0 < abs(aligned.pose.roll) < self._roll:
+            if self._roll != 0.0 and not 0.0 < abs(aligned.pose.roll) < self._roll:
                 continue
             retval[idx] = False
 

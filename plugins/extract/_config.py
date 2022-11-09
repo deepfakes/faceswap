@@ -88,6 +88,15 @@ class Config(FaceswapConfig):
             "be safely disgarded.")
         self.add_item(
             section=section,
+            title="aligner_features",
+            datatype=bool,
+            default=True,
+            group="filters",
+            info="Filters out faces where the lowest point of the aligned face's eye or eyebrow "
+            "is lower than the highest point of the aligned face's mouth. Any faces where this "
+            "occurs are misaligned and can be safely disgarded.")
+        self.add_item(
+            section=section,
             title="filter_refeed",
             datatype=bool,
             default=True,
