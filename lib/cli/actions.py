@@ -7,6 +7,7 @@ as well as adding a mechanism for indicating to the GUI how specific options sho
 
 import argparse
 import os
+from typing import Any, List, Optional, Tuple, Union
 
 
 # << FILE HANDLING >>
@@ -18,7 +19,7 @@ class _FullPaths(argparse.Action):  # pylint: disable=too-few-public-methods
     called directly. It is the base class for the various different file handling
     methods.
     """
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
         if isinstance(values, (list, tuple)):
             vals = [os.path.abspath(os.path.expanduser(val)) for val in values]
         else:
@@ -68,7 +69,7 @@ class FileFullPaths(_FullPaths):
     >>>        filetypes="video))"
     """
     # pylint: disable=too-few-public-methods
-    def __init__(self, *args, filetypes=None, **kwargs):
+    def __init__(self, *args, filetypes: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.filetypes = filetypes
 
@@ -110,7 +111,7 @@ class FilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
     >>>        filetypes="image",
     >>>        nargs="+"))
     """
-    def __init__(self, *args, filetypes=None, **kwargs):
+    def __init__(self, *args, filetypes: Optional[str] = None, **kwargs) -> None:
         if kwargs.get("nargs", None) is None:
             opt = kwargs["option_strings"]
             raise ValueError(f"nargs must be provided for FilesFullPaths: {opt}")
@@ -144,7 +145,6 @@ class DirOrFileFullPaths(FileFullPaths):  # pylint: disable=too-few-public-metho
     >>>        action=DirOrFileFullPaths,
     >>>        filetypes="video))"
     """
-    pass  # pylint: disable=unnecessary-pass
 
 
 class DirOrFilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
@@ -175,7 +175,20 @@ class DirOrFilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-meth
     >>>        action=DirOrFileFullPaths,
     >>>        filetypes="video))"
     """
-    pass  # pylint: disable=unnecessary-pass
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
+        """ Override :class:`_FullPaths` __call__ function.
+
+        The input for this option can be a space separated list of files or a single folder.
+        Folders can have spaces in them, so we don't want to blindly expand the paths.
+
+        We check whether the input can be resolved to a folder first before expanding.
+        """
+        assert isinstance(values, (list, tuple))
+        folder = os.path.abspath(os.path.expanduser(" ".join(values)))
+        if os.path.isdir(folder):
+            setattr(namespace, self.dest, [folder])
+        else:  # file list so call parent method
+            super().__call__(parser, namespace, values, option_string)
 
 
 class SaveFileFullPaths(FileFullPaths):
@@ -235,7 +248,11 @@ class ContextFullPaths(FileFullPaths):
     >>>        action_option="-a"))
     """
     # pylint: disable=too-few-public-methods, too-many-arguments
-    def __init__(self, *args, filetypes=None, action_option=None, **kwargs):
+    def __init__(self,
+                 *args,
+                 filetypes: Optional[str] = None,
+                 action_option: Optional[str] = None,
+                 **kwargs) -> None:
         opt = kwargs["option_strings"]
         if kwargs.get("nargs", None) is not None:
             raise ValueError(f"nargs not allowed for ContextFullPaths: {opt}")
@@ -246,7 +263,7 @@ class ContextFullPaths(FileFullPaths):
         super().__init__(*args, filetypes=filetypes, **kwargs)
         self.action_option = action_option
 
-    def _get_kwargs(self):
+    def _get_kwargs(self) -> List[Tuple[str, Any]]:
         names = ["option_strings",
                  "dest",
                  "nargs",
@@ -280,7 +297,7 @@ class Radio(argparse.Action):  # pylint: disable=too-few-public-methods
     >>>        action=Radio,
     >>>        choices=["foo", "bar"))
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         opt = kwargs["option_strings"]
         if kwargs.get("nargs", None) is not None:
             raise ValueError(f"nargs not allowed for Radio buttons: {opt}")
@@ -288,7 +305,7 @@ class Radio(argparse.Action):  # pylint: disable=too-few-public-methods
             raise ValueError(f"Choices must be provided for Radio buttons: {opt}")
         super().__init__(*args, **kwargs)
 
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
         setattr(namespace, self.dest, values)
 
 
@@ -308,7 +325,7 @@ class MultiOption(argparse.Action):  # pylint: disable=too-few-public-methods
     >>>        action=MultiOption,
     >>>        choices=["foo", "bar"))
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         opt = kwargs["option_strings"]
         if not kwargs.get("nargs", []):
             raise ValueError(f"nargs must be provided for MultiOption: {opt}")
@@ -316,7 +333,7 @@ class MultiOption(argparse.Action):  # pylint: disable=too-few-public-methods
             raise ValueError(f"Choices must be provided for MultiOption: {opt}")
         super().__init__(*args, **kwargs)
 
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
         setattr(namespace, self.dest, values)
 
 
@@ -363,7 +380,11 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
     >>>        type=float,
     >>>        default=5.00))
     """
-    def __init__(self, *args, min_max=None, rounding=None, **kwargs):
+    def __init__(self,
+                 *args,
+                 min_max: Optional[Union[Tuple[int, int], Tuple[float, float]]] = None,
+                 rounding: Optional[int] = None,
+                 **kwargs) -> None:
         opt = kwargs["option_strings"]
         if kwargs.get("nargs", None) is not None:
             raise ValueError(f"nargs not allowed for Slider: {opt}")
@@ -380,7 +401,7 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
         self.min_max = min_max
         self.rounding = rounding
 
-    def _get_kwargs(self):
+    def _get_kwargs(self) -> List[Tuple[str, Any]]:
         names = ["option_strings",
                  "dest",
                  "nargs",
@@ -394,5 +415,5 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
                  "rounding"]  # Decimal places to round floats to or step interval for ints
         return [(name, getattr(self, name)) for name in names]
 
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
         setattr(namespace, self.dest, values)

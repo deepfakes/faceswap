@@ -229,7 +229,37 @@ class Filter():
         return retval
 
     @classmethod
-    def _validate_inputs(cls,
+    def _files_from_folder(cls, input_location: List[str]) -> List[str]:
+        """ Test whether the input location is a folder and if so, return the list of contained
+        image files, otherwise return the original input location
+
+        Parameters
+        ---------
+        input_files: list
+            A list of full paths to individual files or to a folder location
+
+        Returns
+        -------
+        bool
+            Either the original list of files provided, or the image files that exist in the
+            provided folder location
+        """
+        if not input_location or len(input_location) > 1:
+            return input_location
+
+        test_folder = input_location[0]
+        if not os.path.isdir(test_folder):
+            logger.debug("'%s' is not a folder. Returning original list", test_folder)
+            return input_location
+
+        retval = [os.path.join(test_folder, fname)
+                  for fname in os.listdir(test_folder)
+                  if os.path.splitext(fname)[-1].lower() in _image_extensions]
+        logger.info("Collected files from folder '%s': %s", test_folder,
+                    [os.path.basename(f) for f in retval])
+        return retval
+
+    def _validate_inputs(self,
                          filter_files: Optional[List[str]],
                          nfilter_files: Optional[List[str]]) -> Tuple[List[str], List[str]]:
         """ Validates that the given filter/nfilter files exist, are image files and are unique
@@ -252,17 +282,7 @@ class Filter():
         retval: List[List[str]] = []
 
         for files in (filter_files, nfilter_files):
-
-            if isinstance(files, list) and len(files) == 1 and os.path.isdir(files[0]):
-                # Get images from folder, if folder passed in
-                dirname = files[0]
-                files = [os.path.join(dirname, fname)
-                         for fname in os.listdir(dirname)
-                         if os.path.splitext(fname)[-1].lower() in _image_extensions]
-                logger.debug("Collected files from folder '%s': %s", dirname,
-                             [os.path.basename(f) for f in files])
-
-            filt_files = [] if files is None else files
+            filt_files = [] if files is None else self._files_from_folder(files)
             for file in filt_files:
                 if (not os.path.isfile(file) or
                         os.path.splitext(file)[-1].lower() not in _image_extensions):
