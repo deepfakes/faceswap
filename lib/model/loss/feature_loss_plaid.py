@@ -378,4 +378,4 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
         val = K.sum(K.concatenate(res), axis=None)
 
         retval = (val, res) if self._ret_per_layer else val
-        return retval
+        return retval / 10.0   # Reduce by factor of 10 'cos this loss is STRONG
