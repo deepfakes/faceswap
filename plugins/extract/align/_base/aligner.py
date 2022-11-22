@@ -237,6 +237,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             exhausted = True
             logger.debug("All items processed. Returning empty batch")
             self._filter.output_counts()
+            self._eof_seen = False  # Reset for plugin re-use
             return exhausted, AlignerBatch(batch_id=-1)
 
         return None
@@ -288,7 +289,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             if item == "EOF":
                 logger.debug("EOF received")
                 self._eof_seen = True
-                exhausted = not self._re_align.items_tracked
+                exhausted = not self._re_align.active
                 break
 
             # Put frames with no faces or are already aligned into the out queue

@@ -73,11 +73,11 @@ class Align(Aligner):
             The current batch to process input for
         """
         assert isinstance(batch, AlignerBatch)
-        logger.trace("Aligning faces around center")  # type:ignore
+        logger.trace("Aligning faces around center")  # type:ignore[attr-defined]
         center_scale = self.get_center_scale(batch.detected_faces)
         batch.feed = np.array(self.crop(batch, center_scale))[..., :3]
         batch.data.append(dict(center_scale=center_scale))
-        logger.trace("Aligned image around center")  # type:ignore
+        logger.trace("Aligned image around center")  # type:ignore[attr-defined]
 
     def get_center_scale(self, detected_faces: List["DetectedFace"]) -> np.ndarray:
         """ Get the center and set scale of bounding box
@@ -92,7 +92,7 @@ class Align(Aligner):
         :class:`numpy.ndarray`
             The center and scale of the bounding box
         """
-        logger.trace("Calculating center and scale")  # type:ignore
+        logger.trace("Calculating center and scale")  # type:ignore[attr-defined]
         center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
         for index, face in enumerate(detected_faces):
             x_center = (cast(int, face.left) + face.right) / 2.0
@@ -101,7 +101,7 @@ class Align(Aligner):
             center_scale[index, :, 0] = np.full(68, x_center, dtype='float32')
             center_scale[index, :, 1] = np.full(68, y_center, dtype='float32')
             center_scale[index, :, 2] = np.full(68, scale, dtype='float32')
-        logger.trace("Calculated center and scale: %s", center_scale)  # type:ignore
+        logger.trace("Calculated center and scale: %s", center_scale)  # type:ignore[attr-defined]
         return center_scale
 
     def _crop_image(self,
@@ -159,7 +159,7 @@ class Align(Aligner):
         list
             List of cropped images for the batch
         """
-        logger.debug("Cropping images")
+        logger.trace("Cropping images")  # type:ignore[attr-defined]
         batch_shape = center_scale.shape[:2]
         resolutions = np.full(batch_shape, self.input_size, dtype='float32')
         matrix_ones = np.ones(batch_shape + (3,), dtype='float32')
@@ -171,7 +171,7 @@ class Align(Aligner):
         # TODO second pass .. convert to matrix
         new_images = [self._crop_image(image, top_left, bottom_right)
                       for image, top_left, bottom_right in zip(batch.image, upper_left, bot_right)]
-        logger.trace("Cropped images")  # type:ignore
+        logger.trace("Cropped images")  # type:ignore[attr-defined]
         return new_images
 
     @classmethod
@@ -190,7 +190,7 @@ class Align(Aligner):
         resolutions: :class:`numpy.ndarray`
             The resolutions
         """
-        logger.debug("Transforming Points")
+        logger.trace("Transforming Points")  # type:ignore[attr-defined]
         num_images, num_landmarks = points.shape[:2]
         transform_matrix = np.eye(3, dtype='float32')
         transform_matrix = np.repeat(transform_matrix[None, :], num_landmarks, axis=0)
@@ -203,7 +203,7 @@ class Align(Aligner):
         transform_matrix[:, :, 1, 2] = translations[:, :, 1]  # y translation
         new_points = np.einsum('abij, abj -> abi', transform_matrix, points, optimize='greedy')
         retval = new_points[:, :, :2].astype('float32')
-        logger.trace("Transformed Points: %s", retval)  # type:ignore
+        logger.trace("Transformed Points: %s", retval)  # type:ignore[attr-defined]
         return retval
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
@@ -219,11 +219,11 @@ class Align(Aligner):
         :class:`numpy.ndarray`
             The predictions from the aligner
         """
-        logger.trace("Predicting Landmarks")  # type:ignore
+        logger.trace("Predicting Landmarks")  # type:ignore[attr-defined]
         # TODO Remove lazy transpose and change points from predict to use the correct
         # order
         retval = self.model.predict(feed)[-1].transpose(0, 3, 1, 2)
-        logger.trace(retval.shape)  # type:ignore
+        logger.trace(retval.shape)  # type:ignore[attr-defined]
         return retval
 
     def process_output(self, batch: BatchType) -> None:
@@ -246,7 +246,7 @@ class Align(Aligner):
         batch: :class:`AlignerBatch`
             The current batch from the model with :attr:`predictions` populated
         """
-        logger.trace("Obtain points from prediction")  # type:ignore
+        logger.trace("Obtain points from prediction")  # type:ignore[attr-defined]
         num_images, num_landmarks = batch.prediction.shape[:2]
         image_slice = np.repeat(np.arange(num_images)[:, None], num_landmarks, axis=1)
         landmark_slice = np.repeat(np.arange(num_landmarks)[None, :], num_images, axis=0)
@@ -276,4 +276,5 @@ class Align(Aligner):
             batch.landmarks = self.transform(subpixel_landmarks,
                                              batch.data[0]["center_scale"],
                                              resolution)
-        logger.trace("Obtained points from prediction: %s", batch.landmarks)  # type:ignore
+        logger.trace("Obtained points from prediction: %s",  # type:ignore[attr-defined]
+                     batch.landmarks)
