@@ -51,11 +51,27 @@ class Align(Aligner):
         self.vram = 0  # Doesn't use GPU
         self.vram_per_batch = 0
         self.batchsize = 1
+        self.realign_centering = "legacy"
 
     def init_model(self) -> None:
         """ Initialize CV2 DNN Detector Model"""
         self.model = cv2.dnn.readNetFromTensorflow(self.model_path)  # pylint: disable=no-member
         self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)  # pylint: disable=no-member
+
+    def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
+        """ Convert a batch of face images from UINT8 (0-255) to fp32 (0.0-255.0)
+
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The batch of faces in UINT8 format
+
+        Returns
+        -------
+        class: `numpy.ndarray`
+            The batch of faces as fp32
+        """
+        return faces.astype("float32").transpose((0, 3, 1, 2))
 
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction
@@ -71,10 +87,9 @@ class Align(Aligner):
             The batch item with the :attr:`feed` populated and any required :attr:`data` added
         """
         assert isinstance(batch, AlignerBatch)
-        faces, roi, offsets = self.align_image(batch)
-        faces = self._normalize_faces(faces)
+        lfaces, roi, offsets = self.align_image(batch)
+        batch.feed = np.array(lfaces)[..., :3]
         batch.data.append(dict(roi=roi, offsets=offsets))
-        batch.feed = np.array(faces, dtype="float32")[..., :3].transpose((0, 3, 1, 2))
 
     def _get_box_and_offset(self, face: "DetectedFace") -> Tuple[List[int], int]:
         """Obtain the bounding box and offset from a detected face.
@@ -274,8 +289,7 @@ class Align(Aligner):
         assert isinstance(batch, AlignerBatch)
         self.get_pts_from_predict(batch)
 
-    @classmethod
-    def get_pts_from_predict(cls, batch: AlignerBatch):
+    def get_pts_from_predict(self, batch: AlignerBatch):
         """ Get points from predictor and populates the :attr:`landmarks` property
 
         Parameters
@@ -284,13 +298,16 @@ class Align(Aligner):
             The current batch from the model with :attr:`predictions` populated
         """
         landmarks = []
-        for prediction, roi, offset in zip(batch.prediction,
-                                           batch.data[0]["roi"],
-                                           batch.data[0]["offsets"]):
-            points = np.reshape(prediction, (-1, 2))
-            points *= (roi[2] - roi[0])
-            points[:, 0] += (roi[0] - offset[0])
-            points[:, 1] += (roi[1] - offset[1])
-            landmarks.append(points)
-        batch.landmarks = np.array(landmarks)
+        if batch.second_pass:
+            batch.landmarks = batch.prediction.reshape(self.batchsize, -1, 2) * self.input_size
+        else:
+            for prediction, roi, offset in zip(batch.prediction,
+                                               batch.data[0]["roi"],
+                                               batch.data[0]["offsets"]):
+                points = np.reshape(prediction, (-1, 2))
+                points *= (roi[2] - roi[0])
+                points[:, 0] += (roi[0] - offset[0])
+                points[:, 1] += (roi[1] - offset[1])
+                landmarks.append(points)
+            batch.landmarks = np.array(landmarks)
         logger.trace("Predicted Landmarks: %s", batch.landmarks)  # type:ignore

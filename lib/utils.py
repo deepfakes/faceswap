@@ -34,7 +34,7 @@ _image_extensions = [  # pylint:disable=invalid-name
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
-_TF_VERS = None
+_TF_VERS: Optional[float] = None
 ValidBackends = Literal["amd", "nvidia", "cpu", "apple_silicon"]
 
 

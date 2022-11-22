@@ -31,6 +31,7 @@ class Align(Aligner):
         self.vram = 2240
         self.vram_warnings = 512  # Will run at this with warnings
         self.vram_per_batch = 64
+        self.realign_centering = "head"
         self.batchsize: int = self.config["batch-size"]
         self.reference_scale = 200. / 195.
 
@@ -48,6 +49,21 @@ class Align(Aligner):
         placeholder = np.zeros(placeholder_shape, dtype="float32")
         self.model.predict(placeholder)
 
+    def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
+        """ Convert a batch of face images from UINT8 (0-255) to fp32 (0.0-1.0)
+
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The batch of faces in UINT8 format
+
+        Returns
+        -------
+        class: `numpy.ndarray`
+            The batch of faces as fp32 in 0.0 to 1.0 range
+        """
+        return faces.astype("float32") / 255.
+
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction
 
@@ -59,11 +75,9 @@ class Align(Aligner):
         assert isinstance(batch, AlignerBatch)
         logger.trace("Aligning faces around center")  # type:ignore
         center_scale = self.get_center_scale(batch.detected_faces)
-        faces = self.crop(batch, center_scale)
-        logger.trace("Aligned image around center")  # type:ignore
-        faces = self._normalize_faces(faces)
+        batch.feed = np.array(self.crop(batch, center_scale))[..., :3]
         batch.data.append(dict(center_scale=center_scale))
-        batch.feed = np.array(faces, dtype="float32")[..., :3] / 255.0
+        logger.trace("Aligned image around center")  # type:ignore
 
     def get_center_scale(self, detected_faces: List["DetectedFace"]) -> np.ndarray:
         """ Get the center and set scale of bounding box
@@ -115,7 +129,7 @@ class Align(Aligner):
         new_dim = (bottom_right_height - top_left_height,
                    bottom_right_width - top_left_width,
                    3 if image.ndim > 2 else 1)
-        new_img = np.empty(new_dim, dtype=np.uint8)
+        new_img = np.zeros(new_dim, dtype=np.uint8)
 
         new_x = slice(max(0, -top_left_width),
                       min(bottom_right_width, image.shape[1]) - top_left_width)
@@ -256,7 +270,10 @@ class Align(Aligner):
         subpixel_landmarks[:, :, 0] = indices[1] + np.sign(x_subpixel_shift) * 0.25 + 0.5
         subpixel_landmarks[:, :, 1] = indices[0] + np.sign(y_subpixel_shift) * 0.25 + 0.5
 
-        batch.landmarks = self.transform(subpixel_landmarks,
-                                         batch.data[0]["center_scale"],
-                                         resolution)
+        if batch.second_pass:  # Transformation handled by plugin parent for re-aligned faces
+            batch.landmarks = subpixel_landmarks[..., :2] * 4.
+        else:
+            batch.landmarks = self.transform(subpixel_landmarks,
+                                             batch.data[0]["center_scale"],
+                                             resolution)
         logger.trace("Obtained points from prediction: %s", batch.landmarks)  # type:ignore
