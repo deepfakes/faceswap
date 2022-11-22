@@ -67,7 +67,8 @@ class Extract():  # pylint:disable=too-few-public-methods
                                     rotate_images=self._args.rotate_images,
                                     min_size=self._args.min_size,
                                     normalize_method=normalization,
-                                    re_feed=self._args.re_feed)
+                                    re_feed=self._args.re_feed,
+                                    re_align=self._args.re_align)
         self._filter = Filter(self._args.ref_threshold,
                               self._args.filter,
                               self._args.nfilter,
