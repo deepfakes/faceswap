@@ -49,8 +49,9 @@ class Environment():
         ``True`` if the script is being called by Faceswap's internal updater. ``False`` if full
         setup is running. Default: ``False``
     """
+
     def __init__(self, updater: bool = False) -> None:
-        self.conda_required_packages: List[Tuple[str, ...]] = [("tk", )]
+        self.conda_required_packages: List[Tuple[str, ...]] = [("tk",)]
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
@@ -272,6 +273,8 @@ class Environment():
         installed = [re.sub(" +", " ", line.strip())
                      for line in chk.splitlines() if not line.startswith("#")]
         retval = {}
+        if installed.index('\x1b[0m') != -1:
+            installed.remove('\x1b[0m')
         for pkg in installed:
             item = pkg.split(" ")
             retval[item[0]] = item[1]
@@ -427,13 +430,14 @@ class Checks():  # pylint:disable=too-few-public-methods
     environment: :class:`Environment`
         Environment class holding information about the running system
     """
+
     def __init__(self, environment: Environment) -> None:
-        self._env:  Environment = environment
+        self._env: Environment = environment
         self._tips: Tips = Tips()
-    # Checks not required for installer
+        # Checks not required for installer
         if self._env.is_installer:
             return
-    # Checks not required for Apple Silicon
+        # Checks not required for Apple Silicon
         if self._env.enable_apple_silicon:
             return
         self._user_input()
@@ -692,6 +696,7 @@ class Install():  # pylint:disable=too-few-public-methods
         ``True`` if the caller is the Faceswap GUI. Used to prevent output of progress bars
         which get scrambled in the GUI
      """
+
     def __init__(self, environment: Environment, is_gui: bool = False) -> None:
         self._operators = {"==": operator.eq,
                            ">=": operator.ge,
@@ -752,8 +757,8 @@ class Install():  # pylint:disable=too-few-public-methods
             installed_vers = self._env.installed_packages.get(key, "")
 
             if specs and not all(self._operators[spec[0]](
-                [int(s) for s in installed_vers.split(".")],
-                [int(s) for s in spec[1].split(".")])
+                    [int(s) for s in installed_vers.split(".")],
+                    [int(s) for s in spec[1].split(".")])
                                  for spec in specs):
                 self._env.missing_packages.append((key, specs))
 
@@ -974,6 +979,7 @@ class Installer():
     is_gui: bool
         ``True if the process is being called from the Faceswap GUI
     """
+
     def __init__(self,
                  environment: Environment,
                  package: str,
@@ -1061,6 +1067,7 @@ class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
     is_gui: bool
         ``True if the process is being called from the Faceswap GUI
     """
+
     def call(self) -> int:
         """ Install a package using the Pexpect module
 
@@ -1108,6 +1115,7 @@ class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
     is_gui: bool
         ``True if the process is being called from the Faceswap GUI
     """
+
     def __init__(self,
                  environment: Environment,
                  package: str,
@@ -1246,6 +1254,7 @@ class SubProcInstaller(Installer):
     is_gui: bool
         ``True if the process is being called from the Faceswap GUI
     """
+
     def __init__(self,
                  environment: Environment,
                  package: str,
@@ -1295,6 +1304,7 @@ class SubProcInstaller(Installer):
 
 class Tips():
     """ Display installation Tips """
+
     @classmethod
     def docker_no_cuda(cls) -> None:
         """ Output Tips for Docker without Cuda """
