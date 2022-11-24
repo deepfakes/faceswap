@@ -101,7 +101,7 @@ class Config(FaceswapConfig):
             datatype=bool,
             default=True,
             group="filters",
-            info="If enabled, and re-feed has been selected for extraction, then interim "
+            info="If enabled, and 're-feed' has been selected for extraction, then interim "
                  "alignments will be filtered prior to averaging the final landmarks. This can "
                  "help improve the final alignments by removing any obvious misaligns from the "
                  "interim results, and may also help pick up difficult alignments. If disabled, "
@@ -116,3 +116,20 @@ class Config(FaceswapConfig):
                  "extraction process. If disabled, filtered faces are deleted. Note: The faces "
                  "will always be filtered out of the alignments file, regardless of whether you "
                  "keep the faces or not.")
+        self.add_item(
+            section=section,
+            title="realign_refeeds",
+            datatype=bool,
+            default=True,
+            group="re-align",
+            info="If enabled, and 're-align' has been selected for extraction, then all re-feed "
+                 "iterations are re-aligned. If disabled, then only the final averaged output "
+                 "from re-feed will be re-aligned.")
+        self.add_item(
+            section=section,
+            title="filter_realign",
+            datatype=bool,
+            default=True,
+            group="re-align",
+            info="If enabled, and 're-align' has been selected for extraction, then any "
+                 "alignments which would be filtered out will not be re-aligned.")

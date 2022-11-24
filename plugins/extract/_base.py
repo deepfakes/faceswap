@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from .mask._base import MaskerBatch
     from .recognition._base import RecogBatch
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+logger = logging.getLogger(__name__)
 # TODO Run with warnings mode
 
 
@@ -77,7 +77,7 @@ class ExtractorBatch:
         List of :class:`~lib.align.DetectedFace` objects
     filename: list
         List of original frame filenames for the batch
-    feed: :class:`numpy.nd.array`
+    feed: :class:`numpy.ndarray`
         Batch of feed images to feed the net with
     prediction: :class:`numpy.nd.array`
         Batch of predictions. Direct output from the aligner net
@@ -604,6 +604,8 @@ class Extractor():
             batch = self._obtain_batch_item(function, in_queue, out_queue)
             if batch is None:
                 break
+            if not batch.filename:  # Batch not populated. Possible during re-aligns
+                continue
             try:
                 batch = function(batch)
             except tf_errors.UnknownError as err:

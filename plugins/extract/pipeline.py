@@ -90,6 +90,9 @@ class Extractor():
     re_feed: int
         The number of times to re-feed a slightly adjusted bounding box into the aligner.
         Default: `0`
+    re_align: bool, optional
+        ``True`` to obtain landmarks by passing the initially aligned face back through the
+        aligner. Default ``False``
     disable_filter: bool, optional
         Disable all aligner filters regardless of config option. Default: ``False``
 
@@ -111,13 +114,14 @@ class Extractor():
                  min_size: int = 0,
                  normalize_method:  Optional[Literal["none", "clahe", "hist", "mean"]] = None,
                  re_feed: int = 0,
+                 re_align: bool = False,
                  disable_filter: bool = False) -> None:
         logger.debug("Initializing %s: (detector: %s, aligner: %s, masker: %s, recognition: %s, "
                      "configfile: %s, multiprocess: %s, exclude_gpus: %s, rotate_images: %s, "
-                     "min_size: %s, normalize_method: %s, re_feed: %s, disable_filter: %s, )",
-                     self.__class__.__name__, detector, aligner, masker, recognition, configfile,
-                     multiprocess, exclude_gpus, rotate_images, min_size, normalize_method,
-                     re_feed, disable_filter)
+                     "min_size: %s, normalize_method: %s, re_feed: %s, re_align: %s, "
+                     "disable_filter: %s)", self.__class__.__name__, detector, aligner, masker,
+                     recognition, configfile, multiprocess, exclude_gpus, rotate_images, min_size,
+                     normalize_method, re_feed, re_align, disable_filter)
         self._instance = _get_instance()
         maskers = [cast(Optional[str],
                    masker)] if not isinstance(masker, list) else cast(List[Optional[str]], masker)
@@ -134,6 +138,7 @@ class Extractor():
                                        configfile,
                                        normalize_method,
                                        re_feed,
+                                       re_align,
                                        disable_filter)
         self._recognition = self._load_recognition(recognition, configfile)
         self._mask = [self._load_mask(mask, configfile) for mask in maskers]
@@ -581,6 +586,7 @@ class Extractor():
                     configfile: Optional[str],
                     normalize_method: Optional[Literal["none", "clahe", "hist", "mean"]],
                     re_feed: int,
+                    re_align: bool,
                     disable_filter: bool) -> Optional["Aligner"]:
         """ Set global arguments and load aligner plugin
 
@@ -594,6 +600,9 @@ class Extractor():
             Optional normalization method to use
         re_feed: int
             The number of times to adjust the image and re-feed to get an average score
+        re_align: bool
+            ``True`` to obtain landmarks by passing the initially aligned face back through the
+            aligner.
         disable_filter: bool
             Disable all aligner filters regardless of config option
 
@@ -610,6 +619,7 @@ class Extractor():
                                                         configfile=configfile,
                                                         normalize_method=normalize_method,
                                                         re_feed=re_feed,
+                                                        re_align=re_align,
                                                         disable_filter=disable_filter,
                                                         instance=self._instance)
         return plugin
