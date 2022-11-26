@@ -1,0 +1,184 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2021-02-18 23:34-0000\n"
+"PO-Revision-Date: 2022-11-26 21:19+0900\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ko_KR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.2\n"
+
+#: tools/effmpeg/cli.py:15
+msgid "This command allows you to easily execute common ffmpeg tasks."
+msgstr ""
+"이 명령어는 사용자에게 일반 ffmpeg 작업을 쉽게 실행할 수 있도록 해줍니다."
+
+#: tools/effmpeg/cli.py:24
+msgid "A wrapper for ffmpeg for performing image <> video converting."
+msgstr "이미지 <> 비디오 변환을 수행하기 위한 ffmpeg용 wrapper입니다."
+
+#: tools/effmpeg/cli.py:51
+msgid ""
+"R|Choose which action you want ffmpeg ffmpeg to do.\n"
+"L|'extract': turns videos into images \n"
+"L|'gen-vid': turns images into videos \n"
+"L|'get-fps' returns the chosen video's fps.\n"
+"L|'get-info' returns information about a video.\n"
+"L|'mux-audio' add audio from one video to another.\n"
+"L|'rescale' resize video.\n"
+"L|'rotate' rotate video.\n"
+"L|'slice' cuts a portion of the video into a separate video file."
+msgstr ""
+"R|ffmpeg ffmpeg에서 수행할 작업을 선택합니다.\n"
+"L|'extraction': 비디오를 이미지로 바꿉니다.\n"
+"L|'gen-vid': 이미지를 비디오로 바꿉니다.\n"
+"L|'get-fps'는 선택한 비디오의 fps를 반환합니다.\n"
+"L|'get-info'는 동영상에 대한 정보를 반환합니다.\n"
+"L|'mux-audio'는 한 비디오에서 다른 비디오로 오디오를 추가합니다.\n"
+"L|'rescale' 크기 조정 비디오.\n"
+"L|'rotate' 비디오 회전.\n"
+"L| 'slice'는 동영상의 일부를 별도의 동영상 파일로 잘라냅니다."
+
+#: tools/effmpeg/cli.py:65
+msgid "Input file."
+msgstr "입력 파일."
+
+#: tools/effmpeg/cli.py:66 tools/effmpeg/cli.py:73 tools/effmpeg/cli.py:87
+msgid "data"
+msgstr "데이터"
+
+#: tools/effmpeg/cli.py:76
+msgid ""
+"Output file. If no output is specified then: if the output is meant to be a "
+"video then a video called 'out.mkv' will be created in the input directory; "
+"if the output is meant to be a directory then a directory called 'out' will "
+"be created inside the input directory. Note: the chosen output file "
+"extension will determine the file encoding."
+msgstr ""
+"출력 파일. 출력이 지정되지 않은 경우: 출력이 비디오여야 한다면 입력 디렉토리"
+"에 'out.mkv'라는 비디오가 생성됩니다. 출력이 디렉토리여야 한다면 입력 디렉토"
+"리 내에 'out'이라는 디렉터리가 생성됩니다. 참고: 선택한 출력 파일 확장자가 파"
+"일 인코딩을 결정합니다."
+
+#: tools/effmpeg/cli.py:89
+msgid "Path to reference video if 'input' was not a video."
+msgstr "만약 input이 비디오가 아닐 경우 참고 비디으의 경로."
+
+#: tools/effmpeg/cli.py:95 tools/effmpeg/cli.py:105 tools/effmpeg/cli.py:142
+#: tools/effmpeg/cli.py:171
+msgid "output"
+msgstr "출력"
+
+#: tools/effmpeg/cli.py:97
+msgid ""
+"Provide video fps. Can be an integer, float or fraction. Negative values "
+"will will make the program try to get the fps from the input or reference "
+"videos."
+msgstr ""
+"비디오 fps를 제공합니다. 정수, 부동 또는 분수가 될 수 있습니다. 음수 값을 지"
+"정하면 프로그램이 입력 또는 참조 비디오에서 fps를 가져오려고 합니다."
+
+#: tools/effmpeg/cli.py:107
+msgid ""
+"Image format that extracted images should be saved as. '.bmp' will offer the "
+"fastest extraction speed, but will take the most storage space. '.png' will "
+"be slower but will take less storage."
+msgstr ""
+"추출된 이미지의 확장자는 '.bmp'로 저장되어야 합니다. '.bmp'는 가장 빠른 추출 "
+"속도를 제공하지만 가장 많은 저장 공간을 차지합니다. '.png'은 속도는 더 느리지"
+"만 저장 공간은 더 적게 차지합니다."
+
+#: tools/effmpeg/cli.py:114 tools/effmpeg/cli.py:123 tools/effmpeg/cli.py:132
+msgid "clip"
+msgstr "클립"
+
+#: tools/effmpeg/cli.py:116
+msgid ""
+"Enter the start time from which an action is to be applied. Default: "
+"00:00:00, in HH:MM:SS format. You can also enter the time with or without "
+"the colons, e.g. 00:0000 or 026010."
+msgstr ""
+"작업을 적용할 시작 시간을 입력합니다. 기본값: 00:00:00, HH:MM:SS 형식입니다. "
+"콜론을 포함하거나 포함하지 않은 시간(예: 00:0000 또는 026010)을 입력할 수도 "
+"있습니다."
+
+#: tools/effmpeg/cli.py:125
+msgid ""
+"Enter the end time to which an action is to be applied. If both an end time "
+"and duration are set, then the end time will be used and the duration will "
+"be ignored. Default: 00:00:00, in HH:MM:SS."
+msgstr ""
+"적용된 작업의 종료 시간을 입력합니다. 종료 시간과 기간이 모두 설정된 경우 종"
+"료 시간이 사용되고 기간이 무시됩니다. 기본값: 00:00:00, HH:MM:SS."
+
+#: tools/effmpeg/cli.py:134
+msgid ""
+"Enter the duration of the chosen action, for example if you enter 00:00:10 "
+"for slice, then the first 10 seconds after and including the start time will "
+"be cut out into a new video. Default: 00:00:00, in HH:MM:SS format. You can "
+"also enter the time with or without the colons, e.g. 00:0000 or 026010."
+msgstr ""
+"선택한 작업의 지속 시간을 입력합니다. 예를 들어 슬라이스에 00:00:10을 입력하"
+"면 시작 시간 이후의 첫 10초가 새 비디오로 잘라집니다. 기본값: 00:00:00, HH:"
+"MM:SS 형식입니다. 콜론을 포함하거나 포함하지 않은 시간(예: 00:0000 또는 "
+"026010)을 입력할 수도 있습니다."
+
+#: tools/effmpeg/cli.py:144
+msgid ""
+"Mux the audio from the reference video into the input video. This option is "
+"only used for the 'gen-vid' action. 'mux-audio' action has this turned on "
+"implicitly."
+msgstr ""
+"참조 비디오의 오디오를 입력 비디오에 병합합니다. 이 옵션은 'gen-vid' 작업에"
+"만 사용됩니다. 'mux-timeout' 작업은 이 작업을 암시적으로 활성화했습니다."
+
+#: tools/effmpeg/cli.py:155 tools/effmpeg/cli.py:165
+msgid "rotate"
+msgstr "회전"
+
+#: tools/effmpeg/cli.py:157
+msgid ""
+"Transpose the video. If transpose is set, then degrees will be ignored. For "
+"cli you can enter either the number or the long command name, e.g. to use "
+"(1, 90Clockwise) -tr 1 or -tr 90Clockwise"
+msgstr ""
+"비디오를 전치합니다. 전치를 설정하면 각도가 무시됩니다. cli의 경우 숫자 또는 "
+"긴 명령 이름을 입력할 수 있습니다(예: (1, 90Clockwise) (-tr 1 또는 -tr "
+"90Clockwise)"
+
+#: tools/effmpeg/cli.py:166
+msgid "Rotate the video clockwise by the given number of degrees."
+msgstr "비디오를 주어진 입력 각도에 따라 시계방향으로 회전합니다."
+
+#: tools/effmpeg/cli.py:173
+msgid "Set the new resolution scale if the chosen action is 'rescale'."
+msgstr "선택한 작업이 'rescale'이라면 새로운 해상도 크기를 설정합니다."
+
+#: tools/effmpeg/cli.py:178 tools/effmpeg/cli.py:186
+msgid "settings"
+msgstr "설정"
+
+#: tools/effmpeg/cli.py:180
+msgid ""
+"Reduces output verbosity so that only serious errors are printed. If both "
+"quiet and verbose are set, verbose will override quiet."
+msgstr ""
+"출력 상세도를 줄여 심각한 오류만 출력합니다. quiet와 verbose가 모두 설정된 경"
+"우 verbose가 quiet를 재정의합니다."
+
+#: tools/effmpeg/cli.py:188
+msgid ""
+"Increases output verbosity. If both quiet and verbose are set, verbose will "
+"override quiet."
+msgstr ""
+"출력 상세도를 높입니다. quiet와 verbose가 모두 설정된 경우 verbose가 quiet를 "
+"재정의합니다."
