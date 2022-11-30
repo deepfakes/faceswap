@@ -272,6 +272,8 @@ class Environment():
         installed = [re.sub(" +", " ", line.strip())
                      for line in chk.splitlines() if not line.startswith("#")]
         retval = {}
+        if installed.index('\x1b[0m') != -1:
+            installed.remove('\x1b[0m')
         for pkg in installed:
             item = pkg.split(" ")
             retval[item[0]] = item[1]
