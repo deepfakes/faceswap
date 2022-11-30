@@ -2,10 +2,11 @@
 # Copyright (C) YEAR ORGANIZATION
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
+#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-06-08 19:24+0100\n"
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2022-11-24 14:17+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -13,7 +14,7 @@ msgstr ""
 "Content-Type: text/plain; charset=cp1252\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: pygettext.py 1.5\n"
-
+"X-Generator: Poedit 3.2\n"
 
 #: tools/manual\cli.py:13
 msgid "This command lets you perform various actions on frames, faces and alignments files using visual tools."
@@ -207,4 +208,3 @@ msgstr ""
 #: tools/manual\frameviewer\frame.py:487
 msgid "Copy {} Alignments ({})"
 msgstr ""
-

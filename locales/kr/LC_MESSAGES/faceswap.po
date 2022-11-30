@@ -1,0 +1,34 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2021-02-18 23:48-0000\n"
+"PO-Revision-Date: 2022-11-24 12:21+0900\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ko_KR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.2\n"
+
+#: faceswap.py:43
+msgid "Extract the faces from pictures or a video"
+msgstr "그림들 또는 비디오에서 얼굴을 추출합니다"
+
+#: faceswap.py:44
+msgid "Train a model for the two faces A and B"
+msgstr "얼굴들 A와 B에 대한 모델을 훈련시킵니다"
+
+#: faceswap.py:47
+msgid "Convert source pictures or video to a new one with the face swapped"
+msgstr "원본 이미지 또는 비디오를 얼굴이 뒤바뀐 새로운 이미지 또는 영상으로 변환합니다"
+
+#: faceswap.py:48
+msgid "Launch the Faceswap Graphical User Interface"
+msgstr "Faceswap GUI를 실행합니다"
