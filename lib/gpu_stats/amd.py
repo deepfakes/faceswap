@@ -85,7 +85,7 @@ class AMDStats(_GPUStats):
     @property
     def _plaid_ids(self) -> List[str]:
         """ list: The device identification for each GPU device that PlaidML has discovered. """
-        return [device.id.decode("utf-8") for device in self._all_devices]
+        return [device.id.decode("utf-8", errors="replace") for device in self._all_devices]
 
     @property
     def _experimental_indices(self) -> List[int]:
@@ -186,7 +186,9 @@ class AMDStats(_GPUStats):
 
         supported = [d for d in devices
                      if d.details
-                     and json.loads(d.details.decode("utf-8")).get("type", "cpu").lower() == "gpu"]
+                     and json.loads(
+                        d.details.decode("utf-8",
+                                         errors="replace")).get("type", "cpu").lower() == "gpu"]
 
         self._log("debug", f"Obtained supported devices: {supported}")
         return supported
@@ -206,7 +208,9 @@ class AMDStats(_GPUStats):
 
         experi = [d for d in devices
                   if d.details
-                  and json.loads(d.details.decode("utf-8")).get("type", "cpu").lower() == "gpu"]
+                  and json.loads(
+                    d.details.decode("utf-8",
+                                     errors="replace")).get("type", "cpu").lower() == "gpu"]
 
         self._log("debug", f"Obtained experimental Devices: {experi}")
 
@@ -240,7 +244,7 @@ class AMDStats(_GPUStats):
             raise RuntimeError("No valid devices could be found for plaidML.")
 
         self._log("warning", f"PlaidML could not find a GPU. Falling back to: "
-                  f"{[d.id.decode('utf-8') for d in devices]}")
+                  f"{[d.id.decode('utf-8', errors='replace') for d in devices]}")
         return devices
 
     def _get_device_details(self) -> List[dict]:
@@ -254,10 +258,10 @@ class AMDStats(_GPUStats):
         details = []
         for dev in self._all_devices:
             if dev.details:
-                details.append(json.loads(dev.details.decode("utf-8")))
+                details.append(json.loads(dev.details.decode("utf-8", errors="replace")))
             else:
-                details.append(dict(vendor=dev.id.decode("utf-8"),
-                                    name=dev.description.decode("utf-8"),
+                details.append(dict(vendor=dev.id.decode("utf-8", errors="replace"),
+                                    name=dev.description.decode("utf-8", errors="replace"),
                                     globalMemSize=4 * 1024 * 1024 * 1024))  # 4GB dummy ram
         self._log("debug", f"Obtained Device details: {details}")
         return details
@@ -284,11 +288,11 @@ class AMDStats(_GPUStats):
             self._log("error", "Please run `plaidml-setup` to set up your GPU.")
             sys.exit(1)
 
-        max_vram = max([self._all_vram[idx] for idx in indices])
+        max_vram = max(self._all_vram[idx] for idx in indices)
         self._log("debug", f"Max VRAM: {max_vram}")
 
-        gpu_idx = min([idx for idx, vram in enumerate(self._all_vram)
-                       if vram == max_vram and idx in indices])
+        gpu_idx = min(idx for idx, vram in enumerate(self._all_vram)
+                      if vram == max_vram and idx in indices)
         self._log("debug", f"GPU IDX: {gpu_idx}")
 
         selected_gpu = self._plaid_ids[gpu_idx]

@@ -171,13 +171,11 @@ class Serializer():
         logger.debug("returned data type: %s", type(retval))
         return retval
 
-    @classmethod
-    def _marshal(cls, data):
+    def _marshal(self, data):
         """ Override for serializer specific marshalling """
         raise NotImplementedError()
 
-    @classmethod
-    def _unmarshal(cls, data):
+    def _unmarshal(self, data):
         """ Override for serializer specific unmarshalling """
         raise NotImplementedError()
 
@@ -188,13 +186,11 @@ class _YAMLSerializer(Serializer):
         super().__init__()
         self._file_extension = "yml"
 
-    @classmethod
-    def _marshal(cls, data):
+    def _marshal(self, data):
         return yaml.dump(data, default_flow_style=False).encode("utf-8")
 
-    @classmethod
-    def _unmarshal(cls, data):
-        return yaml.load(data.decode("utf-8"), Loader=yaml.FullLoader)
+    def _unmarshal(self, data):
+        return yaml.load(data.decode("utf-8", errors="replace"), Loader=yaml.FullLoader)
 
 
 class _JSONSerializer(Serializer):
@@ -203,13 +199,11 @@ class _JSONSerializer(Serializer):
         super().__init__()
         self._file_extension = "json"
 
-    @classmethod
-    def _marshal(cls, data):
+    def _marshal(self, data):
         return json.dumps(data, indent=2).encode("utf-8")
 
-    @classmethod
-    def _unmarshal(cls, data):
-        return json.loads(data.decode("utf-8"))
+    def _unmarshal(self, data):
+        return json.loads(data.decode("utf-8", errors="replace"))
 
 
 class _PickleSerializer(Serializer):
@@ -218,12 +212,10 @@ class _PickleSerializer(Serializer):
         super().__init__()
         self._file_extension = "pickle"
 
-    @classmethod
-    def _marshal(cls, data):
+    def _marshal(self, data):
         return pickle.dumps(data)
 
-    @classmethod
-    def _unmarshal(cls, data):
+    def _unmarshal(self, data):
         return pickle.loads(data)
 
 

@@ -254,7 +254,7 @@ class Environment():
         """ Get currently installed packages """
         installed_packages = {}
         with Popen(f"\"{sys.executable}\" -m pip freeze --local", shell=True, stdout=PIPE) as chk:
-            installed = chk.communicate()[0].decode(self.encoding).splitlines()
+            installed = chk.communicate()[0].decode(self.encoding, errors="ignore").splitlines()
 
         for pkg in installed:
             if "==" not in pkg:
@@ -574,7 +574,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
             stdout, stderr = chk.communicate()
         if not stderr:
             version = re.search(r".*release (?P<cuda>\d+\.\d+)",
-                                stdout.decode(locale.getpreferredencoding()))
+                                stdout.decode(locale.getpreferredencoding(), errors="ignore"))
             if version is not None:
                 self.cuda_version = version.groupdict().get("cuda", None)
             locate = "where" if self._os == "windows" else "which"
