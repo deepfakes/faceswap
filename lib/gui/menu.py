@@ -268,9 +268,11 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             retcode = cmd.poll()
         if retcode != 0:
             logger.debug("Unable to list git branches. return code: %s, message: %s",
-                         retcode, stdout.decode().strip().replace("\n", " - "))
+                         retcode,
+                         stdout.decode(locale.getpreferredencoding(),
+                                       errors="replace").strip().replace("\n", " - "))
             return None
-        return stdout.decode(locale.getpreferredencoding())
+        return stdout.decode(locale.getpreferredencoding(), errors="replace")
 
     @staticmethod
     def _filter_branches(stdout):
@@ -321,7 +323,9 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             retcode = cmd.poll()
         if retcode != 0:
             logger.error("Unable to switch branch. return code: %s, message: %s",
-                         retcode, stdout.decode().strip().replace("\n", " - "))
+                         retcode,
+                         stdout.decode(locale.getdefaultlocale(),
+                                       errors="replace").strip().replace("\n", " - "))
             return
         logger.info("Succesfully switched to '%s'. You may want to check for updates to make sure "
                     "that you have the latest code.", branch)
@@ -402,7 +406,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             msg = ("Git is not installed or you are not running a cloned repo. "
                    "Unable to check for updates")
         else:
-            chk = stdout.decode(encoding).splitlines()
+            chk = stdout.decode(encoding, errors="replace").splitlines()
             for line in chk:
                 if line.lower().startswith("your branch is ahead"):
                     msg = "Your branch is ahead of the remote repo. Not updating"
@@ -434,7 +438,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
                    bufsize=1,
                    cwd=_WORKING_DIR) as cmd:
             while True:
-                output = cmd.stdout.readline().decode(encoding)
+                output = cmd.stdout.readline().decode(encoding, errors="replace")
                 if output == "" and cmd.poll() is not None:
                     break
                 if output:

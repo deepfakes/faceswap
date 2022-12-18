@@ -95,9 +95,8 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
     @property
     def _installed_pip(self):
         """ str: The list of installed pip packages within Faceswap's scope. """
-        pip = Popen("{} -m pip freeze".format(sys.executable),
-                    shell=True, stdout=PIPE)
-        installed = pip.communicate()[0].decode().splitlines()
+        with Popen(f"{sys.executable} -m pip freeze", shell=True, stdout=PIPE) as pip:
+            installed = pip.communicate()[0].decode(self._encoding, errors="replace").splitlines()
         return "\n".join(installed)
 
     @property
@@ -105,11 +104,11 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
         """ str: The list of installed Conda packages within Faceswap's scope. """
         if not self._is_conda:
             return None
-        conda = Popen("conda list", shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = conda.communicate()
+        with Popen("conda list", shell=True, stdout=PIPE, stderr=PIPE) as conda:
+            stdout, stderr = conda.communicate()
         if stderr:
             return "Could not get package list"
-        installed = stdout.decode().splitlines()
+        installed = stdout.decode(self._encoding, errors="replace").splitlines()
         return "\n".join(installed)
 
     @property
@@ -117,32 +116,33 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
         """ str: The installed version of Conda, or `N/A` if Conda is not installed. """
         if not self._is_conda:
             return "N/A"
-        conda = Popen("conda --version", shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = conda.communicate()
+        with Popen("conda --version", shell=True, stdout=PIPE, stderr=PIPE) as conda:
+            stdout, stderr = conda.communicate()
         if stderr:
             return "Conda is used, but version not found"
-        version = stdout.decode().splitlines()
+        version = stdout.decode(self._encoding, errors="replace").splitlines()
         return "\n".join(version)
 
     @property
     def _git_branch(self):
         """ str: The git branch that is currently being used to execute Faceswap. """
-        git = Popen("git status", shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = git.communicate()
+        with Popen("git status", shell=True, stdout=PIPE, stderr=PIPE) as git:
+            stdout, stderr = git.communicate()
         if stderr:
             return "Not Found"
-        branch = stdout.decode().splitlines()[0].replace("On branch ", "")
+        branch = stdout.decode(self._encoding,
+                               errors="replace").splitlines()[0].replace("On branch ", "")
         return branch
 
     @property
     def _git_commits(self):
         """ str: The last 5 git commits for the currently running Faceswap. """
-        git = Popen("git log --pretty=oneline --abbrev-commit -n 5",
-                    shell=True, stdout=PIPE, stderr=PIPE)
-        stdout, stderr = git.communicate()
+        with Popen("git log --pretty=oneline --abbrev-commit -n 5",
+                   shell=True, stdout=PIPE, stderr=PIPE) as git:
+            stdout, stderr = git.communicate()
         if stderr:
             return "Not Found"
-        commits = stdout.decode().splitlines()
+        commits = stdout.decode(self._encoding, errors="replace").splitlines()
         return ". ".join(commits)
 
     @property
@@ -193,14 +193,14 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
                     "gpu_cuda": self._cuda_version,
                     "gpu_cudnn": self._cudnn_version,
                     "gpu_driver": self._gpu["driver"],
-                    "gpu_devices": ", ".join(["GPU_{}: {}".format(idx, device)
+                    "gpu_devices": ", ".join([f"GPU_{idx}: {device}"
                                               for idx, device in enumerate(self._gpu["devices"])]),
-                    "gpu_vram": ", ".join(["GPU_{}: {}MB".format(idx, int(vram))
+                    "gpu_vram": ", ".join([f"GPU_{idx}: {int(vram)}MB"
                                            for idx, vram in enumerate(self._gpu["vram"])]),
-                    "gpu_devices_active": ", ".join(["GPU_{}".format(idx)
+                    "gpu_devices_active": ", ".join([f"GPU_{idx}"
                                                      for idx in self._gpu["devices_active"]])}
         for key in sorted(sys_info.keys()):
-            retval += ("{0: <20} {1}\n".format(key + ":", sys_info[key]))
+            retval += (f"{key + ':':<20} {sys_info[key]}\n")
         retval += "\n=============== Pip Packages ===============\n"
         retval += self._installed_pip
         if self._is_conda:
@@ -219,11 +219,11 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
         str
             The total, available, used and free RAM displayed in Megabytes
         """
-        retval = list()
+        retval = []
         for name in ("total", "available", "used", "free"):
-            value = getattr(self, "_ram_{}".format(name))
+            value = getattr(self, f"_ram_{name}")
             value = int(value / (1024 * 1024))
-            retval.append("{}: {}MB".format(name.capitalize(), value))
+            retval.append(f"{name.capitalize()}: {value}MB")
         return ", ".join(retval)
 
 
@@ -241,7 +241,8 @@ def get_sysinfo():
     try:
         retval = _SysInfo().full_info()
     except Exception as err:  # pylint: disable=broad-except
-        retval = "Exception occured trying to retrieve sysinfo: {}".format(err)
+        retval = f"Exception occured trying to retrieve sysinfo: {str(err)}"
+        raise
     return retval
 
 
@@ -284,7 +285,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
         for cfile in config_files:
             fname = os.path.basename(cfile)
             ext = os.path.splitext(cfile)[1]
-            formatted += "\n--------- {} ---------\n".format(fname)
+            formatted += f"\n--------- {fname} ---------\n"
             if ext == ".ini":
                 formatted += self._parse_ini(cfile)
             elif fname == ".faceswap":
@@ -305,14 +306,14 @@ class _Configs():  # pylint:disable=too-few-public-methods
             The current configuration in the config file formatted in a human readable format
         """
         formatted = ""
-        with open(config_file, "r") as cfile:
+        with open(config_file, "r", encoding="utf-8", errors="replace") as cfile:
             for line in cfile.readlines():
                 line = line.strip()
                 if line.startswith("#") or not line:
                     continue
                 item = line.split("=")
                 if len(item) == 1:
-                    formatted += "\n{}\n".format(item[0].strip())
+                    formatted += f"\n{item[0].strip()}\n"
                 else:
                     formatted += self._format_text(item[0], item[1])
         return formatted
@@ -331,7 +332,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
             The current configuration in the config file formatted as a python dictionary
         """
         formatted = ""
-        with open(config_file, "r") as cfile:
+        with open(config_file, "r", encoding="utf-8", errors="replace") as cfile:
             conf_dict = json.load(cfile)
             for key in sorted(conf_dict.keys()):
                 formatted += self._format_text(key, conf_dict[key])
@@ -353,7 +354,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
         str
             The formatted key value pair for display
         """
-        return "{0: <25} {1}\n".format(key.strip() + ":", value.strip())
+        return f"{key.strip() + ':':<25} {value.strip()}\n"
 
 
 class _State():  # pylint:disable=too-few-public-methods
@@ -395,12 +396,12 @@ class _State():  # pylint:disable=too-few-public-methods
         """
         if not self._is_training or self._model_dir is None or self._trainer is None:
             return ""
-        fname = os.path.join(self._model_dir, "{}_state.json".format(self._trainer))
+        fname = os.path.join(self._model_dir, f"{self._trainer}_state.json")
         if not os.path.isfile(fname):
             return ""
 
         retval = "\n\n=============== State File =================\n"
-        with open(fname, "r") as sfile:
+        with open(fname, "r", encoding="utf-8", errors="replace") as sfile:
             retval += sfile.read()
         return retval
 

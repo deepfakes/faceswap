@@ -62,7 +62,7 @@ class KBHit:
         if (self.is_gui or not sys.stdout.isatty()) and os.name != "nt":
             return None
         if os.name == "nt":
-            return msvcrt.getch().decode("utf-8")
+            return msvcrt.getch().decode("utf-8", errors="replace")
         return sys.stdin.read(1)
 
     def getarrow(self):
@@ -83,7 +83,7 @@ class KBHit:
             char = sys.stdin.read(3)[2]
             vals = [65, 67, 66, 68]
 
-        return vals.index(ord(char.decode("utf-8")))
+        return vals.index(ord(char.decode("utf-8", errors="replace")))
 
     def kbhit(self):
         """ Returns True if keyboard character was hit, False otherwise. """

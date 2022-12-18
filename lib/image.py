@@ -433,10 +433,11 @@ def read_image_meta(filename):
             elif field == b"iTXt":
                 keyword, value = infile.read(length).split(b"\0", 1)
                 if keyword == b"faceswap":
-                    retval["itxt"] = literal_eval(value[4:].decode("utf-8"))
+                    retval["itxt"] = literal_eval(value[4:].decode("utf-8", errors="replace"))
                     break
                 else:
-                    logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", "ignore"))
+                    logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1",
+                                                                             errors="ignore"))
                     length = 0  # Reset marker for next chunk
             infile.seek(length + 4, 1)
     logger.trace("filename: %s, metadata: %s", filename, retval)
@@ -645,9 +646,9 @@ def png_read_meta(png):
         pointer += 8
         keyword, value = png[pointer:pointer + length].split(b"\0", 1)
         if keyword == b"faceswap":
-            retval = literal_eval(value[4:].decode("utf-8"))
+            retval = literal_eval(value[4:].decode("utf-8", errors="ignore"))
             break
-        logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", "ignore"))
+        logger.trace("Skipping iTXt chunk: '%s'", keyword.decode("latin-1", errors="ignore"))
         pointer += length + 4
     return retval
 
