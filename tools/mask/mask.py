@@ -3,7 +3,7 @@
 import logging
 import os
 import sys
-from typing import Any, cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
@@ -19,7 +19,7 @@ from plugins.extract.pipeline import Extractor, ExtractMedia
 if TYPE_CHECKING:
     from argparse import Namespace
     from lib.align.aligned_face import CenteringType
-    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict, PNGHeaderSourceDict
+    from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
     from lib.queue_manager import EventQueue
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
@@ -234,7 +234,7 @@ class Mask():  # pylint:disable=too-few-public-methods
                     logger.warning("Legacy face not found in alignments file. This face has not "
                                    "been updated: '%s'", filename)
                     continue
-            if not metadata.get("source_frame_dims"):
+            if "source_frame_dims" not in metadata.get("source", {}):
                 logger.error("The faces need to be re-extracted as at least some of them do not "
                              "contain information required to correctly generate masks.")
                 logger.error("You can re-extract the face-set by using the Alignments Tool's "
