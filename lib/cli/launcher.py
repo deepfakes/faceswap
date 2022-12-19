@@ -87,9 +87,9 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         FaceswapError
             If Tensorflow is not found, or is not between versions 2.4 and 2.9
         """
-        amd_ver = 2.2
-        min_ver = 2.7
-        max_ver = 2.9
+        amd_ver = (2, 2)
+        min_ver = (2, 7)
+        max_ver = (2, 9)
         try:
             import tensorflow as tf  # noqa pylint:disable=import-outside-toplevel,unused-import
         except ImportError as err:

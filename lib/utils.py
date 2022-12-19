@@ -15,7 +15,7 @@ from multiprocessing import current_process
 from socket import timeout as socket_timeout, error as socket_error
 from threading import get_ident
 from time import time
-from typing import cast, Dict, List, Optional, Union, TYPE_CHECKING
+from typing import cast, Dict, List, Optional, Union, Tuple, TYPE_CHECKING
 
 import numpy as np
 from tqdm import tqdm
@@ -34,7 +34,7 @@ _image_extensions = [  # pylint:disable=invalid-name
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
-_TF_VERS: Optional[float] = None
+_TF_VERS: Optional[Tuple[int, int]] = None
 ValidBackends = Literal["amd", "nvidia", "cpu", "apple_silicon"]
 
 
@@ -149,7 +149,7 @@ def set_backend(backend: str) -> None:
     _FS_BACKEND = backend
 
 
-def get_tf_version() -> float:
+def get_tf_version() -> Tuple[int, int]:
     """ Obtain the major.minor version of currently installed Tensorflow.
 
     Returns
@@ -160,7 +160,8 @@ def get_tf_version() -> float:
     global _TF_VERS  # pylint:disable=global-statement
     if _TF_VERS is None:
         import tensorflow as tf  # pylint:disable=import-outside-toplevel
-        _TF_VERS = float(".".join(tf.__version__.split(".")[:2]))  # pylint:disable=no-member
+        split = tf.__version__.split(".")[:2]
+        _TF_VERS = (int(split[0]), int(split[1]))
     return _TF_VERS
 
 
