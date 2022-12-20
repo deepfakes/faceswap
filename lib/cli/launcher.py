@@ -89,7 +89,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         """
         amd_ver = (2, 2)
         min_ver = (2, 7)
-        max_ver = (2, 9)
+        max_ver = (2, 10)
         try:
             import tensorflow as tf  # noqa pylint:disable=import-outside-toplevel,unused-import
         except ImportError as err:

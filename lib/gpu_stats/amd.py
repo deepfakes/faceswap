@@ -162,6 +162,7 @@ class AMDStats(_GPUStats):
         plaidml.DEFAULT_LOG_HANDLER.propagate = False
 
         numeric_level = getattr(logging, self._log_level, None)
+        assert numeric_level is not None
         if numeric_level < 10:  # DEBUG Logging
             plaidml._internal_set_vlog(1)  # pylint:disable=protected-access
         elif numeric_level < 20:  # INFO Logging

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
 # Tensorflow builds available from pypi
-_TENSORFLOW_REQUIREMENTS = {">=2.7.0,<2.10.0": ["11.2", "8.1"]}
+_TENSORFLOW_REQUIREMENTS = {">=2.7.0,<2.11.0": ["11.2", "8.1"]}
 # Packages that are explicitly required for setup.py
 _INSTALLER_REQUIREMENTS = [("pexpect>=4.8.0", "!Windows"), ("pywinpty==2.0.2", "Windows")]
 
