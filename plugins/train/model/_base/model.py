@@ -198,8 +198,9 @@ class ModelBase():
     @property
     def name(self) -> str:
         """ str: The name of this model based on the plugin name. """
-        basename = os.path.basename(sys.modules[self.__module__].__file__)
-        return os.path.splitext(basename)[0].lower()
+        _name = sys.modules[self.__module__].__file__
+        assert isinstance(_name, str)
+        return os.path.splitext(os.path.basename(_name))[0].lower()
 
     @property
     def model_name(self) -> str:
