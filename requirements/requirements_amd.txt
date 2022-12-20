@@ -1,6 +1,6 @@
 -r _requirements_base.txt
 # tf2.2 is last version that tensorboard logging works with old Keras
-numpy>=1.18.0,<1.20.0
+numpy>=1.18.0,<1.19.0  # TF Will uninstall anything equal or over 1.19.0
 protobuf>= 3.19.0,<3.20.0  # TF has started pulling in incompatible protobuf
 tensorflow>=2.2.0,<2.3.0
 plaidml-keras==0.7.0
