@@ -709,8 +709,9 @@ class Extractor():
         Only adjusts if the the configured batch size requires more vram than is available. Nvidia
         only.
         """
-        if get_backend() != "nvidia":
-            logger.debug("Backend is not Nvidia. Not updating batchsize requirements")
+        backend = get_backend()
+        if backend not in ("nvidia", "directml"):
+            logger.debug("Not updating batchsize requirements for backend: '%s'", backend)
             return
         if sum(plugin.vram for plugin in self._active_plugins) == 0:
             logger.debug("No plugins use VRAM. Not updating batchsize requirements.")

@@ -11,6 +11,7 @@ from subprocess import PIPE, Popen
 import psutil
 
 from lib.gpu_stats import GPUStats
+from lib.utils import get_backend
 from setup import CudaCheck
 
 
@@ -176,7 +177,8 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
             console or a log file.
         """
         retval = "\n============ System Information ============\n"
-        sys_info = {"os_platform": self._system["platform"],
+        sys_info = {"backend": get_backend(),
+                    "os_platform": self._system["platform"],
                     "os_machine": self._system["machine"],
                     "os_release": self._system["release"],
                     "py_conda_version": self._conda_version,
@@ -195,8 +197,10 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
                     "gpu_driver": self._gpu["driver"],
                     "gpu_devices": ", ".join([f"GPU_{idx}: {device}"
                                               for idx, device in enumerate(self._gpu["devices"])]),
-                    "gpu_vram": ", ".join([f"GPU_{idx}: {int(vram)}MB"
-                                           for idx, vram in enumerate(self._gpu["vram"])]),
+                    "gpu_vram": ", ".join(
+                        f"GPU_{idx}: {int(vram)}MB ({int(vram_free)}MB free)"
+                        for idx, (vram, vram_free) in enumerate(zip(self._gpu["vram"],
+                                                                    self._gpu["vram_free"]))),
                     "gpu_devices_active": ", ".join([f"GPU_{idx}"
                                                      for idx in self._gpu["devices_active"]])}
         for key in sorted(sys_info.keys()):

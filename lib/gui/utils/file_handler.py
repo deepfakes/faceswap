@@ -314,27 +314,27 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     def _dir(self) -> str:
         """ Get a directory location. """
         logger.debug("Popping Dir browser")
-        return filedialog.askdirectory(**self._kwargs)
+        return filedialog.askdirectory(**self._kwargs)  # type: ignore
 
     def _savedir(self) -> str:
         """ Get a save directory location. """
         logger.debug("Popping SaveDir browser")
-        return filedialog.askdirectory(**self._kwargs)
+        return filedialog.askdirectory(**self._kwargs)  # type: ignore
 
     def _filename(self) -> str:
         """ Get an existing file location. """
         logger.debug("Popping Filename browser")
-        return filedialog.askopenfilename(**self._kwargs)
+        return filedialog.askopenfilename(**self._kwargs)  # type: ignore
 
     def _filename_multi(self) -> Tuple[str, ...]:
         """ Get multiple existing file locations. """
         logger.debug("Popping Filename browser")
-        return filedialog.askopenfilenames(**self._kwargs)
+        return filedialog.askopenfilenames(**self._kwargs)  # type: ignore
 
     def _save_filename(self) -> str:
         """ Get a save file location. """
         logger.debug("Popping Save Filename browser")
-        return filedialog.asksaveasfilename(**self._kwargs)
+        return filedialog.asksaveasfilename(**self._kwargs)  # type: ignore
 
     @staticmethod
     def _nothing() -> None:  # pylint: disable=useless-return

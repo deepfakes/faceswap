@@ -1,4 +1,6 @@
 -r _requirements_base.txt
 numpy>=1.21.0; python_version < '3.8'
 numpy>=1.22.0; python_version >= '3.8'
-tensorflow-cpu>=2.7.0,<2.11.0
+tensorflow-cpu>=2.10.0,<2.11.0
+tensorflow-directml-plugin
+comtypes

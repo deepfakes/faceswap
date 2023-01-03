@@ -3,7 +3,6 @@
 from the :class:`_GPUStats` class contained here. """
 
 import logging
-import os
 import sys
 
 from typing import List, Optional
@@ -21,6 +20,7 @@ _EXCLUDE_DEVICES: List[int] = []
 class GPUInfo(TypedDict):
     """ Typed Dictionary for returning Full GPU Information. """
     vram: List[int]
+    vram_free: List[int]
     driver: str
     devices: List[str]
     devices_active: List[int]
@@ -100,6 +100,9 @@ class _GPUStats():
             **vram** (`list`): the total amount of VRAM in Megabytes for each GPU as pertaining to
             :attr:`_handles`
 
+            **vram_free** (`list`): the total amount of VRAM available in Megabytes for each GPU
+            as pertaining to :attr:`_handles`
+
             **driver** (`str`): The GPU driver version that is installed on the OS
 
             **devices** (`list`): The device name of each GPU on the system as pertaining
@@ -109,6 +112,7 @@ class _GPUStats():
             pertaining to :attr:`_handles`
         """
         return GPUInfo(vram=self._vram,
+                       vram_free=self._get_free_vram(),
                        driver=self._driver,
                        devices=self._device_names,
                        devices_active=self._active_devices)
@@ -148,13 +152,12 @@ class _GPUStats():
         raise NotImplementedError()
 
     def _get_active_devices(self) -> List[int]:
-        """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
-        CUDA_VISIBLE_DEVICES environment variable or explicitly excluded in the command line
-        arguments).
+        """ Obtain the indices of active GPUs (those that have not been explicitly excluded in
+        the command line arguments).
 
         Notes
         -----
-        Override for GPUs that do not use CUDA
+        Override for GPU specific checking
 
         Returns
         -------
@@ -162,10 +165,6 @@ class _GPUStats():
             The list of device indices that are available for Faceswap to use
         """
         devices = [idx for idx in range(self._device_count) if idx not in _EXCLUDE_DEVICES]
-        env_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
-        if env_devices:
-            new_devices = [int(i) for i in env_devices.split(",")]
-            devices = [idx for idx in devices if idx in new_devices]
         self._log("debug", f"Active GPU Devices: {devices}")
         return devices
 

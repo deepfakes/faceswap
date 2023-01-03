@@ -447,9 +447,10 @@ class Settings():
             List of GPU device indices that should not be made available to Tensorflow. Pass
             ``None`` if all devices should be made available
         """
-        if get_backend() == "amd":
+        backend = get_backend()
+        if backend == "amd":
             return  # No settings for AMD
-        if get_backend() == "cpu":
+        if backend == "cpu":
             logger.verbose("Hiding GPUs from Tensorflow")  # type:ignore
             tf.config.set_visible_devices([], "GPU")
             return
@@ -464,7 +465,7 @@ class Settings():
             logger.debug("Filtering devices to: %s", gpus)
             tf.config.set_visible_devices(gpus, "GPU")
 
-        if allow_growth:
+        if allow_growth and backend == "nvidia":
             logger.debug("Setting Tensorflow 'allow_growth' option")
             for gpu in gpus:
                 logger.info("Setting allow growth for GPU: %s", gpu)
@@ -535,7 +536,7 @@ class Settings():
             The request Tensorflow Strategy if the backend is Nvidia and the strategy is not
             `"Default"` otherwise ``None``
         """
-        if get_backend() != "nvidia":
+        if get_backend() not in ("nvidia", "directml"):
             retval = None
         elif strategy == "mirrored":
             retval = self._get_mirrored_strategy()
