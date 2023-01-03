@@ -266,11 +266,14 @@ class _Configs():  # pylint:disable=too-few-public-methods
         str
             The current configuration in the config files formatted in a human readable format
         """
-        config_files = [os.path.join(self.config_dir, cfile)
-                        for cfile in os.listdir(self.config_dir)
-                        if os.path.basename(cfile) == ".faceswap"
-                        or os.path.splitext(cfile)[1] == ".ini"]
-        return self._parse_configs(config_files)
+        try:
+            config_files = [os.path.join(self.config_dir, cfile)
+                            for cfile in os.listdir(self.config_dir)
+                            if os.path.basename(cfile) == ".faceswap"
+                            or os.path.splitext(cfile)[1] == ".ini"]
+            return self._parse_configs(config_files)
+        except FileNotFoundError:
+            return ""
 
     def _parse_configs(self, config_files):
         """ Parse the given list of config files into a human readable format.

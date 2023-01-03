@@ -216,8 +216,8 @@ def test_get_dpi() -> None:
     assert isinstance(dpi, float) or dpi is None
     if dpi is None:  # No display detected
         return
-    assert get_dpi() > 0
-    assert get_dpi() < 600.0
+    assert dpi > 0
+    assert dpi < 600.0
 
 
 _SECPARAMS = [((1, ), 1),  # 1 argument
@@ -363,7 +363,7 @@ def test_get_model_model_filename_input(
         results: Union[str, List[str]]) -> None:
     """ Test :class:`~lib.utils.GetModel` filename parsing works
 
-    Paramters
+    Parameters
     ---------
     get_model_instance: `~lib.utils.GetModel`
         The patched instance of the class
@@ -383,7 +383,7 @@ def test_get_model_model_filename_input(
 def test_get_model_attributes(get_model_instance: GetModel) -> None:
     """ Test :class:`~lib.utils.GetModel` private attributes set correctly
 
-    Paramters
+    Parameters
     ---------
     get_model_instance: `~lib.utils.GetModel`
         The patched instance of the class
@@ -399,7 +399,7 @@ def test_get_model_attributes(get_model_instance: GetModel) -> None:
 def test_get_model_properties(get_model_instance: GetModel) -> None:
     """ Test :class:`~lib.utils.GetModel` calculated attributes return correctly
 
-    Paramters
+    Parameters
     ---------
     get_model_instance: `~lib.utils.GetModel`
         The patched instance of the class
@@ -419,7 +419,7 @@ def test_get_model__get(mocker: pytest_mock.MockerFixture,
                         model_exists: bool) -> None:
     """ Test :func:`~lib.utils.GetModel._get` executes logic correctly
 
-    Paramters
+    Parameters
     ---------
     mocker: :class:`pytest_mock.MockerFixture`
         Mocker for dummying in function calls
@@ -462,7 +462,7 @@ def test_get_model__download_model(mocker: pytest_mock.MockerFixture,
                                    error_args: Tuple[Union[str, int], ...]) -> None:
     """ Test :func:`~lib.utils.GetModel._download_model` executes its logic correctly
 
-    Paramters
+    Parameters
     ---------
     mocker: :class:`pytest_mock.MockerFixture`
         Mocker for dummying in function calls
@@ -492,7 +492,7 @@ def test_get_model__write_zipfile(mocker: pytest_mock.MockerFixture,
                                   dl_type: str) -> None:
     """ Test :func:`~lib.utils.GetModel._write_zipfile` executes its logic correctly
 
-    Paramters
+    Parameters
     ---------
     mocker: :class:`pytest_mock.MockerFixture`
         Mocker for dummying in function calls
@@ -535,7 +535,7 @@ def test_get_model__unzip_model(mocker: pytest_mock.MockerFixture,
                                 get_model_instance: GetModel) -> None:
     """ Test :func:`~lib.utils.GetModel._unzip_model` executes its logic correctly
 
-    Paramters
+    Parameters
     ---------
     mocker: :class:`pytest_mock.MockerFixture`
         Mocker for dummying in function calls
@@ -558,7 +558,7 @@ def test_get_model__write_model(mocker: pytest_mock.MockerFixture,
                                 get_model_instance: GetModel) -> None:
     """ Test :func:`~lib.utils.GetModel._write_model` executes its logic correctly
 
-    Paramters
+    Parameters
     ---------
     mocker: :class:`pytest_mock.MockerFixture`
         Mocker for dummying in function calls

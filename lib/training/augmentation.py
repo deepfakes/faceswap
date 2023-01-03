@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class AugConstants:
     """ Dataclass for holding constants for Image Augmentation.
 
-    Paramaters
+    Parameters
     ----------
     clahe_base_contrast: int
         The base number for Contrast Limited Adaptive Histogram Equalization

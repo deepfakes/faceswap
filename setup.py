@@ -969,7 +969,7 @@ class Installer():
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def __init__(self,
                  environment: Environment,
@@ -1056,7 +1056,7 @@ class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def call(self) -> int:
         """ Install a package using the Pexpect module
@@ -1103,7 +1103,7 @@ class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def __init__(self,
                  environment: Environment,
@@ -1241,7 +1241,7 @@ class SubProcInstaller(Installer):
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def __init__(self,
                  environment: Environment,

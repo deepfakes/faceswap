@@ -51,7 +51,6 @@ fsmedia module
    
    ~scripts.fsmedia.Alignments
    ~scripts.fsmedia.DebugLandmarks
-   ~scripts.fsmedia.FaceFilter
    ~scripts.fsmedia.Images
    ~scripts.fsmedia.PostProcess
    ~scripts.fsmedia.finalize

@@ -308,7 +308,7 @@ class ReAlign():
         ----------
         input_size: int
             The input size, in pixels, of the aligner plugin
-         centering: ["face", "head" or "legacy"]
+        centering: ["face", "head" or "legacy"]
             The centering to align the image at for re-aligning
         """
         logger.debug("input_size: %s, centering: %s", input_size, centering)
