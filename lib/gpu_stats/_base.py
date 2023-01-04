@@ -3,22 +3,32 @@
 from the :class:`_GPUStats` class contained here. """
 
 import logging
-import sys
 
+from dataclasses import dataclass
 from typing import List, Optional
 
 from lib.utils import get_backend
 
-if sys.version_info < (3, 8):
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
-
 _EXCLUDE_DEVICES: List[int] = []
 
 
-class GPUInfo(TypedDict):
-    """ Typed Dictionary for returning Full GPU Information. """
+@dataclass
+class GPUInfo():
+    """ Dataclass for holding full GPU Information.
+
+    Parameters
+    ----------
+    vram: list[int]
+        The total amount of VRAM in Megabytes for each GPU
+    vram: list[str]
+        The amount of VRAM available in Megabytes for each GPU
+    driver: str
+        The GPU driver in use
+    devices: list[str]
+        The device name for each GPU found
+    devices_active: list[int]
+        List of indices corresponding to active GPU devices
+    """
     vram: List[int]
     vram_free: List[int]
     driver: str
@@ -26,8 +36,21 @@ class GPUInfo(TypedDict):
     devices_active: List[int]
 
 
-class BiggestGPUInfo(TypedDict):
-    """ Typed Dictionary for returning GPU Information about the card with most available VRAM. """
+@dataclass
+class BiggestGPUInfo():
+    """ Dataclass for holding GPU Information about the card with most available VRAM.
+
+    Parameters
+    ----------
+    card_id: int
+        The index of the card as pertaining to :attr:`_handles`
+    device: str
+        The name of the device
+    free: float
+        The amount of available VRAM on the GPU
+    total: float
+        the total amount of VRAM on the GPU
+    """
     card_id: int
     device: str
     free: float
@@ -93,24 +116,7 @@ class _GPUStats():
 
     @property
     def sys_info(self) -> GPUInfo:
-        """ dict: GPU Stats that are required for system information logging.
-
-        The dictionary contains the following data:
-
-            **vram** (`list`): the total amount of VRAM in Megabytes for each GPU as pertaining to
-            :attr:`_handles`
-
-            **vram_free** (`list`): the total amount of VRAM available in Megabytes for each GPU
-            as pertaining to :attr:`_handles`
-
-            **driver** (`str`): The GPU driver version that is installed on the OS
-
-            **devices** (`list`): The device name of each GPU on the system as pertaining
-            to :attr:`_handles`
-
-            **devices_active** (`list`): The device name of each active GPU on the system as
-            pertaining to :attr:`_handles`
-        """
+        """ :class:`GPUInfo`: The GPU Stats that are required for system information logging """
         return GPUInfo(vram=self._vram,
                        vram_free=self._get_free_vram(),
                        driver=self._driver,
@@ -229,17 +235,7 @@ class _GPUStats():
 
         Returns
         -------
-        dict
-            The dictionary contains the following data:
-
-                **card_id** (`int`):  The index of the card as pertaining to :attr:`_handles`
-
-                **device** (`str`): The name of the device
-
-                **free** (`float`): The amount of available VRAM on the GPU
-
-                **total** (`float`): the total amount of VRAM on the GPU
-
+        :class:`BiggestGpuInfo`
             If a GPU is not detected then the **card_id** is returned as ``-1`` and the amount
             of free and total RAM available is fixed to 2048 Megabytes.
         """

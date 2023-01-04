@@ -5,7 +5,7 @@ import ctypes
 from ctypes import POINTER, Structure, windll
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, cast, List
+from typing import Any, Callable, cast, List
 
 from comtypes import IUnknown, GUID, STDMETHOD, HRESULT
 
@@ -340,6 +340,8 @@ class Device():  # pylint:disable=too-few-public-methods
     ----------
     adapter: :class:`ctypes._Pointer`
         A ctypes pointer pointing at the adapter to be analysed
+    log_func: :func:`~lib.gpu_stats._base._log`
+        The logging function to use from the parent GPUStats class
 
     Attributes
     ----------
@@ -364,7 +366,10 @@ class Device():  # pylint:disable=too-few-public-methods
     vram: :class:`VRam`
         The vram statistics of the device
     """
-    def __init__(self, adapter: ctypes._Pointer) -> None:
+    def __init__(self, adapter: ctypes._Pointer, log_func: Callable[[str, str], None]) -> None:
+        self._log = log_func
+        self._log("debug", f"Initializing {self.__class__.__name__}: (adapter: {adapter}, "
+                           f"log_func: {log_func})")
         self._adapter = adapter
         self.is_hardware: bool = self._get_property(DXCoreAdapterProperty.IsHardware,
                                                     ctypes.c_bool).value
@@ -380,6 +385,7 @@ class Device():  # pylint:disable=too-few-public-methods
         self.driver_details = self._get_driver_details()
         self.luid: LUID = self._get_property(DXCoreAdapterProperty.InstanceLuid, LUID)
         self.vram = self._get_vram()
+        self._log("debug", f"Initialized {self.__class__.__name__}")
 
     def __repr__(self):
         """ Nicely format the __repr__ for logging purposes """
@@ -434,6 +440,7 @@ class Device():  # pylint:disable=too-few-public-methods
             The 4 part driver version
         """
         driver = self._get_property(DXCoreAdapterProperty.DriverVersion, DriverVersion)
+        self._log("debug", f"driver: {driver}")
         return f"{driver.parts_d}.{driver.parts_c}.{driver.parts_b}.{driver.parts_a}"
 
     def _try_create_d3d12_device(self) -> bool:
@@ -453,6 +460,7 @@ class Device():  # pylint:disable=too-few-public-methods
                          GUID)
         func.restype = HRESULT
         check = func(self._adapter, feature_level.value, LookupGUID.id3d12device)
+        self._log("debug", f"d3d12 check result: {check}")
         retval = check in (0, 1)  # Should be 'S_FALSE' but leave S_OK anyway
         return retval
 
@@ -469,11 +477,14 @@ class Device():  # pylint:disable=too-few-public-methods
                                                 DXCoreAdapterProperty.DriverDescription.value,
                                                 ctypes.byref(handle))
         if success != 0:
-            return "Driver not Found"
-        size = handle.value
-
-        details = self._get_property(DXCoreAdapterProperty.DriverDescription, ctypes.c_char * size)
-        return details.value.decode(encoding="utf-8", errors="ignore")
+            retval = "Driver not Found"
+        else:
+            size = handle.value
+            details = self._get_property(DXCoreAdapterProperty.DriverDescription,
+                                         ctypes.c_char * size)
+            retval = details.value.decode(encoding="utf-8", errors="ignore")
+        self._log("debug", f"driver_details: {retval}")
+        return retval
 
     def _get_current_vram(self, vram: VRam) -> None:
         """ Obtain statistics on current VRAM usage and populate to the given object
@@ -485,6 +496,7 @@ class Device():  # pylint:disable=too-few-public-methods
         """
         if not self._adapter.IsQueryStateSupported(  # type:ignore[attr-defined]
                 DXCoreAdapterState.AdapterMemoryBudget.value):
+            self._log("debug", "QueryState not supported")
             return  # Just leave them all set to 0
 
         for segment in ("Local", "NonLocal"):
@@ -509,6 +521,7 @@ class Device():  # pylint:disable=too-few-public-methods
                     f"{segment.lower()}_available_for_reservation",
                     out.availableForReservation)
             setattr(vram, f"{segment.lower()}_current_reservation", out.currentReservation)
+            self._log("debug", f"{segment.lower()} free vram populated: {vram}")
 
     def _get_vram(self) -> VRam:
         """ Obtain total and available VRAM and populate to a :class:`VRam` object
@@ -527,21 +540,31 @@ class Device():  # pylint:disable=too-few-public-methods
         vram = VRam(dedicated_adapter_memory=dedicated_adapter_memory.value,
                     dedicated_system_memory=dedicated_system_memory.value,
                     shared_system_memory=shared_system_memory.value)
+        self._log("debug", f"total vram populated: {vram}")
         self._get_current_vram(vram)
+        self._log("debug", f"total vram populated: {vram}")
         return vram
 
 
 class Adapters():  # pylint:disable=too-few-public-methods
-    """ Wrapper to obtain connected DirectX Graphics interface adapters from Windows """
-    def __init__(self) -> None:
+    """ Wrapper to obtain connected DirectX Graphics interface adapters from Windows
+
+    Parameters
+    ----------
+    log_func: :func:`~lib.gpu_stats._base._log`
+        The logging function to use from the parent GPUStats class
+    """
+    def __init__(self, log_func: Callable[[str, str], None]) -> None:
+        self._log = log_func
+        self._log("debug", f"Initializing {self.__class__.__name__}: (log_func: {log_func})")
         self._factory = self._get_factory()
         self._adapter_list = self._create_adapter_list()
         self._sort_adapter_list()
         self._adapters = self._get_adapters()
         self._valid_adaptors: List[Device] = []
+        self._log("debug", f"Initialized {self.__class__.__name__}")
 
-    @classmethod
-    def _get_factory(cls) -> ctypes._Pointer:
+    def _get_factory(self) -> ctypes._Pointer:
         """ Get a DXGI 1.1 Factory object
 
         Reference
@@ -561,6 +584,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
         factory_func(IDXCoreAdapterFactory._iid_,  # pylint:disable=protected-access
                      ctypes.byref(handle))
         retval = ctypes.POINTER(IDXCoreAdapterFactory)(cast(IDXCoreAdapterFactory, handle.value))
+        self._log("debug", f"factory: {retval}")
 
         return retval
 
@@ -576,6 +600,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
                 # Sorted by most performant so everything after first basic adapter is skipped
                 break
             self._valid_adaptors.append(device)
+        self._log("debug", f"valid_adaptors: {self._valid_adaptors}")
         return self._valid_adaptors
 
     def _create_adapter_list(self) -> ctypes._Pointer:
@@ -597,7 +622,9 @@ class Adapters():  # pylint:disable=too-few-public-methods
             ctypes.byref(attribute),
             IDXCoreAdapterList._iid_,  # pylint:disable=protected-access
             ctypes.byref(handle))
-        return ctypes.POINTER(IDXCoreAdapterList)(cast(IDXCoreAdapterList, handle.value))
+        retval = ctypes.POINTER(IDXCoreAdapterList)(cast(IDXCoreAdapterList, handle.value))
+        self._log("debug", f"adapter_list: {retval}")
+        return retval
 
     def _sort_adapter_list(self) -> None:
         """ Sort the adapter list, in place, by most performant
@@ -608,6 +635,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
         """
         preference = ctypes.c_uint32(DXCoreAdapterPreference.HighPerformance.value)
         self._adapter_list.Sort(1, ctypes.byref(preference))  # type:ignore[attr-defined]
+        self._log("debug", f"sorted adapter_list: {self._adapter_list}")
 
     def _get_adapters(self) -> List[Device]:
         """ Obtain DirectX 12 supporting hardware adapter objects and add to a Device class for
@@ -628,7 +656,9 @@ class Adapters():  # pylint:disable=too-few-public-methods
                 ctypes.byref(handle))
             if success != 0:
                 continue
-            retval.append(Device(POINTER(IDXCoreAdapter)(cast(IDXCoreAdapter, handle.value))))
+            retval.append(Device(POINTER(IDXCoreAdapter)(cast(IDXCoreAdapter, handle.value)),
+                                 self._log))
+        self._log("debug", f"adapters: {retval}")
         return retval
 
 
@@ -685,7 +715,7 @@ class DirectML(_GPUStats):
         list
             The :class:`~dx_lib.Device` objects for GPUs that DX Core has discovered.
         """
-        adapters = Adapters()
+        adapters = Adapters(log_func=self._log)
         devices = adapters.valid_adapters
         self._log("debug", f"Obtained Devices: {devices}")
         return devices
@@ -726,7 +756,7 @@ class DirectML(_GPUStats):
             The list of all discovered GPUs
         """
         handles = self._devices
-        self._log("debug", f"AMD GPU Handles found: {handles}")
+        self._log("debug", f"DirectML GPU Handles found: {handles}")
         return handles
 
     def _get_driver(self) -> str:
@@ -755,7 +785,7 @@ class DirectML(_GPUStats):
         return names
 
     def _get_vram(self) -> List[int]:
-        """ Obtain the VRAM in Megabytes for each connected AMD GPU as identified in
+        """ Obtain the VRAM in Megabytes for each connected DirectML GPU as identified in
         :attr:`_handles`.
 
         Returns

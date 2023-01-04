@@ -251,8 +251,8 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         arguments: :class:`argparse.Namespace`
             The command line arguments passed to Faceswap.
         """
-        if get_backend() == "cpu":
-            # Cpu backends will not have this attribute
+        if not hasattr(arguments, "exclude_gpus"):
+            # CPU backends and systems where no GPU was detected will not have this attribute
             logger.debug("Adding missing exclude gpus argument to namespace")
             setattr(arguments, "exclude_gpus", None)
             return

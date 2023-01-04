@@ -495,9 +495,9 @@ class Extractor():
         gpu_stats = GPUStats()
         stats = gpu_stats.get_card_most_free()
         retval: Dict[str, Union[int, str]] = dict(count=gpu_stats.device_count,
-                                                  device=stats["device"],
-                                                  vram_free=int(stats["free"] - vram_buffer),
-                                                  vram_total=int(stats["total"]))
+                                                  device=stats.device,
+                                                  vram_free=int(stats.free - vram_buffer),
+                                                  vram_total=int(stats.total))
         logger.debug(retval)
         return retval
 

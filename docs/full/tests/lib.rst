@@ -5,6 +5,14 @@ lib package
 .. contents:: Contents
    :local:
 
+Subpackages
+===========
+
+.. toctree::
+   :maxdepth: 1
+
+   gpu_stats
+
 
 utils_test module
 *****************
