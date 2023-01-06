@@ -14,20 +14,20 @@ _EXCLUDE_DEVICES: List[int] = []
 
 @dataclass
 class GPUInfo():
-    """ Dataclass for holding full GPU Information.
+    """Dataclass for storing information about the available GPUs on the system.
 
-    Parameters
+    Attributes:
     ----------
     vram: list[int]
-        The total amount of VRAM in Megabytes for each GPU
-    vram: list[str]
-        The amount of VRAM available in Megabytes for each GPU
+        List of integers representing the total VRAM available on each GPU, in MB.
+    vram_free: list[int]
+        List of integers representing the free VRAM available on each GPU, in MB.
     driver: str
-        The GPU driver in use
+        String representing the driver version being used for the GPUs.
     devices: list[str]
-        The device name for each GPU found
+        List of strings representing the names of each GPU device.
     devices_active: list[int]
-        List of indices corresponding to active GPU devices
+        List of integers representing the indices of the active GPU devices.
     """
     vram: List[int]
     vram_free: List[int]
@@ -40,10 +40,10 @@ class GPUInfo():
 class BiggestGPUInfo():
     """ Dataclass for holding GPU Information about the card with most available VRAM.
 
-    Parameters
+    Attributes
     ----------
     card_id: int
-        The index of the card as pertaining to :attr:`_handles`
+        Integer representing the index of the GPU device.
     device: str
         The name of the device
     free: float
@@ -63,8 +63,12 @@ def set_exclude_devices(devices: List[int]) -> None:
 
     Parameters
     ----------
-    devices: list
-        list of indices corresponding to the GPU devices connected to the computer
+    devices: list[int]
+        list of GPU device indices to exclude
+
+    Example
+    -------
+    >>> set_exclude_devices([0, 1]) # Exclude the first two GPU devices
     """
     logger = logging.getLogger(__name__)
     logger.debug("Excluding GPU indicies: %s", devices)
@@ -74,7 +78,13 @@ def set_exclude_devices(devices: List[int]) -> None:
 
 
 class _GPUStats():
-    """ Parent class for returning information of GPUs used. """
+    """ Parent class for collecting GPU device information.
+
+    Parameters:
+    -----------
+    log : bool, optional
+        Flag indicating whether or not to log debug messages. Default: `True`.
+    """
 
     def __init__(self, log: bool = True) -> None:
         # Logger is held internally, as we don't want to log when obtaining system stats on crash
@@ -106,7 +116,7 @@ class _GPUStats():
 
     @property
     def cli_devices(self) -> List[str]:
-        """ list: List of available devices for use in faceswap's command line arguments. """
+        """ list[str]: Formatted index: name text string for each GPU """
         return [f"{idx}: {device}" for idx, device in enumerate(self._device_names)]
 
     @property
@@ -139,16 +149,16 @@ class _GPUStats():
         logger = getattr(self._logger, level.lower())
         logger(message)
 
-    def _initialize(self):
-        """ Override for GPU specific initialization code. """
+    def _initialize(self) -> None:
+        """ Override to initialize the GPU device handles and any other necessary resources. """
         self._is_initialized = True
 
-    def _shutdown(self):
-        """ Override for GPU specific shutdown code. """
+    def _shutdown(self) -> None:
+        """ Override to shutdown the GPU device handles and any other necessary resources. """
         self._is_initialized = False
 
     def _get_device_count(self) -> int:
-        """ Override to obtain GPU specific device count
+        """ Override to obtain the number of GPU devices
 
         Returns
         -------
