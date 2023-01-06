@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, cast, List
 
-from comtypes import IUnknown, GUID, STDMETHOD, HRESULT
+from comtypes import COMError, IUnknown, GUID, STDMETHOD, HRESULT
 
 from ._base import _GPUStats
 
@@ -27,80 +27,47 @@ class LookupGUID:
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore-adapter-attribute-guids
     https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nn-d3d12-id3d12device2
     """
-    d3d11_graphics = GUID("{8c47866b-7583-450d-f0f0-6bada895af4b}")
-    d3d12_graphics = GUID("{0c9ece4d-2f6e-4f01-8c96-e89e331b47b1}")
-    d3d12_core_compute = GUID("{248e2800-a793-4724-abaa-23a6de1be090}")
-    id3d12device = GUID("{189819f1-1db6-4b57-be54-1821339b85f7}")
+    IDXGIDevice = GUID("{54ec77fa-1377-44e6-8c32-88fd5f44c84c}")
+    ID3D12Device = GUID("{189819f1-1db6-4b57-be54-1821339b85f7}")
 
 
 # ENUMS
-class DXCoreAdapterPreference(IntEnum):
-    """ Constants that specify DXCore adapter preferences to be used as list-sorting criteria in
-    :func:`IDXCoreAdapterList.Sort`
+class DXGIGpuPreference(IntEnum):
+    """ The preference of GPU for the app to run on.
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ne-dxcore_interface-dxcoreadapterpreference
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ne-dxgi1_6-dxgi_gpu_preference
     """
-    # pylint:disable=invalid-name
-    Hardware = 0
-    MinimumPower = 1
-    HighPerformance = 2
+    DXGI_GPU_PREFERENCE_UNSPECIFIED = 0
+    DXGI_GPU_PREFERENCE_MINIMUM_POWER = 1
+    DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE = 2
 
 
-class DXCoreAdapterProperty(IntEnum):
-    """ Defines constants that specify DXCore adapter properties. Use in
-    :func:`IDXCoreAdapter.GetPropertySize` to retrieve the buffer size necessary to receive the
-    value of the corresponding property. Use in :func:`IDXCoreAdapter.GetProperty` to retrieve the
-    property's value
+class DXGIAdapterFlag(IntEnum):
+    """ Identifies the type of DXGI adapter.
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ne-dxcore_interface-dxcoreadapterproperty
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ne-dxgi-dxgi_adapter_flag
     """
-    # pylint:disable=invalid-name
-    InstanceLuid = 0
-    DriverVersion = 1
-    DriverDescription = 2
-    HardwareID = 3
-    KmdModelVersion = 4
-    ComputePreemptionGranularity = 5
-    GraphicsPreemptionGranularity = 6
-    DedicatedAdapterMemory = 7
-    DedicatedSystemMemory = 8
-    SharedSystemMemory = 9
-    AcgCompatible = 10
-    IsHardware = 11
-    IsIntegrated = 12
-    IsDetachable = 13
+    DXGI_ADAPTER_FLAG_NONE = 0
+    DXGI_ADAPTER_FLAG_REMOTE = 1
+    DXGI_ADAPTER_FLAG_SOFTWARE = 2
+    DXGI_ADAPTER_FLAG_FORCE_DWORD = 0xffffffff
 
 
-class DXCoreAdapterState(IntEnum):
-    """ Specify kinds of DXCore adapter states. Pass one of these constants to
-    :func:`IDXCoreAdapter.QueryState` to retrieve the adapter state item for that state.
-
-    Reference
-    ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ne-dxcore_interface-dxcoreadapterstate
-    """
-    # pylint:disable=invalid-name
-    IsDriverUpdateInProgress = 0
-    AdapterMemoryBudget = 1
-
-
-class DXCoreSegmentGroup(IntEnum):
+class DXGIMemorySegmentGroup(IntEnum):
     """ Constants that specify an adapter's memory segment grouping.
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/api/dxcore_interface/ne-dxcore_interface-dxcoresegmentgroup
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_4/ne-dxgi1_4-dxgi_memory_segment_group
     """
-    # pylint:disable=invalid-name
-    Local = 0
-    NonLocal = 1
+    DXGI_MEMORY_SEGMENT_GROUP_LOCAL = 0
+    DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL = 1
 
 
 class D3DFeatureLevel(Enum):
@@ -145,25 +112,12 @@ class StructureRepr(Structure):  # pylint:disable=too-few-public-methods
 
 
 class LUID(StructureRepr):  # pylint:disable=too-few-public-methods
-    """Local Identifier for an adaptor
+    """ Local Identifier for an adaptor
 
     Reference
     ---------
     https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-luid """
     _fields_ = [("LowPart", ctypes.c_ulong), ("HighPart", ctypes.c_long)]
-
-
-class DXCoreHardwareID(StructureRepr):  # pylint:disable=too-few-public-methods
-    """ Represents the PnP hardware ID parts for an adapter
-
-    Reference
-    ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ns-dxcore_interface-dxcorehardwareid
-    """
-    _fields_ = [("vendorID", ctypes.c_uint32),
-                ("deviceID", ctypes.c_uint32),
-                ("subSysID", ctypes.c_uint32),
-                ("revision", ctypes.c_uint32)]
 
 
 class DriverVersion(StructureRepr):  # pylint:disable=too-few-public-methods
@@ -178,372 +132,167 @@ class DriverVersion(StructureRepr):  # pylint:disable=too-few-public-methods
                 ("parts_d", ctypes.c_uint16)]
 
 
-class DXCoreAdapterMemoryBudget(StructureRepr):  # pylint:disable=too-few-public-methods
-    """ Specifies the AdapterMemoryBudget adapter state, which retrieves or requests the adapter
-    memory budget on the adapter.
+class DXGIAdapterDesc1(StructureRepr):  # pylint:disable=too-few-public-methods
+    """ Describes an adapter (or video card) using DXGI 1.1
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ns-dxcore_interface-dxcoreadaptermemorybudget
-    """
-    _fields_ = [("budget", ctypes.c_uint64),
-                ("currentUsage", ctypes.c_uint64),
-                ("availableForReservation", ctypes.c_uint64),
-                ("currentReservation", ctypes.c_uint64)]
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi/ns-dxgi-DXGIAdapterDesc1 """
+    _fields_ = [
+        ("Description", ctypes.c_wchar * 128),
+        ("VendorId", ctypes.c_uint),
+        ("DeviceId", ctypes.c_uint),
+        ("SubSysId", ctypes.c_uint),
+        ("Revision", ctypes.c_uint),
+        ("DedicatedVideoMemory", ctypes.c_size_t),
+        ("DedicatedSystemMemory", ctypes.c_size_t),
+        ("SharedSystemMemory", ctypes.c_size_t),
+        ("AdapterLuid", LUID),
+        ("Flags", DXGIAdapterFlag.ctype)]  # type:ignore[attr-defined] # pylint: disable=no-member
 
 
-class DXCoreAdapterMemoryBudgetNodeSegmentGroup(StructureRepr):  # pylint:disable=too-few-public-methods  # noqa:E501
-    """ Describes a memory segment group for an adapter.
+class DXGIQueryVideoMemoryInfo(StructureRepr):  # pylint:disable=too-few-public-methods
+    """ Describes the current video memory budgeting parameters.
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/api/dxcore_interface/ns-dxcore_interface-dxcoreadaptermemorybudgetnodesegmentgroup
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_4/ns-dxgi1_4-dxgi_query_video_memory_info
     """
-    _fields_ = [("nodeIndex", ctypes.c_uint32),
-                ("segmentGroup", DXCoreSegmentGroup.ctype)]  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
+    _fields_ = [("Budget", ctypes.c_uint64),
+                ("CurrentUsage", ctypes.c_uint64),
+                ("AvailableForReservation", ctypes.c_uint64),
+                ("CurrentReservation", ctypes.c_uint64)]
 
 
 # COM OBjects
-class IDXCoreAdapter(IUnknown):
-    """ Implements methods for retrieving details about an adapter item.
+class IDXObject(IUnknown):
+    """ Base interface for all DXGI objects.
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/nn-dxcore_interface-idxcoreadapter
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nn-dxgi-idxgiobject
     """
-    _iid_ = GUID("{f0db4c7f-fe5a-42a2-bd62-f2a6cf6fc83e}")
-    _methods_ = [STDMETHOD(ctypes.c_bool, "IsValid"),
-                 STDMETHOD(ctypes.c_bool, "IsAttributeSupported", [GUID]),
-                 STDMETHOD(ctypes.c_bool, "IsPropertySupported",
-                           [DXCoreAdapterProperty.ctype]),  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                 STDMETHOD(HRESULT, "GetProperty",
-                           [DXCoreAdapterProperty.ctype,    # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                            ctypes.c_size_t,
-                            POINTER(ctypes.c_void_p)]),
-                 STDMETHOD(HRESULT, "GetPropertySize",
-                           [DXCoreAdapterProperty.ctype,  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                            POINTER(ctypes.c_size_t)]),
-                 STDMETHOD(ctypes.c_bool, "IsQueryStateSupported",
-                           [DXCoreAdapterState.ctype]),  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                 STDMETHOD(HRESULT, "QueryState",
-                           [DXCoreAdapterState.ctype,  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                            ctypes.c_size_t,
-                            POINTER(ctypes.c_void_p),
-                            ctypes.c_size_t,
-                            POINTER(ctypes.c_void_p)]),
-                 STDMETHOD(ctypes.c_bool, "IsSetStateSupported",
-                           [DXCoreAdapterState.ctype]),  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                 STDMETHOD(HRESULT, "SetState",
-                           [DXCoreAdapterState.ctype,  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                            ctypes.c_size_t,
-                            POINTER(ctypes.c_void_p),
-                            ctypes.c_size_t,
-                            POINTER(ctypes.c_void_p)]),
-                 STDMETHOD(HRESULT, "GetFactory", [GUID, POINTER(ctypes.c_void_p)])]
+    _iid_ = GUID("{aec22fb8-76f3-4639-9be0-28eb43a67a2e}")
+    _methods_ = [STDMETHOD(HRESULT, "SetPrivateData",
+                           [GUID, ctypes.c_uint, POINTER(ctypes.c_void_p)]),
+                 STDMETHOD(HRESULT, "SetPrivateDataInterface", [GUID, POINTER(IUnknown)]),
+                 STDMETHOD(HRESULT, "GetPrivateData",
+                           [GUID, POINTER(ctypes.c_uint), POINTER(ctypes.c_void_p)]),
+                 STDMETHOD(HRESULT, "GetParent", [GUID, POINTER(POINTER(ctypes.c_void_p))])]
 
 
-class IDXCoreAdapterList(IUnknown):
-    """ Implements methods for retrieving adapter items from a generated list, as well as details
-    about the list.
+class IDXGIFactory6(IDXObject):
+    """ Implements methods for generating DXGI objects
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/nn-dxcore_interface-idxcoreadapterlist
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nn-dxgi-idxgifactory
     """
-    _iid_ = GUID("{526c7776-40e9-459b-b711-f32ad76dfc28}")
-    _methods_ = [STDMETHOD(HRESULT, "GetAdapter",
-                           [ctypes.c_uint32, GUID, POINTER(ctypes.c_void_p)]),
-                 STDMETHOD(ctypes.c_uint32, "GetAdapterCount"),
-                 STDMETHOD(ctypes.c_bool, "IsStale"),
-                 STDMETHOD(HRESULT, "GetFactory", [GUID, POINTER(ctypes.c_void_p)]),
-                 STDMETHOD(HRESULT, "Sort",
-                           [ctypes.c_uint32,
-                            POINTER(DXCoreAdapterPreference.ctype)]),  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                 STDMETHOD(ctypes.c_bool, "IsAdapterPreferenceSupported",
-                           [DXCoreAdapterPreference.ctype])]  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
+    _iid_ = GUID("{c1b6694f-ff09-44a9-b03c-77900a0a1d17}")
+
+    _methods_ = [STDMETHOD(HRESULT, "EnumAdapters"),  # IDXGIFactory
+                 STDMETHOD(HRESULT, "MakeWindowAssociation"),
+                 STDMETHOD(HRESULT, "GetWindowAssociation"),
+                 STDMETHOD(HRESULT, "CreateSwapChain"),
+                 STDMETHOD(HRESULT, "CreateSoftwareAdapter"),
+                 STDMETHOD(HRESULT, "EnumAdapters1"),  # IDXGIFactory1
+                 STDMETHOD(ctypes.c_bool, "IsCurrent"),
+                 STDMETHOD(ctypes.c_bool, "IsWindowedStereoEnabled"),  # IDXGIFactory2
+                 STDMETHOD(HRESULT, "CreateSwapChainForHwnd"),
+                 STDMETHOD(HRESULT, "CreateSwapChainForCoreWindow"),
+                 STDMETHOD(HRESULT, "GetSharedResourceAdapterLuid"),
+                 STDMETHOD(HRESULT, "RegisterStereoStatusWindow"),
+                 STDMETHOD(HRESULT, "RegisterStereoStatusEvent"),
+                 STDMETHOD(None, "UnregisterStereoStatus"),
+                 STDMETHOD(HRESULT, "RegisterOcclusionStatusWindow"),
+                 STDMETHOD(HRESULT, "RegisterOcclusionStatusEvent"),
+                 STDMETHOD(None, "UnregisterOcclusionStatus"),
+                 STDMETHOD(HRESULT, "CreateSwapChainForComposition"),
+                 STDMETHOD(ctypes.c_uint, "GetCreationFlags"),  # IDXGIFactory3
+                 STDMETHOD(HRESULT, "EnumAdapterByLuid",  # IDXGIFactory4
+                           [LUID, GUID, POINTER(POINTER(ctypes.c_void_p))]),
+                 STDMETHOD(HRESULT, "EnumWarpAdapter"),
+                 STDMETHOD(HRESULT, "CheckFeatureSupport"),  # IDXGIFactory5
+                 STDMETHOD(HRESULT,  # IDXGIFactory6
+                           "EnumAdapterByGpuPreference",
+                           [ctypes.c_uint,
+                            DXGIGpuPreference.ctype,  # type:ignore[attr-defined] # pylint:disable=no-member  # noqa:E501
+                            GUID,
+                            POINTER(ctypes.c_void_p)])]
 
 
-class IDXCoreAdapterFactory(IUnknown):
-    """ Implements methods for generating DXCore adapter enumeration objects, and for retrieving
-    their details.
+class IDXGIAdapter3(IDXObject):
+    """ Represents a display sub-system (including one or more GPU's, DACs and video memory).
 
     Reference
     ---------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/nn-dxcore_interface-idxcoreadapterfactory
+    https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_4/nn-dxgi1_4-idxgiadapter3
     """
-    _iid_ = GUID("{78ee5945-c36e-4b13-a669-005dd11c0f06}")
-    _methods_ = [STDMETHOD(HRESULT, "CreateAdapterList",
-                           [ctypes.c_uint32, POINTER(GUID), GUID, POINTER(ctypes.c_void_p)]),
-                 STDMETHOD(HRESULT, "GetAdapterByLuid", [LUID, GUID, POINTER(ctypes.c_void_p)]),
-                 STDMETHOD(ctypes.c_bool, "IsNotificationTypeSupported", [ctypes.c_uint32]),
-                 STDMETHOD(HRESULT, "RegisterEventNotification"),  # unbound
-                 STDMETHOD(HRESULT, "UnregisterEventNotification", [ctypes.c_uint32])]
+    _iid_ = GUID("{645967a4-1392-4310-a798-8053ce3e93fd}")
+    _methods_ = [STDMETHOD(HRESULT, "EnumOutputs"),  # v1.0 Methods
+                 STDMETHOD(HRESULT, "GetDesc"),
+                 STDMETHOD(HRESULT, "CheckInterfaceSupport",  # v1.1 Methods
+                           [GUID, POINTER(DriverVersion)]),
+                 STDMETHOD(HRESULT, "GetDesc1", [POINTER(DXGIAdapterDesc1)]),
+                 STDMETHOD(HRESULT, "GetDesc2"),  # v1.2 Methods
+                 STDMETHOD(HRESULT,    # v1.3 Methods
+                           "RegisterHardwareContentProtectionTeardownStatusEvent"),
+                 STDMETHOD(None, "UnregisterHardwareContentProtectionTeardownStatus"),
+                 STDMETHOD(HRESULT,
+                           "QueryVideoMemoryInfo",
+                           [ctypes.c_uint,
+                            DXGIMemorySegmentGroup.ctype,  # type:ignore[attr-defined] # pylint:disable=no-member  # noqa:E501
+                            POINTER(DXGIQueryVideoMemoryInfo)]),
+                 STDMETHOD(HRESULT, "SetVideoMemoryReservation"),
+                 STDMETHOD(HRESULT, "RegisterVideoMemoryBudgetChangeNotificationEvent"),
+                 STDMETHOD(None, "UnregisterVideoMemoryBudgetChangeNotification")]
 
 
 ###########################
 # PYTHON COLLATED OBJECTS #
 ###########################
 @dataclass
-class VRam:
-    """ Object for holding information about VRAM amounts as bytes
+class Device:
+    """ Holds information about a device attached to an adapter.
 
     Parameters
     ----------
-    dedicated_adapter_memory: int, optional
-        The total amount dedicated adapter memory that is not shared with the CPU. Default: `0`
-    dedicated_system_memory: int, optional
-        The total amount of dedicated system memory that is not shared with the CPU. Default: `0`
-    shared_system_memory: int, optional
-        The amount of shared system memory. This is the maximum value of system memory that may be
-        consumed by the adapter during operation. Default: `0`
-    local_budget: int, optional
-        The OS-provided adapter local memory budget. Default: `0`
-    local_current_usage: int, optional
-        The applicaton's current adapter local memory usage. Default: `0`
-    local_available_for_reservation: int, optional
-        The amount of adapter memory, that the application has available locally for reservation.
-        Default: `0`
-    local_current_reservation: int, optional
-        The amount of adapter memory that is reserved locally by the application. Default: `0`
-    non_local_budget: int, optional
-        The OS-provided adapter non-local memory budget. Default: `0`
-    non_local_current_usage: int, optional
-        The applicaton's current adapter non-local memory usage. Default: `0`
-    non_local_available_for_reservation: int, optional
-        The amount of adapter memory, that the application has available non-locally for
-        reservation. Default: `0`
-    non_local_current_reservation: int, optional
-        The amount of adapter memory that is reserved non-locally by the application. Default: `0`
-
-    References
-    ----------
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ne-dxcore_interface-dxcoreadapterproperty
-    https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/ns-dxcore_interface-dxcoreadaptermemorybudget
-    """
-    dedicated_adapter_memory: int = 0
-    dedicated_system_memory: int = 0
-    shared_system_memory: int = 0
-    local_budget: int = 0
-    local_current_usage: int = 0
-    local_available_for_reservation: int = 0
-    local_current_reservation: int = 0
-    non_local_budget: int = 0
-    non_local_current_usage: int = 0
-    non_local_available_for_reservation: int = 0
-    non_local_current_reservation: int = 0
-
-
-class Device():  # pylint:disable=too-few-public-methods
-    """ Holds the information about a device.
-
-    Parameters
-    ----------
-    adapter: :class:`ctypes._Pointer`
-        A ctypes pointer pointing at the adapter to be analysed
-    log_func: :func:`~lib.gpu_stats._base._log`
-        The logging function to use from the parent GPUStats class
-
-    Attributes
-    ----------
-    is_hardware: bool
-        ``True`` if the device is a hardware adapter. ``False`` if it is software
-    compute_only: bool
-        ``True`` if the device is a compute-only device. ``False`` if it is a GPU
-    hardware_id: :class:`DXCoreHardwareID`
-        The hardware identification information
-    is_basic_render_vendor: bool
-        ``True`` if the device is a basic render vendor
-    is_basic_render_device: bool
-        ``True`` if the device is a basic render device
+    description: :class:`DXGIAdapterDesc1`
+        The information returned from DXGI.dll about the device
     driver_version: str
-        The driver version as a 4 part string
-    d3d12_device: bool
-        ``True`` if the device is DirectX 12 compatible
-    driver_details: str
-        The vendor and model name of the device
-    luid: LUID
-        The internal LUID of the device
-    vram: :class:`VRam`
-        The vram statistics of the device
+        The driver version of the device
+    local_mem: :class:`DXGIQueryVideoMemoryInfo`
+        The amount of local memory currently available
+    non_local_mem: :class:`DXGIQueryVideoMemoryInfo`
+        The amount of non-local memory currently available
+    is_d3d12: bool
+        ``True`` if the device supports DirectX12
+    is_compute_only: bool
+        ``True`` if the device is only compute (no graphics)
     """
-    def __init__(self, adapter: ctypes._Pointer, log_func: Callable[[str, str], None]) -> None:
-        self._log = log_func
-        self._log("debug", f"Initializing {self.__class__.__name__}: (adapter: {adapter}, "
-                           f"log_func: {log_func})")
-        self._adapter = adapter
-        self.is_hardware: bool = self._get_property(DXCoreAdapterProperty.IsHardware,
-                                                    ctypes.c_bool).value
-        self.compute_only = not adapter.IsAttributeSupported(  # type:ignore[attr-defined]
-                                                             LookupGUID.d3d12_graphics)
-        self.hardware_id: DXCoreHardwareID = self._get_property(DXCoreAdapterProperty.HardwareID,
-                                                                DXCoreHardwareID)
-        self.is_basic_render_vendor: bool = self.hardware_id.vendorID == VendorID.MICROSOFT.value
-        self.is_basic_render_device: bool = self.hardware_id.deviceID == 0x8c
+    description: DXGIAdapterDesc1
+    driver_version: str
+    local_mem: DXGIQueryVideoMemoryInfo
+    non_local_mem: DXGIQueryVideoMemoryInfo
+    is_d3d12: bool
+    is_compute_only: bool = False
 
-        self.driver_version = self._get_driver_version()
-        self.d3d12_device = self._try_create_d3d12_device()
-        self.driver_details = self._get_driver_details()
-        self.luid: LUID = self._get_property(DXCoreAdapterProperty.InstanceLuid, LUID)
-        self.vram = self._get_vram()
-        self._log("debug", f"Initialized {self.__class__.__name__}")
+    @property
+    def is_software_adapter(self) -> bool:
+        """ bool: ``True`` if this is a software adapter. """
+        return self.description.Flags == DXGIAdapterFlag.DXGI_ADAPTER_FLAG_SOFTWARE.value
 
-    def __repr__(self):
-        """ Nicely format the __repr__ for logging purposes """
-        items = ", ".join(f"{k}={v}" for k, v in self.__dict__.items()
-                          if k[0] != "_" and k != "driver_details")
-        retval = f"<{self.__class__.__name__}({self.driver_details}): ({items})>"
-        return retval
+    @property
+    def is_valid(self) -> bool:
+        """ bool: ``True`` if this adapter is a hardware adaptor and is not the basic renderer """
+        if self.is_software_adapter:
+            return False
 
-    def _get_property(self, adapter_property: DXCoreAdapterProperty, ret_type: Any) -> Any:
-        """ Obtain a property from an adapter
+        if (self.description.VendorId == VendorID.MICROSOFT.value and
+                self.description.DeviceId == 0x8c):
+            return False
 
-        Parameters
-        ----------
-        adapter_property: :class:`DXCoreAdapterProperty`
-            Enum for the property to query
-        ret_type: ctypes type
-            The ctypes object that the data should be returned in
-
-        Returns
-        -------
-        ctypes type
-            The property value for the requested property
-        """
-        if issubclass(ret_type, ctypes.Array):
-            # TODO For arrays a standard void pointer silently exits when returning the contents.
-            # Ideally we would have a standardized way of creating the handle, but too much time
-            # has been spent on this, so we just have switch logic depending on our limited use
-            # case
-            buffer = ret_type()
-            handle = ctypes.c_void_p.from_buffer(buffer)
-        else:
-            handle = ctypes.c_void_p(0)
-        success = self._adapter.GetProperty(adapter_property.value,  # type:ignore[attr-defined]
-                                            ctypes.sizeof(ret_type),
-                                            ctypes.byref(handle))
-
-        if success != 0:  # Return empty requested object on failure
-            try:
-                retval = ret_type().value
-            except AttributeError:
-                retval = ret_type()
-            return retval
-
-        return POINTER(ret_type)(handle).contents
-
-    def _get_driver_version(self) -> str:
-        """ Obtain the driver version from the adapter API
-
-        Returns
-        -------
-        str
-            The 4 part driver version
-        """
-        driver = self._get_property(DXCoreAdapterProperty.DriverVersion, DriverVersion)
-        self._log("debug", f"driver: {driver}")
-        return f"{driver.parts_d}.{driver.parts_c}.{driver.parts_b}.{driver.parts_a}"
-
-    def _try_create_d3d12_device(self) -> bool:
-        """ Attempt to create a D3D12 device. Failure means the device does not support DirectX 12,
-        success means it does.
-
-        Returns
-        -------
-        bool
-            ``True`` if the device supports DirectX 12 otherwise ``False``
-        """
-        feature_level = (D3DFeatureLevel.D3D_FEATURE_LEVEL_1_0_CORE if self.compute_only
-                         else D3DFeatureLevel.D3D_FEATURE_LEVEL_11_0)
-        func = windll.d3d12.D3D12CreateDevice
-        func.argtypes = (POINTER(IDXCoreAdapter),
-                         D3DFeatureLevel.ctype,  # type:ignore[attr-defined]  # pylint:disable=no-member  # noqa:E501
-                         GUID)
-        func.restype = HRESULT
-        check = func(self._adapter, feature_level.value, LookupGUID.id3d12device)
-        self._log("debug", f"d3d12 check result: {check}")
-        retval = check in (0, 1)  # Should be 'S_FALSE' but leave S_OK anyway
-        return retval
-
-    def _get_driver_details(self) -> str:
-        """ Obtain the driver details (device model name and number)
-
-        Returns
-        -------
-        str
-            The device clear text identifier
-        """
-        handle = ctypes.c_size_t(0)
-        success = self._adapter.GetPropertySize(  # type:ignore[attr-defined]
-                                                DXCoreAdapterProperty.DriverDescription.value,
-                                                ctypes.byref(handle))
-        if success != 0:
-            retval = "Driver not Found"
-        else:
-            size = handle.value
-            details = self._get_property(DXCoreAdapterProperty.DriverDescription,
-                                         ctypes.c_char * size)
-            retval = details.value.decode(encoding="utf-8", errors="ignore")
-        self._log("debug", f"driver_details: {retval}")
-        return retval
-
-    def _get_current_vram(self, vram: VRam) -> None:
-        """ Obtain statistics on current VRAM usage and populate to the given object
-
-        Parameters
-        ----------
-        vram: :class:`VRam`
-            The VRAM object for the device that is to be populated with current usage stats
-        """
-        if not self._adapter.IsQueryStateSupported(  # type:ignore[attr-defined]
-                DXCoreAdapterState.AdapterMemoryBudget.value):
-            self._log("debug", "QueryState not supported")
-            return  # Just leave them all set to 0
-
-        for segment in ("Local", "NonLocal"):
-            in_ = DXCoreAdapterMemoryBudgetNodeSegmentGroup()
-            in_.nodeIndex = 0  # pylint:disable=invalid-name,attribute-defined-outside-init
-            in_.segmentGroup = getattr(DXCoreSegmentGroup,  segment).value  # pylint:disable=invalid-name,attribute-defined-outside-init  # noqa:E501
-            in_ptr = ctypes.c_void_p.from_buffer(in_)
-
-            out = DXCoreAdapterMemoryBudget()
-            handle = ctypes.c_void_p.from_buffer(out)
-            success = self._adapter.QueryState(  # type:ignore[attr-defined]
-                DXCoreAdapterState.AdapterMemoryBudget.value,
-                ctypes.c_size_t(ctypes.sizeof(in_)),
-                ctypes.byref(in_ptr),
-                ctypes.c_size_t(ctypes.sizeof(out)),
-                ctypes.byref(handle))
-            if success != 0:
-                continue  # Just leave set at 0
-            setattr(vram, f"{segment.lower()}_budget", out.budget)
-            setattr(vram, f"{segment.lower()}_current_usage", out.currentUsage)
-            setattr(vram,
-                    f"{segment.lower()}_available_for_reservation",
-                    out.availableForReservation)
-            setattr(vram, f"{segment.lower()}_current_reservation", out.currentReservation)
-            self._log("debug", f"{segment.lower()} free vram populated: {vram}")
-
-    def _get_vram(self) -> VRam:
-        """ Obtain total and available VRAM and populate to a :class:`VRam` object
-
-        Returns
-        -------
-        :class:`VRam`
-            Object holding VRAM information for a device
-        """
-        dedicated_adapter_memory = self._get_property(DXCoreAdapterProperty.DedicatedAdapterMemory,
-                                                      ctypes.c_uint64)
-        dedicated_system_memory = self._get_property(DXCoreAdapterProperty.DedicatedSystemMemory,
-                                                     ctypes.c_uint64)
-        shared_system_memory = self._get_property(DXCoreAdapterProperty.SharedSystemMemory,
-                                                  ctypes.c_uint64)
-        vram = VRam(dedicated_adapter_memory=dedicated_adapter_memory.value,
-                    dedicated_system_memory=dedicated_system_memory.value,
-                    shared_system_memory=shared_system_memory.value)
-        self._log("debug", f"total vram populated: {vram}")
-        self._get_current_vram(vram)
-        self._log("debug", f"total vram populated: {vram}")
-        return vram
+        return True
 
 
 class Adapters():  # pylint:disable=too-few-public-methods
@@ -557,10 +306,11 @@ class Adapters():  # pylint:disable=too-few-public-methods
     def __init__(self, log_func: Callable[[str, str], None]) -> None:
         self._log = log_func
         self._log("debug", f"Initializing {self.__class__.__name__}: (log_func: {log_func})")
+
         self._factory = self._get_factory()
-        self._adapter_list = self._create_adapter_list()
-        self._sort_adapter_list()
         self._adapters = self._get_adapters()
+        self._devices = self._process_adapters()
+
         self._valid_adaptors: List[Device] = []
         self._log("debug", f"Initialized {self.__class__.__name__}")
 
@@ -574,91 +324,148 @@ class Adapters():  # pylint:disable=too-few-public-methods
         Returns
         -------
         :class:`ctypes._Pointer`
-            A pointer to a :class:`IDXGIFactory` COM instance
+            A pointer to a :class:`IDXGIFactory6` COM instance
         """
-        factory_func = windll.dxcore.DXCoreCreateAdapterFactory
+        factory_func = windll.dxgi.CreateDXGIFactory
         factory_func.argtypes = (GUID, POINTER(ctypes.c_void_p))
         factory_func.restype = HRESULT
         handle = ctypes.c_void_p(0)
-
-        factory_func(IDXCoreAdapterFactory._iid_,  # pylint:disable=protected-access
-                     ctypes.byref(handle))
-        retval = ctypes.POINTER(IDXCoreAdapterFactory)(cast(IDXCoreAdapterFactory, handle.value))
+        factory_func(IDXGIFactory6._iid_,  ctypes.byref(handle))  # pylint:disable=protected-access
+        retval = ctypes.POINTER(IDXGIFactory6)(cast(IDXGIFactory6, handle.value))
         self._log("debug", f"factory: {retval}")
-
         return retval
 
     @property
     def valid_adapters(self) -> List[Device]:
-        """ list: DirectX 12 compatible hardware :class:`Device` objects"""
+        """ list[:class:`Device`]: DirectX 12 compatible hardware :class:`Device` objects """
         if self._valid_adaptors:
             return self._valid_adaptors
 
-        for device in self._adapters:
-            if not device.is_hardware or (device.is_basic_render_vendor
-                                          and device.is_basic_render_device):
+        for device in self._devices:
+            if not device.is_valid:
                 # Sorted by most performant so everything after first basic adapter is skipped
                 break
+            if not device.is_d3d12:
+                continue
             self._valid_adaptors.append(device)
         self._log("debug", f"valid_adaptors: {self._valid_adaptors}")
         return self._valid_adaptors
 
-    def _create_adapter_list(self) -> ctypes._Pointer:
-        """ Obtain a list of connected adapters
-
-        Returns
-        -------
-        :class:`ctypes._Pointer`
-            The pointer to the adapter list
-
-        Reference
-        ---------
-        https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/nf-dxcore_interface-idxcoreadapterfactory-createadapterlist
-        """
-        attribute = LookupGUID.d3d12_core_compute
-        handle = ctypes.c_void_p(0)
-        self._factory.CreateAdapterList(  # type:ignore[attr-defined]
-            1,
-            ctypes.byref(attribute),
-            IDXCoreAdapterList._iid_,  # pylint:disable=protected-access
-            ctypes.byref(handle))
-        retval = ctypes.POINTER(IDXCoreAdapterList)(cast(IDXCoreAdapterList, handle.value))
-        self._log("debug", f"adapter_list: {retval}")
-        return retval
-
-    def _sort_adapter_list(self) -> None:
-        """ Sort the adapter list, in place, by most performant
-
-        References
-        ----------
-        https://learn.microsoft.com/en-us/windows/win32/dxcore/dxcore_interface/nf-dxcore_interface-idxcoreadapterlist-sort
-        """
-        preference = ctypes.c_uint32(DXCoreAdapterPreference.HighPerformance.value)
-        self._adapter_list.Sort(1, ctypes.byref(preference))  # type:ignore[attr-defined]
-        self._log("debug", f"sorted adapter_list: {self._adapter_list}")
-
-    def _get_adapters(self) -> List[Device]:
-        """ Obtain DirectX 12 supporting hardware adapter objects and add to a Device class for
+    def _get_adapters(self) -> List[ctypes._Pointer]:
+        """ Obtain DirectX 12 supporting hardware adapter objects and add a Device class for
         obtaining details
 
         Returns
         -------
         list
-            List of :class:`Device` objects
+            List of :class:`ctypes._Pointer` objects
         """
-        num_adapters = self._adapter_list.GetAdapterCount()  # type:ignore[attr-defined]
+        idx = 0
         retval = []
-        for idx in range(num_adapters):
-            handle = ctypes.c_void_p(0)
-            success = self._adapter_list.GetAdapter(  # type:ignore[attr-defined]
-                idx,
-                IDXCoreAdapter._iid_,  # pylint:disable=protected-access
-                ctypes.byref(handle))
-            if success != 0:
-                continue
-            retval.append(Device(POINTER(IDXCoreAdapter)(cast(IDXCoreAdapter, handle.value)),
-                                 self._log))
+        while True:
+            try:
+                handle = ctypes.c_void_p(0)
+                success = self._factory.EnumAdapterByGpuPreference(  # type:ignore[attr-defined]
+                    idx,
+                    DXGIGpuPreference.DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE.value,
+                    IDXGIAdapter3._iid_,  # pylint:disable=protected-access
+                    ctypes.byref(handle))
+                if success != 0:
+                    raise AttributeError("Error calling EnumAdapterByGpuPreference. Result: "
+                                         f"{hex(ctypes.c_ulong(success).value)}")
+                adapter = POINTER(IDXGIAdapter3)(cast(IDXGIAdapter3, handle.value))
+                self._log("debug", f"found adapter: {adapter}")
+                retval.append(adapter)
+            except COMError as err:
+                err_code = hex(ctypes.c_ulong(err.hresult).value)  # pylint:disable=no-member
+                self._log(
+                    "debug",
+                    "COM Error. Breaking: "
+                    f"{err.text}({err_code})")  # pylint:disable=no-member
+                break
+            finally:
+                idx += 1
+
         self._log("debug", f"adapters: {retval}")
+        return retval
+
+    def _query_adapter(self, func: Callable[[Any], Any], *args: Any) -> None:
+        """ Query an adapter function, logging if the HRESULT is not a success
+
+        Parameters
+        ----------
+        func: Callable[[Any], Any]
+            The adaptor function to call
+        args: Any
+            The arguments to pass to the adaptor function
+        """
+        check = func(*args)
+        if check:
+            self._log("debug", f"Failed HRESULT for func {func}({args}): "
+                               f"{hex(ctypes.c_ulong(check).value)}")
+
+    def _test_d3d12(self, adapter: ctypes._Pointer) -> bool:
+        """ Test whether the given adapter supports DirectX 12
+
+        Parameters
+        ----------
+        adapter: :class:`ctypes._Pointer`
+            A pointer to an adapter instance
+
+        Returns
+        -------
+        bool
+            ``True`` if the given adapter supports DirectX 12
+        """
+        factory_func = windll.d3d12.D3D12CreateDevice
+        factory_func.argtypes = (
+            POINTER(IUnknown),
+            D3DFeatureLevel.ctype, GUID)  # type:ignore[attr-defined] # pylint:disable=no-member
+        factory_func.restype = HRESULT
+        success = factory_func(adapter,
+                               D3DFeatureLevel.D3D_FEATURE_LEVEL_11_0.value,
+                               LookupGUID.ID3D12Device)
+        return success in (0, 1)
+
+    def _process_adapters(self) -> List[Device]:
+        """ Process the adapters to add discovered information.
+
+        Returns
+        -------
+        list[:class:`Device`]
+            List of device of objects found in the adapters
+        """
+        retval = []
+        for adapter in self._adapters:
+            # Description
+            desc = DXGIAdapterDesc1()
+            self._query_adapter(adapter.GetDesc1, ctypes.byref(desc))  # type:ignore[attr-defined]
+
+            # Driver Version
+            driver = DriverVersion()
+            self._query_adapter(adapter.CheckInterfaceSupport,  # type:ignore[attr-defined]
+                                LookupGUID.IDXGIDevice,
+                                ctypes.byref(driver))
+            driver_version = f"{driver.parts_d}.{driver.parts_c}.{driver.parts_b}.{driver.parts_a}"
+
+            # Current Memory
+            local_mem = DXGIQueryVideoMemoryInfo()
+            self._query_adapter(adapter.QueryVideoMemoryInfo,  # type:ignore[attr-defined]
+                                0,
+                                DXGIMemorySegmentGroup.DXGI_MEMORY_SEGMENT_GROUP_LOCAL.value,
+                                local_mem)
+            non_local_mem = DXGIQueryVideoMemoryInfo()
+            self._query_adapter(
+                adapter.QueryVideoMemoryInfo,  # type:ignore[attr-defined]
+                0,
+                DXGIMemorySegmentGroup.DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL.value,
+                non_local_mem)
+
+            # is_d3d12
+            is_d3d12 = self._test_d3d12(adapter)
+
+            retval.append(Device(desc, driver_version, local_mem, non_local_mem, is_d3d12))
+
         return retval
 
 
@@ -680,14 +487,14 @@ class DirectML(_GPUStats):
 
     @property
     def _all_vram(self) -> List[int]:
-        """ list: The VRAM of each GPU device that DX Core has discovered. """
-        return [int(device.vram.dedicated_adapter_memory / (1024 * 1024))
+        """ list: The VRAM of each GPU device that the DX API has discovered. """
+        return [int(device.description.DedicatedVideoMemory / (1024 * 1024))
                 for device in self._devices]
 
     @property
     def names(self) -> List[str]:
-        """ list: The name of each GPU device that DX Core has discovered. """
-        return [device.driver_details for device in self._devices]
+        """ list: The name of each GPU device that the DX API has discovered. """
+        return [device.description.Description for device in self._devices]
 
     def _get_active_devices(self) -> List[int]:
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
@@ -708,12 +515,12 @@ class DirectML(_GPUStats):
         return devices
 
     def _get_devices(self) -> List[Device]:
-        """ Obtain all detected DX12 devices.
+        """ Obtain all detected DX API devices.
 
         Returns
         -------
         list
-            The :class:`~dx_lib.Device` objects for GPUs that DX Core has discovered.
+            The :class:`~dx_lib.Device` objects for GPUs that the DX API has discovered.
         """
         adapters = Adapters(log_func=self._log)
         devices = adapters.valid_adapters
@@ -731,12 +538,12 @@ class DirectML(_GPUStats):
         """
         if self._is_initialized:
             return
-        self._log("debug", "Initializing DX Core for DirectML.")
+        self._log("debug", "Initializing Win DX API for DirectML.")
         self._devices = self._get_devices()
         super()._initialize()
 
     def _get_device_count(self) -> int:
-        """ Detect the number of GPUs available from DX Core.
+        """ Detect the number of GPUs available from the DX API.
 
         Returns
         -------
@@ -748,7 +555,7 @@ class DirectML(_GPUStats):
         return retval
 
     def _get_handles(self) -> list:
-        """ DX Core Doesn't really use device handles, so we just return the all devices list
+        """ The DX API doesn't really use device handles, so we just return the all devices list
 
         Returns
         -------
@@ -807,6 +614,6 @@ class DirectML(_GPUStats):
              List of `float`s containing the amount of VRAM available, in Megabytes, for each
              connected GPU as corresponding to the values in :attr:`_handles
         """
-        vram = [int(device.vram.local_budget / (1024 * 1024)) for device in self._devices]
+        vram = [int(device.local_mem.Budget / (1024 * 1024)) for device in self._devices]
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram
