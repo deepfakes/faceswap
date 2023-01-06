@@ -40,8 +40,8 @@ class Color(Adjustment):
 
     def process(self, old_face, new_face, raw_mask):
         """
-        Parameters:
-        -------
+        Parameters
+        ----------
         source: NumPy array
             OpenCV image in BGR color space (the source image)
         target: NumPy array
@@ -59,7 +59,7 @@ class Color(Adjustment):
             the scaling factor proposed in the paper.  This method seems to produce
             more consistently aesthetically pleasing results
 
-        Returns:
+        Returns
         -------
         transfer: NumPy array
             OpenCV image (w, h, 3) NumPy array (uint8)
@@ -127,12 +127,13 @@ class Color(Adjustment):
     @staticmethod
     def image_stats(image):
         """
-        Parameters:
-        -------
+        Parameters
+        ----------
+
         image: NumPy array
             OpenCV image in L*a*b* color space
 
-        Returns:
+        Returns
         -------
         Tuple of mean and standard deviations for the L*, a*, and b*
         channels, respectively
@@ -151,13 +152,13 @@ class Color(Adjustment):
         """
         Perform min-max scaling to a NumPy array
 
-        Parameters:
-        -------
+        Parameters
+        ----------
         arr: NumPy array to be scaled to [new_min, new_max] range
         new_range: tuple of form (min, max) specifying range of
             transformed array
 
-        Returns:
+        Returns
         -------
         NumPy array that has been scaled to be in
         [new_range[0], new_range[1]] range
@@ -182,14 +183,14 @@ class Color(Adjustment):
         Trim NumPy array values to be in [0, 255] range with option of
         clipping or scaling.
 
-        Parameters:
-        -------
+        Parameters
+        ----------
         arr: array to be trimmed to [0, 255] range
         clip: should array be scaled by np.clip? if False then input
             array will be min-max scaled to range
             [max([arr.min(), 0]), min([arr.max(), 255])]
 
-        Returns:
+        Returns
         -------
         NumPy array that has been scaled to be in [0, 255] range
         """

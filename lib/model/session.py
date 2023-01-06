@@ -178,7 +178,7 @@ class KSession():
             logger.debug("Filtering devices to: %s", gpus)
             tf.config.set_visible_devices(gpus, "GPU")
 
-        if allow_growth:
+        if allow_growth and self._backend == "nvidia":
             for gpu in gpus:
                 logger.info("Setting allow growth for GPU: %s", gpu)
                 tf.config.experimental.set_memory_growth(gpu, True)

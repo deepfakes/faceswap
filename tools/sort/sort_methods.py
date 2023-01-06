@@ -208,7 +208,7 @@ class InfoLoader():
 class SortMethod():
     """ Parent class for sort methods. All sort methods should inherit from this class
 
-    Parameters:
+    Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments passed to the sort process
@@ -567,7 +567,7 @@ class SortMultiMethod(SortMethod):
 class SortBlur(SortMethod):
     """ Sort images by blur or blur-fft amount
 
-    Parameters:
+    Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments passed to the sort process
@@ -691,7 +691,7 @@ class SortBlur(SortMethod):
 class SortColor(SortMethod):
     """ Score by channel average intensity or black pixels.
 
-    Parameters:
+    Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments passed to the sort process
@@ -827,7 +827,7 @@ class SortColor(SortMethod):
 class SortFace(SortMethod):
     """ Sort by identity similarity using VGG Face 2
 
-    Parameters:
+    Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments passed to the sort process
@@ -935,7 +935,7 @@ class SortFace(SortMethod):
 class SortHistogram(SortMethod):
     """ Sort by image histogram similarity or dissimilarity
 
-    Parameters:
+    Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments passed to the sort process

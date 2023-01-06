@@ -26,7 +26,7 @@ class SortAlignedMetric(SortMethod):  # pylint:disable=too-few-public-methods
     """ Sort by comparison of metrics stored in an Aligned Face objects. This is a parent class
     for sort by aligned metrics methods. Individual methods should inherit from this class
 
-    Parameters:
+    Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments passed to the sort process
@@ -239,7 +239,7 @@ class SortSize(SortAlignedMetric):
 class SortFaceCNN(SortAlignedMetric):
     """ Sort by landmark similarity or dissimilarity
 
-    Parameters:
+    Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The command line arguments passed to the sort process

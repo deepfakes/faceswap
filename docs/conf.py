@@ -14,10 +14,12 @@ import os
 import sys
 from unittest import mock
 
+os.environ["FACESWAP_BACKEND"] = "nvidia"
 sys.path.insert(0, os.path.abspath('../'))
 sys.setrecursionlimit(1500)
 
-MOCK_MODULES = ["plaidml", "pynvx"]
+
+MOCK_MODULES = ["plaidml", "pynvx", "ctypes.windll", "comtypes"]
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = mock.Mock()
 

@@ -230,7 +230,7 @@ class BackgroundGenerator(MultiThread):
     name: str, optional
         The thread name. if ``None`` a unique name is constructed of the form
         {generator.__name__}_N where N is an incrementing integer. Default: ``None``
-   args: tuple, Optional
+    args: tuple, Optional
         The argument tuple for generator invocation. Default: ``None``.
     kwargs: dict, Optional
         keyword arguments for the generator invocation. Default: ``None``.

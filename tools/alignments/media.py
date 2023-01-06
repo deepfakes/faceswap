@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 class AlignmentData(Alignments):
     """ Class to hold the alignment data
 
-    Paramaters
+    Parameters
     ----------
     alignments_file: str
         Full path to an alignments file
@@ -47,7 +47,7 @@ class AlignmentData(Alignments):
     def check_file_exists(alignments_file: str) -> Tuple[str, str]:
         """ Check the alignments file exists
 
-        Paramaters
+        Parameters
         ----------
         alignments_file: str
             Full path to an alignments file

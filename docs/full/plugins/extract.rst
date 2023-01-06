@@ -54,14 +54,14 @@ align._base.processing module
    :show-inheritance:
 
 align.cv2_dnn module
--------------------
+--------------------
 .. automodule:: plugins.extract.align.cv2_dnn
    :members:
    :undoc-members:
    :show-inheritance:
 
 align.fan module
--------------------
+----------------
 .. automodule:: plugins.extract.align.fan
    :members:
    :undoc-members:

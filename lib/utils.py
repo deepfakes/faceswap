@@ -6,16 +6,16 @@ import logging
 import os
 import sys
 import tkinter as tk
-import urllib
 import warnings
 import zipfile
 
-from re import finditer
 from multiprocessing import current_process
+from re import finditer
 from socket import timeout as socket_timeout, error as socket_error
 from threading import get_ident
 from time import time
 from typing import cast, Dict, List, Optional, Union, Tuple, TYPE_CHECKING
+from urllib import request, error as urlliberror
 
 import numpy as np
 from tqdm import tqdm
@@ -35,7 +35,7 @@ _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
 _TF_VERS: Optional[Tuple[int, int]] = None
-ValidBackends = Literal["amd", "nvidia", "cpu", "apple_silicon"]
+ValidBackends = Literal["amd", "nvidia", "cpu", "apple_silicon", "directml"]
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -44,7 +44,11 @@ class _Backend():  # pylint:disable=too-few-public-methods
 
     If file doesn't exist and a variable hasn't been set, create the config file. """
     def __init__(self) -> None:
-        self._backends = {"1": "amd", "2": "cpu", "3": "nvidia", "4": "apple_silicon"}
+        self._backends: Dict[str, ValidBackends] = {"1": "cpu",
+                                                    "2": "directml",
+                                                    "3": "nvidia",
+                                                    "4": "apple_silicon",
+                                                    "5": "amd"}
         self._valid_backends = list(self._backends.values())
         self._config_file = self._get_config_file()
         self.backend = self._get_backend()
@@ -109,12 +113,14 @@ class _Backend():  # pylint:disable=too-few-public-methods
         """
         print("First time configuration. Please select the required backend")
         while True:
-            selection = input("1: AMD, 2: CPU, 3: NVIDIA, 4: APPLE SILICON: ")
-            if selection not in ("1", "2", "3", "4"):
+            txt = ", ".join([": ".join([key, val.upper().replace("_", " ")])
+                             for key, val in self._backends.items()])
+            selection = input(f"{txt}: ")
+            if selection not in self._backends:
                 print(f"'{selection}' is not a valid selection. Please try again")
                 continue
             break
-        fs_backend = cast(ValidBackends, self._backends[selection].lower())
+        fs_backend = self._backends[selection]
         config = {"backend": fs_backend}
         with open(self._config_file, "w", encoding="utf8") as cnf:
             json.dump(config, cnf)
@@ -131,7 +137,14 @@ def get_backend() -> ValidBackends:
     Returns
     -------
     str
-        The backend configuration in use by Faceswap
+        The backend configuration in use by Faceswap. One of  ["amd", "cpu", "directml", "nvidia",
+        "apple_silicon"]
+
+    Example
+    -------
+    >>> from lib.utils import get_backend
+    >>> get_backend()
+    'nvidia'
     """
     return _FS_BACKEND
 
@@ -141,8 +154,13 @@ def set_backend(backend: str) -> None:
 
     Parameters
     ----------
-    backend: ["amd", "cpu", "nvidia", "apple_silicon"]
+    backend: ["amd", "cpu", "directml", "nvidia", "apple_silicon"]
         The backend to set faceswap to
+
+    Example
+    -------
+    >>> from lib.utils import set_backend
+    >>> set_backend("nvidia")
     """
     global _FS_BACKEND  # pylint:disable=global-statement
     backend = cast(ValidBackends, backend.lower())
@@ -150,12 +168,18 @@ def set_backend(backend: str) -> None:
 
 
 def get_tf_version() -> Tuple[int, int]:
-    """ Obtain the major.minor version of currently installed Tensorflow.
+    """ Obtain the major. minor version of currently installed Tensorflow.
 
     Returns
     -------
-    float
-        The currently installed tensorflow version
+    tuple[int, int]
+        A tuple of the form (major, minor) representing the version of TensorFlow that is installed
+
+    Example
+    -------
+    >>> from lib.utils import get_tf_version
+    >>> get_tf_version()
+    (2, 9)
     """
     global _TF_VERS  # pylint:disable=global-statement
     if _TF_VERS is None:
@@ -181,8 +205,17 @@ def get_folder(path: str, make_folder: bool = True) -> str:
     str or `None`
         The path to the requested folder. If `make_folder` is set to ``False`` and the requested
         path does not exist, then ``None`` is returned
+
+    Example
+    -------
+    >>> from lib.utils import get_folder
+    >>> get_folder('/tmp/myfolder')
+    '/tmp/myfolder'
+
+    >>> get_folder('/tmp/myfolder', make_folder=False)
+    ''
     """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger = logging.getLogger(__name__)
     logger.debug("Requested path: '%s'", path)
     if not make_folder and not os.path.isdir(path):
         logger.debug("%s does not exist", path)
@@ -193,21 +226,34 @@ def get_folder(path: str, make_folder: bool = True) -> str:
 
 
 def get_image_paths(directory: str, extension: Optional[str] = None) -> List[str]:
-    """ Obtain a list of full paths that reside within a folder.
+    """ Gets the image paths from a given directory.
+
+    The function searches for files with the specified extension(s) in the given directory, and
+    returns a list of their paths. If no extension is provided, the function will search for files
+    with any of the following extensions: '.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff'
 
     Parameters
     ----------
     directory: str
-        The folder that contains the images to be returned
+        The directory to search in
     extension: str
-        The specific image extensions that should be returned
+        The file extension to search for. If not provided, all image file types will be searched
+        for
 
     Returns
     -------
-    list
+    list[str]
         The list of full paths to the images contained within the given folder
+
+    Example
+    -------
+    >>> from lib.utils import get_image_paths
+    >>> get_image_paths('/path/to/directory')
+    ['/path/to/directory/image1.jpg', '/path/to/directory/image2.png']
+    >>> get_image_paths('/path/to/directory', '.jpg')
+    ['/path/to/directory/image1.jpg']
     """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger = logging.getLogger(__name__)
     image_extensions = _image_extensions if extension is None else [extension]
     dir_contents = []
 
@@ -217,45 +263,68 @@ def get_image_paths(directory: str, extension: Optional[str] = None) -> List[str
 
     dir_scanned = sorted(os.scandir(directory), key=lambda x: x.name)
     logger.debug("Scanned Folder contains %s files", len(dir_scanned))
-    logger.trace("Scanned Folder Contents: %s", dir_scanned)  # type:ignore
+    logger.trace("Scanned Folder Contents: %s", dir_scanned)  # type:ignore[attr-defined]
 
     for chkfile in dir_scanned:
         if any(chkfile.name.lower().endswith(ext) for ext in image_extensions):
-            logger.trace("Adding '%s' to image list", chkfile.path)  # type:ignore
+            logger.trace("Adding '%s' to image list", chkfile.path)  # type:ignore[attr-defined]
             dir_contents.append(chkfile.path)
 
     logger.debug("Returning %s images", len(dir_contents))
     return dir_contents
 
 
-def get_dpi() -> float:
-    """ Obtain the DPI of the running screen.
+def get_dpi() -> Optional[float]:
+    """ Gets the DPI (dots per inch) of the display screen.
 
     Returns
     -------
-    int
-        The obtain dots per inch of the running monitor
+    float or ``None``
+        The DPI of the display screen or ``None`` if the dpi couldn't be obtained (ie: if the
+        function is called on a headless system)
+
+    Example
+    -------
+    >>> from lib.utils import get_dpi
+    >>> get_dpi()
+    96.0
     """
-    root = tk.Tk()
-    dpi = root.winfo_fpixels('1i')
+    logger = logging.getLogger(__name__)
+    try:
+        root = tk.Tk()
+        dpi = root.winfo_fpixels('1i')
+    except tk.TclError:
+        logger.warning("Display not detected. Could not obtain DPI")
+        return None
+
     return float(dpi)
 
 
 def convert_to_secs(*args: int) -> int:
-    """ Convert a time to seconds.
+    """  Convert time in hours, minutes, and seconds to seconds.
 
     Parameters
     ----------
-    args: tuple
-        2 or 3 ints. If 2 ints are supplied, then (`minutes`, `seconds`) is implied. If 3 ints are
-        supplied then (`hours`, `minutes`, `seconds`) is implied.
+    *args: int
+        1, 2 or 3 ints. If 2 ints are supplied, then (`minutes`, `seconds`) is implied. If 3 ints
+        are supplied then (`hours`, `minutes`, `seconds`) is implied.
 
     Returns
     -------
     int
         The given time converted to seconds
+
+    Example
+    -------
+    >>> from lib.utils import convert_to_secs
+    >>> convert_to_secs(1, 30, 0)
+    5400
+    >>> convert_to_secs(0, 15, 30)
+    930
+    >>> convert_to_secs(0, 0, 45)
+    45
     """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger = logging.getLogger(__name__)
     logger.debug("from time: %s", args)
     retval = 0.0
     if len(args) == 1:
@@ -270,7 +339,7 @@ def convert_to_secs(*args: int) -> int:
 
 
 def full_path_split(path: str) -> List[str]:
-    """ Split a full path to a location into all of it's separate components.
+    """ Split a file path into all of its parts.
 
     Parameters
     ----------
@@ -284,11 +353,13 @@ def full_path_split(path: str) -> List[str]:
 
     Example
     -------
-    >>> path = "/foo/baz/bar"
-    >>> full_path_split(path)
-    >>> ["foo", "baz", "bar"]
+    >>> from lib.utils import full_path_split
+    >>> full_path_split("/usr/local/bin/python")
+    ['usr', 'local', 'bin', 'python']
+    >>> full_path_split("relative/path/to/file.txt")
+    ['relative', 'path', 'to', 'file.txt']]
     """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger = logging.getLogger(__name__)
     allparts: List[str] = []
     while True:
         parts = os.path.split(path)
@@ -300,28 +371,35 @@ def full_path_split(path: str) -> List[str]:
             break
         path = parts[0]
         allparts.insert(0, parts[1])
-    logger.trace("path: %s, allparts: %s", path, allparts)  # type:ignore
+    logger.trace("path: %s, allparts: %s", path, allparts)  # type:ignore[attr-defined]
+    # Remove any empty strings which may have got inserted
+    allparts = [part for part in allparts if part]
     return allparts
 
 
 def set_system_verbosity(log_level: str):
     """ Set the verbosity level of tensorflow and suppresses future and deprecation warnings from
-    any modules
+    any modules.
+
+    This function sets the `TF_CPP_MIN_LOG_LEVEL` environment variable to control the verbosity of
+    TensorFlow output, as well as filters certain warning types to be ignored. The log level is
+    determined based on the input string `log_level`.
 
     Parameters
     ----------
     log_level: str
-        The requested Faceswap log level
+        The requested Faceswap log level.
 
     References
     ----------
     https://stackoverflow.com/questions/35911252/disable-tensorflow-debugging-information
-    Can be set to:
-    0: all logs shown. 1: filter out INFO logs. 2: filter out WARNING logs. 3: filter out ERROR
-    logs.
-    """
 
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    Example
+    -------
+    >>> from lib.utils import set_system_verbosity
+    >>> set_system_verbosity('warning')
+    """
+    logger = logging.getLogger(__name__)
     from lib.logger import get_loglevel  # pylint:disable=import-outside-toplevel
     numeric_level = get_loglevel(log_level)
     log_level = "3" if numeric_level > 15 else "0"
@@ -333,40 +411,53 @@ def set_system_verbosity(log_level: str):
 
 
 def deprecation_warning(function: str, additional_info: Optional[str] = None) -> None:
-    """ Log at warning level that a function will be removed in a future update.
+    """ Log a deprecation warning message.
+
+    This function logs a warning message to indicate that the specified function has been
+    deprecated and will be removed in future. An optional additional message can also be included.
 
     Parameters
     ----------
     function: str
-        The function that will be deprecated.
+        The name of the function that will be deprecated.
     additional_info: str, optional
         Any additional information to display with the deprecation message. Default: ``None``
+
+    Example
+    -------
+    >>> from lib.utils import deprecation_warning
+    >>> deprecation_warning('old_function', 'Use new_function instead.')
     """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger = logging.getLogger(__name__)
     logger.debug("func_name: %s, additional_info: %s", function, additional_info)
-    msg = f"{function}  has been deprecated and will be removed from a future update."
+    msg = f"{function} has been deprecated and will be removed from a future update."
     if additional_info is not None:
         msg += f" {additional_info}"
     logger.warning(msg)
 
 
 def camel_case_split(identifier: str) -> List[str]:
-    """ Split a camel case name
+    """ Split a camelCase string into a list of its individual parts
 
     Parameters
     ----------
     identifier: str
-        The camel case text to be split
+        The camelCase text to be split
 
     Returns
     -------
-    list
-        A list of the given identifier split into it's constituent parts
-
+    list[str]
+        A list of the individual parts of the camelCase string.
 
     References
     ----------
     https://stackoverflow.com/questions/29916065
+
+    Example
+    -------
+    >>> from lib.utils import camel_case_split
+    >>> camel_case_split('camelCaseExample')
+    ['camel', 'Case', 'Example']
     """
     matches = finditer(
         ".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)",
@@ -375,15 +466,24 @@ def camel_case_split(identifier: str) -> List[str]:
 
 
 def safe_shutdown(got_error: bool = False) -> None:
-    """ Close all tracked queues and threads in event of crash or on shut down.
+    """ Safely shut down the system.
+
+    This function terminates the queue manager and exits the program in a clean and orderly manner.
+    An optional boolean parameter can be used to indicate whether an error occurred during the
+    program's execution.
 
     Parameters
     ----------
     got_error: bool, optional
-        ``True`` if this function is being called as the result of raised error, otherwise
-        ``False``. Default: ``False``
+        ``True`` if this function is being called as the result of raised error. Default: ``False``
+
+    Example
+    -------
+    >>> from lib.utils import safe_shutdown
+    >>> safe_shutdown()
+    >>> safe_shutdown(True)
     """
-    logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
+    logger = logging.getLogger(__name__)
     logger.debug("Safely shutting down")
     from lib.queue_manager import queue_manager  # pylint:disable=import-outside-toplevel
     queue_manager.terminate_queues()
@@ -398,6 +498,15 @@ class FaceswapError(Exception):
     ------
     FaceswapError
         on a captured error
+
+    Example
+    -------
+    >>> from lib.utils import FaceswapError
+    >>> try:
+    ...     # Some code that may raise an error
+    ... except SomeError:
+    ...     raise FaceswapError("There was an error while running the code")
+    FaceswapError: There was an error while running the code
     """
     pass  # pylint:disable=unnecessary-pass
 
@@ -425,6 +534,11 @@ class GetModel():  # pylint:disable=too-few-public-methods
     number: `<model_name>_v<version_number><differentiating_information>.<extension>` (eg:
     `["mtcnn_det_v1.1.py", "mtcnn_det_v1.2.py", "mtcnn_det_v1.3.py"]`, `["resnet_ssd_v1.caffemodel"
     ,"resnet_ssd_v1.prototext"]`
+
+    Example
+    -------
+    >>> from lib.utils import GetModel
+    >>> model_downloader = GetModel("s3fd_keras_v2.h5", 11)
     """
 
     def __init__(self, model_filename: Union[str, List[str]], git_model_id: int) -> None:
@@ -444,36 +558,44 @@ class GetModel():  # pylint:disable=too-few-public-methods
         """ str: The full model name from the filename(s). """
         common_prefix = os.path.commonprefix(self._model_filename)
         retval = os.path.splitext(common_prefix)[0]
-        self.logger.trace(retval)  # type: ignore
+        self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_name(self) -> str:
         """ str: The model name from the model's full name. """
         retval = self._model_full_name[:self._model_full_name.rfind("_")]
-        self.logger.trace(retval)  # type: ignore
+        self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_version(self) -> int:
         """ int: The model's version number from the model full name. """
         retval = int(self._model_full_name[self._model_full_name.rfind("_") + 2:])
-        self.logger.trace(retval)  # type: ignore
+        self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
     def model_path(self) -> Union[str, List[str]]:
-        """ str or list: The model path(s) in the cache folder. """
+        """ str or list[str]: The model path(s) in the cache folder.
+
+        Example
+        -------
+        >>> from lib.utils import GetModel
+        >>> model_downloader = GetModel("s3fd_keras_v2.h5", 11)
+        >>> model_downloader.model_path
+        '/path/to/s3fd_keras_v2.h5'
+        """
         paths = [os.path.join(self._cache_dir, fname) for fname in self._model_filename]
         retval: Union[str, List[str]] = paths[0] if len(paths) == 1 else paths
-        self.logger.trace(retval)  # type: ignore
+        self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
     def _model_zip_path(self) -> str:
         """ str: The full path to downloaded zip file. """
         retval = os.path.join(self._cache_dir, f"{self._model_full_name}.zip")
-        self.logger.trace(retval)  # type: ignore
+        self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -483,7 +605,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
             retval = all(os.path.exists(pth) for pth in self.model_path)
         else:
             retval = os.path.exists(self.model_path)
-        self.logger.trace(retval)  # type: ignore
+        self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -491,7 +613,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
         """ strL Base download URL for models. """
         tag = f"v{self._git_model_id}.{self._model_version}"
         retval = f"{self._url_base}/{tag}/{self._model_full_name}.zip"
-        self.logger.trace("Download url: %s", retval)  # type: ignore
+        self.logger.trace("Download url: %s", retval)  # type:ignore[attr-defined]
         return retval
 
     @property
@@ -499,7 +621,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
         """ int: How many bytes have already been downloaded. """
         zip_file = self._model_zip_path
         retval = os.path.getsize(zip_file) if os.path.exists(zip_file) else 0
-        self.logger.trace(retval)  # type: ignore
+        self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 
     def _get(self) -> None:
@@ -518,16 +640,16 @@ class GetModel():  # pylint:disable=too-few-public-methods
         for attempt in range(self._retries):
             try:
                 downloaded_size = self._url_partial_size
-                req = urllib.request.Request(self._url_download)
+                req = request.Request(self._url_download)
                 if downloaded_size != 0:
                     req.add_header("Range", f"bytes={downloaded_size}-")
-                with urllib.request.urlopen(req, timeout=10) as response:
+                with request.urlopen(req, timeout=10) as response:
                     self.logger.debug("header info: {%s}", response.info())
                     self.logger.debug("Return Code: %s", response.getcode())
                     self._write_zipfile(response, downloaded_size)
                 break
             except (socket_error, socket_timeout,
-                    urllib.error.HTTPError, urllib.error.URLError) as err:
+                    urlliberror.HTTPError, urlliberror.URLError) as err:
                 if attempt + 1 < self._retries:
                     self.logger.warning("Error downloading model (%s). Retrying %s of %s...",
                                         str(err), attempt + 2, self._retries)
@@ -610,7 +732,6 @@ class GetModel():  # pylint:disable=too-few-public-methods
                         break
                     pbar.update(len(buffer))
                     out_file.write(buffer)
-        zip_file.close()
         pbar.close()
 
 
@@ -620,11 +741,24 @@ class DebugTimes():
     Parameters
     ----------
     min: bool, Optional
-        Display minimum time in summary stats. Default: ``True``
+        Display minimum time taken in summary stats. Default: ``True``
     mean: bool, Optional
-        Display mean time in summary stats. Default: ``True``
+        Display mean time taken in summary stats. Default: ``True``
     max: bool, Optional
-        Display maximum time in summary stats. Default: ``True``
+        Display maximum time taken in summary stats. Default: ``True``
+
+    Example
+    -------
+    >>> from lib.utils import DebugTimes
+    >>> debug_times = DebugTimes()
+    >>> debug_times.step_start("step 1")
+    >>> # do something here
+    >>> debug_times.step_end("step 1")
+    >>> debug_times.summary()
+    ----------------------------------
+    Step             Count   Min
+    ----------------------------------
+    step 1           1       0.000000
     """
     def __init__(self,
                  show_min: bool = True, show_mean: bool = True, show_max: bool = True) -> None:
@@ -644,6 +778,14 @@ class DebugTimes():
             ``True`` to record the step time, ``False`` to not record it.
             Used for when you have conditional code to time, but do not want to insert if/else
             statements in the code. Default: `True`
+
+        Example
+        -------
+        >>> from lib.util import DebugTimes
+        >>> debug_times = DebugTimes()
+        >>> debug_times.step_start("Example Step")
+        >>> # do something here
+        >>> debug_times.step_end("Example Step")
         """
         if not record:
             return
@@ -651,7 +793,7 @@ class DebugTimes():
         self._steps[storename] = time()
 
     def step_end(self, name: str, record: bool = True) -> None:
-        """ Stop the timer and record elapsed time  for the given step name.
+        """ Stop the timer and record elapsed time for the given step name.
 
         Parameters
         ----------
@@ -661,6 +803,14 @@ class DebugTimes():
             ``True`` to record the step time, ``False`` to not record it.
             Used for when you have conditional code to time, but do not want to insert if/else
             statements in the code. Default: `True`
+
+        Example
+        -------
+        >>> from lib.util import DebugTimes
+        >>> debug_times = DebugTimes()
+        >>> debug_times.step_start("Example Step")
+        >>> # do something here
+        >>> debug_times.step_end("Example Step")
         """
         if not record:
             return
@@ -686,14 +836,27 @@ class DebugTimes():
         return f"{text}{' ' * (width - len(text))}"
 
     def summary(self, decimal_places: int = 6, interval: int = 1) -> None:
-        """ Output a summary of step times.
+        """ Print a summary of step times.
 
         Parameters
         ----------
         decimal_places: int, optional
-            The number of decimal places to display the summary elapsed times to
+            The number of decimal places to display the summary elapsed times to. Default: 6
         interval: int, optional
             How many times summary must be called before printing to console. Default: 1
+
+        Example
+        -------
+        >>> from lib.utils import DebugTimes
+        >>> debug = DebugTimes()
+        >>> debug.step_start("test")
+        >>> time.sleep(0.5)
+        >>> debug.step_end("test")
+        >>> debug.summary()
+        ----------------------------------
+        Step             Count   Min
+        ----------------------------------
+        test             1       0.500000
         """
         interval = max(1, interval)
         if interval != self._interval:

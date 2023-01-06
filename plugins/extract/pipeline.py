@@ -7,8 +7,7 @@ together.
 
 This module sets up a pipeline for the extraction workflow, loading detect, align and mask
 plugins either in parallel or in series, giving easy access to input and output.
-
- """
+"""
 
 import logging
 import sys
@@ -58,9 +57,9 @@ class Extractor():
     ----------
     detector: str or ``None``
         The name of a detector plugin as exists in :mod:`plugins.extract.detect`
-    aligner: str or ``None
+    aligner: str or ``None``
         The name of an aligner plugin as exists in :mod:`plugins.extract.align`
-    masker: str or list or ``None
+    masker: str or list or ``None``
         The name of a masker plugin(s) as exists in :mod:`plugins.extract.mask`.
         This can be a single masker or a list of multiple maskers
     recognition: str or ``None``
@@ -496,9 +495,9 @@ class Extractor():
         gpu_stats = GPUStats()
         stats = gpu_stats.get_card_most_free()
         retval: Dict[str, Union[int, str]] = dict(count=gpu_stats.device_count,
-                                                  device=stats["device"],
-                                                  vram_free=int(stats["free"] - vram_buffer),
-                                                  vram_total=int(stats["total"]))
+                                                  device=stats.device,
+                                                  vram_free=int(stats.free - vram_buffer),
+                                                  vram_total=int(stats.total))
         logger.debug(retval)
         return retval
 
@@ -709,8 +708,9 @@ class Extractor():
         Only adjusts if the the configured batch size requires more vram than is available. Nvidia
         only.
         """
-        if get_backend() != "nvidia":
-            logger.debug("Backend is not Nvidia. Not updating batchsize requirements")
+        backend = get_backend()
+        if backend not in ("nvidia", "directml"):
+            logger.debug("Not updating batchsize requirements for backend: '%s'", backend)
             return
         if sum(plugin.vram for plugin in self._active_plugins) == 0:
             logger.debug("No plugins use VRAM. Not updating batchsize requirements.")

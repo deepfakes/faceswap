@@ -17,7 +17,7 @@ from lib.image import read_image_meta
 from lib.keypress import KBHit
 from lib.multithreading import MultiThread, FSThread
 from lib.training import Preview, PreviewBuffer, TriggerType
-from lib.utils import (deprecation_warning, get_folder, get_image_paths,
+from lib.utils import (get_folder, get_image_paths,
                        FaceswapError, _image_extensions)
 from plugins.plugin_loader import PluginLoader
 
@@ -74,12 +74,7 @@ class Train():  # pylint:disable=too-few-public-methods
 
     def _handle_deprecations(self) -> None:
         """ Handle the update of deprecated arguments and output warnings. """
-        if self._args.distributed:
-            deprecation_warning("`-d`, `--distributed`",
-                                "Please use `-D`, `--distribution-strategy`")
-            logger.warning("Setting 'distribution-strategy' to 'mirrored'")
-            setattr(self._args, "distribution_strategy", "mirrored")
-            del self._args.distributed
+        return
 
     def _get_images(self) -> Dict[Literal["a", "b"], List[str]]:
         """ Check the image folders exist and contains valid extracted faces. Obtain image paths.

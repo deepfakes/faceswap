@@ -157,7 +157,7 @@ class _Sort():  # pylint:disable=too-few-public-methods
 
     def _set_output_folder(self, arguments):
         """ Set the output folder correctly if it has not been provided
-        Parameters:
+        Parameters
         ----------
         arguments: :class:`argparse.Namespace`
             The command line arguments passed to the sort process
@@ -192,7 +192,7 @@ class _Sort():  # pylint:disable=too-few-public-methods
     def _parse_arguments(self, arguments):
         """ Parse the arguments and update/format relevant choices
 
-        Parameters:
+        Parameters
         ----------
         arguments: :class:`argparse.Namespace`
             The command line arguments passed to the sort process

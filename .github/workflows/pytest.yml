@@ -8,7 +8,7 @@ on:
       - "**/README.md"
 
 jobs:
-  build:
+  build_linux:
 
     runs-on: ubuntu-latest
     strategy:
@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pylint mypy pytest wheel
+          pip install flake8 pylint mypy pytest pytest-mock wheel
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
       - name: Lint with flake8
         run: |
@@ -53,3 +53,38 @@ jobs:
           FACESWAP_BACKEND="${{ matrix.backend }}" KERAS_BACKEND="${{ matrix.kbackend }}" python tests/simple_tests.py;
           if [ "${{ matrix.backend }}" == "amd" ] ; then rm -f ~/.plaidml; fi ;
  
+  build_windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9"]
+        backend: ["cpu", "directml"]
+        include:
+          - backend: "cpu"
+          - backend: "directml"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}      
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: './requirements/requirements_${{ matrix.backend }}.txt'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pylint mypy pytest pytest-mock wheel
+          pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
+      - name: Set Backend EnvVar
+        run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --select=E9,F63,F7,F82 --show-source
+          # exit-zero treats all errors as warnings.
+          flake8 . --exit-zero
+      - name: Simple Tests
+        run: py.test -v tests
+      - name: End to End Tests
+        run: python tests/simple_tests.py

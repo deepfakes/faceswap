@@ -19,6 +19,12 @@ from pkg_resources import parse_requirements, Requirement
 
 from lib.logger import log_setup
 
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
@@ -49,15 +55,16 @@ class Environment():
         ``True`` if the script is being called by Faceswap's internal updater. ``False`` if full
         setup is running. Default: ``False``
     """
+
+    _backends = (("nvidia", "amd", "apple_silicon", "directml", "cpu"))
+
     def __init__(self, updater: bool = False) -> None:
         self.conda_required_packages: List[Tuple[str, ...]] = [("tk", )]
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
-        self.enable_amd: bool = False
-        self.enable_apple_silicon: bool = False
+        self.backend: Optional[Literal["nvidia", "amd", "apple_silicon", "directml", "cpu"]] = None
         self.enable_docker: bool = False
-        self.enable_cuda: bool = False
         self.required_packages: List[Tuple[str, List[Tuple[str, str]]]] = []
         self.missing_packages: List[Tuple[str, List[Tuple[str, str]]]] = []
         self.conda_missing_packages: List[Tuple[str, ...]] = []
@@ -137,24 +144,13 @@ class Environment():
         for arg in args:
             if arg == "--installer":
                 self.is_installer = True
-            if arg == "--nvidia":
-                self.enable_cuda = True
-            if arg == "--amd":
-                self.enable_amd = True
-            if arg == "--apple-silicon":
-                self.enable_apple_silicon = True
+            if not self.backend and (arg.startswith("--") and
+                                     arg.replace("--", "") in self._backends):
+                self.backend = arg.replace("--", "").lower()  # type:ignore
 
     def get_required_packages(self) -> None:
         """ Load requirements list """
-        if self.enable_amd:
-            suffix = "amd.txt"
-        elif self.enable_cuda:
-            suffix = "nvidia.txt"
-        elif self.enable_apple_silicon:
-            suffix = "apple_silicon.txt"
-        else:
-            suffix = "cpu.txt"
-        req_files = ["_requirements_base.txt", f"requirements_{suffix}"]
+        req_files = ["_requirements_base.txt", f"requirements_{self.backend}.txt"]
         pypath = os.path.dirname(os.path.realpath(__file__))
         requirements = []
         for req_file in req_files:
@@ -194,7 +190,7 @@ class Environment():
             logger.error("Your system %s is not supported!", self.os_version[0])
             sys.exit(1)
         if self.os_version[0].lower() == "darwin" and platform.machine() == "arm64":
-            self.enable_apple_silicon = True
+            self.backend = "apple_silicon"
 
             if not self.updater and not self.is_conda:
                 logger.error("Setting up Faceswap for Apple Silicon outside of a Conda "
@@ -212,7 +208,7 @@ class Environment():
             logger.error("Please run this script with Python version 3.7 to 3.9 64bit and try "
                          "again.")
             sys.exit(1)
-        if self.enable_amd and sys.version_info >= (3, 9):
+        if self.backend == "amd" and sys.version_info >= (3, 9):
             logger.error("The AMD version of Faceswap cannot be installed on versions of Python "
                          "higher than 3.8")
             sys.exit(1)
@@ -280,7 +276,7 @@ class Environment():
 
     def update_tf_dep(self) -> None:
         """ Update Tensorflow Dependency """
-        if self.is_conda or not self.enable_cuda:
+        if self.is_conda or self.backend != "nvidia":
             # CPU/AMD doesn't need Cuda and Conda handles Cuda and cuDNN so nothing to do here
             return
 
@@ -336,15 +332,7 @@ class Environment():
 
     def set_config(self) -> None:
         """ Set the backend in the faceswap config file """
-        if self.enable_amd:
-            backend = "amd"
-        elif self.enable_cuda:
-            backend = "nvidia"
-        elif self.enable_apple_silicon:
-            backend = "apple_silicon"
-        else:
-            backend = "cpu"
-        config = {"backend": backend}
+        config = {"backend": self.backend}
         pypath = os.path.dirname(os.path.realpath(__file__))
         config_file = os.path.join(pypath, "config", ".faceswap")
         with open(config_file, "w", encoding="utf8") as cnf:
@@ -373,9 +361,9 @@ class Environment():
         if not self.is_conda:
             return
 
-        linux_update = self.os_version[0].lower() == "linux" and self.enable_cuda
+        linux_update = self.os_version[0].lower() == "linux" and self.backend == "nvidia"
         windows_update = (self.os_version[0].lower() == "windows" and
-                          self.enable_amd and (3, 8) <= sys.version_info < (3, 9))
+                          self.backend == "amd" and (3, 8) <= sys.version_info < (3, 9))
 
         if not linux_update and not windows_update:
             return
@@ -434,7 +422,7 @@ class Checks():  # pylint:disable=too-few-public-methods
         if self._env.is_installer:
             return
     # Checks not required for Apple Silicon
-        if self._env.enable_apple_silicon:
+        if self._env.backend == "apple_silicon":
             return
         self._user_input()
         self._check_cuda()
@@ -442,31 +430,43 @@ class Checks():  # pylint:disable=too-few-public-methods
         if self._env.os_version[0] == "Windows":
             self._tips.pip()
 
+    def _directml_ask_enable(self) -> None:
+        """ Set backend to 'directml' if OS is Windows and DirectML support required """
+        if self._env.os_version[0] != "Windows":
+            return
+        logger.info("DirectML support:\r\nIf you are using an AMD or Intel GPU, then select 'yes'."
+                    "\r\nNvidia users should answer 'no'.")
+        i = input("Enable DirectML Support? [y/N] ")
+        if i in ("Y", "y"):
+            logger.info("DirectML Support Enabled")
+            self._env.backend = "directml"
+
+    def _amd_ask_enable(self) -> None:
+        """ Set backend to 'amd' to use plaidML if AMD support required """
+        logger.info("AMD Support:\r\nThis version is deprecated and will be removed from a future "
+                    "update.\r\n"
+                    "AMD users should select 'DirectML support' if possible.\r\n"
+                    "Nvidia Users MUST answer 'no' to this option.")
+        i = input("Enable AMD Support? [y/N] ")
+        if i in ("Y", "y"):
+            logger.info("AMD Support Enabled")
+            self._env.backend = "amd"
+
     def _user_input(self) -> None:
         """ Get user input for AMD/Cuda/Docker """
-        self._amd_ask_enable()
-        if not self._env.enable_amd:
+        self._directml_ask_enable()
+        if not self._env.backend:
+            self._amd_ask_enable()
+        if not self._env.backend:
             self._docker_ask_enable()
             self._cuda_ask_enable()
         if self._env.os_version[0] != "Linux" and (self._env.enable_docker
-                                                   and self._env.enable_cuda):
+                                                   and self._env.backend == "nvidia"):
             self._docker_confirm()
         if self._env.enable_docker:
             self._docker_tips()
             self._env.set_config()
             sys.exit(0)
-
-    def _amd_ask_enable(self) -> None:
-        """ Enable or disable Plaidml for AMD"""
-        logger.info("AMD Support: AMD GPU support is currently limited.\r\n"
-                    "Nvidia Users MUST answer 'no' to this option.")
-        i = input("Enable AMD Support? [y/N] ")
-        if i in ("Y", "y"):
-            logger.info("AMD Support Enabled")
-            self._env.enable_amd = True
-        else:
-            logger.info("AMD Support Disabled")
-            self._env.enable_amd = False
 
     def _docker_ask_enable(self) -> None:
         """ Enable or disable Docker """
@@ -485,11 +485,11 @@ class Checks():  # pylint:disable=too-few-public-methods
         self._docker_ask_enable()
         if self._env.enable_docker:
             logger.warning("CUDA Disabled")
-            self._env.enable_cuda = False
+            self._env.backend = "cpu"
 
     def _docker_tips(self) -> None:
         """ Provide tips for Docker use """
-        if not self._env.enable_cuda:
+        if self._env.backend != "nvidia":
             self._tips.docker_no_cuda()
         else:
             self._tips.docker_cuda()
@@ -499,14 +499,11 @@ class Checks():  # pylint:disable=too-few-public-methods
         i = input("Enable  CUDA? [Y/n] ")
         if i in ("", "Y", "y"):
             logger.info("CUDA Enabled")
-            self._env.enable_cuda = True
-        else:
-            logger.info("CUDA Disabled")
-            self._env.enable_cuda = False
+            self._env.backend = "nvidia"
 
     def _check_cuda(self) -> None:
         """ Check for Cuda and cuDNN Locations. """
-        if not self._env.enable_cuda:
+        if self._env.backend != "nvidia":
             logger.debug("Skipping Cuda checks as not enabled")
             return
 
@@ -972,7 +969,7 @@ class Installer():
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def __init__(self,
                  environment: Environment,
@@ -1059,7 +1056,7 @@ class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def call(self) -> int:
         """ Install a package using the Pexpect module
@@ -1106,7 +1103,7 @@ class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def __init__(self,
                  environment: Environment,
@@ -1244,7 +1241,7 @@ class SubProcInstaller(Installer):
     command: list
         The command to run
     is_gui: bool
-        ``True if the process is being called from the Faceswap GUI
+        ``True`` if the process is being called from the Faceswap GUI
     """
     def __init__(self,
                  environment: Environment,

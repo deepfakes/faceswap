@@ -12,11 +12,14 @@ pillow==8.3.1
 scikit-learn>=1.0.2
 fastcluster>=1.2.4
 matplotlib==3.5.1
+numexpr
 imageio==2.9.0
 imageio-ffmpeg==0.4.7
 ffmpy==0.2.3
 nvidia-ml-py<11.515
 plaidml==0.7.0
+pytest==7.2.0
+pytest-mock==3.10.0
 tensorflow>=2.8.0,<2.9.0
 tensorflow_probability<0.17
 typing-extensions>=4.0.0
