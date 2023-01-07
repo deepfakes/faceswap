@@ -27,7 +27,6 @@ else:
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-
 if get_backend() == "amd":
     from keras import applications as kapp, backend as K
     from keras.layers import (
@@ -740,6 +739,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
         var_x = input_
 
         scaling = self._selected_model[0].scaling
+
         if scaling:
             #  Some models expect different scaling.
             logger.debug("Scaling to %s for '%s'", scaling, self._config["enc_architecture"])
@@ -750,6 +750,19 @@ class Encoder():  # pylint:disable=too-few-public-methods
                 # models expecting inputs from -1 to 1.
                 var_x = var_x * 2.
                 var_x = var_x - 1.0
+
+        if (self._config["enc_architecture"].startswith("efficientnet_b")
+                and self._config["mixed_precision"]):
+            # There is a bug in EfficientNet pre-processing where the normalized mean for the
+            # imagenet rgb values are not cast to float16 when mixed precision is enabled.
+            # We monkeypatch in a cast constant until the issue is resolved
+            # TODO revert if/when applying Imagenet Normalization works with mixed precision
+            # confirmed bugged: TF2.10
+            logger.debug("Patching efficientnet.IMAGENET_STDDEV_RGB to float16 constant")
+            from keras.applications import efficientnet  # pylint:disable=import-outside-toplevel
+            setattr(efficientnet,
+                    "IMAGENET_STDDEV_RGB",
+                    K.constant(efficientnet.IMAGENET_STDDEV_RGB, dtype="float16"))
 
         var_x = self._get_encoder_model()(var_x)
 
