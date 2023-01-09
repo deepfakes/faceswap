@@ -14,9 +14,21 @@ Subpackages
    gpu_stats
 
 
+sysinfo module
+**************
+Unit tests for :class:`~lib.sysinfo` module
+
+.. rubric:: Module
+
+.. automodule:: tests.lib.sysinfo
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 utils_test module
 *****************
-Unit tests for lib.utils
+Unit tests for :class:`~lib.utils` module
 
 .. rubric:: Module
 

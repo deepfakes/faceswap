@@ -6,7 +6,7 @@ import platform
 
 from lib.utils import get_backend
 
-from ._base import set_exclude_devices
+from ._base import set_exclude_devices, GPUInfo
 
 backend = get_backend()
 

@@ -167,7 +167,15 @@ class NvidiaStats(_GPUStats):
              List of `float`s containing the amount of VRAM available, in Megabytes, for each
              connected GPU as corresponding to the values in :attr:`_handles
         """
+        is_initialized = self._is_initialized
+        if not is_initialized:
+            self._initialize()
+            self._handles = self._get_handles()
+
         vram = [pynvml.nvmlDeviceGetMemoryInfo(handle).free / (1024 * 1024)
                 for handle in self._handles]
+        if not is_initialized:
+            self._shutdown()
+
         self._log("debug", f"GPU VRAM free: {vram}")
         return vram

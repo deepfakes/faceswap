@@ -11,7 +11,7 @@ from typing import List, Optional
 
 import psutil
 
-from lib.gpu_stats import GPUStats
+from lib.gpu_stats import GPUStats, GPUInfo
 from lib.utils import get_backend
 from setup import CudaCheck
 
@@ -29,7 +29,7 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
                             cpu_count=os.cpu_count())
         self._python = dict(implementation=platform.python_implementation(),
                             version=platform.python_version())
-        self._gpu = GPUStats(log=False).sys_info
+        self._gpu = self._get_gpu_info()
         self._cuda_check = CudaCheck()
 
     @property
@@ -166,6 +166,25 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
             retval = "No global version found"
             if self._is_conda:
                 retval += ". Check Conda packages for Conda cuDNN"
+        return retval
+
+    def _get_gpu_info(self) -> GPUInfo:
+        """ Obtain GPU Stats. If an error is raised, swallow the error, and add to GPUInfo output
+
+        Returns
+        -------
+        :class:`~lib.gpu_stats.GPUInfo`
+            The information on connected GPUs
+        """
+        try:
+            retval = GPUStats(log=False).sys_info
+        except Exception as err:  # pylint:disable=broad-except
+            err_string = f"{type(err)}: {err}"
+            retval = GPUInfo(vram=[],
+                             vram_free=[],
+                             driver="N/A",
+                             devices=[f"Error obtaining GPU Stats: '{err_string}'"],
+                             devices_active=[])
         return retval
 
     def full_info(self) -> str:
