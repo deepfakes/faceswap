@@ -11,7 +11,7 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
-   gpu_stats
+   lib.gpu_stats
 
 
 sysinfo module
@@ -20,7 +20,7 @@ Unit tests for :class:`~lib.sysinfo` module
 
 .. rubric:: Module
 
-.. automodule:: tests.lib.sysinfo
+.. automodule:: tests.lib.sysinfo_test
    :members:
    :undoc-members:
    :show-inheritance:
