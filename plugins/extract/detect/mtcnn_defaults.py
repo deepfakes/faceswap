@@ -90,7 +90,7 @@ _DEFAULTS = {
     ),
     "cpu": dict(
         default=True,
-        info="[Not AMD] MTCNN detector still runs fairly quickly on CPU on some setups. "
+        info="[Not PlaidML] MTCNN detector still runs fairly quickly on CPU on some setups. "
              "Enable CPU mode here to use the CPU for this detector to save some VRAM at a speed "
              "cost.",
         datatype=bool,

@@ -709,7 +709,7 @@ class Extractor():
         only.
         """
         backend = get_backend()
-        if backend not in ("nvidia", "directml"):
+        if backend not in ("nvidia", "directml", "rocm"):
             logger.debug("Not updating batchsize requirements for backend: '%s'", backend)
             return
         if sum(plugin.vram for plugin in self._active_plugins) == 0:

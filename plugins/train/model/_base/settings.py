@@ -536,7 +536,7 @@ class Settings():
             The request Tensorflow Strategy if the backend is Nvidia and the strategy is not
             `"Default"` otherwise ``None``
         """
-        if get_backend() not in ("nvidia", "directml"):
+        if get_backend() not in ("nvidia", "directml", "rocm"):
             retval = None
         elif strategy == "mirrored":
             retval = self._get_mirrored_strategy()
@@ -589,7 +589,7 @@ class Settings():
             # `Optimizer.apply_gradients`, but it is a lot more code to check, so we just switch
             # the `experimental_aggregate_gradients` back to `True`. In brief testing this does not
             # appear to have a negative impact.
-            func = lambda s, grads, wvars, name: s._optimizer.apply_gradients(  # noqa pylint:disable=protected-access
+            func = lambda s, grads, wvars, name: s._optimizer.apply_gradients(  # noqa pylint:disable=protected-access,unnecessary-lambda-assignment
                  list(zip(grads, wvars.value)), name, experimental_aggregate_gradients=True)
             loss_scale_optimizer.LossScaleOptimizer._apply_gradients = func  # noqa pylint:disable=protected-access
 

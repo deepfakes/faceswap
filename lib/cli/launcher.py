@@ -88,7 +88,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             If Tensorflow is not found, or is not between versions 2.4 and 2.9
         """
         amd_ver = (2, 2)
-        directml_ver = (2, 10)
+        directml_ver = rocm_ver = (2, 10)
         min_ver = (2, 7)
         max_ver = (2, 10)
         try:
@@ -124,6 +124,10 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             self._handle_import_error(msg)
         if backend == "directml" and tf_ver != directml_ver:
             msg = (f"The supported Tensorflow version for DirectML cards is {directml_ver} but "
+                   f"you have version {tf_ver} installed. Please install the correct version.")
+            self._handle_import_error(msg)
+        if backend == "rocm" and tf_ver != rocm_ver:
+            msg = (f"The supported Tensorflow version for ROCm cards is {rocm_ver} but "
                    f"you have version {tf_ver} installed. Please install the correct version.")
             self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)

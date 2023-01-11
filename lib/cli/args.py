@@ -606,7 +606,7 @@ class ExtractArgs(ExtractConvertArgs):
             opts=("-sp", "--singleprocess"),
             action="store_true",
             default=False,
-            backend=("nvidia", "directml"),
+            backend=("nvidia", "directml", "rocm", "apple_silicon"),
             group=_("settings"),
             help=_("Don't run extraction in parallel. Will run each part of the extraction "
                    "process separately (one after the other) rather than all at the smae time. "
@@ -1049,7 +1049,7 @@ class TrainArgs(FaceSwapArgs):
             type=str.lower,
             choices=["default", "central-storage", "mirrored"],
             default="default",
-            backend=("nvidia", "directml"),
+            backend=("nvidia", "directml", "rocm", "apple_silicon"),
             group=_("training"),
             help=_("R|Select the distribution stategy to use."
                    "\nL|default: Use Tensorflow's default distribution strategy."
