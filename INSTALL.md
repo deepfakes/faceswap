@@ -58,15 +58,21 @@ The type of computations that the process does are well suited for graphics card
 - **A powerful CPU**
     - Laptop CPUs can often run the software, but will not be fast enough to train at reasonable speeds
 - **A powerful GPU**
-    - Currently, Nvidia GPUs are fully supported. and AMD graphics cards are partially supported through plaidML.
+    - Currently, Nvidia GPUs are fully supported
+    - DirectX 12 AMD GPUs are supported on Windows through DirectML.
+    - More modern AMD GPUs are supported on Linux through ROCm.
+    - M-series Macs are supported through Tensorflow-Metal
+    - OpenCL 1.2 support through PlaidML is deprecated and will be removed in a future update
     - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.5. (Release 1.0 will work on Compute Capability 3.0)
       To see which version your GPU supports, consult this list: https://developer.nvidia.com/cuda-gpus
       Desktop cards later than the 7xx series are most likely supported.
 - **A lot of patience**
 
 ## Supported operating systems
-- **Windows 10**
-  Windows 7 and 8 might work. Your mileage may vary. Windows has an installer which will set up everything you need. See: https://github.com/deepfakes/faceswap/releases
+- **Windows 10/11**
+  Windows 7 and 8 might work for Nvidia. Your mileage may vary.
+  DirectML support is only available in Windows 10 onwards.
+  Windows has an installer which will set up everything you need. See: https://github.com/deepfakes/faceswap/releases
 - **Linux**
   Most Ubuntu/Debian or CentOS based Linux distributions will work. There is a Linux install script that will install and set up everything you need. See: https://github.com/deepfakes/faceswap/releases
 - **macOS**

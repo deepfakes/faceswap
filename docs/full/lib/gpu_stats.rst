@@ -61,3 +61,11 @@ gpu_stats.nvidia module
    :members:
    :undoc-members:
    :show-inheritance:
+
+gpu_stats.rocm module
+----------------------
+
+.. automodule:: lib.gpu_stats.rocm
+   :members:
+   :undoc-members:
+   :show-inheritance:

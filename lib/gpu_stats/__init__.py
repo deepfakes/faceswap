@@ -20,5 +20,7 @@ elif backend == "apple_silicon":
     from .apple_silicon import AppleSiliconStats as GPUStats  # type:ignore
 elif backend == "directml":
     from .directml import DirectML as GPUStats  # type:ignore
-elif backend == "cpu":
+elif backend == "rocm":
+    from .rocm import ROCm as GPUStats  # type:ignore
+else:
     from .cpu import CPUStats as GPUStats  # type:ignore

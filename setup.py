@@ -30,6 +30,9 @@ _INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
 # Tensorflow builds available from pypi
 _TENSORFLOW_REQUIREMENTS = {">=2.7.0,<2.11.0": ["11.2", "8.1"]}
+# ROCm min/max version requirements for Tensorflow
+_TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
+# TODO tensorflow-metal versioning
 # Packages that are explicitly required for setup.py
 _INSTALLER_REQUIREMENTS = [("pexpect>=4.8.0", "!Windows"), ("pywinpty==2.0.2", "Windows")]
 
@@ -56,19 +59,21 @@ class Environment():
         setup is running. Default: ``False``
     """
 
-    _backends = (("nvidia", "amd", "apple_silicon", "directml", "cpu"))
+    _backends = (("nvidia", "amd", "apple_silicon", "directml", "rocm", "cpu"))
 
     def __init__(self, updater: bool = False) -> None:
         self.conda_required_packages: List[Tuple[str, ...]] = [("tk", )]
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
-        self.backend: Optional[Literal["nvidia", "amd", "apple_silicon", "directml", "cpu"]] = None
+        self.backend: Optional[Literal["nvidia", "amd", "apple_silicon",
+                                       "directml", "cpu", "rocm"]] = None
         self.enable_docker: bool = False
         self.required_packages: List[Tuple[str, List[Tuple[str, str]]]] = []
         self.missing_packages: List[Tuple[str, List[Tuple[str, str]]]] = []
         self.conda_missing_packages: List[Tuple[str, ...]] = []
         self.cuda_cudnn = ["", ""]
+        self.rocm_version: Tuple[int, ...] = (0, 0, 0)
 
         self._process_arguments()
         self._check_permission()
@@ -274,12 +279,10 @@ class Environment():
         logger.debug(retval)
         return retval
 
-    def update_tf_dep(self) -> None:
-        """ Update Tensorflow Dependency """
-        if self.is_conda or self.backend != "nvidia":
-            # CPU/AMD doesn't need Cuda and Conda handles Cuda and cuDNN so nothing to do here
+    def _update_tf_dep_nvidia(self) -> None:
+        """ Update the Tensorflow dependency for global Cuda installs """
+        if self.is_conda:  # Conda handles Cuda and cuDNN so nothing to do here
             return
-
         tf_ver = None
         cudnn_inst = self.cudnn_version.split(".")
         for key, val in _TENSORFLOW_REQUIREMENTS.items():
@@ -302,7 +305,7 @@ class Environment():
             return
 
         logger.warning(
-            "The minimum Tensorflow requirement is 2.4 \n"
+            "The minimum Tensorflow requirement is 2.8 \n"
             "Tensorflow currently has no official prebuild for your CUDA, cuDNN combination.\n"
             "Either install a combination that Tensorflow supports or build and install your own "
             "tensorflow-gpu.\r\n"
@@ -329,6 +332,42 @@ class Environment():
             _INSTALL_FAILED = True
         elif custom_tf:
             self.required_packages.append((custom_tf, [(custom_tf, "")]))
+
+    def _update_tf_dep_rocm(self) -> None:
+        """ Update the Tensorflow dependency for global ROCm installs """
+        if not any(self.rocm_version):  # ROCm was not found and the install will be aborted
+            return
+
+        global _INSTALL_FAILED  # pylint:disable=global-statement
+        candidates = [key for key, val in _TENSORFLOW_ROCM_REQUIREMENTS.items()
+                      if val[0] <= self.rocm_version <= val[1]]
+
+        if not candidates:
+            _INSTALL_FAILED = True
+            logger.error("No matching Tensorflow candidates found for ROCm %s in %s",
+                         ".".join(str(v) for v in self.rocm_version),
+                         _TENSORFLOW_ROCM_REQUIREMENTS)
+            return
+
+        # set tf_ver to the minimum and maximum compatible range
+        tf_ver = f"{candidates[0].split(',')[0]},{candidates[-1].split(',')[-1]}"
+        # Remove the version of tensorflow-rocm in requirements file and add the correct version
+        # that corresponds to the installed ROCm version
+        self.required_packages = [pkg for pkg in self.required_packages
+                                  if not pkg[0].startswith("tensorflow-rocm")]
+        tf_ver = f"tensorflow-rocm{tf_ver}"
+        self.required_packages.append(("tensorflow-rocm",
+                                       next(parse_requirements(tf_ver)).specs))
+
+    def update_tf_dep(self) -> None:
+        """ Update Tensorflow Dependency.
+
+        Selects a compatible version of Tensorflow for a globally installed GPU library
+        """
+        if self.backend == "nvidia":
+            self._update_tf_dep_nvidia()
+        if self.backend == "rocm":
+            self._update_tf_dep_rocm()
 
     def set_config(self) -> None:
         """ Set the backend in the faceswap config file """
@@ -426,9 +465,20 @@ class Checks():  # pylint:disable=too-few-public-methods
             return
         self._user_input()
         self._check_cuda()
-        self._env.update_tf_dep()
+        self._check_rocm()
         if self._env.os_version[0] == "Windows":
             self._tips.pip()
+
+    def _rocm_ask_enable(self) -> None:
+        """ Set backend to 'rocm' if OS is Linux and ROCm support required """
+        if self._env.os_version[0] != "Linux":
+            return
+        logger.info("ROCm support:\r\nIf you are using an AMD GPU, then select 'yes'."
+                    "\r\nCPU/non-AMD GPU users should answer 'no'.\r\n")
+        i = input("Enable ROCm Support? [y/N] ")
+        if i in ("Y", "y"):
+            logger.info("ROCm Support Enabled")
+            self._env.backend = "rocm"
 
     def _directml_ask_enable(self) -> None:
         """ Set backend to 'directml' if OS is Windows and DirectML support required """
@@ -443,18 +493,24 @@ class Checks():  # pylint:disable=too-few-public-methods
 
     def _amd_ask_enable(self) -> None:
         """ Set backend to 'amd' to use plaidML if AMD support required """
+        msg = ""
+        if self._env.os_version[0] == "Windows":
+            msg = "AMD users should select 'DirectML support' if possible.\r\n"
+        if self._env.os_version[0] == "Linux":
+            msg = "AMD users should select 'ROCm support' if possible.\r\n"
+
         logger.info("AMD Support:\r\nThis version is deprecated and will be removed from a future "
-                    "update.\r\n"
-                    "AMD users should select 'DirectML support' if possible.\r\n"
-                    "Nvidia Users MUST answer 'no' to this option.")
+                    "update.\r\n%s"
+                    "Nvidia Users MUST answer 'no' to this option.", msg)
         i = input("Enable AMD Support? [y/N] ")
         if i in ("Y", "y"):
             logger.info("AMD Support Enabled")
             self._env.backend = "amd"
 
     def _user_input(self) -> None:
-        """ Get user input for AMD/Cuda/Docker """
+        """ Get user input for AMD/DirectML/ROCm/Cuda/Docker """
         self._directml_ask_enable()
+        self._rocm_ask_enable()
         if not self._env.backend:
             self._amd_ask_enable()
         if not self._env.backend:
@@ -539,6 +595,74 @@ class Checks():  # pylint:disable=too-few-public-methods
         self._tips.macos()
         logger.warning("Cannot find CUDA on macOS")
         self._env.cuda_cudnn[0] = input("Manually specify CUDA version: ")
+
+    def _check_rocm(self) -> None:
+        """ Check for ROCm version """
+        if self._env.backend != "rocm" or self._env.os_version[0] != "Linux":
+            logger.info("Skipping ROCm checks as not enabled")
+        global _INSTALL_FAILED  # pylint:disable=global-statement
+        check = ROCmCheck()
+
+        str_min = ".".join(str(v) for v in check.version_min)
+        str_max = ".".join(str(v) for v in check.version_max)
+
+        if check.is_valid:
+            self._env.rocm_version = check.rocm_version
+            logger.info("ROCm version: %s", ".".join(str(v) for v in self._env.rocm_version))
+        else:
+            if check.rocm_version:
+                msg = f"Incompatible ROCm version: {'.'.join(str(v) for v in check.rocm_version)}"
+            else:
+                msg = "ROCm not found"
+            logger.error("%s.\n"
+                         "A compatible version of ROCm must be installed to proceed.\n"
+                         "ROCm versions between %s and %s are supported.\n"
+                         "ROCm install guide: https://docs.amd.com/bundle/ROCm_Installation_Guide"
+                         "v5.0/page/Overview_of_ROCm_Installation_Methods.html",
+                         msg,
+                         str_min,
+                         str_max)
+            _INSTALL_FAILED = True
+
+
+class ROCmCheck():  # pylint:disable=too-few-public-methods
+    """ Find the location of system installed ROCm on Linux """
+    def __init__(self) -> None:
+        self.version_min = min(v[0] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
+        self.version_max = max(v[1] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
+        self.rocm_version: Tuple[int, ...] = (0, 0, 0)
+        if platform.system() == "Linux":
+            self._rocm_check()
+
+    @property
+    def is_valid(self):
+        """ bool: `True` if ROCm has been detected and is between the minimum and maximum
+        compatible versions otherwise ``False`` """
+        return self.version_min <= self.rocm_version <= self.version_max
+
+    def _rocm_check(self) -> None:
+        """ Attempt to locate the installed ROCm version from the dynamic link loader. If not found
+        with ldconfig then attempt to find it in LD_LIBRARY_PATH. If found, set the
+        :attr:`rocm_version` to the discovered version
+        """
+        chk = os.popen("ldconfig -p | grep -P \"librocm-core.so.\\d+\" | head -n 1").read()
+        if not chk and os.environ.get("LD_LIBRARY_PATH"):
+            for path in os.environ["LD_LIBRARY_PATH"].split(":"):
+                chk = os.popen(f"ls {path} | grep -P -o \"librocmcore.so.\\d+\" | "
+                               "head -n 1").read()
+                if chk:
+                    break
+        if not chk:
+            return
+
+        rocm_vers = chk.strip()
+        version = re.search(r"rocm\-(\d+\.\d+\.\d+)", rocm_vers)
+        if version is None:
+            return
+        try:
+            self.rocm_version = tuple(int(v) for v in version.groups()[0].split("."))
+        except ValueError:
+            return
 
 
 class CudaCheck():  # pylint:disable=too-few-public-methods
@@ -697,6 +821,7 @@ class Install():  # pylint:disable=too-few-public-methods
                            "<": operator.lt}
         self._env = environment
         self._is_gui = is_gui
+
         if self._env.os_version[0] == "Windows":
             self._installer: Type[Installer] = WinPTYInstaller
         else:
@@ -705,6 +830,8 @@ class Install():  # pylint:disable=too-few-public-methods
         if not self._env.is_installer and not self._env.updater:
             self._ask_continue()
         self._env.get_required_packages()
+        self._env.update_tf_dep()
+
         self._check_missing_dep()
         self._check_conda_missing_dep()
         if (self._env.updater and
@@ -726,10 +853,14 @@ class Install():  # pylint:disable=too-few-public-methods
                          "these packages manually.")
             sys.exit(1)
 
-    @classmethod
-    def _ask_continue(cls) -> None:
+    def _ask_continue(self) -> None:
         """ Ask Continue with Install """
-        inp = input("Please ensure your System Dependencies are met. Continue? [y/N] ")
+        text = "Please ensure your System Dependencies are met"
+        if self._env.backend == "rocm":
+            text += ("\r\nROCm users: Please ensure that your AMD GPU is supported by the "
+                     "installed ROCm version before proceeding.")
+        text += "\r\nContinue? [y/N] "
+        inp = input(text)
         if inp in ("", "N", "n"):
             logger.error("Please install system dependencies to continue")
             sys.exit(1)

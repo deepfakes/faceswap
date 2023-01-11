@@ -35,7 +35,7 @@ _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
 _TF_VERS: Optional[Tuple[int, int]] = None
-ValidBackends = Literal["amd", "nvidia", "cpu", "apple_silicon", "directml"]
+ValidBackends = Literal["amd", "nvidia", "cpu", "apple_silicon", "directml", "rocm"]
 
 
 class _Backend():  # pylint:disable=too-few-public-methods
@@ -48,7 +48,8 @@ class _Backend():  # pylint:disable=too-few-public-methods
                                                     "2": "directml",
                                                     "3": "nvidia",
                                                     "4": "apple_silicon",
-                                                    "5": "amd"}
+                                                    "5": "rocm",
+                                                    "6": "amd"}
         self._valid_backends = list(self._backends.values())
         self._config_file = self._get_config_file()
         self.backend = self._get_backend()
