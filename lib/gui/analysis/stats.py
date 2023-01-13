@@ -13,7 +13,7 @@ import warnings
 
 from math import ceil
 from threading import Event
-from typing import Any, cast, Dict, List, Optional, Tuple, Union
+from typing import Any, cast, Dict, List, Optional, overload, Tuple, Union
 
 import numpy as np
 
@@ -80,12 +80,14 @@ class GlobalSession():
         ``False``. """
         if not self._state:
             return True
-        return self._state["sessions"][str(self.session_ids[-1])]["no_logs"]
+        max_id = str(max(int(idx) for idx in self._state["sessions"]))
+        return self._state["sessions"][max_id]["no_logs"]
 
     @property
     def session_ids(self) -> List[int]:
         """ list: The sorted list of all existing session ids in the state file """
-        assert self._tb_logs is not None
+        if self._tb_logs is None:
+            return []
         return self._tb_logs.session_ids
 
     def _load_state_file(self) -> None:
@@ -135,8 +137,10 @@ class GlobalSession():
         self._model_dir = model_folder
         self._model_name = model_name
         self._load_state_file()
-        self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir, f"{self._model_name}_logs"),
-                                        is_training)
+        if not self.logging_disabled:
+            self._tb_logs = TensorBoardLogs(os.path.join(self._model_dir,
+                                                         f"{self._model_name}_logs"),
+                                            is_training)
 
         self._summary = SessionsSummary(self)
         logger.debug("Initialized session. Session_IDS: %s", self.session_ids)
@@ -196,8 +200,15 @@ class GlobalSession():
             self._is_querying.clear()
         return retval
 
-    def get_timestamps(self, session_id: Optional[int]) -> Union[Dict[int, np.ndarray],
-                                                                 np.ndarray]:
+    @overload
+    def get_timestamps(self, session_id: None) -> Dict[int, np.ndarray]:
+        ...
+
+    @overload
+    def get_timestamps(self, session_id: int) -> np.ndarray:
+        ...
+
+    def get_timestamps(self, session_id):
         """ Obtain the time stamps keys for the given session_id.
 
         Parameters
@@ -208,7 +219,7 @@ class GlobalSession():
 
         Returns
         -------
-        dict or :class:`numpy.ndarray`
+        dict[int] or :class:`numpy.ndarray`
             If a session ID has been given then a single :class:`numpy.ndarray` will be returned
             with the session's time stamps. Otherwise a 'dict' will be returned with the session
             IDs as key with :class:`numpy.ndarray` of timestamps as values
@@ -750,7 +761,7 @@ class Calculations():
         """
         logger.debug("Calculating totals rate")
         batchsizes = _SESSION.batch_sizes
-        total_timestamps = cast(Dict[int, np.ndarray], _SESSION.get_timestamps(None))
+        total_timestamps = _SESSION.get_timestamps(None)
         rate: List[float] = []
         for sess_id in sorted(total_timestamps.keys()):
             batchsize = batchsizes[sess_id]

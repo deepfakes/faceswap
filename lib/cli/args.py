@@ -609,7 +609,7 @@ class ExtractArgs(ExtractConvertArgs):
             backend=("nvidia", "directml", "rocm", "apple_silicon"),
             group=_("settings"),
             help=_("Don't run extraction in parallel. Will run each part of the extraction "
-                   "process separately (one after the other) rather than all at the smae time. "
+                   "process separately (one after the other) rather than all at the same time. "
                    "Useful if VRAM is at a premium.")))
         argument_list.append(dict(
             opts=("-s", "--skip-existing"),

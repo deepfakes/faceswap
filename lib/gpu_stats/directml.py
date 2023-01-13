@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """ Collects and returns Information on DirectX 12 hardware devices for DirectML. """
 import os
+import sys
+assert sys.platform == "win32"
+
 import ctypes
 from ctypes import POINTER, Structure, windll
 from dataclasses import dataclass

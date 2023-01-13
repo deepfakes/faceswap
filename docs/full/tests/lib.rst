@@ -12,6 +12,7 @@ Subpackages
    :maxdepth: 1
 
    lib.gpu_stats
+   lib.gui
 
 
 sysinfo module
