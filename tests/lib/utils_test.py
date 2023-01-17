@@ -22,7 +22,8 @@ from lib.utils import (
     safe_shutdown, set_backend, set_system_verbosity)
 
 from lib.logger import log_setup
-log_setup("DEBUG", "", "PyTest, False")  # Need to setup logging to avoid trace/verbose errors
+# Need to setup logging to avoid trace/verbose errors
+log_setup("DEBUG", "pytest_utils.log", "PyTest, False")
 
 
 # pylint:disable=protected-access

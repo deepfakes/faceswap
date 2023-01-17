@@ -12,7 +12,8 @@ import numpy as np
 from PIL import ImageTk
 
 from lib.logger import log_setup
-log_setup("DEBUG", "", "PyTest, False")  # Need to setup logging to avoid trace/verbose errors
+# Need to setup logging to avoid trace/verbose errors
+log_setup("DEBUG", "pytest_viewer.log", "PyTest, False")
 
 from lib.utils import get_backend  # pylint:disable=wrong-import-position  # noqa
 from tools.preview.viewer import _Faces, FacesDisplay, ImagesCanvas  # pylint:disable=wrong-import-position  # noqa
@@ -115,6 +116,7 @@ class TestFacesDisplay():
         f_display.set_display_dimensions(dimensions)
         assert f_display._display_dims == dimensions
 
+    @pytest.mark.skip(reason="Headless tkinter will error")
     @pytest.mark.parametrize("columns, face_size", _PARAMS, ids=_IDS)
     def test_update_tk_image(self,
                              columns: int,
@@ -131,6 +133,8 @@ class TestFacesDisplay():
         mocker: :class:`pytest_mock.MockerFixture`
             Mocker for checking _build_faces_image method called
         """
+        # TODO find out how we can test this on a headless system
+        # Launching tk.Tk() will result in an error because a display is not found
         f_display = self.get_faces_display_instance(columns, face_size)
         f_display._build_faces_image = cast(MagicMock, mocker.MagicMock())  # type:ignore
         f_display._get_scale_size = cast(MagicMock,  # type:ignore
