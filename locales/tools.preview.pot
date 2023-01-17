@@ -1,72 +1,80 @@
 # SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR ORGANIZATION
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
+#, fuzzy
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2021-03-10 16:51-0000\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-01-16 12:27+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
 "MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=cp1252\n"
+"Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: pygettext.py 1.5\n"
 
-
-#: ./tools/preview\cli.py:13
+#: tools/preview/cli.py:14
 msgid "This command allows you to preview swaps to tweak convert settings."
 msgstr ""
 
-#: ./tools/preview\cli.py:22
+#: tools/preview/cli.py:29
 msgid ""
 "Preview tool\n"
 "Allows you to configure your convert settings with a live preview"
 msgstr ""
 
-#: ./tools/preview\cli.py:32 ./tools/preview\cli.py:41
-#: ./tools/preview\cli.py:48
+#: tools/preview/cli.py:46 tools/preview/cli.py:55 tools/preview/cli.py:62
 msgid "data"
 msgstr ""
 
-#: ./tools/preview\cli.py:34
-msgid "Input directory or video. Either a directory containing the image files you wish to process or path to a video file."
+#: tools/preview/cli.py:48
+msgid ""
+"Input directory or video. Either a directory containing the image files you "
+"wish to process or path to a video file."
 msgstr ""
 
-#: ./tools/preview\cli.py:43
-msgid "Path to the alignments file for the input, if not at the default location"
+#: tools/preview/cli.py:57
+msgid ""
+"Path to the alignments file for the input, if not at the default location"
 msgstr ""
 
-#: ./tools/preview\cli.py:50
-msgid "Model directory. A directory containing the trained model you wish to process."
+#: tools/preview/cli.py:64
+msgid ""
+"Model directory. A directory containing the trained model you wish to "
+"process."
 msgstr ""
 
-#: ./tools/preview\cli.py:57
+#: tools/preview/cli.py:71
 msgid "Swap the model. Instead of A -> B, swap B -> A"
 msgstr ""
 
-#: ./tools/preview\preview.py:1303
+#: tools/preview/control_panels.py:496
 msgid "Save full config"
 msgstr ""
 
-#: ./tools/preview\preview.py:1306
+#: tools/preview/control_panels.py:499
 msgid "Reset full config to default values"
 msgstr ""
 
-#: ./tools/preview\preview.py:1309
+#: tools/preview/control_panels.py:502
 msgid "Reset full config to saved values"
 msgstr ""
 
-#: ./tools/preview\preview.py:1453
-msgid "Save {} config"
+#: tools/preview/control_panels.py:653
+#, python-brace-format
+msgid "Save {title} config"
 msgstr ""
 
-#: ./tools/preview\preview.py:1456
-msgid "Reset {} config to default values"
+#: tools/preview/control_panels.py:656
+#, python-brace-format
+msgid "Reset {title} config to default values"
 msgstr ""
 
-#: ./tools/preview\preview.py:1459
-msgid "Reset {} config to saved values"
+#: tools/preview/control_panels.py:659
+#, python-brace-format
+msgid "Reset {title} config to saved values"
 msgstr ""
-

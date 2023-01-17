@@ -26,8 +26,8 @@ _CONFIG: Optional["Config"] = None
 
 
 def initialize_config(root: tk.Tk,
-                      cli_opts: "CliOptions",
-                      statusbar: "StatusBar") -> Optional["Config"]:
+                      cli_opts: Optional["CliOptions"],
+                      statusbar: Optional["StatusBar"]) -> Optional["Config"]:
     """ Initialize the GUI Master :class:`Config` and add to global constant.
 
     This should only be called once on first GUI startup. Future access to :class:`Config`
@@ -37,10 +37,10 @@ def initialize_config(root: tk.Tk,
     ----------
     root: :class:`tkinter.Tk`
         The root Tkinter object
-    cli_opts: :class:`lib.gui.options.CliOptions`
-        The command line options object
-    statusbar: :class:`lib.gui.custom_widgets.StatusBar`
-        The GUI Status bar
+    cli_opts: :class:`lib.gui.options.CliOptions` or ``None``
+        The command line options object. Must be provided for main GUI. Must be ``None`` for tools
+    statusbar: :class:`lib.gui.custom_widgets.StatusBar` or ``None``
+        The GUI Status bar. Must be provided for main GUI. Must be ``None`` for tools
 
     Returns
     -------
@@ -145,11 +145,11 @@ class GlobalVariables():
 @dataclass
 class _GuiObjects:
     """ Data class for commonly accessed GUI Objects """
-    cli_opts: "CliOptions"
+    cli_opts: Optional["CliOptions"]
     tk_vars: GlobalVariables
     project: Project
     tasks: Tasks
-    status_bar: "StatusBar"
+    status_bar: Optional["StatusBar"]
     default_options: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     command_notebook: Optional["CommandNotebook"] = None
 
@@ -165,12 +165,15 @@ class Config():
     ----------
     root: :class:`tkinter.Tk`
         The root Tkinter object
-    cli_opts: :class:`lib.gui.options.CliOpts`
-        The command line options object
-    statusbar: :class:`lib.gui.custom_widgets.StatusBar`
-        The GUI Status bar
+    cli_opts: :class:`lib.gui.options.CliOptions` or ``None``
+        The command line options object. Must be provided for main GUI. Must be ``None`` for tools
+    statusbar: :class:`lib.gui.custom_widgets.StatusBar` or ``None``
+        The GUI Status bar. Must be provided for main GUI. Must be ``None`` for tools
     """
-    def __init__(self, root: tk.Tk, cli_opts: "CliOptions", statusbar: "StatusBar") -> None:
+    def __init__(self,
+                 root: tk.Tk,
+                 cli_opts: Optional["CliOptions"],
+                 statusbar: Optional["StatusBar"]) -> None:
         logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s)",
                      self.__class__.__name__, root, cli_opts, statusbar)
         self._default_font = cast(dict, tk.font.nametofont("TkDefaultFont").configure())["family"]
@@ -210,6 +213,9 @@ class Config():
     @property
     def cli_opts(self) -> "CliOptions":
         """ :class:`lib.gui.options.CliOptions`: The command line options for this GUI Session. """
+        # This should only be None when a separate tool (not main GUI) is used, at which point
+        # cli_opts do not exist
+        assert self._gui_objects.cli_opts is not None
         return self._gui_objects.cli_opts
 
     @property
@@ -236,6 +242,9 @@ class Config():
     def statusbar(self) -> "StatusBar":
         """ :class:`lib.gui.custom_widgets.StatusBar`: The GUI StatusBar
         :class:`tkinter.ttk.Frame`. """
+        # This should only be None when a separate tool (not main GUI) is used, at which point
+        # this statusbar does not exist
+        assert self._gui_objects.status_bar is not None
         return self._gui_objects.status_bar
 
     @property

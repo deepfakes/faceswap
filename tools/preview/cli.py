@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 import gettext
+from typing import Any, List, Dict
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths
@@ -17,13 +18,26 @@ class PreviewArgs(FaceSwapArgs):
     """ Class to parse the command line arguments for Preview (Convert Settings) tool """
 
     @staticmethod
-    def get_info():
-        """ Return command information """
+    def get_info() -> str:
+        """ Return command information
+
+        Returns
+        -------
+        str
+            Top line information about the Preview tool
+        """
         return _("Preview tool\nAllows you to configure your convert settings with a live preview")
 
-    def get_argument_list(self):
+    @staticmethod
+    def get_argument_list() -> List[Dict[str, Any]]:
+        """ Put the arguments in a list so that they are accessible from both argparse and gui
 
-        argument_list = list()
+        Returns
+        -------
+        list[dict[str, Any]]
+            Top command line options for the preview tool
+        """
+        argument_list = []
         argument_list.append(dict(
             opts=("-i", "--input-dir"),
             action=DirOrFileFullPaths,
