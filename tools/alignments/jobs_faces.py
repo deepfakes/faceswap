@@ -337,11 +337,7 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
 
-        kwargs = {}
-        if alignments.version < 2.1:
-            # Update headers of faces generated with hash based alignments
-            kwargs["alignments"] = alignments
-        self._items = Faces(arguments.faces_dir, **kwargs)  # type:ignore  # needs TypedDict :/
+        self._items = Faces(arguments.faces_dir, alignments=alignments)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self) -> None:

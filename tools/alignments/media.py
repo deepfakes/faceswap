@@ -260,9 +260,10 @@ class Faces(MediaLoader):
     folder: str
         The folder to load faces from
     alignments: :class:`lib.align.Alignments`, optional
-        The alignments object that contains the faces. Used to update legacy hash based faces
-        for <v2.1 alignments to png header based version. Pass in ``None`` to not update legacy
-        faces (raises error instead). Default: ``None``
+        The alignments object that contains the faces. This can be used for 2 purposes:
+        - To update legacy hash based faces for <v2.1 alignments to png header based version.
+        - When the remove-faces job is being run, when the process will only load faces that exist
+        in the alignments file. Default: ``None``
     """
     def __init__(self, folder: str, alignments: Optional[Alignments] = None) -> None:
         self._alignments = alignments
@@ -278,8 +279,10 @@ class Faces(MediaLoader):
             :class:`lib.image.read_image_meta_batch`
         """
         logger.info("Loading file list from %s", self.folder)
+        is_legacy = self._alignments is not None and self._alignments.version < 2.1
+        filter_count = 0
 
-        if self._alignments is not None:  # Legacy updating
+        if is_legacy:  # Legacy updating
             filelist = [os.path.join(self.folder, face)
                         for face in os.listdir(self.folder)
                         if self.valid_extension(face)]
@@ -314,8 +317,17 @@ class Faces(MediaLoader):
             else:
                 sub_dict = cast("PNGHeaderDict", metadata["itxt"])
 
+            if (self._alignments is not None and  # filter existing
+                    not self._alignments.frame_exists(sub_dict["source"]["source_filename"])):
+                filter_count += 1
+                continue
+
             retval = (os.path.basename(fullpath), sub_dict)
             yield retval
+
+        if self._alignments is not None:
+            logger.debug("Faces filtered out that did not exist in alignments file: %s",
+                         filter_count)
 
     def load_items(self) -> Dict[str, List[int]]:
         """ Load the face names into dictionary.
