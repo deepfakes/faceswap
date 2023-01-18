@@ -269,6 +269,81 @@ class Faces(MediaLoader):
         self._alignments = alignments
         super().__init__(folder)
 
+    def _handle_legacy(self, fullpath: str, log: bool = False) -> "PNGHeaderDict":
+        """Handle facesets that are legacy (i.e. do not contain alignment information in the
+        header data)
+
+        Parameters
+        ----------
+        fullpath : str
+            The full path to the extracted face image
+        log : bool, optional
+            Whether to log a message that legacy updating is occurring
+
+        Returns
+        -------
+        :class:`~lib.align.alignments.PNGHeaderDict`
+            The Alignments information from the face in PNG Header dict format
+
+        Raises
+        ------
+        FaceswapError
+            If legacy faces can't be updated because the alignments file does not exist or some of
+            the faces do not appear in the provided alignments file
+        """
+        if self._alignments is None:  # Can't update legacy
+            raise FaceswapError(f"The folder '{self.folder}' contains images that do not include "
+                                "Faceswap metadata.\nAll images in the provided folder should "
+                                "contain faces generated from Faceswap's extraction process.\n"
+                                "Please double check the source and try again.")
+        if log:
+            logger.warning("Legacy faces discovered. These faces will be updated")
+
+        data = update_legacy_png_header(fullpath, self._alignments)
+        if not data:
+            raise FaceswapError(
+                f"Some of the faces being passed in from '{self.folder}' could not be "
+                f"matched to the alignments file '{self._alignments.file}'\nPlease double "
+                "check your sources and try again.")
+        return data
+
+    def _handle_duplicate(self,
+                          fullpath: str,
+                          header_dict: "PNGHeaderDict",
+                          seen: Dict[str, List[int]]) -> bool:
+        """ Check whether the given face has already been seen for the source frame and face index
+        from an existing face. Can happen when filenames have changed due to sorting etc. and users
+        have done multiple extractions/copies and placed all of the faces in the same folder
+
+        Parameters
+        ----------
+        fullpath : str
+            The full path to the face image that is being checked
+        header_dict : class:`~lib.align.alignments.PNGHeaderDict`
+            The PNG header dictionary for the given face
+        seen : Dict[str, List[int]]
+            Dictionary of original source filename and face indices that have already been seen and
+            will be updated with the face processing now
+
+        Returns
+        -------
+        bool
+            ``True`` if the face was a duplicate and has been removed, otherwise ``False``
+        """
+        src_filename = header_dict["source"]["source_filename"]
+        face_index = header_dict["source"]["face_index"]
+
+        if src_filename in seen and face_index in seen[src_filename]:
+            dupe_dir = os.path.join(self.folder, "_duplicates")
+            os.makedirs(dupe_dir, exist_ok=True)
+            filename = os.path.basename(fullpath)
+            logger.trace("Moving duplicate: %s", filename)  # type:ignore
+            os.rename(fullpath, os.path.join(dupe_dir, filename))
+            return True
+
+        seen.setdefault(src_filename, []).append(face_index)
+        return False
+
     def process_folder(self) -> Generator[Tuple[str, "PNGHeaderDict"], None, None]:
         """ Iterate through the faces folder pulling out various information for each face.
 
@@ -279,10 +354,11 @@ class Faces(MediaLoader):
             :class:`lib.image.read_image_meta_batch`
         """
         logger.info("Loading file list from %s", self.folder)
-        is_legacy = self._alignments is not None and self._alignments.version < 2.1
         filter_count = 0
+        dupe_count = 0
+        seen: dict[str, list[int]] = {}
 
-        if is_legacy:  # Legacy updating
+        if self._alignments is not None and self._alignments.version < 2.1:  # Legacy updating
             filelist = [os.path.join(self.folder, face)
                         for face in os.listdir(self.folder)
                         if self.valid_extension(face)]
@@ -297,25 +373,14 @@ class Faces(MediaLoader):
                                        desc="Reading Face Data"):
 
             if "itxt" not in metadata or "source" not in metadata["itxt"]:
-                if self._alignments is None:  # Can't update legacy
-                    raise FaceswapError(
-                        f"The folder '{self.folder}' contains images that do not include Faceswap "
-                        "metadata.\nAll images in the provided folder should contain faces "
-                        "generated from Faceswap's extraction process.\nPlease double check the "
-                        "source and try again.")
-
-                if not log_once:
-                    logger.warning("Legacy faces discovered. These faces will be updated")
-                    log_once = True
-                data = update_legacy_png_header(fullpath, self._alignments)
-                if not data:
-                    raise FaceswapError(
-                        f"Some of the faces being passed in from '{self.folder}' could not be "
-                        f"matched to the alignments file '{self._alignments.file}'\nPlease double "
-                        "check your sources and try again.")
-                sub_dict = data
+                sub_dict = self._handle_legacy(fullpath, not log_once)
+                log_once = True
             else:
                 sub_dict = cast("PNGHeaderDict", metadata["itxt"])
+
+            if self._handle_duplicate(fullpath, sub_dict, seen):
+                dupe_count += 1
+                continue
 
             if (self._alignments is not None and  # filter existing
                     not self._alignments.frame_exists(sub_dict["source"]["source_filename"])):
@@ -328,6 +393,11 @@ class Faces(MediaLoader):
         if self._alignments is not None:
             logger.debug("Faces filtered out that did not exist in alignments file: %s",
                          filter_count)
+
+        if dupe_count > 0:
+            logger.warning("%s Duplicate face images were found. These files have been moved to "
+                           "'%s' from where they can be safely deleted",
+                           dupe_count, os.path.join(self.folder, "_duplicates"))
 
     def load_items(self) -> Dict[str, List[int]]:
         """ Load the face names into dictionary.
