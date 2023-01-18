@@ -57,6 +57,10 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         # Allocate a decent number of threads to numexpr to suppress warnings
         cpu_count = os.cpu_count()
         allocate = cpu_count - cpu_count // 3 if cpu_count is not None else 1
+        if "OMP_NUM_THREADS" in os.environ:
+            # If this is set above NUMEXPR_MAX_THREADS, numexpr will error.
+            # ref: https://github.com/pydata/numexpr/issues/322
+            os.environ.pop("OMP_NUM_THREADS")
         os.environ["NUMEXPR_MAX_THREADS"] = str(max(1, allocate))
 
         # Ensure tensorflow doesn't pin all threads to one core when using Math Kernel Library
