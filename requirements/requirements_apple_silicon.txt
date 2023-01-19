@@ -3,7 +3,7 @@ numpy>=1.21.0; python_version < '3.8'
 numpy>=1.22.0; python_version >= '3.8'
 tensorflow-macos>=2.8.0,<2.11.0
 tensorflow-deps>=2.8.0,<2.11.0
-tensorflow-metal>=0.4.0,<0.6.0
+tensorflow-metal>=0.4.0,<0.7.0
 libblas  # Conda only
 # These next 2 should have been installed, but some users complain of errors
 decorator
