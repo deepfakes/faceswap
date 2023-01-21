@@ -147,7 +147,7 @@ class FfmpegReader(imageio.plugins.ffmpeg.FfmpegFormat.Reader):  # type:ignore
         logger.trace("keyframe pts_time: %s, keyframe: %s", prev_pts_time, prev_keyframe)
         return prev_pts_time, prev_keyframe
 
-    def _initialize(self, index=0):
+    def _initialize(self, index=0):  # noqa:C901
         """ Replace ImageIO _initialize with a version that explictly uses keyframes.
 
         Notes

@@ -31,12 +31,12 @@ TriggerNamesType = Literal["toggle_mask", "refresh", "save", "quit"]
 
 class PreviewBuffer():
     """ A thread safe class for holding preview images """
-    def __init__(self):
-        logger.debug("Initializing: %s", __class__.__name__)
+    def __init__(self) -> None:
+        logger.debug("Initializing: %s", self.__class__.__name__)
         self._images: Dict[str, "np.ndarray"] = {}
         self._lock = Lock()
         self._updated = Event()
-        logger.debug("Initialized: %s", __class__.__name__)
+        logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
     def is_updated(self) -> bool:

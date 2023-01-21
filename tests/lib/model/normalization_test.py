@@ -104,7 +104,7 @@ def test_layer_normalization(center, scale):
 
 
 _PARAMS = ["partial", "bias"]
-_VALUES = [(0.0, False), (0.25, False), (0.5, True), (0.75, False), (1.0, True)]
+_VALUES = [(0.0, False), (0.25, False), (0.5, True), (0.75, False), (1.0, True)]  # type:ignore
 _IDS = [f"partial={v[0]}|bias={v[1]}[{get_backend().upper()}]" for v in _VALUES]
 
 

@@ -92,7 +92,7 @@ class FSThread(threading.Thread):
     def run(self) -> None:
         """ Runs the target, reraising any errors from within the thread in the caller. """
         try:
-            if self._target:
+            if self._target is not None:
                 self._target(*self._args, **self._kwargs)
         except Exception as err:  # pylint: disable=broad-except
             self.err = sys.exc_info()

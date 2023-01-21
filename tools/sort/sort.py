@@ -9,7 +9,7 @@ import sys
 
 from argparse import Namespace
 from shutil import copyfile, rmtree
-from typing import List, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from tqdm import tqdm
 
@@ -125,7 +125,7 @@ class Sort():  # pylint:disable=too-few-public-methods
 
 class _Sort():  # pylint:disable=too-few-public-methods
     """ Sorts folders of faces based on input criteria """
-    def __init__(self, arguments):
+    def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: arguments: %s", self.__class__.__name__, arguments)
         self._processes = dict(blur=SortBlur,
                                blur_fft=SortBlur,
@@ -146,7 +146,7 @@ class _Sort():  # pylint:disable=too-few-public-methods
                                color_orange=SortColor)
 
         self._args = self._parse_arguments(arguments)
-        self._changes = {}
+        self._changes: Dict[str, str] = {}
         self.serializer: Optional[Serializer] = None
 
         if arguments.log_changes:

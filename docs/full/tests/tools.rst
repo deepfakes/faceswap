@@ -11,4 +11,5 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
+   tools.alignments
    tools.preview

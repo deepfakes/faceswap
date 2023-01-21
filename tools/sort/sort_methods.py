@@ -305,19 +305,19 @@ class SortMethod():
                      [r[0] if isinstance(r, (tuple, list)) else r for r in self._result])
 
     @classmethod
-    def _get_unique_labels(cls, numbers: List[float]) -> List[str]:
+    def _get_unique_labels(cls, numbers: np.ndarray) -> List[str]:
         """ For a list of threshold values for displaying in the bin name, get the lowest number of
         decimal figures (down to int) required to have a unique set of folder names and return the
         formatted numbers.
 
         Parameters
         ----------
-        numbers: list
+        numbers: :class:`numpy.ndarray`
             The list of floating point threshold numbers being used as boundary points
 
         Returns
         -------
-        list
+        list[str]
             The string formatted numbers at the lowest precision possible to represent them
             uniquely
         """

@@ -66,7 +66,7 @@ class LongRunningTask(Thread):
     def run(self) -> None:
         """ Commence the given task in a background thread. """
         try:
-            if self._target:
+            if self._target is not None:
                 retval = self._target(*self._args, **self._kwargs)
                 self._queue.put(retval)
         except Exception:  # pylint: disable=broad-except

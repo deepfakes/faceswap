@@ -25,7 +25,7 @@ CONV_SHAPE = (3, 3, 256, 2048)
 CONV_ID = get_backend().upper()
 
 
-def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,
+def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa:C901
                input_data=None, expected_output=None,
                expected_output_dtype=None, fixed_batch_size=False):
     """Test routine for a layer with a single input tensor

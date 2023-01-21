@@ -9,7 +9,7 @@ import imageio
 from ._base import Output, logger
 
 if TYPE_CHECKING:
-    from imageio.plugins.pillowmulti import GIFFormat
+    from imageio.core import format as im_format  # noqa:F401
 
 
 class Writer(Output):
@@ -75,7 +75,7 @@ class Writer(Output):
         logger.debug("frame_order: %s", retval)
         return retval
 
-    def _get_writer(self) -> "GIFFormat.Writer":
+    def _get_writer(self) -> "im_format.Format.Writer":
         """ Obtain the GIF writer with the requested GIF encoding options.
 
         Returns
@@ -84,6 +84,7 @@ class Writer(Output):
             The imageio GIF writer
         """
         logger.debug("writer config: %s", self.config)
+        assert self._gif_file is not None
         return imageio.get_writer(self._gif_file,
                                   mode="i",
                                   **self._gif_params)

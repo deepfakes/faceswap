@@ -580,7 +580,7 @@ class DisplayArea(ttk.Frame):  # pylint:disable=too-many-ancestors
                             cursor="hand2")
             lbl.pack(side=tk.TOP, fill=tk.X, padx=10, pady=(0, 5))
             bind = f"{key}|{link}"
-            lbl.bind("<Button-1>", lambda e, l=bind: self._link_callback(l))
+            lbl.bind("<Button-1>", lambda e, x=bind: self._link_callback(x))
 
         return frame
 

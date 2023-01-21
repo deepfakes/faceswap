@@ -36,6 +36,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pylint mypy pytest pytest-mock pytest-xvfb wheel
+          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
       - name: Lint with flake8
         run: |
@@ -43,6 +44,10 @@ jobs:
           flake8 . --select=E9,F63,F7,F82 --show-source
           # exit-zero treats all errors as warnings.
           flake8 . --exit-zero
+      - name: MyPy Typing
+        continue-on-error: true
+        run: |
+          mypy .
       - name: Simple Tests
         run: |
           if [ "${{ matrix.backend }}" == "amd" ] ; then echo "{\"PLAIDML_DEVICE_IDS\":[\"llvm_cpu.0\"],\"PLAIDML_EXPERIMENTAL\":true}" > ~/.plaidml; fi ;
@@ -75,6 +80,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pylint mypy pytest pytest-mock wheel
+          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
       - name: Set Backend EnvVar
         run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -84,6 +90,10 @@ jobs:
           flake8 . --select=E9,F63,F7,F82 --show-source
           # exit-zero treats all errors as warnings.
           flake8 . --exit-zero
+      - name: MyPy Typing
+        continue-on-error: true
+        run: |
+          mypy .
       - name: Simple Tests
         run: py.test -v tests
       - name: End to End Tests

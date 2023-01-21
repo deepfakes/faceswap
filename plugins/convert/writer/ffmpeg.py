@@ -56,7 +56,7 @@ class Writer(Output):
     @property
     def _video_fps(self) -> float:
         """ float: The fps of the source video. """
-        reader = imageio.get_reader(self._source_video, "ffmpeg")
+        reader = imageio.get_reader(self._source_video, "ffmpeg")  # type:ignore[arg-type]
         retval = reader.get_meta_data()["fps"]
         reader.close()
         logger.debug(retval)
@@ -235,7 +235,7 @@ class Writer(Output):
         image: :class:`numpy.ndarray`
             The converted image to be written
         """
-        logger.trace("Received frame: (filename: '%s', shape: %s",  # type: ignore
+        logger.trace("Received frame: (filename: '%s', shape: %s",  # type:ignore[attr-defined]
                      filename, image.shape)
         if not self._output_dimensions:
             input_dims = cast(Tuple[int, int], image.shape[:2])
@@ -265,13 +265,14 @@ class Writer(Output):
         assert self._writer is not None
         while self.frame_order:
             if self.frame_order[0] not in self.cache:
-                logger.trace("Next frame not ready. Continuing")  # type: ignore
+                logger.trace("Next frame not ready. Continuing")  # type:ignore[attr-defined]
                 break
             save_no = self.frame_order.pop(0)
             save_image = self.cache.pop(save_no)
-            logger.trace("Rendering from cache. Frame no: %s", save_no)  # type: ignore
+            logger.trace("Rendering from cache. Frame no: %s",  # type:ignore[attr-defined]
+                         save_no)
             self._writer.send(np.ascontiguousarray(save_image[:, :, ::-1]))
-        logger.trace("Current cache size: %s", len(self.cache))  # type: ignore
+        logger.trace("Current cache size: %s", len(self.cache))  # type:ignore[attr-defined]
 
     def close(self) -> None:
         """ Close the ffmpeg writer and mux the audio """

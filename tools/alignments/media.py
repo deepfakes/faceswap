@@ -45,7 +45,7 @@ class AlignmentData(Alignments):
 
     @staticmethod
     def check_file_exists(alignments_file: str) -> Tuple[str, str]:
-        """ Check the alignments file exists
+        """  Check if the alignments file exists, and returns a tuple of the folder and filename.
 
         Parameters
         ----------
@@ -83,6 +83,7 @@ class MediaLoader():
     count: int or ``None``, optional
         If the total frame count is known it can be passed in here which will skip
         analyzing a video file. If the count is not passed in, it will be calculated.
+        Default: ``None``
     """
     def __init__(self, folder: str, count: Optional[int] = None):
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
@@ -112,7 +113,7 @@ class MediaLoader():
         return self._count
 
     def check_input_folder(self) -> Optional[cv2.VideoCapture]:
-        """ makes sure that the frames or faces folder exists
+        """ Ensure that the frames or faces folder exists and is valid.
             If frames folder contains a video file return imageio reader object
 
         Returns
@@ -204,6 +205,7 @@ class MediaLoader():
         logger.trace("Loading video frame: '%s'", frame)  # type: ignore
         frame_no = int(frame[frame.rfind("_") + 1:]) - 1
         self._vid_reader.set(cv2.CAP_PROP_POS_FRAMES, frame_no)  # pylint: disable=no-member
+
         _, image = self._vid_reader.read()
         # TODO imageio single frame seek seems slow. Look into this
         # self._vid_reader.set_image_index(frame_no)
@@ -356,7 +358,7 @@ class Faces(MediaLoader):
         logger.info("Loading file list from %s", self.folder)
         filter_count = 0
         dupe_count = 0
-        seen: dict[str, list[int]] = {}
+        seen: Dict[str, List[int]] = {}
 
         if self._alignments is not None and self._alignments.version < 2.1:  # Legacy updating
             filelist = [os.path.join(self.folder, face)

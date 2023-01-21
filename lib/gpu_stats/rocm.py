@@ -259,7 +259,7 @@ class ROCm(_GPUStats):
         """
         base_dir = "/sys/class/drm/"
 
-        retval: list[str] = []
+        retval: List[str] = []
         if not os.path.exists(base_dir):
             self._log("warning", f"sysfs not found at '{base_dir}'")
             return retval

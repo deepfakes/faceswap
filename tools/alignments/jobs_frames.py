@@ -4,14 +4,14 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import cast, Dict, List, Optional, TYPE_CHECKING, Union
+from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
 from tqdm import tqdm
 
 from lib.align import DetectedFace, _EXTRACT_RATIOS
-from lib.align.alignments import _VERSION
+from lib.align.alignments import _VERSION, PNGHeaderDict
 from lib.image import encode_image, generate_thumbnail, ImagesSaver
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from .media import ExtractedFaces, Frames
@@ -370,13 +370,15 @@ class Extract():  # pylint:disable=too-few-public-methods
 
         for idx, face in enumerate(faces):
             output = f"{frame_name}_{idx}.png"
-            meta = dict(alignments=face.to_png_meta(),
-                        source=dict(alignments_version=self._alignments.version,
-                                    original_filename=output,
-                                    face_index=idx,
-                                    source_filename=filename,
-                                    source_is_video=self._frames.is_video,
-                                    source_frame_dims=image.shape[:2]))
+            meta: PNGHeaderDict = dict(
+                alignments=face.to_png_meta(),
+                source=dict(alignments_version=self._alignments.version,
+                            original_filename=output,
+                            face_index=idx,
+                            source_filename=filename,
+                            source_is_video=self._frames.is_video,
+                            source_frame_dims=cast(Tuple[int, int], image.shape[:2])))
+            assert face.aligned.face is not None
             self._saver.save(output, encode_image(face.aligned.face, ".png", metadata=meta))
             if self._min_size == 0 and self._is_legacy:
                 face.thumbnail = generate_thumbnail(face.aligned.face, size=96, quality=60)

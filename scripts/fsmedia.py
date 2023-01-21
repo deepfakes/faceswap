@@ -9,7 +9,8 @@ Holds optional pre/post processing functions for convert and extract.
 import logging
 import os
 import sys
-from typing import Any, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import (Any, cast, Dict, Generator, Iterator, List,
+                    Optional, Tuple, TYPE_CHECKING, Union)
 
 import cv2
 import numpy as np
@@ -154,7 +155,8 @@ class Alignments(AlignmentsBase):
             logger.debug("Frames with no faces selected for redetection: %s", len(del_keys))
             for key in del_keys:
                 if key in data:
-                    logger.trace("Selected for redetection: '%s'", key)  # type: ignore
+                    logger.trace("Selected for redetection: '%s'",  # type:ignore[attr-defined]
+                                 key)
                     del data[key]
         return data
 
@@ -284,12 +286,12 @@ class Images():
         """
         logger.debug("Input is video. Capturing frames")
         vidname = os.path.splitext(os.path.basename(self._args.input_dir))[0]
-        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")
-        for i, frame in enumerate(reader):
+        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
+        for i, frame in enumerate(cast(Iterator[np.ndarray], reader)):
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
             filename = f"{vidname}_{i + 1:06d}.png"
-            logger.trace("Loading video frame: '%s'", filename)  # type: ignore
+            logger.trace("Loading video frame: '%s'", filename)  # type:ignore[attr-defined]
             yield filename, frame
         reader.close()
 
@@ -307,14 +309,14 @@ class Images():
             The image for the requested filename,
 
         """
-        logger.trace("Loading image: '%s'", filename)  # type: ignore
+        logger.trace("Loading image: '%s'", filename)  # type:ignore[attr-defined]
         if self._is_video:
             if filename.isdigit():
                 frame_no = filename
             else:
                 frame_no = os.path.splitext(filename)[0][filename.rfind("_") + 1:]
-                logger.trace("Extracted frame_no %s from filename '%s'",  # type: ignore
-                             frame_no, filename)
+                logger.trace(  # type:ignore[attr-defined]
+                    "Extracted frame_no %s from filename '%s'", frame_no, filename)
             retval = self._load_one_video_frame(int(frame_no))
         else:
             retval = read_image(filename, raise_error=True)
@@ -333,10 +335,10 @@ class Images():
         :class:`numpy.ndarray`
             The image for the requested frame index,
         """
-        logger.trace("Loading video frame: %s", frame_no)  # type: ignore
-        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")
+        logger.trace("Loading video frame: %s", frame_no)  # type:ignore[attr-defined]
+        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
         reader.set_image_index(frame_no - 1)
-        frame = reader.get_next_data()[:, :, ::-1]
+        frame = reader.get_next_data()[:, :, ::-1]  # type:ignore[index]
         reader.close()
         return frame
 
@@ -593,7 +595,8 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
             if not self._font_scale:
                 self._initialize_font(face.aligned.size)
 
-            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s", frame, idx)  # type: ignore
+            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",  # type:ignore[attr-defined]
+                         frame, idx)
             # Landmarks
             for (pos_x, pos_y) in face.aligned.landmarks.astype("int32"):
                 cv2.circle(face.aligned.face, (pos_x, pos_y), 1, (0, 255, 255), -1)
