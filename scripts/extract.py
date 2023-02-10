@@ -163,12 +163,14 @@ class Extract():  # pylint:disable=too-few-public-methods
             else:
                 arguments = self._args
             extract = _Extract(self._extractor, arguments)
-            if len(self._input_locations) > 1:
+            if sys.platform == "linux" and len(self._input_locations) > 1:
                 # TODO - Running this in a process is hideously hacky. However, there is a memory
                 # leak in some instances when running in batch mode. Many days have been spent
                 # trying to track this down to no avail (most likely coming from C-code.) Running
                 # the extract job inside a process prevents the memory leak in testing. This should
                 # be replaced if/when the memory leak is found
+                # Only done for Linux as not reported elsewhere and this new process won't work in
+                # Windows because it can't fork.
                 proc = Process(target=extract.process)
                 proc.start()
                 proc.join()
