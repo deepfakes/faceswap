@@ -895,9 +895,10 @@ class ImageIO():
 
     def _set_thread(self):
         """ Set the background thread for the load and save iterators and launch it. """
-        logger.debug("Setting thread")
+        logger.trace("Setting thread")  # type:ignore[attr-defined]
         if self._thread is not None and self._thread.is_alive():
-            logger.debug("Thread pre-exists and is alive: %s", self._thread)
+            logger.trace("Thread pre-exists and is alive: %s",  # type:ignore[attr-defined]
+                         self._thread)
             return
         self._thread = MultiThread(self._process,
                                    self._queue,
@@ -921,6 +922,7 @@ class ImageIO():
         logger.debug("Received Close")
         if self._thread is not None:
             self._thread.join()
+        del self._thread
         self._thread = None
         logger.debug("Closed")
 
@@ -1461,6 +1463,8 @@ class ImagesSaver(ImageIO):
             logger.trace("Saved image: '%s'", filename)  # type:ignore
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, str(err))
+        del image
+        del filename
 
     def save(self,
              filename: str,

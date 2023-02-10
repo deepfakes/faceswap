@@ -394,7 +394,6 @@ class Extractor():
         """
         for thread in self._threads:
             thread.join()
-            del thread
 
     def check_and_raise_error(self) -> None:
         """ Check all threads for errors

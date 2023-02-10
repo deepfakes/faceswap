@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 from argparse import Namespace
+from multiprocessing import Process
 from typing import List, Dict, Optional, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
@@ -150,19 +151,29 @@ class Extract():  # pylint:disable=too-few-public-methods
         Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
         """
         logger.info('Starting, this may take a while...')
-        inputs = self._input_locations
         if self._args.batch_mode:
             logger.info("Batch mode selected processing: %s", self._input_locations)
         for job_no, location in enumerate(self._input_locations):
             if self._args.batch_mode:
-                logger.info("Processing job %s of %s: '%s'", job_no + 1, len(inputs), location)
+                logger.info("Processing job %s of %s: '%s'",
+                            job_no + 1, len(self._input_locations), location)
                 arguments = Namespace(**self._args.__dict__)
                 arguments.input_dir = location
                 arguments.output_dir = self._output_for_input(location)
             else:
                 arguments = self._args
             extract = _Extract(self._extractor, arguments)
-            extract.process()
+            if len(self._input_locations) > 1:
+                # TODO - Running this in a process is hideously hacky. However, there is a memory
+                # leak in some instances when running in batch mode. Many days have been spent
+                # trying to track this down to no avail (most likely coming from C-code.) Running
+                # the extract job inside a process prevents the memory leak in testing. This should
+                # be replaced if/when the memory leak is found
+                proc = Process(target=extract.process)
+                proc.start()
+                proc.join()
+            else:
+                extract.process()
             self._extractor.reset_phase_index()
 
 
