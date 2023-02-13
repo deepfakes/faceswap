@@ -1185,18 +1185,20 @@ class ControlBuilder():
                         anchor=tk.W,
                         style=f"{self._style}Group.TLabel")
         ctl = tk.Frame(frame,
-                       bg=self.option.value,
+                       bg=self.option.tk_var.get(),
                        bd=2,
                        cursor="hand2",
                        relief=tk.SUNKEN,
                        width=round(int(20 * get_config().scaling_factor)),
-                       height=round(int(12 * get_config().scaling_factor)))
+                       height=round(int(14 * get_config().scaling_factor)))
         ctl.bind("<Button-1>", lambda *e, c=ctl, t=self.option.title: self._ask_color(c, t))
-        lbl.pack(padx=2, pady=5, side=tk.LEFT, anchor=tk.N)
+        lbl.pack(side=tk.LEFT, anchor=tk.N)
         ctl.pack(side=tk.RIGHT, anchor=tk.W)
-        frame.pack(side=tk.LEFT, anchor=tk.W)
+        frame.pack(padx=5, side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
-            _get_tooltip(lbl, text=self.option.helptext)
+            _get_tooltip(frame, text=self.option.helptext)
+        # Callback to set the color chooser background on an update (e.g. reset)
+        self.option.tk_var.trace("w", lambda *e: ctl.config(bg=self.option.tk_var.get()))
         logger.debug("Added control to Options Frame: %s", self.option.name)
         return ctl
 
@@ -1206,7 +1208,6 @@ class ControlBuilder():
         chosen = colorchooser.askcolor(parent=frame, color=color, title=f"{title} Color")[1]
         if chosen is None:
             return
-        frame.config(bg=chosen)
         self.option.tk_var.set(chosen)
 
     def control_to_checkframe(self):

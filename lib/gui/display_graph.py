@@ -87,7 +87,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             Whether the graph should be initialized for the first time (``True``) or data is being
             updated for an existing graph (``False``). Default: ``True``
         """
-        logger.trace("Updating plot")  # type:ignore
+        logger.trace("Updating plot")  # type:ignore[attr-defined]
         if initiate:
             logger.debug("Initializing plot")
             self._lines = []
@@ -115,7 +115,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
         if initiate:
             self._legend_place()
-        logger.trace("Updated plot")  # type:ignore
+        logger.trace("Updated plot")  # type:ignore[attr-defined]
 
     def _axes_labels_set(self) -> None:
         """ Set the X and Y axes labels. """
@@ -148,7 +148,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             ymin, ymax = self._axes_data_get_min_max(data)
             self._ax1.set_ylim(ymin, ymax)
             self._ax1.set_xlim(xmin, xmax)
-            logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)",  # type:ignore
+            logger.trace("axes ranges: (y: (%s, %s), x:(0, %s)",  # type:ignore[attr-defined]
                          ymin, ymax, xmax)
         else:
             self._axes_limits_set_default()
@@ -174,7 +174,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             ymaxs.append(np.nanmax(item) * 1000)
         ymin = floor(min(ymins)) / 1000
         ymax = ceil(max(ymaxs)) / 1000
-        logger.trace("ymin: %s, ymax: %s", ymin, ymax)  # type:ignore
+        logger.trace("ymin: %s, ymax: %s", ymin, ymax)  # type:ignore[attr-defined]
         return ymin, ymax
 
     def _axes_set_yscale(self, scale: str) -> None:
@@ -201,7 +201,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         list
             A list of loss keys with their corresponding line formatting and color information
         """
-        logger.trace("Sorting lines")  # type:ignore
+        logger.trace("Sorting lines")  # type:ignore[attr-defined]
         raw_lines: List[List[str]] = []
         sorted_lines: List[List[str]] = []
         for key in sorted(keys):
@@ -242,7 +242,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             keys = [key[0][:key[0].find("_")] for key in sorted_lines]
             distinct_keys = set(keys)
             groupsize = len(keys) // len(distinct_keys)
-        logger.trace(groupsize)  # type:ignore
+        logger.trace(groupsize)  # type:ignore[attr-defined]
         return groupsize
 
     def _lines_style(self,
@@ -262,7 +262,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         list
             A list of loss keys with their corresponding line formatting and color information
         """
-        logger.trace("Setting lines style")  # type:ignore
+        logger.trace("Setting lines style")  # type:ignore[attr-defined]
         groups = int(len(lines) / groupsize)
         colours = self._lines_create_colors(groupsize, groups)
         widths = list(range(1, groups + 1))
@@ -293,7 +293,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
                 cmap = matplotlib.cm.get_cmap(colour)
                 cpoint = 1 - (i / 5)
                 colours.append(cmap(cpoint))
-        logger.trace(colours)  # type:ignore
+        logger.trace(colours)  # type:ignore[attr-defined]
         return colours
 
     def _legend_place(self) -> None:
