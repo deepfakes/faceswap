@@ -41,9 +41,10 @@ else:
 
 if TYPE_CHECKING:
     import argparse
+    from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_CONFIG: Dict[str, Union[str, float, int, bool, None]] = {}
+_CONFIG: Dict[str, "ConfigValueType"] = {}
 
 
 def KerasModel(inputs: list, outputs: list, name: str) -> keras.models.Model:  # noqa, pylint:disable=invalid-name
@@ -412,7 +413,7 @@ class ModelBase():
             print_fn = None  # Print straight to stdout
         else:
             # print to logger
-            print_fn = lambda x: logger.verbose("%s", x)  # type: ignore # noqa
+            print_fn = lambda x: logger.verbose("%s", x)  #type:ignore[attr-defined]  # noqa[E731]  # pylint:disable=C3001
         for idx, model in enumerate(get_all_sub_models(self.model)):
             if idx == 0:
                 parent = model
@@ -547,7 +548,7 @@ class State():
         self._rebuild_model = False
         self._sessions: Dict[int, dict] = {}
         self._lowest_avg_loss: Dict[str, float] = {}
-        self._config: Dict[str, Union[str, float, int, bool, None]] = {}
+        self._config: Dict[str, "ConfigValueType"] = {}
         self._load(config_changeable_items)
         self._session_id = self._new_session_id()
         self._create_new_session(no_logs, config_changeable_items)
@@ -723,7 +724,7 @@ class State():
                                                                  mixed_precision=False)
         for key, val in _CONFIG.items():
             if key not in self._config.keys():
-                setting = legacy_defaults.get(key, val)
+                setting: "ConfigValueType" = legacy_defaults.get(key, val)
                 logger.info("Adding new config item to state file: '%s': '%s'", key, setting)
                 self._config[key] = setting
         self._update_changed_config_items(config_changeable_items)

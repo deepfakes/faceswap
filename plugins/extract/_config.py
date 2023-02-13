@@ -24,7 +24,7 @@ class Config(FaceswapConfig):
         """
         logger.debug("Setting global config")
         section = "global"
-        self.add_section(title=section, info="Options that apply to all extraction plugins")
+        self.add_section(section, "Options that apply to all extraction plugins")
         self.add_item(
             section=section,
             title="allow_growth",

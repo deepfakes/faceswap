@@ -95,20 +95,20 @@ class ConfigTools():
         for section in self._config.config.sections():
             if section.startswith("writer."):
                 continue
-            for key, val in self._config.defaults[section].items():
+            for key, val in self._config.defaults[section].items.items():
                 if key == "helptext":
                     config_dicts.setdefault(section, {})[key] = val
                     continue
                 cp_option = ControlPanelOption(title=key,
-                                               dtype=val["type"],
-                                               group=val["group"],
-                                               default=val["default"],
+                                               dtype=val.datatype,
+                                               group=val.group,
+                                               default=val.default,
                                                initial_value=self._config.get(section, key),
-                                               choices=val["choices"],
-                                               is_radio=val["gui_radio"],
-                                               rounding=val["rounding"],
-                                               min_max=val["min_max"],
-                                               helptext=val["helptext"])
+                                               choices=val.choices,
+                                               is_radio=val.gui_radio,
+                                               rounding=val.rounding,
+                                               min_max=val.min_max,
+                                               helptext=val.helptext)
                 self.tk_vars.setdefault(section, {})[key] = cp_option.tk_var
                 config_dicts.setdefault(section, {})[key] = cp_option
         logger.debug("Formatted Config for GUI: %s", config_dicts)
@@ -175,29 +175,29 @@ class ConfigTools():
 
         new_config = ConfigParser(allow_no_value=True)
 
-        for config_section, items in self._config.defaults.items():
-            logger.debug("Adding section: '%s')", config_section)
-            self._config.insert_config_section(config_section,
-                                               items["helptext"],
+        for section_name, sect in self._config.defaults.items():
+            logger.debug("Adding section: '%s')", section_name)
+            self._config.insert_config_section(section_name,
+                                               sect.helptext,
                                                config=new_config)
-            for item, options in items.items():
+            for item, options in sect.items.items():
                 if item == "helptext":
                     continue  # helptext already written at top
-                if ((section is not None and config_section != section)
-                        or config_section not in self.tk_vars):
+                if ((section is not None and section_name != section)
+                        or section_name not in self.tk_vars):
                     # retain saved values that have not been updated
-                    new_opt = self._config.get(config_section, item)
+                    new_opt = self._config.get(section_name, item)
                     logger.debug("Retaining option: (item: '%s', value: '%s')", item, new_opt)
                 else:
-                    new_opt = self.tk_vars[config_section][item].get()
+                    new_opt = self.tk_vars[section_name][item].get()
                     logger.debug("Setting option: (item: '%s', value: '%s')", item, new_opt)
 
                     # Set config_dicts value to new saved value
-                    self._config_dicts[config_section][item].set_initial_value(new_opt)
+                    self._config_dicts[section_name][item].set_initial_value(new_opt)
 
-                helptext = self._config.format_help(options["helptext"], is_section=False)
-                new_config.set(config_section, helptext)
-                new_config.set(config_section, item, str(new_opt))
+                helptext = self._config.format_help(options.helptext, is_section=False)
+                new_config.set(section_name, helptext)
+                new_config.set(section_name, item, str(new_opt))
 
         self._config.config = new_config
         self._config.save_config()

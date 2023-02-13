@@ -22,8 +22,8 @@ else:
     from typing import get_args, Literal
 
 if TYPE_CHECKING:
-    from .generator import ConfigType
     from lib.align.alignments import PNGHeaderAlignmentsDict, PNGHeaderDict
+    from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ _FACE_CACHES: Dict[str, "_Cache"] = {}
 
 def get_cache(side: Literal["a", "b"],
               filenames: Optional[List[str]] = None,
-              config: Optional["ConfigType"] = None,
+              config: Optional[Dict[str, "ConfigValueType"]] = None,
               size: Optional[int] = None,
               coverage_ratio: Optional[float] = None) -> "_Cache":
     """ Obtain a :class:`_Cache` object for the given side. If the object does not pre-exist then
@@ -121,7 +121,7 @@ class _Cache():
     """
     def __init__(self,
                  filenames: List[str],
-                 config: "ConfigType",
+                 config: Dict[str, "ConfigValueType"],
                  size: int,
                  coverage_ratio: float) -> None:
         logger.debug("Initializing: %s (filenames: %s, size: %s, coverage_ratio: %s)",
@@ -425,8 +425,10 @@ class _Cache():
                 f"The masks that exist for this face are: {list(detected_face.mask)}")
 
         mask = detected_face.mask[str(self._config["mask_type"])]
-        mask.set_blur_and_threshold(blur_kernel=int(self._config["mask_blur_kernel"]),
-                                    threshold=int(self._config["mask_threshold"]))
+        assert isinstance(self._config["mask_blur_kernel"], int)
+        assert isinstance(self._config["mask_threshold"], int)
+        mask.set_blur_and_threshold(blur_kernel=self._config["mask_blur_kernel"],
+                                    threshold=self._config["mask_threshold"])
 
         pose = detected_face.aligned.pose
         mask.set_sub_crop(pose.offset[mask.stored_centering],
@@ -458,7 +460,9 @@ class _Cache():
         area: str
             `"eye"` or `"mouth"`. The area of the face to obtain the mask for
         """
-        if not self._config["penalized_mask_loss"] or int(self._config[f"{area}_multiplier"]) <= 1:
+        multiplier = self._config[f"{area}_multiplier"]
+        assert isinstance(multiplier, int)
+        if not self._config["penalized_mask_loss"] or multiplier <= 1:
             return None
         mask = detected_face.get_landmark_mask(area, self._size // 16, self._size // 32)
         logger.trace("Caching localized '%s' mask for: %s %s",  # type: ignore

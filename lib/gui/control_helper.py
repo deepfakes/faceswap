@@ -1179,21 +1179,21 @@ class ControlBuilder():
         logger.debug("Add control to Options Frame: (widget: '%s', control: %s, choices: %s)",
                      self.option.name, self.option.control, self.option.choices)
         frame = ttk.Frame(self.frame, style=f"{self._style}Group.TFrame")
+        lbl = ttk.Label(frame,
+                        text=self.option.title,
+                        width=self.label_width,
+                        anchor=tk.W,
+                        style=f"{self._style}Group.TLabel")
         ctl = tk.Frame(frame,
-                       bg=self.option.default,
+                       bg=self.option.value,
                        bd=2,
                        cursor="hand2",
                        relief=tk.SUNKEN,
                        width=round(int(20 * get_config().scaling_factor)),
                        height=round(int(12 * get_config().scaling_factor)))
         ctl.bind("<Button-1>", lambda *e, c=ctl, t=self.option.title: self._ask_color(c, t))
-        ctl.pack(side=tk.LEFT, anchor=tk.W)
-        lbl = ttk.Label(frame,
-                        text=self.option.title,
-                        width=self.label_width,
-                        anchor=tk.W,
-                        style=f"{self._style}Group.TLabel")
-        lbl.pack(padx=2, pady=5, side=tk.RIGHT, anchor=tk.N)
+        lbl.pack(padx=2, pady=5, side=tk.LEFT, anchor=tk.N)
+        ctl.pack(side=tk.RIGHT, anchor=tk.W)
         frame.pack(side=tk.LEFT, anchor=tk.W)
         if self.option.helptext is not None:
             _get_tooltip(lbl, text=self.option.helptext)
@@ -1203,7 +1203,7 @@ class ControlBuilder():
     def _ask_color(self, frame, title):
         """ Pop ask color dialog set to variable and change frame color """
         color = self.option.tk_var.get()
-        chosen = colorchooser.askcolor(color=color, title=f"{title} Color")[1]
+        chosen = colorchooser.askcolor(parent=frame, color=color, title=f"{title} Color")[1]
         if chosen is None:
             return
         frame.config(bg=chosen)

@@ -20,13 +20,15 @@ import tensorflow as tf
 from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
+from lib.image import hex_to_rgb
 from lib.training import PreviewDataGenerator, TrainingDataGenerator
-from lib.training.generator import BatchType, ConfigType, DataGenerator
+from lib.training.generator import BatchType, DataGenerator
 from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths, get_tf_version
 from plugins.train._config import Config
 
 if TYPE_CHECKING:
     from plugins.train.model._base import ModelBase
+    from lib.config import ConfigValueType
 
 if sys.version_info < (3, 8):
     from typing_extensions import get_args, Literal
@@ -36,7 +38,8 @@ else:
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def _get_config(plugin_name: str, configfile: Optional[str] = None) -> ConfigType:
+def _get_config(plugin_name: str,
+                configfile: Optional[str] = None) -> Dict[str, "ConfigValueType"]:
     """ Return the configuration for the requested trainer.
 
     Parameters
@@ -92,15 +95,23 @@ class TrainerBase():
         self._feeder = _Feeder(images, self._model, batch_size, self._config)
 
         self._tensorboard = self._set_tensorboard()
-        self._samples = _Samples(self._model, self._model.coverage_ratio)
+        self._samples = _Samples(self._model,
+                                 self._model.coverage_ratio,
+                                 cast(int, self._config["mask_opacity"]),
+                                 cast(str, self._config["mask_color"]))
+
+        num_images = self._config.get("preview_images", 14)
+        assert isinstance(num_images, int)
         self._timelapse = _Timelapse(self._model,
                                      self._model.coverage_ratio,
-                                     int(self._config.get("preview_images", 14)),
+                                     num_images,
+                                     cast(int, self._config["mask_opacity"]),
+                                     cast(str, self._config["mask_color"]),
                                      self._feeder,
                                      self._images)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_config(self, configfile: Optional[str]) -> ConfigType:
+    def _get_config(self, configfile: Optional[str]) -> Dict[str, "ConfigValueType"]:
         """ Get the saved training config options. Override any global settings with the setting
         provided from the model's saved config.
 
@@ -376,14 +387,14 @@ class _Feeder():
         The selected model that will be running this trainer
     batch_size: int
         The size of the batch to be processed for each side at each iteration
-    config: :class:`lib.config.FaceswapConfig`
+    config: dict
         The configuration for this trainer
     """
     def __init__(self,
                  images: Dict[Literal["a", "b"], List[str]],
                  model: 'ModelBase',
                  batch_size: int,
-                 config: ConfigType) -> None:
+                 config: Dict[str, "ConfigValueType"]) -> None:
         logger.debug("Initializing %s: num_images: %s, batch_size: %s, config: %s)",
                      self.__class__.__name__, {k: len(v) for k, v in images.items()}, batch_size,
                      config)
@@ -446,10 +457,11 @@ class _Feeder():
             value.
         """
         retval: Dict[Literal["a", "b"], Generator[BatchType, None, None]] = {}
+        num_images = self._config.get("preview_images", 14)
+        assert isinstance(num_images, int)
         for side in get_args(Literal["a", "b"]):
             logger.debug("Setting preview feed: (side: '%s')", side)
-            preview_images = int(self._config.get("preview_images", 14))
-            preview_images = min(max(preview_images, 2), 16)
+            preview_images = min(max(num_images, 2), 16)
             batchsize = min(len(self._images[side]), preview_images)
             retval[side] = self._load_generator(side,
                                                 True,
@@ -547,7 +559,9 @@ class _Feeder():
             The list of samples, targets and masks as :class:`numpy.ndarrays` for creating a
             preview image
          """
-        num_images = min(image_count, int(self._config.get("preview_images", 14)))
+        num_images = self._config.get("preview_images", 14)
+        assert isinstance(num_images, int)
+        num_images = min(image_count, num_images)
         retval: Dict[Literal["a", "b"], List[np.ndarray]] = {}
         for side in get_args(Literal["a", "b"]):
             logger.debug("Compiling samples: (side: '%s', samples: %s)", side, num_images)
@@ -599,6 +613,10 @@ class _Samples():  # pylint:disable=too-few-public-methods
         The selected model that will be running this trainer
     coverage_ratio: float
         Ratio of face to be cropped out of the training image.
+    mask_opacity: int
+        The opacity (as a percentage) to use for the mask overlay
+    mask_color: str
+        The hex RGB value to use the mask overlay
 
     Attributes
     ----------
@@ -607,13 +625,20 @@ class _Samples():  # pylint:disable=too-few-public-methods
         dictionary should contain 2 keys ("a" and "b") with the values being the training images
         for generating samples corresponding to each side.
     """
-    def __init__(self, model: "ModelBase", coverage_ratio: float) -> None:
-        logger.debug("Initializing %s: model: '%s', coverage_ratio: %s)",
-                     self.__class__.__name__, model, coverage_ratio)
+    def __init__(self,
+                 model: "ModelBase",
+                 coverage_ratio: float,
+                 mask_opacity: int,
+                 mask_color: str) -> None:
+        logger.debug("Initializing %s: model: '%s', coverage_ratio: %s, mask_opacity: %s, "
+                     "mask_color: %s)",
+                     self.__class__.__name__, model, coverage_ratio, mask_opacity, mask_color)
         self._model = model
         self._display_mask = model.config["learn_mask"] or model.config["penalized_mask_loss"]
         self.images: Dict[Literal["a", "b"], List[np.ndarray]] = {}
         self._coverage_ratio = coverage_ratio
+        self._mask_opacity = mask_opacity / 100.0
+        self._mask_color = np.array(hex_to_rgb(mask_color))[..., 2::-1] / 255.
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def toggle_mask_display(self) -> None:
@@ -849,8 +874,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         logger.debug("Overlayed background. Shape: %s", images.shape)
         return images
 
-    @classmethod
-    def _compile_masked(cls, faces: List[np.ndarray], masks: np.ndarray) -> List[np.ndarray]:
+    def _compile_masked(self, faces: List[np.ndarray], masks: np.ndarray) -> List[np.ndarray]:
         """ Add the mask to the faces for masked preview.
 
         Places an opaque red layer over areas of the face that are masked out.
@@ -868,22 +892,24 @@ class _Samples():  # pylint:disable=too-few-public-methods
         list
             List of :class:`numpy.ndarray` faces with the opaque mask layer applied
         """
-        orig_masks = np.tile(1 - np.rint(masks), 3)
-        orig_masks[np.where((orig_masks == [1., 1., 1.]).all(axis=3))] = [0., 0., 1.]
+        orig_masks = 1 - np.rint(masks)
         masks3: Union[List[np.ndarray], np.ndarray] = []
 
         if faces[-1].shape[-1] == 4:  # Mask contained in alpha channel of predictions
-            pred_masks = [np.tile(1 - np.rint(face[..., -1])[..., None], 3) for face in faces[-2:]]
-            for swap_masks in pred_masks:
-                swap_masks[np.where((swap_masks == [1., 1., 1.]).all(axis=3))] = [0., 0., 1.]
+            pred_masks = [1 - np.rint(face[..., -1])[..., None] for face in faces[-2:]]
             faces[-2:] = [face[..., :-1] for face in faces[-2:]]
             masks3 = [orig_masks, *pred_masks]
         else:
             masks3 = np.repeat(np.expand_dims(orig_masks, axis=0), 3, axis=0)
 
-        retval = [np.array([cv2.addWeighted(img, 1.0, mask, 0.3, 0)
-                            for img, mask in zip(previews, compiled_masks)])
-                  for previews, compiled_masks in zip(faces, masks3)]
+        retval: List[np.ndarray] = []
+        alpha = 1.0 - self._mask_opacity
+        for previews, compiled_masks in zip(faces, masks3):
+            overlays = previews.copy()
+            overlays[np.where((compiled_masks == 1.).all(axis=3))] = self._mask_color
+            retval.append(np.array([cv2.addWeighted(img, alpha, ovl, self._mask_opacity, 0)
+                                    for img, ovl in zip(previews, overlays)]))
+
         logger.debug("masked shapes: %s", [faces.shape for faces in retval])
         return retval
 
@@ -991,10 +1017,12 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         The selected model that will be running this trainer
     coverage_ratio: float
         Ratio of face to be cropped out of the training image.
-    scaling: float, optional
-        The amount to scale the final preview image by. Default: `1.0`
     image_count: int
         The number of preview images to be displayed in the time-lapse
+    mask_opacity: int
+        The opacity (as a percentage) to use for the mask overlay
+    mask_color: str
+        The hex RGB value to use the mask overlay
     feeder: :class:`_Feeder`
         The feeder for generating the time-lapse images.
     image_paths: dict
@@ -1004,13 +1032,16 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
                  model: "ModelBase",
                  coverage_ratio: float,
                  image_count: int,
+                 mask_opacity: int,
+                 mask_color: str,
                  feeder: _Feeder,
                  image_paths: Dict[Literal["a", "b"], List[str]]) -> None:
         logger.debug("Initializing %s: model: %s, coverage_ratio: %s, image_count: %s, "
-                     "feeder: '%s', image_paths: %s)", self.__class__.__name__, model,
-                     coverage_ratio, image_count, feeder, len(image_paths))
+                     "mask_opacity: %s, mask_color: %s, feeder: %s, image_paths: %s)",
+                     self.__class__.__name__, model, coverage_ratio, image_count, mask_opacity,
+                     mask_color, feeder, len(image_paths))
         self._num_images = image_count
-        self._samples = _Samples(model, coverage_ratio)
+        self._samples = _Samples(model, coverage_ratio, mask_opacity, mask_color)
         self._model = model
         self._feeder = feeder
         self._image_paths = image_paths

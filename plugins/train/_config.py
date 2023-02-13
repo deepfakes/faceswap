@@ -104,8 +104,8 @@ class Config(FaceswapConfig):
         """ Set the global options for training """
         logger.debug("Setting global config")
         section = "global"
-        self.add_section(title=section,
-                         info="Options that apply to all models" + ADDITIONAL_INFO)
+        self.add_section(section,
+                         "Options that apply to all models" + ADDITIONAL_INFO)
         self.add_item(
             section=section,
             title="centering",
@@ -325,10 +325,10 @@ class Config(FaceswapConfig):
         # pylint:enable=line-too-long
         logger.debug("Setting Loss config")
         section = "global.loss"
-        self.add_section(title=section,
-                         info="Loss configuration options\n"
-                              "Loss is the mechanism by which a Neural Network judges how well it "
-                              "thinks that it is recreating a face." + ADDITIONAL_INFO)
+        self.add_section(section,
+                         "Loss configuration options\n"
+                         "Loss is the mechanism by which a Neural Network judges how well it "
+                         "thinks that it is recreating a face." + ADDITIONAL_INFO)
         self.add_item(
             section=section,
             title="loss_function",

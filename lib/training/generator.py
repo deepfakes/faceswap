@@ -7,7 +7,7 @@ import sys
 from concurrent import futures
 
 from random import shuffle, choice
-from typing import cast, Dict, Generator, List, Tuple, TYPE_CHECKING, Union
+from typing import cast, Dict, Generator, List, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -27,11 +27,11 @@ else:
     from typing import get_args, Literal
 
 if TYPE_CHECKING:
+    from lib.config import ConfigValueType
     from plugins.train.model._base import ModelBase
     from .cache import _Cache
 
 logger = logging.getLogger(__name__)
-ConfigType = Dict[str, Union[bool, int, float, str]]  # TODO Dataclass
 BatchType = Tuple[np.ndarray, List[np.ndarray]]
 
 
@@ -57,7 +57,7 @@ class DataGenerator():
         objects of this size from the iterator.
     """
     def __init__(self,
-                 config: ConfigType,
+                 config: Dict[str, "ConfigValueType"],
                  model: "ModelBase",
                  side: Literal["a", "b"],
                  images: List[str],
@@ -99,7 +99,8 @@ class DataGenerator():
                                           self._config["penalized_mask_loss"]):
             channels += 1
 
-        mults = [area for area in ["eye", "mouth"] if int(self._config[f"{area}_multiplier"]) > 1]
+        mults = [area for area in ["eye", "mouth"]
+                 if cast(int, self._config[f"{area}_multiplier"]) > 1]
         if self._config["penalized_mask_loss"] and mults:
             channels += len(mults)
         return channels
@@ -416,7 +417,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         objects of this size from the iterator.
     """
     def __init__(self,
-                 config: ConfigType,
+                 config: Dict[str, "ConfigValueType"],
                  model: "ModelBase",
                  side: Literal["a", "b"],
                  images: List[str],

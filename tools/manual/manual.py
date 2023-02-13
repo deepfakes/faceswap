@@ -325,7 +325,7 @@ class _Options(ttk.Frame):  # pylint:disable=too-many-ancestors
                                  max_columns=1,
                                  header_text=controls["header"],
                                  blank_nones=False,
-                                 label_width=18,
+                                 label_width=12,
                                  style="CPanel",
                                  scrollbar=False)
             panel.pack_forget()

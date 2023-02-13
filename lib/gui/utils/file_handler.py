@@ -54,6 +54,8 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     variable: str, optional
         Required for context handling file dialog, otherwise unused. The variable to associate
         with this file dialog. Default: ``None``
+    parent: :class:`tkinter.Frame`, optional
+        The parent that is launching the file dialog. ``None`` sets this to root. Default: ``None``
 
     Attributes
     ----------
@@ -76,11 +78,12 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                  initial_file: Optional[str] = None,
                  command: Optional[str] = None,
                  action: Optional[str] = None,
-                 variable: Optional[str] = None) -> None:
+                 variable: Optional[str] = None,
+                 parent: Optional[tk.Frame] = None) -> None:
         logger.debug("Initializing %s: (handle_type: '%s', file_type: '%s', title: '%s', "
                      "initial_folder: '%s', initial_file: '%s', command: '%s', action: '%s', "
-                     "variable: %s)", self.__class__.__name__, handle_type, file_type, title,
-                     initial_folder, initial_file, command, action, variable)
+                     "variable: %s, parent: %s)", self.__class__.__name__, handle_type, file_type,
+                     title, initial_folder, initial_file, command, action, variable, parent)
         self._handletype = handle_type
         self._dummy_master = self._set_dummy_master()
         self._defaults = self._set_defaults()
@@ -90,7 +93,8 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                                         file_type,
                                         command,
                                         action,
-                                        variable)
+                                        variable,
+                                        parent)
         self.return_file = getattr(self, f"_{self._handletype.lower()}")()
         self._remove_dummy_master()
 
@@ -217,7 +221,8 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                     file_type: Optional[_FILETYPE],
                     command: Optional[str],
                     action: Optional[str],
-                    variable: Optional[str] = None
+                    variable: Optional[str],
+                    parent: Optional[tk.Frame]
                     ) -> Dict[str, Union[None, tk.Frame, str, List[Tuple[str, str]]]]:
         """ Generate the required kwargs for the requested file dialog browser.
 
@@ -241,6 +246,8 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         variable: str, optional
             Required for context handling file dialog, otherwise unused. The variable to associate
             with this file dialog. Default: ``None``
+        parent: :class:`tkinter.Frame`
+            The parent that is launching the file dialog. ``None`` sets this to root
 
         Returns
         -------
@@ -248,8 +255,9 @@ class FileHandler():  # pylint:disable=too-few-public-methods
             The key word arguments for the file dialog to be launched
         """
         logger.debug("Setting Kwargs: (title: %s, initial_folder: %s, initial_file: '%s', "
-                     "file_type: '%s', command: '%s': action: '%s', variable: '%s')",
-                     title, initial_folder, initial_file, file_type, command, action, variable)
+                     "file_type: '%s', command: '%s': action: '%s', variable: '%s', parent: %s)",
+                     title, initial_folder, initial_file, file_type, command, action, variable,
+                     parent)
 
         kwargs: Dict[str, Union[None, tk.Frame, str,
                                 List[Tuple[str, str]]]] = dict(master=self._dummy_master)
@@ -266,6 +274,9 @@ class FileHandler():  # pylint:disable=too-few-public-methods
 
         if initial_file is not None:
             kwargs["initialfile"] = initial_file
+
+        if parent is not None:
+            kwargs["parent"] = parent
 
         if self._handletype.lower() in (
                 "open", "save", "filename", "filename_multi", "save_filename"):

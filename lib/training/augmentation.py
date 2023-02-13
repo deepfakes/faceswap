@@ -2,7 +2,7 @@
 """ Processes the augmentation of images for feeding into a Faceswap model. """
 from dataclasses import dataclass
 import logging
-from typing import Tuple, TYPE_CHECKING
+from typing import Dict, Tuple, TYPE_CHECKING
 
 import cv2
 import numexpr as ne
@@ -12,7 +12,7 @@ from scipy.interpolate import griddata
 from lib.image import batch_convert_color
 
 if TYPE_CHECKING:
-    from plugins.train.trainer._base import ConfigType
+    from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -79,7 +79,7 @@ class ImageAugmentation():
     def __init__(self,
                  batchsize: int,
                  processing_size: int,
-                 config: "ConfigType") -> None:
+                 config: Dict[str, "ConfigValueType"]) -> None:
         logger.debug("Initializing %s: (batchsize: %s, processing_size: %s, "
                      "config: %s)",
                      self.__class__.__name__, batchsize, processing_size, config)
@@ -105,12 +105,29 @@ class ImageAugmentation():
         """
         logger.debug("Initializing constants.")
 
+        # Config variables typing check
+        shift_range = self._config.get("shift_range", 5)
+        color_lightness = self._config.get("color_lightness", 30)
+        color_ab = self._config.get("color_ab", 8)
+        color_clahe_chance = self._config.get("color_clahe_chance", 50)
+        color_clahe_max_size = self._config.get("color_clahe_max_size", 4)
+        rotation_range = self._config.get("rotation_range", 10)
+        zoom_amount = self._config.get("zoom_amount", 5)
+
+        assert isinstance(shift_range, int)
+        assert isinstance(color_lightness, int)
+        assert isinstance(color_ab, int)
+        assert isinstance(color_clahe_chance, int)
+        assert isinstance(color_clahe_max_size, int)
+        assert isinstance(rotation_range, int)
+        assert isinstance(zoom_amount, int)
+
         # Transform
-        tform_shift = (int(self._config.get("shift_range", 5)) / 100) * self._processing_size
+        tform_shift = (shift_range / 100) * self._processing_size
 
         # Color Aug
-        amount_l = int(self._config.get("color_lightness", 30)) / 100
-        amount_ab = int(self._config.get("color_ab", 8)) / 100
+        amount_l = int(color_lightness) / 100
+        amount_ab = int(color_ab) / 100
         lab_adjust = np.array([amount_l, amount_ab, amount_ab], dtype="float32")
 
         # Random Warp
@@ -128,11 +145,11 @@ class ImageAugmentation():
         grids = np.mgrid[0: p_mx: complex(self._processing_size),  # type: ignore
                          0: p_mx: complex(self._processing_size)]  # type: ignore
         retval = AugConstants(clahe_base_contrast=max(2, self._processing_size // 128),
-                              clahe_chance=int(self._config.get("color_clahe_chance", 50)) / 100,
-                              clahe_max_size=int(self._config.get("color_clahe_max_size", 4)),
+                              clahe_chance=color_clahe_chance / 100,
+                              clahe_max_size=color_clahe_max_size,
                               lab_adjust=lab_adjust,
-                              transform_rotation=int(self._config.get("rotation_range", 10)),
-                              transform_zoom=int(self._config.get("zoom_amount", 5)) / 100,
+                              transform_rotation=rotation_range,
+                              transform_zoom=zoom_amount / 100,
                               transform_shift=tform_shift,
                               warp_maps=np.stack((warp_mapx, warp_mapy), axis=1),
                               warp_pad=(warp_pad, warp_pad),
@@ -259,7 +276,9 @@ class ImageAugmentation():
         """
         logger.trace("Randomly flipping image")  # type: ignore
         randoms = np.random.rand(self._batchsize)
-        indices = np.where(randoms > int(self._config.get("random_flip", 50)) / 100)[0]
+        flip_chance = self._config.get("random_flip", 50)
+        assert isinstance(flip_chance, int)
+        indices = np.where(randoms > flip_chance / 100)[0]
         batch[indices] = batch[indices, :, ::-1]
         logger.trace("Randomly flipped %s images of %s",  # type: ignore
                      len(indices), self._batchsize)

@@ -26,9 +26,9 @@ class Config(FaceswapConfig):
         """
         logger.debug("Setting global config")
         section = "global"
-        self.add_section(title=section,
-                         info="Faceswap GUI Options.\nConfigure the appearance and behaviour of "
-                              "the GUI")
+        self.add_section(section,
+                         "Faceswap GUI Options.\nConfigure the appearance and behaviour of "
+                         "the GUI")
         self.add_item(
             section=section, title="fullscreen", datatype=bool, default=False, group="startup",
             info="Start Faceswap maximized.")

@@ -42,19 +42,19 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def display_item_set(self) -> None:
         """ Load the latest preview if available """
-        logger.trace("Loading latest preview")  # type:ignore
+        logger.trace("Loading latest preview")  # type:ignore[attr-defined]
         size = int(256 if self.command == "convert" else 128 * get_config().scaling_factor)
         if not self._preview.load_latest_preview(thumbnail_size=size,
                                                  frame_dims=(self.winfo_width(),
                                                              self.winfo_height())):
-            logger.trace("Preview not updated")  # type:ignore
+            logger.trace("Preview not updated")  # type:ignore[attr-defined]
             return
         logger.debug("Preview loaded")
         self.display_item = True
 
     def display_item_process(self) -> None:
         """ Display the preview """
-        logger.trace("Displaying preview")  # type:ignore
+        logger.trace("Displaying preview")  # type:ignore[attr-defined]
         if not self.subnotebook.children:
             self.add_child()
         else:
@@ -70,7 +70,7 @@ class PreviewExtract(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
 
     def update_child(self) -> None:
         """ Update the preview image on the label """
-        logger.trace("Updating preview")  # type:ignore
+        logger.trace("Updating preview")  # type:ignore[attr-defined]
         for widget in self.subnotebook_get_widgets():
             widget.configure(image=self._preview.image)
 
@@ -142,9 +142,9 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def display_item_set(self) -> None:
         """ Load the latest preview if available """
         # TODO This seems to be triggering faster than the waittime
-        logger.trace("Loading latest preview")  # type:ignore
+        logger.trace("Loading latest preview")  # type:ignore[attr-defined]
         if not self._preview.load():
-            logger.trace("Preview not updated")  # type:ignore
+            logger.trace("Preview not updated")  # type:ignore[attr-defined]
             return
         logger.debug("Preview loaded")
         self.display_item = True
@@ -332,18 +332,18 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
     def display_item_set(self) -> None:
         """ Load the graph(s) if available """
         if Session.is_training and Session.logging_disabled:
-            logger.trace("Logs disabled. Hiding graph")  # type:ignore
+            logger.trace("Logs disabled. Hiding graph")  # type:ignore[attr-defined]
             self.set_info("Graph is disabled as 'no-logs' has been selected")
             self.display_item = None
             self._clear_trace_variables()
         elif Session.is_training and self.display_item is None:
-            logger.trace("Loading graph")  # type:ignore
+            logger.trace("Loading graph")  # type:ignore[attr-defined]
             self.display_item = Session
             self._add_trace_variables()
         elif Session.is_training and self.display_item is not None:
-            logger.trace("Graph already displayed. Nothing to do.")  # type:ignore
+            logger.trace("Graph already displayed. Nothing to do.")  # type:ignore[attr-defined]
         else:
-            logger.trace("Clearing graph")  # type:ignore
+            logger.trace("Clearing graph")  # type:ignore[attr-defined]
             self.display_item = None
             self._clear_trace_variables()
 
