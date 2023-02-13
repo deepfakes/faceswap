@@ -16,6 +16,14 @@ from typing import Dict, List, Optional, Tuple, Union
 
 from lib.utils import full_path_split
 
+# Can't type OrderedDict fully on Python 3.8 or lower
+if sys.version_info < (3, 9):
+    OrderedDictSectionType = OrderedDict
+    OrderedDictItemType = OrderedDict
+else:
+    OrderedDictSectionType = OrderedDict[str, "ConfigSection"]
+    OrderedDictItemType = OrderedDict[str, "ConfigItem"]
+
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 ConfigValueType = Union[bool, int, float, List[str], str, None]
 
@@ -66,7 +74,7 @@ class ConfigSection:
         Dictionary of configuration items for the section
     """
     helptext: str
-    items: OrderedDict[str, ConfigItem]
+    items: OrderedDictItemType
 
 
 class FaceswapConfig():
@@ -84,7 +92,7 @@ class FaceswapConfig():
         logger.debug("Initializing: %s", self.__class__.__name__)
         self.configfile = self._get_config_file(configfile)
         self.config = ConfigParser(allow_no_value=True)
-        self.defaults: OrderedDict[str, ConfigSection] = OrderedDict()
+        self.defaults: OrderedDictSectionType = OrderedDict()
         self.config.optionxform = str  # type:ignore
         self.section = section
 
