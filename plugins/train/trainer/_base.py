@@ -813,8 +813,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         if self._model.color_order.lower() == "rgb":  # Switch color order for RGB model display
             full = full[..., ::-1]
             faces = faces[..., ::-1]
-            predictions = [pred[..., ::-1] if pred.shape[-1] == 3 else pred
-                           for pred in predictions]
+            predictions = [pred[..., 2::-1] for pred in predictions]
 
         full = self._process_full(side, full, predictions[0].shape[1], (0., 0., 1.0))
         images = [faces] + predictions
