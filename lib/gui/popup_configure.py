@@ -124,7 +124,6 @@ class _ConfigurePlugins(tk.Toplevel):
         super().__init__()
         self._root = get_config().root
         self._set_geometry()
-        self.attributes('-topmost', 'true')
         self._tk_vars = dict(header=tk.StringVar())
 
         theme = {**get_config().user_theme["group_panel"],
