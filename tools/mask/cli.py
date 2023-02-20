@@ -31,10 +31,12 @@ class MaskArgs(FaceSwapArgs):
             action=FileFullPaths,
             type=str,
             group=_("data"),
-            required=True,
+            required=False,
             filetypes="alignments",
-            help=_("Full path to the alignments file to add the mask to. NB: if the mask already "
-                   "exists in the alignments file it will be overwritten.")))
+            help=_("Full path to the alignments file to add the mask to if not at the default "
+                   "location. NB: If the input-type is faces and you wish to update the "
+                   "corresponding alignments file, then you must provide a value here as the "
+                   "location cannot be automatically detected.")))
         argument_list.append(dict(
             opts=("-i", "--input"),
             action=DirOrFileFullPaths,

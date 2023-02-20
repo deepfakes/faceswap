@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-08-05 14:00+0100\n"
-"PO-Revision-Date: 2022-11-27 01:28+0900\n"
+"POT-Creation-Date: 2023-02-20 14:55+0000\n"
+"PO-Revision-Date: 2023-02-20 15:01+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,13 +16,13 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.2\n"
+"X-Generator: Poedit 3.0.1\n"
 
-#: /home/matt/faceswap/tools/mask/cli.py:15
+#: tools/mask/cli.py:15
 msgid "This command lets you generate masks for existing alignments."
 msgstr "이 명령어는 이미 존재하는 alignments로부터 마스크를 생성하게 해줍니다."
 
-#: /home/matt/faceswap/tools/mask/cli.py:24
+#: tools/mask/cli.py:24
 msgid ""
 "Mask tool\n"
 "Generate masks for existing alignments files."
@@ -30,25 +30,26 @@ msgstr ""
 "마스크 도구\n"
 "존재하는 alignments 파일들로부터 마스크를 생성합니다."
 
-#: /home/matt/faceswap/tools/mask/cli.py:33
-#: /home/matt/faceswap/tools/mask/cli.py:42
-#: /home/matt/faceswap/tools/mask/cli.py:52
+#: tools/mask/cli.py:33 tools/mask/cli.py:44 tools/mask/cli.py:54
 msgid "data"
 msgstr "데이터"
 
-#: /home/matt/faceswap/tools/mask/cli.py:36
+#: tools/mask/cli.py:36
 msgid ""
-"Full path to the alignments file to add the mask to. NB: if the mask already "
-"exists in the alignments file it will be overwritten."
+"Full path to the alignments file to add the mask to if not at the default "
+"location. NB: If the input-type is faces and you wish to update the "
+"corresponding alignments file, then you must provide a value here as the "
+"location cannot be automatically detected."
 msgstr ""
-"마스크를 추가할 alignments 파일의 전체 경로입니다. 주의: alignments 파일에 마"
-"스크가 이미 있으면 alignments 파일이 덮어 씌워집니다."
+"기본 위치가 아닌 경우 마스크를 추가할 정렬 파일의 전체 경로입니다. NB: 입력 "
+"유형이 얼굴이고 해당 정렬 파일을 업데이트하려는 경우 위치를 자동으로 감지할 "
+"수 없으므로 여기에 값을 제공해야 합니다."
 
-#: /home/matt/faceswap/tools/mask/cli.py:45
+#: tools/mask/cli.py:47
 msgid "Directory containing extracted faces, source frames, or a video file."
 msgstr "추출된 얼굴들, 원본 프레임들, 또는 비디오 파일이 존재하는 디렉토리."
 
-#: /home/matt/faceswap/tools/mask/cli.py:54
+#: tools/mask/cli.py:56
 msgid ""
 "R|Whether the `input` is a folder of faces or a folder frames/video\n"
 "L|faces: The input is a folder containing extracted faces.\n"
@@ -58,12 +59,11 @@ msgstr ""
 "L|faces: 입력은 추출된 얼굴을 포함된 폴더입니다.\n"
 "L|frames: 입력이 프레임을 포함된 폴더이거나 비디오입니다"
 
-#: /home/matt/faceswap/tools/mask/cli.py:63
-#: /home/matt/faceswap/tools/mask/cli.py:95
+#: tools/mask/cli.py:65 tools/mask/cli.py:97
 msgid "process"
 msgstr "진행"
 
-#: /home/matt/faceswap/tools/mask/cli.py:64
+#: tools/mask/cli.py:66
 msgid ""
 "R|Masker to use.\n"
 "L|bisenet-fp: Relatively lightweight NN based mask that provides more "
@@ -113,7 +113,7 @@ msgstr ""
 "델은 커뮤니티 구성원들에 의해 훈련되었으며 추가 설명을 위해 테스트가 필요합니"
 "다. 옆 얼굴은 평균 이하의 성능을 초래할 수 있습니다."
 
-#: /home/matt/faceswap/tools/mask/cli.py:96
+#: tools/mask/cli.py:98
 msgid ""
 "R|Whether to update all masks in the alignments files, only those faces that "
 "do not already have a mask of the given `mask type` or just to output the "
@@ -133,15 +133,12 @@ msgstr ""
 "L|output: 마스크를 업데이트하지 말고 지정된 출력 폴더에서 검토할 수 있도록 출"
 "력하십시오."
 
-#: /home/matt/faceswap/tools/mask/cli.py:109
-#: /home/matt/faceswap/tools/mask/cli.py:116
-#: /home/matt/faceswap/tools/mask/cli.py:129
-#: /home/matt/faceswap/tools/mask/cli.py:142
-#: /home/matt/faceswap/tools/mask/cli.py:151
+#: tools/mask/cli.py:111 tools/mask/cli.py:118 tools/mask/cli.py:131
+#: tools/mask/cli.py:144 tools/mask/cli.py:153
 msgid "output"
 msgstr "출력"
 
-#: /home/matt/faceswap/tools/mask/cli.py:110
+#: tools/mask/cli.py:112
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
@@ -149,7 +146,7 @@ msgstr ""
 "선택적 출력 위치. 만약 값이 제공된다면 생성된 마스크 미리 보기가 주어진 폴더"
 "에 출력됩니다."
 
-#: /home/matt/faceswap/tools/mask/cli.py:120
+#: tools/mask/cli.py:122
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -161,7 +158,7 @@ msgstr ""
 "은 홀수여야 하며 짝수가 전달되면 다음 홀수로 반올림됩니다. NB: 출력 미리 보기"
 "에만 영향을 줍니다. 0으로 설정하면 꺼집니다"
 
-#: /home/matt/faceswap/tools/mask/cli.py:133
+#: tools/mask/cli.py:135
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
@@ -171,7 +168,7 @@ msgstr ""
 "줄이는 데 도움이 됩니다. 값이 클수록 마스크에 더 많은 영향을 미칩니다. NB: 출"
 "력 미리 보기에만 영향을 줍니다. 0으로 설정하면 꺼집니다"
 
-#: /home/matt/faceswap/tools/mask/cli.py:143
+#: tools/mask/cli.py:145
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -184,10 +181,17 @@ msgstr ""
 "L|masked: 마스크된 얼굴/프레임을 Rgba 이미지로 출력합니다.\n"
 "L|mask: 마스크를 단일 채널 이미지로만 출력합니다."
 
-#: /home/matt/faceswap/tools/mask/cli.py:152
+#: tools/mask/cli.py:154
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."
 msgstr ""
 "R|출력 처리를 사용할 때 전체 프레임을 출력할지 또는 페이스 박스만 출력할지 여"
 "부. 프레임을 입력으로 사용할 때만 효과가 있습니다."
+
+#~ msgid ""
+#~ "Full path to the alignments file to add the mask to. NB: if the mask "
+#~ "already exists in the alignments file it will be overwritten."
+#~ msgstr ""
+#~ "마스크를 추가할 alignments 파일의 전체 경로입니다. 주의: alignments 파일"
+#~ "에 마스크가 이미 있으면 alignments 파일이 덮어 씌워집니다."

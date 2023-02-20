@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-08-05 14:00+0100\n"
+"POT-Creation-Date: 2023-02-20 14:55+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,45 +17,44 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: /home/matt/faceswap/tools/mask/cli.py:15
+#: tools/mask/cli.py:15
 msgid "This command lets you generate masks for existing alignments."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:24
+#: tools/mask/cli.py:24
 msgid ""
 "Mask tool\n"
 "Generate masks for existing alignments files."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:33
-#: /home/matt/faceswap/tools/mask/cli.py:42
-#: /home/matt/faceswap/tools/mask/cli.py:52
+#: tools/mask/cli.py:33 tools/mask/cli.py:44 tools/mask/cli.py:54
 msgid "data"
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:36
+#: tools/mask/cli.py:36
 msgid ""
-"Full path to the alignments file to add the mask to. NB: if the mask already "
-"exists in the alignments file it will be overwritten."
+"Full path to the alignments file to add the mask to if not at the default "
+"location. NB: If the input-type is faces and you wish to update the "
+"corresponding alignments file, then you must provide a value here as the "
+"location cannot be automatically detected."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:45
+#: tools/mask/cli.py:47
 msgid "Directory containing extracted faces, source frames, or a video file."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:54
+#: tools/mask/cli.py:56
 msgid ""
 "R|Whether the `input` is a folder of faces or a folder frames/video\n"
 "L|faces: The input is a folder containing extracted faces.\n"
 "L|frames: The input is a folder containing frames or is a video"
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:63
-#: /home/matt/faceswap/tools/mask/cli.py:95
+#: tools/mask/cli.py:65 tools/mask/cli.py:97
 msgid "process"
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:64
+#: tools/mask/cli.py:66
 msgid ""
 "R|Masker to use.\n"
 "L|bisenet-fp: Relatively lightweight NN based mask that provides more "
@@ -85,7 +84,7 @@ msgid ""
 "performance."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:96
+#: tools/mask/cli.py:98
 msgid ""
 "R|Whether to update all masks in the alignments files, only those faces that "
 "do not already have a mask of the given `mask type` or just to output the "
@@ -97,21 +96,18 @@ msgid ""
 "output folder."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:109
-#: /home/matt/faceswap/tools/mask/cli.py:116
-#: /home/matt/faceswap/tools/mask/cli.py:129
-#: /home/matt/faceswap/tools/mask/cli.py:142
-#: /home/matt/faceswap/tools/mask/cli.py:151
+#: tools/mask/cli.py:111 tools/mask/cli.py:118 tools/mask/cli.py:131
+#: tools/mask/cli.py:144 tools/mask/cli.py:153
 msgid "output"
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:110
+#: tools/mask/cli.py:112
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:120
+#: tools/mask/cli.py:122
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -119,14 +115,14 @@ msgid ""
 "to the next odd number. NB: Only effects the output preview. Set to 0 for off"
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:133
+#: tools/mask/cli.py:135
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
 "effects the output preview. Set to 0 for off"
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:143
+#: tools/mask/cli.py:145
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -134,7 +130,7 @@ msgid ""
 "L|mask: Only output the mask as a single channel image."
 msgstr ""
 
-#: /home/matt/faceswap/tools/mask/cli.py:152
+#: tools/mask/cli.py:154
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."
