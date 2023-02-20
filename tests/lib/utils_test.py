@@ -139,12 +139,12 @@ def test_get_image_paths(tmp_path: str) -> None:
     # Test getting any image paths from a folder with images and random files
     exists = [os.path.join(test_folder, img)
               for img in os.listdir(test_folder) if os.path.splitext(img)[-1] != ".txt"]
-    assert get_image_paths(test_folder) == exists
+    assert sorted(get_image_paths(test_folder)) == sorted(exists)
 
     # Test getting image paths from a folder with images with a specific extension
     exists = [os.path.join(test_folder, img)
               for img in os.listdir(test_folder) if os.path.splitext(img)[-1] == ".png"]
-    assert get_image_paths(test_folder, extension=".png") == exists
+    assert sorted(get_image_paths(test_folder, extension=".png")) == sorted(exists)
 
 
 _PARAMS = [("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
