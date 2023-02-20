@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Pytest unit tests for :mod:`tools.alignments.media` """
 import os
+from operator import itemgetter
 from typing import cast, Dict, Generator, List, Tuple
 from unittest.mock import MagicMock
 
@@ -608,8 +609,8 @@ class TestFrames:
                     dict(frame_fullname="b.png", frame_name="b", frame_extension=".png")]
 
         frames = Frames(folder, None)
-        returned = list(frames.process_frames())
-        assert returned == expected
+        returned = sorted(list(frames.process_frames()), key=itemgetter("frame_fullname"))
+        assert returned == sorted(expected, key=itemgetter("frame_fullname"))
 
     def test_process_video(self, folder: str) -> None:
         """ Test for :class:`~tools.alignments.media.Frames` process_video method
