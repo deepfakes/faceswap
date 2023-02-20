@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-02-20 14:55+0000\n"
-"PO-Revision-Date: 2023-02-20 14:58+0000\n"
+"POT-Creation-Date: 2023-02-20 23:42+0000\n"
+"PO-Revision-Date: 2023-02-20 23:45+0000\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
@@ -32,6 +32,7 @@ msgstr ""
 "Genera máscaras para los archivos de alineación existentes."
 
 #: tools/mask/cli.py:33 tools/mask/cli.py:44 tools/mask/cli.py:54
+#: tools/mask/cli.py:64
 msgid "data"
 msgstr "datos"
 
@@ -63,11 +64,36 @@ msgstr ""
 "L|faces: La entrada es una carpeta que contiene caras extraídas.\n"
 "L|frames: La entrada es una carpeta que contiene fotogramas o es un vídeo"
 
-#: tools/mask/cli.py:65 tools/mask/cli.py:97
+#: tools/mask/cli.py:65
+msgid ""
+"R|Run the mask tool on multiple sources. If selected then the other options "
+"should be set as follows:\n"
+"L|input: A parent folder containing either all of the video files to be "
+"processed, or containing sub-folders of frames/faces.\n"
+"L|output-folder: If provided, then sub-folders will be created within the "
+"given location to hold the previews for each input.\n"
+"L|alignments: Alignments field will be ignored for batch processing. The "
+"alignments files must exist at the default location (for frames). For batch "
+"processing of masks with 'faces' as the input type, then only the PNG header "
+"within the extracted faces will be updated."
+msgstr ""
+"R|Ejecute la herramienta de máscara en varias fuentes. Si se selecciona, las "
+"otras opciones deben configurarse de la siguiente manera:\n"
+"L|input: una carpeta principal que contiene todos los archivos de video que "
+"se procesarán o que contiene subcarpetas de marcos/caras.\n"
+"L|output-folder: si se proporciona, se crearán subcarpetas dentro de la "
+"ubicación dada para contener las vistas previas de cada entrada.\n"
+"L|alignments: el campo de alineaciones se ignorará para el procesamiento por "
+"lotes. Los archivos de alineaciones deben existir en la ubicación "
+"predeterminada (para marcos). Para el procesamiento por lotes de máscaras "
+"con 'caras' como tipo de entrada, solo se actualizará el encabezado PNG "
+"dentro de las caras extraídas."
+
+#: tools/mask/cli.py:81 tools/mask/cli.py:113
 msgid "process"
 msgstr "proceso"
 
-#: tools/mask/cli.py:66
+#: tools/mask/cli.py:82
 msgid ""
 "R|Masker to use.\n"
 "L|bisenet-fp: Relatively lightweight NN based mask that provides more "
@@ -126,7 +152,7 @@ msgstr ""
 "descripción. Los rostros de perfil pueden dar lugar a un rendimiento "
 "inferior."
 
-#: tools/mask/cli.py:98
+#: tools/mask/cli.py:114
 msgid ""
 "R|Whether to update all masks in the alignments files, only those faces that "
 "do not already have a mask of the given `mask type` or just to output the "
@@ -146,12 +172,12 @@ msgstr ""
 "L|output: No actualiza las máscaras, sólo las emite para su revisión en la "
 "carpeta de salida dada."
 
-#: tools/mask/cli.py:111 tools/mask/cli.py:118 tools/mask/cli.py:131
-#: tools/mask/cli.py:144 tools/mask/cli.py:153
+#: tools/mask/cli.py:127 tools/mask/cli.py:134 tools/mask/cli.py:147
+#: tools/mask/cli.py:160 tools/mask/cli.py:169
 msgid "output"
 msgstr "salida"
 
-#: tools/mask/cli.py:112
+#: tools/mask/cli.py:128
 msgid ""
 "Optional output location. If provided, a preview of the masks created will "
 "be output in the given folder."
@@ -159,7 +185,7 @@ msgstr ""
 "Ubicación de salida opcional. Si se proporciona, se obtendrá una vista "
 "previa de las máscaras creadas en la carpeta indicada."
 
-#: tools/mask/cli.py:122
+#: tools/mask/cli.py:138
 msgid ""
 "Apply gaussian blur to the mask output. Has the effect of smoothing the "
 "edges of the mask giving less of a hard edge. the size is in pixels. This "
@@ -172,7 +198,7 @@ msgstr ""
 "redondeará al siguiente número impar. NB: Sólo afecta a la vista previa de "
 "salida. Si se ajusta a 0, se desactiva"
 
-#: tools/mask/cli.py:135
+#: tools/mask/cli.py:151
 msgid ""
 "Helps reduce 'blotchiness' on some masks by making light shades white and "
 "dark shades black. Higher values will impact more of the mask. NB: Only "
@@ -183,7 +209,7 @@ msgstr ""
 "más a la máscara. NB: Sólo afecta a la vista previa de salida. Si se ajusta "
 "a 0, se desactiva"
 
-#: tools/mask/cli.py:145
+#: tools/mask/cli.py:161
 msgid ""
 "R|How to format the output when processing is set to 'output'.\n"
 "L|combined: The image contains the face/frame, face mask and masked face.\n"
@@ -198,7 +224,7 @@ msgstr ""
 "enmascarada.\n"
 "L|mask: Sólo emite la máscara como una imagen de un solo canal."
 
-#: tools/mask/cli.py:154
+#: tools/mask/cli.py:170
 msgid ""
 "R|Whether to output the whole frame or only the face box when using output "
 "processing. Only has an effect when using frames as input."

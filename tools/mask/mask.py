@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+from argparse import Namespace
 from typing import cast, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
@@ -13,11 +14,10 @@ from lib.align import Alignments, AlignedFace, DetectedFace, update_legacy_png_h
 from lib.image import FacesLoader, ImagesLoader, ImagesSaver, encode_image
 
 from lib.multithreading import MultiThread
-from lib.utils import get_folder
+from lib.utils import get_folder, _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
 if TYPE_CHECKING:
-    from argparse import Namespace
     from lib.align.aligned_face import CenteringType
     from lib.align.alignments import AlignmentFileDict, PNGHeaderDict
     from lib.queue_manager import EventQueue
@@ -32,13 +32,116 @@ class Mask():  # pylint:disable=too-few-public-methods
     Faceswap Masks tool. Generate masks from existing alignments files, and output masks
     for preview.
 
+    Wrapper for the mask process to run in either batch mode or single use mode
+
     Parameters
     ----------
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
-    def __init__(self, arguments: "Namespace") -> None:
+    def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s", self.__class__.__name__, arguments)
+        self._args = arguments
+        self._input_locations = self._get_input_locations()
+
+    def _get_input_locations(self) -> List[str]:
+        """ Obtain the full path to input locations. Will be a list of locations if batch mode is
+        selected, or containing a single location if batch mode is not selected.
+
+        Returns
+        -------
+        list:
+            The list of input location paths
+        """
+        if not self._args.batch_mode:
+            return [self._args.input]
+
+        retval = [os.path.join(self._args.input, fname)
+                  for fname in os.listdir(self._args.input)
+                  if os.path.isdir(os.path.join(self._args.input, fname))
+                  or os.path.splitext(fname)[-1].lower() in _video_extensions]
+        logger.info("Batch mode selected. Processing locations: %s", retval)
+        return retval
+
+    def _get_output_location(self, input_location: str) -> str:
+        """ Obtain the path to an output folder for faces for a given input location.
+
+        A sub-folder within the user supplied output location will be returned based on
+        the input filename
+
+        Parameters
+        ----------
+        input_location: str
+            The full path to an input video or folder of images
+        """
+        retval = os.path.join(self._args.output,
+                              os.path.splitext(os.path.basename(input_location))[0])
+        logger.debug("Returning output: '%s' for input: '%s'", retval, input_location)
+        return retval
+
+    def _get_extractor(self) -> Optional[Extractor]:
+        """ Obtain a Mask extractor plugin and launch it
+
+        Returns
+        -------
+        :class:`plugins.extract.pipeline.Extractor`:
+            The launched Extractor
+        """
+        if self._args.processing == "output":
+            logger.debug("Update type `output` selected. Not launching extractor")
+            return None
+        logger.debug("masker: %s", self._args.masker)
+        extractor = Extractor(None, None, self._args.masker, exclude_gpus=self._args.exclude_gpus)
+        logger.debug(extractor)
+        return extractor
+
+    def process(self) -> None:
+        """ The entry point for triggering the Extraction Process.
+
+        Should only be called from  :class:`lib.cli.launcher.ScriptExecutor`
+        """
+        extractor = self._get_extractor()
+        for idx, location in enumerate(self._input_locations):
+            if self._args.batch_mode:
+                logger.info("Processing job %s of %s: %s",
+                            idx + 1, len(self._input_locations), location)
+                arguments = Namespace(**self._args.__dict__)
+                arguments.input = location
+                # Due to differences in how alignments are handled for frames/faces, only default
+                # locations allowed
+                arguments.alignments = None
+                if self._args.output:
+                    arguments.output = self._get_output_location(location)
+            else:
+                arguments = self._args
+
+            if extractor is not None:
+                extractor.launch()
+
+            mask = _Mask(arguments, extractor)
+            mask.process()
+
+            if extractor is not None:
+                extractor.reset_phase_index()
+
+
+class _Mask():  # pylint:disable=too-few-public-methods
+    """ This tool is part of the Faceswap Tools suite and should be called from
+    ``python tools.py mask`` command.
+
+    Faceswap Masks tool. Generate masks from existing alignments files, and output masks
+    for preview.
+
+    Parameters
+    ----------
+    arguments: :class:`argparse.Namespace`
+        The :mod:`argparse` arguments as passed in from :mod:`tools.py`
+    extractor: :class:`plugins.extract.pipeline.Extractor`:
+            The launched Extractor
+    """
+    def __init__(self, arguments: Namespace, extractor: Optional[Extractor]) -> None:
+        logger.debug("Initializing %s: (arguments: %s, extractor: %s)",
+                     self.__class__.__name__, arguments, extractor)
         self._update_type = arguments.processing
         self._input_is_faces = arguments.input_type == "faces"
         self._mask_type = arguments.masker
@@ -56,7 +159,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         self._faces_saver: Optional[ImagesSaver] = None
 
         self._alignments = self._get_alignments(arguments)
-        self._extractor = self._get_extractor(arguments.exclude_gpus)
+        self._extractor = extractor
         self._set_correct_mask_type()
         self._extractor_input_thread = self._feed_extractor()
 
@@ -79,7 +182,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             sys.exit(0)
         logger.debug("input '%s' is valid", mask_input)
 
-    def _set_saver(self, arguments: "Namespace") -> Optional[ImagesSaver]:
+    def _set_saver(self, arguments: Namespace) -> Optional[ImagesSaver]:
         """ set the saver in a background thread
 
         Parameters
@@ -105,7 +208,7 @@ class Mask():  # pylint:disable=too-few-public-methods
         logger.debug(saver)
         return saver
 
-    def _get_alignments(self, arguments: "Namespace") -> Optional[Alignments]:
+    def _get_alignments(self, arguments: Namespace) -> Optional[Alignments]:
         """ Obtain the alignments from either the given alignments location or the default
         location.
 
@@ -142,29 +245,6 @@ class Mask():  # pylint:disable=too-few-public-methods
             filename = "alignments"
 
         return Alignments(folder, filename=filename)
-
-    def _get_extractor(self, exclude_gpus: List[int]) -> Optional[Extractor]:
-        """ Obtain a Mask extractor plugin and launch it
-
-        Parameters
-        ----------
-        exclude_gpus: list or ``None``
-            A list of indices correlating to connected GPUs that Tensorflow should not use. Pass
-            ``None`` to not exclude any GPUs.
-
-        Returns
-        -------
-        :class:`plugins.extract.pipeline.Extractor`:
-            The launched Extractor
-        """
-        if self._update_type == "output":
-            logger.debug("Update type `output` selected. Not launching extractor")
-            return None
-        logger.debug("masker: %s", self._mask_type)
-        extractor = Extractor(None, None, self._mask_type, exclude_gpus=exclude_gpus)
-        extractor.launch()
-        logger.debug(extractor)
-        return extractor
 
     def _set_correct_mask_type(self):
         """ Some masks have multiple variants that they can be saved as depending on config options
@@ -366,7 +446,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             logger.debug("Mask pre-exists for face: '%s' - %s", frame, idx)
         return retval
 
-    def _get_output_suffix(self, arguments: "Namespace") -> str:
+    def _get_output_suffix(self, arguments: Namespace) -> str:
         """ The filename suffix, based on selected output options.
 
         Parameters

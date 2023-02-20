@@ -57,6 +57,22 @@ class MaskArgs(FaceSwapArgs):
                    "\nL|faces: The input is a folder containing extracted faces."
                    "\nL|frames: The input is a folder containing frames or is a video")))
         argument_list.append(dict(
+            opts=("-B", "--batch-mode"),
+            action="store_true",
+            dest="batch_mode",
+            default=False,
+            group=_("data"),
+            help=_("R|Run the mask tool on multiple sources. If selected then the other options "
+                   "should be set as follows:"
+                   "\nL|input: A parent folder containing either all of the video files to be "
+                   "processed, or containing sub-folders of frames/faces."
+                   "\nL|output-folder: If provided, then sub-folders will be created within the "
+                   "given location to hold the previews for each input."
+                   "\nL|alignments: Alignments field will be ignored for batch processing. The "
+                   "alignments files must exist at the default location (for frames). For batch "
+                   "processing of masks with 'faces' as the input type, then only the PNG header "
+                   "within the extracted faces will be updated.")))
+        argument_list.append(dict(
             opts=("-M", "--masker"),
             action=Radio,
             type=str.lower,
