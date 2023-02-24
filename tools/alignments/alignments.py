@@ -5,6 +5,7 @@ import os
 import sys
 
 from argparse import Namespace
+from multiprocessing import Process
 from typing import Any, cast, List, Dict, Optional
 
 from lib.utils import _video_extensions, FaceswapError
@@ -196,6 +197,23 @@ class Alignments():  # pylint:disable=too-few-public-methods
         logger.debug("File locations: %s", retval)
         return retval
 
+    @staticmethod
+    def _run_process(arguments) -> None:
+        """ The alignements tool process to be run in a spawned process.
+
+        In some instances, batch-mode memory leaks. Launching each job in a separate process
+        prevents this leak.
+
+        Parameters
+        ----------
+        arguments: :class:`argparse.Namespace`
+            The :mod:`argparse` arguments to be used for the given job
+        """
+        logger.debug("Starting process: (arguments: %s)", arguments)
+        tool = _Alignments(arguments)
+        tool.process()
+        logger.debug("Finished process: (arguments: %s)", arguments)
+
     def process(self):
         """ The entry point for the Alignments tool from :mod:`lib.tools.alignments.cli`.
 
@@ -212,8 +230,13 @@ class Alignments():  # pylint:disable=too-few-public-methods
             args.frames_dir = frames
             args.faces_dir = faces
             args.alignments_file = alignments
-            tool = _Alignments(args)
-            tool.process()
+
+            if num_jobs > 1:
+                proc = Process(target=self._run_process, args=(args, ))
+                proc.start()
+                proc.join()
+            else:
+                self._run_process(args)
 
 
 class _Alignments():  # pylint:disable=too-few-public-methods
