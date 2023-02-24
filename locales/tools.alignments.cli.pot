@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-09-14 18:45+0100\n"
+"POT-Creation-Date: 2023-02-24 00:27+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -39,8 +39,8 @@ msgstr ""
 
 #: tools/alignments/cli.py:46
 msgid ""
-" Must Pass in either a frames folder/source video file OR afaces folder (-fr "
-"or -fc)."
+" Must Pass in either a frames folder/source video file OR a faces folder (-"
+"fr or -fc)."
 msgstr ""
 
 #: tools/alignments/cli.py:48
@@ -70,11 +70,11 @@ msgid ""
 "{1}\n"
 "L|'from-faces': Generate alignment file(s) from a folder of extracted faces. "
 "if the folder of faces comes from multiple sources, then multiple alignments "
-"files will be created. NB: for faces which have been extracted folders of "
-"source images, rather than a video, a single alignments file will be created "
-"as there is no way for the process to know how many folders of images were "
-"originally used. You do not need to provide an alignments file path to run "
-"this job. {3}\n"
+"files will be created. NB: for faces which have been extracted from folders "
+"of source images, rather than a video, a single alignments file will be "
+"created as there is no way for the process to know how many folders of "
+"images were originally used. You do not need to provide an alignments file "
+"path to run this job. {3}\n"
 "L|'missing-alignments': Identify frames that do not exist in the alignments "
 "file.{2}{0}\n"
 "L|'missing-frames': Identify frames in the alignments file that do not "
@@ -105,7 +105,7 @@ msgid ""
 msgstr ""
 
 #: tools/alignments/cli.py:110 tools/alignments/cli.py:123
-#: tools/alignments/cli.py:130
+#: tools/alignments/cli.py:130 tools/alignments/cli.py:137
 msgid "data"
 msgstr ""
 
@@ -126,23 +126,45 @@ msgstr ""
 msgid "Directory containing source frames that faces were extracted from."
 msgstr ""
 
-#: tools/alignments/cli.py:140 tools/alignments/cli.py:151
-#: tools/alignments/cli.py:161
+#: tools/alignments/cli.py:138
+msgid ""
+"R|Run the aligmnents tool on multiple sources. The following jobs support "
+"batch mode:\n"
+"L|draw, extract, from-faces, missing-alignments, missing-frames, no-faces, "
+"sort, spatial.\n"
+"If batch mode is selected then the other options should be set as follows:\n"
+"L|alignments_file: For 'sort' and 'spatial' this should point to the parent "
+"folder containing the alignments files to be processed. For all other jobs "
+"this option is ignored, and the alignments files must exist at their default "
+"location relative to the original frames folder/video.\n"
+"L|faces_dir: For 'from-faces' this should be a parent folder, containing sub-"
+"folders of extracted faces from which to generate alignments files. For "
+"'extract' this should be a parent folder where sub-folders will be created "
+"for each extraction to be run. For all other jobs this option is ignored.\n"
+"L|frames_dir: For 'draw', 'extract', 'missing-alignments', 'missing-frames' "
+"and 'no-faces' this should be a parent folder containing video files or sub-"
+"folders of images to perform the alignments job on. The alignments file "
+"should exist at the default location. For all other jobs this option is "
+"ignored."
+msgstr ""
+
+#: tools/alignments/cli.py:164 tools/alignments/cli.py:175
+#: tools/alignments/cli.py:185
 msgid "extract"
 msgstr ""
 
-#: tools/alignments/cli.py:141
+#: tools/alignments/cli.py:165
 msgid ""
 "[Extract only] Extract every 'nth' frame. This option will skip frames when "
 "extracting faces. For example a value of 1 will extract faces from every "
 "frame, a value of 10 will extract faces from every 10th frame."
 msgstr ""
 
-#: tools/alignments/cli.py:152
+#: tools/alignments/cli.py:176
 msgid "[Extract only] The output size of extracted faces."
 msgstr ""
 
-#: tools/alignments/cli.py:162
+#: tools/alignments/cli.py:186
 msgid ""
 "[Extract only] Only extract faces that have been resized by this percent or "
 "more to meet the specified extract size (`-sz`, `--size`). Useful for "

@@ -43,7 +43,7 @@ class AlignmentsArgs(FaceSwapArgs):
         """
         frames_dir = _(" Must Pass in a frames folder/source video file (-fr).")
         faces_dir = _(" Must Pass in a faces folder (-fc).")
-        frames_or_faces_dir = _(" Must Pass in either a frames folder/source video file OR a"
+        frames_or_faces_dir = _(" Must Pass in either a frames folder/source video file OR a "
                                 "faces folder (-fr or -fc).")
         frames_and_faces_dir = _(" Must Pass in a frames folder/source video file AND a faces "
                                  "folder (-fr and -fc).")
@@ -67,9 +67,9 @@ class AlignmentsArgs(FaceSwapArgs):
                    "\nL|'from-faces': Generate alignment file(s) from a folder of extracted "
                    "faces. if the folder of faces comes from multiple sources, then multiple "
                    "alignments files will be created. NB: for faces which have been extracted "
-                   "folders of source images, rather than a video, a single alignments file will "
-                   "be created as there is no way for the process to know how many folders of "
-                   "images were originally used. You do not need to provide an alignments file "
+                   "from folders of source images, rather than a video, a single alignments file "
+                   "will be created as there is no way for the process to know how many folders "
+                   "of images were originally used. You do not need to provide an alignments file "
                    "path to run this job. {3}"
                    "\nL|'missing-alignments': Identify frames that do not exist in the alignments "
                    "file.{2}{0}"
@@ -129,6 +129,30 @@ class AlignmentsArgs(FaceSwapArgs):
             filetypes="video",
             group=_("data"),
             help=_("Directory containing source frames that faces were extracted from.")))
+        argument_list.append(dict(
+            opts=("-B", "--batch-mode"),
+            action="store_true",
+            dest="batch_mode",
+            default=False,
+            group=_("data"),
+            help=_("R|Run the aligmnents tool on multiple sources. The following jobs support "
+                   "batch mode:"
+                   "\nL|draw, extract, from-faces, missing-alignments, missing-frames, no-faces, "
+                   "sort, spatial."
+                   "\nIf batch mode is selected then the other options should be set as follows:"
+                   "\nL|alignments_file: For 'sort' and 'spatial' this should point to the parent "
+                   "folder containing the alignments files to be processed. For all other jobs "
+                   "this option is ignored, and the alignments files must exist at their default "
+                   "location relative to the original frames folder/video."
+                   "\nL|faces_dir: For 'from-faces' this should be a parent folder, containing "
+                   "sub-folders of extracted faces from which to generate alignments files. For "
+                   "'extract' this should be a parent folder where sub-folders will be created "
+                   "for each extraction to be run. For all other jobs this option is ignored."
+                   "\nL|frames_dir: For 'draw', 'extract', 'missing-alignments', 'missing-frames' "
+                   "and 'no-faces' this should be a parent folder containing video files or sub-"
+                   "folders of images to perform the alignments job on. The alignments file "
+                   "should exist at the default location. For all other jobs this option is "
+                   "ignored.")))
         argument_list.append(dict(
             opts=("-een", "--extract-every-n"),
             type=int,
