@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-09-14 18:45+0100\n"
-"PO-Revision-Date: 2022-11-26 16:43+0900\n"
+"POT-Creation-Date: 2023-02-24 00:27+0000\n"
+"PO-Revision-Date: 2023-02-24 00:34+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 3.2\n"
+"X-Generator: Poedit 3.0.1\n"
 
 #: tools/alignments/cli.py:17
 msgid ""
@@ -45,8 +45,8 @@ msgstr " 얼굴 폴더를 무조건 전달해야 합니다 (-fc)."
 
 #: tools/alignments/cli.py:46
 msgid ""
-" Must Pass in either a frames folder/source video file OR afaces folder (-fr "
-"or -fc)."
+" Must Pass in either a frames folder/source video file OR a faces folder (-"
+"fr or -fc)."
 msgstr ""
 " 프레임 폴더나 원본 비디오 파일 또는 얼굴 폴더중 하나를 무조건 전달해야 합니"
 "다 (-fr and -fc)."
@@ -80,11 +80,11 @@ msgid ""
 "{1}\n"
 "L|'from-faces': Generate alignment file(s) from a folder of extracted faces. "
 "if the folder of faces comes from multiple sources, then multiple alignments "
-"files will be created. NB: for faces which have been extracted folders of "
-"source images, rather than a video, a single alignments file will be created "
-"as there is no way for the process to know how many folders of images were "
-"originally used. You do not need to provide an alignments file path to run "
-"this job. {3}\n"
+"files will be created. NB: for faces which have been extracted from folders "
+"of source images, rather than a video, a single alignments file will be "
+"created as there is no way for the process to know how many folders of "
+"images were originally used. You do not need to provide an alignments file "
+"path to run this job. {3}\n"
 "L|'missing-alignments': Identify frames that do not exist in the alignments "
 "file.{2}{0}\n"
 "L|'missing-frames': Identify frames in the alignments file that do not "
@@ -146,7 +146,7 @@ msgstr ""
 "L|'이동': 검색된 항목을 원본 디렉토리 내의 하위 폴더로 이동합니다."
 
 #: tools/alignments/cli.py:110 tools/alignments/cli.py:123
-#: tools/alignments/cli.py:130
+#: tools/alignments/cli.py:130 tools/alignments/cli.py:137
 msgid "data"
 msgstr "데이터"
 
@@ -171,12 +171,48 @@ msgstr "추출된 얼굴들이 저장된 디렉토리."
 msgid "Directory containing source frames that faces were extracted from."
 msgstr "얼굴 추출의 소스로 쓰인 원본 프레임이 저장된 디렉토리."
 
-#: tools/alignments/cli.py:140 tools/alignments/cli.py:151
-#: tools/alignments/cli.py:161
+#: tools/alignments/cli.py:138
+msgid ""
+"R|Run the aligmnents tool on multiple sources. The following jobs support "
+"batch mode:\n"
+"L|draw, extract, from-faces, missing-alignments, missing-frames, no-faces, "
+"sort, spatial.\n"
+"If batch mode is selected then the other options should be set as follows:\n"
+"L|alignments_file: For 'sort' and 'spatial' this should point to the parent "
+"folder containing the alignments files to be processed. For all other jobs "
+"this option is ignored, and the alignments files must exist at their default "
+"location relative to the original frames folder/video.\n"
+"L|faces_dir: For 'from-faces' this should be a parent folder, containing sub-"
+"folders of extracted faces from which to generate alignments files. For "
+"'extract' this should be a parent folder where sub-folders will be created "
+"for each extraction to be run. For all other jobs this option is ignored.\n"
+"L|frames_dir: For 'draw', 'extract', 'missing-alignments', 'missing-frames' "
+"and 'no-faces' this should be a parent folder containing video files or sub-"
+"folders of images to perform the alignments job on. The alignments file "
+"should exist at the default location. For all other jobs this option is "
+"ignored."
+msgstr ""
+"R|여러 소스에서 정렬 도구를 실행합니다. 다음 작업은 배치 모드를 지원합니다.\n"
+"L|그리기, 추출, 얼굴부터, 정렬 누락, 프레임 누락, 얼굴 없음, 정렬, 공간.\n"
+"배치 모드를 선택한 경우 다른 옵션을 다음과 같이 설정해야 합니다.\n"
+"L|alignments_file: 'sort'및 'spatial'의 경우 처리할 정렬 파일이 포함된 상위 "
+"폴더를 가리켜야 합니다. 다른 모든 작업의 경우 이 옵션은 무시되며 정렬 파일은 "
+"원본 프레임 폴더/비디오에 상대적인 기본 위치에 있어야 합니다.\n"
+"L|faces_dir: 'from-faces'의 경우 정렬 파일을 생성할 추출된 면의 하위 폴더를 "
+"포함하는 상위 폴더여야 합니다. '추출'의 경우 실행할 각 추출에 대해 하위 폴더"
+"가 생성되는 상위 폴더여야 합니다. 다른 모든 작업의 경우 이 옵션은 무시됩니"
+"다.\n"
+"L|frames_dir: 'draw', 'extract', 'missing-alignments', 'missing-frames' 및 "
+"'no-faces'의 경우 비디오 파일이 포함된 상위 폴더 또는 정렬 작업을 수행할 이미"
+"지의 하위 폴더여야 합니다. 에. 정렬 파일은 기본 위치에 있어야 합니다. 다른 모"
+"든 작업의 경우 이 옵션은 무시됩니다."
+
+#: tools/alignments/cli.py:164 tools/alignments/cli.py:175
+#: tools/alignments/cli.py:185
 msgid "extract"
 msgstr "추출"
 
-#: tools/alignments/cli.py:141
+#: tools/alignments/cli.py:165
 msgid ""
 "[Extract only] Extract every 'nth' frame. This option will skip frames when "
 "extracting faces. For example a value of 1 will extract faces from every "
@@ -186,11 +222,11 @@ msgstr ""
 "프레임을 건너뜁니다. 예를 들어, 값이 1이면 모든 프레임에서 얼굴이 추출되고, "
 "값이 10이면 모든 10번째 프레임에서 얼굴이 추출됩니다."
 
-#: tools/alignments/cli.py:152
+#: tools/alignments/cli.py:176
 msgid "[Extract only] The output size of extracted faces."
 msgstr "[Extract only] 추출된 얼굴들의 결과 크기입니다."
 
-#: tools/alignments/cli.py:162
+#: tools/alignments/cli.py:186
 msgid ""
 "[Extract only] Only extract faces that have been resized by this percent or "
 "more to meet the specified extract size (`-sz`, `--size`). Useful for "
