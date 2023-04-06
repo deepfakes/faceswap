@@ -11,6 +11,7 @@ from lib.utils import get_backend
 from .original import Model as OriginalModel, KerasModel
 from lib.model.networks.clip.model import _Models, ClipConfig
 from lib.model.networks.clip.visual_transformer import VisualTransformer
+from lib.utils import GetModel
 import numpy as np
 
 if get_backend() == "amd":
@@ -47,6 +48,18 @@ class Model(OriginalModel):
         empty_image = np.zeros((1, 224, 224, 3))
         self.visualtransformer(empty_image)
         # self.visualtransformer.summary()
+        
+        model_downloader = GetModel("s3fd_keras_v2.h5", 11)
+        model_downloader._model_filename = 'farl_v1.h5'
+        model_downloader._git_model_id = 1
+        model_downloader._url_base = "https://github.com/Arkavian/faceswap-models/releases/download"
+        model_downloader._get()
+        self.visualtransformer.load_weights(model_downloader.model_path, by_name=True)
+
+        # model_downloader._change_base("https://github.com/Arkavian/faceswap-models/releases/download")
+
+        # model_downloader._change_base("Arkavian","faceswap-models")
+
         # self.visualtransformer.load_weights('/home/nikkelitous/FaRL_Visual.h5', by_name=True, skip_mismatch=True)
         # self.visualtransformer.load_weights('/home/nikkelitous/FaRL_Visual_update.h5', by_name=True)
         self.visualtransformer.trainable = False
