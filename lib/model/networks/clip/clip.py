@@ -1,3 +1,5 @@
+#Clip implmented in TF2 from https://github.com/RobertBiehl/CLIP-tf2
+
 from collections import OrderedDict
 from typing import Tuple, Union
 
