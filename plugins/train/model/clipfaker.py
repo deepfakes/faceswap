@@ -50,7 +50,7 @@ class Model(OriginalModel):
         # self.visualtransformer.summary()
         
         model_downloader = GetModel("s3fd_keras_v2.h5", 11)
-        model_downloader._model_filename = 'farl_v1.h5'
+        model_downloader._model_filename = ['FaRL_v1.h5']
         model_downloader._git_model_id = 1
         model_downloader._url_base = "https://github.com/Arkavian/faceswap-models/releases/download"
         model_downloader._get()
