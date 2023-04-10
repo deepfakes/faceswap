@@ -617,7 +617,7 @@ class Settings():
                 retval.extend(self._get_mixed_precision_layers(config["layers"]))
                 continue
 
-            dtype = config["dtype"]
+            dtype = config.get("dtype", None)
             if isinstance(dtype, dict) and dtype["config"]["name"] == "mixed_float16":
                 logger.debug("Adding supported mixed precision layer: %s %s", layer["name"], dtype)
                 retval.append(layer["name"])
