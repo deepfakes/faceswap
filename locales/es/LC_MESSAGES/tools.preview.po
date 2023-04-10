@@ -1,0 +1,88 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: faceswap.spanish\n"
+"POT-Creation-Date: 2021-02-18 23:09-0000\n"
+"PO-Revision-Date: 2021-03-19 14:28+0000\n"
+"Language-Team: tokafondo\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 2.3\n"
+"Last-Translator: \n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: es_ES\n"
+
+#: tools/preview/cli.py:14
+msgid "This command allows you to preview swaps to tweak convert settings."
+msgstr ""
+"Este comando permite previsualizar los intercambios para ajustar la "
+"configuración de la conversión."
+
+#: tools/preview/cli.py:23
+msgid ""
+"Preview tool\n"
+"Allows you to configure your convert settings with a live preview"
+msgstr ""
+"Herramienta de vista previa\n"
+"Permite configurar los ajustes de conversión con una vista previa en directo"
+
+#: tools/preview/cli.py:33 tools/preview/cli.py:42 tools/preview/cli.py:49
+msgid "data"
+msgstr "datos"
+
+#: tools/preview/cli.py:35
+msgid ""
+"Input directory or video. Either a directory containing the image files you "
+"wish to process or path to a video file."
+msgstr ""
+"Directorio o vídeo de entrada. Un directorio que contenga los archivos de "
+"imagen que desea procesar o la ruta a un archivo de vídeo."
+
+#: tools/preview/cli.py:44
+msgid ""
+"Path to the alignments file for the input, if not at the default location"
+msgstr ""
+"Ruta del archivo de alineaciones para la entrada, si no está en la "
+"ubicación por defecto"
+
+#: tools/preview/cli.py:51
+msgid ""
+"Model directory. A directory containing the trained model you wish to "
+"process."
+msgstr ""
+"Directorio del modelo. Un directorio que contiene el modelo entrenado que "
+"desea procesar."
+
+#: tools/preview/cli.py:58
+msgid "Swap the model. Instead of A -> B, swap B -> A"
+msgstr ""
+"Intercambiar el modelo. En lugar de convertir A en B, convierte B en A"
+
+#: tools/preview\preview.py:1303
+msgid "Save full config"
+msgstr "Guardar la configuración completa"
+
+#: tools/preview\preview.py:1306
+msgid "Reset full config to default values"
+msgstr "Restablecer la configuración completa a los valores por defecto"
+
+#: tools/preview\preview.py:1309
+msgid "Reset full config to saved values"
+msgstr "Restablecer la configuración completa a los valores guardados"
+
+#: tools/preview\preview.py:1453
+msgid "Save {} config"
+msgstr "Guardar la configuración de {}"
+
+#: tools/preview\preview.py:1456
+msgid "Reset {} config to default values"
+msgstr "Restablecer la configuración completa de {} a los valores por defecto"
+
+#: tools/preview\preview.py:1459
+msgid "Reset {} config to saved values"
+msgstr "Restablecer la configuración completa de {} a los valores guardados"

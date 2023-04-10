@@ -1,0 +1,139 @@
+{
+	"info": "Initial default theme configuration whilst migrating from default ttk OS widgets",
+	"group_panel": {
+		"info": {
+			"info1": "The 'group_panel' section are any section which contains items for user input, such as the left hand options panel in the main GUI or the Settings pop-up",
+			"info2": "Anything which uses a 'group_panel' will use the theme specified here as default. Panels can be overriden (see below).",
+
+			"panel_background": "The background color of the main panel that holds all of the group options.",
+
+			"info_color": "The background color of the information header box at the top of each control panel",
+			"info_font": "The color of the font inside the information header box at the top of each control panel",
+			"info_border": "The color of the border around the outside of the information header box at the top of each control panel",
+
+			"header_color": "The color to use for the option group boxes header backgrounds, the group box border and for labels on options groups.",
+			"header_font": "The color to use for the option group boxes header font.",
+			"group_background": "This is the color used for the background of each group of options, as well as the background color used for any label which resides inside a group box",
+			"group_font": "The font color used inside each group box for labels",
+
+			"control_color": "The color of controls (e.g. Slider knob, combo pull-down arrow, scrollbar slider + arrows etc.)",
+			"control_active": "Selected/hovered over color of controls (e.g. Slider knob, combo pull-down arrow, scrollbar slider + arrows etc.)",
+			"control_disabled": "The color of controls when they are disabled (specifically scrollbars when there is no page to scroll).",
+
+			"input_color": "The background color of input boxes (e.g. text entry)",
+			"input_font": "The font color of input boxes (e.g. text entry)",
+			"button_background": "The background color of buttons",
+
+			"scrollbar_border": "Border color of scrollbar",
+			"scrollbar_trough": "Trough color of scrollbar"
+		},
+		"panel_background": "#CDD3D5",
+
+		"info_color": "#FFFFFF",
+		"info_font": "#000000",
+		"info_border": "#000000",
+
+		"header_color": "#176087",
+		"header_font": "#FFFFFF",
+		"group_background": "#FFFFFF",
+		"group_border": "#176087",
+		"group_font": "#000000",
+
+		"control_color": "#75929C",
+		"control_active": "#176087",
+		"control_disabled": "#CDD3D5",
+
+		"input_color": "#FFFFFF",
+		"input_font": "#000000",
+		"button_background": "#FFFFFF",
+
+		"scrollbar_border": "#176087",
+		"scrollbar_trough": "#CDD3D5"
+	},
+	"group_settings": {
+		"info": {
+			"info1": "Override default colors for the settings pop-up. See 'group_panel' for allowable options",
+			"info2": "Options same as 'group_panel' with the following additions:",
+
+			"tree_select": "The color of the selected item in the left hand nav frame",
+			"link_color": "The color of links on pages where there are no configuration options"
+		},
+		"panel_background": "#DAD2D8",
+
+		"header_color": "#9B1D20",
+		"group_border": "#9B1D20",
+
+		"control_color": "#B090A8",
+		"control_active": "#9B1D20",
+		"control_disabled": "#DAD2D8",
+
+		"scrollbar_border": "#9B1D20",
+		"scrollbar_trough": "#DAD2D8",
+
+		"tree_select": "#9B1D20",
+		"link_color": "#9B1D20"
+	},
+	"command_tabs": {
+		"frame_border": "#176087",
+		"tab_color": "#CDD3D5",
+		"tab_selected": "#75929C",
+		"tab_hover": "#176087"
+	},
+	"console": {
+		"info": {
+			"info1": "The colors of the console output box",
+
+			"background_color": "The background color of the console output",
+			"border_color": "The color of the border around the console box and scrollbar",
+
+			"stdout_color": "The text color for standard print message output (non Faceswap Logging messages)",
+			"stderr_color": "The text color for messages that are printed to sterr (non Faceswap Logging messages)",
+            "info_color": "The text color for Faceswap INFO log messages",
+            "verbose_color": "The text color for Faceswap VERBOSE log messages",
+            "warning_color": "The text color for Faceswap WARNING log messages",
+            "critical_color": "The text color for Faceswap CRITICAL log messages",
+            "error_color": "The text color for Faceswap ERROR log messages",
+
+            "scrollbar_border": "The color of the overall scrollbar border",
+            "scrollbar_trough": "The color of the scrollbar trough",
+
+            "scrollbar_background_<state>": "The main color of the up/down buttons and the slider of the scrollbar, for active (pressed/hovered), normal and disabled (no scrollbar required)",
+            "scrollbar_foreground_<state>": "The foreground color for the up/down buttons of the scrollbar, for active (pressed/hovered), normal and disabled (no scrollbar required)",
+            "scrollbar_border_<state>": "The border color of the up/down buttons and the slider of the scrollbar, for active (pressed/hovered), normal and disabled (no scrollbar required)"
+		},
+		"background_color": "#CDD3D5",
+		"border_color": "#176087",
+
+		"stdout_color": "#172c87",
+		"stderr_color": "#78162f",
+        "info_color": "#176087",
+        "verbose_color": "#1D9B32",
+        "warning_color": "#9B701D",
+        "critical_color": "#9B381D",
+        "error_color": "#9B381D",
+
+		"scrollbar_border": "#176087",
+		"scrollbar_trough": "#CDD3D5",
+        "scrollbar_background_normal": "#75929C",
+        "scrollbar_background_disabled": "#CDD3D5",
+        "scrollbar_background_active": "#176087",
+        "scrollbar_foreground_normal": "#CDD3D5",
+        "scrollbar_foreground_disabled": "#75929C",
+        "scrollbar_foreground_active": "#CDD3D5",
+        "scrollbar_border_normal": "#176087",
+        "scrollbar_border_disabled": "#75929C",
+        "scrollbar_border_active": "#176087"
+	},
+	"tooltip": {
+		"info": {
+			"info1": "The colors of the tool-tip pop ups",
+
+			"background_color": "Tool-tip background color",
+			"border_color": "Tool-tip border color",
+			"font_color": "Tool-tip font color"
+		},
+		"background_color": "#FFFFEA",
+		"border_color": "#FFFFEA",
+		"font_color": "#000000"
+	}
+}

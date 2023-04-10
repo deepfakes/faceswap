@@ -1,0 +1,294 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: faceswap.spanish\n"
+"POT-Creation-Date: 2021-06-08 19:24+0100\n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.4.3\n"
+
+#: tools/manual\cli.py:13
+msgid ""
+"This command lets you perform various actions on frames, faces and "
+"alignments files using visual tools."
+msgstr ""
+"Este comando le permite realizar varias acciones en los archivos de "
+"fotogramas, caras y alineaciones utilizando herramientas visuales."
+
+#: tools/manual\cli.py:23
+msgid ""
+"A tool to perform various actions on frames, faces and alignments files "
+"using visual tools"
+msgstr ""
+"Una herramienta que permite realizar diversas acciones en archivos de "
+"fotogramas, caras y alineaciones mediante herramientas visuales"
+
+#: tools/manual\cli.py:35 tools/manual\cli.py:43
+msgid "data"
+msgstr "datos"
+
+#: tools/manual\cli.py:37
+msgid ""
+"Path to the alignments file for the input, if not at the default location"
+msgstr ""
+"Ruta del archivo de alineaciones para la entrada, si no está en la ubicación "
+"por defecto"
+
+#: tools/manual\cli.py:44
+msgid ""
+"Video file or directory containing source frames that faces were extracted "
+"from."
+msgstr ""
+"Archivo o directorio de vídeo que contiene los fotogramas de origen de los "
+"que se extrajeron las caras."
+
+#: tools/manual\cli.py:51 tools/manual\cli.py:59
+msgid "options"
+msgstr "opciones"
+
+#: tools/manual\cli.py:52
+msgid ""
+"Force regeneration of the low resolution jpg thumbnails in the alignments "
+"file."
+msgstr ""
+"Forzar la regeneración de las miniaturas jpg de baja resolución en el "
+"archivo de alineaciones."
+
+#: tools/manual\cli.py:60
+msgid ""
+"The process attempts to speed up generation of thumbnails by extracting from "
+"the video in parallel threads. For some videos, this causes the caching "
+"process to hang. If this happens, then set this option to generate the "
+"thumbnails in a slower, but more stable single thread."
+msgstr ""
+"El proceso intenta acelerar la generación de miniaturas extrayendo del vídeo "
+"en hilos paralelos. En algunos vídeos, esto hace que el proceso de "
+"extracción se cuelgue. Si esto sucede, entonces configure esta opción para "
+"generar las miniaturas en un solo hilo más lento, pero más estable."
+
+#: tools/manual\faceviewer\frame.py:163
+msgid "Display the landmarks mesh"
+msgstr "Mostrar la malla de puntos de referencia"
+
+#: tools/manual\faceviewer\frame.py:164
+msgid "Display the mask"
+msgstr "Mostrar la máscara"
+
+#: tools/manual\frameviewer\editor\_base.py:628
+#: tools/manual\frameviewer\editor\landmarks.py:44
+#: tools/manual\frameviewer\editor\mask.py:75
+msgid "Magnify/Demagnify the View"
+msgstr "Ampliar/Reducir la vista"
+
+#: tools/manual\frameviewer\editor\bounding_box.py:33
+#: tools/manual\frameviewer\editor\extract_box.py:32
+msgid "Delete Face"
+msgstr "Borrar cara"
+
+#: tools/manual\frameviewer\editor\bounding_box.py:36
+msgid ""
+"Bounding Box Editor\n"
+"Edit the bounding box being fed into the aligner to recalculate the "
+"landmarks.\n"
+"\n"
+" - Grab the corner anchors to resize the bounding box.\n"
+" - Click and drag the bounding box to relocate.\n"
+" - Click in empty space to create a new bounding box.\n"
+" - Right click a bounding box to delete a face."
+msgstr ""
+"Editor del cuadro delimitador\n"
+"Edite el cuadro delimitador que el alineador usa para recalcular los puntos "
+"de referencia.\n"
+"\n"
+" - Tire de los anclajes de las esquinas para cambiar el tamaño del cuadro "
+"delimitador.\n"
+" - Haga clic y arrastre el cuadro delimitador para reubicarlo.\n"
+" - Haga clic en un espacio vacío para crear un nuevo cuadro delimitador.\n"
+" - Haga clic con el botón derecho del ratón en un cuadro delimitador para "
+"eliminar una cara."
+
+#: tools/manual\frameviewer\editor\bounding_box.py:70
+msgid ""
+"Aligner to use. FAN will obtain better alignments, but cv2-dnn can be useful "
+"if FAN cannot get decent alignments and you want to set a base to edit from."
+msgstr ""
+"Alineador a utilizar. FAN obtendrá mejores alineaciones, pero cv2-dnn puede "
+"ser útil si FAN no puede obtener alineaciones decentes y quiere tener una "
+"base inicial que luego se vaya a editar."
+
+#: tools/manual\frameviewer\editor\bounding_box.py:83
+msgid ""
+"Normalization method to use for feeding faces to the aligner. This can help "
+"the aligner better align faces with difficult lighting conditions. Different "
+"methods will yield different results on different sets. NB: This does not "
+"impact the output face, just the input to the aligner.\n"
+"\tnone: Don't perform normalization on the face.\n"
+"\tclahe: Perform Contrast Limited Adaptive Histogram Equalization on the "
+"face.\n"
+"\thist: Equalize the histograms on the RGB channels.\n"
+"\tmean: Normalize the face colors to the mean."
+msgstr ""
+"Método de normalización a utilizar para las caras que el alineador usará. "
+"Esto puede ayudar al alineador a alinear mejor las caras con condiciones de "
+"iluminación difíciles. Diferentes métodos darán diferentes resultados en "
+"diferentes conjuntos. NB: Esto no afecta a la cara de salida, sólo la "
+"entrada al alineador.\n"
+"\tninguno: No realizar la normalización en la cara.\n"
+"\tclahe: Realiza la ecualización adaptativa del histograma con contraste "
+"limitado en la cara.\n"
+"\thist: Iguala los histogramas en los canales RGB.\n"
+"\tmean: Normaliza los colores de la cara a la media."
+
+#: tools/manual\frameviewer\editor\extract_box.py:35
+msgid ""
+"Extract Box Editor\n"
+"Move the extract box that has been generated by the aligner. Click and "
+"drag:\n"
+"\n"
+" - Inside the bounding box to relocate the landmarks.\n"
+" - The corner anchors to resize the landmarks.\n"
+" - Outside of the corners to rotate the landmarks."
+msgstr ""
+"Editor de cuadros de extracción\n"
+"Mueve el cuadro de extracción que ha sido generada por el alineador. Haga "
+"clic y arrastre...\n"
+"\n"
+" - Dentro del cuadro delimitador para reubicar los puntos de referencia.\n"
+" - Los anclajes de las esquinas para cambiar el tamaño de los puntos de "
+"referencia.\n"
+" - Fuera de las esquinas para girar los puntos de referencia."
+
+#: tools/manual\frameviewer\editor\landmarks.py:27
+msgid ""
+"Landmark Point Editor\n"
+"Edit the individual landmark points.\n"
+"\n"
+" - Click and drag individual points to relocate.\n"
+" - Draw a box to select multiple points to relocate."
+msgstr ""
+"Editor de puntos de referencia\n"
+"Edite los puntos de referencia individuales.\n"
+"\n"
+" - Haga clic y arrastre los puntos individuales para reubicarlos.\n"
+" - Dibuje un cuadro para seleccionar varios puntos para reubicarlos."
+
+#: tools/manual\frameviewer\editor\mask.py:33
+msgid ""
+"Mask Editor\n"
+"Edit the mask.\n"
+" - NB: For Landmark based masks (e.g. components/extended) it is better to "
+"make sure the landmarks are correct rather than editing the mask directly. "
+"Any change to the landmarks after editing the mask will override your manual "
+"edits."
+msgstr ""
+"Editor de máscaras\n"
+"Edite la máscara.\n"
+" - Nota: En el caso de las máscaras basadas en puntos de referencia (por "
+"ejemplo, componentes/extensión) es mejor asegurarse de que los puntos de "
+"referencia son correctos en lugar de editar la máscara directamente. "
+"Cualquier cambio en los puntos de referencia después de editar la máscara "
+"anulará sus ediciones manuales."
+
+#: tools/manual\frameviewer\editor\mask.py:77
+msgid "Draw Tool"
+msgstr "Herramienta de dibujo"
+
+#: tools/manual\frameviewer\editor\mask.py:78
+msgid "Erase Tool"
+msgstr "Herramienta de borrado"
+
+#: tools/manual\frameviewer\editor\mask.py:97
+msgid "Select which mask to edit"
+msgstr "Seleccionar máscara a editar"
+
+#: tools/manual\frameviewer\editor\mask.py:104
+msgid "Set the brush size. ([ - decrease, ] - increase)"
+msgstr "Seleccionar el tamaño del pincel ([ - disminuir, ] - aumentar)"
+
+#: tools/manual\frameviewer\editor\mask.py:111
+msgid "Select the brush cursor color."
+msgstr "Seleccionar el color del pincel."
+
+#: tools/manual\frameviewer\frame.py:78
+msgid "Play/Pause (SPACE)"
+msgstr "Reproducir/Pausa (BARRA DE ESPACIO)"
+
+#: tools/manual\frameviewer\frame.py:79
+msgid "Go to First Frame (HOME)"
+msgstr "Ir al primer cuadro (INICIO)"
+
+#: tools/manual\frameviewer\frame.py:80
+msgid "Go to Previous Frame (Z)"
+msgstr "Ir al cuadro anterior (Z)"
+
+#: tools/manual\frameviewer\frame.py:81
+msgid "Go to Next Frame (X)"
+msgstr "Ir al siguiente cuadro (X)"
+
+#: tools/manual\frameviewer\frame.py:82
+msgid "Go to Last Frame (END)"
+msgstr "Ir al último cuadro (FIN)"
+
+#: tools/manual\frameviewer\frame.py:83
+msgid "Extract the faces to a folder... (Ctrl+E)"
+msgstr "Extraer las caras a una carpeta... (Ctrl+E)"
+
+#: tools/manual\frameviewer\frame.py:84
+msgid "Save the Alignments file (Ctrl+S)"
+msgstr "Guardar el fichero de alineamientos (Ctrl+S)"
+
+#: tools/manual\frameviewer\frame.py:85
+msgid "Filter Frames to only those Containing the Selected Item (F)"
+msgstr "Mostrar cuadros que contenga únicamente el elemento seleccionado (F)"
+
+#: tools/manual\frameviewer\frame.py:86
+msgid ""
+"Set the distance from an 'average face' to be considered misaligned. Higher "
+"distances are more restrictive"
+msgstr ""
+"Establezca la distancia desde una 'cara promedio' para que se considere "
+"desalineada. Las distancias más altas son más restrictivas"
+
+#: tools/manual\frameviewer\frame.py:391
+msgid "View alignments"
+msgstr "Ver alineamientos"
+
+#: tools/manual\frameviewer\frame.py:392
+msgid "Bounding box editor"
+msgstr "Editor de cuadro delimitador"
+
+#: tools/manual\frameviewer\frame.py:393
+msgid "Location editor"
+msgstr "Editor de ubicación"
+
+#: tools/manual\frameviewer\frame.py:394
+msgid "Mask editor"
+msgstr "Editor de máscara"
+
+#: tools/manual\frameviewer\frame.py:395
+msgid "Landmark point editor"
+msgstr "Editor de puntos de referencia"
+
+#: tools/manual\frameviewer\frame.py:470
+msgid "Next"
+msgstr "Siguiente"
+
+#: tools/manual\frameviewer\frame.py:470
+msgid "Previous"
+msgstr "Anterior"
+
+#: tools/manual\frameviewer\frame.py:481
+msgid "Revert to saved Alignments ({})"
+msgstr "Volver a los alineamientos guardados ({})"
+
+#: tools/manual\frameviewer\frame.py:487
+msgid "Copy {} Alignments ({})"
+msgstr "Copiar los alineamientos del cuadro {} ({})"

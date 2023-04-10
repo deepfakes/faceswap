@@ -1,84 +1,87 @@
 #!/usr/bin/env python3
 """ Improved autoencoder for faceswap """
 
-from keras.layers import Concatenate, Conv2D, Dense, Flatten, Input, Reshape
-from keras.models import Model as KerasModel
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, UpscaleBlock
+from lib.utils import get_backend
 
-from ._base import ModelBase, logger
+from ._base import ModelBase, KerasModel
+
+if get_backend() == "amd":
+    from keras.layers import Concatenate, Dense, Flatten, Input, Reshape
+
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.layers import Concatenate, Dense, Flatten, Input, Reshape  # noqa pylint:disable=import-error,no-name-in-module
 
 
 class Model(ModelBase):
-    """ Improved Autoeencoder Model """
+    """ Improved Autoencoder Model """
     def __init__(self, *args, **kwargs):
-        logger.debug("Initializing %s: (args: %s, kwargs: %s",
-                     self.__class__.__name__, args, kwargs)
-        kwargs["input_shape"] = (64, 64, 3)
-        kwargs["encoder_dim"] = 1024
         super().__init__(*args, **kwargs)
-        logger.debug("Initialized %s", self.__class__.__name__)
+        self.input_shape = (64, 64, 3)
+        self.encoder_dim = 1024
 
-    def add_networks(self):
-        """ Add the IAE model weights """
-        logger.debug("Adding networks")
-        self.add_network("encoder", None, self.encoder())
-        self.add_network("decoder", None, self.decoder())
-        self.add_network("intermediate", "a", self.intermediate())
-        self.add_network("intermediate", "b", self.intermediate())
-        self.add_network("inter", None, self.intermediate())
-        logger.debug("Added networks")
+    def build_model(self, inputs):
+        """ Build the IAE Model """
+        encoder = self.encoder()
+        decoder = self.decoder()
+        inter_a = self.intermediate("a")
+        inter_b = self.intermediate("b")
+        inter_both = self.intermediate("both")
 
-    def build_autoencoders(self):
-        """ Initialize IAE model """
-        logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = (self.input_shape[:2] + (1, ))
-            inputs.append(Input(shape=mask_shape, name="mask"))
+        encoder_a = encoder(inputs[0])
+        encoder_b = encoder(inputs[1])
 
-        decoder = self.networks["decoder"].network
-        encoder = self.networks["encoder"].network
-        inter_both = self.networks["inter"].network
-        for side in ("a", "b"):
-            inter_side = self.networks["intermediate_{}".format(side)].network
-            output = decoder(Concatenate()([inter_side(encoder(inputs[0])),
-                                            inter_both(encoder(inputs[0]))]))
+        outputs = [decoder(Concatenate()([inter_a(encoder_a), inter_both(encoder_a)])),
+                   decoder(Concatenate()([inter_b(encoder_b), inter_both(encoder_b)]))]
 
-            autoencoder = KerasModel(inputs, output)
-            self.add_predictor(side, autoencoder)
-        logger.debug("Initialized model")
+        autoencoder = KerasModel(inputs, outputs, name=self.model_name)
+        return autoencoder
 
     def encoder(self):
         """ Encoder Network """
         input_ = Input(shape=self.input_shape)
         var_x = input_
-        var_x = self.blocks.conv(var_x, 128)
-        var_x = self.blocks.conv(var_x, 256)
-        var_x = self.blocks.conv(var_x, 512)
-        var_x = self.blocks.conv(var_x, 1024)
+        var_x = Conv2DBlock(128, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(256, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(512, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(1024, activation="leakyrelu")(var_x)
         var_x = Flatten()(var_x)
-        return KerasModel(input_, var_x)
+        return KerasModel(input_, var_x, name="encoder")
 
-    def intermediate(self):
+    def intermediate(self, side):
         """ Intermediate Network """
-        input_ = Input(shape=(None, 4 * 4 * 1024))
-        var_x = input_
-        var_x = Dense(self.encoder_dim)(var_x)
+        input_ = Input(shape=(4 * 4 * 1024, ))
+        var_x = Dense(self.encoder_dim)(input_)
         var_x = Dense(4 * 4 * int(self.encoder_dim/2))(var_x)
         var_x = Reshape((4, 4, int(self.encoder_dim/2)))(var_x)
-        return KerasModel(input_, var_x)
+        return KerasModel(input_, var_x, name=f"inter_{side}")
 
     def decoder(self):
         """ Decoder Network """
         input_ = Input(shape=(4, 4, self.encoder_dim))
         var_x = input_
-        var_x = self.blocks.upscale(var_x, 512)
-        var_x = self.blocks.upscale(var_x, 256)
-        var_x = self.blocks.upscale(var_x, 128)
-        var_x = self.blocks.upscale(var_x, 64)
-        var_x = Conv2D(3, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        var_x = UpscaleBlock(512, activation="leakyrelu")(var_x)
+        var_x = UpscaleBlock(256, activation="leakyrelu")(var_x)
+        var_x = UpscaleBlock(128, activation="leakyrelu")(var_x)
+        var_x = UpscaleBlock(64, activation="leakyrelu")(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out")(var_x)
         outputs = [var_x]
 
-        if self.config.get("mask_type", None):
-            var_y = Conv2D(1, kernel_size=5, padding="same", activation="sigmoid")(var_x)
+        if self.config.get("learn_mask", False):
+            var_y = input_
+            var_y = UpscaleBlock(512, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(256, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(128, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(64, activation="leakyrelu")(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs)
+        return KerasModel(input_, outputs=outputs, name="decoder")
+
+    def _legacy_mapping(self):
+        """ The mapping of legacy separate model names to single model names """
+        return {f"{self.name}_encoder.h5": "encoder",
+                f"{self.name}_intermediate_A.h5": "inter_a",
+                f"{self.name}_intermediate_B.h5": "inter_b",
+                f"{self.name}_inter.h5": "inter_both",
+                f"{self.name}_decoder.h5": "decoder"}

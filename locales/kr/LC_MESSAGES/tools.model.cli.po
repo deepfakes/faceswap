@@ -1,0 +1,78 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2022-06-28 14:05+0100\n"
+"PO-Revision-Date: 2022-11-27 01:32+0900\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ko_KR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.2\n"
+
+#: tools/model/cli.py:13
+msgid "This tool lets you perform actions on saved Faceswap models."
+msgstr ""
+"이 도구를 사용하여 저장된 Faceswap 모델에서 작업을 수행할 수 있습니다."
+
+#: tools/model/cli.py:22
+msgid "A tool for performing actions on Faceswap trained model files"
+msgstr "_Faceswap 훈련을 받은 모델 파일에서 작업을 수행하기 위한 도구"
+
+#: tools/model/cli.py:33
+msgid ""
+"Model directory. A directory containing the model you wish to perform an "
+"action on."
+msgstr "모델 디렉토리. 작업을 수행할 모델이 들어 있는 디렉토리입니다."
+
+#: tools/model/cli.py:41
+msgid ""
+"R|Choose which action you want to perform.\n"
+"L|'inference' - Create an inference only copy of the model. Strips any "
+"layers from the model which are only required for training. NB: This is for "
+"exporting the model for use in external applications. Inference generated "
+"models cannot be used within Faceswap. See the 'format' option for "
+"specifying the model output format.\n"
+"L|'nan-scan' - Scan the model file for NaNs or Infs (invalid data).\n"
+"L|'restore' - Restore a model from backup."
+msgstr ""
+"R|실행할 작업을 선택합니다.\n"
+"L|'inference' - 모델의 추론 전용 사본을 만듭니다. 모델에서 훈련에만 필요한 "
+"모든 레이어를 제거합니다. NB: 이것은 외부 응용 프로그램에서 사용하기 위해 모"
+"델을 내보내기 위한 것입니다. 추론 생성 모델은 Faceswap 내에서 사용할 수 없습"
+"니다. 모델 출력 형식을 지정하려면 'format' 옵션을 참조하십시오.\n"
+"L|'nan-scan' - 모델 파일에서 NaN 또는 Infs(잘못된 데이터)를 검색합니다.\n"
+"L|'restore' - 백업에서 모델을 복원합니다."
+
+#: tools/model/cli.py:55 tools/model/cli.py:66
+msgid "inference"
+msgstr "추론"
+
+#: tools/model/cli.py:56
+msgid ""
+"R|The format to save the model as. Note: Only used for 'inference' job.\n"
+"L|'h5' - Standard Keras H5 format. Does not store any custom layer "
+"information. Layers will need to be loaded from Faceswap to use.\n"
+"L|'saved-model' - Tensorflow's Saved Model format. Contains all information "
+"required to load the model outside of Faceswap."
+msgstr ""
+"R|모델을 저장할 형식입니다. 참고: '추론' 작업에만 사용됩니다.\n"
+"L|'h5' - 표준 케라스 H5 형식. 사용자 지정 레이어 정보를 저장하지 않습니다. "
+"사용하려면 Faceswap에서 레이어를 로드해야 합니다.\n"
+"L| 'saved-model' - 텐서플로의 저장된 모델 형식. Faceswap 외부에서 모델을 로"
+"드하는 데 필요한 모든 정보를 포함합니다."
+
+#: tools/model/cli.py:67
+msgid ""
+"Only used for 'inference' job. Generate the inference model for B -> A "
+"instead of A -> B."
+msgstr ""
+"'추론' 작업에만 쓰입니다. A -> B 대신 B -> A에 대한 추론 모델을 생성합니다."

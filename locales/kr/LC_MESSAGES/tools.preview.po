@@ -1,0 +1,83 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2021-03-10 16:51-0000\n"
+"PO-Revision-Date: 2022-11-27 01:49+0900\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ko_KR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.2\n"
+
+#: tools/preview\cli.py:13
+msgid "This command allows you to preview swaps to tweak convert settings."
+msgstr ""
+"이 명령어는 변환 설정을 변경하기 위한 변환 미리보기를 가능하게 해줍니다."
+
+#: tools/preview\cli.py:22
+msgid ""
+"Preview tool\n"
+"Allows you to configure your convert settings with a live preview"
+msgstr ""
+"미리보기 도구\n"
+"라이브로 미리보기를 보면서 변환 설정을 구성할 수 있도록 해줍니다"
+
+#: tools/preview\cli.py:32 tools/preview\cli.py:41 tools/preview\cli.py:48
+msgid "data"
+msgstr "데이터"
+
+#: tools/preview\cli.py:34
+msgid ""
+"Input directory or video. Either a directory containing the image files you "
+"wish to process or path to a video file."
+msgstr ""
+"입력 디렉토리 또는 비디오. 처리할 이미지 파일이 들어 있는 디렉토리 또는 비디"
+"오 파일의 경로입니다."
+
+#: tools/preview\cli.py:43
+msgid ""
+"Path to the alignments file for the input, if not at the default location"
+msgstr "입력 alignments 파일의 경로, 만약 제공되지 않는다면 기본 위치"
+
+#: tools/preview\cli.py:50
+msgid ""
+"Model directory. A directory containing the trained model you wish to "
+"process."
+msgstr ""
+"모델 디렉토리. 사용자가 처리하고 싶어하는 훈련된 모델이 있는 디렉토리."
+
+#: tools/preview\cli.py:57
+msgid "Swap the model. Instead of A -> B, swap B -> A"
+msgstr "모델을 스왑함. A -> B 대신, B -> A로 스왑함"
+
+#: tools/preview\preview.py:1303
+msgid "Save full config"
+msgstr "전체 설정을 저장"
+
+#: tools/preview\preview.py:1306
+msgid "Reset full config to default values"
+msgstr "전체 설정을 기본 값으로 초기화"
+
+#: tools/preview\preview.py:1309
+msgid "Reset full config to saved values"
+msgstr "전체 설정을 저장된 값으로 초기화"
+
+#: tools/preview\preview.py:1453
+msgid "Save {} config"
+msgstr "{} 설정 저장"
+
+#: tools/preview\preview.py:1456
+msgid "Reset {} config to default values"
+msgstr "{} 설정을 기본 값으로 초기화"
+
+#: tools/preview\preview.py:1459
+msgid "Reset {} config to saved values"
+msgstr "{} 설정을 저장된 값으로 초기화"

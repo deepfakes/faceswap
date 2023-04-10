@@ -1,5 +1,6 @@
 !include MUI2.nsh
 !include nsDialogs.nsh
+!include winmessages.nsh
 !include LogicLib.nsh
 !include CPUFeatures.nsh
 !include MultiDetailPrint.nsi
@@ -9,48 +10,39 @@ OutFile "faceswap_setup_x64.exe"
 Name "Faceswap"
 InstallDir $PROFILE\faceswap
 
-# Download sites
-!define wwwGit "https://github.com/git-for-windows/git/releases/download/v2.20.1.windows.1/Git-2.20.1-64-bit.exe"
+# Sometimes miniconda breaks. Uncomment/comment the following 2 lines to pin
 !define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+#!define wwwConda "https://repo.anaconda.com/miniconda/Miniconda3-4.5.12-Windows-x86_64.exe"
 !define wwwRepo "https://github.com/deepfakes/faceswap.git"
-
+!define wwwFaceswap "https://www.faceswap.dev"
 
 # Faceswap Specific
-!define flagsSetup "setup.py --installer"
+!define flagsSetup "--installer"
 
 # Install cli flags
-!define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$Profile\MiniConda3"
-!define flagsGit "/SILENT /NORESTART /NOCANCEL /SP /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS"
+!define flagsConda "/S /RegisterPython=0 /AddToPath=0 /D=$PROFILE\MiniConda3"
 !define flagsRepo "--depth 1 --no-single-branch ${wwwRepo}"
-!define flagsEnv "-y python=3.6"
-
-# Dlib Wheel prefix
-!define prefixDlib "dlib-19.16.99-cp36-cp36m-win_amd64"
-!define dlibFinalName "dlib-19.16.99-cp36-cp36m-win_amd64.whl" # Dlib Wheel MUST have this name before installing
-!define cudaDlib "_cuda90"
-!define avxDlib "_avx"
-!define sseDlib "_sse4"
-!define noneDlib "_none"
-
+!define flagsEnv "-y python=3."
 
 # Folders
+Var ProgramData
 Var dirTemp
 Var dirMiniconda
+Var dirMinicondaAll
 Var dirAnaconda
+Var dirAnacondaAll
 Var dirConda
 
 # Items to Install
-Var InstallGit
 Var InstallConda
-Var dlibWhl
 
 # Misc
-Var gitInf
 Var InstallFailed
 Var lblPos
 Var hasAVX
 Var hasSSE4
-Var noNvidia
+Var setupType
+Var ctlRadio
 Var ctlCondaText
 Var ctlCondaButton
 Var Log
@@ -61,7 +53,7 @@ Var envName
 !define MUI_ABORTWARNING
 
 # Install Location Page
-!define MUI_ICON "fs_logo_32.ico"
+!define MUI_ICON "fs_logo.ico"
 !define MUI_PAGE_HEADER_TEXT "Faceswap.py Installer"
 !define MUI_PAGE_HEADER_SUBTEXT "Install Location"
 !define MUI_DIRECTORYPAGE_TEXT_DESTINATION "Select Destination Folder:"
@@ -72,6 +64,7 @@ Var envName
 Page custom pgPrereqCreate pgPrereqLeave
 
 # Install Faceswap Page
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW InstFilesShow
 !define MUI_PAGE_HEADER_SUBTEXT "Installing Faceswap..."
 !insertmacro MUI_PAGE_INSTFILES
 
@@ -80,17 +73,25 @@ Page custom pgPrereqCreate pgPrereqLeave
 
 # Init
 Function .onInit
+    SetShellVarContext all
+    StrCpy $ProgramData $APPDATA
+    SetShellVarContext current
     # It's better to put stuff in $pluginsdir, $temp is shared
     InitPluginsDir
     StrCpy $dirTemp "$pluginsdir\faceswap\temp"
     StrCpy $dirMiniconda "$PROFILE\Miniconda3"
     StrCpy $dirAnaconda "$PROFILE\Anaconda3"
-    StrCpy $gitInf "$dirTemp\git_install.inf"
+    StrCpy $dirMinicondaAll "$ProgramData\Miniconda3"
+    StrCpy $dirAnacondaAll "$ProgramData\Anaconda3"
     StrCpy $envName "faceswap"
     SetOutPath "$dirTemp"
-    File *.whl
-    File git_install.inf
     Call CheckPrerequisites
+FunctionEnd
+
+# Enable the cancel button during installation
+Function InstFilesShow
+    GetDlgItem $0 $HWNDPARENT 2
+    EnableWindow $0 1
 FunctionEnd
 
 Function VerifyInstallDir
@@ -120,26 +121,40 @@ Function pgPrereqCreate
     ${NSD_CreateGroupBox} 5% 5% 90% 35% "The following applications will be installed"
     Pop $0
 
-        ${If} $InstallGit == 1
-            ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Git for Windows"
-            Pop $0
-            intOp $lblPos $lblPos + 7
-        ${EndIf}
-
         ${If} $InstallConda == 1
             ${NSD_CreateLabel} 10% $lblPos% 80% 14u "MiniConda 3"
             Pop $0
             intOp $lblPos $lblPos + 7
         ${EndIf}
         ${NSD_CreateLabel} 10% $lblPos% 80% 14u "Faceswap"
+        Pop $0
 
-        StrCpy $lblPos 46
+        StrCpy $lblPos 50
     # Info Custom Options
-    ${NSD_CreateGroupBox} 5% 40% 90% 60% "Custom Items"
+    ${NSD_CreateGroupBox} 5% 40% 90% 120% "Custom Items"
     Pop $0
-        ${NSD_CreateCheckBox} 10% $lblPos% 80% 11u " IMPORTANT! Check here if you do NOT have an NVIDIA graphics card"
-        Pop $noNvidia
+        ${NSD_CreateRadioButton} 10% $lblPos% 27% 11u "Setup for NVIDIA GPU"
+            Pop $ctlRadio
+		    ${NSD_AddStyle} $ctlRadio ${WS_GROUP}
+            nsDialogs::SetUserData $ctlRadio "nvidia"
+            ${NSD_OnClick} $ctlRadio RadioClick
+        ${NSD_CreateRadioButton} 50% $lblPos% 30% 11u "Setup for DirectML"
+            Pop $ctlRadio
+            nsDialogs::SetUserData $ctlRadio "directml"
+            ${NSD_OnClick} $ctlRadio RadioClick
+
         intOp $lblPos $lblPos + 10
+
+        ${NSD_CreateRadioButton} 10% $lblPos% 25% 11u "Setup for CPU"
+            Pop $ctlRadio
+            nsDialogs::SetUserData $ctlRadio "cpu"
+            ${NSD_OnClick} $ctlRadio RadioClick
+        ${NSD_CreateRadioButton} 50% $lblPos% 40% 11u "Setup for AMD (deprecated)"
+            Pop $ctlRadio
+            nsDialogs::SetUserData $ctlRadio "amd"
+            ${NSD_OnClick} $ctlRadio RadioClick
+
+        intOp $lblPos $lblPos + 12
 
         ${NSD_CreateLabel} 10% $lblPos% 80% 10u "Environment Name (NB: Existing envs with this name will be deleted):"
         pop $0
@@ -165,6 +180,12 @@ Function pgPrereqCreate
     nsDialogs::Show
 FunctionEnd
 
+Function RadioClick
+    Pop $R0
+	nsDialogs::GetUserData $R0
+    Pop $setupType
+FunctionEnd
+
 Function fnc_hCtl_test_DirRequest1_Click
 	Pop $R0
 	${If} $R0 == $ctlCondaButton
@@ -178,16 +199,24 @@ Function fnc_hCtl_test_DirRequest1_Click
 FunctionEnd
 
 Function pgPrereqLeave
+	call CheckSetupType
     Call CheckCustomCondaPath
-    ${NSD_GetState} $noNvidia $noNvidia
     ${NSD_GetText} $envName $envName
 
+FunctionEnd
+
+Function CheckSetupType
+    ${If} $setupType == ""
+	    MessageBox MB_OK "Please specify whether to setup for Nvidia, DirectML or CPU."
+	    Abort
+	${EndIf}
+    StrCpy $Log "$log(check) Setting up for: $setupType$\n"
 FunctionEnd
 
 Function CheckCustomCondaPath
     ${NSD_GetText} $ctlCondaText $2
     ${If} $2 != ""
-        nsExec::ExecToStack "$2\Scripts\conda.exe -V"
+        nsExec::ExecToStack "$\"$2\Scripts\conda.exe$\" -V"
         pop $0
         pop $1
         ${If} $0 == 0
@@ -200,39 +229,57 @@ Function CheckCustomCondaPath
     ${EndIf}
 FunctionEnd
 
+Function CheckConda
+    # miniconda
+    nsExec::ExecToStack "$\"$dirMiniconda\Scripts\conda.exe$\" -V"
+    pop $0
+    pop $1
+
+    nsExec::ExecToStack "$\"$dirMinicondaAll\Scripts\conda.exe$\" -V"
+    pop $2
+    pop $3
+
+    # anaconda
+    nsExec::ExecToStack "$\"$dirAnaconda\Scripts\conda.exe$\" -V"
+    pop $4
+    pop $5
+
+    nsExec::ExecToStack "$\"$dirAnacondaAll\Scripts\conda.exe$\" -V"
+    pop $6
+    pop $7
+
+    ${If} $0 == 0
+        StrCpy $dirConda "$dirMiniconda"
+        StrCpy $Log "$log(check) MiniConda installed: $1"
+    ${ElseIf} $2 == 0
+        StrCpy $dirConda "$dirMinicondaAll"
+        StrCpy $Log "$log(check) MiniConda installed: $3"
+    ${ElseIf} $4 == 0
+        StrCpy $dirConda "$dirAnaconda"
+        StrCpy $Log "$log(check) AnaConda installed: $5"
+    ${ElseIf} $6 == 0
+        StrCpy $dirConda "$dirAnacondaAll"
+        StrCpy $Log "$log(check) AnaConda installed: $7"
+    ${EndIf}
+FunctionEnd
+
 Function CheckPrerequisites
-    #Git
-        nsExec::ExecToStack "git --version"
-        pop $0
-        pop $1
-        ${If} $0 == 0
-            StrCpy $Log "$log(check) Git installed: $1"
-        ${Else}
-            StrCpy $InstallGit 1
-        ${EndIf}
-
     # Conda
-        # miniconda
-        nsExec::ExecToStack "$dirMiniconda\Scripts\conda.exe -V"
-        pop $0
-        pop $1
+    Call CheckConda
+    Push $PROFILE
+        Call CheckForSpaces
+    Pop $R0
+    # If spaces in user profile look for and install Conda in C:
+    ${If} $dirConda == ""
+    ${AndIf} $R0 != 0
+        StrCpy $dirMiniconda "C:\Miniconda3"
+        StrCpy $dirAnaconda "C:\Anaconda3"
+        Call CheckConda
+    ${EndIf}
 
-        # anaconda
-        nsExec::ExecToStack "$dirAnaconda\Scripts\conda.exe -V"
-        pop $2
-        pop $3
-
-        ${If} $0 == 0
-            StrCpy $dirConda "$dirMiniconda"
-            StrCpy $Log "$log(check) MiniConda installed: $1"
-        ${Else}
-            ${If} $2 == 0
-                StrCpy $dirConda "$dirAnaconda"
-                StrCpy $Log "$log(check) AnaConda installed: $0"
-            ${Else}
-                StrCpy $InstallConda 1
-            ${EndIf}
-        ${EndIf}
+    ${If} $dirConda == ""
+        StrCpy $InstallConda 1
+    ${EndIf}
 
     # CPU Capabilities
         ${If} ${CPUSupports} "AVX2"
@@ -249,98 +296,123 @@ Function CheckPrerequisites
     StrCpy $Log "$Log(check) Completed check for installed applications$\n"
 FunctionEnd
 
+Function CheckForSpaces
+# Check a string for space (Used for defining MiniConda install Location)
+    Exch $R0
+    Push $R1
+    Push $R2
+    Push $R3
+    StrCpy $R1 -1
+    StrCpy $R3 $R0
+    StrCpy $R0 0
+        loop:
+        StrCpy $R2 $R3 1 $R1
+        IntOp $R1 $R1 - 1
+        StrCmp $R2 "" done
+        StrCmp $R2 " " 0 loop
+        IntOp $R0 $R0 + 1
+    Goto loop
+    done:
+    Pop $R3
+    Pop $R2
+    Pop $R1
+    Exch $R0
+
+FunctionEnd
+
 Section Install
     Push $Log
     Call MultiDetailPrint
-    Call InstallPrerequisites
-    Call CloneRepo
+    Call InstallConda
     Call SetEnvironment
-    Call InstallDlib
+    Call InstallGit
+    Call CloneRepo
     Call SetupFaceSwap
+    Call AddGuiLauncher
     Call DesktopShortcut
+    ExecShell "open" "${wwwFaceswap}"
+    DetailPrint "Visit ${wwwFaceswap} for help and support."
 SectionEnd
 
-Function InstallPrerequisites
-    # GIT
-        ${If} $InstallGit == 1
-            DetailPrint "Downloading Git..."
-            inetc::get /caption "Downloading Git..." /canceltext "Cancel" ${wwwGit} "git_installer.exe" /end
-            Pop $0 # return value = exit code, "OK" means OK
-            ${If} $0 == "OK"
-                DetailPrint "Installing Git..."
-                SetDetailsPrint listonly
-                ExecWait "$dirTemp\git_installer.exe ${flagsGit} /LOADINF=$\"$gitInf$\"" $0
-                SetDetailsPrint both
-                ${If} $0 != 0
-                    DetailPrint "Error Installing Git"
-                    StrCpy $InstallFailed 1
-                ${EndIf}
-            ${Else}
-                DetailPrint "Error Downloading Git"
+Function InstallConda
+    ${If} $InstallConda == 1
+        DetailPrint "Downloading Miniconda3..."
+        inetc::get /caption "Downloading Miniconda3." /canceltext "Cancel" ${wwwConda} "Miniconda3.exe" /end
+        Pop $0
+        ${If} $0 == "OK"
+            DetailPrint "Installing Miniconda3. This will take a few minutes..."
+            SetDetailsPrint listonly
+            ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirTemp\Miniconda3.exe$\" ${flagsConda}"
+            pop $0
+            ExecDos::wait $0
+            pop $0
+            StrCpy $dirConda "$dirMiniconda"
+            SetDetailsPrint both
+            ${If} $0 != 0
+                DetailPrint "Error Installing Miniconda3"
                 StrCpy $InstallFailed 1
             ${EndIf}
+        ${Else}
+            DetailPrint "Error Downloading Miniconda3"
+            StrCpy $InstallFailed 1
         ${EndIf}
-
-    # CONDA
-        ${If} $InstallConda == 1
-            DetailPrint "Downloading Miniconda3..."
-            inetc::get /caption "Downloading Miniconda3." /canceltext "Cancel" ${wwwConda} "Miniconda3.exe" /end
-            Pop $0
-            ${If} $0 == "OK"
-                DetailPrint "Installing Miniconda3. This will take a few minutes..."
-                SetDetailsPrint listonly
-                ExecWait "$dirTemp\Miniconda3.exe ${flagsConda}" $0
-                StrCpy $dirConda "$dirMiniconda"
-                SetDetailsPrint both
-                ${If} $0 != 0
-                    DetailPrint "Error Installing Miniconda3"
-                    StrCpy $InstallFailed 1
-                ${EndIf}
-            ${Else}
-                DetailPrint "Error Downloading Miniconda3"
-                StrCpy $InstallFailed 1
-            ${EndIf}
-        ${EndIf}
+    ${EndIf}
 
     ${If} $InstallFailed == 1
         Call Abort
     ${Else}
-        DetailPrint "All Prerequisites installed."
-    ${EndIf}
-FunctionEnd
-
-Function CloneRepo
-    DetailPrint "Downloading Faceswap..."
-    SetDetailsPrint listonly
-    ExecWait "$PROGRAMFILES64\git\bin\git.exe clone ${flagsRepo} $INSTDIR" $0
-    SetDetailsPrint both
-    ${If} $0 != 0
-        DetailPrint "Error Downloading Faceswap"
-        Call Abort
+        DetailPrint "Miniconda3 installed."
     ${EndIf}
 FunctionEnd
 
 Function SetEnvironment
-    # Updating Conda breaks setup.py. Commented out in case this issue gets resolved in future
-#    DetailPrint "Initializing Conda..."
-#    SetDetailsPrint listonly
-#    ExecWait "$dirConda\scripts\activate.bat && conda update -y -n base -c defaults conda && conda deactivate" $0
-#    SetDetailsPrint both
+    DetailPrint "Initializing Conda..."
+    SetDetailsPrint listonly
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda update -y -n base -c defaults conda && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
+    SetDetailsPrint both
     DetailPrint "Creating Conda Virtual Environment..."
 
-    IfFileExists  "$dirConda\envs\faceswap" DeleteEnv CreateEnv
+    IfFileExists  "$dirConda\envs\$envName" DeleteEnv CreateEnv
         DeleteEnv:
+            DetailPrint "Removing existing Conda Virtual Environment..."
             SetDetailsPrint listonly
-            ExecWait "$dirConda\scripts\activate.bat && conda env remove -y -n $\"$envName$\" && conda deactivate" $0
+            ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda env remove -y -n $\"$envName$\" && conda deactivate"
+            pop $0
+            ExecDos::wait $0
+            pop $0
             SetDetailsPrint both
             ${If} $0 != 0
                 DetailPrint "Error deleting Conda Virtual Environment"
                 Call Abort
             ${EndIf}
 
+        # Often Conda won't actually remove the folder and some of it's contents which leads to permission problems later
+        IfFileExists  "$dirConda\envs\$envName" DeleteFolder CreateEnv
+            DeleteFolder:
+                DetailPrint "Deleting stale Conda Virtual Environment files..."
+                SetDetailsPrint listonly
+                RMDir /r "$dirConda\envs\$envName"
+                pop $0
+                SetDetailsPrint both
+                ${If} $0 != 0
+                    DetailPrint "Error deleting Conda Virtual Environment Folder"
+                    Call Abort
+                ${EndIf}
+
     CreateEnv:
         SetDetailsPrint listonly
-        ExecWait "$dirConda\scripts\activate.bat && conda create ${flagsEnv} -n  $\"$envName$\" && conda deactivate" $0
+        ${If} $setupType == "amd"
+            StrCpy $0 "${flagsEnv}8"
+        ${else}
+            StrCpy $0 "${flagsEnv}9"
+        ${EndIf}        
+        ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create $0 -n  $\"$envName$\" && conda deactivate"
+        pop $0
+        ExecDos::wait $0
+        pop $0
         SetDetailsPrint both
         ${If} $0 != 0
             DetailPrint "Error Creating Conda Virtual Environment"
@@ -348,46 +420,43 @@ Function SetEnvironment
         ${EndIf}
 FunctionEnd
 
-Function InstallDlib
-    DetailPrint "Installing Dlib..."
+Function InstallGit
+    DetailPrint "Installing Git..."
     SetDetailsPrint listonly
-
-    StrCpy $dlibWhl ${prefixDlib}
-
-    ${If} $noNvidia != 1
-        StrCpy $dlibWhl "$dlibWhl${cudaDlib}"
-    ${EndIf}
-
-    ${If} $hasAVX == 1
-        StrCpy $dlibWhl "$dlibWhl${avxDlib}"
-    ${ElseIf} $hasSSE4 == 1
-        StrCpy $dlibWhl "$dlibWhl${sseDlib}"
-    ${Else}
-        StrCpy $dlibWhl "$dlibWhl${noneDlib}"
-    ${EndIf}
-
-    StrCpy $dlibWhl "$dlibWhl.whl"
-    DetailPrint "Renaming $dlibWhl to ${dlibFinalName}"
-    Rename  $dirTemp\$dlibWhl  $dirTemp\${dlibFinalName}
-
-    ExecWait "$dirConda\scripts\activate.bat && conda activate $\"$envName$\" && pip install $dirTemp\${dlibFinalName} &&  conda deactivate" $0
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && conda install git -y -q && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
     SetDetailsPrint both
     ${If} $0 != 0
-        DetailPrint "Error Installing Dlib"
+        DetailPrint "Error Installing Git"
+        StrCpy $InstallFailed 1
+    ${EndIf}
+FunctionEnd
+
+Function CloneRepo
+    DetailPrint "Downloading Faceswap..."
+    SetDetailsPrint listonly
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && git clone ${flagsRepo} $\"$INSTDIR$\" && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
+    SetDetailsPrint both
+    ${If} $0 != 0
+        DetailPrint "Error Downloading Faceswap"
         Call Abort
     ${EndIf}
-
 FunctionEnd
 
 Function SetupFaceSwap
-    DetailPrint "Setting up FaceSwap Environment"
+    DetailPrint "Setting up FaceSwap Environment... This may take a while"
     StrCpy $0 "${flagsSetup}"
-    ${If} $noNvidia != 1
-        StrCpy $0 "$0 --gpu"
-    ${EndIf}
-
+    StrCpy $0 "$0 --$setupType"
     SetDetailsPrint listonly
-    ExecWait "$dirConda\scripts\activate.bat && conda activate $\"$envName$\" && python $INSTDIR\$0 && conda deactivate" $0
+    ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python -u $\"$INSTDIR\setup.py$\" $0 && conda deactivate"
+    pop $0
+    ExecDos::wait $0
+    pop $0
     SetDetailsPrint both
     ${If} $0 != 0
         DetailPrint "Error Setting up Faceswap"
@@ -395,12 +464,16 @@ Function SetupFaceSwap
     ${EndIf}
 FunctionEnd
 
-Function DesktopShortcut
-    DetailPrint "Creating Desktop Shortcut"
+Function AddGuiLauncher
+    DetailPrint "Creating GUI Launcher"
     SetOutPath "$INSTDIR"
     StrCpy $0 "faceswap_win_launcher.bat"
     FileOpen $9 "$INSTDIR\$0" w
     FileWrite $9 "$\"$dirConda\scripts\activate.bat$\" && conda activate $\"$envName$\" && python $\"$INSTDIR/faceswap.py$\" gui$\r$\n"
     FileClose $9
-    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$INSTDIR\$0" "" "$INSTDIR\.install\windows\fs_logo_32.ico"
+FunctionEnd
+
+Function DesktopShortcut
+    DetailPrint "Creating Desktop Shortcut"
+    CreateShortCut "$DESKTOP\FaceSwap.lnk" "$\"$INSTDIR\$0$\"" "" "$INSTDIR\.install\windows\fs_logo.ico"
 FunctionEnd

@@ -1,62 +1,67 @@
 #!/usr/bin/env python3
 """ DFaker Model
     Based on the dfaker model: https://github.com/dfaker """
+import logging
+import sys
+
+from lib.model.nn_blocks import Conv2DOutput, UpscaleBlock, ResidualBlock
+from lib.utils import get_backend
+from .original import Model as OriginalModel, KerasModel
+
+if get_backend() == "amd":
+    from keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
+    from keras.layers import Input, LeakyReLU
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.initializers import RandomNormal  # noqa pylint:disable=import-error,no-name-in-module
+    from tensorflow.keras.layers import Input, LeakyReLU  # noqa pylint:disable=import-error,no-name-in-module
 
 
-from keras.initializers import RandomNormal
-from keras.layers import Conv2D, Input
-from keras.models import Model as KerasModel
-
-from .original import logger, Model as OriginalModel
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 class Model(OriginalModel):
-    """ Improved Autoeencoder Model """
+    """ Dfaker Model """
     def __init__(self, *args, **kwargs):
-        logger.debug("Initializing %s: (args: %s, kwargs: %s",
-                     self.__class__.__name__, args, kwargs)
-        kwargs["input_shape"] = (64, 64, 3)
-        kwargs["encoder_dim"] = 1024
-        self.kernel_initializer = RandomNormal(0, 0.02)
         super().__init__(*args, **kwargs)
-        logger.debug("Initialized %s", self.__class__.__name__)
+        self._output_size = self.config["output_size"]
+        if self._output_size not in (128, 256):
+            logger.error("Dfaker output shape should be 128 or 256 px")
+            sys.exit(1)
+        self.input_shape = (self._output_size // 2, self._output_size // 2, 3)
+        self.encoder_dim = 1024
+        self.kernel_initializer = RandomNormal(0, 0.02)
 
-    def build_autoencoders(self):
-        """ Initialize Dfaker model """
-        logger.debug("Initializing model")
-        inputs = [Input(shape=self.input_shape, name="face")]
-        if self.config.get("mask_type", None):
-            mask_shape = (self.input_shape[0] * 2, self.input_shape[1] * 2, 1)
-            inputs.append(Input(shape=mask_shape, name="mask"))
-
-        for side in ("a", "b"):
-            decoder = self.networks["decoder_{}".format(side)].network
-            output = decoder(self.networks["encoder"].network(inputs[0]))
-            autoencoder = KerasModel(inputs, output)
-            self.add_predictor(side, autoencoder)
-        logger.debug("Initialized model")
-
-    def decoder(self):
+    def decoder(self, side):
         """ Decoder Network """
         input_ = Input(shape=(8, 8, 512))
         var_x = input_
 
-        var_x = self.blocks.upscale(var_x, 512, res_block_follows=True)
-        var_x = self.blocks.res_block(var_x, 512, kernel_initializer=self.kernel_initializer)
-        var_x = self.blocks.upscale(var_x, 256, res_block_follows=True)
-        var_x = self.blocks.res_block(var_x, 256, kernel_initializer=self.kernel_initializer)
-        var_x = self.blocks.upscale(var_x, 128, res_block_follows=True)
-        var_x = self.blocks.res_block(var_x, 128, kernel_initializer=self.kernel_initializer)
-        var_x = self.blocks.upscale(var_x, 64)
-        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+        if self._output_size == 256:
+            var_x = UpscaleBlock(1024, activation=None)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
+            var_x = ResidualBlock(1024, kernel_initializer=self.kernel_initializer)(var_x)
+        var_x = UpscaleBlock(512, activation=None)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = ResidualBlock(512, kernel_initializer=self.kernel_initializer)(var_x)
+        var_x = UpscaleBlock(256, activation=None)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = ResidualBlock(256, kernel_initializer=self.kernel_initializer)(var_x)
+        var_x = UpscaleBlock(128, activation=None)(var_x)
+        var_x = LeakyReLU(alpha=0.2)(var_x)
+        var_x = ResidualBlock(128, kernel_initializer=self.kernel_initializer)(var_x)
+        var_x = UpscaleBlock(64, activation="leakyrelu")(var_x)
+        var_x = Conv2DOutput(3, 5, name=f"face_out_{side}")(var_x)
         outputs = [var_x]
 
-        if self.config.get("mask_type", None):
+        if self.config.get("learn_mask", False):
             var_y = input_
-            var_y = self.blocks.upscale(var_y, 512)
-            var_y = self.blocks.upscale(var_y, 256)
-            var_y = self.blocks.upscale(var_y, 128)
-            var_y = self.blocks.upscale(var_y, 64)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            if self._output_size == 256:
+                var_y = UpscaleBlock(1024, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(512, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(256, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(128, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(64, activation="leakyrelu")(var_y)
+            var_y = Conv2DOutput(1, 5, name=f"mask_out_{side}")(var_y)
             outputs.append(var_y)
-        return KerasModel([input_], outputs=outputs)
+        return KerasModel([input_], outputs=outputs, name=f"decoder_{side}")

@@ -1,21 +1,29 @@
-FROM tensorflow/tensorflow:latest-gpu-py3
+FROM nvidia/cuda:11.7.0-runtime-ubuntu18.04
+ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update -qq -y \
- && apt-get install -y libsm6 libxrender1 libxext-dev python3-tk\
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+#install python3.8
+RUN apt-get update
+RUN apt-get install software-properties-common -y
+RUN add-apt-repository ppa:deadsnakes/ppa -y
+RUN apt-get update
+RUN apt-get install python3.8 -y 
+RUN apt-get install python3.8-distutils -y
+RUN apt-get install python3.8-tk -y
+RUN apt-get install curl -y
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+RUN python3.8 get-pip.py
+RUN rm get-pip.py
 
-COPY requirements.txt /opt/
-RUN pip3 install --upgrade pip
-RUN pip3 install cmake
-RUN pip3 install dlib --install-option=--yes --install-option=USE_AVX_INSTRUCTIONS
-RUN pip3 --no-cache-dir install -r /opt/requirements.txt && rm /opt/requirements.txt
+# install requirements
+RUN apt-get install ffmpeg git -y
+COPY ./requirements/_requirements_base.txt /opt/
+COPY ./requirements/requirements_nvidia.txt /opt/
+RUN python3.8 -m pip --no-cache-dir install -r /opt/requirements_nvidia.txt && rm /opt/_requirements_base.txt && rm /opt/requirements_nvidia.txt
 
-# patch for tensorflow:latest-gpu-py3 image
-RUN cd /usr/local/cuda/lib64 \
- && mv stubs/libcuda.so ./ \
- && ln -s libcuda.so libcuda.so.1 \
- && ldconfig
-
-WORKDIR "/srv"
-CMD ["/bin/bash"]
+RUN python3.8 -m pip install jupyter matplotlib tqdm
+RUN python3.8 -m pip install jupyter_http_over_ws
+RUN jupyter serverextension enable --py jupyter_http_over_ws
+RUN alias python=python3.8
+RUN echo "alias python=python3.8" >> /root/.bashrc
+WORKDIR "/notebooks"
+CMD ["jupyter-notebook", "--allow-root" ,"--port=8888" ,"--no-browser" ,"--ip=0.0.0.0"]

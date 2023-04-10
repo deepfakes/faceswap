@@ -1,108 +1,142 @@
 #!/usr/bin/env python3
-""" Holds the classes for the 3 main Faceswap 'media' objects for
-    input (extract) and output (convert) tasks. Those being:
-            Images
-            Faces
-            Alignments"""
+""" Helper functions for :mod:`~scripts.extract` and :mod:`~scripts.convert`.
+
+Holds the classes for the 2 main Faceswap 'media' objects: Images and Alignments.
+
+Holds optional pre/post processing functions for convert and extract.
+"""
 
 import logging
 import os
-from pathlib import Path
+import sys
+from typing import (Any, cast, Dict, Generator, Iterator, List,
+                    Optional, Tuple, TYPE_CHECKING, Union)
 
 import cv2
 import numpy as np
+import imageio
 
-from lib.aligner import Extract as AlignerExtract
-from lib.alignments import Alignments as AlignmentsBase
-from lib.face_filter import FaceFilter as FilterFunc
-from lib.utils import (camel_case_split, get_folder, get_image_paths,
-                       set_system_verbosity, _video_extensions)
+from lib.align import Alignments as AlignmentsBase, get_centered_size
+from lib.image import count_frames, read_image
+from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
+
+if TYPE_CHECKING:
+    from argparse import Namespace
+    from lib.align import AlignedFace
+    from plugins.extract.pipeline import ExtractMedia
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-class Utils():
-    """ Holds utility functions that are required by more than one media
-        object """
+def finalize(images_found: int, num_faces_detected: int, verify_output: bool) -> None:
+    """ Output summary statistics at the end of the extract or convert processes.
 
-    @staticmethod
-    def set_verbosity(loglevel):
-        """ Set the system output verbosity """
-        set_system_verbosity(loglevel)
+    Parameters
+    ----------
+    images_found: int
+        The number of images/frames that were processed
+    num_faces_detected: int
+        The number of faces that have been detected
+    verify_output: bool
+        ``True`` if multiple faces were detected in frames otherwise ``False``.
+     """
+    logger.info("-------------------------")
+    logger.info("Images found:        %s", images_found)
+    logger.info("Faces detected:      %s", num_faces_detected)
+    logger.info("-------------------------")
 
-    @staticmethod
-    def finalize(images_found, num_faces_detected, verify_output):
-        """ Finalize the image processing """
+    if verify_output:
+        logger.info("Note:")
+        logger.info("Multiple faces were detected in one or more pictures.")
+        logger.info("Double check your results.")
         logger.info("-------------------------")
-        logger.info("Images found:        %s", images_found)
-        logger.info("Faces detected:      %s", num_faces_detected)
-        logger.info("-------------------------")
 
-        if verify_output:
-            logger.info("Note:")
-            logger.info("Multiple faces were detected in one or more pictures.")
-            logger.info("Double check your results.")
-            logger.info("-------------------------")
-
-        logger.info("Process Succesfully Completed. Shutting Down...")
+    logger.info("Process Succesfully Completed. Shutting Down...")
 
 
 class Alignments(AlignmentsBase):
-    """ Override main alignments class for extract """
-    def __init__(self, arguments, is_extract, input_is_video=False):
+    """ Override :class:`lib.align.Alignments` to add custom loading based on command
+    line arguments.
+
+    Parameters
+    ----------
+    arguments: :class:`argparse.Namespace`
+        The command line arguments that were passed to Faceswap
+    is_extract: bool
+        ``True`` if the process calling this class is extraction otherwise ``False``
+    input_is_video: bool, optional
+        ``True`` if the input to the process is a video, ``False`` if it is a folder of images.
+        Default: False
+    """
+    def __init__(self,
+                 arguments: "Namespace",
+                 is_extract: bool,
+                 input_is_video: bool = False) -> None:
         logger.debug("Initializing %s: (is_extract: %s, input_is_video: %s)",
                      self.__class__.__name__, is_extract, input_is_video)
-        self.args = arguments
-        self.is_extract = is_extract
-        folder, filename = self.set_folder_filename(input_is_video)
-        serializer = self.set_serializer()
-        super().__init__(folder,
-                         filename=filename,
-                         serializer=serializer)
+        self._args = arguments
+        self._is_extract = is_extract
+        folder, filename = self._set_folder_filename(input_is_video)
+        super().__init__(folder, filename=filename)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_folder_filename(self, input_is_video):
-        """ Return the folder for the alignments file"""
-        if self.args.alignments_path:
-            logger.debug("Alignments File provided: '%s'", self.args.alignments_path)
-            folder, filename = os.path.split(str(self.args.alignments_path))
+    def _set_folder_filename(self, input_is_video: bool) -> Tuple[str, str]:
+        """ Return the folder and the filename for the alignments file.
+
+        If the input is a video, the alignments file will be stored in the same folder
+        as the video, with filename `<videoname>_alignments`.
+
+        If the input is a folder of images, the alignments file will be stored in folder with
+        the images and just be called 'alignments'
+
+        Parameters
+        ----------
+        input_is_video: bool, optional
+            ``True`` if the input to the process is a video, ``False`` if it is a folder of images.
+
+        Returns
+        -------
+        folder: str
+            The folder where the alignments file will be stored
+        filename: str
+            The filename of the alignments file
+        """
+        if self._args.alignments_path:
+            logger.debug("Alignments File provided: '%s'", self._args.alignments_path)
+            folder, filename = os.path.split(str(self._args.alignments_path))
         elif input_is_video:
-            logger.debug("Alignments from Video File: '%s'", self.args.input_dir)
-            folder, filename = os.path.split(self.args.input_dir)
-            filename = "{}_alignments".format(os.path.splitext(filename)[0])
+            logger.debug("Alignments from Video File: '%s'", self._args.input_dir)
+            folder, filename = os.path.split(self._args.input_dir)
+            filename = f"{os.path.splitext(filename)[0]}_alignments.fsa"
         else:
-            logger.debug("Alignments from Input Folder: '%s'", self.args.input_dir)
-            folder = str(self.args.input_dir)
+            logger.debug("Alignments from Input Folder: '%s'", self._args.input_dir)
+            folder = str(self._args.input_dir)
             filename = "alignments"
         logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
 
-    def set_serializer(self):
-        """ Set the serializer to be used for loading and
-            saving alignments """
-        if hasattr(self.args, "serializer") and self.args.serializer:
-            logger.debug("Serializer provided: '%s'", self.args.serializer)
-            serializer = self.args.serializer
-        else:
-            # If there is a full filename then this will be overriden
-            # by filename extension
-            serializer = "json"
-            logger.debug("No Serializer defaulting to: '%s'", serializer)
-        return serializer
+    def _load(self) -> Dict[str, Any]:
+        """ Override the parent :func:`~lib.align.Alignments._load` to handle skip existing
+        frames and faces on extract.
 
-    def load(self):
-        """ Override  parent loader to handle skip existing on extract """
-        data = dict()
-        if not self.is_extract:
-            if not self.have_alignments_file:
-                return data
-            data = super().load()
+        If skip existing has been selected, existing alignments are loaded and returned to the
+        calling script.
+
+        Returns
+        -------
+        dict
+            Any alignments that have already been extracted if skip existing has been selected
+            otherwise an empty dictionary
+        """
+        data: Dict[str, Any] = {}
+        if not self._is_extract and not self.have_alignments_file:
+            return data
+        if not self._is_extract:
+            data = super()._load()
             return data
 
-        skip_existing = bool(hasattr(self.args, 'skip_existing')
-                             and self.args.skip_existing)
-        skip_faces = bool(hasattr(self.args, 'skip_faces')
-                          and self.args.skip_faces)
+        skip_existing = hasattr(self._args, 'skip_existing') and self._args.skip_existing
+        skip_faces = hasattr(self._args, 'skip_faces') and self._args.skip_faces
 
         if not skip_existing and not skip_faces:
             logger.debug("No skipping selected. Returning empty dictionary")
@@ -112,316 +146,469 @@ class Alignments(AlignmentsBase):
             logger.warning("Skip Existing/Skip Faces selected, but no alignments file found!")
             return data
 
-        try:
-            with open(self.file, self.serializer.roptions) as align:
-                data = self.serializer.unmarshal(align.read())
-        except IOError as err:
-            logger.error("Error: '%s' not read: %s", self.file, err.strerror)
-            exit(1)
+        data = super()._load()
 
         if skip_faces:
-            # Remove items from algnments that have no faces so they will
+            # Remove items from alignments that have no faces so they will
             # be re-detected
-            del_keys = [key for key, val in data.items() if not val]
+            del_keys = [key for key, val in data.items() if not val["faces"]]
             logger.debug("Frames with no faces selected for redetection: %s", len(del_keys))
             for key in del_keys:
                 if key in data:
-                    logger.trace("Selected for redetection: '%s'", key)
+                    logger.trace("Selected for redetection: '%s'",  # type:ignore[attr-defined]
+                                 key)
                     del data[key]
         return data
 
 
 class Images():
-    """ Holds the full frames/images """
-    def __init__(self, arguments):
+    """ Handles the loading of frames from a folder of images or a video file for extract
+    and convert processes.
+
+    Parameters
+    ----------
+    arguments: :class:`argparse.Namespace`
+        The command line arguments that were passed to Faceswap
+    """
+    def __init__(self, arguments: "Namespace") -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
-        self.args = arguments
-        self.is_video = self.check_input_folder()
-        self.input_images = self.get_input_images()
+        self._args = arguments
+        self._is_video = self._check_input_folder()
+        self._input_images = self._get_input_images()
+        self._images_found = self._count_images()
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def images_found(self):
-        """ Number of images or frames """
-        if self.is_video:
-            cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
-            retval = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))  # pylint: disable=no-member
-            cap.release()
+    def is_video(self) -> bool:
+        """bool: ``True`` if the input is a video file otherwise ``False``. """
+        return self._is_video
+
+    @property
+    def input_images(self) -> Union[str, List[str]]:
+        """str or list: Path to the video file if the input is a video otherwise list of
+        image paths. """
+        return self._input_images
+
+    @property
+    def images_found(self) -> int:
+        """int: The number of frames that exist in the video file, or the folder of images. """
+        return self._images_found
+
+    def _count_images(self) -> int:
+        """ Get the number of Frames from a video file or folder of images.
+
+        Returns
+        -------
+        int
+            The number of frames in the image source
+        """
+        if self._is_video:
+            retval = int(count_frames(self._args.input_dir, fast=True))
         else:
-            retval = len(self.input_images)
+            retval = len(self._input_images)
         return retval
 
-    def check_input_folder(self):
-        """ Check whether the input is a folder or video """
-        if not os.path.exists(self.args.input_dir):
-            logger.error("Input location %s not found.", self.args.input_dir)
-            exit(1)
-        if (os.path.isfile(self.args.input_dir) and
-                os.path.splitext(self.args.input_dir)[1] in _video_extensions):
-            logger.info("Input Video: %s", self.args.input_dir)
+    def _check_input_folder(self) -> bool:
+        """ Check whether the input is a folder or video.
+
+        Returns
+        -------
+        bool
+            ``True`` if the input is a video otherwise ``False``
+        """
+        if not os.path.exists(self._args.input_dir):
+            logger.error("Input location %s not found.", self._args.input_dir)
+            sys.exit(1)
+        if (os.path.isfile(self._args.input_dir) and
+                os.path.splitext(self._args.input_dir)[1].lower() in _video_extensions):
+            logger.info("Input Video: %s", self._args.input_dir)
             retval = True
         else:
-            logger.info("Input Directory: %s", self.args.input_dir)
+            logger.info("Input Directory: %s", self._args.input_dir)
             retval = False
         return retval
 
-    def get_input_images(self):
-        """ Return the list of images or video file that is to be processed """
-        if self.is_video:
-            input_images = self.args.input_dir
+    def _get_input_images(self) -> Union[str, List[str]]:
+        """ Return the list of images or path to video file that is to be processed.
+
+        Returns
+        -------
+        str or list
+            Path to the video file if the input is a video otherwise list of image paths.
+        """
+        if self._is_video:
+            input_images = self._args.input_dir
         else:
-            input_images = get_image_paths(self.args.input_dir)
+            input_images = get_image_paths(self._args.input_dir)
 
         return input_images
 
-    def load(self):
-        """ Load an image and yield it with it's filename """
-        iterator = self.load_video_frames if self.is_video else self.load_disk_frames
+    def load(self) -> Generator[Tuple[str, np.ndarray], None, None]:
+        """ Generator to load frames from a folder of images or from a video file.
+
+        Yields
+        ------
+        filename: str
+            The filename of the current frame
+        image: :class:`numpy.ndarray`
+            A single frame
+        """
+        iterator = self._load_video_frames if self._is_video else self._load_disk_frames
         for filename, image in iterator():
             yield filename, image
 
-    def load_disk_frames(self):
-        """ Load frames from disk """
+    def _load_disk_frames(self) -> Generator[Tuple[str, np.ndarray], None, None]:
+        """ Generator to load frames from a folder of images.
+
+        Yields
+        ------
+        filename: str
+            The filename of the current frame
+        image: :class:`numpy.ndarray`
+            A single frame
+        """
         logger.debug("Input is separate Frames. Loading images")
-        for filename in self.input_images:
-            logger.trace("Loading image: '%s'", filename)
-            try:
-                image = cv2.imread(filename)  # pylint: disable=no-member
-            except Exception as err:  # pylint: disable=broad-except
-                logger.error("Failed to load image '%s'. Original Error: %s", filename, err)
+        for filename in self._input_images:
+            image = read_image(filename, raise_error=False)
+            if image is None:
                 continue
             yield filename, image
 
-    def load_video_frames(self):
-        """ Return frames from a video file """
+    def _load_video_frames(self) -> Generator[Tuple[str, np.ndarray], None, None]:
+        """ Generator to load frames from a video file.
+
+        Yields
+        ------
+        filename: str
+            The filename of the current frame
+        image: :class:`numpy.ndarray`
+            A single frame
+        """
         logger.debug("Input is video. Capturing frames")
-        vidname = os.path.splitext(os.path.basename(self.args.input_dir))[0]
-        cap = cv2.VideoCapture(self.args.input_dir)  # pylint: disable=no-member
-        i = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                logger.debug("Video terminated")
-                break
-            i += 1
-            # Keep filename format for outputted face
-            filename = "{}_{:06d}.png".format(vidname, i)
-            logger.trace("Loading video frame: '%s'", filename)
+        vidname = os.path.splitext(os.path.basename(self._args.input_dir))[0]
+        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
+        for i, frame in enumerate(cast(Iterator[np.ndarray], reader)):
+            # Convert to BGR for cv2 compatibility
+            frame = frame[:, :, ::-1]
+            filename = f"{vidname}_{i + 1:06d}.png"
+            logger.trace("Loading video frame: '%s'", filename)  # type:ignore[attr-defined]
             yield filename, frame
-        cap.release()
+        reader.close()
 
-    @staticmethod
-    def load_one_image(filename):
-        """ load requested image """
-        logger.trace("Loading image: '%s'", filename)
-        return cv2.imread(filename)  # pylint: disable=no-member
+    def load_one_image(self, filename) -> np.ndarray:
+        """ Obtain a single image for the given filename.
+
+        Parameters
+        ----------
+        filename: str
+            The filename to return the image for
+
+        Returns
+        ------
+        :class:`numpy.ndarray`
+            The image for the requested filename,
+
+        """
+        logger.trace("Loading image: '%s'", filename)  # type:ignore[attr-defined]
+        if self._is_video:
+            if filename.isdigit():
+                frame_no = filename
+            else:
+                frame_no = os.path.splitext(filename)[0][filename.rfind("_") + 1:]
+                logger.trace(  # type:ignore[attr-defined]
+                    "Extracted frame_no %s from filename '%s'", frame_no, filename)
+            retval = self._load_one_video_frame(int(frame_no))
+        else:
+            retval = read_image(filename, raise_error=True)
+        return retval
+
+    def _load_one_video_frame(self, frame_no: int) -> np.ndarray:
+        """ Obtain a single frame from a video file.
+
+        Parameters
+        ----------
+        frame_no: int
+            The frame index for the required frame
+
+        Returns
+        ------
+        :class:`numpy.ndarray`
+            The image for the requested frame index,
+        """
+        logger.trace("Loading video frame: %s", frame_no)  # type:ignore[attr-defined]
+        reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
+        reader.set_image_index(frame_no - 1)
+        frame = reader.get_next_data()[:, :, ::-1]  # type:ignore[index]
+        reader.close()
+        return frame
 
 
-class PostProcess():
-    """ Optional post processing tasks """
-    def __init__(self, arguments):
+class PostProcess():  # pylint:disable=too-few-public-methods
+    """ Optional pre/post processing tasks for convert and extract.
+
+    Builds a pipeline of actions that have optionally been requested to be performed
+    in this session.
+
+    Parameters
+    ----------
+    arguments: :class:`argparse.Namespace`
+        The command line arguments that were passed to Faceswap
+    """
+    def __init__(self, arguments: "Namespace") -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
-        self.args = arguments
-        self.actions = self.set_actions()
+        self._args = arguments
+        self._actions = self._set_actions()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_actions(self):
-        """ Compile the actions to be performed into a list """
-        postprocess_items = self.get_items()
-        actions = list()
-        for action, options in postprocess_items.items():
-            options = dict() if options is None else options
-            args = options.get("args", tuple())
-            kwargs = options.get("kwargs", dict())
-            args = args if isinstance(args, tuple) else tuple()
-            kwargs = kwargs if isinstance(kwargs, dict) else dict()
-            task = globals()[action](*args, **kwargs)
-            logger.debug("Adding Postprocess action: '%s'", task)
-            actions.append(task)
+    def _set_actions(self) -> List["PostProcessAction"]:
+        """ Compile the requested actions to be performed into a list
 
-        for action in actions:
-            action_name = camel_case_split(action.__class__.__name__)
+        Returns
+        -------
+        list
+            The list of :class:`PostProcessAction` to be performed
+        """
+        postprocess_items = self._get_items()
+        actions: List["PostProcessAction"] = []
+        for action, options in postprocess_items.items():
+            options = {} if options is None else options
+            args = options.get("args", tuple())
+            kwargs = options.get("kwargs", {})
+            args = args if isinstance(args, tuple) else tuple()
+            kwargs = kwargs if isinstance(kwargs, dict) else {}
+            task = globals()[action](*args, **kwargs)
+            if task.valid:
+                logger.debug("Adding Postprocess action: '%s'", task)
+                actions.append(task)
+
+        for ppaction in actions:
+            action_name = camel_case_split(ppaction.__class__.__name__)
             logger.info("Adding post processing item: %s", " ".join(action_name))
 
         return actions
 
-    def get_items(self):
-        """ Set the post processing actions """
-        postprocess_items = dict()
+    def _get_items(self) -> Dict[str, Optional[Dict[str, Union[tuple, dict]]]]:
+        """ Check the passed in command line arguments for requested actions,
+
+        For any requested actions, add the item to the actions list along with
+        any relevant arguments and keyword arguments.
+
+        Returns
+        -------
+        dict
+            The name of the action to be performed as the key. Any action specific
+            arguments and keyword arguments as the value.
+        """
+        postprocess_items: Dict[str, Optional[Dict[str, Union[tuple, dict]]]] = {}
         # Debug Landmarks
-        if (hasattr(self.args, 'debug_landmarks')
-                and self.args.debug_landmarks):
+        if (hasattr(self._args, 'debug_landmarks') and self._args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
-
-        # Blurry Face
-        if hasattr(self.args, 'blur_thresh') and self.args.blur_thresh:
-            kwargs = {"blur_thresh": self.args.blur_thresh}
-            postprocess_items["BlurryFaceFilter"] = {"kwargs": kwargs}
-
-        # Face Filter post processing
-        if ((hasattr(self.args, "filter") and self.args.filter is not None) or
-                (hasattr(self.args, "nfilter") and
-                 self.args.nfilter is not None)):
-            face_filter = dict()
-            filter_lists = dict()
-            if hasattr(self.args, "ref_threshold"):
-                face_filter["ref_threshold"] = self.args.ref_threshold
-            for filter_type in ('filter', 'nfilter'):
-                filter_args = getattr(self.args, filter_type, None)
-                filter_args = None if not filter_args else filter_args
-                filter_lists[filter_type] = filter_args
-            face_filter["filter_lists"] = filter_lists
-            postprocess_items["FaceFilter"] = {"kwargs": face_filter}
 
         logger.debug("Postprocess Items: %s", postprocess_items)
         return postprocess_items
 
-    def do_actions(self, output_item):
-        """ Perform the requested post-processing actions """
-        for action in self.actions:
+    def do_actions(self, extract_media: "ExtractMedia") -> None:
+        """ Perform the requested optional post-processing actions on the given image.
+
+        Parameters
+        ----------
+        extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
+            The :class:`~plugins.extract.pipeline.ExtractMedia` object to perform the
+            action on.
+
+        Returns
+        -------
+        :class:`~plugins.extract.pipeline.ExtractMedia`
+            The original :class:`~plugins.extract.pipeline.ExtractMedia` with any actions applied
+        """
+        for action in self._actions:
             logger.debug("Performing postprocess action: '%s'", action.__class__.__name__)
-            action.process(output_item)
+            action.process(extract_media)
 
 
 class PostProcessAction():  # pylint: disable=too-few-public-methods
-    """ Parent class for Post Processing Actions
-        Usuable in Extract or Convert or both
-        depending on context """
-    def __init__(self, *args, **kwargs):
+    """ Parent class for Post Processing Actions.
+
+    Usable in Extract or Convert or both depending on context. Any post-processing actions should
+    inherit from this class.
+
+    Parameters
+    -----------
+    args: tuple
+        Varies for specific post process action
+    kwargs: dict
+        Varies for specific post process action
+    """
+    def __init__(self, *args, **kwargs) -> None:
         logger.debug("Initializing %s: (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
+        self._valid = True  # Set to False if invalid parameters passed in to disable
         logger.debug("Initialized base class %s", self.__class__.__name__)
 
-    def process(self, output_item):
-        """ Override for specific post processing action """
+    @property
+    def valid(self) -> bool:
+        """bool: ``True`` if the action if the parameters passed in for this action are valid,
+        otherwise ``False`` """
+        return self._valid
+
+    def process(self, extract_media: "ExtractMedia") -> None:
+        """ Override for specific post processing action
+
+        Parameters
+        ----------
+        extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
+            The :class:`~plugins.extract.pipeline.ExtractMedia` object to perform the
+            action on.
+        """
         raise NotImplementedError
 
 
-class BlurryFaceFilter(PostProcessAction):  # pylint: disable=too-few-public-methods
-    """ Move blurry faces to a different folder
-        Extract Only """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.blur_thresh = kwargs["blur_thresh"]
-        logger.debug("Initialized %s", self.__class__.__name__)
-
-    def process(self, output_item):
-        """ Detect and move blurry face """
-        extractor = AlignerExtract()
-
-        for idx, detected_face in enumerate(output_item["detected_faces"]):
-            frame_name = detected_face["file_location"].parts[-1]
-            face = detected_face["face"]
-            logger.trace("Checking for blurriness. Frame: '%s', Face: %s", frame_name, idx)
-            aligned_landmarks = face.aligned_landmarks
-            resized_face = face.aligned_face
-            size = face.aligned["size"]
-            padding = int(size * 0.1875)
-            feature_mask = extractor.get_feature_mask(
-                aligned_landmarks / size,
-                size, padding)
-            feature_mask = cv2.blur(  # pylint: disable=no-member
-                feature_mask, (10, 10))
-            isolated_face = cv2.multiply(  # pylint: disable=no-member
-                feature_mask,
-                resized_face.astype(float)).astype(np.uint8)
-            blurry, focus_measure = self.is_blurry(isolated_face)
-
-            if blurry:
-                blur_folder = detected_face["file_location"].parts[:-1]
-                blur_folder = get_folder(Path(*blur_folder) / Path("blurry"))
-                detected_face["file_location"] = blur_folder / Path(frame_name)
-                logger.verbose("%s's focus measure of %s was below the blur threshold, "
-                               "moving to 'blurry'", frame_name, "{0:.2f}".format(focus_measure))
-
-    def is_blurry(self, image):
-        """ Convert to grayscale, and compute the focus measure of the image using the
-            Variance of Laplacian method """
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # pylint: disable=no-member
-        focus_measure = self.variance_of_laplacian(gray)
-
-        # if the focus measure is less than the supplied threshold,
-        # then the image should be considered "blurry"
-        retval = (focus_measure < self.blur_thresh, focus_measure)
-        logger.trace("Returning: (is_blurry: %s, focus_measure %s)", retval[0], retval[1])
-        return retval
-
-    @staticmethod
-    def variance_of_laplacian(image):
-        """ Compute the Laplacian of the image and then return the focus
-            measure, which is simply the variance of the Laplacian """
-        retval = cv2.Laplacian(image, cv2.CV_64F).var()  # pylint: disable=no-member
-        logger.trace("Returning: %s", retval)
-        return retval
-
-
 class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-methods
-    """ Draw debug landmarks on face
-        Extract Only """
+    """ Draw debug landmarks on face output. Extract Only """
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(self, *args, **kwargs)
+        self._face_size = 0
+        self._legacy_size = 0
+        self._font = cv2.FONT_HERSHEY_SIMPLEX
+        self._font_scale = 0.0
+        self._font_pad = 0
 
-    def process(self, output_item):
-        """ Draw landmarks on image """
-        for idx, detected_face in enumerate(output_item["detected_faces"]):
-            face = detected_face["face"]
-            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",
-                         detected_face["file_location"].parts[-1], idx)
-            aligned_landmarks = face.aligned_landmarks
-            for (pos_x, pos_y) in aligned_landmarks:
-                cv2.circle(  # pylint: disable=no-member
-                    face.aligned_face,
-                    (pos_x, pos_y), 2, (0, 0, 255), -1)
+    def _initialize_font(self, size: int) -> None:
+        """ Set the font scaling sizes on first call
 
+        Parameters
+        ----------
+        size: int
+            The pixel size of the saved aligned face
+        """
+        self._font_scale = size / 512
+        self._font_pad = size // 64
 
-class FaceFilter(PostProcessAction):
-    """ Filter in or out faces based on input image(s)
-        Extract or Convert """
+    def _border_text(self,
+                     image: np.ndarray,
+                     text: str,
+                     color: Tuple[int, int, int],
+                     position: Tuple[int, int]) -> None:
+        """ Create text on an image with a black border
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        filter_lists = kwargs["filter_lists"]
-        ref_threshold = kwargs.get("ref_threshold", 0.6)
-        self.filter = self.load_face_filter(filter_lists, ref_threshold)
-        logger.debug("Initialized %s", self.__class__.__name__)
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The image to put bordered text on to
+        text: str
+            The text to place the image
+        color: tuple
+            The color of the text
+        position: tuple
+            The (x, y) co-ordinates to place the text
+        """
+        thickness = 2
+        for idx in range(2):
+            text_color = (0, 0, 0) if idx == 0 else color
+            cv2.putText(image,
+                        text,
+                        position,
+                        self._font,
+                        self._font_scale,
+                        text_color,
+                        thickness,
+                        lineType=cv2.LINE_AA)
+            thickness //= 2
 
-    def load_face_filter(self, filter_lists, ref_threshold):
-        """ Load faces to filter out of images """
-        if not any(val for val in filter_lists.values()):
-            return None
+    def _annotate_face_box(self, face: "AlignedFace") -> None:
+        """ Annotate the face extract box and print the original size in pixels
 
-        filter_files = [self.set_face_filter(f_type, filter_lists[f_type])
-                        for f_type in ("filter", "nfilter")]
+        face: :class:`~lib.align.AlignedFace`
+            The object containing the aligned face to annotate
+        """
+        assert face.face is not None
+        color = (0, 255, 0)
+        roi = face.get_cropped_roi(face.size, self._face_size, "face")
+        cv2.rectangle(face.face, tuple(roi[:2]), tuple(roi[2:]), color, 1)
 
-        if any(filters for filters in filter_files):
-            facefilter = FilterFunc(filter_files[0],
-                                    filter_files[1],
-                                    ref_threshold)
-        logger.debug("Face filter: %s", facefilter)
-        return facefilter
+        # Size in top right corner
+        roi_pnts = np.array([[roi[0], roi[1]],
+                             [roi[0], roi[3]],
+                             [roi[2], roi[3]],
+                             [roi[2], roi[1]]])
+        orig_roi = face.transform_points(roi_pnts, invert=True)
+        size = int(round(((orig_roi[1][0] - orig_roi[0][0]) ** 2 +
+                          (orig_roi[1][1] - orig_roi[0][1]) ** 2) ** 0.5))
+        text_img = face.face.copy()
+        text = f"{size}px"
+        text_size = cv2.getTextSize(text, self._font, self._font_scale, 1)[0]
+        pos_x = roi[2] - (text_size[0] + self._font_pad)
+        pos_y = roi[1] + text_size[1] + self._font_pad
 
-    @staticmethod
-    def set_face_filter(f_type, f_args):
-        """ Set the required filters """
-        if not f_args:
-            return list()
+        self._border_text(text_img, text, color, (pos_x, pos_y))
+        cv2.addWeighted(text_img, 0.75, face.face, 0.25, 0, face.face)
 
-        logger.info("%s: %s", f_type.title(), f_args)
-        filter_files = f_args if isinstance(f_args, list) else [f_args]
-        filter_files = list(filter(lambda fpath: Path(fpath).exists(), filter_files))
-        logger.debug("Face Filter files: %s", filter_files)
-        return filter_files
+    def _print_stats(self, face: "AlignedFace") -> None:
+        """ Print various metrics on the output face images
 
-    def process(self, output_item):
-        """ Filter in/out wanted/unwanted faces """
-        if not self.filter:
-            return
+        Parameters
+        ----------
+        face: :class:`~lib.align.AlignedFace`
+            The loaded aligned face
+        """
+        assert face.face is not None
+        text_image = face.face.copy()
+        texts = [f"pitch: {face.pose.pitch:.2f}",
+                 f"yaw: {face.pose.yaw:.2f}",
+                 f"roll: {face.pose.roll: .2f}",
+                 f"distance: {face.average_distance:.2f}"]
+        colors = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (255, 255, 255)]
+        text_sizes = [cv2.getTextSize(text, self._font, self._font_scale, 1)[0] for text in texts]
 
-        ret_faces = list()
-        for idx, detected_face in enumerate(output_item["detected_faces"]):
-            if not self.filter.check(detected_face["face"]):
-                logger.verbose("Skipping not recognized face! Frame: %s Face %s",
-                               detected_face["file_location"].parts[-1], idx)
-                continue
-            logger.trace("Accepting recognised face. Frame: %s. Face: %s",
-                         detected_face["file_location"].parts[-1], idx)
-            ret_faces.append(detected_face)
-        output_item["detected_faces"] = ret_faces
+        final_y = face.size - text_sizes[-1][1]
+        pos_y = [(size[1] + self._font_pad) * (idx + 1)
+                 for idx, size in enumerate(text_sizes)][:-1] + [final_y]
+        pos_x = self._font_pad
+
+        for idx, text in enumerate(texts):
+            self._border_text(text_image, text, colors[idx], (pos_x, pos_y[idx]))
+
+        # Apply text to face
+        cv2.addWeighted(text_image, 0.75, face.face, 0.25, 0, face.face)
+
+    def process(self, extract_media: "ExtractMedia") -> None:
+        """ Draw landmarks on a face.
+
+        Parameters
+        ----------
+        extract_media: :class:`~plugins.extract.pipeline.ExtractMedia`
+            The :class:`~plugins.extract.pipeline.ExtractMedia` object that contains the faces to
+            draw the landmarks on to
+        """
+        frame = os.path.splitext(os.path.basename(extract_media.filename))[0]
+        for idx, face in enumerate(extract_media.detected_faces):
+            if not self._face_size:
+                self._face_size = get_centered_size(face.aligned.centering,
+                                                    "face",
+                                                    face.aligned.size)
+                logger.debug("set face size: %s", self._face_size)
+            if not self._legacy_size:
+                self._legacy_size = get_centered_size(face.aligned.centering,
+                                                      "legacy",
+                                                      face.aligned.size)
+                logger.debug("set legacy size: %s", self._legacy_size)
+            if not self._font_scale:
+                self._initialize_font(face.aligned.size)
+
+            logger.trace("Drawing Landmarks. Frame: '%s'. Face: %s",  # type:ignore[attr-defined]
+                         frame, idx)
+            # Landmarks
+            for (pos_x, pos_y) in face.aligned.landmarks.astype("int32"):
+                cv2.circle(face.aligned.face, (pos_x, pos_y), 1, (0, 255, 255), -1)
+            # Pose
+            center = (face.aligned.size // 2, face.aligned.size // 2)
+            points = (face.aligned.pose.xyz_2d * face.aligned.size).astype("int32")
+            cv2.line(face.aligned.face, center, tuple(points[1]), (0, 255, 0), 1)
+            cv2.line(face.aligned.face, center, tuple(points[0]), (255, 0, 0), 1)
+            cv2.line(face.aligned.face, center, tuple(points[2]), (0, 0, 255), 1)
+            # Face centering
+            self._annotate_face_box(face.aligned)
+            # Legacy centering
+            roi = face.aligned.get_cropped_roi(face.aligned.size, self._legacy_size, "legacy")
+            cv2.rectangle(face.aligned.face, tuple(roi[:2]), tuple(roi[2:]), (0, 0, 255), 1)
+            self._print_stats(face.aligned)

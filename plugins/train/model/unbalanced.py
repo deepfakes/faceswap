@@ -1,130 +1,146 @@
 #!/usr/bin/env python3
 """ Unbalanced Model
     Based on the original https://www.reddit.com/r/deepfakes/
-        code sample + contribs """
+        code sample + contributions """
 
-from keras.initializers import RandomNormal
-from keras.layers import Conv2D, Dense, Flatten, Input, Reshape, SpatialDropout2D
-from keras.models import Model as KerasModel
+from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
+from lib.utils import get_backend
+from ._base import ModelBase, KerasModel
 
-from .original import logger, Model as OriginalModel
+if get_backend() == "amd":
+    from keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
+    from keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D
+else:
+    # Ignore linting errors from Tensorflow's thoroughly broken import system
+    from tensorflow.keras.initializers import RandomNormal  # noqa pylint:disable=import-error,no-name-in-module
+    from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape, SpatialDropout2D  # noqa pylint:disable=import-error,no-name-in-module
 
 
-class Model(OriginalModel):
+class Model(ModelBase):
     """ Unbalanced Faceswap Model """
     def __init__(self, *args, **kwargs):
-        logger.debug("Initializing %s: (args: %s, kwargs: %s",
-                     self.__class__.__name__, args, kwargs)
-
-        self.lowmem = self.config.get("lowmem", False)
-        kwargs["input_shape"] = (self.config["input_size"], self.config["input_size"], 3)
-        kwargs["encoder_dim"] = 512 if self.lowmem else self.config["nodes"]
+        super().__init__(*args, **kwargs)
+        self.input_shape = (self.config["input_size"], self.config["input_size"], 3)
+        self.low_mem = self.config.get("lowmem", False)
+        self.encoder_dim = 512 if self.low_mem else self.config["nodes"]
         self.kernel_initializer = RandomNormal(0, 0.02)
 
-        super().__init__(*args, **kwargs)
-        logger.debug("Initialized %s", self.__class__.__name__)
+    def build_model(self, inputs):
+        """ build the Unbalanced Model. """
+        encoder = self.encoder()
+        encoder_a = encoder(inputs[0])
+        encoder_b = encoder(inputs[1])
 
-    def add_networks(self):
-        """ Add the original model weights """
-        logger.debug("Adding networks")
-        self.add_network("decoder", "a", self.decoder_a())
-        self.add_network("decoder", "b", self.decoder_b())
-        self.add_network("encoder", None, self.encoder())
-        logger.debug("Added networks")
+        outputs = [self.decoder_a()(encoder_a), self.decoder_b()(encoder_b)]
+
+        autoencoder = KerasModel(inputs, outputs, name=self.model_name)
+        return autoencoder
 
     def encoder(self):
         """ Unbalanced Encoder """
         kwargs = dict(kernel_initializer=self.kernel_initializer)
-        encoder_complexity = 128 if self.lowmem else self.config["complexity_encoder"]
-        dense_dim = 384 if self.lowmem else 512
+        encoder_complexity = 128 if self.low_mem else self.config["complexity_encoder"]
+        dense_dim = 384 if self.low_mem else 512
         dense_shape = self.input_shape[0] // 16
         input_ = Input(shape=self.input_shape)
 
         var_x = input_
-        var_x = self.blocks.conv(var_x, encoder_complexity, use_instance_norm=True, **kwargs)
-        var_x = self.blocks.conv(var_x, encoder_complexity * 2, use_instance_norm=True, **kwargs)
-        var_x = self.blocks.conv(var_x, encoder_complexity * 4, **kwargs)
-        var_x = self.blocks.conv(var_x, encoder_complexity * 6, **kwargs)
-        var_x = self.blocks.conv(var_x, encoder_complexity * 8, **kwargs)
+        var_x = Conv2DBlock(encoder_complexity,
+                            normalization="instance",
+                            activation="leakyrelu",
+                            **kwargs)(var_x)
+        var_x = Conv2DBlock(encoder_complexity * 2,
+                            normalization="instance",
+                            activation="leakyrelu",
+                            **kwargs)(var_x)
+        var_x = Conv2DBlock(encoder_complexity * 4, **kwargs, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(encoder_complexity * 6, **kwargs, activation="leakyrelu")(var_x)
+        var_x = Conv2DBlock(encoder_complexity * 8, **kwargs, activation="leakyrelu")(var_x)
         var_x = Dense(self.encoder_dim,
                       kernel_initializer=self.kernel_initializer)(Flatten()(var_x))
         var_x = Dense(dense_shape * dense_shape * dense_dim,
                       kernel_initializer=self.kernel_initializer)(var_x)
         var_x = Reshape((dense_shape, dense_shape, dense_dim))(var_x)
-        return KerasModel(input_, var_x)
+        return KerasModel(input_, var_x, name="encoder")
 
     def decoder_a(self):
         """ Decoder for side A """
         kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
-        decoder_complexity = 320 if self.lowmem else self.config["complexity_decoder_a"]
-        dense_dim = 384 if self.lowmem else 512
+        decoder_complexity = 320 if self.low_mem else self.config["complexity_decoder_a"]
+        dense_dim = 384 if self.low_mem else 512
         decoder_shape = self.input_shape[0] // 16
         input_ = Input(shape=(decoder_shape, decoder_shape, dense_dim))
 
         var_x = input_
 
-        var_x = self.blocks.upscale(var_x, decoder_complexity, **kwargs)
+        var_x = UpscaleBlock(decoder_complexity, activation="leakyrelu", **kwargs)(var_x)
         var_x = SpatialDropout2D(0.25)(var_x)
-        var_x = self.blocks.upscale(var_x, decoder_complexity, **kwargs)
-        if self.lowmem:
+        var_x = UpscaleBlock(decoder_complexity, activation="leakyrelu", **kwargs)(var_x)
+        if self.low_mem:
             var_x = SpatialDropout2D(0.15)(var_x)
         else:
             var_x = SpatialDropout2D(0.25)(var_x)
-        var_x = self.blocks.upscale(var_x, decoder_complexity // 2, **kwargs)
-        var_x = self.blocks.upscale(var_x, decoder_complexity // 4, **kwargs)
-        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+        var_x = UpscaleBlock(decoder_complexity // 2, activation="leakyrelu", **kwargs)(var_x)
+        var_x = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu", **kwargs)(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_a")(var_x)
         outputs = [var_x]
 
-        if self.config.get("mask_type", None):
+        if self.config.get("learn_mask", False):
             var_y = input_
-            var_y = self.blocks.upscale(var_y, decoder_complexity)
-            var_y = self.blocks.upscale(var_y, decoder_complexity)
-            var_y = self.blocks.upscale(var_y, decoder_complexity // 2)
-            var_y = self.blocks.upscale(var_y, decoder_complexity // 4)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            var_y = UpscaleBlock(decoder_complexity, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(decoder_complexity, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(decoder_complexity // 2, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu")(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_a")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs)
+        return KerasModel(input_, outputs=outputs, name="decoder_a")
 
     def decoder_b(self):
         """ Decoder for side B """
         kwargs = dict(kernel_size=5, kernel_initializer=self.kernel_initializer)
-        dense_dim = 384 if self.lowmem else self.config["complexity_decoder_b"]
-        decoder_complexity = 384 if self.lowmem else 512
+        decoder_complexity = 384 if self.low_mem else self.config["complexity_decoder_b"]
+        dense_dim = 384 if self.low_mem else 512
         decoder_shape = self.input_shape[0] // 16
         input_ = Input(shape=(decoder_shape, decoder_shape, dense_dim))
 
         var_x = input_
-        if self.lowmem:
-            var_x = self.blocks.upscale(var_x, decoder_complexity, **kwargs)
-            var_x = self.blocks.upscale(var_x, decoder_complexity // 2, **kwargs)
-            var_x = self.blocks.upscale(var_x, decoder_complexity // 4, **kwargs)
-            var_x = self.blocks.upscale(var_x, decoder_complexity // 8, **kwargs)
+        if self.low_mem:
+            var_x = UpscaleBlock(decoder_complexity, activation="leakyrelu", **kwargs)(var_x)
+            var_x = UpscaleBlock(decoder_complexity // 2, activation="leakyrelu", **kwargs)(var_x)
+            var_x = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu", **kwargs)(var_x)
+            var_x = UpscaleBlock(decoder_complexity // 8, activation="leakyrelu", **kwargs)(var_x)
         else:
-            var_x = self.blocks.upscale(var_x, decoder_complexity,
-                                        res_block_follows=True, **kwargs)
-            var_x = self.blocks.res_block(var_x, decoder_complexity,
-                                          kernel_initializer=self.kernel_initializer)
-            var_x = self.blocks.upscale(var_x, decoder_complexity,
-                                        res_block_follows=True, **kwargs)
-            var_x = self.blocks.res_block(var_x, decoder_complexity,
-                                          kernel_initializer=self.kernel_initializer)
-            var_x = self.blocks.upscale(var_x, decoder_complexity // 2,
-                                        res_block_follows=True, **kwargs)
-            var_x = self.blocks.res_block(var_x, decoder_complexity // 2,
-                                          kernel_initializer=self.kernel_initializer)
-            var_x = self.blocks.upscale(var_x, decoder_complexity // 4, **kwargs)
-        var_x = Conv2D(3, kernel_size=5, padding='same', activation='sigmoid')(var_x)
+            var_x = UpscaleBlock(decoder_complexity, activation=None, **kwargs)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
+            var_x = ResidualBlock(decoder_complexity,
+                                  kernel_initializer=self.kernel_initializer)(var_x)
+            var_x = UpscaleBlock(decoder_complexity, activation=None, **kwargs)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
+            var_x = ResidualBlock(decoder_complexity,
+                                  kernel_initializer=self.kernel_initializer)(var_x)
+            var_x = UpscaleBlock(decoder_complexity // 2, activation=None, **kwargs)(var_x)
+            var_x = LeakyReLU(alpha=0.2)(var_x)
+            var_x = ResidualBlock(decoder_complexity // 2,
+                                  kernel_initializer=self.kernel_initializer)(var_x)
+            var_x = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu", **kwargs)(var_x)
+        var_x = Conv2DOutput(3, 5, name="face_out_b")(var_x)
         outputs = [var_x]
 
-        if self.config.get("mask_type", None):
+        if self.config.get("learn_mask", False):
             var_y = input_
-            var_y = self.blocks.upscale(var_y, decoder_complexity)
-            if not self.lowmem:
-                var_y = self.blocks.upscale(var_y, decoder_complexity)
-            var_y = self.blocks.upscale(var_y, decoder_complexity // 2)
-            var_y = self.blocks.upscale(var_y, decoder_complexity // 4)
-            if self.lowmem:
-                var_y = self.blocks.upscale(var_y, decoder_complexity // 8)
-            var_y = Conv2D(1, kernel_size=5, padding='same', activation='sigmoid')(var_y)
+            var_y = UpscaleBlock(decoder_complexity, activation="leakyrelu")(var_y)
+            if not self.low_mem:
+                var_y = UpscaleBlock(decoder_complexity, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(decoder_complexity // 2, activation="leakyrelu")(var_y)
+            var_y = UpscaleBlock(decoder_complexity // 4, activation="leakyrelu")(var_y)
+            if self.low_mem:
+                var_y = UpscaleBlock(decoder_complexity // 8, activation="leakyrelu")(var_y)
+            var_y = Conv2DOutput(1, 5, name="mask_out_b")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs)
+        return KerasModel(input_, outputs=outputs, name="decoder_b")
+
+    def _legacy_mapping(self):
+        """ The mapping of legacy separate model names to single model names """
+        return {f"{self.name}_encoder.h5": "encoder",
+                f"{self.name}_decoder_A.h5": "decoder_a",
+                f"{self.name}_decoder_B.h5": "decoder_b"}

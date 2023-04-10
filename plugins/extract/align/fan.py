@@ -3,258 +3,278 @@
     Code adapted and modified from:
     https://github.com/1adrianb/face-alignment
 """
-import os
+import logging
+from typing import cast, List, TYPE_CHECKING
+
 import cv2
 import numpy as np
 
-from ._base import Aligner, logger
+from lib.model.session import KSession
+from ._base import Aligner, AlignerBatch, BatchType
+
+if TYPE_CHECKING:
+    from lib.align import DetectedFace
+
+logger = logging.getLogger(__name__)
 
 
 class Align(Aligner):
     """ Perform transformation to align and get landmarks """
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, **kwargs) -> None:
+        git_model_id = 13
+        model_filename = "face-alignment-network_2d4_keras_v2.h5"
+        super().__init__(git_model_id=git_model_id, model_filename=model_filename, **kwargs)
+        self.model: KSession
+        self.name = "FAN"
+        self.input_size = 256
+        self.color_format = "RGB"
         self.vram = 2240
-        self.reference_scale = 195.0
-        self.model = None
-        self.test = None
+        self.vram_warnings = 512  # Will run at this with warnings
+        self.vram_per_batch = 64
+        self.realign_centering = "head"
+        self.batchsize: int = self.config["batch-size"]
+        self.reference_scale = 200. / 195.
 
-    def set_model_path(self):
-        """ Load the mtcnn models """
-        model_path = os.path.join(self.cachepath, "2DFAN-4.pb")
-        if not os.path.exists(model_path):
-            raise Exception("Error: Unable to find {}, reinstall "
-                            "the lib!".format(model_path))
-        logger.debug("Loading model: '%s'", model_path)
-        return model_path
+    def init_model(self) -> None:
+        """ Initialize FAN model """
+        assert isinstance(self.name, str)
+        assert isinstance(self.model_path, str)
+        self.model = KSession(self.name,
+                              self.model_path,
+                              allow_growth=self.config["allow_growth"],
+                              exclude_gpus=self._exclude_gpus)
+        self.model.load_model()
+        # Feed a placeholder so Aligner is primed for Manual tool
+        placeholder_shape = (self.batchsize, self.input_size, self.input_size, 3)
+        placeholder = np.zeros(placeholder_shape, dtype="float32")
+        self.model.predict(placeholder)
 
-    def initialize(self, *args, **kwargs):
-        """ Initialization tasks to run prior to alignments """
-        super().initialize(*args, **kwargs)
-        logger.info("Initializing Face Alignment Network...")
-        logger.debug("fan initialize: (args: %s kwargs: %s)", args, kwargs)
+    def faces_to_feed(self, faces: np.ndarray) -> np.ndarray:
+        """ Convert a batch of face images from UINT8 (0-255) to fp32 (0.0-1.0)
 
-        _, _, vram_total = self.get_vram_free()
+        Parameters
+        ----------
+        faces: :class:`numpy.ndarray`
+            The batch of faces in UINT8 format
 
-        if vram_total <= self.vram:
-            tf_ratio = 1.0
+        Returns
+        -------
+        class: `numpy.ndarray`
+            The batch of faces as fp32 in 0.0 to 1.0 range
+        """
+        return faces.astype("float32") / 255.
+
+    def process_input(self, batch: BatchType) -> None:
+        """ Compile the detected faces for prediction
+
+        Parameters
+        ----------
+        batch: :class:`AlignerBatch`
+            The current batch to process input for
+        """
+        assert isinstance(batch, AlignerBatch)
+        logger.trace("Aligning faces around center")  # type:ignore[attr-defined]
+        center_scale = self.get_center_scale(batch.detected_faces)
+        batch.feed = np.array(self.crop(batch, center_scale))[..., :3]
+        batch.data.append(dict(center_scale=center_scale))
+        logger.trace("Aligned image around center")  # type:ignore[attr-defined]
+
+    def get_center_scale(self, detected_faces: List["DetectedFace"]) -> np.ndarray:
+        """ Get the center and set scale of bounding box
+
+        Parameters
+        ----------
+        detected_faces: list
+            List of :class:`~lib.align.DetectedFace` objects for the batch
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The center and scale of the bounding box
+        """
+        logger.trace("Calculating center and scale")  # type:ignore[attr-defined]
+        center_scale = np.empty((len(detected_faces), 68, 3), dtype='float32')
+        for index, face in enumerate(detected_faces):
+            x_center = (cast(int, face.left) + face.right) / 2.0
+            y_center = (cast(int, face.top) + face.bottom) / 2.0 - cast(int, face.height) * 0.12
+            scale = (cast(int, face.width) + cast(int, face.height)) * self.reference_scale
+            center_scale[index, :, 0] = np.full(68, x_center, dtype='float32')
+            center_scale[index, :, 1] = np.full(68, y_center, dtype='float32')
+            center_scale[index, :, 2] = np.full(68, scale, dtype='float32')
+        logger.trace("Calculated center and scale: %s", center_scale)  # type:ignore[attr-defined]
+        return center_scale
+
+    def _crop_image(self,
+                    image: np.ndarray,
+                    top_left: np.ndarray,
+                    bottom_right: np.ndarray) -> np.ndarray:
+        """ Crop a single image
+
+        Parameters
+        ----------
+        image: :class:`numpy.ndarray`
+            The image to crop
+        top_left: :class:`numpy.ndarray`
+            The top left (x, y) point to crop from
+        bottom_right: :class:`numpy.ndarray`
+            The bottom right (x, y) point to crop to
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The cropped image
+        """
+        bottom_right_width, bottom_right_height = bottom_right[0].astype('int32')
+        top_left_width, top_left_height = top_left[0].astype('int32')
+        new_dim = (bottom_right_height - top_left_height,
+                   bottom_right_width - top_left_width,
+                   3 if image.ndim > 2 else 1)
+        new_img = np.zeros(new_dim, dtype=np.uint8)
+
+        new_x = slice(max(0, -top_left_width),
+                      min(bottom_right_width, image.shape[1]) - top_left_width)
+        new_y = slice(max(0, -top_left_height),
+                      min(bottom_right_height, image.shape[0]) - top_left_height)
+        old_x = slice(max(0, top_left_width), min(bottom_right_width, image.shape[1]))
+        old_y = slice(max(0, top_left_height), min(bottom_right_height, image.shape[0]))
+        new_img[new_y, new_x] = image[old_y, old_x]
+
+        interp = cv2.INTER_CUBIC if new_dim[0] < self.input_size else cv2.INTER_AREA
+        return cv2.resize(new_img,
+                          dsize=(self.input_size, self.input_size),
+                          interpolation=interp)
+
+    def crop(self, batch: AlignerBatch, center_scale: np.ndarray) -> List[np.ndarray]:
+        """ Crop image around the center point
+
+        Parameters
+        ----------
+        batch: :class:`AlignerBatch`
+            The current batch to crop the image for
+        center_scale: :class:`numpy.ndarray`
+            The center and scale for the bounding box
+
+        Returns
+        -------
+        list
+            List of cropped images for the batch
+        """
+        logger.trace("Cropping images")  # type:ignore[attr-defined]
+        batch_shape = center_scale.shape[:2]
+        resolutions = np.full(batch_shape, self.input_size, dtype='float32')
+        matrix_ones = np.ones(batch_shape + (3,), dtype='float32')
+        matrix_size = np.full(batch_shape + (3,), self.input_size, dtype='float32')
+        matrix_size[..., 2] = 1.0
+        upper_left = self.transform(matrix_ones, center_scale, resolutions)
+        bot_right = self.transform(matrix_size, center_scale, resolutions)
+
+        # TODO second pass .. convert to matrix
+        new_images = [self._crop_image(image, top_left, bottom_right)
+                      for image, top_left, bottom_right in zip(batch.image, upper_left, bot_right)]
+        logger.trace("Cropped images")  # type:ignore[attr-defined]
+        return new_images
+
+    @classmethod
+    def transform(cls,
+                  points: np.ndarray,
+                  center_scales: np.ndarray,
+                  resolutions: np.ndarray) -> np.ndarray:
+        """ Transform Image
+
+        Parameters
+        ----------
+        points: :class:`numpy.ndarray`
+            The points to transform
+        center_scales: :class:`numpy.ndarray`
+            The calculated centers and scales for the batch
+        resolutions: :class:`numpy.ndarray`
+            The resolutions
+        """
+        logger.trace("Transforming Points")  # type:ignore[attr-defined]
+        num_images, num_landmarks = points.shape[:2]
+        transform_matrix = np.eye(3, dtype='float32')
+        transform_matrix = np.repeat(transform_matrix[None, :], num_landmarks, axis=0)
+        transform_matrix = np.repeat(transform_matrix[None, :, :], num_images, axis=0)
+        scales = center_scales[:, :, 2] / resolutions
+        translations = center_scales[..., 2:3] * -0.5 + center_scales[..., :2]
+        transform_matrix[:, :, 0, 0] = scales  # x scale
+        transform_matrix[:, :, 1, 1] = scales  # y scale
+        transform_matrix[:, :, 0, 2] = translations[:, :, 0]  # x translation
+        transform_matrix[:, :, 1, 2] = translations[:, :, 1]  # y translation
+        new_points = np.einsum('abij, abj -> abi', transform_matrix, points, optimize='greedy')
+        retval = new_points[:, :, :2].astype('float32')
+        logger.trace("Transformed Points: %s", retval)  # type:ignore[attr-defined]
+        return retval
+
+    def predict(self, feed: np.ndarray) -> np.ndarray:
+        """ Predict the 68 point landmarks
+
+        Parameters
+        ----------
+        batch: :class:`numpy.ndarray`
+            The batch to feed into the aligner
+
+        Returns
+        -------
+        :class:`numpy.ndarray`
+            The predictions from the aligner
+        """
+        logger.trace("Predicting Landmarks")  # type:ignore[attr-defined]
+        # TODO Remove lazy transpose and change points from predict to use the correct
+        # order
+        retval = self.model.predict(feed)[-1].transpose(0, 3, 1, 2)
+        logger.trace(retval.shape)  # type:ignore[attr-defined]
+        return retval
+
+    def process_output(self, batch: BatchType) -> None:
+        """ Process the output from the model
+
+        Parameters
+        ----------
+        batch: :class:`AlignerBatch`
+            The current batch from the model with :attr:`predictions` populated
+        """
+        assert isinstance(batch, AlignerBatch)
+        self.get_pts_from_predict(batch)
+
+    def get_pts_from_predict(self, batch: AlignerBatch) -> None:
+        """ Get points from predictor and populate the :attr:`landmarks` property of the
+        :class:`AlignerBatch`
+
+        Parameters
+        ----------
+        batch: :class:`AlignerBatch`
+            The current batch from the model with :attr:`predictions` populated
+        """
+        logger.trace("Obtain points from prediction")  # type:ignore[attr-defined]
+        num_images, num_landmarks = batch.prediction.shape[:2]
+        image_slice = np.repeat(np.arange(num_images)[:, None], num_landmarks, axis=1)
+        landmark_slice = np.repeat(np.arange(num_landmarks)[None, :], num_images, axis=0)
+        resolution = np.full((num_images, num_landmarks), 64, dtype='int32')
+        subpixel_landmarks = np.ones((num_images, num_landmarks, 3), dtype='float32')
+
+        indices = np.array(np.unravel_index(batch.prediction.reshape(num_images,
+                                                                     num_landmarks,
+                                                                     -1).argmax(-1),
+                                            (batch.prediction.shape[2],  # height
+                                             batch.prediction.shape[3])))  # width
+        min_clipped = np.minimum(indices + 1, batch.prediction.shape[2] - 1)
+        max_clipped = np.maximum(indices - 1, 0)
+        offsets = [(image_slice, landmark_slice, indices[0], min_clipped[1]),
+                   (image_slice, landmark_slice, indices[0], max_clipped[1]),
+                   (image_slice, landmark_slice, min_clipped[0], indices[1]),
+                   (image_slice, landmark_slice, max_clipped[0], indices[1])]
+        x_subpixel_shift = batch.prediction[offsets[0]] - batch.prediction[offsets[1]]
+        y_subpixel_shift = batch.prediction[offsets[2]] - batch.prediction[offsets[3]]
+        # TODO improve rudimentary sub-pixel logic to centroid of 3x3 window algorithm
+        subpixel_landmarks[:, :, 0] = indices[1] + np.sign(x_subpixel_shift) * 0.25 + 0.5
+        subpixel_landmarks[:, :, 1] = indices[0] + np.sign(y_subpixel_shift) * 0.25 + 0.5
+
+        if batch.second_pass:  # Transformation handled by plugin parent for re-aligned faces
+            batch.landmarks = subpixel_landmarks[..., :2] * 4.
         else:
-            tf_ratio = self.vram / vram_total
-        logger.verbose("Reserving %sMB for face alignments", self.vram)
-
-        self.model = FAN(self.model_path, ratio=tf_ratio)
-
-        self.init.set()
-        logger.info("Initialized Face Alignment Network.")
-
-    def align(self, *args, **kwargs):
-        """ Perform alignments on detected faces """
-        super().align(*args, **kwargs)
-        for item in self.get_item():
-            if item == "EOF":
-                self.finalize(item)
-                break
-            image = item["image"][:, :, ::-1].copy()
-
-            logger.trace("Aligning faces")
-            try:
-                item["landmarks"] = self.process_landmarks(image, item["detected_faces"])
-                logger.trace("Aligned faces: %s", item["landmarks"])
-            except ValueError as err:
-                logger.warning("Image '%s' could not be processed. This may be due to corrupted "
-                               "data: %s", item["filename"], str(err))
-                item["detected_faces"] = list()
-                item["landmarks"] = list()
-            self.finalize(item)
-        logger.debug("Completed Align")
-
-    def process_landmarks(self, image, detected_faces):
-        """ Align image and process landmarks """
-        logger.trace("Processing landmarks")
-        retval = list()
-        for detected_face in detected_faces:
-            center, scale = self.get_center_scale(detected_face)
-            aligned_image = self.align_image(image, center, scale)
-            landmarks = self.predict_landmarks(aligned_image, center, scale)
-            retval.append(landmarks)
-        logger.trace("Processed landmarks: %s", retval)
-        return retval
-
-    def get_center_scale(self, detected_face):
-        """ Get the center and set scale of bounding box """
-        logger.trace("Calculating center and scale")
-        center = np.array([(detected_face.left()
-                            + detected_face.right()) / 2.0,
-                           (detected_face.top()
-                            + detected_face.bottom()) / 2.0])
-
-        center[1] -= (detected_face.bottom()
-                      - detected_face.top()) * 0.12
-
-        scale = (detected_face.right()
-                 - detected_face.left()
-                 + detected_face.bottom()
-                 - detected_face.top()) / self.reference_scale
-
-        logger.trace("Calculated center and scale: %s, %s", center, scale)
-        return center, scale
-
-    def align_image(self, image, center, scale):
-        """ Crop and align image around center """
-        logger.trace("Aligning image around center")
-        image = self.crop(
-            image,
-            center,
-            scale).transpose((2, 0, 1)).astype(np.float32) / 255.0
-        logger.trace("Aligned image around center")
-        return np.expand_dims(image, 0)
-
-    def predict_landmarks(self, image, center, scale):
-        """ Predict the 68 point landmarks """
-        logger.trace("Predicting Landmarks")
-        prediction = self.model.predict(image)[-1]
-        pts_img = self.get_pts_from_predict(prediction, center, scale)
-        retval = [(int(pt[0]), int(pt[1])) for pt in pts_img]
-        logger.trace("Predicted Landmarks: %s", retval)
-        return retval
-
-    @staticmethod
-    def transform(point, center, scale, resolution):
-        """ Transform Image """
-        logger.trace("Transforming Points")
-        pnt = np.array([point[0], point[1], 1.0])
-        hscl = 200.0 * scale
-        eye = np.eye(3)
-        eye[0, 0] = resolution / hscl
-        eye[1, 1] = resolution / hscl
-        eye[0, 2] = resolution * (-center[0] / hscl + 0.5)
-        eye[1, 2] = resolution * (-center[1] / hscl + 0.5)
-        eye = np.linalg.inv(eye)
-        retval = np.matmul(eye, pnt)[0:2]
-        logger.trace("Transformed Points: %s", retval)
-        return retval
-
-    def crop(self, image, center, scale, resolution=256.0):  # pylint: disable=too-many-locals
-        """ Crop image around the center point """
-        logger.trace("Cropping image")
-        v_ul = self.transform([1, 1], center, scale, resolution).astype(np.int)
-        v_br = self.transform([resolution, resolution],
-                              center,
-                              scale,
-                              resolution).astype(np.int)
-        if image.ndim > 2:
-            new_dim = np.array([v_br[1] - v_ul[1],
-                                v_br[0] - v_ul[0],
-                                image.shape[2]],
-                               dtype=np.int32)
-            self.test = new_dim
-            new_img = np.zeros(new_dim, dtype=np.uint8)
-        else:
-            new_dim = np.array([v_br[1] - v_ul[1],
-                                v_br[0] - v_ul[0]],
-                               dtype=np.int)
-            self.test = new_dim
-            new_img = np.zeros(new_dim, dtype=np.uint8)
-        height = image.shape[0]
-        width = image.shape[1]
-        new_x = np.array([max(1, -v_ul[0] + 1), min(v_br[0], width) - v_ul[0]],
-                         dtype=np.int32)
-        new_y = np.array([max(1, -v_ul[1] + 1),
-                          min(v_br[1], height) - v_ul[1]],
-                         dtype=np.int32)
-        old_x = np.array([max(1, v_ul[0] + 1), min(v_br[0], width)],
-                         dtype=np.int32)
-        old_y = np.array([max(1, v_ul[1] + 1), min(v_br[1], height)],
-                         dtype=np.int32)
-        new_img[new_y[0] - 1:new_y[1],
-                new_x[0] - 1:new_x[1]] = image[old_y[0] - 1:old_y[1],
-                                               old_x[0] - 1:old_x[1], :]
-        # pylint: disable=no-member
-        new_img = cv2.resize(new_img,
-                             dsize=(int(resolution), int(resolution)),
-                             interpolation=cv2.INTER_LINEAR)
-        logger.trace("Cropped image")
-        return new_img
-
-    def get_pts_from_predict(self, var_a, center, scale):
-        """ Get points from predictor """
-        logger.trace("Obtain points from prediction")
-        var_b = var_a.reshape((var_a.shape[0],
-                               var_a.shape[1] * var_a.shape[2]))
-        var_c = var_b.argmax(1).reshape((var_a.shape[0],
-                                         1)).repeat(2,
-                                                    axis=1).astype(np.float)
-        var_c[:, 0] %= var_a.shape[2]
-        var_c[:, 1] = np.apply_along_axis(
-            lambda x: np.floor(x / var_a.shape[2]),
-            0,
-            var_c[:, 1])
-
-        for i in range(var_a.shape[0]):
-            pt_x, pt_y = int(var_c[i, 0]), int(var_c[i, 1])
-            if pt_x > 0 and pt_x < 63 and pt_y > 0 and pt_y < 63:
-                diff = np.array([var_a[i, pt_y, pt_x+1]
-                                 - var_a[i, pt_y, pt_x-1],
-                                 var_a[i, pt_y+1, pt_x]
-                                 - var_a[i, pt_y-1, pt_x]])
-
-                var_c[i] += np.sign(diff)*0.25
-
-        var_c += 0.5
-        retval = [self.transform(var_c[i], center, scale, var_a.shape[2])
-                  for i in range(var_a.shape[0])]
-        logger.trace("Obtained points from prediction: %s", retval)
-
-        return retval
-
-
-class FAN():
-    """The FAN Model.
-    Converted from pyTorch via ONNX from:
-    https://github.com/1adrianb/face-alignment """
-
-    def __init__(self, model_path, ratio=1.0):
-        # Must import tensorflow inside the spawned process
-        # for Windows machines
-        import tensorflow as tf
-        self.tf = tf  # pylint: disable=invalid-name
-
-        self.model_path = model_path
-        self.graph = self.load_graph()
-        self.input = self.graph.get_tensor_by_name("fa/input_1:0")
-        self.output = self.graph.get_tensor_by_name("fa/transpose_647:0")
-        self.session = self.set_session(ratio)
-
-    def load_graph(self):
-        """ Load the tensorflow Model and weights """
-        # pylint: disable=not-context-manager
-        logger.verbose("Initializing Face Alignment Network model...")
-
-        with self.tf.gfile.GFile(self.model_path, "rb") as gfile:
-            graph_def = self.tf.GraphDef()
-            graph_def.ParseFromString(gfile.read())
-        fa_graph = self.tf.Graph()
-        with fa_graph.as_default():
-            self.tf.import_graph_def(graph_def, name="fa")
-        return fa_graph
-
-    def set_session(self, vram_ratio):
-        """ Set the TF Session and initialize """
-        # pylint: disable=not-context-manager, no-member
-        placeholder = np.zeros((1, 3, 256, 256))
-        with self.graph.as_default():
-            config = self.tf.ConfigProto()
-            config.gpu_options.per_process_gpu_memory_fraction = vram_ratio
-            session = self.tf.Session(config=config)
-            with session.as_default():
-                if any("gpu" in str(device).lower() for device in session.list_devices()):
-                    logger.debug("Using GPU")
-                else:
-                    logger.warning("Using CPU")
-                session.run(self.output, feed_dict={self.input: placeholder})
-        return session
-
-    def predict(self, feed_item):
-        """ Predict landmarks in session """
-        return self.session.run(self.output,
-                                feed_dict={self.input: feed_item})
+            batch.landmarks = self.transform(subpixel_landmarks,
+                                             batch.data[0]["center_scale"],
+                                             resolution)
+        logger.trace("Obtained points from prediction: %s",  # type:ignore[attr-defined]
+                     batch.landmarks)
