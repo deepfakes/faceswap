@@ -1,0 +1,190 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: 2021-02-18 23:34-0000\n"
+"PO-Revision-Date: 2023-04-11 15:18+0700\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.2.2\n"
+
+#: tools/effmpeg/cli.py:15
+msgid "This command allows you to easily execute common ffmpeg tasks."
+msgstr "Эта команда позволяет легко выполнять общие задачи ffmpeg."
+
+#: tools/effmpeg/cli.py:24
+msgid "A wrapper for ffmpeg for performing image <> video converting."
+msgstr "Обертка для ffmpeg для выполнения конвертации изображений <> видео."
+
+#: tools/effmpeg/cli.py:51
+msgid ""
+"R|Choose which action you want ffmpeg ffmpeg to do.\n"
+"L|'extract': turns videos into images \n"
+"L|'gen-vid': turns images into videos \n"
+"L|'get-fps' returns the chosen video's fps.\n"
+"L|'get-info' returns information about a video.\n"
+"L|'mux-audio' add audio from one video to another.\n"
+"L|'rescale' resize video.\n"
+"L|'rotate' rotate video.\n"
+"L|'slice' cuts a portion of the video into a separate video file."
+msgstr ""
+"R|Выберите, какое действие вы хотите, чтобы выполнял ffmpeg.\n"
+"L|'extract': превращает видео в изображения \n"
+"L|'gen-vid': превращает изображения в видео. \n"
+"L|'get-fps' возвращает частоту кадров в секунду выбранного видео.\n"
+"L|'get-info': возвращает информацию о видео.\n"
+"L|'mux-audio' добавляет звук из одного видео в другое.\n"
+"L|'rescale' изменить размер видео.\n"
+"L|'rotate' вращение видео.\n"
+"L|'slice' вырезает часть видео в отдельный видеофайл."
+
+#: tools/effmpeg/cli.py:65
+msgid "Input file."
+msgstr "Входной файл."
+
+#: tools/effmpeg/cli.py:66 tools/effmpeg/cli.py:73 tools/effmpeg/cli.py:87
+msgid "data"
+msgstr "данные"
+
+#: tools/effmpeg/cli.py:76
+msgid ""
+"Output file. If no output is specified then: if the output is meant to be a "
+"video then a video called 'out.mkv' will be created in the input directory; "
+"if the output is meant to be a directory then a directory called 'out' will "
+"be created inside the input directory. Note: the chosen output file "
+"extension will determine the file encoding."
+msgstr ""
+"Выходной файл. Если выходной файл не указан, то: если выходным файлом "
+"является видео, то в каталоге ввода будет создан видеофайл с именем 'out."
+"mkv'; если выходным файлом является каталог, то внутри каталога ввода будет "
+"создан каталог с именем 'out'. Примечание: выбранное расширение выходного "
+"файла определяет кодировку файла."
+
+#: tools/effmpeg/cli.py:89
+msgid "Path to reference video if 'input' was not a video."
+msgstr "Путь к опорному видео, если 'input' не является видео."
+
+#: tools/effmpeg/cli.py:95 tools/effmpeg/cli.py:105 tools/effmpeg/cli.py:142
+#: tools/effmpeg/cli.py:171
+msgid "output"
+msgstr "выход"
+
+#: tools/effmpeg/cli.py:97
+msgid ""
+"Provide video fps. Can be an integer, float or fraction. Negative values "
+"will will make the program try to get the fps from the input or reference "
+"videos."
+msgstr ""
+"Предоставляет количество кадров в секунду. Может быть целым числом, "
+"плавающей цифрой или дробью. Отрицательные значения заставят программу "
+"попытаться получить fps из входного или опорного видео."
+
+#: tools/effmpeg/cli.py:107
+msgid ""
+"Image format that extracted images should be saved as. '.bmp' will offer the "
+"fastest extraction speed, but will take the most storage space. '.png' will "
+"be slower but will take less storage."
+msgstr ""
+"Формат изображения, в котором должны быть сохранены извлеченные изображения. "
+"'.bmp' обеспечивает самую высокую скорость извлечения, но занимает больше "
+"всего места в памяти. '.png' будет медленнее, но займет меньше места."
+
+#: tools/effmpeg/cli.py:114 tools/effmpeg/cli.py:123 tools/effmpeg/cli.py:132
+msgid "clip"
+msgstr "клип"
+
+#: tools/effmpeg/cli.py:116
+msgid ""
+"Enter the start time from which an action is to be applied. Default: "
+"00:00:00, in HH:MM:SS format. You can also enter the time with or without "
+"the colons, e.g. 00:0000 or 026010."
+msgstr ""
+"Введите время начала, с которого будет применяться действие. По умолчанию: "
+"00:00:00, в формате ЧЧ:ММ:СС. Вы также можете ввести время с двоеточием или "
+"без него, например, 00:0000 или 026010."
+
+#: tools/effmpeg/cli.py:125
+msgid ""
+"Enter the end time to which an action is to be applied. If both an end time "
+"and duration are set, then the end time will be used and the duration will "
+"be ignored. Default: 00:00:00, in HH:MM:SS."
+msgstr ""
+"Введите время окончания, до которого будет применяться действие. Если заданы "
+"и время окончания, и продолжительность, то будет использоваться время "
+"окончания, а продолжительность будет игнорироваться. По умолчанию: 00:00:00, "
+"в формате ЧЧ:ММ:СС."
+
+#: tools/effmpeg/cli.py:134
+msgid ""
+"Enter the duration of the chosen action, for example if you enter 00:00:10 "
+"for slice, then the first 10 seconds after and including the start time will "
+"be cut out into a new video. Default: 00:00:00, in HH:MM:SS format. You can "
+"also enter the time with or without the colons, e.g. 00:0000 or 026010."
+msgstr ""
+"Введите продолжительность выбранного действия, например, если вы введете "
+"00:00:10 для нарезки, то первые 10 секунд после начала и включая время "
+"начала будут вырезаны в новое видео. По умолчанию: 00:00:00, в формате ЧЧ:ММ:"
+"СС. Вы также можете ввести время с двоеточием или без него, например, "
+"00:0000 или 026010."
+
+#: tools/effmpeg/cli.py:144
+msgid ""
+"Mux the audio from the reference video into the input video. This option is "
+"only used for the 'gen-vid' action. 'mux-audio' action has this turned on "
+"implicitly."
+msgstr ""
+"Mux аудио из опорного видео во входное видео. Эта опция используется только "
+"для действия 'gen-vid'. Действие 'mux-audio' включает эту опцию неявно."
+
+#: tools/effmpeg/cli.py:155 tools/effmpeg/cli.py:165
+msgid "rotate"
+msgstr "поворот"
+
+#: tools/effmpeg/cli.py:157
+msgid ""
+"Transpose the video. If transpose is set, then degrees will be ignored. For "
+"cli you can enter either the number or the long command name, e.g. to use "
+"(1, 90Clockwise) -tr 1 or -tr 90Clockwise"
+msgstr ""
+"Транспонировать видео. Если задано транспонирование, то градусы будут "
+"игнорироваться. Для командой строки вы можете ввести либо число, либо "
+"длинное имя команды, например, для использования (1, 90 по часовой стрелке) -"
+"tr 1 или -tr 90 по часовой стрелке"
+
+#: tools/effmpeg/cli.py:166
+msgid "Rotate the video clockwise by the given number of degrees."
+msgstr "Поверните видео по часовой стрелке на заданное количество градусов."
+
+#: tools/effmpeg/cli.py:173
+msgid "Set the new resolution scale if the chosen action is 'rescale'."
+msgstr "Установите новый масштаб разрешения, если выбрано действие 'rescale'."
+
+#: tools/effmpeg/cli.py:178 tools/effmpeg/cli.py:186
+msgid "settings"
+msgstr "настройки"
+
+#: tools/effmpeg/cli.py:180
+msgid ""
+"Reduces output verbosity so that only serious errors are printed. If both "
+"quiet and verbose are set, verbose will override quiet."
+msgstr ""
+"Уменьшает многословность вывода, чтобы выводились только серьезные ошибки. "
+"Если заданы и quiet, и verbose, то verbose будет преобладать над quiet."
+
+#: tools/effmpeg/cli.py:188
+msgid ""
+"Increases output verbosity. If both quiet and verbose are set, verbose will "
+"override quiet."
+msgstr ""
+"Повышает точность вывода. Если заданы и quiet, и verbose, то verbose будет "
+"преобладать над quiet."
