@@ -121,6 +121,12 @@ class CLIP(keras.Model):
                                        dtype=tf.float32, name="logit_scale")
 
     def initialize_parameters(self):
+        """
+        Initializes the parameters of the CLIP model.
+
+        Returns:
+            None.
+        """
         # TODO: convert to tf, for model initialization (not needed for pretrained weights)
         self.token_embedding.assign(tf.random.normal(self.token_embedding.shape, stddev=0.02))
         self.positional_embedding.assign(tf.random.normal(
@@ -163,6 +169,13 @@ class CLIP(keras.Model):
                 tf.random.normal(self.text_projection.shape, stddev=std))
 
     def build_attention_mask(self):
+        """
+        Builds an attention mask tensor for the CLIP model.
+
+        Returns:
+            A tensor of shape (batch_size, context_length, context_length) with boolean values
+            indicating which tokens should be attended to.
+        """
         n_dest = self.context_length
         n_src = self.context_length
         dtype = tf.bool
@@ -180,10 +193,27 @@ class CLIP(keras.Model):
 
     @property
     def dtype(self):
+        """
+        Returns the data type of the weights.
+
+        Returns:
+            The data type.
+        """
         return self.visual.conv1.weight.dtype
 
     @tf.function(input_signature=[tf.TensorSpec(shape=(None, None, None, 3), dtype=tf.float32, name="image")])
     def encode_image(self, image: tf.Tensor):
+        """
+        Encodes an image tensor using the visual function.
+
+        Args:
+            image (tf.Tensor): A tensor of shape [batch_size, image_resolution, image_resolution, channels]
+                (Note: Channels could be 1 -monochrome or 3 -RGB color)
+                containing the image to be encoded.
+
+        Returns:
+            tf.Tensor: A tensor of shape[batch_size, embed_size] containing the encoded representation of the image.
+        """
         return self.visual(image)
 
     @tf.function(input_signature=[tf.TensorSpec(shape=(None, None), dtype=tf.int32, name="text")])
@@ -220,6 +250,18 @@ class CLIP(keras.Model):
         tf.TensorSpec(shape=(None, None, None), dtype=tf.int32, name="text")
     )])
     def call(self, input: Tuple[tf.Tensor, tf.Tensor]):
+        """
+        Finds the embeddings for a batch of images and texts and then computes the
+            cosine similarity between the embeddings.
+        Args:
+            input (Tuple[tf.Tensor, tf.Tensor]): A tuple of two tensors containing the input
+                images and texts. The image tensor should have shape [batch_size,
+                image_resolution, image_resolution, channels], and the text tensor should have
+                shape [batch_size, sequence_length].
+        Returns:
+            Tuple[tf.Tensor, tf.Tensor]: A tuple of two tensors containing the logits for the
+                image and text inputs. Both tensors will have shape [batch_size, embed_dim].
+        """
         image, text = input
         image_features = self.encode_image(image)
 
