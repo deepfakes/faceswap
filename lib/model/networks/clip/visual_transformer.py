@@ -9,7 +9,70 @@ from tensorflow.keras.initializers import RandomNormal
 import numpy as np
 
 class VisualTransformer():
+    """
+    A class representing a Visual Transformer model for image classification tasks.
+
+    Attributes
+    ----------
+    input_resolution : int
+        The input resolution of the images.
+    patch_size : int
+        The size of the patches to be extracted from the images.
+    width : int
+        The dimension of the input and output vectors.
+    num_layers : int
+        The number of layers in the Transformer.
+    heads : int
+        The number of attention heads.
+    output_dim : int
+        The dimension of the output vector.
+    name : str, optional
+        The name of the Visual Transformer model, by default "VisualTransformer".
+    conv1 : keras.layers.Conv2D
+        The 2D convolution layer.
+    transformer : Transformer
+        The Transformer model.
+    class_embedding : K.constant
+        The class embedding vector.
+    positional_embedding : K.constant
+        The positional embedding matrix.
+    ln_pre : keras.layers.LayerNormalization
+        The layer normalization applied before the Transformer.
+    ln_post : keras.layers.LayerNormalization
+        The layer normalization applied after the Transformer.
+    proj : K.constant
+        The projection matrix.
+
+    Methods
+    -------
+    get_config() -> Dict[str, Union[int, str]]:
+        Returns a dictionary containing the Visual Transformer configuration.
+    from_config(cls, config: Dict[str, Union[int, str]]) -> 'VisualTransformer':
+        Returns a new VisualTransformer instance from the given configuration dictionary.
+    __call__() -> Model:
+        Builds and returns the Visual Transformer model.
+    """
     def __init__(self, input_resolution: int, patch_size: int, width: int, layers: int, heads: int, output_dim: int, name="VisualTransformer"):
+        """
+        Initializes a new instance of the VisualTransformer class.
+
+        Parameters
+        ----------
+        input_resolution : int
+            The input resolution of the images.
+        patch_size : int
+            The size of the patches to be extracted from the images.
+        width : int
+            The dimension of the input and output vectors.
+        layers : int
+            The number of layers in the Transformer.
+        heads : int
+            The number of attention heads.
+        output_dim : int
+            The dimension of the output vector.
+        name : str, optional
+            The name of the Visual Transformer model, by default "VisualTransformer".
+        """
         self.input_resolution: int = input_resolution
         self.patch_size: int = patch_size
         self.width: int = width
@@ -32,6 +95,14 @@ class VisualTransformer():
         self.proj = K.constant(scale * np.random.random((width, output_dim)), name=f"{name}/proj")
 
     def get_config(self):
+        """
+        Returns a dictionary containing the Visual Transformer configuration.
+
+        Returns
+        -------
+        Dict[str, Union[int, str]]
+            The Visual Transformer configuration dictionary.
+        """
         return {
             "input_resolution": self.input_resolution,
             "patch_size": self.patch_size,
@@ -44,9 +115,30 @@ class VisualTransformer():
 
     @classmethod
     def from_config(cls, config):
+        """
+        Returns a new VisualTransformer instance from the given configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Union[int, str]]
+            The configuration dictionary.
+
+        Returns
+        -------
+        VisualTransformer
+            A new VisualTransformer instance with the given configuration.
+        """
         return cls(**config)
 
     def __call__(self):
+        """
+        Builds and returns the Visual Transformer model.
+
+        Returns
+        -------
+        Model
+            The Visual Transformer model.
+        """
         inputs = Input([self.input_resolution, self.input_resolution, 3])
         var_x = self.conv1(inputs)  # shape = [*, grid, grid, width]
 
