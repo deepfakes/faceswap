@@ -300,7 +300,7 @@ def read_image(filename, raise_error=False, with_metadata=False):
             if retval is None:
                 raise ValueError("Image is None")
         else:
-            with open(filename, "rb") as infile:
+            with open(filename, "rb", encoding="utf8") as infile:
                 raw_file = infile.read()
                 metadata = png_read_meta(raw_file)
             image = cv2.imdecode(np.frombuffer(raw_file, dtype="uint8"), cv2.IMREAD_UNCHANGED)
@@ -410,7 +410,7 @@ def read_image_meta(filename):
         img = cv2.imread(filename)
         retval["height"], retval["width"] = img.shape[:2]
         return retval
-    with open(filename, "rb") as infile:
+    with open(filename, "rb", encoding="utf8") as infile:
         try:
             chunk = infile.read(8)
         except PermissionError:
@@ -521,7 +521,7 @@ def update_existing_metadata(filename, metadata):
     """
 
     tmp_filename = filename + "~"
-    with open(filename, "rb") as png, open(tmp_filename, "wb") as tmp:
+    with open(filename, "rb", encoding="utf8") as png, open(tmp_filename, "wb", encoding="utf8") as tmp:
         chunk = png.read(8)
         if chunk != b"\x89PNG\r\n\x1a\n":
             raise ValueError(f"Invalid header found in png: {filename}")
@@ -800,7 +800,7 @@ def count_frames(filename, fast=False):
     process = subprocess.Popen(cmd,
                                stderr=subprocess.STDOUT,
                                stdout=subprocess.PIPE,
-                               universal_newlines=True)
+                               universal_newlines=True, encoding="utf8")
     pbar = None
     duration = None
     init_tqdm = False
@@ -1456,7 +1456,7 @@ class ImagesSaver(ImageIO):
         try:
             if self._as_bytes:
                 assert isinstance(image, bytes)
-                with open(filename, "wb") as out_file:
+                with open(filename, "wb", encoding="utf8") as out_file:
                     out_file.write(image)
             else:
                 cv2.imwrite(filename, image)
