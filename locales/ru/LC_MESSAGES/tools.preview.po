@@ -1,0 +1,93 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-01-16 12:27+0000\n"
+"PO-Revision-Date: 2023-04-11 16:06+0700\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"X-Generator: Poedit 3.2.2\n"
+
+#: tools/preview/cli.py:14
+msgid "This command allows you to preview swaps to tweak convert settings."
+msgstr ""
+"Эта команда позволяет просматривать замены для настройки параметров "
+"конвертирования."
+
+#: tools/preview/cli.py:29
+msgid ""
+"Preview tool\n"
+"Allows you to configure your convert settings with a live preview"
+msgstr ""
+"Инструмент предпросмотра\n"
+"Позволяет настраивать параметры конвертации с помощью предварительного "
+"просмотра в реальном времени"
+
+#: tools/preview/cli.py:46 tools/preview/cli.py:55 tools/preview/cli.py:62
+msgid "data"
+msgstr "данные"
+
+#: tools/preview/cli.py:48
+msgid ""
+"Input directory or video. Either a directory containing the image files you "
+"wish to process or path to a video file."
+msgstr ""
+"Входная папка или видео. Либо папка, содержащая файлы изображений, которые "
+"необходимо обработать, либо путь к видеофайлу."
+
+#: tools/preview/cli.py:57
+msgid ""
+"Path to the alignments file for the input, if not at the default location"
+msgstr ""
+"Путь к файлу выравниваний для входных данных, если он не находится в месте "
+"по умолчанию"
+
+#: tools/preview/cli.py:64
+msgid ""
+"Model directory. A directory containing the trained model you wish to "
+"process."
+msgstr ""
+"Папка модели. Папка, содержащая обученную модель, которую вы хотите "
+"обработать."
+
+#: tools/preview/cli.py:71
+msgid "Swap the model. Instead of A -> B, swap B -> A"
+msgstr "Поменять местами модели. Вместо A -> B заменить B -> A"
+
+#: tools/preview/control_panels.py:496
+msgid "Save full config"
+msgstr "Сохранить полную конфигурацию"
+
+#: tools/preview/control_panels.py:499
+msgid "Reset full config to default values"
+msgstr "Сбросить полную конфигурацию до заводских значений"
+
+#: tools/preview/control_panels.py:502
+msgid "Reset full config to saved values"
+msgstr "Сбросить полную конфигурацию до сохраненных значений"
+
+#: tools/preview/control_panels.py:653
+#, python-brace-format
+msgid "Save {title} config"
+msgstr "Сохранить конфигурацию {title}"
+
+#: tools/preview/control_panels.py:656
+#, python-brace-format
+msgid "Reset {title} config to default values"
+msgstr "Сбросить полную конфигурацию {title} до заводских значений"
+
+#: tools/preview/control_panels.py:659
+#, python-brace-format
+msgid "Reset {title} config to saved values"
+msgstr "Сбросить полную конфигурацию {title} до сохраненных значений"

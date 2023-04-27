@@ -1,0 +1,388 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2022-11-24 14:19+0900\n"
+"PO-Revision-Date: 2023-04-11 16:24+0700\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"X-Generator: Poedit 3.2.2\n"
+
+#: tools/sort/cli.py:14
+msgid "This command lets you sort images using various methods."
+msgstr "Эта команда позволяет сортировать изображения различными методами."
+
+#: tools/sort/cli.py:20
+msgid ""
+" Adjust the '-t' ('--threshold') parameter to control the strength of "
+"grouping."
+msgstr ""
+" Настройте параметр '-t' ('--threshold') для контроля силы группировки."
+
+#: tools/sort/cli.py:21
+msgid ""
+" Adjust the '-b' ('--bins') parameter to control the number of bins for "
+"grouping. Each image is allocated to a bin by the percentage of color pixels "
+"that appear in the image."
+msgstr ""
+" Настройте параметр '-b' ('--bins') для управления количеством корзинок для "
+"группировки. Каждое изображение распределяется по корзинкам в зависимости от "
+"процента цветных пикселей, присутствующих в изображении."
+
+#: tools/sort/cli.py:24
+msgid ""
+" Adjust the '-b' ('--bins') parameter to control the number of bins for "
+"grouping. Each image is allocated to a bin by the number of degrees the face "
+"is orientated from center."
+msgstr ""
+" Настройте параметр '-b' ('--bins') для управления количеством корзинок для "
+"группировки. Каждое изображение распределяется по корзинам по количеству "
+"градусов, на которые лицо ориентировано от центра."
+
+#: tools/sort/cli.py:27
+msgid ""
+" Adjust the '-b' ('--bins') parameter to control the number of bins for "
+"grouping. The minimum and maximum values are taken for the chosen sort "
+"metric. The bins are then populated with the results from the group sorting."
+msgstr ""
+" Настройте параметр '-b' ('--bins') для управления количеством корзинок для "
+"группировки. Для выбранной метрики сортировки берутся минимальное и "
+"максимальное значения. Затем корзины заполняются результатами групповой "
+"сортировки."
+
+#: tools/sort/cli.py:31
+msgid "faces by blurriness."
+msgstr "лица по размытости."
+
+#: tools/sort/cli.py:32
+msgid "faces by fft filtered blurriness."
+msgstr "лица по размытости с фильтрацией fft."
+
+#: tools/sort/cli.py:33
+msgid ""
+"faces by the estimated distance of the alignments from an 'average' face. "
+"This can be useful for eliminating misaligned faces. Sorts from most like an "
+"average face to least like an average face."
+msgstr ""
+"лица по оценочному расстоянию выравнивания от \"среднего\" лица. Это может "
+"быть полезно для устранения неправильно расположенных лиц. Сортирует от "
+"наиболее похожего на среднее лицо к наименее похожему на среднее лицо."
+
+#: tools/sort/cli.py:36
+msgid ""
+"faces using VGG Face2 by face similarity. This uses a pairwise clustering "
+"algorithm to check the distances between 512 features on every face in your "
+"set and order them appropriately."
+msgstr ""
+"лиц с помощью VGG Face2 по сходству лиц. При этом используется алгоритм "
+"парной кластеризации для проверки расстояний между 512 признаками на каждом "
+"лице в вашем наборе и их упорядочивания соответствующим образом."
+
+#: tools/sort/cli.py:39
+msgid "faces by their landmarks."
+msgstr "лица по их ориентирам."
+
+#: tools/sort/cli.py:40
+msgid "Like 'face-cnn' but sorts by dissimilarity."
+msgstr "Как 'face-cnn', но сортирует по непохожести."
+
+#: tools/sort/cli.py:41
+msgid "faces by Yaw (rotation left to right)."
+msgstr "лица по Yaw (вращение слева направо)."
+
+#: tools/sort/cli.py:42
+msgid "faces by Pitch (rotation up and down)."
+msgstr "лица по Pitch (вращение вверх и вниз)."
+
+#: tools/sort/cli.py:43
+msgid ""
+"faces by Roll (rotation). Aligned faces should have a roll value close to "
+"zero. The further the Roll value from zero the higher liklihood the face is "
+"misaligned."
+msgstr ""
+"грани по Roll (повороту). Выровненные грани должны иметь значение Roll, "
+"близкое к нулю. Чем дальше значение Roll от нуля, тем выше вероятность того, "
+"что лицо неправильно выровнено."
+
+#: tools/sort/cli.py:45
+msgid "faces by their color histogram."
+msgstr "лица по их цветовой гистограмме."
+
+#: tools/sort/cli.py:46
+msgid "Like 'hist' but sorts by dissimilarity."
+msgstr "Как 'hist', но сортирует по непохожести."
+
+#: tools/sort/cli.py:47
+msgid ""
+"images by the average intensity of the converted grayscale color channel."
+msgstr ""
+"изображения по средней интенсивности преобразованного полутонового цветового "
+"канала."
+
+#: tools/sort/cli.py:48
+msgid ""
+"images by their number of black pixels. Useful when faces are near borders "
+"and a large part of the image is black."
+msgstr ""
+"изображения по количеству черных пикселей. Полезно, когда лица находятся "
+"вблизи границ и большая часть изображения черная."
+
+#: tools/sort/cli.py:50
+msgid ""
+"images by the average intensity of the converted Y color channel. Bright "
+"lighting and oversaturated images will be ranked first."
+msgstr ""
+"изображений по средней интенсивности преобразованного цветового канала Y. "
+"Яркое освещение и перенасыщенные изображения будут ранжироваться в первую "
+"очередь."
+
+#: tools/sort/cli.py:52
+msgid ""
+"images by the average intensity of the converted Cg color channel. Green "
+"images will be ranked first and red images will be last."
+msgstr ""
+"изображений по средней интенсивности преобразованного цветового канала Cg. "
+"Зеленые изображения занимают первое место, а красные - последнее."
+
+#: tools/sort/cli.py:54
+msgid ""
+"images by the average intensity of the converted Co color channel. Orange "
+"images will be ranked first and blue images will be last."
+msgstr ""
+"изображений по средней интенсивности преобразованного цветового канала Co. "
+"Оранжевые изображения занимают первое место, а синие - последнее."
+
+#: tools/sort/cli.py:56
+msgid ""
+"images by their size in the original frame. Faces further from the camera "
+"and from lower resolution sources will be sorted first, whilst faces closer "
+"to the camera and from higher resolution sources will be sorted last."
+msgstr ""
+"изображения по их размеру в исходном кадре. Лица, расположенные дальше от "
+"камеры и полученные из источников с низким разрешением, будут отсортированы "
+"первыми, а лица, расположенные ближе к камере и полученные из источников с "
+"высоким разрешением, будут отсортированы последними."
+
+#: tools/sort/cli.py:59
+msgid " option is deprecated. Use 'yaw'"
+msgstr " является устаревшей. Используйте 'yaw'"
+
+#: tools/sort/cli.py:60
+msgid " option is deprecated. Use 'color-black'"
+msgstr " является устаревшей. Используйте 'color-black'"
+
+#: tools/sort/cli.py:82
+msgid "Sort faces using a number of different techniques"
+msgstr "Сортировка лиц с использованием различных методов"
+
+#: tools/sort/cli.py:92 tools/sort/cli.py:99 tools/sort/cli.py:110
+#: tools/sort/cli.py:148
+msgid "data"
+msgstr "данные"
+
+#: tools/sort/cli.py:93
+msgid "Input directory of aligned faces."
+msgstr "Входная папка соотнесенных лиц."
+
+#: tools/sort/cli.py:100
+msgid ""
+"Output directory for sorted aligned faces. If not provided and 'keep' is "
+"selected then a new folder called 'sorted' will be created within the input "
+"folder to house the output. If not provided and 'keep' is not selected then "
+"the images will be sorted in-place, overwriting the original contents of the "
+"'input_dir'"
+msgstr ""
+"Выходная папка для отсортированных выровненных лиц. Если не указано и "
+"выбрано 'keep', то в папке input будет создана новая папка под названием "
+"'sorted' для размещения выходных данных. Если не указано и не выбрано "
+"'keep', то изображения будут отсортированы на месте, перезаписывая исходное "
+"содержимое 'input_dir'."
+
+#: tools/sort/cli.py:111
+msgid ""
+"R|If selected then the input_dir should be a parent folder containing "
+"multiple folders of faces you wish to sort. The faces will be output to "
+"separate sub-folders in the output_dir"
+msgstr ""
+"R|Если выбрано, то input_dir должен быть родительской папкой, содержащей "
+"несколько папок с лицами, которые вы хотите отсортировать. Лица будут "
+"выведены в отдельные вложенные папки в output_dir"
+
+#: tools/sort/cli.py:120
+msgid "sort settings"
+msgstr "настройки сортировки"
+
+#: tools/sort/cli.py:122
+msgid ""
+"R|Choose how images are sorted. Selecting a sort method gives the images a "
+"new filename based on the order the image appears within the given method.\n"
+"L|'none': Don't sort the images. When a 'group-by' method is selected, "
+"selecting 'none' means that the files will be moved/copied into their "
+"respective bins, but the files will keep their original filenames. Selecting "
+"'none' for both 'sort-by' and 'group-by' will do nothing"
+msgstr ""
+"R|Выбор способа сортировки изображений. При выборе метода сортировки "
+"изображениям присваивается новое имя файла, основанное на порядке появления "
+"изображения в данном методе.\n"
+"L|'none': Не сортировать изображения. Если выбран метод 'group-by', выбор "
+"'none' означает, что файлы будут перемещены/скопированы в соответствующие "
+"корзины, но файлы сохранят свои оригинальные имена. Выбор значения 'none' "
+"как для 'sort-by', так и для 'group-by' ничего не даст"
+
+#: tools/sort/cli.py:135 tools/sort/cli.py:162 tools/sort/cli.py:191
+msgid "group settings"
+msgstr "настройки группировки"
+
+#: tools/sort/cli.py:137
+msgid ""
+"R|Selecting a group by method will move/copy files into numbered bins based "
+"on the selected method.\n"
+"L|'none': Don't bin the images. Folders will be sorted by the selected 'sort-"
+"by' but will not be binned, instead they will be sorted into a single "
+"folder.  Selecting 'none' for both 'sort-by' and 'group-by' will do nothing"
+msgstr ""
+"R|Выбор группы по методу приведет к перемещению/копированию файлов в "
+"пронумерованные корзины в соответствии с выбранным методом.\n"
+"L|'none': Не сортировать изображения. Папки будут отсортированы по "
+"выбранному \"sort-by\", но не будут разбиты на папки, вместо этого они будут "
+"отсортированы в одну папку.  Выбор значения 'none' как для 'sort-by', так и "
+"для 'group-by' ничего не даст"
+
+#: tools/sort/cli.py:149
+msgid ""
+"Whether to keep the original files in their original location. Choosing a "
+"'sort-by' method means that the files have to be renamed. Selecting 'keep' "
+"means that the original files will be kept, and the renamed files will be "
+"created in the specified output folder. Unselecting keep means that the "
+"original files will be moved and renamed based on the selected sort/group "
+"criteria."
+msgstr ""
+"Сохранять ли исходные файлы в их первоначальном расположении. Выбор метода "
+"\"сортировать по\" означает, что файлы должны быть переименованы. Выбор "
+"'keep' означает, что исходные файлы будут сохранены, а переименованные файлы "
+"будут созданы в указанной выходной папке. Отмена выбора \"keep\" означает, "
+"что исходные файлы будут перемещены и переименованы в соответствии с "
+"выбранными критериями сортировки/группировки."
+
+#: tools/sort/cli.py:164
+msgid ""
+"R|Float value. Minimum threshold to use for grouping comparison with 'face-"
+"cnn' 'hist' and 'face' methods.\n"
+"The lower the value the more discriminating the grouping is. Leaving -1.0 "
+"will allow Faceswap to choose the default value.\n"
+"L|For 'face-cnn' 7.2 should be enough, with 4 being very discriminating. \n"
+"L|For 'hist' 0.3 should be enough, with 0.2 being very discriminating. \n"
+"L|For 'face' between 0.1 (more bins) to 0.5 (fewer bins) should be about "
+"right.\n"
+"Be careful setting a value that's too extrene in a directory with many "
+"images, as this could result in a lot of folders being created. Defaults: "
+"face-cnn 7.2, hist 0.3, face 0.25"
+msgstr ""
+"R|Плавающее значение. Минимальный порог, используемый для сравнения "
+"группировок с методами 'face-cnn' 'hist' и 'face'.\n"
+"Чем меньше значение, тем более дискриминационной является группировка. Если "
+"оставить значение -1.0, Faceswap сможет выбрать значение по умолчанию.\n"
+"L|Для 'face-cnn' 7,2 должно быть достаточно, при этом 4 будет очень "
+"дискриминационным. \n"
+"L|Для 'hist' 0.3 должно быть достаточно, при этом 0.2 очень хорошо "
+"различает. \n"
+"L|For 'face' от 0,1 (больше бинов) до 0,5 (меньше бинов) должно быть "
+"достаточно.\n"
+"Будьте осторожны, устанавливая слишком большое значение в каталоге с большим "
+"количеством изображений, так как это может привести к созданию большого "
+"количества папок. По умолчанию: face-cnn 7.2, hist 0.3, face 0.25"
+
+#: tools/sort/cli.py:181
+msgid "output"
+msgstr "вывод"
+
+#: tools/sort/cli.py:182
+msgid ""
+"Deprecated and no longer used. The final processing will be dictated by the "
+"sort/group by methods and whether 'keep_original' is selected."
+msgstr ""
+"Устарело и больше не используется. Окончательная обработка будет диктоваться "
+"методами sort/group by и тем, выбрана ли опция 'keep_original'."
+
+#: tools/sort/cli.py:193
+#, python-format
+msgid ""
+"R|Integer value. Used to control the number of bins created for grouping by: "
+"any 'blur' methods, 'color' methods or 'face metric' methods ('distance', "
+"'size') and 'orientation; methods ('yaw', 'pitch'). For any other grouping "
+"methods see the '-t' ('--threshold') option.\n"
+"L|For 'face metric' methods the bins are filled, according the the "
+"distribution of faces between the minimum and maximum chosen metric.\n"
+"L|For 'color' methods the number of bins represents the divider of the "
+"percentage of colored pixels. Eg. For a bin number of '5': The first folder "
+"will have the faces with 0%% to 20%% colored pixels, second 21%% to 40%%, "
+"etc. Any empty bins will be deleted, so you may end up with fewer bins than "
+"selected.\n"
+"L|For 'blur' methods folder 0 will be the least blurry, while the last "
+"folder will be the blurriest.\n"
+"L|For 'orientation' methods the number of bins is dictated by how much 180 "
+"degrees is divided. Eg. If 18 is selected, then each folder will be a 10 "
+"degree increment. Folder 0 will contain faces looking the most to the left/"
+"down whereas the last folder will contain the faces looking the most to the "
+"right/up. NB: Some bins may be empty if faces do not fit the criteria.\n"
+"Default value: 5"
+msgstr ""
+"R| Целочисленное значение. Используется для управления количеством бинов, "
+"создаваемых для группировки: любыми методами 'размытия', 'цвета' или "
+"методами 'метрики лица' ('расстояние', 'размер') и 'ориентации; методы "
+"('yaw', 'pitch'). Для любых других методов группировки смотрите опцию '-"
+"t' ('--threshold').\n"
+"L|Для методов 'face metric' бины заполняются в соответствии с распределением "
+"лиц между минимальной и максимальной выбранной метрикой.\n"
+"L|Для методов 'color' количество бинов представляет собой делитель процента "
+"цветных пикселей. Например, для числа бинов \"5\": В первой папке будут лица "
+"с 0%% - 20%% цветных пикселей, во второй 21%% - 40%% и т.д. Все пустые папки "
+"будут удалены, поэтому в итоге у вас может оказаться меньше папок, чем было "
+"выбрано.\n"
+"L|Для методов 'blur' папка 0 будет наименее размытой, а последняя папка "
+"будет самой размытой.\n"
+"L|Для методов \"orientation\" количество бинов диктуется тем, на сколько "
+"делится 180 градусов. Например, если выбрано 18, то каждая папка будет иметь "
+"шаг в 10 градусов. Папка 0 будет содержать лица, направленные больше всего "
+"влево/вниз, а последняя папка будет содержать лица, направленные больше "
+"всего вправо/вверх. Примечание: Некоторые папки могут быть пустыми, если "
+"лица не соответствуют критериям.\n"
+"Значение по умолчанию: 5"
+
+#: tools/sort/cli.py:215 tools/sort/cli.py:225
+msgid "settings"
+msgstr "настройки"
+
+#: tools/sort/cli.py:217
+msgid ""
+"Logs file renaming changes if grouping by renaming, or it logs the file "
+"copying/movement if grouping by folders. If no log file is specified  with "
+"'--log-file', then a 'sort_log.json' file will be created in the input "
+"directory."
+msgstr ""
+"Ведет журнал изменений переименования файлов при группировке по "
+"переименованию, или журнал копирования/перемещения файлов при группировке по "
+"папкам. Если файл журнала не указан с помощью '--log-file', то в каталоге "
+"ввода будет создан файл 'sort_log.json'."
+
+#: tools/sort/cli.py:228
+msgid ""
+"Specify a log file to use for saving the renaming or grouping information. "
+"If specified extension isn't 'json' or 'yaml', then json will be used as the "
+"serializer, with the supplied filename. Default: sort_log.json"
+msgstr ""
+"Укажите файл журнала, который будет использоваться для сохранения информации "
+"о переименовании или группировке. Если указанное расширение не 'json' или "
+"'yaml', то в качестве сериализатора будет использоваться json, с указанным "
+"именем файла. По умолчанию: sort_log.json"
