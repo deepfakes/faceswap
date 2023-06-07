@@ -1,0 +1,155 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: faceswap.spanish\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-06-07 13:54+0100\n"
+"PO-Revision-Date: 2023-06-07 14:11+0100\n"
+"Last-Translator: \n"
+"Language-Team: tokafondo\n"
+"Language: es_ES\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.3.1\n"
+
+#: lib/gui/menu.py:37
+msgid "faceswap.dev - Guides and Forum"
+msgstr "faceswap.dev - Guías y foro"
+
+#: lib/gui/menu.py:38
+msgid "Patreon - Support this project"
+msgstr "Patreon - Apoya este proyecto"
+
+#: lib/gui/menu.py:39
+msgid "Discord - The FaceSwap Discord server"
+msgstr "Discord - El servidor de Discord de FaceSwap"
+
+#: lib/gui/menu.py:40
+msgid "Github - Our Source Code"
+msgstr "Github - Nuestro código fuente"
+
+#: lib/gui/menu.py:60
+msgid "File"
+msgstr ""
+
+#: lib/gui/menu.py:61
+msgid "Settings"
+msgstr ""
+
+#: lib/gui/menu.py:62
+msgid "Help"
+msgstr ""
+
+#: lib/gui/menu.py:85
+msgid "Configure Settings..."
+msgstr ""
+
+#: lib/gui/menu.py:116
+msgid "New Project..."
+msgstr ""
+
+#: lib/gui/menu.py:121
+msgid "Open Project..."
+msgstr ""
+
+#: lib/gui/menu.py:126
+msgid "Save Project"
+msgstr ""
+
+#: lib/gui/menu.py:131
+msgid "Save Project as..."
+msgstr ""
+
+#: lib/gui/menu.py:136
+msgid "Reload Project from Disk"
+msgstr ""
+
+#: lib/gui/menu.py:141
+msgid "Close Project"
+msgstr ""
+
+#: lib/gui/menu.py:147
+msgid "Open Task..."
+msgstr ""
+
+#: lib/gui/menu.py:154
+msgid "Open recent"
+msgstr ""
+
+#: lib/gui/menu.py:156
+msgid "Quit"
+msgstr ""
+
+#: lib/gui/menu.py:211
+msgid "{} Task"
+msgstr ""
+
+#: lib/gui/menu.py:223
+msgid "Clear recent files"
+msgstr ""
+
+#: lib/gui/menu.py:391
+msgid "Check for updates..."
+msgstr ""
+
+#: lib/gui/menu.py:394
+msgid "Update Faceswap..."
+msgstr ""
+
+#: lib/gui/menu.py:398
+msgid "Switch Branch"
+msgstr ""
+
+#: lib/gui/menu.py:401
+msgid "Resources"
+msgstr ""
+
+#: lib/gui/menu.py:404
+msgid "Output System Information"
+msgstr ""
+
+#: lib/gui/menu.py:589
+msgid "currently selected Task"
+msgstr "tarea actualmente seleccionada"
+
+#: lib/gui/menu.py:589
+msgid "Project"
+msgstr "Proyecto"
+
+#: lib/gui/menu.py:591
+msgid "Reload {} from disk"
+msgstr "Recargar {} del disco"
+
+#: lib/gui/menu.py:593
+msgid "Create a new {}..."
+msgstr "Crear un nuevo {}..."
+
+#: lib/gui/menu.py:595
+msgid "Reset {} to default"
+msgstr "Reiniciar {} a los ajustes por defecto"
+
+#: lib/gui/menu.py:597
+msgid "Save {}"
+msgstr "Guardar {}"
+
+#: lib/gui/menu.py:599
+msgid "Save {} as..."
+msgstr "Guardar {} como..."
+
+#: lib/gui/menu.py:603
+msgid " from a task or project file"
+msgstr " de un archivo de tarea o proyecto"
+
+#: lib/gui/menu.py:604
+msgid "Load {}..."
+msgstr "Cargar {}..."
+
+#: lib/gui/menu.py:659
+msgid "Configure {} settings..."
+msgstr "Configurar los ajustes de {}..."

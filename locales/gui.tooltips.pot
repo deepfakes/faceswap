@@ -119,62 +119,6 @@ msgstr ""
 msgid "Enable or disable {} display"
 msgstr ""
 
-#: ./lib/gui/menu.py:32
-msgid "faceswap.dev - Guides and Forum"
-msgstr ""
-
-#: ./lib/gui/menu.py:33
-msgid "Patreon - Support this project"
-msgstr ""
-
-#: ./lib/gui/menu.py:34
-msgid "Discord - The FaceSwap Discord server"
-msgstr ""
-
-#: ./lib/gui/menu.py:35
-msgid "Github - Our Source Code"
-msgstr ""
-
-#: ./lib/gui/menu.py:527
-msgid "Configure {} settings..."
-msgstr ""
-
-#: ./lib/gui/menu.py:535
-msgid "Project"
-msgstr ""
-
-#: ./lib/gui/menu.py:535
-msgid "currently selected Task"
-msgstr ""
-
-#: ./lib/gui/menu.py:537
-msgid "Reload {} from disk"
-msgstr ""
-
-#: ./lib/gui/menu.py:539
-msgid "Create a new {}..."
-msgstr ""
-
-#: ./lib/gui/menu.py:541
-msgid "Reset {} to default"
-msgstr ""
-
-#: ./lib/gui/menu.py:543
-msgid "Save {}"
-msgstr ""
-
-#: ./lib/gui/menu.py:545
-msgid "Save {} as..."
-msgstr ""
-
-#: ./lib/gui/menu.py:549
-msgid " from a task or project file"
-msgstr ""
-
-#: ./lib/gui/menu.py:550
-msgid "Load {}..."
-msgstr ""
-
 #: ./lib/gui/popup_configure.py:209
 msgid "Close without saving"
 msgstr ""

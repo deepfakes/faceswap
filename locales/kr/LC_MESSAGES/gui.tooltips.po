@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "POT-Creation-Date: 2021-03-22 18:37+0000\n"
-"PO-Revision-Date: 2022-11-26 16:12+0900\n"
+"PO-Revision-Date: 2023-06-07 14:13+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ko_KR\n"
@@ -15,7 +15,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.2\n"
+"X-Generator: Poedit 3.3.1\n"
 
 #: lib/gui/command.py:184
 msgid "Output command line options to the console"
@@ -127,62 +127,6 @@ msgstr "{}(s)를 파일에 저장합니다"
 #: lib/gui/display_page.py:250
 msgid "Enable or disable {} display"
 msgstr "{} display를 활성화 또는 비활성화"
-
-#: lib/gui/menu.py:32
-msgid "faceswap.dev - Guides and Forum"
-msgstr "faceswap.dev - Guides and Forum"
-
-#: lib/gui/menu.py:33
-msgid "Patreon - Support this project"
-msgstr "Patreon - Support this project"
-
-#: lib/gui/menu.py:34
-msgid "Discord - The FaceSwap Discord server"
-msgstr "Discord - The FaceSwap Discord server"
-
-#: lib/gui/menu.py:35
-msgid "Github - Our Source Code"
-msgstr "Github - Our Source Code"
-
-#: lib/gui/menu.py:527
-msgid "Configure {} settings..."
-msgstr "{} 세팅 설정하기."
-
-#: lib/gui/menu.py:535
-msgid "Project"
-msgstr "프로젝트"
-
-#: lib/gui/menu.py:535
-msgid "currently selected Task"
-msgstr "현재 선택된 작업"
-
-#: lib/gui/menu.py:537
-msgid "Reload {} from disk"
-msgstr "디스크에서 {}를 다시 가져옵니다"
-
-#: lib/gui/menu.py:539
-msgid "Create a new {}..."
-msgstr "새로운 {}를 만들기."
-
-#: lib/gui/menu.py:541
-msgid "Reset {} to default"
-msgstr "{} 기본으로 재설정"
-
-#: lib/gui/menu.py:543
-msgid "Save {}"
-msgstr "{} 저장"
-
-#: lib/gui/menu.py:545
-msgid "Save {} as..."
-msgstr "{}를 다른 이름으로 저장."
-
-#: lib/gui/menu.py:549
-msgid " from a task or project file"
-msgstr " 작업 또는 프로젝트 파일에서"
-
-#: lib/gui/menu.py:550
-msgid "Load {}..."
-msgstr "{} 가져오기."
 
 #: lib/gui/popup_configure.py:209
 msgid "Close without saving"

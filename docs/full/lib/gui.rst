@@ -104,6 +104,13 @@ display\_graph module
    :undoc-members:
    :show-inheritance:
 
+menu module
+===========
+.. automodule:: lib.gui.menu
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 popup_configure module
 ======================
 .. automodule:: lib.gui.popup_configure

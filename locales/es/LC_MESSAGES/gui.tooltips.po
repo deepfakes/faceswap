@@ -6,16 +6,16 @@ msgid ""
 msgstr ""
 "Project-Id-Version: faceswap.spanish\n"
 "POT-Creation-Date: 2021-03-22 18:37+0000\n"
-"PO-Revision-Date: 2021-03-22 18:39+0000\n"
+"PO-Revision-Date: 2023-06-07 14:12+0100\n"
 "Last-Translator: \n"
 "Language-Team: tokafondo\n"
 "Language: es_ES\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 2.4.2\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Generated-By: pygettext.py 1.5\n"
+"X-Generator: Poedit 3.3.1\n"
 
 #: lib/gui/command.py:184
 msgid "Output command line options to the console"
@@ -128,62 +128,6 @@ msgstr "Grabar {} a un fichero"
 #: lib/gui/display_page.py:250
 msgid "Enable or disable {} display"
 msgstr "Activar o desactivar la muestra de {}"
-
-#: lib/gui/menu.py:32
-msgid "faceswap.dev - Guides and Forum"
-msgstr "faceswap.dev - Guías y foro"
-
-#: lib/gui/menu.py:33
-msgid "Patreon - Support this project"
-msgstr "Patreon - Apoya este proyecto"
-
-#: lib/gui/menu.py:34
-msgid "Discord - The FaceSwap Discord server"
-msgstr "Discord - El servidor de Discord de FaceSwap"
-
-#: lib/gui/menu.py:35
-msgid "Github - Our Source Code"
-msgstr "Github - Nuestro código fuente"
-
-#: lib/gui/menu.py:527
-msgid "Configure {} settings..."
-msgstr "Configurar los ajustes de {}..."
-
-#: lib/gui/menu.py:535
-msgid "Project"
-msgstr "Proyecto"
-
-#: lib/gui/menu.py:535
-msgid "currently selected Task"
-msgstr "tarea actualmente seleccionada"
-
-#: lib/gui/menu.py:537
-msgid "Reload {} from disk"
-msgstr "Recargar {} del disco"
-
-#: lib/gui/menu.py:539
-msgid "Create a new {}..."
-msgstr "Crear un nuevo {}..."
-
-#: lib/gui/menu.py:541
-msgid "Reset {} to default"
-msgstr "Reiniciar {} a los ajustes por defecto"
-
-#: lib/gui/menu.py:543
-msgid "Save {}"
-msgstr "Guardar {}"
-
-#: lib/gui/menu.py:545
-msgid "Save {} as..."
-msgstr "Guardar {} como..."
-
-#: lib/gui/menu.py:549
-msgid " from a task or project file"
-msgstr " de un archivo de tarea o proyecto"
-
-#: lib/gui/menu.py:550
-msgid "Load {}..."
-msgstr "Cargar {}..."
 
 #: lib/gui/popup_configure.py:209
 msgid "Close without saving"

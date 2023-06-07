@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "POT-Creation-Date: 2021-03-22 18:37+0000\n"
-"PO-Revision-Date: 2023-04-11 16:07+0700\n"
+"PO-Revision-Date: 2023-06-07 14:14+0100\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
 "Generated-By: pygettext.py 1.5\n"
-"X-Generator: Poedit 3.2.2\n"
+"X-Generator: Poedit 3.3.1\n"
 
 #: lib/gui/command.py:184
 msgid "Output command line options to the console"
@@ -128,62 +128,6 @@ msgstr "Сохранить {}(ы) в файл"
 #: lib/gui/display_page.py:250
 msgid "Enable or disable {} display"
 msgstr "Включить или выключить отображение {}"
-
-#: lib/gui/menu.py:32
-msgid "faceswap.dev - Guides and Forum"
-msgstr "faceswap.dev - Руководства и Форум"
-
-#: lib/gui/menu.py:33
-msgid "Patreon - Support this project"
-msgstr "Patreon - Поддержите этот проект"
-
-#: lib/gui/menu.py:34
-msgid "Discord - The FaceSwap Discord server"
-msgstr "Discord - Discord сервер Faceswap"
-
-#: lib/gui/menu.py:35
-msgid "Github - Our Source Code"
-msgstr "Github - Наш исходный код"
-
-#: lib/gui/menu.py:527
-msgid "Configure {} settings..."
-msgstr "Настройка параметров {}..."
-
-#: lib/gui/menu.py:535
-msgid "Project"
-msgstr "Проект"
-
-#: lib/gui/menu.py:535
-msgid "currently selected Task"
-msgstr "текущая выбранная задача"
-
-#: lib/gui/menu.py:537
-msgid "Reload {} from disk"
-msgstr "Перезагрузить {} из диска"
-
-#: lib/gui/menu.py:539
-msgid "Create a new {}..."
-msgstr "Создать новый {}..."
-
-#: lib/gui/menu.py:541
-msgid "Reset {} to default"
-msgstr "Сбросить {} по умолчанию"
-
-#: lib/gui/menu.py:543
-msgid "Save {}"
-msgstr "Сохранить {}"
-
-#: lib/gui/menu.py:545
-msgid "Save {} as..."
-msgstr "Сохранить {} как..."
-
-#: lib/gui/menu.py:549
-msgid " from a task or project file"
-msgstr " из файла задачи или проекта"
-
-#: lib/gui/menu.py:550
-msgid "Load {}..."
-msgstr "Загрузить {}..."
 
 #: lib/gui/popup_configure.py:209
 msgid "Close without saving"
