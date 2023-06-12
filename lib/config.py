@@ -3,6 +3,7 @@
     Extends out :class:`configparser.ConfigParser` functionality by checking for default
     configuration updates and returning data in it's correct format """
 
+import gettext
 import logging
 import os
 import sys
@@ -15,6 +16,10 @@ from importlib import import_module
 from typing import Dict, List, Optional, Tuple, Union
 
 from lib.utils import full_path_split
+
+# LOCALES
+_LANG = gettext.translation("lib.config", localedir="locales", fallback=True)
+_ = _LANG.gettext
 
 # Can't type OrderedDict fully on Python 3.8 or lower
 if sys.version_info < (3, 9):
@@ -282,7 +287,9 @@ class FaceswapConfig():
                 logger.error(err)
                 raise ValueError(err)
             return configfile
-        dirname = os.path.dirname(sys.modules[self.__module__].__file__)
+        filepath = sys.modules[self.__module__].__file__
+        assert filepath is not None
+        dirname = os.path.dirname(filepath)
         folder, fname = os.path.split(dirname)
         retval = os.path.join(os.path.dirname(folder), "config", f"{fname}.ini")
         logger.debug("Config File location: '%s'", retval)
@@ -383,23 +390,23 @@ class FaceswapConfig():
         """ Add extra helptext info from parameters """
         helptext += "\n"
         if not fixed:
-            helptext += "\nThis option can be updated for existing models.\n"
+            helptext += _("\nThis option can be updated for existing models.\n")
         if datatype == list:
-            helptext += ("\nIf selecting multiple options then each option should be separated "
-                         "by a space or a comma (e.g. item1, item2, item3)\n")
+            helptext += _("\nIf selecting multiple options then each option should be separated "
+                          "by a space or a comma (e.g. item1, item2, item3)\n")
         if choices and choices != "colorchooser":
-            helptext += f"\nChoose from: {choices}"
+            helptext += _("\nChoose from: {}").format(choices)
         elif datatype == bool:
-            helptext += "\nChoose from: True, False"
+            helptext += _("\nChoose from: True, False")
         elif datatype == int:
             assert min_max is not None
             cmin, cmax = min_max
-            helptext += f"\nSelect an integer between {cmin} and {cmax}"
+            helptext += _("\nSelect an integer between {} and {}").format(cmin, cmax)
         elif datatype == float:
             assert min_max is not None
             cmin, cmax = min_max
-            helptext += f"\nSelect a decimal number between {cmin} and {cmax}"
-        helptext += f"\n[Default: {default}]"
+            helptext += _("\nSelect a decimal number between {} and {}").format(cmin, cmax)
+        helptext += _("\n[Default: {}]").format(default)
         return helptext
 
     def _check_exists(self) -> bool:

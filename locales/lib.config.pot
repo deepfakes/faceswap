@@ -1,0 +1,61 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-06-11 23:28+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=CHARSET\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: lib/config.py:393
+msgid ""
+"\n"
+"This option can be updated for existing models.\n"
+msgstr ""
+
+#: lib/config.py:395
+msgid ""
+"\n"
+"If selecting multiple options then each option should be separated by a "
+"space or a comma (e.g. item1, item2, item3)\n"
+msgstr ""
+
+#: lib/config.py:398
+msgid ""
+"\n"
+"Choose from: {}"
+msgstr ""
+
+#: lib/config.py:400
+msgid ""
+"\n"
+"Choose from: True, False"
+msgstr ""
+
+#: lib/config.py:404
+msgid ""
+"\n"
+"Select an integer between {} and {}"
+msgstr ""
+
+#: lib/config.py:408
+msgid ""
+"\n"
+"Select a decimal number between {} and {}"
+msgstr ""
+
+#: lib/config.py:409
+msgid ""
+"\n"
+"[Default: {}]"
+msgstr ""
