@@ -528,7 +528,7 @@ class FaceswapConfig():
     def _load_config(self) -> None:
         """ Load values from config """
         logger.verbose("Loading config: '%s'", self.configfile)  # type:ignore[attr-defined]
-        self.config.read(self.configfile)
+        self.config.read(self.configfile, encoding="utf-8")
 
     def save_config(self) -> None:
         """ Save a config file """
