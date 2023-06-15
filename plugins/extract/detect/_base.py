@@ -174,7 +174,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                          {k: len(v) if isinstance(v, (list, np.ndarray)) else v
                           for k, v in batch.__dict__.items()})
         else:
-            logger.trace(item)  # type:ignore
+            logger.trace(item)  # type:ignore[attr-defined]
 
         if not exhausted and not batch.filename:
             # This occurs when face filter is fed aligned faces.
@@ -201,7 +201,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             for the detected faces found in the frame.
         """
         assert isinstance(batch, DetectorBatch)
-        logger.trace("Item out: %s",  # type:ignore
+        logger.trace("Item out: %s",  # type:ignore[attr-defined]
                      {k: len(v) if isinstance(v, (list, np.ndarray)) else v
                       for k, v in batch.__dict__.items()})
 
@@ -235,13 +235,13 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             output = self._extract_media.pop(filename)
             output.add_detected_faces(batch.detected_faces[idx])
 
-            logger.trace("final output: (filename: '%s', image shape: %s, "  # type:ignore
-                         "detected_faces: %s, item: %s", output.filename, output.image_shape,
-                         output.detected_faces, output)
+            logger.trace("final output: (filename: '%s', "  # type:ignore[attr-defined]
+                         "image shape: %s, detected_faces: %s, item: %s",
+                         output.filename, output.image_shape, output.detected_faces, output)
             yield output
 
     @staticmethod
-    def _to_detected_face(left: float, top: float, right: float, bottom: float):
+    def _to_detected_face(left: float, top: float, right: float, bottom: float) -> DetectedFace:
         """ Convert a bounding box to a detected face object
 
         Parameters
@@ -276,9 +276,15 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             # Rotate the batch and insert placeholders for already found faces
             self._rotate_batch(batch, angle)
             try:
-                batch.prediction = self.predict(batch.feed)
-                logger.trace("angle: %s, filenames: %s, prediction: %s",  # type:ignore
-                             angle, batch.filename, batch.prediction)
+                pred = self.predict(batch.feed)
+                if angle == 0:
+                    batch.prediction = pred
+                else:
+                    batch.prediction = np.array([b if b.any() else p
+                                                 for b, p in zip(batch.prediction, pred)])
+                logger.trace("angle: %s, filenames: %s, "  # type:ignore[attr-defined]
+                             "prediction: %s",
+                             angle, batch.filename, pred)
             except tf_errors.ResourceExhaustedError as err:
                 msg = ("You do not have enough GPU memory available to run detection at the "
                        "selected batch size. You can try a number of things:"
@@ -308,7 +314,8 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                 raise
 
             if angle != 0 and any(face.any() for face in batch.prediction):
-                logger.verbose("found face(s) by rotating image %s degrees",  # type:ignore
+                logger.verbose("found face(s) by rotating image %s "  # type:ignore[attr-defined]
+                               "degrees",
                                angle)
 
             found_faces = cast(List[np.ndarray], ([face if not found.any() else found
@@ -316,12 +323,13 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                                                                           found_faces)]))
 
             if all(face.any() for face in found_faces):
-                logger.trace("Faces found for all images")  # type:ignore
+                logger.trace("Faces found for all images")  # type:ignore[attr-defined]
                 break
 
         batch.prediction = np.array(found_faces, dtype="object")
-        logger.trace("detect_prediction output: (filenames: %s, prediction: %s, "  # type:ignore
-                     "rotmat: %s)", batch.filename, batch.prediction, batch.rotation_matrix)
+        logger.trace("detect_prediction output: (filenames: %s, "  # type:ignore[attr-defined]
+                     "prediction: %s, rotmat: %s)",
+                     batch.filename, batch.prediction, batch.rotation_matrix)
         return batch
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
@@ -349,7 +357,8 @@ class Detector(Extractor):  # pylint:disable=abstract-method
 
         image = self._scale_image(image, item.image_size, scale)
         image = self._pad_image(image)
-        logger.trace("compiled: (images shape: %s, scale: %s, pad: %s)",  # type:ignore
+        logger.trace("compiled: (images shape: %s, "  # type:ignore[attr-defined]
+                     "scale: %s, pad: %s)",
                      image.shape, scale, pad)
         return image, scale, pad
 
@@ -367,7 +376,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             The scaling factor from original image size to model input size
         """
         scale = self.input_size / max(image_size)
-        logger.trace("Detector scale: %s", scale)  # type:ignore
+        logger.trace("Detector scale: %s", scale)  # type:ignore[attr-defined]
         return scale
 
     def _set_padding(self, image_size: Tuple[int, int], scale: float) -> Tuple[int, int]:
@@ -410,11 +419,12 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         interpln = cv2.INTER_CUBIC if scale > 1.0 else cv2.INTER_AREA
         if scale != 1.0:
             dims = (int(image_size[1] * scale), int(image_size[0] * scale))
-            logger.trace("Resizing detection image from %s to %s. Scale=%s",  # type:ignore
+            logger.trace("Resizing detection image from %s to %s. "  # type:ignore[attr-defined]
+                         "Scale=%s",
                          "x".join(str(i) for i in reversed(image_size)),
                          "x".join(str(i) for i in dims), scale)
             image = cv2.resize(image, dims, interpolation=interpln)
-        logger.trace("Resized image shape: %s", image.shape)  # type:ignore
+        logger.trace("Resized image shape: %s", image.shape)  # type:ignore[attr-defined]
         return image
 
     def _pad_image(self, image: np.ndarray) -> np.ndarray:
@@ -442,7 +452,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                                        pad_l,
                                        pad_r,
                                        cv2.BORDER_CONSTANT)
-        logger.trace("Padded image shape: %s", image.shape)  # type:ignore
+        logger.trace("Padded image shape: %s", image.shape)  # type:ignore[attr-defined]
         return image
 
     # <<< FINALIZE METHODS >>> #
@@ -634,7 +644,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         https://stackoverflow.com/questions/22041699
         """
 
-        logger.trace("Rotating image: (image: %s, angle: %s)",  # type:ignore
+        logger.trace("Rotating image: (image: %s, angle: %s)",  # type:ignore[attr-defined]
                      image.shape, angle)
         channels_first = image.shape[0] <= 4
         if channels_first:
@@ -645,7 +655,8 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         rotation_matrix = cv2.getRotationMatrix2D(image_center, -1.*angle, 1.)
         rotation_matrix[0, 2] += self.input_size / 2 - image_center[0]
         rotation_matrix[1, 2] += self.input_size / 2 - image_center[1]
-        logger.trace("Rotated image: (rotation_matrix: %s", rotation_matrix)  # type:ignore
+        logger.trace("Rotated image: (rotation_matrix: %s",  # type:ignore[attr-defined]
+                     rotation_matrix)
         image = cv2.warpAffine(image, rotation_matrix, (self.input_size, self.input_size))
         if channels_first:
             image = np.moveaxis(image, 2, 0)
