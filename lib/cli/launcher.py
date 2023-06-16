@@ -83,6 +83,14 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             logger.debug("Setting `KMP_DUPLICATE_LIB_OK` environment variable to `TRUE`")
             os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+        # There is a memory leak in TF2.10+ predict function. This fix will work for tf2.10 but not
+        # for later versions. This issue has been patched recently, but we'll probably need to
+        # skip some TF versions
+        # ref: https://github.com/tensorflow/tensorflow/issues/58676
+        # TODO remove this fix post TF2.10 and check memleak is fixed
+        logger.debug("Setting TF_RUN_EAGER_OP_AS_FUNCTION env var to False")
+        os.environ["TF_RUN_EAGER_OP_AS_FUNCTION"] = "false"
+
     def _test_for_tf_version(self) -> None:
         """ Check that the required Tensorflow version is installed.
 
