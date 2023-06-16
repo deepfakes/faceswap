@@ -800,7 +800,7 @@ def count_frames(filename, fast=False):
     process = subprocess.Popen(cmd,
                                stderr=subprocess.STDOUT,
                                stdout=subprocess.PIPE,
-                               universal_newlines=True)
+                               universal_newlines=True, encoding="utf8")
     pbar = None
     duration = None
     init_tqdm = False
