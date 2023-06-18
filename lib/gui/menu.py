@@ -2,7 +2,6 @@
 """ The Menu Bars for faceswap GUI """
 
 import gettext
-import locale
 import logging
 import os
 import sys
@@ -11,12 +10,9 @@ import typing as T
 from tkinter import ttk
 import webbrowser
 
-from subprocess import Popen, PIPE, STDOUT
-
 from lib.multithreading import MultiThread
 from lib.serializer import get_serializer, Serializer
 from lib.utils import FaceswapError
-import update_deps
 
 from .popup_configure import open_popup
 from .custom_widgets import Tooltip
@@ -273,130 +269,9 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         print(info)
         self.root.config(cursor="")
 
-    @classmethod
-    def _check_for_updates(cls, encoding: str, check: bool = False) -> bool:
-        """ Check whether an update is required
-
-        Parameters
-        ----------
-        encoding: str
-            The encoding to use for decoding process returns
-        check: bool
-            ``True`` if we are just checking for updates ``False`` if a check and update is to be
-            performed. Default: ``False``
-
-        Returns
-        -------
-        bool
-            ``True`` if an update is required
-        """
-        # Do the check
-        logger.info("Checking for updates...")
-        update = False
-        msg = ""
-        gitcmd = "git remote update && git status -uno"
-        with Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR) as cmd:
-            stdout, _ = cmd.communicate()
-            retcode = cmd.poll()
-        if retcode != 0:
-            msg = ("Git is not installed or you are not running a cloned repo. "
-                   "Unable to check for updates")
-        else:
-            chk = stdout.decode(encoding, errors="replace").splitlines()
-            for line in chk:
-                if line.lower().startswith("your branch is ahead"):
-                    msg = "Your branch is ahead of the remote repo. Not updating"
-                    break
-                if line.lower().startswith("your branch is up to date"):
-                    msg = "Faceswap is up to date."
-                    break
-                if line.lower().startswith("your branch is behind"):
-                    msg = "There are updates available"
-                    update = True
-                    break
-                if "have diverged" in line.lower():
-                    msg = "Your branch has diverged from the remote repo. Not updating"
-                    break
-        if not update or check:
-            logger.info(msg)
-        logger.debug("Checked for update. Update required: %s", update)
-        return update
-
-    def _check(self) -> None:
-        """ Check for updates and clone repository """
-        logger.debug("Checking for updates...")
-        self.root.config(cursor="watch")
-        encoding = locale.getpreferredencoding()
-        logger.debug("Encoding: %s", encoding)
-        self._check_for_updates(encoding, check=True)
-        self.root.config(cursor="")
-
-    @classmethod
-    def _do_update(cls, encoding: str) -> bool:
-        """ Update Faceswap
-
-        Parameters
-        ----------
-        encoding: str
-            The encoding to use for decoding process returns
-
-        Returns
-        -------
-        bool
-            ``True`` if update was successful
-        """
-        logger.info("A new version is available. Updating...")
-        gitcmd = "git pull"
-        with Popen(gitcmd,
-                   shell=True,
-                   stdout=PIPE,
-                   stderr=STDOUT,
-                   bufsize=1,
-                   cwd=_WORKING_DIR) as cmd:
-            while True:
-                out = cmd.stdout
-                output = "" if out is None else out.readline().decode(encoding, errors="replace")
-                if output == "" and cmd.poll() is not None:
-                    break
-                if output:
-                    logger.debug("'%s' output: '%s'", gitcmd, output.strip())
-                    print(output.strip())
-            retcode = cmd.poll()
-        logger.debug("'%s' returncode: %s", gitcmd, retcode)
-        if retcode != 0:
-            logger.info("An error occurred during update. return code: %s", retcode)
-            retval = False
-        else:
-            retval = True
-        return retval
-
-    def _update(self) -> None:
-        """ Check for updates and clone repository """
-        logger.debug("Updating Faceswap...")
-        self.root.config(cursor="watch")
-        encoding = locale.getpreferredencoding()
-        logger.debug("Encoding: %s", encoding)
-        success = False
-        if self._check_for_updates(encoding):
-            success = self._do_update(encoding)
-        update_deps.main(is_gui=True)
-        if success:
-            logger.info("Please restart Faceswap to complete the update.")
-        self.root.config(cursor="")
-
     def _build(self) -> None:
         """ Build the help menu """
         logger.debug("Building Help menu")
-
-        self.add_command(label=_("Check for updates..."),
-                         underline=0,
-                         command=lambda action="_check": self._in_thread(action))  # type:ignore
-        self.add_command(label=_("Update Faceswap..."),
-                         underline=0,
-                         command=lambda action="_update": self._in_thread(action))  # type:ignore
-        if self._build_branches_menu():
-            self.add_cascade(label=_("Switch Branch"), underline=7, menu=self._branches_menu)
-        self.add_separator()
         self._build_recources_menu()
         self.add_cascade(label=_("Resources"), underline=0, menu=self.recources_menu)
         self.add_separator()
@@ -405,109 +280,6 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
             underline=0,
             command=lambda action="_output_sysinfo": self._in_thread(action))  # type:ignore
         logger.debug("Built help menu")
-
-    def _build_branches_menu(self) -> bool:
-        """ Build branch selection menu.
-
-        Queries git for available branches and builds a menu based on output.
-
-        Returns
-        -------
-        bool
-            ``True`` if menu was successfully built otherwise ``False``
-        """
-        stdout = self._get_branches()
-        if stdout is None:
-            return False
-
-        branches = self._filter_branches(stdout)
-        if not branches:
-            return False
-
-        for branch in branches:
-            self._branches_menu.add_command(
-                label=branch,
-                command=lambda b=branch: self._switch_branch(b))  # type:ignore
-        return True
-
-    @classmethod
-    def _get_branches(cls) -> T.Optional[str]:
-        """ Get the available github branches
-
-        Returns
-        -------
-        str or ``None``
-            The list of branches available. If no branches were found or there was an
-            error then `None` is returned
-        """
-        gitcmd = "git branch -a"
-        with Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR) as cmd:
-            stdout, _ = cmd.communicate()
-            retcode = cmd.poll()
-        if retcode != 0:
-            logger.debug("Unable to list git branches. return code: %s, message: %s",
-                         retcode,
-                         stdout.decode(locale.getpreferredencoding(),
-                                       errors="replace").strip().replace("\n", " - "))
-            return None
-        return stdout.decode(locale.getpreferredencoding(), errors="replace")
-
-    @classmethod
-    def _filter_branches(cls, stdout: str) -> T.List[str]:
-        """ Filter the branches, remove duplicates and the current branch and return a sorted
-        list.
-
-        Parameters
-        ----------
-        stdout: str
-            The output from the git branch query converted to a string
-
-        Returns
-        -------
-        list[str]
-            Unique list of available branches sorted in alphabetical order
-        """
-        current = None
-        branches = set()
-        for line in stdout.splitlines():
-            branch = line[line.rfind("/") + 1:] if "/" in line else line.strip()
-            if branch.startswith("*"):
-                branch = branch.replace("*", "").strip()
-                current = branch
-                continue
-            branches.add(branch)
-        logger.debug("Found branches: %s", branches)
-        if current in branches:
-            logger.debug("Removing current branch from output: %s", current)
-            branches.remove(current)
-
-        retval = sorted(list(branches), key=str.casefold)
-        logger.debug("Final branches: %s", retval)
-        return retval
-
-    @classmethod
-    def _switch_branch(cls, branch: str) -> None:
-        """ Change the currently checked out branch, and return a notification.
-
-        Parameters
-        ----------
-        str
-            The branch to switch to
-        """
-        logger.info("Switching branch to '%s'...", branch)
-        gitcmd = f"git checkout {branch}"
-        with Popen(gitcmd, shell=True, stdout=PIPE, stderr=STDOUT, cwd=_WORKING_DIR) as cmd:
-            stdout, _ = cmd.communicate()
-            retcode = cmd.poll()
-        if retcode != 0:
-            logger.error("Unable to switch branch. return code: %s, message: %s",
-                         retcode,
-                         stdout.decode(T.cast(str, locale.getdefaultlocale()),
-                                       errors="replace").strip().replace("\n", " - "))
-            return
-        logger.info("Succesfully switched to '%s'. You may want to check for updates to make sure "
-                    "that you have the latest code.", branch)
-        logger.info("Please restart Faceswap to complete the switch.")
 
     def _build_recources_menu(self) -> None:
         """ Build resources menu """

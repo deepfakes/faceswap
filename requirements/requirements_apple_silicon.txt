@@ -5,7 +5,7 @@ numpy>=1.22.0,<1.24.0; python_version >= '3.8'
 tensorflow-macos>=2.8.0,<2.11.0
 tensorflow-deps>=2.8.0,<2.11.0
 tensorflow-metal>=0.4.0,<0.7.0
-libblas  # Conda only
+libblas==3.9.0  # Conda only
 # These next 2 should have been installed, but some users complain of errors
-decorator
-cloudpickle
+decorator>=4.4.0,<=5.1.1
+cloudpickle>=2.0.0,<=2.2.1

@@ -3,5 +3,5 @@
 numpy>=1.21.0,<1.24.0; python_version < '3.8'
 numpy>=1.22.0,<1.24.0; python_version >= '3.8'
 tensorflow-cpu>=2.10.0,<2.11.0
-tensorflow-directml-plugin
-comtypes
+tensorflow-directml-plugin==0.4.0.dev230202
+comtypes==1.1.10
