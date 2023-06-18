@@ -791,7 +791,7 @@ class Predict():
         input_shape = [input_shape] if not isinstance(input_shape, list) else input_shape
         output_shape = self._model.model.output_shape
         output_shape = [output_shape] if not isinstance(output_shape, list) else output_shape
-        retval = dict(input=input_shape[0][1], output=output_shape[-1][1])
+        retval = {"input": input_shape[0][1], "output": output_shape[-1][1]}
         logger.debug(retval)
         return retval
 
@@ -833,7 +833,6 @@ class Predict():
         is_cpu = GPUStats().device_count == 0
         batchsize = 1 if is_cpu else self._model.config["convert_batchsize"]
         batchsize = min(queue_size, batchsize)
-        logger.debug("Batchsize: %s", batchsize)
         logger.debug("Got batchsize: %s", batchsize)
         return batchsize
 

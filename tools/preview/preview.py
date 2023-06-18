@@ -302,7 +302,7 @@ class Samples():
         self._indices = self._get_indices()
 
         self._predictor = Predict(queue_manager.get_queue("preview_predict_in"),
-                                  sample_size,
+                                  self._sample_size,
                                   arguments)
         self._app._display.set_centering(self._predictor.centering)
         self.generate()
@@ -385,6 +385,7 @@ class Samples():
         """
         # Remove start and end values to get a list divisible by self.sample_size
         no_files = len(self._filelist)
+        self._sample_size = min(self._sample_size, no_files)
         crop = no_files % self._sample_size
         top_tail = list(range(no_files))[
             crop // 2:no_files - (crop - (crop // 2))]
