@@ -69,20 +69,20 @@ class _LPIPSTrunkNet():  # pylint:disable=too-few-public-methods
     @property
     def _nets(self) -> Dict[str, NetInfo]:
         """ :class:`NetInfo`: The Information about the requested net."""
-        return dict(
-            alex=NetInfo(model_id=15,
-                         model_name="alexnet_imagenet_no_top_v1.h5",
-                         net=AlexNet,
-                         outputs=[f"features.{idx}" for idx in (0, 3, 6, 8, 10)]),
-            squeeze=NetInfo(model_id=16,
-                            model_name="squeezenet_imagenet_no_top_v1.h5",
-                            net=SqueezeNet,
-                            outputs=[f"features.{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
-            vgg16=NetInfo(model_id=17,
-                          model_name="vgg16_imagenet_no_top_v1.h5",
-                          net=kapp.vgg16.VGG16,
-                          init_kwargs=dict(include_top=False, weights=None),
-                          outputs=[f"block{i + 1}_conv{2 if i < 2 else 3}" for i in range(5)]))
+        return {
+            "alex": NetInfo(model_id=15,
+                            model_name="alexnet_imagenet_no_top_v1.h5",
+                            net=AlexNet,
+                            outputs=[f"features.{idx}" for idx in (0, 3, 6, 8, 10)]),
+            "squeeze": NetInfo(model_id=16,
+                               model_name="squeezenet_imagenet_no_top_v1.h5",
+                               net=SqueezeNet,
+                               outputs=[f"features.{idx}" for idx in (0, 4, 7, 9, 10, 11, 12)]),
+            "vgg16": NetInfo(model_id=17,
+                             model_name="vgg16_imagenet_no_top_v1.h5",
+                             net=kapp.vgg16.VGG16,
+                             init_kwargs={"include_top": False, "weights": None},
+                             outputs=[f"block{i + 1}_conv{2 if i < 2 else 3}" for i in range(5)])}
 
     @classmethod
     def _normalize_output(cls, inputs: tf.Tensor, epsilon: float = 1e-10) -> tf.Tensor:
@@ -178,13 +178,13 @@ class _LPIPSLinearNet(_LPIPSTrunkNet):  # pylint:disable=too-few-public-methods
     @property
     def _nets(self) -> Dict[str, NetInfo]:
         """ :class:`NetInfo`: The Information about the requested net."""
-        return dict(
-            alex=NetInfo(model_id=18,
-                         model_name="alexnet_lpips_v1.h5",),
-            squeeze=NetInfo(model_id=19,
-                            model_name="squeezenet_lpips_v1.h5"),
-            vgg16=NetInfo(model_id=20,
-                          model_name="vgg16_lpips_v1.h5"))
+        return {
+            "alex": NetInfo(model_id=18,
+                            model_name="alexnet_lpips_v1.h5",),
+            "squeeze": NetInfo(model_id=19,
+                               model_name="squeezenet_lpips_v1.h5"),
+            "vgg16": NetInfo(model_id=20,
+                             model_name="vgg16_lpips_v1.h5")}
 
     def _linear_block(self, net_output_layer: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
         """ Build a linear block for a trunk network output.
@@ -275,7 +275,7 @@ class LPIPSLoss():  # pylint:disable=too-few-public-methods
         ``True`` to return the loss value per feature output layer otherwise ``False``.
         Default: ``False``
     """
-    def __init__(self,
+    def __init__(self,  # pylint:disable=too-many-arguments
                  trunk_network: str,
                  trunk_pretrained: bool = True,
                  trunk_eval_mode: bool = True,

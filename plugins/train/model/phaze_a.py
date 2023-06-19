@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
+from tensorflow.python.keras.layers import LayerNormalization
 
 from lib.model.nn_blocks import (
     Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,
     UpscaleResizeImagesBlock, UpscaleDNYBlock)
 from lib.model.normalization import (
-    AdaInstanceNormalization, GroupNormalization, InstanceNormalization, LayerNormalization,
-    RMSNormalization)
+    AdaInstanceNormalization, GroupNormalization, InstanceNormalization, RMSNormalization)
 from lib.utils import get_backend, get_tf_version, FaceswapError
 
 from ._base import KerasModel, ModelBase, get_all_sub_models

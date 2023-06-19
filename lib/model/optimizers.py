@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """ Custom Optimizers for TensorFlow 2.x/tf.keras """
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import inspect
 import sys
@@ -10,8 +7,8 @@ import sys
 import tensorflow as tf
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.optimizers import (Adam, Nadam, RMSprop)  # noqa pylint:disable=no-name-in-module,unused-import,import-error
-from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
+from tensorflow.python.keras.optimizers import Adam, Nadam, RMSprop  # noqa:F401,E501  # pylint:disable=no-name-in-module,unused-import
+from tensorflow.python.keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
 
 
 class AdaBelief(tf.keras.optimizers.Optimizer):
@@ -381,18 +378,18 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
             The optimizer configuration.
         """
         config = super().get_config()
-        config.update(dict(learning_rate=self._serialize_hyperparameter("learning_rate"),
-                           beta_1=self._serialize_hyperparameter("beta_1"),
-                           beta_2=self._serialize_hyperparameter("beta_2"),
-                           decay=self._serialize_hyperparameter("decay"),
-                           weight_decay=self._serialize_hyperparameter("weight_decay"),
-                           sma_threshold=self._serialize_hyperparameter("sma_threshold"),
-                           epsilon=self.epsilon,
-                           amsgrad=self.amsgrad,
-                           rectify=self.rectify,
-                           total_steps=self._serialize_hyperparameter("total_steps"),
-                           warmup_proportion=self._serialize_hyperparameter("warmup_proportion"),
-                           min_lr=self._serialize_hyperparameter("min_lr")))
+        config.update({"learning_rate": self._serialize_hyperparameter("learning_rate"),
+                       "beta_1": self._serialize_hyperparameter("beta_1"),
+                       "beta_2": self._serialize_hyperparameter("beta_2"),
+                       "decay": self._serialize_hyperparameter("decay"),
+                       "weight_decay": self._serialize_hyperparameter("weight_decay"),
+                       "sma_threshold": self._serialize_hyperparameter("sma_threshold"),
+                       "epsilon": self.epsilon,
+                       "amsgrad": self.amsgrad,
+                       "rectify": self.rectify,
+                       "total_steps": self._serialize_hyperparameter("total_steps"),
+                       "warmup_proportion": self._serialize_hyperparameter("warmup_proportion"),
+                       "min_lr": self._serialize_hyperparameter("min_lr")})
         return config
 
 

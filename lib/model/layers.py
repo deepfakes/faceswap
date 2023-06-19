@@ -7,21 +7,12 @@ import sys
 import inspect
 
 import tensorflow as tf
-
-from lib.utils import get_backend
-
-if get_backend() == "amd":
-    from lib.plaidml_utils import pad
-    from keras.utils import get_custom_objects, conv_utils  # pylint:disable=no-name-in-module
-    import keras.backend as K
-    from keras.layers import InputSpec, Layer
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
-    from tensorflow.keras import backend as K  # pylint:disable=import-error
-    from tensorflow.keras.layers import InputSpec, Layer  # noqa pylint:disable=no-name-in-module,import-error
-    from tensorflow import pad  # type:ignore
-    from tensorflow.python.keras.utils import conv_utils  # pylint:disable=no-name-in-module
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.python.keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
+from tensorflow.python.keras import backend as K  # pylint:disable=no-name-in-module
+from tensorflow.python.keras.layers import InputSpec, Layer  # pylint:disable=no-name-in-module
+from tensorflow import pad  # type:ignore
+from tensorflow.python.keras.utils import conv_utils  # pylint:disable=no-name-in-module
 
 
 class PixelShuffler(Layer):
@@ -65,10 +56,7 @@ class PixelShuffler(Layer):
     """
     def __init__(self, size=(2, 2), data_format=None, **kwargs):
         super().__init__(**kwargs)
-        if get_backend() == "amd":
-            self.data_format = K.normalize_data_format(data_format)  # pylint:disable=no-member
-        else:
-            self.data_format = conv_utils.normalize_data_format(data_format)
+        self.data_format = conv_utils.normalize_data_format(data_format)
         self.size = conv_utils.normalize_tuple(size, 2, 'size')
 
     def call(self, inputs, *args, **kwargs):
@@ -238,10 +226,7 @@ class KResizeImages(Layer):
         else:
             # Arbitrary resizing
             size = int(round(K.int_shape(inputs)[1] * self.size))
-            if get_backend() != "amd":
-                retval = tf.image.resize(inputs, (size, size), method=self.interpolation)
-            else:
-                raise NotImplementedError
+            retval = tf.image.resize(inputs, (size, size), method=self.interpolation)
         return retval
 
     def compute_output_shape(self, input_shape):
@@ -271,7 +256,7 @@ class KResizeImages(Layer):
         dict
             A python dictionary containing the layer configuration
         """
-        config = dict(size=self.size, interpolation=self.interpolation)
+        config = {"size": self.size, "interpolation": self.interpolation}
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
@@ -325,10 +310,7 @@ class SubPixelUpscaling(Layer):
         super().__init__(**kwargs)
 
         self.scale_factor = scale_factor
-        if get_backend() == "amd":
-            self.data_format = K.normalize_data_format(data_format)  # pylint:disable=no-member
-        else:
-            self.data_format = conv_utils.normalize_data_format(data_format)
+        self.data_format = conv_utils.normalize_data_format(data_format)
 
     def build(self, input_shape):
         """Creates the layer weights.
@@ -543,7 +525,7 @@ class ReflectionPadding2D(Layer):
                 input_shape[2] + padding_width,
                 input_shape[3])
 
-    def call(self, var_x, mask=None):  # pylint:disable=unused-argument,arguments-differ
+    def call(self, inputs, *args, **kwargs):
         """This is where the layer's logic lives.
 
         Parameters
@@ -576,7 +558,7 @@ class ReflectionPadding2D(Layer):
         padding_left = padding_width // 2
         padding_right = padding_width - padding_left
 
-        return pad(var_x,
+        return pad(inputs,
                    [[0, 0],
                     [padding_top, padding_bot],
                     [padding_left, padding_right],
@@ -611,10 +593,7 @@ class _GlobalPooling2D(Layer):
     """
     def __init__(self, data_format=None, **kwargs):
         super().__init__(**kwargs)
-        if get_backend() == "amd":
-            self.data_format = K.normalize_data_format(data_format)  # pylint:disable=no-member
-        else:
-            self.data_format = conv_utils.normalize_data_format(data_format)
+        self.data_format = conv_utils.normalize_data_format(data_format)
         self.input_spec = InputSpec(ndim=4)
 
     def compute_output_shape(self, input_shape):
@@ -781,9 +760,6 @@ class Swish(Layer):
         inputs: tensor
             Input tensor, or list/tuple of input tensors
         """
-        if get_backend() == "amd":
-            return inputs * K.sigmoid(inputs * self.beta)
-        # Native TF Implementation has more memory-efficient gradients
         return tf.nn.swish(inputs * self.beta)
 
     def get_config(self):

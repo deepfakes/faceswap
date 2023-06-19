@@ -7,17 +7,9 @@ import inspect
 
 import numpy as np
 import tensorflow as tf
-
-from lib.utils import get_backend
-
-if get_backend() == "amd":
-    from keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
-    from keras import backend as K
-    from keras import initializers
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.utils import get_custom_objects  # noqa pylint:disable=no-name-in-module,import-error
-    from tensorflow.keras import initializers, backend as K  # noqa pylint:disable=no-name-in-module,import-error
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.python.keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
+from tensorflow.python.keras import initializers, backend as K  # pylint:disable=no-name-in-module
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -136,9 +128,6 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name,no-member
     def _space_to_depth(self, input_tensor):
         """ Space to depth implementation.
 
-        PlaidML does not have a space to depth operation, so calculate if backend is amd
-        otherwise returns the :func:`tensorflow.space_to_depth` operation.
-
         Parameters
         ----------
         input_tensor: tensor
@@ -149,16 +138,7 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name,no-member
         tensor
             The manipulated input tensor
         """
-        if get_backend() == "amd":
-            batch, height, width, depth = input_tensor.shape.dims
-            new_height = height // self.scale
-            new_width = width // self.scale
-            reshaped = K.reshape(input_tensor,
-                                 (batch, new_height, self.scale, new_width, self.scale, depth))
-            retval = K.reshape(K.permute_dimensions(reshaped, [0, 1, 3, 2, 4, 5]),
-                               (batch, new_height, new_width, -1))
-        else:
-            retval = tf.nn.space_to_depth(input_tensor, block_size=self.scale, data_format="NHWC")
+        retval = tf.nn.space_to_depth(input_tensor, block_size=self.scale, data_format="NHWC")
         logger.debug("Input shape: %s, Output shape: %s", input_tensor.shape, retval.shape)
         return retval
 
@@ -248,7 +228,7 @@ class ConvolutionAware(initializers.Initializer):  # pylint: disable=no-member
 
             transpose_dimensions = (2, 1, 0)
             kernel_shape = (row,)
-            correct_ifft = lambda shape, s=[None]: np.fft.irfft(shape, s[0])  # noqa
+            correct_ifft = lambda shape, s=[None]: np.fft.irfft(shape, s[0])  # noqa:E501,E731 # pylint:disable=unnecessary-lambda-assignment
             correct_fft = np.fft.rfft
 
         elif rank == 4:
@@ -317,9 +297,9 @@ class ConvolutionAware(initializers.Initializer):  # pylint: disable=no-member
         dict
             The configuration for ICNR Initialization
         """
-        return dict(eps_std=self.eps_std,
-                    seed=self.seed,
-                    initialized=self.initialized)
+        return {"eps_std": self.eps_std,
+                "seed": self.seed,
+                "initialized": self.initialized}
 
 
 # Update initializers into Keras custom objects

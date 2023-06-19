@@ -1,18 +1,14 @@
 #!/usr/bin/env python3
 """ Ports of existing NN Architecture for use in faceswap.py """
+from __future__ import annotations
 import logging
-from typing import Optional, Tuple
+import typing as T
 
-from lib.utils import get_backend
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.python.keras.layers import Concatenate, Conv2D, Input, MaxPool2D, ZeroPadding2D  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.python.keras.models import Model  # pylint:disable=no-name-in-module
 
-if get_backend() == "amd":
-    from keras.layers import Concatenate, Conv2D, Input, MaxPool2D, ZeroPadding2D
-    from keras.models import Model
-    from plaidml.tile import Value as Tensor
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.layers import Concatenate, Conv2D, Input, MaxPool2D, ZeroPadding2D  # noqa pylint:disable=no-name-in-module,import-error
-    from tensorflow.keras.models import Model  # noqa pylint:disable=no-name-in-module,import-error
+if T.TYPE_CHECKING:
     from tensorflow import Tensor
 
 
@@ -32,7 +28,7 @@ class _net():  # pylint:disable=too-few-public-methods
         The input shape for the model. Default: ``None``
     """
     def __init__(self,
-                 input_shape: Optional[Tuple[int, int, int]] = None) -> None:
+                 input_shape: T.Optional[T.Tuple[int, int, int]] = None) -> None:
         logger.debug("Initializing: %s (input_shape: %s)", self.__class__.__name__, input_shape)
         self._input_shape = (None, None, 3) if input_shape is None else input_shape
         assert len(self._input_shape) == 3 and self._input_shape[-1] == 3, (
@@ -57,7 +53,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
     input_shape, Tuple, optional
         The input shape for the model. Default: ``None``
     """
-    def __init__(self, input_shape: Optional[Tuple[int, int, int]] = None) -> None:
+    def __init__(self, input_shape: T.Optional[T.Tuple[int, int, int]] = None) -> None:
         super().__init__(input_shape)
         self._feature_indices = [0, 3, 6, 8, 10]  # For naming equivalent to PyTorch
         self._filters = [64, 192, 384, 256, 256]  # Filters at each block
