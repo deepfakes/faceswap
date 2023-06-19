@@ -134,13 +134,12 @@ ask_version() {
     # Ask which version of faceswap to install
     while true; do
         default=1
-        read -rp $'\e[36mSelect:\t1: NVIDIA\n\t2: AMD (ROCm)\n\t3: CPU\n\t4: AMD (PlaidML) - deprecated\n'"[default: $default]: "$'\e[97m' vers
+        read -rp $'\e[36mSelect:\t1: NVIDIA\n\t2: AMD (ROCm)\n\t3: CPU\n'"[default: $default]: "$'\e[97m' vers
         vers="${vers:-${default}}"
         case $vers in
             1) VERSION="nvidia" ; break ;;
             2) VERSION="rocm" ; break ;;
             3) VERSION="cpu" ; break ;;
-            4) VERSION="amd" ; PYENV_VERSION="3.8" ; break ;;
             * ) echo "Invalid selection." ;;
         esac
     done
@@ -281,11 +280,6 @@ faceswap_opts () {
     latest graphics card drivers installed from the relevant vendor. Please select the version\
     of Faceswap you wish to install."
     ask_version
-    if [ $VERSION == "amd" ] ; then
-        warn "PlaidML support is deprecated and will be removed in a future update. If possible \
-        please consider using the ROCm version"
-        sleep 2
-    fi
     if [ $VERSION == "rocm" ] ; then
         warn "ROCm support is experimental. Please make sure that your GPU is supported by ROCm and that \
         ROCm has been installed on your system before proceeding. Installation instructions: \
@@ -328,10 +322,6 @@ review() {
     fi
     echo "        - Faceswap will be installed in '$DIR_FACESWAP'"
     echo "        - Installing for '$VERSION'"
-    if [ $VERSION == "amd" ] ; then
-        echo -e "          \e[33m- Note: '$VERSION' is deprecated and will be removed in a\e[97m"
-        echo -e "          \e[33m  future update. Consider using the ROCm version.\e[97m"
-    fi
     if [ $VERSION == "rocm" ] ; then
         echo -e "          \e[33m- Note: Please ensure that ROCm is supported by your GPU\e[97m"
         echo -e "          \e[33m  and is installed prior to proceeding.\e[97m"
