@@ -79,7 +79,7 @@ We are very troubled by the fact that FaceSwap can be used for unethical and dis
 # How To setup and run the project
 FaceSwap is a Python program that will run on multiple Operating Systems including Windows, Linux, and MacOS.
 
-See [INSTALL.md](INSTALL.md) for full installation instructions. You will need a modern GPU with CUDA support for best performance. AMD GPUs are partially supported.
+See [INSTALL.md](INSTALL.md) for full installation instructions. You will need a modern GPU with CUDA support for best performance. Many AMD GPUs are supported through DirectML (Windows) and ROCm (Linux).
 
 # Overview
 The project has multiple entry points. You will have to:
