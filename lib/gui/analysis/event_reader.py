@@ -16,7 +16,6 @@ from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
 from lib.serializer import get_serializer
-from lib.utils import get_backend
 
 if sys.version_info < (3, 8):
     from typing_extensions import Literal
@@ -692,9 +691,6 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                     continue
                 if event.summary.value[0].tag == "keras":
                     self._parse_outputs(event)
-                if get_backend() == "amd":
-                    # No model is logged for AMD so need to get loss labels from state file
-                    self._add_amd_loss_labels(session_id)
                 if event.summary.value[0].tag.startswith("batch_"):
                     data[event.step] = self._process_event(event,
                                                            data.get(event.step, EventData()))
@@ -771,28 +767,6 @@ class _EventParser():  # pylint:disable=too-few-public-methods
                          outputs, outputs.shape)
         return outputs
 
-    def _add_amd_loss_labels(self, session_id: int) -> None:
-        """ It is not possible to store the model config in the Tensorboard logs for AMD so we
-        need to obtain the loss labels from the model's state file. This is called now so we know
-        event data is being written, and therefore the most current loss label data is available
-        in the state file.
-
-        Loss names are added to :attr:`_loss_labels`
-
-        Parameters
-        ----------
-        session_id: int
-            The session id that the data is being cached for
-
-        """
-        if self._cache._loss_labels:  # pylint:disable=protected-access
-            return
-        # Import global session here to prevent circular import
-        from . import Session  # pylint:disable=import-outside-toplevel
-        loss_labels = sorted(Session.get_loss_keys(session_id=session_id))
-        self._loss_labels = loss_labels
-        logger.debug("Collated loss labels: %s", self._loss_labels)
-
     @classmethod
     def _process_event(cls, event: event_pb2.Event, step: EventData) -> EventData:
         """ Process a single Tensorflow event.
@@ -815,7 +789,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         """
         summary = event.summary.value[0]
 
-        if summary.tag in ("batch_loss", "batch_total"):  # Pre tf2.3 totals were "batch_total"
+        if summary.tag == "batch_loss":
             step.timestamp = event.wall_time
             return step
 

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from typing import Any, Callable, cast, List
 
-from comtypes import COMError, IUnknown, GUID, STDMETHOD, HRESULT
+from comtypes import COMError, IUnknown, GUID, STDMETHOD, HRESULT  # pylint:disable=import-error
 
 from ._base import _GPUStats
 
@@ -168,7 +168,7 @@ class DXGIQueryVideoMemoryInfo(StructureRepr):  # pylint:disable=too-few-public-
 
 
 # COM OBjects
-class IDXObject(IUnknown):
+class IDXObject(IUnknown):  # pylint:disable=too-few-public-methods
     """ Base interface for all DXGI objects.
 
     Reference
@@ -184,7 +184,7 @@ class IDXObject(IUnknown):
                  STDMETHOD(HRESULT, "GetParent", [GUID, POINTER(POINTER(ctypes.c_void_p))])]
 
 
-class IDXGIFactory6(IDXObject):
+class IDXGIFactory6(IDXObject):  # pylint:disable=too-few-public-methods
     """ Implements methods for generating DXGI objects
 
     Reference
@@ -224,7 +224,7 @@ class IDXGIFactory6(IDXObject):
                             POINTER(ctypes.c_void_p)])]
 
 
-class IDXGIAdapter3(IDXObject):
+class IDXGIAdapter3(IDXObject):  # pylint:disable=too-few-public-methods
     """ Represents a display sub-system (including one or more GPU's, DACs and video memory).
 
     Reference
@@ -536,8 +536,8 @@ class DirectML(_GPUStats):
         If :attr:`_is_initialized` is ``True`` then this function just returns performing no
         action.
 
-        if ``False`` then PlaidML is setup, if not already, and GPU information is extracted
-        from the PlaidML context.
+        if ``False`` then DirectML is setup, if not already, and GPU information is extracted
+        from the DirectML context.
         """
         if self._is_initialized:
             return
