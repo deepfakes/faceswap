@@ -60,13 +60,13 @@ class Environment():
         setup is running. Default: ``False``
     """
 
-    _backends = (("nvidia", "amd", "apple_silicon", "directml", "rocm", "cpu"))
+    _backends = (("nvidia", "apple_silicon", "directml", "rocm", "cpu"))
 
     def __init__(self, updater: bool = False) -> None:
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
-        self.backend: Optional[Literal["nvidia", "amd", "apple_silicon",
+        self.backend: Optional[Literal["nvidia", "apple_silicon",
                                        "directml", "cpu", "rocm"]] = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
@@ -130,7 +130,7 @@ class Environment():
                       (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
         else:
             prefix = os.path.dirname(sys.prefix)
-            retval = (os.path.basename(prefix) == "envs")
+            retval = os.path.basename(prefix) == "envs"
         return retval
 
     def _process_arguments(self) -> None:
@@ -185,10 +185,6 @@ class Environment():
             logger.error("Please run this script with Python version 3.7 to 3.9 64bit and try "
                          "again.")
             sys.exit(1)
-        if self.backend == "amd" and sys.version_info >= (3, 9):
-            logger.error("The AMD version of Faceswap cannot be installed on versions of Python "
-                         "higher than 3.8")
-            sys.exit(1)
 
     def _output_runtime_info(self) -> None:
         """ Output run time info """
@@ -240,10 +236,6 @@ class Environment():
         Update the LD_LIBRARY_PATH environment variable when activating a conda environment
         and revert it when deactivating.
 
-        Windows + AMD + Python 3.8:
-        Add CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1 environment variable to get around a bug which
-        prevents SciPy from loading in this config: https://github.com/scipy/scipy/issues/14002
-
         Notes
         -----
         From Tensorflow 2.7, installing Cuda Toolkit from conda-forge and tensorflow from pip
@@ -255,10 +247,8 @@ class Environment():
             return
 
         linux_update = self.os_version[0].lower() == "linux" and self.backend == "nvidia"
-        windows_update = (self.os_version[0].lower() == "windows" and
-                          self.backend == "amd" and (3, 8) <= sys.version_info < (3, 9))
 
-        if not linux_update and not windows_update:
+        if not linux_update:
             return
 
         conda_prefix = os.environ["CONDA_PREFIX"]
@@ -267,9 +257,8 @@ class Environment():
         os.makedirs(activate_folder, exist_ok=True)
         os.makedirs(deactivate_folder, exist_ok=True)
 
-        ext = ".bat" if windows_update else ".sh"
-        activate_script = os.path.join(conda_prefix, activate_folder, f"env_vars{ext}")
-        deactivate_script = os.path.join(conda_prefix, deactivate_folder, f"env_vars{ext}")
+        activate_script = os.path.join(conda_prefix, activate_folder, "env_vars.sh")
+        deactivate_script = os.path.join(conda_prefix, deactivate_folder, "env_vars.sh")
 
         if os.path.isfile(activate_script):
             # Only create file if it does not already exist. There may be instances where people
@@ -277,22 +266,14 @@ class Environment():
             # people should already know what they are doing.
             return
 
-        if linux_update:
-            conda_libs = os.path.join(conda_prefix, "lib")
-            activate = ["#!/bin/sh\n\n",
-                        "export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\n",
-                        f"export LD_LIBRARY_PATH='{conda_libs}':${{LD_LIBRARY_PATH}}\n"]
-            deactivate = ["#!/bin/sh\n\n",
-                          "export LD_LIBRARY_PATH=${OLD_LD_LIBRARY_PATH}\n",
-                          "unset OLD_LD_LIBRARY_PATH\n"]
-            logger.info("Cuda search path set to '%s'", conda_libs)
-
-        if windows_update:
-            activate = ["@ECHO OFF\n",
-                        "set CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1\n"]
-            deactivate = ["@ECHO OFF\n",
-                          "set CONDA_DLL_SEARCH_MODIFICATION_ENABLE=\n"]
-            logger.verbose("CONDA_DLL_SEARCH_MODIFICATION_ENABLE set to 1")  # type: ignore
+        conda_libs = os.path.join(conda_prefix, "lib")
+        activate = ["#!/bin/sh\n\n",
+                    "export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}\n",
+                    f"export LD_LIBRARY_PATH='{conda_libs}':${{LD_LIBRARY_PATH}}\n"]
+        deactivate = ["#!/bin/sh\n\n",
+                      "export LD_LIBRARY_PATH=${OLD_LD_LIBRARY_PATH}\n",
+                      "unset OLD_LD_LIBRARY_PATH\n"]
+        logger.info("Cuda search path set to '%s'", conda_libs)
 
         with open(activate_script, "w", encoding="utf8") as afile:
             afile.writelines(activate)
@@ -628,28 +609,10 @@ class Checks():  # pylint:disable=too-few-public-methods
             logger.info("DirectML Support Enabled")
             self._env.backend = "directml"
 
-    def _amd_ask_enable(self) -> None:
-        """ Set backend to 'amd' to use plaidML if AMD support required """
-        msg = ""
-        if self._env.os_version[0] == "Windows":
-            msg = "AMD users should select 'DirectML support' if possible.\r\n"
-        if self._env.os_version[0] == "Linux":
-            msg = "AMD users should select 'ROCm support' if possible.\r\n"
-
-        logger.info("AMD Support:\r\nThis version is deprecated and will be removed from a future "
-                    "update.\r\n%s"
-                    "Nvidia Users MUST answer 'no' to this option.", msg)
-        i = input("Enable AMD Support? [y/N] ")
-        if i in ("Y", "y"):
-            logger.info("AMD Support Enabled")
-            self._env.backend = "amd"
-
     def _user_input(self) -> None:
         """ Get user input for AMD/DirectML/ROCm/Cuda/Docker """
         self._directml_ask_enable()
         self._rocm_ask_enable()
-        if not self._env.backend:
-            self._amd_ask_enable()
         if not self._env.backend:
             self._docker_ask_enable()
             self._cuda_ask_enable()
