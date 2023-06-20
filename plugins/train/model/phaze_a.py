@@ -51,9 +51,6 @@ class _EncoderInfo:
         exist in Keras Applications
     default_size: int
         The default input size of the encoder
-    no_amd: bool, optional
-        ``True`` if the encoder is not compatible with the PlaidML backend otherwise ``False``.
-        Default: ``False``
     tf_min: float, optional
         The lowest version of Tensorflow that the encoder can be used for. Default: `2.0`
     scaling: tuple, optional
@@ -68,7 +65,6 @@ class _EncoderInfo:
     """
     keras_name: str
     default_size: int
-    no_amd: bool = False
     tf_min: T.Tuple[int, int] = (2, 0)
     scaling: T.Tuple[int, int] = (0, 1)
     min_size: int = 32
@@ -84,50 +80,35 @@ _MODEL_MAPPING: T.Dict[str, _EncoderInfo] = {
     "densenet201": _EncoderInfo(
         keras_name="DenseNet201", default_size=224),
     "efficientnet_b0": _EncoderInfo(
-        keras_name="EfficientNetB0",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=224),
+        keras_name="EfficientNetB0", tf_min=(2, 3), scaling=(0, 255), default_size=224),
     "efficientnet_b1": _EncoderInfo(
-        keras_name="EfficientNetB1",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=240),
+        keras_name="EfficientNetB1", tf_min=(2, 3), scaling=(0, 255), default_size=240),
     "efficientnet_b2": _EncoderInfo(
-        keras_name="EfficientNetB2",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=260),
+        keras_name="EfficientNetB2", tf_min=(2, 3), scaling=(0, 255), default_size=260),
     "efficientnet_b3": _EncoderInfo(
-        keras_name="EfficientNetB3",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=300),
+        keras_name="EfficientNetB3", tf_min=(2, 3), scaling=(0, 255), default_size=300),
     "efficientnet_b4": _EncoderInfo(
-        keras_name="EfficientNetB4",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=380),
+        keras_name="EfficientNetB4", tf_min=(2, 3), scaling=(0, 255), default_size=380),
     "efficientnet_b5": _EncoderInfo(
-        keras_name="EfficientNetB5",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=456),
+        keras_name="EfficientNetB5", tf_min=(2, 3), scaling=(0, 255), default_size=456),
     "efficientnet_b6": _EncoderInfo(
-        keras_name="EfficientNetB6",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=528),
+        keras_name="EfficientNetB6", tf_min=(2, 3), scaling=(0, 255), default_size=528),
     "efficientnet_b7": _EncoderInfo(
-        keras_name="EfficientNetB7",
-        no_amd=True, tf_min=(2, 3), scaling=(0, 255), default_size=600),
+        keras_name="EfficientNetB7", tf_min=(2, 3), scaling=(0, 255), default_size=600),
     "efficientnet_v2_b0": _EncoderInfo(
-        keras_name="EfficientNetV2B0",
-        no_amd=True, tf_min=(2, 8), scaling=(-1, 1), default_size=224),
+        keras_name="EfficientNetV2B0", tf_min=(2, 8), scaling=(-1, 1), default_size=224),
     "efficientnet_v2_b1": _EncoderInfo(
-        keras_name="EfficientNetV2B1",
-        no_amd=True, tf_min=(2, 8), scaling=(-1, 1), default_size=240),
+        keras_name="EfficientNetV2B1", tf_min=(2, 8), scaling=(-1, 1), default_size=240),
     "efficientnet_v2_b2": _EncoderInfo(
-        keras_name="EfficientNetV2B2",
-        no_amd=True, tf_min=(2, 8), scaling=(-1, 1), default_size=260),
+        keras_name="EfficientNetV2B2", tf_min=(2, 8), scaling=(-1, 1), default_size=260),
     "efficientnet_v2_b3": _EncoderInfo(
-        keras_name="EfficientNetV2B3",
-        no_amd=True, tf_min=(2, 8), scaling=(-1, 1), default_size=300),
+        keras_name="EfficientNetV2B3", tf_min=(2, 8), scaling=(-1, 1), default_size=300),
     "efficientnet_v2_s": _EncoderInfo(
-        keras_name="EfficientNetV2S",
-        no_amd=True, tf_min=(2, 8), scaling=(-1, 1), default_size=384),
+        keras_name="EfficientNetV2S", tf_min=(2, 8), scaling=(-1, 1), default_size=384),
     "efficientnet_v2_m": _EncoderInfo(
-        keras_name="EfficientNetV2M",
-        no_amd=True, tf_min=(2, 8), scaling=(-1, 1), default_size=480),
+        keras_name="EfficientNetV2M", tf_min=(2, 8), scaling=(-1, 1), default_size=480),
     "efficientnet_v2_l": _EncoderInfo(
-        keras_name="EfficientNetV2L",
-        no_amd=True, tf_min=(2, 8), scaling=(-1, 1), default_size=480),
+        keras_name="EfficientNetV2L", tf_min=(2, 8), scaling=(-1, 1), default_size=480),
     "inception_resnet_v2": _EncoderInfo(
         keras_name="InceptionResNetV2", scaling=(-1, 1), min_size=75, default_size=299),
     "inception_v3": _EncoderInfo(
@@ -137,11 +118,9 @@ _MODEL_MAPPING: T.Dict[str, _EncoderInfo] = {
     "mobilenet_v2": _EncoderInfo(
         keras_name="MobileNetV2", scaling=(-1, 1), default_size=224),
     "mobilenet_v3_large": _EncoderInfo(
-        keras_name="MobileNetV3Large",
-        no_amd=True, tf_min=(2, 4), scaling=(-1, 1), default_size=224),
+        keras_name="MobileNetV3Large", tf_min=(2, 4), scaling=(-1, 1), default_size=224),
     "mobilenet_v3_small": _EncoderInfo(
-        keras_name="MobileNetV3Small",
-        no_amd=True, tf_min=(2, 4), scaling=(-1, 1), default_size=224),
+        keras_name="MobileNetV3Small", tf_min=(2, 4), scaling=(-1, 1), default_size=224),
     "nasnet_large": _EncoderInfo(
         keras_name="NASNetLarge", scaling=(-1, 1), default_size=331, enforce_for_weights=True),
     "nasnet_mobile": _EncoderInfo(
@@ -149,15 +128,15 @@ _MODEL_MAPPING: T.Dict[str, _EncoderInfo] = {
     "resnet50": _EncoderInfo(
         keras_name="ResNet50", scaling=(-1, 1), min_size=32, default_size=224),
     "resnet50_v2": _EncoderInfo(
-        keras_name="ResNet50V2", no_amd=True, scaling=(-1, 1), default_size=224),
+        keras_name="ResNet50V2", scaling=(-1, 1), default_size=224),
     "resnet101": _EncoderInfo(
-        keras_name="ResNet101", no_amd=True, scaling=(-1, 1), default_size=224),
+        keras_name="ResNet101", scaling=(-1, 1), default_size=224),
     "resnet101_v2": _EncoderInfo(
-        keras_name="ResNet101V2", no_amd=True, scaling=(-1, 1), default_size=224),
+        keras_name="ResNet101V2", scaling=(-1, 1), default_size=224),
     "resnet152": _EncoderInfo(
-        keras_name="ResNet152", no_amd=True, scaling=(-1, 1), default_size=224),
+        keras_name="ResNet152", scaling=(-1, 1), default_size=224),
     "resnet152_v2": _EncoderInfo(
-        keras_name="ResNet152V2", no_amd=True, scaling=(-1, 1), default_size=224),
+        keras_name="ResNet152V2", scaling=(-1, 1), default_size=224),
     "vgg16": _EncoderInfo(
         keras_name="VGG16", color_order="bgr", scaling=(0, 255), default_size=224),
     "vgg19": _EncoderInfo(

@@ -72,7 +72,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        inputs: :class:`plaidml.tile.Value` or :class:`tf.Tensor`
+        inputs: :class:`tf.Tensor`
             The input tensor to the block
         padding: int
             The amount of zero paddin to apply prior to convolution
@@ -89,7 +89,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`plaidml.tile.Value` or :class:`tf.Tensor`
+        :class:`tf.Tensor`
             The output of the Convolutional block
         """
         name = f"features.{block_idx}"
@@ -160,7 +160,7 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
 
         Parameters
         ----------
-        inputs: :class:`plaidml.tile.Value` or :class:`tf.Tensor`
+        inputs: :class:`tf.Tensor`
             The input to the fire block
         squeeze_planes: int
             The number of filters for the squeeze convolution
@@ -171,7 +171,7 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
 
         Returns
         -------
-        :class:`plaidml.tile.Value` or :class:`tf.Tensor`
+        :class:`tf.Tensor`
             The output of the SqueezeNet fire block
         """
         name = f"features.{block_idx}"

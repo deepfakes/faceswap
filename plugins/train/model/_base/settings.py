@@ -349,9 +349,7 @@ class Settings():
     Sets backend tensorflow settings prior to launching the model.
 
     Tensorflow 2 uses distribution strategies for multi-GPU/system training. These are context
-    managers. To enable the code to be more readable, we handle strategies the same way for Nvidia
-    and AMD backends. PlaidML does not support strategies, but we need to still create a context
-    manager so that we don't need branching logic.
+    managers.
 
     Parameters
     ----------

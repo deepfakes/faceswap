@@ -19,11 +19,7 @@ from lib.utils import get_backend
 
 
 def block_test(layer_func, kwargs={}, input_shape=None):
-    """Test routine for faceswap neural network blocks.
-
-    Tests are simple and are to ensure that the blocks compile on both tensorflow
-    and plaidml backends
-    """
+    """Test routine for faceswap neural network blocks. """
     # generate input data
     assert input_shape
     input_dtype = K.floatx()

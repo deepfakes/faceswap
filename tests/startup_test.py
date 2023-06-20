@@ -23,7 +23,6 @@ def test_backend(dummy):  # pylint:disable=unused-argument
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_keras(dummy):  # pylint:disable=unused-argument
-    """ Sanity check to ensure that tensorflow keras is being used for CPU and standard
-    keras for AMD. """
+    """ Sanity check to ensure that tensorflow keras is being used for CPU """
     assert (_BACKEND in ("cpu", "directml")
             and keras.__version__ in ("2.7.0", "2.8.0", "2.9.0", "2.10.0"))

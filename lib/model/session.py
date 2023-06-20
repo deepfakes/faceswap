@@ -76,9 +76,7 @@ class KSession():
         """ Get predictions from the model.
 
         This method is a wrapper for :func:`keras.predict()` function. For Tensorflow backends
-        this is a straight call to the predict function. For PlaidML backends, this attempts
-        to optimize the inference batch sizes to reduce the number of kernels that need to be
-        compiled.
+        this is a straight call to the predict function.
 
         Parameters
         ----------
