@@ -8,7 +8,7 @@ import pytest
 import numpy as np
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras import backend as K, losses as k_losses  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras import backend as K, losses as k_losses  # noqa:E501  # pylint:disable=import-error
 
 
 from lib.model import losses
@@ -42,7 +42,7 @@ _LWPARAMS = [losses.DSSIMObjective(),
              losses.LaplacianPyramidLoss(),
              losses.LDRFLIPLoss(),
              losses.LInfNorm(),
-             losses.k_losses.logcosh,  # pylint:disable=no-member
+             k_losses.logcosh,  # pylint:disable=no-member
              k_losses.mean_absolute_error,
              k_losses.mean_squared_error,
              losses.MSSIMLoss()]

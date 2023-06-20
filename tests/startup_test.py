@@ -6,7 +6,7 @@ import pytest
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
 from tensorflow import keras
-from tensorflow.python.keras import backend as K  # pylint:disable=no-name-in-module
+from tensorflow.keras import backend as K  # pylint:disable=import-error
 
 from lib.utils import get_backend
 

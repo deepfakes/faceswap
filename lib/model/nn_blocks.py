@@ -5,10 +5,10 @@ import logging
 import typing as T
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.layers import (  # pylint:disable=no-name-in-module
+from tensorflow.keras.layers import (  # pylint:disable=import-error
     Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
     DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
-from tensorflow.python.keras.initializers import he_uniform, VarianceScaling  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras.initializers import he_uniform, VarianceScaling  # noqa:E501  # pylint:disable=import-error
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages

@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU  # noqa:E501  # pylint:disable=import-error
 
 from lib.model.session import KSession
 from ._base import BatchType, Detector

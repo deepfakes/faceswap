@@ -16,7 +16,7 @@ import sys
 import typing as T
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=import-error
 
 from lib.model.backup_restore import Backup
 from lib.utils import FaceswapError

@@ -4,14 +4,15 @@ import inspect
 import sys
 
 import tensorflow as tf
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras import initializers, regularizers, constraints, backend as K  # noqa:E501  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.layers import InputSpec, Layer  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
+
+# Fix intellisense/linting for tf.keras' thoroughly broken import system
 from tensorflow.python.keras.utils.conv_utils import normalize_data_format  # noqa:E501 # pylint:disable=no-name-in-module
+keras = tf.keras
+layers = keras.layers
+K = keras.backend
 
 
-class AdaInstanceNormalization(Layer):
+class AdaInstanceNormalization(layers.Layer):  # type:ignore[name-defined]
     """ Adaptive Instance Normalization Layer for Keras.
 
     Parameters
@@ -130,7 +131,7 @@ class AdaInstanceNormalization(Layer):
         return input_shape[0]
 
 
-class GroupNormalization(Layer):
+class GroupNormalization(layers.Layer):  # type:ignore[name-defined]
     """ Group Normalization
 
     Parameters
@@ -169,10 +170,10 @@ class GroupNormalization(Layer):
         self.gamma = None
         super().__init__(**kwargs)
         self.axis = axis if isinstance(axis, (list, tuple)) else [axis]
-        self.gamma_init = initializers.get(gamma_init)
-        self.beta_init = initializers.get(beta_init)
-        self.gamma_regularizer = regularizers.get(gamma_regularizer)
-        self.beta_regularizer = regularizers.get(beta_regularizer)
+        self.gamma_init = keras.initializers.get(gamma_init)
+        self.beta_init = keras.initializers.get(beta_init)
+        self.gamma_regularizer = keras.regularizers.get(gamma_regularizer)
+        self.beta_regularizer = keras.regularizers.get(beta_regularizer)
         self.epsilon = epsilon
         self.group = group
         self.data_format = normalize_data_format(data_format)
@@ -188,7 +189,7 @@ class GroupNormalization(Layer):
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        input_spec = [InputSpec(shape=input_shape)]
+        input_spec = [layers.InputSpec(shape=input_shape)]
         self.input_spec = input_spec  # pylint:disable=attribute-defined-outside-init
         shape = [1 for _ in input_shape]
         if self.data_format == 'channels_last':
@@ -298,16 +299,16 @@ class GroupNormalization(Layer):
         """
         config = {'epsilon': self.epsilon,
                   'axis': self.axis,
-                  'gamma_init': initializers.serialize(self.gamma_init),
-                  'beta_init': initializers.serialize(self.beta_init),
-                  'gamma_regularizer': regularizers.serialize(self.gamma_regularizer),
-                  'beta_regularizer': regularizers.serialize(self.gamma_regularizer),
+                  'gamma_init': keras.initializers.serialize(self.gamma_init),
+                  'beta_init': keras.initializers.serialize(self.beta_init),
+                  'gamma_regularizer': keras.regularizers.serialize(self.gamma_regularizer),
+                  'beta_regularizer': keras.regularizers.serialize(self.gamma_regularizer),
                   'group': self.group}
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class InstanceNormalization(Layer):
+class InstanceNormalization(layers.Layer):  # type:ignore[name-defined]
     """Instance normalization layer (Lei Ba et al, 2016, Ulyanov et al., 2016).
 
     Normalize the activations of the previous layer at each step, i.e. applies a transformation
@@ -371,12 +372,12 @@ class InstanceNormalization(Layer):
         self.epsilon = epsilon
         self.center = center
         self.scale = scale
-        self.beta_initializer = initializers.get(beta_initializer)
-        self.gamma_initializer = initializers.get(gamma_initializer)
-        self.beta_regularizer = regularizers.get(beta_regularizer)
-        self.gamma_regularizer = regularizers.get(gamma_regularizer)
-        self.beta_constraint = constraints.get(beta_constraint)
-        self.gamma_constraint = constraints.get(gamma_constraint)
+        self.beta_initializer = keras.initializers.get(beta_initializer)
+        self.gamma_initializer = keras.initializers.get(gamma_initializer)
+        self.beta_regularizer = keras.regularizers.get(beta_regularizer)
+        self.gamma_regularizer = keras.regularizers.get(gamma_regularizer)
+        self.beta_constraint = keras.constraints.get(beta_constraint)
+        self.gamma_constraint = keras.constraints.get(gamma_constraint)
 
     def build(self, input_shape):
         """Creates the layer weights.
@@ -394,7 +395,7 @@ class InstanceNormalization(Layer):
         if (self.axis is not None) and (ndim == 2):
             raise ValueError("Cannot specify axis for rank 1 tensor")
 
-        self.input_spec = InputSpec(ndim=ndim)  # pylint:disable=attribute-defined-outside-init
+        self.input_spec = layers.InputSpec(ndim=ndim)  # noqa:E501  pylint:disable=attribute-defined-outside-init
 
         if self.axis is None:
             shape = (1,)
@@ -476,18 +477,18 @@ class InstanceNormalization(Layer):
             "epsilon": self.epsilon,
             "center": self.center,
             "scale": self.scale,
-            "beta_initializer": initializers.serialize(self.beta_initializer),
-            "gamma_initializer": initializers.serialize(self.gamma_initializer),
-            "beta_regularizer": regularizers.serialize(self.beta_regularizer),
-            "gamma_regularizer": regularizers.serialize(self.gamma_regularizer),
-            "beta_constraint": constraints.serialize(self.beta_constraint),
-            "gamma_constraint": constraints.serialize(self.gamma_constraint)
+            "beta_initializer": keras.initializers.serialize(self.beta_initializer),
+            "gamma_initializer": keras.initializers.serialize(self.gamma_initializer),
+            "beta_regularizer": keras.regularizers.serialize(self.beta_regularizer),
+            "gamma_regularizer": keras.regularizers.serialize(self.gamma_regularizer),
+            "beta_constraint": keras.constraints.serialize(self.beta_constraint),
+            "gamma_constraint": keras.constraints.serialize(self.gamma_constraint)
         }
         base_config = super().get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class RMSNormalization(Layer):
+class RMSNormalization(layers.Layer):  # type:ignore[name-defined]
     """ Root Mean Square Layer Normalization (Biao Zhang, Rico Sennrich, 2019)
 
     RMSNorm is a simplification of the original layer normalization (LayerNorm). LayerNorm is a
@@ -645,4 +646,4 @@ class RMSNormalization(Layer):
 # Update normalization into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({name: obj})
+        keras.utils.get_custom_objects().update({name: obj})

@@ -7,15 +7,15 @@ import sys
 import inspect
 
 import tensorflow as tf
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
-from tensorflow.python.keras import backend as K  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.layers import InputSpec, Layer  # pylint:disable=no-name-in-module
-from tensorflow import pad  # type:ignore
+
+# Fix intellisense/linting for tf.keras' thoroughly broken import system
 from tensorflow.python.keras.utils import conv_utils  # pylint:disable=no-name-in-module
+keras = tf.keras
+layers = keras.layers
+K = keras.backend
 
 
-class PixelShuffler(Layer):
+class PixelShuffler(keras.layers.Layer):  # type:ignore[name-defined]
     """ PixelShuffler layer for Keras.
 
     This layer requires a Convolution2D prior to it, having output filters computed according to
@@ -183,7 +183,7 @@ class PixelShuffler(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class KResizeImages(Layer):
+class KResizeImages(keras.layers.Layer):  # type:ignore[name-defined]
     """ A custom upscale function that uses :class:`keras.backend.resize_images` to upsample.
 
     Parameters
@@ -261,7 +261,7 @@ class KResizeImages(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class SubPixelUpscaling(Layer):
+class SubPixelUpscaling(keras.layers.Layer):  # type:ignore[name-defined]
     """ Sub-pixel convolutional up-scaling layer.
 
     This layer requires a Convolution2D prior to it, having output filters computed according to
@@ -454,7 +454,7 @@ class SubPixelUpscaling(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class ReflectionPadding2D(Layer):
+class ReflectionPadding2D(keras.layers.Layer):  # type:ignore[name-defined]
     """Reflection-padding layer for 2D input (e.g. picture).
 
     This layer can add rows and columns at the top, bottom, left and right side of an image tensor.
@@ -488,7 +488,7 @@ class ReflectionPadding2D(Layer):
             Keras tensor (future input to layer) or ``list``/``tuple`` of Keras tensors to
             reference for weight shape computations.
         """
-        self.input_spec = [InputSpec(shape=input_shape)]
+        self.input_spec = [keras.layers.InputSpec(shape=input_shape)]
         super().build(input_shape)
 
     def compute_output_shape(self, input_shape):
@@ -558,12 +558,12 @@ class ReflectionPadding2D(Layer):
         padding_left = padding_width // 2
         padding_right = padding_width - padding_left
 
-        return pad(inputs,
-                   [[0, 0],
-                    [padding_top, padding_bot],
-                    [padding_left, padding_right],
-                    [0, 0]],
-                   'REFLECT')
+        return tf.pad(inputs,
+                      [[0, 0],
+                       [padding_top, padding_bot],
+                       [padding_left, padding_right],
+                       [0, 0]],
+                      'REFLECT')
 
     def get_config(self):
         """Returns the config of the layer.
@@ -586,7 +586,7 @@ class ReflectionPadding2D(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class _GlobalPooling2D(Layer):
+class _GlobalPooling2D(keras.layers.Layer):  # type:ignore[name-defined]
     """Abstract class for different global pooling 2D layers.
 
     From keras as access to pooling is trickier in tensorflow.keras
@@ -594,7 +594,7 @@ class _GlobalPooling2D(Layer):
     def __init__(self, data_format=None, **kwargs):
         super().__init__(**kwargs)
         self.data_format = conv_utils.normalize_data_format(data_format)
-        self.input_spec = InputSpec(ndim=4)
+        self.input_spec = keras.layers.InputSpec(ndim=4)
 
     def compute_output_shape(self, input_shape):
         """ Compute the output shape based on the input shape.
@@ -683,7 +683,7 @@ class GlobalStdDevPooling2D(_GlobalPooling2D):
         return pooled
 
 
-class L2_normalize(Layer):  # pylint:disable=invalid-name
+class L2_normalize(keras.layers.Layer):  # type:ignore[name-defined]  # pylint:disable=invalid-name
     """ Normalizes a tensor w.r.t. the L2 norm alongside the specified axis.
 
     Parameters
@@ -734,7 +734,7 @@ class L2_normalize(Layer):  # pylint:disable=invalid-name
         return config
 
 
-class Swish(Layer):
+class Swish(keras.layers.Layer):  # type:ignore[name-defined]
     """ Swish Activation Layer implementation for Keras.
 
     Parameters
@@ -780,4 +780,4 @@ class Swish(Layer):
 # Update layers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({name: obj})
+        keras.utils.get_custom_objects().update({name: obj})

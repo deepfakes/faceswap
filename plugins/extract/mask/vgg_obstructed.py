@@ -7,7 +7,7 @@ import typing as T
 import numpy as np
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.layers import (  # pylint:disable=no-name-in-module
+from tensorflow.keras.layers import (  # pylint:disable=import-error
     Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
     ZeroPadding2D)
 

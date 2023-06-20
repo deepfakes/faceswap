@@ -4,9 +4,12 @@ from __future__ import annotations
 import logging
 import typing as T
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.layers import Concatenate, Conv2D, Input, MaxPool2D, ZeroPadding2D  # noqa:E501  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.models import Model  # pylint:disable=no-name-in-module
+import tensorflow as tf
+
+# Fix intellisense/linting for tf.keras' thoroughly broken import system
+keras = tf.keras
+layers = keras.layers
+Model = keras.models.Model
 
 if T.TYPE_CHECKING:
     from tensorflow import Tensor
@@ -95,14 +98,14 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
         name = f"features.{block_idx}"
         var_x = inputs
         if max_pool:
-            var_x = MaxPool2D(pool_size=3, strides=2, name=f"{name}.pool")(var_x)
-        var_x = ZeroPadding2D(padding=padding, name=f"{name}.pad")(var_x)
-        var_x = Conv2D(filters,
-                       kernel_size=kernel_size,
-                       strides=strides,
-                       padding="valid",
-                       activation="relu",
-                       name=name)(var_x)
+            var_x = layers.MaxPool2D(pool_size=3, strides=2, name=f"{name}.pool")(var_x)
+        var_x = layers.ZeroPadding2D(padding=padding, name=f"{name}.pad")(var_x)
+        var_x = layers.Conv2D(filters,
+                              kernel_size=kernel_size,
+                              strides=strides,
+                              padding="valid",
+                              activation="relu",
+                              name=name)(var_x)
         return var_x
 
     def __call__(self) -> Model:
@@ -113,7 +116,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
         :class:`keras.models.Model`
             The compiled AlexNet model
         """
-        inputs = Input(self._input_shape)
+        inputs = layers.Input(self._input_shape)
         var_x = inputs
         kernel_size = 11
         strides = 4
@@ -175,11 +178,16 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
             The output of the SqueezeNet fire block
         """
         name = f"features.{block_idx}"
-        squeezed = Conv2D(squeeze_planes, 1, activation="relu", name=f"{name}.squeeze")(inputs)
-        expand1 = Conv2D(expand_planes, 1, activation="relu", name=f"{name}.expand1x1")(squeezed)
-        expand3 = Conv2D(expand_planes, 3,
-                         activation="relu", padding="same", name=f"{name}.expand3x3")(squeezed)
-        return Concatenate(axis=-1, name=name)([expand1, expand3])
+        squeezed = layers.Conv2D(squeeze_planes, 1,
+                                 activation="relu", name=f"{name}.squeeze")(inputs)
+        expand1 = layers.Conv2D(expand_planes, 1,
+                                activation="relu", name=f"{name}.expand1x1")(squeezed)
+        expand3 = layers.Conv2D(expand_planes,
+                                3,
+                                activation="relu",
+                                padding="same",
+                                name=f"{name}.expand3x3")(squeezed)
+        return layers.Concatenate(axis=-1, name=name)([expand1, expand3])
 
     def __call__(self) -> Model:
         """ Create the SqueezeNet Model
@@ -189,15 +197,15 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
         :class:`keras.models.Model`
             The compiled SqueezeNet model
         """
-        inputs = Input(self._input_shape)
-        var_x = Conv2D(64, 3, strides=2, activation="relu", name="features.0")(inputs)
+        inputs = layers.Input(self._input_shape)
+        var_x = layers.Conv2D(64, 3, strides=2, activation="relu", name="features.0")(inputs)
 
         block_idx = 2
         squeeze = 16
         expand = 64
         for idx in range(4):
             if idx < 3:
-                var_x = MaxPool2D(pool_size=3, strides=2)(var_x)
+                var_x = layers.MaxPool2D(pool_size=3, strides=2)(var_x)
                 block_idx += 1
             var_x = self._fire(var_x, squeeze, expand, block_idx)
             block_idx += 1

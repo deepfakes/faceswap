@@ -9,8 +9,8 @@ import numpy as np
 import tensorflow as tf
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.layers import Activation  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.models import load_model as k_load_model, Model  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras.layers import Activation  # pylint:disable=import-error
+from tensorflow.keras.models import load_model as k_load_model, Model  # noqa:E501  # pylint:disable=import-error
 
 from lib.utils import get_backend
 

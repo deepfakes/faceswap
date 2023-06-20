@@ -7,9 +7,11 @@ import inspect
 
 import numpy as np
 import tensorflow as tf
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
-from tensorflow.python.keras import initializers, backend as K  # pylint:disable=no-name-in-module
+
+# Fix intellisense/linting for tf.keras' thoroughly broken import system
+keras = tf.keras
+K = keras.backend
+
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -62,7 +64,7 @@ def compute_fans(shape, data_format='channels_last'):
     return fan_in, fan_out
 
 
-class ICNR(initializers.Initializer):  # pylint: disable=invalid-name,no-member
+class ICNR(keras.initializers.Initializer):  # type:ignore[name-defined]
     """ ICNR initializer for checkerboard artifact free sub pixel convolution
 
     Parameters
@@ -92,7 +94,7 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name,no-member
         self.scale = scale
         self.initializer = initializer
 
-    def __call__(self, shape, dtype="float32"):
+    def __call__(self, shape, dtype="float32", **kwargs):
         """ Call function for the ICNR initializer.
 
         Parameters
@@ -112,7 +114,7 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name,no-member
             return self.initializer(shape)
         new_shape = shape[:3] + [shape[3] // (self.scale ** 2)]
         if isinstance(self.initializer, dict):
-            self.initializer = initializers.deserialize(self.initializer)
+            self.initializer = keras.initializers.deserialize(self.initializer)
         var_x = self.initializer(new_shape, dtype)
         var_x = K.permute_dimensions(var_x, [2, 0, 1, 3])
         var_x = K.resize_images(var_x,
@@ -157,7 +159,7 @@ class ICNR(initializers.Initializer):  # pylint: disable=invalid-name,no-member
         return dict(list(base_config.items()) + list(config.items()))
 
 
-class ConvolutionAware(initializers.Initializer):  # pylint: disable=no-member
+class ConvolutionAware(keras.initializers.Initializer):  # type:ignore[name-defined]
     """
     Initializer that generates orthogonal convolution filters in the Fourier space. If this
     initializer is passed a shape that is not 3D or 4D, orthogonal initialization will be used.
@@ -190,11 +192,11 @@ class ConvolutionAware(initializers.Initializer):  # pylint: disable=no-member
     def __init__(self, eps_std=0.05, seed=None, initialized=False):
         self.eps_std = eps_std
         self.seed = seed
-        self.orthogonal = initializers.Orthogonal()  # pylint:disable=no-member
-        self.he_uniform = initializers.he_uniform()  # pylint:disable=no-member
+        self.orthogonal = keras.initializers.Orthogonal()
+        self.he_uniform = keras.initializers.he_uniform()
         self.initialized = initialized
 
-    def __call__(self, shape, dtype=None):
+    def __call__(self, shape, dtype=None, **kwargs):
         """ Call function for the ICNR initializer.
 
         Parameters
@@ -305,4 +307,4 @@ class ConvolutionAware(initializers.Initializer):  # pylint: disable=no-member
 # Update initializers into Keras custom objects
 for name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({name: obj})
+        keras.utils.get_custom_objects().update({name: obj})

@@ -5,7 +5,7 @@ import typing as T
 
 import numpy as np
 
-import tensorflow.python.keras.backend as K  # pylint:disable=no-name-in-module
+import tensorflow.keras.backend as K  # pylint:disable=import-error
 
 if T.TYPE_CHECKING:
     from tensorflow import Tensor

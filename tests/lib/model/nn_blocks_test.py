@@ -12,7 +12,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras import Input, Model, backend as K  # pylint:disable=no-name-in-module
+from tensorflow.keras import Input, Model, backend as K  # pylint:disable=import-error
 
 from lib.model import nn_blocks
 from lib.utils import get_backend

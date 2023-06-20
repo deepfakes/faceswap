@@ -8,7 +8,7 @@ from itertools import product
 import numpy as np
 import pytest
 
-from tensorflow.python.keras import regularizers, models, layers  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras import regularizers, models, layers  # noqa:E501  # pylint:disable=import-error
 
 from lib.model import normalization
 from lib.utils import get_backend
@@ -89,14 +89,6 @@ def test_adain_normalization(center, scale):
                                         actual_output_shape):
         if expected_dim is not None:
             assert expected_dim == actual_dim
-
-
-@pytest.mark.parametrize(_PARAMS, _VALUES, ids=_IDS)
-def test_layer_normalization(center, scale):
-    """ Basic test for layer normalization. """
-    layer_test(normalization.LayerNormalization,  # pylint:disable=no-member
-               kwargs={"center": center, "scale": scale},
-               input_shape=(4, 512))
 
 
 _PARAMS = ["partial", "bias"]

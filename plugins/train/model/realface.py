@@ -11,9 +11,9 @@ import logging
 import sys
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape  # noqa:E501  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.models import Model as KModel  # pylint:disable=no-name-in-module
+from tensorflow.keras.initializers import RandomNormal  # pylint:disable=import-error
+from tensorflow.keras.layers import Dense, Flatten, Input, LeakyReLU, Reshape  # noqa:E501  # pylint:disable=import-error
+from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
 
 from lib.model.nn_blocks import Conv2DOutput, Conv2DBlock, ResidualBlock, UpscaleBlock
 from ._base import ModelBase

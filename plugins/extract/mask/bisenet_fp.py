@@ -11,8 +11,8 @@ import typing as T
 import numpy as np
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras import backend as K  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.layers import (  # pylint:disable=no-name-in-module
+from tensorflow.keras import backend as K  # pylint:disable=import-error
+from tensorflow.keras.layers import (  # pylint:disable=import-error
     Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
     MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
 

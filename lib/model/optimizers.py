@@ -7,8 +7,8 @@ import sys
 import tensorflow as tf
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.optimizers import Adam, Nadam, RMSprop  # noqa:F401,E501  # pylint:disable=no-name-in-module,unused-import
-from tensorflow.python.keras.utils import get_custom_objects  # pylint:disable=no-name-in-module
+from tensorflow.keras.optimizers import Adam, Nadam, RMSprop  # noqa:E501,F401  pylint:disable=import-error,unused-import
+keras = tf.keras
 
 
 class AdaBelief(tf.keras.optimizers.Optimizer):
@@ -396,4 +396,4 @@ class AdaBelief(tf.keras.optimizers.Optimizer):
 # Update layers into Keras custom objects
 for _name, obj in inspect.getmembers(sys.modules[__name__]):
     if inspect.isclass(obj) and obj.__module__ == __name__:
-        get_custom_objects().update({_name: obj})
+        keras.utils.get_custom_objects().update({_name: obj})

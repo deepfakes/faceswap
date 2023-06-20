@@ -14,10 +14,12 @@ import typing as T
 from collections import OrderedDict
 
 import numpy as np
+import tensorflow as tf
+
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras import backend as K  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.layers import Input  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras import backend as K  # pylint:disable=import-error
+from tensorflow.keras.layers import Input  # pylint:disable=import-error
+from tensorflow.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=import-error
 
 from lib.serializer import get_serializer
 from lib.model.nn_blocks import set_config as set_nnblock_config
@@ -35,7 +37,6 @@ else:
 
 if T.TYPE_CHECKING:
     import argparse
-    from tensorflow import keras
     from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -84,7 +85,7 @@ class ModelBase():
 
         self._args = arguments
         self._is_predict = predict
-        self._model: T.Optional[keras.models.Model] = None
+        self._model: T.Optional[tf.keras.models.Model] = None
 
         self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._load_config()
@@ -122,7 +123,7 @@ class ModelBase():
         logger.debug("Initialized ModelBase (%s)", self.__class__.__name__)
 
     @property
-    def model(self) -> keras.models.Model:
+    def model(self) -> tf.keras.models.Model:
         """:class:`Keras.models.Model`: The compiled model for this plugin. """
         return self._model
 
@@ -306,13 +307,13 @@ class ModelBase():
         os.mkdir(self.model_dir)
         new_model = self.build_model(self._get_inputs())
         for model_name, layer_name in legacy_mapping.items():
-            old_model: keras.models.Model = load_model(os.path.join(archive_dir, model_name),
-                                                       compile=False)
+            old_model: tf.keras.models.Model = load_model(os.path.join(archive_dir, model_name),
+                                                          compile=False)
             layer = [layer for layer in new_model.layers if layer.name == layer_name]
             if not layer:
                 logger.warning("Skipping legacy weights from '%s'...", model_name)
                 continue
-            klayer: keras.layers.Layer = layer[0]
+            klayer: tf.keras.layers.Layer = layer[0]
             logger.info("Updating legacy weights from '%s'...", model_name)
             klayer.set_weights(old_model.get_weights())
         filename = self._io._filename  # pylint:disable=protected-access
@@ -332,7 +333,7 @@ class ModelBase():
         a list of 2 shape tuples of 3 dimensions. """
         assert len(self.input_shape) == 3, "Input shape should be a 3 dimensional shape tuple"
 
-    def _get_inputs(self) -> T.List[keras.layers.Input]:
+    def _get_inputs(self) -> T.List[tf.keras.layers.Input]:
         """ Obtain the standardized inputs for the model.
 
         The inputs will be returned for the "A" and "B" sides in the shape as defined by
@@ -351,7 +352,7 @@ class ModelBase():
         logger.debug("inputs: %s", inputs)
         return inputs
 
-    def build_model(self, inputs: T.List[keras.layers.Input]) -> keras.models.Model:
+    def build_model(self, inputs: T.List[tf.keras.layers.Input]) -> tf.keras.models.Model:
         """ Override for Model Specific autoencoder builds.
 
         Parameters
@@ -789,7 +790,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         ``True`` if the swap should be performed "B" > "A" ``False`` if the swap should be
         "A" > "B"
     """
-    def __init__(self, saved_model: keras.models.Model, switch_sides: bool) -> None:
+    def __init__(self, saved_model: tf.keras.models.Model, switch_sides: bool) -> None:
         logger.debug("Initializing: %s (saved_model: %s, switch_sides: %s)",
                      self.__class__.__name__, saved_model, switch_sides)
         self._config = saved_model.get_config()
@@ -802,7 +803,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def model(self) -> keras.models.Model:
+    def model(self) -> tf.keras.models.Model:
         """ :class:`keras.models.Model`: The Faceswap model, compiled for inference. """
         return self._model
 
@@ -832,7 +833,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         retval = [(node[0], node[2]) for node in anodes]
         return retval
 
-    def _make_inference_model(self, saved_model: keras.models.Model) -> keras.models.Model:
+    def _make_inference_model(self, saved_model: tf.keras.models.Model) -> tf.keras.models.Model:
         """ Extract the sub-models from the saved model that are required for inference.
 
         Parameters
@@ -848,7 +849,7 @@ class _Inference():  # pylint:disable=too-few-public-methods
         logger.debug("Compiling inference model. saved_model: %s", saved_model)
         struct = self._get_filtered_structure()
         model_inputs = self._get_inputs(saved_model.inputs)
-        compiled_layers: T.Dict[str, keras.layers.Layer] = {}
+        compiled_layers: T.Dict[str, tf.keras.layers.Layer] = {}
         for layer in saved_model.layers:
             if layer.name not in struct:
                 logger.debug("Skipping unused layer: '%s'", layer.name)

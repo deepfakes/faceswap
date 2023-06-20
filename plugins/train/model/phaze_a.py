@@ -10,13 +10,13 @@ from dataclasses import dataclass
 
 import numpy as np
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.layers import LayerNormalization  # pylint:disable=no-name-in-module
-from tensorflow.python.keras import applications as kapp, backend as K  # noqa:E501  # pylint:disable=no-name-in-module
-from tensorflow.python.keras.layers import (  # pylint:disable=no-name-in-module
+from tensorflow.keras.layers import LayerNormalization  # pylint:disable=import-error
+from tensorflow.keras import applications as kapp, backend as K  # noqa:E501  # pylint:disable=import-error
+from tensorflow.keras.layers import (  # pylint:disable=import-error
     Add, BatchNormalization, Concatenate, Dense, Dropout, Flatten, GaussianNoise, MaxPool2D,
     GlobalAveragePooling2D, GlobalMaxPooling2D, Input, LeakyReLU, Reshape, UpSampling2D,
     Conv2D as KConv2D)
-from tensorflow.python.keras.models import clone_model, Model as KModel  # noqa:E501  # pylint:disable=no-name-in-module
+from tensorflow.keras.models import clone_model, Model as KModel  # noqa:E501  # pylint:disable=import-error
 
 from lib.model.nn_blocks import (
     Conv2D, Conv2DBlock, Conv2DOutput, ResidualBlock, UpscaleBlock, Upscale2xBlock,

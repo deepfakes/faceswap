@@ -11,7 +11,7 @@ import tensorflow as tf
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
 from tensorflow.python.keras.engine import compile_utils  # pylint:disable=no-name-in-module
-from tensorflow.python.keras import backend as K  # pylint:disable=no-name-in-module
+from tensorflow.keras import backend as K  # pylint:disable=import-error
 
 logger = logging.getLogger(__name__)
 

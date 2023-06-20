@@ -21,9 +21,8 @@ from contextlib import nullcontext
 
 import tensorflow as tf
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras import losses as k_losses  # pylint:disable=no-name-in-module
-from tensorflow.python.keras import backend as K  # pylint:disable=no-name-in-module
-import tensorflow.python.keras.mixed_precision as mixedprecision  # noqa pylint:disable=no-name-in-module
+from tensorflow.keras import losses as k_losses  # pylint:disable=import-error
+import tensorflow.keras.mixed_precision as mixedprecision  # noqa pylint:disable=import-error
 
 from lib.model import losses, optimizers
 from lib.model.autoclip import AutoClipper
@@ -36,8 +35,10 @@ else:
 
 if T.TYPE_CHECKING:
     from argparse import Namespace
-    from tensorflow import keras
     from .model import State
+
+keras = tf.keras
+K = keras.backend
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -76,7 +77,7 @@ class Loss():
         logger.debug("Initializing %s: (color_order: %s)", self.__class__.__name__, color_order)
         self._config = config
         self._mask_channels = self._get_mask_channels()
-        self._inputs: T.List[keras.layers.Layer] = []
+        self._inputs: T.List[tf.keras.layers.Layer] = []
         self._names: T.List[str] = []
         self._funcs: T.Dict[str, T.Callable] = {}
 
@@ -127,7 +128,7 @@ class Loss():
             return None
         return [K.int_shape(mask_input) for mask_input in self._mask_inputs]
 
-    def configure(self, model: keras.models.Model) -> None:
+    def configure(self, model: tf.keras.models.Model) -> None:
         """ Configure the loss functions for the given inputs and outputs.
 
         Parameters
@@ -318,7 +319,7 @@ class Optimizer():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def optimizer(self) -> keras.optimizers.Optimizer:
+    def optimizer(self) -> tf.keras.optimizers.Optimizer:
         """ :class:`keras.optimizers.Optimizer`: The requested optimizer. """
         return self._optimizer(**self._kwargs)
 
@@ -394,7 +395,7 @@ class Settings():
     @classmethod
     def loss_scale_optimizer(
             cls,
-            optimizer: keras.optimizers.Optimizer) -> mixedprecision.LossScaleOptimizer:
+            optimizer: tf.keras.optimizers.Optimizer) -> mixedprecision.LossScaleOptimizer:
         """ Optimize loss scaling for mixed precision training.
 
         Parameters
@@ -623,9 +624,9 @@ class Settings():
             config["dtype"] = policy
 
     def get_mixed_precision_layers(self,
-                                   build_func: T.Callable[[T.List[keras.layers.Layer]],
-                                                          keras.models.Model],
-                                   inputs: T.List[keras.layers.Layer]) -> T.List[str]:
+                                   build_func: T.Callable[[T.List[tf.keras.layers.Layer]],
+                                                          tf.keras.models.Model],
+                                   inputs: T.List[tf.keras.layers.Layer]) -> T.List[str]:
         """ Get and store the mixed precision layers from a full precision enabled model.
 
         Parameters
@@ -651,8 +652,8 @@ class Settings():
         return layers
 
     def check_model_precision(self,
-                              model: keras.models.Model,
-                              state: "State") -> keras.models.Model:
+                              model: tf.keras.models.Model,
+                              state: "State") -> tf.keras.models.Model:
         """ Check the model's precision.
 
         If this is a new model, then
