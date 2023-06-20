@@ -624,11 +624,10 @@ class Test_EventParser:  # pylint:disable=invalid-name
         monkeypatch: :class:`pytest.MonkeyPatch`
             For patching different iterators for testing output
         """
-        monkeypatch.setattr("lib.utils._FS_BACKEND", "cpu")  # We'll test AMD separately
+        monkeypatch.setattr("lib.utils._FS_BACKEND", "cpu")
 
         event_parse = event_parser_instance
         event_parse._parse_outputs = cast(MagicMock, mocker.MagicMock())  # type:ignore
-        event_parse._add_amd_loss_labels = cast(MagicMock, mocker.MagicMock())  # type:ignore
         event_parse._process_event = cast(MagicMock, mocker.MagicMock())  # type:ignore
         event_parse._cache.cache_data = cast(MagicMock, mocker.MagicMock())  # type:ignore
 
@@ -638,11 +637,9 @@ class Test_EventParser:  # pylint:disable=invalid-name
                             iter([self._create_example_event(0, 1., time())]))
         event_parse.cache_events(1)
         assert event_parse._parse_outputs.called
-        assert not event_parse._add_amd_loss_labels.called
         assert not event_parse._process_event.called
         assert event_parse._cache.cache_data.called
         event_parse._parse_outputs.reset_mock()
-        event_parse._add_amd_loss_labels.reset_mock()
         event_parse._process_event.reset_mock()
         event_parse._cache.cache_data.reset_mock()
 
@@ -652,11 +649,9 @@ class Test_EventParser:  # pylint:disable=invalid-name
                             iter([self._create_example_event(1, 1., time())]))
         event_parse.cache_events(1)
         assert not event_parse._parse_outputs.called
-        assert not event_parse._add_amd_loss_labels.called
         assert event_parse._process_event.called
         assert event_parse._cache.cache_data.called
         event_parse._parse_outputs.reset_mock()
-        event_parse._add_amd_loss_labels.reset_mock()
         event_parse._process_event.reset_mock()
         event_parse._cache.cache_data.reset_mock()
 
@@ -665,24 +660,11 @@ class Test_EventParser:  # pylint:disable=invalid-name
                             "_iterator",
                             iter([event_pb2.Event(step=1).SerializeToString()]))
         assert not event_parse._parse_outputs.called
-        assert not event_parse._add_amd_loss_labels.called
         assert not event_parse._process_event.called
         assert not event_parse._cache.cache_data.called
         event_parse._parse_outputs.reset_mock()
-        event_parse._add_amd_loss_labels.reset_mock()
         event_parse._process_event.reset_mock()
         event_parse._cache.cache_data.reset_mock()
-
-        # AMD + batch item 2
-        monkeypatch.setattr("lib.utils._FS_BACKEND", "amd")
-        monkeypatch.setattr(event_parse,
-                            "_iterator",
-                            iter([self._create_example_event(2, 1., time())]))
-        event_parse.cache_events(1)
-        assert not event_parse._parse_outputs.called
-        assert event_parse._add_amd_loss_labels.called
-        assert event_parse._process_event.called
-        assert event_parse._cache.cache_data.called
 
     def test__parse_outputs(self,
                             event_parser_instance: _EventParser,
@@ -728,34 +710,6 @@ class Test_EventParser:  # pylint:disable=invalid-name
         assert isinstance(actual, np.ndarray)
         assert actual.shape == (2, 1, 3)
         np.testing.assert_equal(expected, actual)
-
-    def test__add_amd_loss_labels(self,
-                                  event_parser_instance: _EventParser,
-                                  mocker: pytest_mock.MockerFixture) -> None:
-        """ Test _add_amd_loss_labels works correctly
-
-        Parameters
-        ----------
-        event_parser_instance: :class:`lib.gui.analysis.event_reader._EventParser`
-            The class instance to test
-        mocker: :class:`pytest_mock.MockerFixture`
-            Mocker for checking Session data
-        """
-        event_parse = event_parser_instance
-
-        # Already collected
-        assert not event_parse._cache._loss_labels
-        event_parse._cache._loss_labels.extend(["label_a", "label_b"])
-        event_parse._add_amd_loss_labels(1)
-        assert not event_parse._loss_labels
-
-        # New labels
-        event_parse._cache._loss_labels = []
-        mock_session = mocker.patch("lib.gui.analysis.Session")
-        mock_session.get_loss_keys.return_value = ["label_c", "label_d"]
-        assert not event_parse._cache._loss_labels
-        event_parse._add_amd_loss_labels(1)
-        assert event_parse._loss_labels == ["label_c", "label_d"]
 
     def test__process_event(self, event_parser_instance: _EventParser) -> None:
         """ Test _process_event works correctly
