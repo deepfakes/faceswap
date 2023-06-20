@@ -1,14 +1,14 @@
 #!/usr/bin python3
 """ Main entry point to the convert process of FaceSwap """
-
+from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 import re
 import os
 import sys
+import typing as T
 from threading import Event
 from time import sleep
-from typing import Callable, cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
@@ -22,7 +22,7 @@ from lib.gpu_stats import GPUStats
 from lib.image import read_image_meta_batch, ImagesLoader
 from lib.multithreading import MultiThread, total_cpus
 from lib.queue_manager import queue_manager
-from lib.utils import FaceswapError, get_backend, get_folder, get_image_paths
+from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from plugins.plugin_loader import PluginLoader
 
@@ -31,7 +31,7 @@ if sys.version_info < (3, 8):
 else:
     from typing import get_args, Literal
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from argparse import Namespace
     from plugins.convert.writer._base import Output
     from plugins.train.model._base import ModelBase
@@ -61,8 +61,8 @@ class ConvertItem:
         The swapped faces returned from the model's predict function
     """
     inbound: ExtractMedia
-    feed_faces: List[AlignedFace] = field(default_factory=list)
-    reference_faces: List[AlignedFace] = field(default_factory=list)
+    feed_faces: T.List[AlignedFace] = field(default_factory=list)
+    reference_faces: T.List[AlignedFace] = field(default_factory=list)
     swapped_faces: np.ndarray = np.array([])
 
 
@@ -84,7 +84,7 @@ class Convert():  # pylint:disable=too-few-public-methods
         The arguments to be passed to the convert process as generated from Faceswap's command
         line arguments
     """
-    def __init__(self, arguments: "Namespace") -> None:
+    def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (args: %s)", self.__class__.__name__, arguments)
         self._args = arguments
 
@@ -290,7 +290,7 @@ class DiskIO():
     """
 
     def __init__(self,
-                 alignments: Alignments, images: ImagesLoader, arguments: "Namespace") -> None:
+                 alignments: Alignments, images: ImagesLoader, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (alignments: %s, images: %s, arguments: %s)",
                      self.__class__.__name__, alignments, images, arguments)
         self._alignments = alignments
@@ -307,8 +307,8 @@ class DiskIO():
         # Extractor for on the fly detection
         self._extractor = self._load_extractor()
 
-        self._queues: Dict[Literal["load", "save"], "EventQueue"] = {}
-        self._threads: Dict[Literal["load", "save"], MultiThread] = {}
+        self._queues: T.Dict[Literal["load", "save"], EventQueue] = {}
+        self._threads: T.Dict[Literal["load", "save"], MultiThread] = {}
         self._init_threads()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -324,13 +324,13 @@ class DiskIO():
         return self._writer.config.get("draw_transparent", False)
 
     @property
-    def pre_encode(self) -> Optional[Callable[[np.ndarray], List[bytes]]]:
+    def pre_encode(self) -> T.Optional[T.Callable[[np.ndarray], T.List[bytes]]]:
         """ python function: Selected writer's pre-encode function, if it has one,
         otherwise ``None`` """
         dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self._writer.pre_encode(dummy)
-        retval: Optional[Callable[[np.ndarray],
-                                  List[bytes]]] = None if test is None else self._writer.pre_encode
+        retval: T.Optional[T.Callable[[np.ndarray],
+                           T.List[bytes]]] = None if test is None else self._writer.pre_encode
         logger.debug("Writer pre_encode function: %s", retval)
         return retval
 
@@ -347,7 +347,7 @@ class DiskIO():
         return self._threads["load"]
 
     @property
-    def load_queue(self) -> "EventQueue":
+    def load_queue(self) -> EventQueue:
         """ :class:`~lib.queue_manager.EventQueue`: The queue that images and detected faces are "
         "loaded into. """
         return self._queues["load"]
@@ -363,7 +363,7 @@ class DiskIO():
         return retval
 
     # Initialization
-    def _get_writer(self) -> "Output":
+    def _get_writer(self) -> Output:
         """ Load the selected writer plugin.
 
         Returns
@@ -384,7 +384,7 @@ class DiskIO():
         return PluginLoader.get_converter("writer", self._args.writer)(*args,
                                                                        configfile=configfile)
 
-    def _get_frame_ranges(self) -> Optional[List[Tuple[int, int]]]:
+    def _get_frame_ranges(self) -> T.Optional[T.List[T.Tuple[int, int]]]:
         """ Obtain the frame ranges that are to be converted.
 
         If frame ranges have been specified, then split the command line formatted arguments into
@@ -422,7 +422,7 @@ class DiskIO():
         logger.debug("frame ranges: %s", retval)
         return retval
 
-    def _load_extractor(self) -> Optional[Extractor]:
+    def _load_extractor(self) -> T.Optional[Extractor]:
         """ Load the CV2-DNN Face Extractor Chain.
 
         For On-The-Fly conversion we use a CPU based extractor to avoid stacking the GPU.
@@ -571,7 +571,7 @@ class DiskIO():
         logger.trace("idx: %s, skipframe: %s", idx, skipframe)  # type: ignore
         return skipframe
 
-    def _get_detected_faces(self, filename: str, image: np.ndarray) -> List[DetectedFace]:
+    def _get_detected_faces(self, filename: str, image: np.ndarray) -> T.List[DetectedFace]:
         """ Return the detected faces for the given image.
 
         If we have an alignments file, then the detected faces are created from that file. If
@@ -597,7 +597,7 @@ class DiskIO():
         logger.trace("Got %s faces for: '%s'", len(detected_faces), filename)  # type:ignore
         return detected_faces
 
-    def _alignments_faces(self, frame_name: str, image: np.ndarray) -> List[DetectedFace]:
+    def _alignments_faces(self, frame_name: str, image: np.ndarray) -> T.List[DetectedFace]:
         """ Return detected faces from an alignments file.
 
         Parameters
@@ -644,7 +644,7 @@ class DiskIO():
             tqdm.write(f"No alignment found for {frame_name}, skipping")
         return have_alignments
 
-    def _detect_faces(self, filename: str, image: np.ndarray) -> List[DetectedFace]:
+    def _detect_faces(self, filename: str, image: np.ndarray) -> T.List[DetectedFace]:
         """ Extract the face from a frame for On-The-Fly conversion.
 
         Pulls detected faces out of the Extraction pipeline.
@@ -714,7 +714,7 @@ class Predict():
         The arguments that were passed to the convert process as generated from Faceswap's command
         line arguments
     """
-    def __init__(self, in_queue: "EventQueue", queue_size: int, arguments: "Namespace") -> None:
+    def __init__(self, in_queue: EventQueue, queue_size: int, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (args: %s, queue_size: %s, in_queue: %s)",
                      self.__class__.__name__, arguments, queue_size, in_queue)
         self._args = arguments
@@ -740,12 +740,12 @@ class Predict():
         return self._thread
 
     @property
-    def in_queue(self) -> "EventQueue":
+    def in_queue(self) -> EventQueue:
         """ :class:`~lib.queue_manager.EventQueue`: The input queue to the predictor. """
         return self._in_queue
 
     @property
-    def out_queue(self) -> "EventQueue":
+    def out_queue(self) -> EventQueue:
         """ :class:`~lib.queue_manager.EventQueue`: The output queue from the predictor. """
         return self._out_queue
 
@@ -765,7 +765,7 @@ class Predict():
         return self._coverage_ratio
 
     @property
-    def centering(self) -> "CenteringType":
+    def centering(self) -> CenteringType:
         """ str: The centering that the model was trained on (`"head", "face"` or `"legacy"`) """
         return self._centering
 
@@ -779,7 +779,7 @@ class Predict():
         """ int: The size in pixels of the Faceswap model output. """
         return self._sizes["output"]
 
-    def _get_io_sizes(self) -> Dict[str, int]:
+    def _get_io_sizes(self) -> T.Dict[str, int]:
         """ Obtain the input size and output size of the model.
 
         Returns
@@ -795,7 +795,7 @@ class Predict():
         logger.debug(retval)
         return retval
 
-    def _load_model(self) -> "ModelBase":
+    def _load_model(self) -> ModelBase:
         """ Load the Faceswap model.
 
         Returns
@@ -896,9 +896,9 @@ class Predict():
         """
         faces_seen = 0
         consecutive_no_faces = 0
-        batch: List[ConvertItem] = []
+        batch: T.List[ConvertItem] = []
         while True:
-            item: Union[Literal["EOF"], ConvertItem] = self._in_queue.get()
+            item: T.Union[Literal["EOF"], ConvertItem] = self._in_queue.get()
             if item == "EOF":
                 logger.debug("EOF Received")
                 if batch:  # Process out any remaining items
@@ -938,7 +938,7 @@ class Predict():
         self._out_queue.put("EOF")
         logger.debug("Load queue complete")
 
-    def _process_batch(self, batch: List[ConvertItem], faces_seen: int):
+    def _process_batch(self, batch: T.List[ConvertItem], faces_seen: int):
         """ Predict faces on the given batch of images and queue out to patch thread
 
         Parameters
@@ -959,9 +959,6 @@ class Predict():
         if faces_seen != 0:
             feed_faces = self._compile_feed_faces(feed_batch)
             batch_size = None
-            if get_backend() == "amd" and feed_faces.shape[0] != self._batchsize:
-                logger.verbose("Fallback to BS=1")  # type:ignore
-                batch_size = 1
             predicted = self._predict(feed_faces, batch_size)
         else:
             predicted = np.array([])
@@ -1004,7 +1001,7 @@ class Predict():
         logger.trace("Loaded aligned faces: '%s'", item.inbound.filename)  # type:ignore
 
     @staticmethod
-    def _compile_feed_faces(feed_faces: List[AlignedFace]) -> np.ndarray:
+    def _compile_feed_faces(feed_faces: T.List[AlignedFace]) -> np.ndarray:
         """ Compile a batch of faces for feeding into the Predictor.
 
         Parameters
@@ -1018,12 +1015,12 @@ class Predict():
             A batch of faces ready for feeding into the Faceswap model.
         """
         logger.trace("Compiling feed face. Batchsize: %s", len(feed_faces))  # type:ignore
-        retval = np.stack([cast(np.ndarray, feed_face.face)[..., :3]
+        retval = np.stack([T.cast(np.ndarray, feed_face.face)[..., :3]
                            for feed_face in feed_faces]) / 255.0
         logger.trace("Compiled Feed faces. Shape: %s", retval.shape)  # type:ignore
         return retval
 
-    def _predict(self, feed_faces: np.ndarray, batch_size: Optional[int] = None) -> np.ndarray:
+    def _predict(self, feed_faces: np.ndarray, batch_size: T.Optional[int] = None) -> np.ndarray:
         """ Run the Faceswap models' prediction function.
 
         Parameters
@@ -1048,7 +1045,7 @@ class Predict():
         logger.trace("Input shape(s): %s", [item.shape for item in feed])  # type:ignore
 
         inbound = self._model.model.predict(feed, verbose=0, batch_size=batch_size)
-        predicted: List[np.ndarray] = inbound if isinstance(inbound, list) else [inbound]
+        predicted: T.List[np.ndarray] = inbound if isinstance(inbound, list) else [inbound]
 
         if self._model.color_order.lower() == "rgb":
             predicted[0] = predicted[0][..., ::-1]
@@ -1065,7 +1062,7 @@ class Predict():
         logger.trace("Final shape: %s", retval.shape)  # type:ignore
         return retval
 
-    def _queue_out_frames(self, batch: List[ConvertItem], swapped_faces: np.ndarray) -> None:
+    def _queue_out_frames(self, batch: T.List[ConvertItem], swapped_faces: np.ndarray) -> None:
         """ Compile the batch back to original frames and put to the Out Queue.
 
         For batching, faces are split away from their frames. This compiles all detected faces
@@ -1110,8 +1107,8 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         The alignments file for this conversion
     """
     def __init__(self,
-                 arguments: "Namespace",
-                 input_images: List[np.ndarray],
+                 arguments: Namespace,
+                 input_images: T.List[np.ndarray],
                  alignments: Alignments) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
@@ -1134,7 +1131,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         self._alignments.filter_faces(accept_dict, filter_out=False)
         logger.info("Faces filtered out: %s", pre_face_count - self._alignments.faces_count)
 
-    def _get_face_metadata(self) -> Dict[str, List[int]]:
+    def _get_face_metadata(self) -> T.Dict[str, T.List[int]]:
         """ Check for the existence of an aligned directory for identifying which faces in the
         target frames should be swapped. If it exists, scan the folder for face's metadata
 
@@ -1143,7 +1140,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         dict
             Dictionary of source frame names with a list of associated face indices to be skipped
         """
-        retval: Dict[str, List[int]] = {}
+        retval: T.Dict[str, T.List[int]] = {}
         input_aligned_dir = self._args.input_aligned_dir
 
         if input_aligned_dir is None:
