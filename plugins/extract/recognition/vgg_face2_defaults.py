@@ -66,7 +66,7 @@ _DEFAULTS = {
         fixed=True),
     "cpu": dict(
         default=False,
-        info="[Not PlaidML] VGG Face2 still runs fairly quickly on CPU on some setups. Enable "
+        info="VGG Face2 still runs fairly quickly on CPU on some setups. Enable "
              "CPU mode here to use the CPU for this plugin to save some VRAM at a speed cost.",
         datatype=bool,
         group="settings"),

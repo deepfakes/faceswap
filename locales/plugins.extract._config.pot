@@ -27,7 +27,7 @@ msgstr ""
 
 #: plugins/extract/_config.py:39
 msgid ""
-"[Nvidia Only]. Enable the Tensorflow GPU `allow_growth` configuration "
+"Enable the Tensorflow GPU `allow_growth` configuration "
 "option. This option prevents Tensorflow from allocating all of the GPU VRAM "
 "at launch but can lead to higher VRAM fragmentation and slower performance. "
 "Should only be enabled if you are having problems running extraction."

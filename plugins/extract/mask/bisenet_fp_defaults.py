@@ -65,7 +65,7 @@ _DEFAULTS = {
         fixed=True),
     "cpu": dict(
         default=False,
-        info="[Not PlaidML] BiseNet mask still runs fairly quickly on CPU on some setups. Enable "
+        info="BiseNet mask still runs fairly quickly on CPU on some setups. Enable "
              "CPU mode here to use the CPU for this masker to save some VRAM at a speed cost.",
         datatype=bool,
         group="settings"),
