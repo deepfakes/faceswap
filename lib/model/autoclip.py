@@ -1,7 +1,4 @@
-""" Auto clipper for clipping gradients.
-
-Non AMD Only
-"""
+""" Auto clipper for clipping gradients. """
 from typing import List
 
 import tensorflow as tf

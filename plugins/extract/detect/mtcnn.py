@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 """ MTCNN Face detection plugin """
-from __future__ import absolute_import, division, print_function
+from __future__ import annotations
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+import typing as T
 
 import cv2
 import numpy as np
 
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU  # noqa:E501  # pylint:disable=import-error
+
 from lib.model.session import KSession
-from lib.utils import get_backend
 from ._base import BatchType, Detector
 
-if get_backend() == "amd":
-    from keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU
-    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.layers import Conv2D, Dense, Flatten, Input, MaxPool2D, Permute, PReLU  # noqa pylint:disable=no-name-in-module,import-error
+if T.TYPE_CHECKING:
     from tensorflow import Tensor
 
 logger = logging.getLogger(__name__)
@@ -37,7 +34,7 @@ class Detect(Detector):
         self.kwargs = self._validate_kwargs()
         self.color_format = "RGB"
 
-    def _validate_kwargs(self) -> Dict[str, Union[int, float, List[float]]]:
+    def _validate_kwargs(self) -> T.Dict[str, T.Union[int, float, T.List[float]]]:
         """ Validate that config options are correct. If not reset to default """
         valid = True
         threshold = [self.config["threshold_1"],
@@ -167,7 +164,7 @@ class PNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: Optional[List[int]],
+                 exclude_gpus: T.Optional[T.List[int]],
                  cpu_mode: bool,
                  input_size: int,
                  min_size: int,
@@ -188,10 +185,10 @@ class PNet(KSession):
         self._pnet_scales = self._calculate_scales(min_size, factor)
         self._pnet_sizes = [(int(input_size * scale), int(input_size * scale))
                             for scale in self._pnet_scales]
-        self._pnet_input: Optional[List[np.ndarray]] = None
+        self._pnet_input: T.Optional[T.List[np.ndarray]] = None
 
     @staticmethod
-    def model_definition() -> Tuple[List[Tensor], List[Tensor]]:
+    def model_definition() -> T.Tuple[T.List[Tensor], T.List[Tensor]]:
         """ Keras P-Network Definition for MTCNN """
         input_ = Input(shape=(None, None, 3))
         var_x = Conv2D(10, (3, 3), strides=1, padding='valid', name='conv1')(input_)
@@ -207,7 +204,7 @@ class PNet(KSession):
 
     def _calculate_scales(self,
                           minsize: int,
-                          factor: float) -> List[float]:
+                          factor: float) -> T.List[float]:
         """ Calculate multi-scale
 
         Parameters
@@ -234,7 +231,7 @@ class PNet(KSession):
         logger.trace(scales)  # type:ignore
         return scales
 
-    def __call__(self, images: np.ndarray) -> List[np.ndarray]:
+    def __call__(self, images: np.ndarray) -> T.List[np.ndarray]:
         """ first stage - fast proposal network (p-net) to obtain face candidates
 
         Parameters
@@ -248,8 +245,8 @@ class PNet(KSession):
             List of face candidates from P-Net
         """
         batch_size = images.shape[0]
-        rectangles: List[List[List[Union[int, float]]]] = [[] for _ in range(batch_size)]
-        scores: List[List[np.ndarray]] = [[] for _ in range(batch_size)]
+        rectangles: T.List[T.List[T.List[T.Union[int, float]]]] = [[] for _ in range(batch_size)]
+        scores: T.List[T.List[np.ndarray]] = [[] for _ in range(batch_size)]
 
         if self._pnet_input is None:
             self._pnet_input = [np.empty((batch_size, rheight, rwidth, 3), dtype="float32")
@@ -281,7 +278,7 @@ class PNet(KSession):
                            class_probabilities: np.ndarray,
                            roi: np.ndarray,
                            size: int,
-                           scale: float) -> Tuple[np.ndarray, np.ndarray]:
+                           scale: float) -> T.Tuple[np.ndarray, np.ndarray]:
         """ Detect face position and calibrate bounding box on 12net feature map(matrix version)
 
         Parameters
@@ -347,7 +344,7 @@ class RNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: Optional[List[int]],
+                 exclude_gpus: T.Optional[T.List[int]],
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
@@ -363,7 +360,7 @@ class RNet(KSession):
         self._threshold = threshold
 
     @staticmethod
-    def model_definition() -> Tuple[List[Tensor], List[Tensor]]:
+    def model_definition() -> T.Tuple[T.List[Tensor], T.List[Tensor]]:
         """ Keras R-Network Definition for MTCNN """
         input_ = Input(shape=(24, 24, 3))
         var_x = Conv2D(28, (3, 3), strides=1, padding='valid', name='conv1')(input_)
@@ -386,8 +383,8 @@ class RNet(KSession):
 
     def __call__(self,
                  images: np.ndarray,
-                 rectangle_batch: List[np.ndarray],
-                 ) -> List[np.ndarray]:
+                 rectangle_batch: T.List[np.ndarray],
+                 ) -> T.List[np.ndarray]:
         """ second stage - refinement of face candidates with r-net
 
         Parameters
@@ -402,7 +399,7 @@ class RNet(KSession):
         List
             List of :class:`numpy.ndarray` refined face candidates from R-Net
         """
-        ret: List[np.ndarray] = []
+        ret: T.List[np.ndarray] = []
         for idx, (rectangles, image) in enumerate(zip(rectangle_batch, images)):
             if not np.any(rectangles):
                 ret.append(np.array([]))
@@ -415,8 +412,7 @@ class RNet(KSession):
                             dst=feed_batch[idx])
                  for idx, rect in enumerate(rectangles)]
 
-            cls_prob, roi_prob = self.predict(feed_batch,
-                                              batch_size=128 if get_backend() == "amd" else None)
+            cls_prob, roi_prob = self.predict(feed_batch)
             ret.append(self._filter_face_24net(cls_prob, roi_prob, rectangles))
         return ret
 
@@ -478,7 +474,7 @@ class ONet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: Optional[List[int]],
+                 exclude_gpus: T.Optional[T.List[int]],
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
@@ -494,7 +490,7 @@ class ONet(KSession):
         self._threshold = threshold
 
     @staticmethod
-    def model_definition() -> Tuple[List[Tensor], List[Tensor]]:
+    def model_definition() -> T.Tuple[T.List[Tensor], T.List[Tensor]]:
         """ Keras O-Network for MTCNN """
         input_ = Input(shape=(48, 48, 3))
         var_x = Conv2D(32, (3, 3), strides=1, padding='valid', name='conv1')(input_)
@@ -520,8 +516,8 @@ class ONet(KSession):
 
     def __call__(self,
                  images: np.ndarray,
-                 rectangle_batch: List[np.ndarray]
-                 ) -> List[Tuple[np.ndarray, np.ndarray]]:
+                 rectangle_batch: T.List[np.ndarray]
+                 ) -> T.List[T.Tuple[np.ndarray, np.ndarray]]:
         """ Third stage - further refinement and facial landmarks positions with o-net
 
         Parameters
@@ -536,7 +532,7 @@ class ONet(KSession):
         List
             List of refined final candidates, scores and landmark points from O-Net
         """
-        ret: List[Tuple[np.ndarray, np.ndarray]] = []
+        ret: T.List[T.Tuple[np.ndarray, np.ndarray]] = []
         for idx, rectangles in enumerate(rectangle_batch):
             if not np.any(rectangles):
                 ret.append((np.empty((0, 5)), np.empty(0)))
@@ -549,16 +545,14 @@ class ONet(KSession):
                             dst=feed_batch[idx])
                  for idx, rect in enumerate(rectangles)]
 
-            cls_probs, roi_probs, pts_probs = self.predict(
-                feed_batch,
-                batch_size=128 if get_backend() == "amd" else None)
+            cls_probs, roi_probs, pts_probs = self.predict(feed_batch)
             ret.append(self._filter_face_48net(cls_probs, roi_probs, pts_probs, rectangles))
         return ret
 
     def _filter_face_48net(self, class_probabilities: np.ndarray,
                            roi: np.ndarray,
                            points: np.ndarray,
-                           rectangles: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+                           rectangles: np.ndarray) -> T.Tuple[np.ndarray, np.ndarray]:
         """ Filter face position and calibrate bounding box on 12net's output
 
         Parameters
@@ -629,13 +623,13 @@ class MTCNN():  # pylint: disable=too-few-public-methods
         Default: `0.709`
     """
     def __init__(self,
-                 model_path: List[str],
+                 model_path: T.List[str],
                  allow_growth: bool,
-                 exclude_gpus: Optional[List[int]],
+                 exclude_gpus: T.Optional[T.List[int]],
                  cpu_mode: bool,
                  input_size: int = 640,
                  minsize: int = 20,
-                 threshold: Optional[List[float]] = None,
+                 threshold: T.Optional[T.List[float]] = None,
                  factor: float = 0.709) -> None:
         logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s, exclude_gpus: %s, "
                      "input_size: %s, minsize: %s, threshold: %s, factor: %s)",
@@ -666,7 +660,7 @@ class MTCNN():  # pylint: disable=too-few-public-methods
 
         logger.debug("Initialized: %s", self.__class__.__name__)
 
-    def detect_faces(self, batch: np.ndarray) -> Tuple[np.ndarray, Tuple[np.ndarray]]:
+    def detect_faces(self, batch: np.ndarray) -> T.Tuple[np.ndarray, T.Tuple[np.ndarray]]:
         """Detects faces in an image, and returns bounding boxes and points for them.
 
         Parameters
@@ -690,7 +684,7 @@ class MTCNN():  # pylint: disable=too-few-public-methods
 def nms(rectangles: np.ndarray,
         scores: np.ndarray,
         threshold: float,
-        method: str = "iom") -> Tuple[np.ndarray, np.ndarray]:
+        method: str = "iom") -> T.Tuple[np.ndarray, np.ndarray]:
     """ apply non-maximum suppression on ROIs in same scale(matrix version)
 
     Parameters

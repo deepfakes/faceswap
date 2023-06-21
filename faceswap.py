@@ -11,7 +11,6 @@ if sys.platform.startswith("win"):
 
 from lib.cli import args as cli_args  # pylint:disable=wrong-import-position
 from lib.config import generate_configs  # pylint:disable=wrong-import-position
-from lib.utils import get_backend  # pylint:disable=wrong-import-position
 
 # LOCALES
 _LANG = gettext.translation("faceswap", localedir="locales", fallback=True)
@@ -19,9 +18,6 @@ _ = _LANG.gettext
 
 if sys.version_info < (3, 7):
     raise ValueError("This program requires at least python3.7")
-if get_backend() == "amd" and sys.version_info >= (3, 9):
-    raise ValueError("The AMD version of Faceswap cannot run on versions of Python higher "
-                     "than 3.8")
 
 
 _PARSER = cli_args.FullHelpArgumentParser()

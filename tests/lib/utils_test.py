@@ -42,8 +42,8 @@ def test_set_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     set_backend("directml")
     assert utils._FS_BACKEND == "directml"
     monkeypatch.delattr(utils, "_FS_BACKEND")  # _FS_BACKEND is not already defined
-    set_backend("amd")
-    assert utils._FS_BACKEND == "amd"
+    set_backend("rocm")
+    assert utils._FS_BACKEND == "rocm"
 
 
 def test_get_backend(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,9 +73,9 @@ def test__backend(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("os.environ", {})  # Environment variable not set, dummy in config file
     monkeypatch.setattr("os.path.isfile", lambda x: True)
-    monkeypatch.setattr("builtins.open", lambda *args, **kwargs: StringIO('{"backend": "amd"}'))
+    monkeypatch.setattr("builtins.open", lambda *args, **kwargs: StringIO('{"backend": "cpu"}'))
     backend = _Backend()
-    assert backend.backend == "amd"
+    assert backend.backend == "cpu"
 
     monkeypatch.setattr("os.path.isfile", lambda x: False)  # no config file, dummy in user input
     monkeypatch.setattr("builtins.input", lambda x: "3")

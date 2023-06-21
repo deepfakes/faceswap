@@ -14,7 +14,6 @@ from urllib.request import urlretrieve
 import os
 from os.path import join as pathjoin, expanduser
 
-_TRAIN_ARGS = (1, 1) if os.environ.get("FACESWAP_BACKEND", "cpu").lower() == "amd" else (4, 4)
 FAIL_COUNT = 0
 TEST_COUNT = 0
 _COLORS = {
@@ -202,8 +201,8 @@ def main():
             train_args("lightweight",
                        pathjoin(vid_base, "model"),
                        pathjoin(vid_base, "faces"),
-                       iterations=_TRAIN_ARGS[0],
-                       batchsize=_TRAIN_ARGS[1],
+                       iterations=1,
+                       batchsize=1,
                        extra_args="-wl"))
 
         set_train_config(False)
@@ -212,8 +211,8 @@ def main():
             train_args("lightweight",
                        pathjoin(vid_base, "model"),
                        pathjoin(vid_base, "faces"),
-                       iterations=_TRAIN_ARGS[0],
-                       batchsize=_TRAIN_ARGS[1],
+                       iterations=1,
+                       batchsize=1,
                        extra_args="-wl"))
 
     if was_trained:

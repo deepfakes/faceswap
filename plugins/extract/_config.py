@@ -11,7 +11,7 @@ from lib.config import FaceswapConfig
 _LANG = gettext.translation("plugins.extract._config", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-logger = logging.getLogger(__name__) 
+logger = logging.getLogger(__name__)
 
 
 class Config(FaceswapConfig):
@@ -36,7 +36,7 @@ class Config(FaceswapConfig):
             datatype=bool,
             default=False,
             group=_("settings"),
-            info=_("[Nvidia Only]. Enable the Tensorflow GPU `allow_growth` configuration option. "
+            info=_("Enable the Tensorflow GPU `allow_growth` configuration option. "
                    "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
                    "but can lead to higher VRAM fragmentation and slower performance. Should only "
                    "be enabled if you are having problems running extraction."))

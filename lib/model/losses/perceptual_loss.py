@@ -536,9 +536,9 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
             key with the Filter kernel corresponding to the spatial contrast sensitivity function
             of channel and kernel's radius
         """
-        mapping = dict(A=dict(a1=1, b1=0.0047, a2=0, b2=1e-5),
-                       RG=dict(a1=1, b1=0.0053, a2=0, b2=1e-5),
-                       BY=dict(a1=34.1, b1=0.04, a2=13.5, b2=0.025))
+        mapping = {"A": {"a1": 1, "b1": 0.0047, "a2": 0, "b2": 1e-5},
+                   "RG": {"a1": 1, "b1": 0.0053, "a2": 0, "b2": 1e-5},
+                   "BY": {"a1": 34.1, "b1": 0.04, "a2": 13.5, "b2": 0.025}}
 
         domain, radius = self._get_evaluation_domain(mapping["A"]["b1"],
                                                      mapping["A"]["b2"],
@@ -603,7 +603,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
 
 
 class _FeatureDetection():  # pylint:disable=too-few-public-methods
-    """ Detect features (i.e. edges amd points) in an achromatic YCxCz image.
+    """ Detect features (i.e. edges and points) in an achromatic YCxCz image.
 
     For use with LDRFlipLoss.
 

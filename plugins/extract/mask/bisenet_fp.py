@@ -4,28 +4,23 @@
 Architecture and Pre-Trained Model ported from PyTorch to Keras by TorzDF from
 https://github.com/zllrunning/face-parsing.PyTorch
 """
+from __future__ import annotations
 import logging
-from typing import cast, List, Optional, Tuple
+import typing as T
 
 import numpy as np
 
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras import backend as K  # pylint:disable=import-error
+from tensorflow.keras.layers import (  # pylint:disable=import-error
+    Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
+    MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
+
 from lib.model.session import KSession
-from lib.utils import get_backend
 from plugins.extract._base import _get_config
 from ._base import BatchType, Masker, MaskerBatch
 
-if get_backend() == "amd":
-    from keras import backend as K
-    from keras.layers import (
-        Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
-        MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
-    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras import backend as K  # pylint:disable=import-error
-    from tensorflow.keras.layers import (  # pylint:disable=no-name-in-module,import-error
-        Activation, Add, BatchNormalization, Concatenate, Conv2D, GlobalAveragePooling2D, Input,
-        MaxPooling2D, Multiply, Reshape, UpSampling2D, ZeroPadding2D)
+if T.TYPE_CHECKING:
     from tensorflow import Tensor
 
 logger = logging.getLogger(__name__)
@@ -54,7 +49,7 @@ class Mask(Masker):
         # Separate storage for face and head masks
         self._storage_name = f"{self._storage_name}_{self._storage_centering}"
 
-    def _check_weights_selection(self, configfile: Optional[str]) -> Tuple[bool, int]:
+    def _check_weights_selection(self, configfile: T.Optional[str]) -> T.Tuple[bool, int]:
         """ Check which weights have been selected.
 
         This is required for passing along the correct file name for the corresponding weights
@@ -78,7 +73,7 @@ class Mask(Masker):
         version = 1 if not is_faceswap else 2 if config.get("include_hair") else 3
         return is_faceswap, version
 
-    def _get_segment_indices(self) -> List[int]:
+    def _get_segment_indices(self) -> T.List[int]:
         """ Obtain the segment indices to include within the face mask area based on user
         configuration settings.
 
@@ -129,7 +124,7 @@ class Mask(Masker):
         mean = (0.384, 0.314, 0.279) if self._is_faceswap else (0.485, 0.456, 0.406)
         std = (0.324, 0.286, 0.275) if self._is_faceswap else (0.229, 0.224, 0.225)
 
-        batch.feed = ((np.array([cast(np.ndarray, feed.face)[..., :3]
+        batch.feed = ((np.array([T.cast(np.ndarray, feed.face)[..., :3]
                                  for feed in batch.feed_faces],
                                 dtype="float32") / 255.0) - mean) / std
         logger.trace("feed shape: %s", batch.feed.shape)  # type:ignore
@@ -168,7 +163,7 @@ class Mask(Masker):
 # SOFTWARE.
 
 
-_NAME_TRACKER = set()
+_NAME_TRACKER: T.Set[str] = set()
 
 
 def _get_name(name: str, start_idx: int = 1) -> str:
@@ -559,7 +554,7 @@ class BiSeNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: Optional[List[int]],
+                 exclude_gpus: T.Optional[T.List[int]],
                  input_size: int,
                  num_classes: int,
                  cpu_mode: bool) -> None:
@@ -574,7 +569,7 @@ class BiSeNet(KSession):
         self.define_model(self._model_definition)
         self.load_model_weights()
 
-    def _model_definition(self) -> Tuple[Tensor, List[Tensor]]:
+    def _model_definition(self) -> T.Tuple[Tensor, T.List[Tensor]]:
         """ Definition of the VGG Obstructed Model.
 
         Returns

@@ -10,11 +10,8 @@ import numpy as np
 import tensorflow as tf
 
 # Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.python.keras.engine import compile_utils  # noqa pylint:disable=no-name-in-module,import-error
+from tensorflow.python.keras.engine import compile_utils  # pylint:disable=no-name-in-module
 from tensorflow.keras import backend as K  # pylint:disable=import-error
-
-from .feature_loss_tf import LPIPSLoss  #pylint:disable=unused-import # noqa
-from .perceptual_loss_tf import DSSIMObjective, GMSDLoss, LDRFLIPLoss, MSSIMLoss  #pylint:disable=unused-import # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -523,7 +520,7 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
 
 class LInfNorm():  # pylint:disable=too-few-public-methods
     """ Calculate the L-inf norm as a loss function. """
-    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:  # noqa,pylint:disable=no-self-use
+    def __call__(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """ Call the L-inf norm loss function.
 
         Parameters

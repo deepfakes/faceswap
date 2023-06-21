@@ -1,30 +1,20 @@
 #!/usr/bin/env python3
 """ Neural Network Blocks for faceswap.py. """
-
+from __future__ import annotations
 import logging
-from typing import Dict, Optional, Tuple, Union
+import typing as T
 
-from lib.utils import get_backend
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.layers import (  # pylint:disable=import-error
+    Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
+    DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
+from tensorflow.keras.initializers import he_uniform, VarianceScaling  # noqa:E501  # pylint:disable=import-error
 
 from .initializers import ICNR, ConvolutionAware
 from .layers import PixelShuffler, ReflectionPadding2D, Swish, KResizeImages
 from .normalization import InstanceNormalization
 
-if get_backend() == "amd":
-    from keras.layers import (
-        Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
-        DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
-    from keras.initializers import he_uniform, VarianceScaling  # pylint:disable=no-name-in-module
-    # type checking:
-    import keras
-    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.layers import (  # noqa pylint:disable=no-name-in-module,import-error
-        Activation, Add, BatchNormalization, Concatenate, Conv2D as KConv2D, Conv2DTranspose,
-        DepthwiseConv2D as KDepthwiseConv2d, LeakyReLU, PReLU, SeparableConv2D, UpSampling2D)
-    from tensorflow.keras.initializers import he_uniform, VarianceScaling  # noqa pylint:disable=no-name-in-module,import-error
-    # type checking:
+if T.TYPE_CHECKING:
     from tensorflow import keras
     from tensorflow import Tensor
 
@@ -33,7 +23,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 _CONFIG: dict = {}
-_NAMES: Dict[str, int] = {}
+_NAMES: T.Dict[str, int] = {}
 
 
 def set_config(configuration: dict) -> None:
@@ -199,7 +189,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int]],
+                 kernel_size: T.Union[int, T.Tuple[int]],
                  activation: str = "sigmoid",
                  padding: str = "same", **kwargs) -> None:
         self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
@@ -275,11 +265,11 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 5,
-                 strides: Union[int, Tuple[int, int]] = 2,
+                 kernel_size: T.Union[int, T.Tuple[int, int]] = 5,
+                 strides: T.Union[int, T.Tuple[int, int]] = 2,
                  padding: str = "same",
-                 normalization: Optional[str] = None,
-                 activation: Optional[str] = "leakyrelu",
+                 normalization: T.Optional[str] = None,
+                 activation: T.Optional[str] = "leakyrelu",
                  use_depthwise: bool = False,
                  relu_alpha: float = 0.1,
                  **kwargs) -> None:
@@ -372,8 +362,8 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 5,
-                 strides: Union[int, Tuple[int, int]] = 2, **kwargs) -> None:
+                 kernel_size: T.Union[int, T.Tuple[int, int]] = 5,
+                 strides: T.Union[int, T.Tuple[int, int]] = 2, **kwargs) -> None:
         self._name = _get_name(f"separableconv2d_{filters}")
         logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      self._name, filters, kernel_size, strides, kwargs)
@@ -444,11 +434,11 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
 
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
                  padding: str = "same",
                  scale_factor: int = 2,
-                 normalization: Optional[str] = None,
-                 activation: Optional[str] = "leakyrelu",
+                 normalization: T.Optional[str] = None,
+                 activation: T.Optional[str] = "leakyrelu",
                  **kwargs) -> None:
         self._name = _get_name(f"upscale_{filters}")
         logger.debug("name: %s. filters: %s, kernel_size: %s, padding: %s, scale_factor: %s, "
@@ -531,9 +521,9 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
                  padding: str = "same",
-                 activation: Optional[str] = "leakyrelu",
+                 activation: T.Optional[str] = "leakyrelu",
                  interpolation: str = "bilinear",
                  sr_ratio: float = 0.5,
                  scale_factor: int = 2,
@@ -625,9 +615,9 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
                  padding: str = "same",
-                 activation: Optional[str] = "leakyrelu",
+                 activation: T.Optional[str] = "leakyrelu",
                  scale_factor: int = 2,
                  interpolation: str = "bilinear") -> None:
         self._name = _get_name(f"upscale_ri_{filters}")
@@ -710,9 +700,9 @@ class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
                  padding: str = "same",
-                 activation: Optional[str] = "leakyrelu",
+                 activation: T.Optional[str] = "leakyrelu",
                  size: int = 2,
                  interpolation: str = "bilinear",
                  **kwargs) -> None:
@@ -767,7 +757,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: Union[int, Tuple[int, int]] = 3,
+                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
                  padding: str = "same",
                  **kwargs) -> None:
         self._name = _get_name(f"residual_{filters}")

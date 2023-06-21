@@ -9,29 +9,25 @@ This module handles:
     - The loading, saving and backing up of keras models to and from disk.
     - The loading and freezing of weights for model plugins.
 """
+from __future__ import annotations
 import logging
 import os
 import sys
+import typing as T
 
-from typing import List, Optional, TYPE_CHECKING
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=import-error
 
 from lib.model.backup_restore import Backup
-from lib.utils import FaceswapError, get_backend
+from lib.utils import FaceswapError
 
 if sys.version_info < (3, 8):
     from typing_extensions import Literal
 else:
     from typing import Literal
 
-if get_backend() == "amd":
-    import keras
-    from keras.models import load_model, Model as KModel
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow import keras  # pylint:disable=import-error,no-name-in-module
-    from tensorflow.keras.models import load_model, Model as KModel  # noqa pylint:disable=import-error,no-name-in-module
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from tensorflow import keras
     from .model import ModelBase
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -39,7 +35,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_all_sub_models(
         model: keras.models.Model,
-        models: Optional[List[keras.models.Model]] = None) -> List[keras.models.Model]:
+        models: T.Optional[T.List[keras.models.Model]] = None) -> T.List[keras.models.Model]:
     """ For a given model, return all sub-models that occur (recursively) as children.
 
     Parameters
@@ -86,7 +82,7 @@ class IO():
         request.
     """
     def __init__(self,
-                 plugin: "ModelBase",
+                 plugin: ModelBase,
                  model_dir: str,
                  is_predict: bool,
                  save_optimizer: Literal["never", "always", "exit"]) -> None:
@@ -94,7 +90,7 @@ class IO():
         self._is_predict = is_predict
         self._model_dir = model_dir
         self._save_optimizer = save_optimizer
-        self._history: List[List[float]] = [[], []]  # Loss histories per save iteration
+        self._history: T.List[T.List[float]] = [[], []]  # Loss histories per save iteration
         self._backup = Backup(self._model_dir, self._plugin.name)
 
     @property
@@ -110,12 +106,12 @@ class IO():
         return os.path.isfile(self._filename)
 
     @property
-    def history(self) -> List[List[float]]:
+    def history(self) -> T.List[T.List[float]]:
         """ list: list of loss histories per side for the current save iteration. """
         return self._history
 
     @property
-    def multiple_models_in_folder(self) -> Optional[List[str]]:
+    def multiple_models_in_folder(self) -> T.Optional[T.List[str]]:
         """ :list: or ``None`` If there are multiple model types in the requested folder, or model
         types that don't correspond to the requested plugin type, then returns the list of plugin
         names that exist in the folder, otherwise returns ``None`` """
@@ -214,7 +210,7 @@ class IO():
             msg += f" - Average loss since last save: {', '.join(lossmsg)}"
         logger.info(msg)
 
-    def _get_save_averages(self) -> List[float]:
+    def _get_save_averages(self) -> T.List[float]:
         """ Return the average loss since the last save iteration and reset historical loss """
         logger.debug("Getting save averages")
         if not all(loss for loss in self._history):
@@ -226,7 +222,7 @@ class IO():
         logger.debug("Average losses since last save: %s", retval)
         return retval
 
-    def _should_backup(self, save_averages: List[float]) -> bool:
+    def _should_backup(self, save_averages: T.List[float]) -> bool:
         """ Check whether the loss averages for this save iteration is the lowest that has been
         seen.
 
@@ -291,7 +287,7 @@ class Weights():
     plugin: :class:`Model`
         The parent plugin class that owns the IO functions.
     """
-    def __init__(self, plugin: "ModelBase") -> None:
+    def __init__(self, plugin: ModelBase) -> None:
         logger.debug("Initializing %s: (plugin: %s)", self.__class__.__name__, plugin)
         self._model = plugin.model
         self._name = plugin.model_name
@@ -305,7 +301,7 @@ class Weights():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
-    def _check_weights_file(cls, weights_file: str) -> Optional[str]:
+    def _check_weights_file(cls, weights_file: str) -> T.Optional[str]:
         """ Validate that we have a valid path to a .h5 file.
 
         Parameters
@@ -407,7 +403,7 @@ class Weights():
                            "different settings than you have set for your current model.",
                            skipped_ops)
 
-    def _get_weights_model(self) -> List[keras.models.Model]:
+    def _get_weights_model(self) -> T.List[keras.models.Model]:
         """ Obtain a list of all sub-models contained within the weights model.
 
         Returns

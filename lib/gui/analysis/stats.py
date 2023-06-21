@@ -18,7 +18,6 @@ from typing import Any, cast, Dict, List, Optional, overload, Tuple, Union
 import numpy as np
 
 from lib.serializer import get_serializer
-from lib.utils import get_backend
 
 from .event_reader import TensorBoardLogs
 
@@ -263,15 +262,10 @@ class GlobalSession():
             The loss keys for the given session. If ``None`` is passed as session_id then a unique
             list of all loss keys for all sessions is returned
         """
-        if get_backend() == "amd":
-            # We can't log the graph in Tensorboard logs for AMD so need to obtain from state file
-            loss_keys = {int(sess_id): [name for name in session["loss_names"] if name != "total"]
-                         for sess_id, session in self._state["sessions"].items()}
-        else:
-            assert self._tb_logs is not None
-            loss_keys = {sess_id: list(logs.keys())
-                         for sess_id, logs
-                         in self._tb_logs.get_loss(session_id=session_id).items()}
+        assert self._tb_logs is not None
+        loss_keys = {sess_id: list(logs.keys())
+                     for sess_id, logs
+                     in self._tb_logs.get_loss(session_id=session_id).items()}
 
         if session_id is None:
             retval: List[str] = list(set(loss_key
@@ -339,9 +333,9 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
             logger.debug("Collating summary time stamps")
 
             self._time_stats = {
-                sess_id: dict(start_time=np.min(timestamps) if np.any(timestamps) else 0,
-                              end_time=np.max(timestamps) if np.any(timestamps) else 0,
-                              iterations=timestamps.shape[0] if np.any(timestamps) else 0)
+                sess_id: {"start_time": np.min(timestamps) if np.any(timestamps) else 0,
+                          "end_time": np.max(timestamps) if np.any(timestamps) else 0,
+                          "iterations": timestamps.shape[0] if np.any(timestamps) else 0}
                 for sess_id, timestamps in cast(Dict[int, np.ndarray],
                                                 self._session.get_timestamps(None)).items()}
 
@@ -351,10 +345,10 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
             session_id = _SESSION.session_ids[-1]
             latest = cast(np.ndarray, self._session.get_timestamps(session_id))
 
-            self._time_stats[session_id] = dict(
-                start_time=np.min(latest) if np.any(latest) else 0,
-                end_time=np.max(latest) if np.any(latest) else 0,
-                iterations=latest.shape[0] if np.any(latest) else 0)
+            self._time_stats[session_id] = {
+                "start_time": np.min(latest) if np.any(latest) else 0,
+                "end_time": np.max(latest) if np.any(latest) else 0,
+                "iterations": latest.shape[0] if np.any(latest) else 0}
 
         logger.debug("time_stats: %s", self._time_stats)
 
@@ -416,14 +410,15 @@ class SessionsSummary():  # pylint:disable=too-few-public-methods
         end = np.nan_to_num(timestamps["end_time"])
         elapsed = int(end - start)
         batchsize = self._session.batch_sizes.get(session_id, 0)
-        retval = dict(
-            session=session_id,
-            start=start,
-            end=end,
-            elapsed=elapsed,
-            rate=(((batchsize * 2) * timestamps["iterations"]) / elapsed if elapsed != 0 else 0),
-            batch=batchsize,
-            iterations=timestamps["iterations"])
+        retval = {
+            "session": session_id,
+            "start": start,
+            "end": end,
+            "elapsed": elapsed,
+            "rate": (((batchsize * 2) * timestamps["iterations"]) / elapsed
+                     if elapsed != 0 else 0),
+            "batch": batchsize,
+            "iterations": timestamps["iterations"]}
         logger.debug(retval)
         return retval
 
@@ -557,9 +552,9 @@ class Calculations():
         self._loss_keys = loss_keys if isinstance(loss_keys, list) else [loss_keys]
         self._selections = selections if isinstance(selections, list) else [selections]
         self._is_totals = session_id is None
-        self._args: Dict[str, Union[int, float]] = dict(avg_samples=avg_samples,
-                                                        smooth_amount=smooth_amount,
-                                                        flatten_outliers=flatten_outliers)
+        self._args: Dict[str, Union[int, float]] = {"avg_samples": avg_samples,
+                                                    "smooth_amount": smooth_amount,
+                                                    "flatten_outliers": flatten_outliers}
         self._iterations = 0
         self._limit = 0
         self._start_iteration = 0

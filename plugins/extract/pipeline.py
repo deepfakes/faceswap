@@ -494,10 +494,10 @@ class Extractor():
         vram_buffer = 256  # Leave a buffer for VRAM allocation
         gpu_stats = GPUStats()
         stats = gpu_stats.get_card_most_free()
-        retval: Dict[str, Union[int, str]] = dict(count=gpu_stats.device_count,
-                                                  device=stats.device,
-                                                  vram_free=int(stats.free - vram_buffer),
-                                                  vram_total=int(stats.total))
+        retval: Dict[str, Union[int, str]] = {"count": gpu_stats.device_count,
+                                              "device": stats.device,
+                                              "vram_free": int(stats.free - vram_buffer),
+                                              "vram_total": int(stats.total)}
         logger.debug(retval)
         return retval
 
@@ -516,10 +516,6 @@ class Extractor():
         if self._vram_stats["count"] == 0:
             logger.debug("No GPU detected. Enabling parallel processing.")
             return True
-
-        if get_backend() == "amd":
-            logger.debug("Parallel processing disabled by amd")
-            return False
 
         logger.verbose("%s - %sMB free of %sMB",  # type: ignore
                        self._vram_stats["device"],
@@ -545,7 +541,6 @@ class Extractor():
         list:
             The jobs to be undertaken split into phases that fit into GPU RAM
         """
-        force_single_process = not multiprocess or get_backend() == "amd"
         phases: List[List[str]] = []
         current_phase: List[str] = []
         available = cast(int, self._vram_stats["vram_free"])
@@ -556,11 +551,11 @@ class Extractor():
             required = sum(self._vram_per_phase[p] for p in current_phase + [phase]) * scaling
             logger.debug("Num plugins for phase: %s, scaling: %s, vram required: %s",
                          num_plugins, scaling, required)
-            if required <= available and not force_single_process:
+            if required <= available and multiprocess:
                 logger.debug("Required: %s, available: %s. Adding phase '%s' to current phase: %s",
                              required, available, phase, current_phase)
                 current_phase.append(phase)
-            elif len(current_phase) == 0 or force_single_process:
+            elif len(current_phase) == 0 or not multiprocess:
                 # Amount of VRAM required to run a single plugin is greater than available. We add
                 # it anyway, and hope it will run with warnings, as the alternative is to not run
                 # at all.
@@ -692,7 +687,7 @@ class Extractor():
             next_phase = self._flow[self._flow.index(phase) + 1]
             out_qname = f"extract{self._instance}_{next_phase}_in"
         logger.debug("in_qname: %s, out_qname: %s", in_qname, out_qname)
-        kwargs = dict(in_queue=self._queues[in_qname], out_queue=self._queues[out_qname])
+        kwargs = {"in_queue": self._queues[in_qname], "out_queue": self._queues[out_qname]}
 
         plugin_type, idx = self._get_plugin_type_and_index(phase)
         plugin = getattr(self, f"_{plugin_type}")

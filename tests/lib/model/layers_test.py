@@ -10,16 +10,12 @@ import numpy as np
 
 from numpy.testing import assert_allclose
 
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras import Input, Model, backend as K  # pylint:disable=import-error
+
 from lib.model import layers
 from lib.utils import get_backend
 from tests.utils import has_arg
-
-if get_backend() == "amd":
-    from keras import Input, Model, backend as K
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras import Input, Model, backend as K  # pylint:disable=import-error
-
 
 CONV_SHAPE = (3, 3, 256, 2048)
 CONV_ID = get_backend().upper()
@@ -40,7 +36,7 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa
         for i, var_e in enumerate(input_data_shape):
             if var_e is None:
                 input_data_shape[i] = np.random.randint(1, 4)
-        input_data = (10 * np.random.random(input_data_shape))
+        input_data = 10 * np.random.random(input_data_shape)
         input_data = input_data.astype(input_dtype)
     else:
         if input_shape is None:
@@ -111,7 +107,6 @@ def test_pixel_shuffler(dummy):  # pylint:disable=unused-argument
     layer_test(layers.PixelShuffler, input_shape=(2, 4, 4, 1024))
 
 
-@pytest.mark.skipif(get_backend() == "amd", reason="amd does not support this layer")
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_subpixel_upscaling(dummy):  # pylint:disable=unused-argument
     """ Sub Pixel up-scaling layer test """

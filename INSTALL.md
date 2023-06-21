@@ -62,7 +62,6 @@ The type of computations that the process does are well suited for graphics card
     - DirectX 12 AMD GPUs are supported on Windows through DirectML.
     - More modern AMD GPUs are supported on Linux through ROCm.
     - M-series Macs are supported through Tensorflow-Metal
-    - OpenCL 1.2 support through PlaidML is deprecated and will be removed in a future update
     - If using an Nvidia GPU, then it needs to support at least CUDA Compute Capability 3.5. (Release 1.0 will work on Compute Capability 3.0)
       To see which version your GPU supports, consult this list: https://developer.nvidia.com/cuda-gpus
       Desktop cards later than the 7xx series are most likely supported.
@@ -142,7 +141,6 @@ If you are using an Nvidia card make sure you have the correct versions of Cuda/
 - Install tkinter (required for the GUI) by typing: `conda install tk`
 - Install requirements:
   - For Nvidia GPU users: `pip install -r ./requirements/requirements_nvidia.txt`
-  - For AMD GPU users: `pip install -r ./requirements/requirements_amd.txt`
   - For CPU users: `pip install -r ./requirements/requirements_cpu.txt`
 
 ## Running faceswap

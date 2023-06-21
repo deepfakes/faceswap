@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """ Common multi-backend Keras utilities """
-from typing import Optional, Tuple
+from __future__ import annotations
+import typing as T
 
 import numpy as np
 
-from lib.utils import get_backend
+import tensorflow.keras.backend as K  # pylint:disable=import-error
 
-if get_backend() == "amd":
-    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
-    from keras import backend as K
-else:
+if T.TYPE_CHECKING:
     from tensorflow import Tensor
-    from tensorflow.keras import backend as K  # pylint:disable=import-error
 
 
 def frobenius_norm(matrix: Tensor,
@@ -46,7 +43,7 @@ def replicate_pad(image: Tensor, padding: int) -> Tensor:
     -----
     At the time of writing Keras/Tensorflow does not have a native replication padding method.
     The implementation here is probably not the most efficient, but it is a pure keras method
-    which should work on both TF and Plaid.
+    which should work on TF.
 
     Parameters
     ----------
@@ -91,28 +88,22 @@ class ColorSpaceConvert():  # pylint:disable=too-few-public-methods
         One of `"srgb"`, `"rgb"`, `"xyz"`
     to_space: str
         One of `"lab"`, `"rgb"`, `"ycxcz"`, `"xyz"`
-    batch_shape: Tuple, optional
-        Shape tuple (b, h, w, c) if the image being processed. Required for PlaidML backend.
-        Optional. Default = ``None``
 
     Raises
     ------
     ValueError
         If the requested color space conversion is not defined
     """
-    def __init__(self,
-                 from_space: str,
-                 to_space: str,
-                 batch_shape: Optional[Tuple[int, int, int, int]] = None) -> None:
-        functions = dict(rgb_lab=self._rgb_to_lab,
-                         rgb_xyz=self._rgb_to_xyz,
-                         srgb_rgb=self._srgb_to_rgb,
-                         srgb_ycxcz=self._srgb_to_ycxcz,
-                         xyz_ycxcz=self._xyz_to_ycxcz,
-                         xyz_lab=self._xyz_to_lab,
-                         xyz_to_rgb=self._xyz_to_rgb,
-                         ycxcz_rgb=self._ycxcz_to_rgb,
-                         ycxcz_xyz=self._ycxcz_to_xyz)
+    def __init__(self, from_space: str, to_space: str) -> None:
+        functions = {"rgb_lab": self._rgb_to_lab,
+                     "rgb_xyz": self._rgb_to_xyz,
+                     "srgb_rgb": self._srgb_to_rgb,
+                     "srgb_ycxcz": self._srgb_to_ycxcz,
+                     "xyz_ycxcz": self._xyz_to_ycxcz,
+                     "xyz_lab": self._xyz_to_lab,
+                     "xyz_to_rgb": self._xyz_to_rgb,
+                     "ycxcz_rgb": self._ycxcz_to_rgb,
+                     "ycxcz_xyz": self._ycxcz_to_xyz}
         func_name = f"{from_space.lower()}_{to_space.lower()}"
         if func_name not in functions:
             raise ValueError(f"The color transform {from_space} to {to_space} is not defined.")
@@ -124,10 +115,9 @@ class ColorSpaceConvert():  # pylint:disable=too-few-public-methods
 
         self._rgb_xyz_map = self._get_rgb_xyz_map()
         self._xyz_multipliers = K.constant([116, 500, 200], dtype="float32")
-        self._batch_shape = batch_shape
 
     @classmethod
-    def _get_rgb_xyz_map(cls) -> Tuple[Tensor, Tensor]:
+    def _get_rgb_xyz_map(cls) -> T.Tuple[Tensor, Tensor]:
         """ Obtain the mapping and inverse mapping for rgb to xyz color space conversion.
 
         Returns
@@ -198,7 +188,7 @@ class ColorSpaceConvert():  # pylint:disable=too-few-public-methods
         Tensor
             The image tensor in XYZ format
         """
-        dim = K.int_shape(image) if self._batch_shape is None else self._batch_shape
+        dim = K.int_shape(image)
         image = K.permute_dimensions(image, (0, 3, 1, 2))
         image = K.reshape(image, (dim[0], dim[3], dim[1] * dim[2]))
         converted = K.permute_dimensions(K.dot(mapping, image), (1, 2, 0))
@@ -278,7 +268,7 @@ class ColorSpaceConvert():  # pylint:disable=too-few-public-methods
         factor = 1 / (3 * (delta ** 2))
 
         clamped_term = K.pow(K.clip(image, delta_cube, None), 1.0 / 3.0)
-        div = (factor * image + (4 / 29))
+        div = factor * image + (4 / 29)
 
         image = K.switch(image > delta_cube, clamped_term, div)
         return K.concatenate([self._xyz_multipliers[0] * image[..., 1:2] - 16.,

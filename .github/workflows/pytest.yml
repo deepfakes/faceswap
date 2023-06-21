@@ -3,7 +3,7 @@ name: ci/build
 on:
   push:
   pull_request:
-    paths-ignore: 
+    paths-ignore:
       - docs/**
       - "**/README.md"
 
@@ -15,18 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.7", "3.8", "3.9"]
-        backend: ["amd", "cpu"]
+        backend: ["cpu"]
         include:
-          - kbackend: "plaidml.keras.backend"
-            backend: "amd"
           - kbackend: "tensorflow"
             backend: "cpu"
-        exclude:
-          - python-version: 3.9
-            backend: amd
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}      
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
@@ -50,14 +45,11 @@ jobs:
           mypy .
       - name: Simple Tests
         run: |
-          if [ "${{ matrix.backend }}" == "amd" ] ; then echo "{\"PLAIDML_DEVICE_IDS\":[\"llvm_cpu.0\"],\"PLAIDML_EXPERIMENTAL\":true}" > ~/.plaidml; fi ;
-          echo "{\"PLAIDML_DEVICE_IDS\":[\"llvm_cpu.0\"],\"PLAIDML_EXPERIMENTAL\":true}" > ~/.plaidml;
           FACESWAP_BACKEND="${{ matrix.backend }}" KERAS_BACKEND="${{ matrix.kbackend }}" py.test -v tests/;
       - name: End to End Tests
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" KERAS_BACKEND="${{ matrix.kbackend }}" python tests/simple_tests.py;
-          if [ "${{ matrix.backend }}" == "amd" ] ; then rm -f ~/.plaidml; fi ;
- 
+
   build_windows:
     runs-on: windows-latest
     strategy:
@@ -70,7 +62,7 @@ jobs:
           - backend: "directml"
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}      
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}

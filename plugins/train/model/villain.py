@@ -3,20 +3,16 @@
     Based on the original https://www.reddit.com/r/deepfakes/ code sample + contributions
     Adapted from a model by VillainGuy (https://github.com/VillainGuy) """
 
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.initializers import RandomNormal  # pylint:disable=import-error
+from tensorflow.keras.layers import add, Dense, Flatten, Input, LeakyReLU, Reshape  # noqa:E501  # pylint:disable=import-error
+from tensorflow.keras.models import Model as KModel  # pylint:disable=import-error
+
 from lib.model.layers import PixelShuffler
 from lib.model.nn_blocks import (Conv2DOutput, Conv2DBlock, ResidualBlock, SeparableConv2DBlock,
                                  UpscaleBlock)
-from lib.utils import get_backend
 
-from .original import Model as OriginalModel, KerasModel
-
-if get_backend() == "amd":
-    from keras.initializers import RandomNormal  # pylint:disable=no-name-in-module
-    from keras.layers import add, Dense, Flatten, Input, LeakyReLU, Reshape
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.initializers import RandomNormal  # noqa pylint:disable=import-error,no-name-in-module
-    from tensorflow.keras.layers import add, Dense, Flatten, Input, LeakyReLU, Reshape  # noqa pylint:disable=import-error,no-name-in-module
+from .original import Model as OriginalModel
 
 
 class Model(OriginalModel):
@@ -29,7 +25,7 @@ class Model(OriginalModel):
 
     def encoder(self):
         """ Encoder Network """
-        kwargs = dict(kernel_initializer=self.kernel_initializer)
+        kwargs = {"kernel_initializer": self.kernel_initializer}
         input_ = Input(shape=self.input_shape)
         in_conv_filters = self.input_shape[0]
         if self.input_shape[0] > 128:
@@ -61,11 +57,11 @@ class Model(OriginalModel):
         var_x = Dense(dense_shape * dense_shape * 1024, **kwargs)(var_x)
         var_x = Reshape((dense_shape, dense_shape, 1024))(var_x)
         var_x = UpscaleBlock(512, activation="leakyrelu", **kwargs)(var_x)
-        return KerasModel(input_, var_x, name="encoder")
+        return KModel(input_, var_x, name="encoder")
 
     def decoder(self, side):
         """ Decoder Network """
-        kwargs = dict(kernel_initializer=self.kernel_initializer)
+        kwargs = {"kernel_initializer": self.kernel_initializer}
         decoder_shape = self.input_shape[0] // 8
         input_ = Input(shape=(decoder_shape, decoder_shape, 512))
 
@@ -89,4 +85,4 @@ class Model(OriginalModel):
             var_y = UpscaleBlock(self.input_shape[0], activation="leakyrelu")(var_y)
             var_y = Conv2DOutput(1, 5, name=f"mask_out_{side}")(var_y)
             outputs.append(var_y)
-        return KerasModel(input_, outputs=outputs, name=f"decoder_{side}")
+        return KModel(input_, outputs=outputs, name=f"decoder_{side}")

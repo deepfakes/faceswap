@@ -276,7 +276,7 @@ msgstr ""
 
 #: plugins/train/_config.py:258
 msgid ""
-"[Not PlaidML] Apply AutoClipping to the gradients. AutoClip analyzes the "
+"Apply AutoClipping to the gradients. AutoClip analyzes the "
 "gradient weights and adjusts the normalization value dynamically to fit the "
 "data. Can help prevent NaNs and improve model optimization at the expense of "
 "VRAM. Ref: AutoClip: Adaptive Gradient Clipping for Source Separation "
@@ -299,7 +299,7 @@ msgstr ""
 
 #: plugins/train/_config.py:286
 msgid ""
-"[Nvidia Only]. Enable the Tensorflow GPU 'allow_growth' configuration "
+"Enable the Tensorflow GPU 'allow_growth' configuration "
 "option. This option prevents Tensorflow from allocating all of the GPU VRAM "
 "at launch but can lead to higher VRAM fragmentation and slower performance. "
 "Should only be enabled if you are receiving errors regarding 'cuDNN fails to "
@@ -308,7 +308,7 @@ msgstr ""
 
 #: plugins/train/_config.py:299
 msgid ""
-"[Not PlaidML], NVIDIA GPUs can run operations in float16 faster than in "
+"NVIDIA GPUs can run operations in float16 faster than in "
 "float32. Mixed precision allows you to use a mix of float16 with float32, to "
 "get the performance benefits from float16 and the numeric stability benefits "
 "from float32.\n"

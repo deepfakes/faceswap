@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
 """ Tool to restore models from backup """
-
+from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Any, Tuple, TYPE_CHECKING, Union
+import typing as T
 
 import numpy as np
 import tensorflow as tf
+from tensorflow import keras
 
 from lib.model.backup_restore import Backup
-from lib.utils import get_backend
 
 # Import the following libs for custom objects
 from lib.model import initializers, layers, normalization  # noqa # pylint:disable=unused-import
 from plugins.train.model._base.model import _Inference
 
-if get_backend() == "amd":
-    import keras
-else:
-    from tensorflow import keras
 
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     import argparse
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -36,7 +31,7 @@ class Model():  # pylint:disable=too-few-public-methods
     :class:`argparse.Namespace`
         The command line arguments calling the model tool
     """
-    def __init__(self, arguments: 'argparse.Namespace') -> None:
+    def __init__(self, arguments: argparse.Namespace) -> None:
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         self._configure_tensorflow()
         self._model_dir = self._check_folder(arguments.model_dir)
@@ -45,13 +40,11 @@ class Model():  # pylint:disable=too-few-public-methods
     @classmethod
     def _configure_tensorflow(cls) -> None:
         """ Disable eager execution and force Tensorflow into CPU mode. """
-        if get_backend() == "amd":
-            return
         tf.config.set_visible_devices([], device_type="GPU")
         tf.compat.v1.disable_eager_execution()
 
     @classmethod
-    def _get_job(cls, arguments: "argparse.Namespace") -> Any:
+    def _get_job(cls, arguments: argparse.Namespace) -> T.Any:
         """ Get the correct object that holds the selected job.
 
         Parameters
@@ -120,12 +113,12 @@ class Inference():  # pylint:disable=too-few-public-methods
     :class:`argparse.Namespace`
         The command line arguments calling the model tool
     """
-    def __init__(self, arguments: "argparse.Namespace") -> None:
+    def __init__(self, arguments: argparse.Namespace) -> None:
         self._switch = arguments.swap_model
         self._format = arguments.format
         self._input_file, self._output_file = self._get_output_file(arguments.model_dir)
 
-    def _get_output_file(self, model_dir: str) -> Tuple[str, str]:
+    def _get_output_file(self, model_dir: str) -> T.Tuple[str, str]:
         """ Obtain the full path for the output model file/folder
 
         Parameters
@@ -168,7 +161,7 @@ class NaNScan():  # pylint:disable=too-few-public-methods
     :class:`argparse.Namespace`
         The command line arguments calling the model tool
     """
-    def __init__(self, arguments: "argparse.Namespace") -> None:
+    def __init__(self, arguments: argparse.Namespace) -> None:
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         self._model_file = self._get_model_filename(arguments.model_dir)
 
@@ -190,7 +183,7 @@ class NaNScan():  # pylint:disable=too-few-public-methods
         return os.path.join(model_dir, model_file)
 
     def _parse_weights(self,
-                       layer: Union[keras.models.Model, keras.layers.Layer]) -> dict:
+                       layer: T.Union[keras.models.Model, keras.layers.Layer]) -> dict:
         """ Recursively pass through sub-models to scan layer weights"""
         weights = layer.get_weights()
         logger.debug("Processing weights for layer '%s', length: '%s'",
@@ -214,7 +207,7 @@ class NaNScan():  # pylint:disable=too-few-public-methods
 
         if nans + infs == 0:
             return {}
-        return dict(nans=nans, infs=infs)
+        return {"nans": nans, "infs": infs}
 
     def _parse_output(self, errors: dict, indent: int = 0) -> None:
         """ Parse the output of the errors dictionary and print a pretty summary.
@@ -260,7 +253,7 @@ class Restore():  # pylint:disable=too-few-public-methods
     :class:`argparse.Namespace`
         The command line arguments calling the model tool
     """
-    def __init__(self, arguments: "argparse.Namespace") -> None:
+    def __init__(self, arguments: argparse.Namespace) -> None:
         logger.debug("Initializing %s: (arguments: '%s'", self.__class__.__name__, arguments)
         self._model_dir = arguments.model_dir
         self._model_name = self._get_model_name()

@@ -7,17 +7,11 @@ Adapted from Keras tests.
 import pytest
 import numpy as np
 
+from tensorflow.keras import backend as K  # pylint:disable=import-error
+from tensorflow.keras import initializers as k_initializers  # noqa:E501  # pylint:disable=import-error
+
 from lib.model import initializers
 from lib.utils import get_backend
-
-if get_backend() == "amd":
-    from keras import backend as K
-    from keras import initializers as k_initializers
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras import backend as K  # pylint:disable=import-error
-    from tensorflow.keras import initializers as k_initializers  # pylint:disable=import-error
-
 
 CONV_SHAPE = (3, 3, 256, 2048)
 CONV_ID = get_backend().upper()
@@ -49,8 +43,11 @@ def test_icnr(tensor_shape):
     """
     fan_in, _ = initializers.compute_fans(tensor_shape)
     std = np.sqrt(2. / fan_in)
-    _runner(initializers.ICNR(initializer=k_initializers.he_uniform(), scale=2), tensor_shape,
-            target_mean=0, target_std=std)
+    _runner(initializers.ICNR(initializer=k_initializers.he_uniform(),  # pylint:disable=no-member
+                              scale=2),
+            tensor_shape,
+            target_mean=0,
+            target_std=std)
 
 
 @pytest.mark.parametrize('tensor_shape', [CONV_SHAPE], ids=[CONV_ID])

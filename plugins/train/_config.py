@@ -255,7 +255,7 @@ class Config(FaceswapConfig):
             datatype=bool,
             default=False,
             info=_(
-                "[Not PlaidML] Apply AutoClipping to the gradients. AutoClip analyzes the "
+                "Apply AutoClipping to the gradients. AutoClip analyzes the "
                 "gradient weights and adjusts the normalization value dynamically to fit the "
                 "data. Can help prevent NaNs and improve model optimization at the expense of "
                 "VRAM. Ref: AutoClip: Adaptive Gradient Clipping for Source Separation Networks "
@@ -283,7 +283,7 @@ class Config(FaceswapConfig):
             group=_("network"),
             fixed=False,
             info=_(
-                "[Nvidia Only]. Enable the Tensorflow GPU 'allow_growth' configuration option. "
+                "Enable the Tensorflow GPU 'allow_growth' configuration option. "
                 "This option prevents Tensorflow from allocating all of the GPU VRAM at launch "
                 "but can lead to higher VRAM fragmentation and slower performance. Should only "
                 "be enabled if you are receiving errors regarding 'cuDNN fails to initialize' "
@@ -296,7 +296,7 @@ class Config(FaceswapConfig):
             fixed=False,
             group=_("network"),
             info=_(
-                "[Not PlaidML], NVIDIA GPUs can run operations in float16 faster than in "
+                "NVIDIA GPUs can run operations in float16 faster than in "
                 "float32. Mixed precision allows you to use a mix of float16 with float32, to "
                 "get the performance benefits from float16 and the numeric stability benefits "
                 "from float32.\n\nThis is untested on DirectML backend, but will run on most "

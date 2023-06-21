@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 """ VGG Clear face mask plugin. """
+from __future__ import annotations
 import logging
-from typing import cast, List, Optional, Tuple
+import typing as T
 
 import numpy as np
 
+# Ignore linting errors from Tensorflow's thoroughly broken import system
+from tensorflow.keras.layers import (  # pylint:disable=import-error
+    Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
+    ZeroPadding2D)
+
 from lib.model.session import KSession
-from lib.utils import get_backend
 from ._base import BatchType, Masker, MaskerBatch
 
-if get_backend() == "amd":
-    from keras.layers import (
-        Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
-        ZeroPadding2D)
-    from plaidml.tile import Value as Tensor  # pylint:disable=import-error
-else:
-    # Ignore linting errors from Tensorflow's thoroughly broken import system
-    from tensorflow.keras.layers import (  # pylint:disable=no-name-in-module,import-error
-        Add, Conv2D, Conv2DTranspose, Cropping2D, Dropout, Input, Lambda, MaxPooling2D,
-        ZeroPadding2D)
+if T.TYPE_CHECKING:
     from tensorflow import Tensor
 
 logger = logging.getLogger(__name__)
@@ -51,7 +47,7 @@ class Mask(Masker):
     def process_input(self, batch: BatchType) -> None:
         """ Compile the detected faces for prediction """
         assert isinstance(batch, MaskerBatch)
-        input_ = np.array([cast(np.ndarray, feed.face)[..., :3]
+        input_ = np.array([T.cast(np.ndarray, feed.face)[..., :3]
                            for feed in batch.feed_faces], dtype="float32")
         batch.feed = input_ - np.mean(input_, axis=(1, 2))[:, None, None, :]
         logger.trace("feed shape: %s", batch.feed.shape)  # type: ignore
@@ -98,7 +94,7 @@ class VGGClear(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: Optional[List[int]]):
+                 exclude_gpus: T.Optional[T.List[int]]):
         super().__init__("VGG Obstructed",
                          model_path,
                          allow_growth=allow_growth,
@@ -107,7 +103,7 @@ class VGGClear(KSession):
         self.load_model_weights()
 
     @classmethod
-    def _model_definition(cls) -> Tuple[Tensor, Tensor]:
+    def _model_definition(cls) -> T.Tuple[Tensor, Tensor]:
         """ Definition of the VGG Obstructed Model.
 
         Returns
@@ -214,7 +210,7 @@ class _ScorePool():  # pylint:disable=too-few-public-methods
     crop: tuple
         The amount of 2D cropping to apply. Tuple of `ints`
     """
-    def __init__(self, level: int, scale: float, crop: Tuple[int, int]):
+    def __init__(self, level: int, scale: float, crop: T.Tuple[int, int]):
         self._name = f"_pool{level}"
         self._cropping = (crop, crop)
         self._scale = scale
