@@ -789,7 +789,7 @@ class _EventParser():  # pylint:disable=too-few-public-methods
         """
         summary = event.summary.value[0]
 
-        if summary.tag == "batch_loss":
+        if summary.tag == "batch_total":
             step.timestamp = event.wall_time
             return step
 
