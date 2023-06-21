@@ -518,7 +518,7 @@ class Test_EventParser:  # pylint:disable=invalid-name
         serialize: bool, optional
             ``True`` to serialize the event to bytes, ``False`` to return the Event object
         """
-        tags = {0: "keras", 1: "batch_loss", 2: "batch_face_a", 3: "batch_face_b"}
+        tags = {0: "keras", 1: "batch_total", 2: "batch_face_a", 3: "batch_face_b"}
         event = event_pb2.Event(step=step)
         event.summary.value.add(tag=tags[step],  # pylint:disable=no-member
                                 simple_value=loss_value)
