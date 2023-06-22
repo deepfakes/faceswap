@@ -1127,6 +1127,104 @@ class Install():  # pylint:disable=too-few-public-methods
             _INSTALL_FAILED = True
 
 
+class ProgressBar():
+    """ Simple progress bar using STDLib for intercepting Conda installs and keeping the
+    terminal from getting jumbled """
+    def __init__(self):
+        self._width_desc = 21
+        self._width_size = 9
+        self._width_bar = 37
+        self._width_pct = 4
+        self._marker = "█"
+
+        self._cursor_visible = True
+        self._current_pos = 0
+        self._bars = []
+
+    @classmethod
+    def _display_cursor(cls, visible: bool) -> None:
+        """ Sends ANSI code to display or hide the cursor
+
+        Parameters
+        ----------
+        visible: bool
+            ``True`` to display the cursor. ``False`` to hide the cursor
+        """
+        code = "\x1b[?25h" if visible else "\x1b[?25l"
+        print(code, end="\r")
+
+    def _format_bar(self, description: str, size: str, percent: int) -> str:
+        """ Format the progress bar for display
+
+        Parameters
+        ----------
+        description: str
+            The description to display for the progress bar
+        size: str
+            The size of the download, including units
+        percent: int
+            The percentage progress of the bar
+        """
+        size = size[:self._width_size].ljust(self._width_size)
+        bar_len = int(self._width_bar * (percent / 100))
+        progress = f"{self._marker * bar_len}"[:self._width_bar].ljust(self._width_bar)
+        pct = f"{percent}%"[:self._width_pct].rjust(self._width_pct)
+        return f"  {description}| {size} | {progress} | {pct}"
+
+    def _move_cursor(self, position: int) -> str:
+        """ Generate ANSI code for moving the cursor to the given progress bar's position
+
+        Parameters
+        ----------
+        position: int
+            The progress bar position to move to
+
+        Returns
+        -------
+        str
+            The ansi code to move to the given position
+        """
+        move = position - self._current_pos
+        retval = "\x1b[A" if move < 0 else "\x1b[B" if move > 0 else ""
+        retval *= abs(move)
+        return retval
+
+    def __call__(self, description: str, size: str, percent: int) -> None:
+        """ Create or update a progress bar
+
+        Parameters
+        ----------
+        description: str
+            The description to display for the progress bar
+        size: str
+            The size of the download, including units
+        percent: int
+            The percentage progress of the bar
+        """
+        if self._cursor_visible:
+            self._display_cursor(visible=False)
+
+        desc = description[:self._width_desc].ljust(self._width_desc)
+        if desc not in self._bars:
+            self._bars.append(desc)
+
+        position = self._bars.index(desc)
+        pbar = self._format_bar(desc, size, percent)
+
+        output = f"{self._move_cursor(position)} {pbar}"
+
+        print(output)
+        self._current_pos = position + 1
+
+    def close(self) -> None:
+        """ Reset all progress bars and re-enable the cursor """
+        print(self._move_cursor(len(self._bars)), end="\r")
+        self._display_cursor(True)
+        self._cursor_visible = True
+        self._current_pos = 0
+        self._bars = []
+
+
 class Installer():
     """ Parent class for package installers.
 
@@ -1157,8 +1255,15 @@ class Installer():
         self._env = environment
         self._package = package
         self._command = command
+        self._is_conda = "conda" in command
         self._is_gui = is_gui
-        self._last_line_cr = False
+
+        self._progess_bar = ProgressBar()
+        self._re_conda = re.compile(
+            rb"(?P<lib>^\S+)\s+\|\s+(?P<tot>\d+\.?\d*\s\w+).*\|\s+(?P<prg>\d+%)")
+        self._re_pip_pkg = re.compile(rb"^\s*Downloading\s(?P<lib>\w+-.+?)-")
+        self._re_pip = re.compile(rb"(?P<done>\d+\.?\d*)/(?P<tot>\d+\.?\d*\s\w+)")
+        self._pip_pkg = ""
         self._seen_lines: Set[str] = set()
 
     def __call__(self) -> int:
@@ -1174,9 +1279,11 @@ class Installer():
         except Exception as err:  # pylint:disable=broad-except
             logger.debug("Failed to install with %s. Falling back to subprocess. Error: %s",
                          self.__class__.__name__, str(err))
+            self._progess_bar.close()
             returncode = SubProcInstaller(self._env, self._package, self._command, self._is_gui)()
 
         logger.debug("Package: %s, returncode: %s", self._package, returncode)
+        self._progess_bar.close()
         return returncode
 
     def call(self) -> int:
@@ -1189,19 +1296,57 @@ class Installer():
         """
         raise NotImplementedError()
 
-    def _non_gui_print(self, text: str, end: Optional[str] = None) -> None:
+    def _print_conda(self, text: bytes) -> None:
+        """ Output progress for Conda installs
+
+        Parameters
+        ----------
+        text: bytes
+            The text to print
+        """
+        data = self._re_conda.match(text)
+        if not data:
+            return
+        lib = data.groupdict()["lib"].decode("utf-8", errors="replace")
+        size = data.groupdict()["tot"].decode("utf-8", errors="replace")
+        progress = int(data.groupdict()["prg"].decode("utf-8", errors="replace")[:-1])
+        self._progess_bar(lib, size, progress)
+
+    def _print_pip(self, text: bytes) -> None:
+        """ Output progress for Pip installs
+
+        Parameters
+        ----------
+        text: bytes
+            The text to print
+        """
+        pkg = self._re_pip_pkg.match(text)
+        if pkg:
+            logger.debug("Collected pip package '%s'", pkg)
+            self._pip_pkg = pkg.groupdict()["lib"].decode("utf-8", errors="replace")
+            return
+        data = self._re_pip.search(text)
+        if not data:
+            return
+        done = float(data.groupdict()["done"].decode("utf-8", errors="replace"))
+        size = data.groupdict()["tot"].decode("utf-8", errors="replace")
+        progress = int(round(done / float(size.split()[0]) * 100, 0))
+        self._progess_bar(self._pip_pkg, size, progress)
+
+    def _non_gui_print(self, text: bytes) -> None:
         """ Print output to console if not running in the GUI
 
         Parameters
         ----------
-        text: str
+        text: bytes
             The text to print
-        end: str, optional
-            The line ending to use. Default: ``None`` (new line)
         """
         if self._is_gui:
             return
-        print(text, end=end)
+        if self._is_conda:
+            self._print_conda(text)
+        else:
+            self._print_pip(text)
 
     def _seen_line_log(self, text: str) -> None:
         """ Output gets spammed to the log file when conda is waiting/processing. Only log each
@@ -1214,7 +1359,7 @@ class Installer():
         """
         if text in self._seen_lines:
             return
-        logger.verbose(text)  # type:ignore
+        logger.debug(text)
         self._seen_lines.add(text)
 
 
@@ -1243,22 +1388,13 @@ class PexpectInstaller(Installer):  # pylint: disable=too-few-public-methods
             The return code of the package install process
         """
         import pexpect  # pylint:disable=import-outside-toplevel,import-error
-        proc = pexpect.spawn(" ".join(self._command),
-                             encoding=self._env.encoding, codec_errors="replace", timeout=None)
+        proc = pexpect.spawn(" ".join(self._command), timeout=None)
         while True:
             try:
-                idx = proc.expect(["\r\n", "\r"])
-                line = proc.before.rstrip()
-                if line and idx == 0:
-                    if self._last_line_cr:
-                        self._last_line_cr = False
-                        # Output last line of progress bar and go to next line
-                        self._non_gui_print(line)
-                    self._seen_line_log(line)
-                elif line and idx == 1:
-                    self._last_line_cr = True
-                    logger.debug(line)
-                    self._non_gui_print(line, end="\r")
+                proc.expect([b"\r\n", b"\r"])
+                line: bytes = proc.before
+                self._seen_line_log(line.decode("utf-8", errors="replace").rstrip())
+                self._non_gui_print(line)
             except pexpect.EOF:
                 break
         proc.close()
@@ -1445,24 +1581,15 @@ class SubProcInstaller(Installer):
                    bufsize=0, stdout=PIPE, stderr=STDOUT, shell=self._shell) as proc:
             while True:
                 if proc.stdout is not None:
-                    line = proc.stdout.readline().decode(self._env.encoding, errors="replace")
+                    lines = proc.stdout.readline()
                 returncode = proc.poll()
-                if line == "" and returncode is not None:
+                if lines == b"" and returncode is not None:
                     break
 
-                is_cr = line.startswith("\r")
-                line = line.rstrip()
+                for line in lines.split(b"\r"):
+                    self._seen_line_log(line.decode("utf-8", errors="replace").rstrip())
+                    self._non_gui_print(line)
 
-                if line and not is_cr:
-                    if self._last_line_cr:
-                        self._last_line_cr = False
-                        # Go to next line
-                        self._non_gui_print("")
-                    self._seen_line_log(line)
-                elif line:
-                    self._last_line_cr = True
-                    logger.debug(line)
-                    self._non_gui_print("", end="\r")
         return returncode
 
 
