@@ -9,7 +9,6 @@ with "original" unique code split out to the original plugin.
 from __future__ import annotations
 import logging
 import os
-import sys
 import time
 import typing as T
 
@@ -29,11 +28,6 @@ from plugins.train._config import Config
 if T.TYPE_CHECKING:
     from plugins.train.model._base import ModelBase
     from lib.config import ConfigValueType
-
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -80,7 +74,7 @@ class TrainerBase():
 
     def __init__(self,
                  model: ModelBase,
-                 images: T.Dict[Literal["a", "b"], T.List[str]],
+                 images: T.Dict[T.Literal["a", "b"], T.List[str]],
                  batch_size: int,
                  configfile: T.Optional[str]) -> None:
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
@@ -174,9 +168,9 @@ class TrainerBase():
 
     def train_one_step(self,
                        viewer: T.Optional[T.Callable[[np.ndarray, str], None]],
-                       timelapse_kwargs: T.Optional[T.Dict[Literal["input_a",
-                                                                   "input_b",
-                                                                   "output"], str]]) -> None:
+                       timelapse_kwargs: T.Optional[T.Dict[T.Literal["input_a",
+                                                                     "input_b",
+                                                                     "output"], str]]) -> None:
         """ Running training on a batch of images for each side.
 
         Triggered from the training cycle in :class:`scripts.train.Train`.
@@ -319,9 +313,9 @@ class TrainerBase():
 
     def _update_viewers(self,
                         viewer: T.Optional[T.Callable[[np.ndarray, str], None]],
-                        timelapse_kwargs: T.Optional[T.Dict[Literal["input_a",
-                                                                    "input_b",
-                                                                    "output"], str]]) -> None:
+                        timelapse_kwargs: T.Optional[T.Dict[T.Literal["input_a",
+                                                                      "input_b",
+                                                                      "output"], str]]) -> None:
         """ Update the preview viewer and timelapse output
 
         Parameters
@@ -371,7 +365,7 @@ class _Feeder():
         The configuration for this trainer
     """
     def __init__(self,
-                 images: T.Dict[Literal["a", "b"], T.List[str]],
+                 images: T.Dict[T.Literal["a", "b"], T.List[str]],
                  model: ModelBase,
                  batch_size: int,
                  config: T.Dict[str, ConfigValueType]) -> None:
@@ -383,13 +377,13 @@ class _Feeder():
         self._batch_size = batch_size
         self._config = config
         self._feeds = {side: self._load_generator(side, False).minibatch_ab()
-                       for side in get_args(Literal["a", "b"])}
+                       for side in T.get_args(T.Literal["a", "b"])}
 
         self._display_feeds = {"preview": self._set_preview_feed(), "timelapse": {}}
         logger.debug("Initialized %s:", self.__class__.__name__)
 
     def _load_generator(self,
-                        side: Literal["a", "b"],
+                        side: T.Literal["a", "b"],
                         is_display: bool,
                         batch_size: T.Optional[int] = None,
                         images: T.Optional[T.List[str]] = None) -> DataGenerator:
@@ -424,7 +418,7 @@ class _Feeder():
                            self._batch_size if batch_size is None else batch_size)
         return retval
 
-    def _set_preview_feed(self) -> T.Dict[Literal["a", "b"], T.Generator[BatchType, None, None]]:
+    def _set_preview_feed(self) -> T.Dict[T.Literal["a", "b"], T.Generator[BatchType, None, None]]:
         """ Set the preview feed for this feeder.
 
         Creates a generator from :class:`lib.training_data.PreviewDataGenerator` specifically
@@ -436,10 +430,10 @@ class _Feeder():
             The side ("a" or "b") as key, :class:`~lib.training_data.PreviewDataGenerator` as
             value.
         """
-        retval: T.Dict[Literal["a", "b"], T.Generator[BatchType, None, None]] = {}
+        retval: T.Dict[T.Literal["a", "b"], T.Generator[BatchType, None, None]] = {}
         num_images = self._config.get("preview_images", 14)
         assert isinstance(num_images, int)
-        for side in get_args(Literal["a", "b"]):
+        for side in T.get_args(T.Literal["a", "b"]):
             logger.debug("Setting preview feed: (side: '%s')", side)
             preview_images = min(max(num_images, 2), 16)
             batchsize = min(len(self._images[side]), preview_images)
@@ -473,7 +467,7 @@ class _Feeder():
         return model_inputs, model_targets
 
     def generate_preview(self, is_timelapse: bool = False
-                         ) -> T.Dict[Literal["a", "b"], T.List[np.ndarray]]:
+                         ) -> T.Dict[T.Literal["a", "b"], T.List[np.ndarray]]:
         """ Generate the images for preview window or timelapse
 
         Parameters
@@ -491,14 +485,14 @@ class _Feeder():
         logger.debug("Generating preview (is_timelapse: %s)", is_timelapse)
 
         batchsizes: T.List[int] = []
-        feed: T.Dict[Literal["a", "b"], np.ndarray] = {}
-        samples: T.Dict[Literal["a", "b"], np.ndarray] = {}
-        masks: T.Dict[Literal["a", "b"], np.ndarray] = {}
+        feed: T.Dict[T.Literal["a", "b"], np.ndarray] = {}
+        samples: T.Dict[T.Literal["a", "b"], np.ndarray] = {}
+        masks: T.Dict[T.Literal["a", "b"], np.ndarray] = {}
 
         # MyPy can't recurse into nested dicts to get the type :(
-        iterator = T.cast(T.Dict[Literal["a", "b"], T.Generator[BatchType, None, None]],
+        iterator = T.cast(T.Dict[T.Literal["a", "b"], T.Generator[BatchType, None, None]],
                           self._display_feeds["timelapse" if is_timelapse else "preview"])
-        for side in get_args(Literal["a", "b"]):
+        for side in T.get_args(T.Literal["a", "b"]):
             side_feed, side_samples = next(iterator[side])
             batchsizes.append(len(side_samples[0]))
             samples[side] = side_samples[0]
@@ -513,10 +507,10 @@ class _Feeder():
 
     def compile_sample(self,
                        image_count: int,
-                       feed: T.Dict[Literal["a", "b"], np.ndarray],
-                       samples: T.Dict[Literal["a", "b"], np.ndarray],
-                       masks: T.Dict[Literal["a", "b"], np.ndarray]
-                       ) -> T.Dict[Literal["a", "b"], T.List[np.ndarray]]:
+                       feed: T.Dict[T.Literal["a", "b"], np.ndarray],
+                       samples: T.Dict[T.Literal["a", "b"], np.ndarray],
+                       masks: T.Dict[T.Literal["a", "b"], np.ndarray]
+                       ) -> T.Dict[T.Literal["a", "b"], T.List[np.ndarray]]:
         """ Compile the preview samples for display.
 
         Parameters
@@ -542,8 +536,8 @@ class _Feeder():
         num_images = self._config.get("preview_images", 14)
         assert isinstance(num_images, int)
         num_images = min(image_count, num_images)
-        retval: T.Dict[Literal["a", "b"], T.List[np.ndarray]] = {}
-        for side in get_args(Literal["a", "b"]):
+        retval: T.Dict[T.Literal["a", "b"], T.List[np.ndarray]] = {}
+        for side in T.get_args(T.Literal["a", "b"]):
             logger.debug("Compiling samples: (side: '%s', samples: %s)", side, num_images)
             retval[side] = [feed[side][0:num_images],
                             samples[side][0:num_images],
@@ -552,7 +546,7 @@ class _Feeder():
         return retval
 
     def set_timelapse_feed(self,
-                           images: T.Dict[Literal["a", "b"], T.List[str]],
+                           images: T.Dict[T.Literal["a", "b"], T.List[str]],
                            batch_size: int) -> None:
         """ Set the time-lapse feed for this feeder.
 
@@ -570,10 +564,10 @@ class _Feeder():
                      images, batch_size)
 
         # MyPy can't recurse into nested dicts to get the type :(
-        iterator = T.cast(T.Dict[Literal["a", "b"], T.Generator[BatchType, None, None]],
+        iterator = T.cast(T.Dict[T.Literal["a", "b"], T.Generator[BatchType, None, None]],
                           self._display_feeds["timelapse"])
 
-        for side in get_args(Literal["a", "b"]):
+        for side in T.get_args(T.Literal["a", "b"]):
             imgs = images[side]
             logger.debug("Setting preview feed: (side: '%s', images: %s)", side, len(imgs))
 
@@ -615,7 +609,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
                      self.__class__.__name__, model, coverage_ratio, mask_opacity, mask_color)
         self._model = model
         self._display_mask = model.config["learn_mask"] or model.config["penalized_mask_loss"]
-        self.images: T.Dict[Literal["a", "b"], T.List[np.ndarray]] = {}
+        self.images: T.Dict[T.Literal["a", "b"], T.List[np.ndarray]] = {}
         self._coverage_ratio = coverage_ratio
         self._mask_opacity = mask_opacity / 100.0
         self._mask_color = np.array(hex_to_rgb(mask_color))[..., 2::-1] / 255.
@@ -639,8 +633,8 @@ class _Samples():  # pylint:disable=too-few-public-methods
             A compiled preview image ready for display or saving
         """
         logger.debug("Showing sample")
-        feeds: T.Dict[Literal["a", "b"], np.ndarray] = {}
-        for idx, side in enumerate(get_args(Literal["a", "b"])):
+        feeds: T.Dict[T.Literal["a", "b"], np.ndarray] = {}
+        for idx, side in enumerate(T.get_args(T.Literal["a", "b"])):
             feed = self.images[side][0]
             input_shape = self._model.model.input_shape[idx][1:]
             if input_shape[0] / feed.shape[1] != 1.0:
@@ -653,7 +647,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
 
     @classmethod
     def _resize_sample(cls,
-                       side: Literal["a", "b"],
+                       side: T.Literal["a", "b"],
                        sample: np.ndarray,
                        target_size: int) -> np.ndarray:
         """ Resize a given image to the target size.
@@ -732,8 +726,8 @@ class _Samples():  # pylint:disable=too-few-public-methods
         :class:`numpy.ndarry`
             A compiled preview image ready for display or saving
         """
-        figures: T.Dict[Literal["a", "b"], np.ndarray] = {}
-        headers: T.Dict[Literal["a", "b"], np.ndarray] = {}
+        figures: T.Dict[T.Literal["a", "b"], np.ndarray] = {}
+        headers: T.Dict[T.Literal["a", "b"], np.ndarray] = {}
 
         for side, samples in self.images.items():
             other_side = "a" if side == "b" else "b"
@@ -761,7 +755,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         return np.clip(figure * 255, 0, 255).astype('uint8')
 
     def _to_full_frame(self,
-                       side: Literal["a", "b"],
+                       side: T.Literal["a", "b"],
                        samples: T.List[np.ndarray],
                        predictions: T.List[np.ndarray]) -> T.List[np.ndarray]:
         """ Patch targets and prediction images into images of model output size.
@@ -803,7 +797,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         return images
 
     def _process_full(self,
-                      side: Literal["a", "b"],
+                      side: T.Literal["a", "b"],
                       images: np.ndarray,
                       prediction_size: int,
                       color: T.Tuple[float, float, float]) -> np.ndarray:
@@ -910,7 +904,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
         return backgrounds
 
     @classmethod
-    def _get_headers(cls, side: Literal["a", "b"], width: int) -> np.ndarray:
+    def _get_headers(cls, side: T.Literal["a", "b"], width: int) -> np.ndarray:
         """ Set header row for the final preview frame
 
         Parameters
@@ -958,8 +952,8 @@ class _Samples():  # pylint:disable=too-few-public-methods
 
     @classmethod
     def _duplicate_headers(cls,
-                           headers: T.Dict[Literal["a", "b"], np.ndarray],
-                           columns: int) -> T.Dict[Literal["a", "b"], np.ndarray]:
+                           headers: T.Dict[T.Literal["a", "b"], np.ndarray],
+                           columns: int) -> T.Dict[T.Literal["a", "b"], np.ndarray]:
         """ Duplicate headers for the number of columns displayed for each side.
 
         Parameters
@@ -1008,7 +1002,7 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
                  mask_opacity: int,
                  mask_color: str,
                  feeder: _Feeder,
-                 image_paths: T.Dict[Literal["a", "b"], T.List[str]]) -> None:
+                 image_paths: T.Dict[T.Literal["a", "b"], T.List[str]]) -> None:
         logger.debug("Initializing %s: model: %s, coverage_ratio: %s, image_count: %s, "
                      "mask_opacity: %s, mask_color: %s, feeder: %s, image_paths: %s)",
                      self.__class__.__name__, model, coverage_ratio, image_count, mask_opacity,
@@ -1042,8 +1036,8 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         logger.debug("Time-lapse output set to '%s'", self._output_file)
 
         # Rewrite paths to pull from the training images so mask and face data can be accessed
-        images: T.Dict[Literal["a", "b"], T.List[str]] = {}
-        for side, input_ in zip(get_args(Literal["a", "b"]), (input_a, input_b)):
+        images: T.Dict[T.Literal["a", "b"], T.List[str]] = {}
+        for side, input_ in zip(T.get_args(T.Literal["a", "b"]), (input_a, input_b)):
             training_path = os.path.dirname(self._image_paths[side][0])
             images[side] = [os.path.join(training_path, os.path.basename(pth))
                             for pth in get_image_paths(input_)]
@@ -1054,9 +1048,9 @@ class _Timelapse():  # pylint:disable=too-few-public-methods
         self._feeder.set_timelapse_feed(images, batchsize)
         logger.debug("Set up time-lapse")
 
-    def output_timelapse(self, timelapse_kwargs: T.Dict[Literal["input_a",
-                                                                "input_b",
-                                                                "output"], str]) -> None:
+    def output_timelapse(self, timelapse_kwargs: T.Dict[T.Literal["input_a",
+                                                                  "input_b",
+                                                                  "output"], str]) -> None:
         """ Generate the time-lapse samples and output the created time-lapse to the specified
         output folder.
 

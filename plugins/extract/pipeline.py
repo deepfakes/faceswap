@@ -10,8 +10,7 @@ plugins either in parallel or in series, giving easy access to input and output.
 """
 
 import logging
-import sys
-from typing import cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Dict, Generator, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 
@@ -19,11 +18,6 @@ from lib.gpu_stats import GPUStats
 from lib.queue_manager import EventQueue, queue_manager, QueueEmpty
 from lib.utils import get_backend
 from plugins.plugin_loader import PluginLoader
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     import numpy as np

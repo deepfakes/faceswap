@@ -26,11 +26,6 @@ from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from plugins.plugin_loader import PluginLoader
 
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
-
 if T.TYPE_CHECKING:
     from argparse import Namespace
     from plugins.convert.writer._base import Output
@@ -307,8 +302,8 @@ class DiskIO():
         # Extractor for on the fly detection
         self._extractor = self._load_extractor()
 
-        self._queues: T.Dict[Literal["load", "save"], EventQueue] = {}
-        self._threads: T.Dict[Literal["load", "save"], MultiThread] = {}
+        self._queues: T.Dict[T.Literal["load", "save"], EventQueue] = {}
+        self._threads: T.Dict[T.Literal["load", "save"], MultiThread] = {}
         self._init_threads()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -467,12 +462,12 @@ class DiskIO():
         Creates the load and save queues and the load and save threads. Starts the threads.
         """
         logger.debug("Initializing DiskIO Threads")
-        for task in get_args(Literal["load", "save"]):
+        for task in T.get_args(T.Literal["load", "save"]):
             self._add_queue(task)
             self._start_thread(task)
         logger.debug("Initialized DiskIO Threads")
 
-    def _add_queue(self, task: Literal["load", "save"]) -> None:
+    def _add_queue(self, task: T.Literal["load", "save"]) -> None:
         """ Add the queue to queue_manager and to :attr:`self._queues` for the given task.
 
         Parameters
@@ -490,7 +485,7 @@ class DiskIO():
         self._queues[task] = queue_manager.get_queue(q_name)
         logger.debug("Added queue for task: '%s'", task)
 
-    def _start_thread(self, task: Literal["load", "save"]) -> None:
+    def _start_thread(self, task: T.Literal["load", "save"]) -> None:
         """ Create the thread for the given task, add it it :attr:`self._threads` and start it.
 
         Parameters
@@ -898,7 +893,7 @@ class Predict():
         consecutive_no_faces = 0
         batch: T.List[ConvertItem] = []
         while True:
-            item: T.Union[Literal["EOF"], ConvertItem] = self._in_queue.get()
+            item: T.Union[T.Literal["EOF"], ConvertItem] = self._in_queue.get()
             if item == "EOF":
                 logger.debug("EOF Received")
                 if batch:  # Process out any remaining items

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """ Plugin to blend the edges of the face between the swap and the original face. """
 import logging
-import sys
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -10,12 +9,6 @@ import numpy as np
 from lib.align import BlurMask, DetectedFace
 from lib.config import FaceswapConfig
 from plugins.convert._config import Config
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 
 logger = logging.getLogger(__name__)
 

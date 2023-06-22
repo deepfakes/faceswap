@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 import platform
-import sys
 import typing as T
 
 from contextlib import nullcontext
@@ -27,11 +26,6 @@ import tensorflow.keras.mixed_precision as mixedprecision  # noqa pylint:disable
 from lib.model import losses, optimizers
 from lib.model.autoclip import AutoClipper
 from lib.utils import get_backend
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if T.TYPE_CHECKING:
     from argparse import Namespace
@@ -73,7 +67,7 @@ class Loss():
     color_order: str
         Color order of the model. One of `"BGR"` or `"RGB"`
     """
-    def __init__(self, config: dict, color_order: Literal["bgr", "rgb"]) -> None:
+    def __init__(self, config: dict, color_order: T.Literal["bgr", "rgb"]) -> None:
         logger.debug("Initializing %s: (color_order: %s)", self.__class__.__name__, color_order)
         self._config = config
         self._mask_channels = self._get_mask_channels()
@@ -480,7 +474,7 @@ class Settings():
         return True
 
     def _get_strategy(self,
-                      strategy: Literal["default", "central-storage", "mirrored"]
+                      strategy: T.Literal["default", "central-storage", "mirrored"]
                       ) -> T.Optional[tf.distribute.Strategy]:
         """ If we are running on Nvidia backend and the strategy is not ``None`` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.

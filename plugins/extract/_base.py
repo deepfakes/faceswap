@@ -3,10 +3,9 @@
 :mod:`~plugins.extract.mask` Plugins
 """
 import logging
-import sys
 
 from dataclasses import dataclass, field
-from typing import (Any, Callable, Dict, Generator, List, Optional,
+from typing import (Any, Callable, Dict, Generator, List, Literal, Optional,
                     Sequence, Union, Tuple, TYPE_CHECKING)
 
 import numpy as np
@@ -17,11 +16,6 @@ from lib.queue_manager import queue_manager
 from lib.utils import GetModel, FaceswapError
 from ._config import Config
 from .pipeline import ExtractMedia
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from queue import Queue

@@ -13,11 +13,10 @@ For each source item, the plugin must pass a dict to finalize containing:
 >>>  "detected_faces": [<list of DetectedFace objects>]}
 """
 import logging
-import sys
 
 from dataclasses import dataclass, field
 from time import sleep
-from typing import cast, Generator, List, Optional, Tuple, TYPE_CHECKING
+from typing import cast, Generator, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -27,11 +26,6 @@ from tensorflow.python.framework import errors_impl as tf_errors  # pylint:disab
 from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractMedia, ExtractorBatch
 from .processing import AlignedFilter, ReAlign
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from queue import Queue

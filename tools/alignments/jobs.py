@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import cast, Dict, Generator, List, Tuple, TYPE_CHECKING, Optional, Union
+from typing import cast, Dict, Generator, List, Literal, Tuple, TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from scipy import signal
@@ -14,11 +14,6 @@ from tqdm import tqdm
 
 from .media import Faces, Frames
 from .jobs_faces import FaceToFile
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace

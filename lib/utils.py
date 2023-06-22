@@ -14,16 +14,11 @@ from re import finditer
 from socket import timeout as socket_timeout, error as socket_error
 from threading import get_ident
 from time import time
-from typing import cast, Dict, List, Optional, Union, Tuple, TYPE_CHECKING
+from typing import cast, Dict, get_args, List, Literal, Optional, Union, Tuple, TYPE_CHECKING
 from urllib import request, error as urlliberror
 
 import numpy as np
 from tqdm import tqdm
-
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
 
 if TYPE_CHECKING:
     from http.client import HTTPResponse

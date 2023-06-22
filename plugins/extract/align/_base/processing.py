@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """ Processing methods for aligner plugins """
 import logging
-import sys
 
 from threading import Lock
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Dict, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 
 import numpy as np
 
 from lib.align import AlignedFace
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from lib.align import DetectedFace
@@ -72,11 +66,11 @@ class AlignedFilter():
                                         min_scale > 0.0 or
                                         distance > 0.0 or
                                         roll > 0.0)
-        self._counts: Dict[str, int] = dict(features=0,
-                                            min_scale=0,
-                                            max_scale=0,
-                                            distance=0,
-                                            roll=0)
+        self._counts: Dict[str, int] = {"features": 0,
+                                        "min_scale": 0,
+                                        "max_scale": 0,
+                                        "distance": 0,
+                                        "roll": 0}
         logger.debug("Initialized %s: ", self.__class__.__name__)
 
     def _scale_test(self,

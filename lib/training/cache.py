@@ -2,10 +2,9 @@
 """ Holds the data cache for training data generators """
 import logging
 import os
-import sys
 
 from threading import Lock
-from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import cast, Dict, get_args, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -16,17 +15,11 @@ from lib.align.aligned_face import CenteringType
 from lib.image import read_image_batch, read_image_meta_batch
 from lib.utils import FaceswapError
 
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
-
 if TYPE_CHECKING:
     from lib.align.alignments import PNGHeaderAlignmentsDict, PNGHeaderDict
     from lib.config import ConfigValueType
 
 logger = logging.getLogger(__name__)
-
 _FACE_CACHES: Dict[str, "_Cache"] = {}
 
 
@@ -127,7 +120,7 @@ class _Cache():
         logger.debug("Initializing: %s (filenames: %s, size: %s, coverage_ratio: %s)",
                      self.__class__.__name__, len(filenames), size, coverage_ratio)
         self._lock = Lock()
-        self._cache_info = dict(cache_full=False, has_reset=False)
+        self._cache_info = {"cache_full": False, "has_reset": False}
         self._partially_loaded: List[str] = []
 
         self._image_count = len(filenames)

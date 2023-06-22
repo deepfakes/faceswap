@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Dict, get_args, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
@@ -15,11 +15,6 @@ from lib.align.alignments import _VERSION, PNGHeaderDict
 from lib.image import encode_image, generate_thumbnail, ImagesSaver
 from plugins.extract.pipeline import Extractor, ExtractMedia
 from .media import ExtractedFaces, Frames
-
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -44,14 +39,14 @@ class Draw():  # pylint:disable=too-few-public-methods
         self._alignments = alignments
         self._frames = Frames(arguments.frames_dir)
         self._output_folder = self._set_output()
-        self._mesh_areas = dict(mouth=(48, 68),
-                                right_eyebrow=(17, 22),
-                                left_eyebrow=(22, 27),
-                                right_eye=(36, 42),
-                                left_eye=(42, 48),
-                                nose=(27, 36),
-                                jaw=(0, 17),
-                                chin=(8, 11))
+        self._mesh_areas = {"mouth": (48, 68),
+                            "right_eyebrow": (17, 22),
+                            "left_eyebrow": (22, 27),
+                            "right_eye": (36, 42),
+                            "left_eye": (42, 48),
+                            "nose": (27, 36),
+                            "jaw": (0, 17),
+                            "chin": (8, 11)}
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def _set_output(self) -> str:
@@ -370,14 +365,14 @@ class Extract():  # pylint:disable=too-few-public-methods
 
         for idx, face in enumerate(faces):
             output = f"{frame_name}_{idx}.png"
-            meta: PNGHeaderDict = dict(
-                alignments=face.to_png_meta(),
-                source=dict(alignments_version=self._alignments.version,
-                            original_filename=output,
-                            face_index=idx,
-                            source_filename=filename,
-                            source_is_video=self._frames.is_video,
-                            source_frame_dims=cast(Tuple[int, int], image.shape[:2])))
+            meta: PNGHeaderDict = {
+                "alignments": face.to_png_meta(),
+                "source": {"alignments_version": self._alignments.version,
+                           "original_filename": output,
+                           "face_index": idx,
+                           "source_filename": filename,
+                           "source_is_video": self._frames.is_video,
+                           "source_frame_dims": cast(Tuple[int, int], image.shape[:2])}}
             assert face.aligned.face is not None
             self._saver.save(output, encode_image(face.aligned.face, ".png", metadata=meta))
             if self._min_size == 0 and self._is_legacy:

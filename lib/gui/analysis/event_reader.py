@@ -3,11 +3,10 @@
 
 import logging
 import os
-import sys
 import zlib
 
 from dataclasses import dataclass, field
-from typing import Any, cast, Dict, Iterator, Generator, List, Optional, Tuple, Union
+from typing import Any, cast, Dict, Iterator, Generator, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import tensorflow as tf
@@ -16,12 +15,6 @@ from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
     errors_impl as tf_errors)
 
 from lib.serializer import get_serializer
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

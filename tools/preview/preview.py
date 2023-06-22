@@ -6,7 +6,7 @@ import logging
 import random
 import tkinter as tk
 from tkinter import ttk
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 import os
 import sys
 
@@ -28,12 +28,6 @@ from plugins.extract.pipeline import ExtractMedia
 
 from .control_panels import ActionFrame, ConfigTools, OptionsBook
 from .viewer import FacesDisplay, ImagesCanvas
-
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace

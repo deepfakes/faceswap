@@ -2,20 +2,12 @@
 """ File browser utility functions for the Faceswap GUI. """
 import logging
 import platform
-import sys
 import tkinter as tk
 from tkinter import filedialog
 
-from typing import cast, Dict, IO, List, Optional, Tuple, Union
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
+from typing import cast, Dict, IO, List, Literal, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
 _FILETYPE = Literal["default", "alignments", "config_project", "config_task",
                     "config_all", "csv", "image", "ini", "state", "log", "video"]
 _HANDLETYPE = Literal["open", "save", "filename", "filename_multi", "save_filename",
@@ -104,32 +96,32 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     def _filetypes(self) -> Dict[str, List[Tuple[str, str]]]:
         """ dict: The accepted extensions for each file type for opening/saving """
         all_files = ("All files", "*.*")
-        filetypes = dict(
-            default=[all_files],
-            alignments=[("Faceswap Alignments", "*.fsa"), all_files],
-            config_project=[("Faceswap Project files", "*.fsw"), all_files],
-            config_task=[("Faceswap Task files", "*.fst"), all_files],
-            config_all=[("Faceswap Project and Task files", "*.fst *.fsw"), all_files],
-            csv=[("Comma separated values", "*.csv"), all_files],
-            image=[("Bitmap", "*.bmp"),
-                   ("JPG", "*.jpeg *.jpg"),
-                   ("PNG", "*.png"),
-                   ("TIFF", "*.tif *.tiff"),
-                   all_files],
-            ini=[("Faceswap config files", "*.ini"), all_files],
-            json=[("JSON file", "*.json"), all_files],
-            model=[("Keras model files", "*.h5"), all_files],
-            state=[("State files", "*.json"), all_files],
-            log=[("Log files", "*.log"), all_files],
-            video=[("Audio Video Interleave", "*.avi"),
-                   ("Flash Video", "*.flv"),
-                   ("Matroska", "*.mkv"),
-                   ("MOV", "*.mov"),
-                   ("MP4", "*.mp4"),
-                   ("MPEG", "*.mpeg *.mpg *.ts *.vob"),
-                   ("WebM", "*.webm"),
-                   ("Windows Media Video", "*.wmv"),
-                   all_files])
+        filetypes = {
+            "default": [all_files],
+            "alignments": [("Faceswap Alignments", "*.fsa"), all_files],
+            "config_project": [("Faceswap Project files", "*.fsw"), all_files],
+            "config_task": [("Faceswap Task files", "*.fst"), all_files],
+            "config_all": [("Faceswap Project and Task files", "*.fst *.fsw"), all_files],
+            "csv": [("Comma separated values", "*.csv"), all_files],
+            "image": [("Bitmap", "*.bmp"),
+                      ("JPG", "*.jpeg *.jpg"),
+                      ("PNG", "*.png"),
+                      ("TIFF", "*.tif *.tiff"),
+                      all_files],
+            "ini": [("Faceswap config files", "*.ini"), all_files],
+            "json": [("JSON file", "*.json"), all_files],
+            "model": [("Keras model files", "*.h5"), all_files],
+            "state": [("State files", "*.json"), all_files],
+            "log": [("Log files", "*.log"), all_files],
+            "video": [("Audio Video Interleave", "*.avi"),
+                      ("Flash Video", "*.flv"),
+                      ("Matroska", "*.mkv"),
+                      ("MOV", "*.mov"),
+                      ("MP4", "*.mp4"),
+                      ("MPEG", "*.mpeg *.mpg *.ts *.vob"),
+                      ("WebM", "*.webm"),
+                      ("Windows Media Video", "*.wmv"),
+                      all_files]}
 
         # Add in multi-select options and upper case extensions for Linux
         for key in filetypes:
@@ -149,22 +141,22 @@ class FileHandler():  # pylint:disable=too-few-public-methods
     def _contexts(self) -> Dict[str, Dict[str, Union[str, Dict[str, str]]]]:
         """dict: Mapping of commands, actions and their corresponding file dialog for context
         handle types. """
-        return dict(effmpeg=dict(input={"extract": "filename",
-                                        "gen-vid": "dir",
-                                        "get-fps": "filename",
-                                        "get-info": "filename",
-                                        "mux-audio": "filename",
-                                        "rescale": "filename",
-                                        "rotate": "filename",
-                                        "slice": "filename"},
-                                 output={"extract": "dir",
-                                         "gen-vid": "save_filename",
-                                         "get-fps": "nothing",
-                                         "get-info": "nothing",
-                                         "mux-audio": "save_filename",
-                                         "rescale": "save_filename",
-                                         "rotate": "save_filename",
-                                         "slice": "save_filename"}))
+        return {"effmpeg": {"input": {"extract": "filename",
+                                      "gen-vid": "dir",
+                                      "get-fps": "filename",
+                                      "get-info": "filename",
+                                      "mux-audio": "filename",
+                                      "rescale": "filename",
+                                      "rotate": "filename",
+                                      "slice": "filename"},
+                            "output": {"extract": "dir",
+                                       "gen-vid": "save_filename",
+                                       "get-fps": "nothing",
+                                       "get-info": "nothing",
+                                       "mux-audio": "save_filename",
+                                       "rescale": "save_filename",
+                                       "rotate": "save_filename",
+                                       "slice": "save_filename"}}}
 
     @classmethod
     def _set_dummy_master(cls) -> Optional[tk.Frame]:
@@ -260,7 +252,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                      parent)
 
         kwargs: Dict[str, Union[None, tk.Frame, str,
-                                List[Tuple[str, str]]]] = dict(master=self._dummy_master)
+                                List[Tuple[str, str]]]] = {"master": self._dummy_master}
 
         if self._handletype.lower() == "context":
             assert command is not None and action is not None and variable is not None

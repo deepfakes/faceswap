@@ -7,7 +7,7 @@ import sys
 
 from time import sleep
 from threading import Event
-from typing import cast, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import cast, Callable, Dict, List, Literal, Optional, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -20,11 +20,6 @@ from lib.training import Preview, PreviewBuffer, TriggerType
 from lib.utils import (get_folder, get_image_paths,
                        FaceswapError, _image_extensions)
 from plugins.plugin_loader import PluginLoader
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     import argparse
@@ -63,9 +58,9 @@ class Train():  # pylint:disable=too-few-public-methods
         self._timelapse = self._set_timelapse()
         gui_cache = os.path.join(
             os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
-        self._gui_triggers: Dict[Literal["mask", "refresh"], str] = dict(
-            mask=os.path.join(gui_cache, ".preview_mask_toggle"),
-            refresh=os.path.join(gui_cache, ".preview_trigger"))
+        self._gui_triggers: Dict[Literal["mask", "refresh"], str] = {
+            "mask": os.path.join(gui_cache, ".preview_mask_toggle"),
+            "refresh": os.path.join(gui_cache, ".preview_trigger")}
         self._stop: bool = False
         self._save_now: bool = False
         self._preview = PreviewInterface(self._args.preview)
@@ -527,11 +522,11 @@ class PreviewInterface():
     """
     def __init__(self, use_preview: bool) -> None:
         self._active = use_preview
-        self._triggers: TriggerType = dict(toggle_mask=Event(),
-                                           refresh=Event(),
-                                           save=Event(),
-                                           quit=Event(),
-                                           shutdown=Event())
+        self._triggers: TriggerType = {"toggle_mask": Event(),
+                                       "refresh": Event(),
+                                       "save": Event(),
+                                       "quit": Event(),
+                                       "shutdown": Event()}
         self._buffer = PreviewBuffer()
         self._thread = self._launch_thread()
 
@@ -609,7 +604,7 @@ class PreviewInterface():
         thread = FSThread(target=Preview,
                           name="preview",
                           args=(self._buffer, ),
-                          kwargs=dict(triggers=self._triggers))
+                          kwargs={"triggers": self._triggers})
         thread.start()
         return thread
 

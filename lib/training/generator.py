@@ -3,11 +3,10 @@
 
 import logging
 import os
-import sys
 from concurrent import futures
 
 from random import shuffle, choice
-from typing import cast, Dict, Generator, List, Tuple, TYPE_CHECKING
+from typing import cast, Dict, Generator, get_args, List, Literal, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -20,11 +19,6 @@ from lib.utils import FaceswapError
 
 from . import ImageAugmentation
 from .cache import get_cache, RingBuffer
-
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
 
 if TYPE_CHECKING:
     from lib.config import ConfigValueType
@@ -391,7 +385,7 @@ class DataGenerator():
             The input uint8 array
         """
         return ne.evaluate("x / c",
-                           local_dict=dict(x=in_array, c=np.float32(255)),
+                           local_dict={"x": in_array, "c": np.float32(255)},
                            casting="unsafe")
 
 
@@ -525,7 +519,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         if self._warp_to_landmarks:
             landmarks = np.array([face.aligned.landmarks for face in detected_faces])
             batch_dst_pts = self._get_closest_match(filenames, landmarks)
-            warp_kwargs = dict(batch_src_points=landmarks, batch_dst_points=batch_dst_pts)
+            warp_kwargs = {"batch_src_points": landmarks, "batch_dst_points": batch_dst_pts}
         else:
             warp_kwargs = {}
 

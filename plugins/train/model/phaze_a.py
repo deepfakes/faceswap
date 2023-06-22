@@ -4,7 +4,6 @@
 # pylint: disable=too-many-lines
 from __future__ import annotations
 import logging
-import sys
 import typing as T
 from dataclasses import dataclass
 
@@ -27,15 +26,9 @@ from lib.utils import get_tf_version, FaceswapError
 
 from ._base import ModelBase, get_all_sub_models
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 if T.TYPE_CHECKING:
     from tensorflow import keras
     from tensorflow import Tensor
-
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -69,7 +62,7 @@ class _EncoderInfo:
     scaling: T.Tuple[int, int] = (0, 1)
     min_size: int = 32
     enforce_for_weights: bool = False
-    color_order: Literal["bgr", "rgb"] = "rgb"
+    color_order: T.Literal["bgr", "rgb"] = "rgb"
 
 
 _MODEL_MAPPING: T.Dict[str, _EncoderInfo] = {
@@ -519,8 +512,8 @@ def _bottleneck(inputs: Tensor, bottleneck: str, size: int, normalization: str) 
     return var_x
 
 
-def _get_upscale_layer(method: Literal["resize_images", "subpixel", "upscale_dny", "upscale_fast",
-                                       "upscale_hybrid", "upsample2d"],
+def _get_upscale_layer(method: T.Literal["resize_images", "subpixel", "upscale_dny",
+                                         "upscale_fast", "upscale_hybrid", "upsample2d"],
                        filters: int,
                        activation: T.Optional[str] = None,
                        upsamples: T.Optional[int] = None,
@@ -571,7 +564,7 @@ def _get_curve(start_y: int,
                end_y: int,
                num_points: int,
                scale: float,
-               mode: Literal["full", "cap_max", "cap_min"] = "full") -> T.List[int]:
+               mode: T.Literal["full", "cap_max", "cap_min"] = "full") -> T.List[int]:
     """ Obtain a curve.
 
     For the given start and end y values, return the y co-ordinates of a curve for the given
@@ -832,7 +825,7 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
         The user configuration dictionary
     """
     def __init__(self,
-                 side: Literal["a", "b", "both", "gblock", "shared"],
+                 side: T.Literal["a", "b", "both", "gblock", "shared"],
                  input_shape: tuple,
                  config: dict) -> None:
         logger.debug("Initializing: %s (side: %s, input_shape: %s)",
@@ -995,7 +988,7 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
     _filters: T.List[int] = []
 
     def __init__(self,
-                 side: Literal["a", "b", "both", "shared"],
+                 side: T.Literal["a", "b", "both", "shared"],
                  config: dict,
                  layer_indicies: T.Optional[T.Tuple[int, int]] = None) -> None:
         logger.debug("Initializing: %s (side: %s, layer_indicies: %s)",
@@ -1203,7 +1196,7 @@ class GBlock():  # pylint:disable=too-few-public-methods
         The user configuration dictionary
     """
     def __init__(self,
-                 side: Literal["a", "b", "both"],
+                 side: T.Literal["a", "b", "both"],
                  input_shapes: T.Union[list, tuple],
                  config: dict) -> None:
         logger.debug("Initializing: %s (side: %s, input_shapes: %s)",
@@ -1284,7 +1277,7 @@ class Decoder():  # pylint:disable=too-few-public-methods
         The user configuration dictionary
     """
     def __init__(self,
-                 side: Literal["a", "b", "both"],
+                 side: T.Literal["a", "b", "both"],
                  input_shape: T.Tuple[int, int, int],
                  config: dict) -> None:
         logger.debug("Initializing: %s (side: %s, input_shape: %s)",

@@ -2,7 +2,6 @@
 """ Utils imported from Keras as their location changes between Tensorflow Keras and standard
 Keras. Also ensures testing consistency """
 import inspect
-import sys
 
 import numpy as np
 
@@ -101,12 +100,6 @@ def has_arg(func, name, accept_all=False):
     bool
         Whether `func` accepts a `name` keyword argument.
     """
-    if sys.version_info < (3, 3):
-        arg_spec = inspect.getfullargspec(func)
-        if accept_all and arg_spec.varkw is not None:
-            return True
-        return (name in arg_spec.args or
-                name in arg_spec.kwonlyargs)
     signature = inspect.signature(func)
     parameter = signature.parameters.get(name)
     if parameter is None:

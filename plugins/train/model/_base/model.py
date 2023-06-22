@@ -29,12 +29,6 @@ from plugins.train._config import Config
 from .io import IO, get_all_sub_models, Weights
 from .settings import Loss, Optimizer, Settings
 
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 if T.TYPE_CHECKING:
     import argparse
     from lib.config import ConfigValueType
@@ -81,7 +75,7 @@ class ModelBase():
         # Input shape must be set within the plugin after initializing
         self.input_shape: T.Tuple[int, ...] = ()
         self.trainer = "original"  # Override for plugin specific trainer
-        self.color_order: Literal["bgr", "rgb"] = "bgr"  # Override for image color channel order
+        self.color_order: T.Literal["bgr", "rgb"] = "bgr"  # Override for image color channel order
 
         self._args = arguments
         self._is_predict = predict

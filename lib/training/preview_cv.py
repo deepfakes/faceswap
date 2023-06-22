@@ -5,20 +5,13 @@ If Tkinter is installed, then this will be used to manage the preview image, oth
 fallback to opencv's imshow
 """
 import logging
-import sys
 
 from threading import Event, Lock
 from time import sleep
 
-from typing import Dict, Generator, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Generator, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import cv2
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 
 if TYPE_CHECKING:
     import numpy as np
@@ -91,10 +84,10 @@ class PreviewBase():  # pylint:disable=too-few-public-methods
                      self.__class__.__name__, triggers)
         self._triggers = triggers
         self._buffer = preview_buffer
-        self._keymaps: Dict[TriggerKeysType, TriggerNamesType] = dict(m="toggle_mask",
-                                                                      r="refresh",
-                                                                      s="save",
-                                                                      enter="quit")
+        self._keymaps: Dict[TriggerKeysType, TriggerNamesType] = {"m": "toggle_mask",
+                                                                  "r": "refresh",
+                                                                  "s": "save",
+                                                                  "enter": "quit"}
         self._title = ""
         logger.debug("Initialized %s parent", self.__class__.__name__)
 

@@ -3,9 +3,8 @@
 
 import logging
 import os
-import sys
 from importlib import import_module
-from typing import Callable, List, Type, TYPE_CHECKING
+from typing import Callable, List, Literal, Type, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from plugins.extract.detect._base import Detector
@@ -14,11 +13,6 @@ if TYPE_CHECKING:
     from plugins.extract.recognition._base import Identity
     from plugins.train.model._base import ModelBase
     from plugins.train.trainer._base import TrainerBase
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

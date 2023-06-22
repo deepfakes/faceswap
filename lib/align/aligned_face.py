@@ -3,21 +3,13 @@
 
 from dataclasses import dataclass, field
 import logging
-import sys
 from threading import Lock
-from typing import cast, Dict, Optional, Tuple
-
+from typing import cast, Dict, get_args, Literal, Optional, Tuple
 
 import cv2
 import numpy as np
 
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
-
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
 CenteringType = Literal["face", "head", "legacy"]
 
 _MEAN_FACE = np.array([[0.010086, 0.106454], [0.085135, 0.038915], [0.191003, 0.018748],
@@ -65,7 +57,7 @@ _MEAN_FACE_3D = np.array([[4.056931, -11.432347, 1.636229],   # 8 chin LL
                           [0.0, -8.601736, 6.097667],         # 45 mouth bottom C
                           [0.589441, -8.443925, 6.109526]])   # 44 mouth bottom L
 
-_EXTRACT_RATIOS = dict(legacy=0.375, face=0.5, head=0.625)
+_EXTRACT_RATIOS = {"legacy": 0.375, "face": 0.5, "head": 0.625}
 
 
 def get_matrix_scaling(matrix: np.ndarray) -> Tuple[int, int]:
@@ -340,9 +332,9 @@ class AlignedFace():
         self._dtype = dtype
         self._is_aligned = is_aligned
         self._source_centering: CenteringType = "legacy" if is_legacy and is_aligned else "head"
-        self._matrices = dict(legacy=_umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
-                              face=np.array([]),
-                              head=np.array([]))
+        self._matrices = {"legacy": _umeyama(landmarks[17:], _MEAN_FACE, True)[0:2],
+                          "face": np.array([]),
+                          "head": np.array([])}
         self._padding = self._padding_from_coverage(size, coverage_ratio)
 
         self._cache = _FaceCache()
@@ -803,9 +795,9 @@ class PoseEstimate():
         :class:`numpy.ndarray`
             The x, y offset of the new center from the old center.
         """
-        offset: Dict[CenteringType, np.ndarray] = dict(legacy=np.array([0.0, 0.0]))
-        points: Dict[Literal["face", "head"], Tuple[float, ...]] = dict(head=(0.0, 0.0, -2.3),
-                                                                        face=(0.0, -1.5, 4.2))
+        offset: Dict[CenteringType, np.ndarray] = {"legacy": np.array([0.0, 0.0])}
+        points: Dict[Literal["face", "head"], Tuple[float, ...]] = {"head": (0.0, 0.0, -2.3),
+                                                                    "face": (0.0, -1.5, 4.2)}
 
         for key, pnts in points.items():
             center = cv2.projectPoints(np.array([pnts]).astype("float32"),

@@ -2,19 +2,13 @@
 """ Converter for Faceswap """
 
 import logging
-import sys
 from dataclasses import dataclass
-from typing import Callable, cast, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Callable, cast, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
 
 from plugins.plugin_loader import PluginLoader
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace

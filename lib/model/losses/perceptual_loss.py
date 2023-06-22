@@ -2,9 +2,8 @@
 """ TF Keras implementation of Perceptual Loss Functions for faceswap.py """
 
 import logging
-import sys
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Literal, Optional, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -13,11 +12,6 @@ import tensorflow as tf
 from tensorflow.keras import backend as K  # pylint:disable=import-error
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 logger = logging.getLogger(__name__)
 

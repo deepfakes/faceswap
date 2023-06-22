@@ -2,10 +2,9 @@
 """ Tools for manipulating the alignments using extracted Faces as a source """
 import logging
 import os
-import sys
 from argparse import Namespace
 from operator import itemgetter
-from typing import cast, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import cast, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from tqdm import tqdm
@@ -15,11 +14,6 @@ from lib.image import update_existing_metadata  # TODO remove
 from scripts.fsmedia import Alignments
 
 from .media import Faces
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from .media import AlignmentData
@@ -151,7 +145,7 @@ class FromFaces():  # pylint:disable=too-few-public-methods
         for fname, frames in alignments.items():
             this_file: Dict[str, "AlignmentDict"] = {}
             for frame in tqdm(sorted(frames), desc=f"Sorting {fname}", leave=False):
-                this_file[frame] = dict(video_meta={}, faces=[])
+                this_file[frame] = {"video_meta": {}, "faces": []}
                 for real_idx, (f_id, almt, f_path, f_src) in enumerate(sorted(frames[frame],
                                                                               key=itemgetter(0))):
                     if real_idx != f_id:
@@ -194,7 +188,7 @@ class FromFaces():  # pylint:disable=too-few-public-methods
 
         source_info["face_index"] = new_index
         source_info["original_filename"] = new_filename
-        meta = dict(alignments=face.to_png_meta(), source=source_info)
+        meta = {"alignments": face.to_png_meta(), "source": source_info}
         update_existing_metadata(face_path, meta)
 
     def _save_alignments(self,
@@ -399,13 +393,13 @@ class RemoveFaces():  # pylint:disable=too-few-public-methods
 
             face = DetectedFace()
             face.from_alignment(self._alignments.get_faces_in_frame(frame)[new_index])
-            meta = dict(alignments=face.to_png_meta(),
-                        source=dict(alignments_version=file_info["alignments_version"],
-                                    original_filename=orig_filename,
-                                    face_index=new_index,
-                                    source_filename=frame,
-                                    source_is_video=file_info["source_is_video"],
-                                    source_frame_dims=file_info.get("source_frame_dims")))
+            meta = {"alignments": face.to_png_meta(),
+                    "source": {"alignments_version": file_info["alignments_version"],
+                               "original_filename": orig_filename,
+                               "face_index": new_index,
+                               "source_filename": frame,
+                               "source_is_video": file_info["source_is_video"],
+                               "source_frame_dims": file_info.get("source_frame_dims")}}
             update_existing_metadata(fullpath, meta)
 
         logger.info("%s Extracted face(s) had their header information updated", len(to_update))

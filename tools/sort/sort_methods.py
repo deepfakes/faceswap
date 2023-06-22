@@ -8,7 +8,7 @@ import logging
 import operator
 import sys
 
-from typing import Any, cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import Any, cast, Dict, Generator, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
@@ -18,11 +18,6 @@ from lib.align import AlignedFace, DetectedFace
 from lib.image import FacesLoader, ImagesLoader, read_image_meta_batch, update_existing_metadata
 from lib.utils import FaceswapError
 from plugins.extract.recognition.vgg_face2 import Cluster, Recognition as VGGFace
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -201,7 +196,7 @@ class InfoLoader():
             return
 
         self._cached_source_data[filename]["alignments_version"] = 2.3 if vers == 2.2 else vers
-        header = dict(alignments=alignments, source=self._cached_source_data[filename])
+        header = {"alignments": alignments, "source": self._cached_source_data[filename]}
         update_existing_metadata(filename, header)
 
 

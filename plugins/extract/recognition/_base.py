@@ -17,7 +17,6 @@ To get a :class:`~lib.align.DetectedFace` object use the function:
 """
 from __future__ import annotations
 import logging
-import sys
 import typing as T
 
 from dataclasses import dataclass, field
@@ -30,12 +29,6 @@ from lib.image import read_image_meta
 from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractorBatch
 from plugins.extract.pipeline import ExtractMedia
-
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
-
 
 if T.TYPE_CHECKING:
     from queue import Queue
@@ -357,7 +350,7 @@ class IdentityFilter():
         return retval
 
     def _get_matches(self,
-                     filter_type: Literal["filter", "nfilter"],
+                     filter_type: T.Literal["filter", "nfilter"],
                      identities: np.ndarray) -> np.ndarray:
         """ Obtain the average and minimum distances for each face against the source identities
         to test against
@@ -460,7 +453,7 @@ class IdentityFilter():
             return faces
 
         should_filter: T.List[np.ndarray] = []
-        for f_type in get_args(Literal["filter", "nfilter"]):
+        for f_type in T.get_args(T.Literal["filter", "nfilter"]):
             if not getattr(self, f"_{f_type}_enabled"):
                 continue
             should_filter.append(self._get_matches(f_type, identities))

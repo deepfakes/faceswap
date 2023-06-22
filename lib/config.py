@@ -21,13 +21,8 @@ from lib.utils import full_path_split
 _LANG = gettext.translation("lib.config", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-# Can't type OrderedDict fully on Python 3.8 or lower
-if sys.version_info < (3, 9):
-    OrderedDictSectionType = OrderedDict
-    OrderedDictItemType = OrderedDict
-else:
-    OrderedDictSectionType = OrderedDict[str, "ConfigSection"]
-    OrderedDictItemType = OrderedDict[str, "ConfigItem"]
+OrderedDictSectionType = OrderedDict[str, "ConfigSection"]
+OrderedDictItemType = OrderedDict[str, "ConfigItem"]
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 ConfigValueType = Union[bool, int, float, List[str], str, None]

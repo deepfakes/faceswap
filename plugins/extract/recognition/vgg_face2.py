@@ -2,9 +2,8 @@
 """ VGG_Face2 inference and sorting """
 
 import logging
-import sys
 
-from typing import cast, Dict, Generator, List, Tuple, Optional
+from typing import cast, Dict, Generator, List, Literal, Tuple, Optional
 
 import numpy as np
 import psutil
@@ -14,12 +13,6 @@ from lib.model.layers import L2_normalize
 from lib.model.session import KSession
 from lib.utils import FaceswapError
 from ._base import BatchType, RecogBatch, Identity
-
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -64,7 +57,7 @@ class Recognition(Identity):
     def init_model(self) -> None:
         """ Initialize VGG Face 2 Model. """
         assert isinstance(self.model_path, str)
-        model_kwargs = dict(custom_objects={'L2_normalize': L2_normalize})
+        model_kwargs = {"custom_objects": {"L2_normalize": L2_normalize}}
         self.model = KSession(self.name,
                               self.model_path,
                               model_kwargs=model_kwargs,

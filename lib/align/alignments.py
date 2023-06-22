@@ -4,19 +4,13 @@ serialized alignments file. """
 
 import logging
 import os
-import sys
 from datetime import datetime
-from typing import cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, TypedDict, Union
 
 import numpy as np
 
 from lib.serializer import get_serializer, get_serializer_from_filename
 from lib.utils import FaceswapError
-
-if sys.version_info < (3, 8):
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
 
 if TYPE_CHECKING:
     from .aligned_face import CenteringType
@@ -187,7 +181,7 @@ class Alignments():
         """ dict: The frame meta data stored in the alignments file. If data does not exist in the
         alignments file then ``None`` is returned for each Key """
         retval: Dict[str, Optional[Union[List[int],
-                                         List[float]]]] = dict(pts_time=None, keyframes=None)
+                                         List[float]]]] = {"pts_time": None, "keyframes": None}
         pts_time: List[float] = []
         keyframes: List[int] = []
         for idx, key in enumerate(sorted(self.data)):
@@ -197,7 +191,7 @@ class Alignments():
             pts_time.append(cast(float, meta["pts_time"]))
             if meta["keyframe"]:
                 keyframes.append(idx)
-        retval = dict(pts_time=pts_time, keyframes=keyframes)
+        retval = {"pts_time": pts_time, "keyframes": keyframes}
         return retval
 
     @property
@@ -262,10 +256,10 @@ class Alignments():
         logger.info("Saving video meta information to Alignments file")
 
         for idx, pts in enumerate(pts_time):
-            meta: Dict[str, Union[float, int]] = dict(pts_time=pts, keyframe=idx in keyframes)
+            meta: Dict[str, Union[float, int]] = {"pts_time": pts, "keyframe": idx in keyframes}
             key = f"{basename}_{idx + 1:06d}.png"
             if key not in self.data:
-                self.data[key] = dict(video_meta=meta, faces=[])
+                self.data[key] = {"video_meta": meta, "faces": []}
             else:
                 self.data[key]["video_meta"] = meta
 
@@ -497,7 +491,7 @@ class Alignments():
         """
         logger.debug("Adding face to frame_name: '%s'", frame_name)
         if frame_name not in self._data:
-            self._data[frame_name] = dict(faces=[], video_meta={})
+            self._data[frame_name] = {"faces": [], "video_meta": {}}
         self._data[frame_name]["faces"].append(face)
         retval = self._count_faces_in_frame(frame_name) - 1
         logger.debug("Returning new face index: %s", retval)
@@ -732,7 +726,7 @@ class _IO():
 
         logger.info("Reading alignments from: '%s'", self._file)
         data = self._serializer.load(self._file)
-        meta = data.get("__meta__", dict(version=1.0))
+        meta = data.get("__meta__", {"version": 1.0})
         self._version = meta["version"]
         data = data.get("__data__", data)
         logger.debug("Loaded alignments")
@@ -743,8 +737,8 @@ class _IO():
         the location :attr:`file`. """
         logger.debug("Saving alignments")
         logger.info("Writing alignments to: '%s'", self._file)
-        data = dict(__meta__=dict(version=self._version),
-                    __data__=self._alignments.data)
+        data = {"__meta__": {"version": self._version},
+                "__data__": self._alignments.data}
         self._serializer.save(self._file, data)
         logger.debug("Saved alignments")
 
@@ -928,7 +922,7 @@ class _FileStructure(_Updater):
         for key, val in self._alignments.data.items():
             if not isinstance(val, list):
                 continue
-            self._alignments.data[key] = dict(faces=val)
+            self._alignments.data[key] = {"faces": val}
             updated += 1
         return updated
 

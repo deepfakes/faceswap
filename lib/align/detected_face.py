@@ -2,11 +2,10 @@
 """ Face and landmarks detection for faceswap.py """
 
 import logging
-import sys
 import os
 
 from hashlib import sha1
-from typing import cast, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING, Union
+from typing import cast, Callable, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 from zlib import compress, decompress
 
 import cv2
@@ -20,11 +19,6 @@ from . import AlignedFace, get_adjusted_center, get_centered_size
 
 if TYPE_CHECKING:
     from .aligned_face import CenteringType
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -235,7 +229,7 @@ class DetectedFace():
         """
         # TODO Face mask generation from landmarks
         logger.trace("area: %s, dilation: %s", area, dilation)  # type: ignore
-        areas = dict(mouth=[slice(48, 60)], eye=[slice(36, 42), slice(42, 48)])
+        areas = {"mouth": [slice(48, 60)], "eye": [slice(36, 42), slice(42, 48)]}
         points = [self.aligned.landmarks[zone]
                   for zone in areas[area]]
 
@@ -943,7 +937,7 @@ class BlurMask():  # pylint:disable=too-few-public-methods
     def _multipass_factor(self) -> float:
         """ For multiple passes the kernel must be scaled down. This value is
             different for box filter and gaussian """
-        factor = dict(gaussian=0.8, normalized=0.5)
+        factor = {"gaussian": 0.8, "normalized": 0.5}
         return factor[self._blur_type]
 
     @property
@@ -954,20 +948,17 @@ class BlurMask():  # pylint:disable=too-few-public-methods
     @property
     def _func_mapping(self) -> Dict[Literal["gaussian", "normalized"], Callable]:
         """ dict: :attr:`_blur_type` mapped to cv2 Function name. """
-        return dict(gaussian=cv2.GaussianBlur,  # pylint: disable = no-member
-                    normalized=cv2.blur)  # pylint: disable = no-member
+        return {"gaussian": cv2.GaussianBlur, "normalized": cv2.blur}
 
     @property
     def _kwarg_requirements(self) -> Dict[Literal["gaussian", "normalized"], List[str]]:
         """ dict: :attr:`_blur_type` mapped to cv2 Function required keyword arguments. """
-        return dict(gaussian=["ksize", "sigmaX"],
-                    normalized=["ksize"])
+        return {"gaussian": ['ksize', 'sigmaX'], "normalized": ['ksize']}
 
     @property
     def _kwarg_mapping(self) -> Dict[str, Union[int, Tuple[int, int]]]:
         """ dict: cv2 function keyword arguments mapped to their parameters. """
-        return dict(ksize=self._kernel_size,
-                    sigmaX=self._sigma)
+        return {"ksize": self._kernel_size, "sigmaX": self._sigma}
 
     def _get_kernel_size(self, kernel: Union[int, float], is_ratio: bool) -> int:
         """ Set the kernel size to absolute value.

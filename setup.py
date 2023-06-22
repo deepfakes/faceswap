@@ -13,17 +13,11 @@ import re
 import sys
 from shutil import which
 from subprocess import list2cmdline, PIPE, Popen, run, STDOUT
-from typing import Any, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Type
 
 from pkg_resources import parse_requirements, Requirement
 
 from lib.logger import log_setup
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _INSTALL_FAILED = False
@@ -181,8 +175,8 @@ class Environment():
         if self.updater:
             return
 
-        if not ((3, 7) <= sys.version_info < (3, 10) and self.py_version[1] == "64bit"):
-            logger.error("Please run this script with Python version 3.7 to 3.9 64bit and try "
+        if not ((3, 9) <= sys.version_info < (3, 12) and self.py_version[1] == "64bit"):
+            logger.error("Please run this script with Python version 3.9 to 3.11 64bit and try "
                          "again.")
             sys.exit(1)
 

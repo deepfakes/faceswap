@@ -21,11 +21,6 @@ from tensorflow.keras.models import load_model, Model as KModel  # noqa:E501  # 
 from lib.model.backup_restore import Backup
 from lib.utils import FaceswapError
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 if T.TYPE_CHECKING:
     from tensorflow import keras
     from .model import ModelBase
@@ -85,7 +80,7 @@ class IO():
                  plugin: ModelBase,
                  model_dir: str,
                  is_predict: bool,
-                 save_optimizer: Literal["never", "always", "exit"]) -> None:
+                 save_optimizer: T.Literal["never", "always", "exit"]) -> None:
         self._plugin = plugin
         self._is_predict = is_predict
         self._model_dir = model_dir
@@ -429,7 +424,7 @@ class Weights():
     def _load_layer_weights(self,
                             layer: keras.layers.Layer,
                             sub_weights: keras.layers.Layer,
-                            model_name: str) -> Literal[-1, 0, 1]:
+                            model_name: str) -> T.Literal[-1, 0, 1]:
         """ Load the weights for a single layer.
 
         Parameters

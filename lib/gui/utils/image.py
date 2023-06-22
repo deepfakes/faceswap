@@ -3,8 +3,7 @@
 
 import logging
 import os
-import sys
-from typing import cast, Dict, List, Optional, Sequence, Tuple
+from typing import cast, Dict, List, Literal, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -14,13 +13,7 @@ from lib.training.preview_cv import PreviewBuffer
 
 from .config import get_config, PATHCACHE
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
 _IMAGES: Optional["Images"] = None
 _PREVIEW_TRIGGER: Optional["PreviewTrigger"] = None
 TRAININGPREVIEW = ".gui_training_preview.png"
@@ -609,8 +602,8 @@ class PreviewTrigger():
     """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._trigger_files = dict(update=os.path.join(PATHCACHE, ".preview_trigger"),
-                                   mask_toggle=os.path.join(PATHCACHE, ".preview_mask_toggle"))
+        self._trigger_files = {"update": os.path.join(PATHCACHE, ".preview_trigger"),
+                               "mask_toggle": os.path.join(PATHCACHE, ".preview_mask_toggle")}
         logger.debug("Initialized: %s (trigger_files: %s)",
                      self.__class__.__name__, self._trigger_files)
 
