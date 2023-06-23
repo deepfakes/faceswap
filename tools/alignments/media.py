@@ -379,7 +379,7 @@ class Faces(MediaLoader):
                 sub_dict = self._handle_legacy(fullpath, not log_once)
                 log_once = True
             else:
-                sub_dict = T.cast(PNGHeaderDict, metadata["itxt"])
+                sub_dict = T.cast("PNGHeaderDict", metadata["itxt"])
 
             if self._handle_duplicate(fullpath, sub_dict, seen):
                 dupe_count += 1
@@ -411,7 +411,7 @@ class Faces(MediaLoader):
             The source filename as key with list of face indices for the frame as value
         """
         faces: dict[str, list[int]] = {}
-        for face in T.cast(list[tuple[str, PNGHeaderDict]], self.file_list_sorted):
+        for face in T.cast(list[tuple[str, "PNGHeaderDict"]], self.file_list_sorted):
             src = face[1]["source"]
             faces.setdefault(src["source_filename"], []).append(src["face_index"])
         logger.trace(faces)  # type: ignore

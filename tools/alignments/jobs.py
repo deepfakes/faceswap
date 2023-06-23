@@ -91,7 +91,7 @@ class Check():
         assert self._type is not None
         items: T.Union[Frames, Faces] = globals()[self._type.title()](self._source_dir)
         self._is_video = items.is_video
-        return T.cast(T.Union[list[dict[str, str]], list[tuple[str, PNGHeaderDict]]],
+        return T.cast(T.Union[list[dict[str, str]], list[tuple[str, "PNGHeaderDict"]]],
                       items.file_list_sorted)
 
     def process(self) -> None:
@@ -101,7 +101,7 @@ class Check():
         items_output = self._compile_output()
 
         if self._type == "faces":
-            filelist = T.cast(list[tuple[str, PNGHeaderDict]], self._items)
+            filelist = T.cast(list[tuple[str, "PNGHeaderDict"]], self._items)
             check_update = FaceToFile(self._alignments, [val[1] for val in filelist])
             if check_update():
                 self._alignments.save()
@@ -190,7 +190,7 @@ class Check():
             The frame name and the face id of any frames which have multiple faces
         """
         self.output_message = "Multiple faces in frame"
-        for item in tqdm(T.cast(list[tuple[str, PNGHeaderDict]], self._items),
+        for item in tqdm(T.cast(list[tuple[str, "PNGHeaderDict"]], self._items),
                          desc=self.output_message,
                          leave=False):
             src = item[1]["source"]

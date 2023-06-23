@@ -491,7 +491,7 @@ class _Feeder():
         masks: dict[T.Literal["a", "b"], np.ndarray] = {}
 
         # MyPy can't recurse into nested dicts to get the type :(
-        iterator = T.cast(dict[T.Literal["a", "b"], Generator[BatchType, None, None]],
+        iterator = T.cast(dict[T.Literal["a", "b"], "Generator[BatchType, None, None]"],
                           self._display_feeds["timelapse" if is_timelapse else "preview"])
         for side in T.get_args(T.Literal["a", "b"]):
             side_feed, side_samples = next(iterator[side])
@@ -565,7 +565,7 @@ class _Feeder():
                      images, batch_size)
 
         # MyPy can't recurse into nested dicts to get the type :(
-        iterator = T.cast(dict[T.Literal["a", "b"], Generator[BatchType, None, None]],
+        iterator = T.cast(dict[T.Literal["a", "b"], "Generator[BatchType, None, None]"],
                           self._display_feeds["timelapse"])
 
         for side in T.get_args(T.Literal["a", "b"]):

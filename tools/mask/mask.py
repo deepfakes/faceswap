@@ -408,7 +408,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
         assert self._alignments is not None
         logger.debug("args: %s", args)
         if self._update_type != "output":
-            queue = T.cast(EventQueue, args[0])
+            queue = T.cast("EventQueue", args[0])
         for filename, image in tqdm(self._loader.load(), total=self._loader.count):
             frame = os.path.basename(filename)
             if not self._alignments.frame_exists(frame):
