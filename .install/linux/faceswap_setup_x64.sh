@@ -12,7 +12,7 @@ DIR_CONDA="$HOME/miniconda3"
 CONDA_EXECUTABLE="${DIR_CONDA}/bin/conda"
 CONDA_TO_PATH=false
 ENV_NAME="faceswap"
-PYENV_VERSION="3.9"
+PYENV_VERSION="3.10"
 
 DIR_FACESWAP="$HOME/faceswap"
 VERSION="nvidia"
@@ -363,7 +363,7 @@ delete_env() {
 }
 
 create_env() {
-    # Create Python 3.8 env for faceswap
+    # Create Python 3.10 env for faceswap
     delete_env
     info "Creating Conda Virtual Environment..."
     yellow ; "$CONDA_EXECUTABLE" create -n "$ENV_NAME" -q python="$PYENV_VERSION" -y
