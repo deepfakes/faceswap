@@ -397,6 +397,7 @@ Function SetEnvironment
 
     CreateEnv:
         SetDetailsPrint listonly
+        StrCpy $0 "${flagsEnv}"
         ExecDos::exec /NOUNLOAD /ASYNC /DETAILED "$\"$dirConda\scripts\activate.bat$\" && conda create $0 -n  $\"$envName$\" && conda deactivate"
         pop $0
         ExecDos::wait $0
