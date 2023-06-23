@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """ Launches the correct script with the given Command Line Arguments """
+from __future__ import annotations
 import logging
 import os
 import platform
 import sys
+import typing as T
 
 from importlib import import_module
-from typing import Callable, TYPE_CHECKING
 
 from lib.gpu_stats import set_exclude_devices, GPUStats
 from lib.logger import crash_log, log_setup
 from lib.utils import (FaceswapError, get_backend, get_tf_version,
                        safe_shutdown, set_backend, set_system_verbosity)
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     import argparse
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -209,7 +211,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
                             "See https://support.apple.com/en-gb/HT201341")
             raise FaceswapError("No display detected. GUI mode has been disabled.")
 
-    def execute_script(self, arguments: "argparse.Namespace") -> None:
+    def execute_script(self, arguments: argparse.Namespace) -> None:
         """ Performs final set up and launches the requested :attr:`_command` with the given
         command line arguments.
 
@@ -250,7 +252,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         finally:
             safe_shutdown(got_error=not success)
 
-    def _configure_backend(self, arguments: "argparse.Namespace") -> None:
+    def _configure_backend(self, arguments: argparse.Namespace) -> None:
         """ Configure the backend.
 
         Exclude any GPUs for use by Faceswap when requested.

@@ -1,11 +1,11 @@
 #!/usr/bin python3
 """ Face and landmarks detection for faceswap.py """
-
+from __future__ import annotations
 import logging
 import os
+import typing as T
 
 from hashlib import sha1
-from typing import cast, Callable, Dict, List, Literal, Optional, Tuple, TYPE_CHECKING, Union
 from zlib import compress, decompress
 
 import cv2
@@ -17,7 +17,8 @@ from .alignments import (Alignments, AlignmentFileDict, MaskAlignmentsFileDict,
                          PNGHeaderAlignmentsDict, PNGHeaderDict, PNGHeaderSourceDict)
 from . import AlignedFace, get_adjusted_center, get_centered_size
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Callable
     from .aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -79,14 +80,14 @@ class DetectedFace():
         dict of {**name** (`str`): :class:`Mask`}.
     """
     def __init__(self,
-                 image: Optional[np.ndarray] = None,
-                 left: Optional[int] = None,
-                 width: Optional[int] = None,
-                 top: Optional[int] = None,
-                 height: Optional[int] = None,
-                 landmarks_xy: Optional[np.ndarray] = None,
-                 mask: Optional[Dict[str, "Mask"]] = None,
-                 filename: Optional[str] = None) -> None:
+                 image: T.Optional[np.ndarray] = None,
+                 left: T.Optional[int] = None,
+                 width: T.Optional[int] = None,
+                 top: T.Optional[int] = None,
+                 height: T.Optional[int] = None,
+                 landmarks_xy: T.Optional[np.ndarray] = None,
+                 mask: T.Optional[dict[str, "Mask"]] = None,
+                 filename: T.Optional[str] = None) -> None:
         logger.trace("Initializing %s: (image: %s, left: %s, width: %s, top: %s, "  # type: ignore
                      "height: %s, landmarks_xy: %s, mask: %s, filename: %s)",
                      self.__class__.__name__,
@@ -98,12 +99,12 @@ class DetectedFace():
         self.top = top
         self.height = height
         self._landmarks_xy = landmarks_xy
-        self._identity: Dict[str, np.ndarray] = {}
-        self.thumbnail: Optional[np.ndarray] = None
+        self._identity: dict[str, np.ndarray] = {}
+        self.thumbnail: T.Optional[np.ndarray] = None
         self.mask = {} if mask is None else mask
-        self._training_masks: Optional[Tuple[bytes, Tuple[int, int, int]]] = None
+        self._training_masks: T.Optional[tuple[bytes, tuple[int, int, int]]] = None
 
-        self._aligned: Optional[AlignedFace] = None
+        self._aligned: T.Optional[AlignedFace] = None
         logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
 
     @property
@@ -131,7 +132,7 @@ class DetectedFace():
         return self.top + self.height
 
     @property
-    def identity(self) -> Dict[str, np.ndarray]:
+    def identity(self) -> dict[str, np.ndarray]:
         """ dict: Identity mechanism as key, identity embedding as value. """
         return self._identity
 
@@ -141,7 +142,7 @@ class DetectedFace():
                  affine_matrix: np.ndarray,
                  interpolator: int,
                  storage_size: int = 128,
-                 storage_centering: "CenteringType" = "face") -> None:
+                 storage_centering: CenteringType = "face") -> None:
         """ Add a :class:`Mask` to this detected face
 
         The mask should be the original output from  :mod:`plugins.extract.mask`
@@ -203,7 +204,7 @@ class DetectedFace():
         self._identity[name] = embedding
 
     def get_landmark_mask(self,
-                          area: Literal["eye", "face", "mouth"],
+                          area: T.Literal["eye", "face", "mouth"],
                           blur_kernel: int,
                           dilation: int) -> np.ndarray:
         """ Add a :class:`LandmarksMask` to this detected face
@@ -244,7 +245,7 @@ class DetectedFace():
         return lmmask.mask
 
     def store_training_masks(self,
-                             masks: List[Optional[np.ndarray]],
+                             masks: list[T.Optional[np.ndarray]],
                              delete_masks: bool = False) -> None:
         """ Concatenate and compress the given training masks and store for retrieval.
 
@@ -267,7 +268,7 @@ class DetectedFace():
         combined = np.concatenate(valid, axis=-1)
         self._training_masks = (compress(combined), combined.shape)
 
-    def get_training_masks(self) -> Optional[np.ndarray]:
+    def get_training_masks(self) -> T.Optional[np.ndarray]:
         """ Obtain the decompressed combined training masks.
 
         Returns
@@ -306,7 +307,7 @@ class DetectedFace():
         return alignment
 
     def from_alignment(self, alignment: AlignmentFileDict,
-                       image: Optional[np.ndarray] = None, with_thumb: bool = False) -> None:
+                       image: T.Optional[np.ndarray] = None, with_thumb: bool = False) -> None:
         """ Set the attributes of this class from an alignments file and optionally load the face
         into the ``image`` attribute.
 
@@ -336,7 +337,7 @@ class DetectedFace():
         landmarks = alignment["landmarks_xy"]
         if not isinstance(landmarks, np.ndarray):
             landmarks = np.array(landmarks, dtype="float32")
-        self._identity = {cast(Literal["vggface2"], k): np.array(v, dtype="float32")
+        self._identity = {T.cast(T.Literal["vggface2"], k): np.array(v, dtype="float32")
                           for k, v in alignment.get("identity", {}).items()}
         self._landmarks_xy = landmarks.copy()
 
@@ -397,7 +398,7 @@ class DetectedFace():
         self._identity = {}
         for key, val in alignment.get("identity", {}).items():
             assert key in ["vggface2"]
-            self._identity[cast(Literal["vggface2"], key)] = np.array(val, dtype="float32")
+            self._identity[T.cast(T.Literal["vggface2"], key)] = np.array(val, dtype="float32")
         logger.trace("Created from png exif header: (left: %s, width: %s, top: %s "  # type: ignore
                      " height: %s, landmarks: %s, mask: %s, identity: %s)", self.left, self.width,
                      self.top, self.height, self.landmarks_xy, self.mask,
@@ -411,10 +412,10 @@ class DetectedFace():
 
     # <<< Aligned Face methods and properties >>> #
     def load_aligned(self,
-                     image: Optional[np.ndarray],
+                     image: T.Optional[np.ndarray],
                      size: int = 256,
-                     dtype: Optional[str] = None,
-                     centering: "CenteringType" = "head",
+                     dtype: T.Optional[str] = None,
+                     centering: CenteringType = "head",
                      coverage_ratio: float = 1.0,
                      force: bool = False,
                      is_aligned: bool = False,
@@ -501,22 +502,22 @@ class Mask():
     """
     def __init__(self,
                  storage_size: int = 128,
-                 storage_centering: "CenteringType" = "face") -> None:
+                 storage_centering: CenteringType = "face") -> None:
         logger.trace("Initializing: %s (storage_size: %s, storage_centering: %s)",  # type: ignore
                      self.__class__.__name__, storage_size, storage_centering)
         self.stored_size = storage_size
         self.stored_centering = storage_centering
 
-        self._mask: Optional[bytes] = None
-        self._affine_matrix: Optional[np.ndarray] = None
-        self._interpolator: Optional[int] = None
+        self._mask: T.Optional[bytes] = None
+        self._affine_matrix: T.Optional[np.ndarray] = None
+        self._interpolator: T.Optional[int] = None
 
-        self._blur_type: Optional[Literal["gaussian", "normalized"]] = None
+        self._blur_type: T.Optional[T.Literal["gaussian", "normalized"]] = None
         self._blur_passes: int = 0
-        self._blur_kernel: Union[float, int] = 0
+        self._blur_kernel: T.Union[float, int] = 0
         self._threshold = 0.0
         self._sub_crop_size = 0
-        self._sub_crop_slices: Dict[Literal["in", "out"], List[slice]] = {}
+        self._sub_crop_slices: dict[T.Literal["in", "out"], list[slice]] = {}
 
         self.set_blur_and_threshold()
         logger.trace("Initialized: %s", self.__class__.__name__)  # type: ignore
@@ -642,7 +643,8 @@ class Mask():
 
     def set_blur_and_threshold(self,
                                blur_kernel: int = 0,
-                               blur_type: Optional[Literal["gaussian", "normalized"]] = "gaussian",
+                               blur_type: T.Optional[T.Literal["gaussian",
+                                                               "normalized"]] = "gaussian",
                                blur_passes: int = 1,
                                threshold: int = 0) -> None:
         """ Set the internal blur kernel and threshold amount for returned masks
@@ -673,7 +675,7 @@ class Mask():
     def set_sub_crop(self,
                      source_offset: np.ndarray,
                      target_offset: np.ndarray,
-                     centering: "CenteringType",
+                     centering: CenteringType,
                      coverage_ratio: float = 1.0) -> None:
         """ Set the internal crop area of the mask to be returned.
 
@@ -825,9 +827,9 @@ class LandmarksMask(Mask):
         The amount of dilation to apply to the mask. `0` for none. Default: `0`
     """
     def __init__(self,
-                 points: List[np.ndarray],
+                 points: list[np.ndarray],
                  storage_size: int = 128,
-                 storage_centering: "CenteringType" = "face",
+                 storage_centering: CenteringType = "face",
                  dilation: int = 0) -> None:
         super().__init__(storage_size=storage_size, storage_centering=storage_centering)
         self._points = points
@@ -901,9 +903,9 @@ class BlurMask():  # pylint:disable=too-few-public-methods
     (128, 128, 1)
     """
     def __init__(self,
-                 blur_type: Literal["gaussian", "normalized"],
+                 blur_type: T.Literal["gaussian", "normalized"],
                  mask: np.ndarray,
-                 kernel: Union[int, float],
+                 kernel: T.Union[int, float],
                  is_ratio: bool = False,
                  passes: int = 1) -> None:
         logger.trace("Initializing %s: (blur_type: '%s', mask_shape: %s, "  # type: ignore
@@ -941,26 +943,26 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         return factor[self._blur_type]
 
     @property
-    def _sigma(self) -> Literal[0]:
+    def _sigma(self) -> T.Literal[0]:
         """ int: The Sigma for Gaussian Blur. Returns 0 to force calculation from kernel size. """
         return 0
 
     @property
-    def _func_mapping(self) -> Dict[Literal["gaussian", "normalized"], Callable]:
+    def _func_mapping(self) -> dict[T.Literal["gaussian", "normalized"], Callable]:
         """ dict: :attr:`_blur_type` mapped to cv2 Function name. """
         return {"gaussian": cv2.GaussianBlur, "normalized": cv2.blur}
 
     @property
-    def _kwarg_requirements(self) -> Dict[Literal["gaussian", "normalized"], List[str]]:
+    def _kwarg_requirements(self) -> dict[T.Literal["gaussian", "normalized"], list[str]]:
         """ dict: :attr:`_blur_type` mapped to cv2 Function required keyword arguments. """
         return {"gaussian": ['ksize', 'sigmaX'], "normalized": ['ksize']}
 
     @property
-    def _kwarg_mapping(self) -> Dict[str, Union[int, Tuple[int, int]]]:
+    def _kwarg_mapping(self) -> dict[str, T.Union[int, tuple[int, int]]]:
         """ dict: cv2 function keyword arguments mapped to their parameters. """
         return {"ksize": self._kernel_size, "sigmaX": self._sigma}
 
-    def _get_kernel_size(self, kernel: Union[int, float], is_ratio: bool) -> int:
+    def _get_kernel_size(self, kernel: T.Union[int, float], is_ratio: bool) -> int:
         """ Set the kernel size to absolute value.
 
         If :attr:`is_ratio` is ``True`` then the kernel size is calculated from the given ratio and
@@ -990,7 +992,7 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         return kernel_size
 
     @staticmethod
-    def _get_kernel_tuple(kernel_size: int) -> Tuple[int, int]:
+    def _get_kernel_tuple(kernel_size: int) -> tuple[int, int]:
         """ Make sure kernel_size is odd and return it as a tuple.
 
         Parameters
@@ -1008,7 +1010,7 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         logger.trace(retval)  # type: ignore
         return retval
 
-    def _get_kwargs(self) -> Dict[str, Union[int, Tuple[int, int]]]:
+    def _get_kwargs(self) -> dict[str, T.Union[int, tuple[int, int]]]:
         """ dict: the valid keyword arguments for the requested :attr:`_blur_type` """
         retval = {kword: self._kwarg_mapping[kword]
                   for kword in self._kwarg_requirements[self._blur_type]}
@@ -1016,11 +1018,11 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         return retval
 
 
-_HASHES_SEEN: Dict[str, Dict[str, int]] = {}
+_HASHES_SEEN: dict[str, dict[str, int]] = {}
 
 
 def update_legacy_png_header(filename: str, alignments: Alignments
-                             ) -> Optional[PNGHeaderDict]:
+                             ) -> T.Optional[PNGHeaderDict]:
     """ Update a legacy extracted face from pre v2.1 alignments by placing the alignment data for
     the face in the png exif header for the given filename with the given alignment data.
 

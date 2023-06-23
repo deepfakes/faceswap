@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """ Collects and returns Information on available Nvidia GPUs. """
 import os
-from typing import List
 
 import pynvml
 
@@ -83,7 +82,7 @@ class NvidiaStats(_GPUStats):
         self._log("debug", f"GPU Device count: {retval}")
         return retval
 
-    def _get_active_devices(self) -> List[int]:
+    def _get_active_devices(self) -> list[int]:
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
         CUDA_VISIBLE_DEVICES environment variable or explicitly excluded in the command line
         arguments).
@@ -130,7 +129,7 @@ class NvidiaStats(_GPUStats):
         self._log("debug", f"GPU Driver: {driver}")
         return driver
 
-    def _get_device_names(self) -> List[str]:
+    def _get_device_names(self) -> list[str]:
         """ Obtain the list of names of connected Nvidia GPUs as identified in :attr:`_handles`.
 
         Returns
@@ -143,7 +142,7 @@ class NvidiaStats(_GPUStats):
         self._log("debug", f"GPU Devices: {names}")
         return names
 
-    def _get_vram(self) -> List[int]:
+    def _get_vram(self) -> list[int]:
         """ Obtain the VRAM in Megabytes for each connected Nvidia GPU as identified in
         :attr:`_handles`.
 
@@ -157,7 +156,7 @@ class NvidiaStats(_GPUStats):
         self._log("debug", f"GPU VRAM: {vram}")
         return vram
 
-    def _get_free_vram(self) -> List[int]:
+    def _get_free_vram(self) -> list[int]:
         """ Obtain the amount of VRAM that is available, in Megabytes, for each connected Nvidia
         GPU.
 

@@ -31,6 +31,7 @@ from plugins.extract._base import BatchType, Extractor, ExtractorBatch
 from plugins.extract.pipeline import ExtractMedia
 
 if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from queue import Queue
     from lib.align.aligned_face import CenteringType
 
@@ -43,8 +44,8 @@ class RecogBatch(ExtractorBatch):
 
     Inherits from :class:`~plugins.extract._base.ExtractorBatch`
     """
-    detected_faces: T.List["DetectedFace"] = field(default_factory=list)
-    feed_faces: T.List[AlignedFace] = field(default_factory=list)
+    detected_faces: list[DetectedFace] = field(default_factory=list)
+    feed_faces: list[AlignedFace] = field(default_factory=list)
 
 
 class Identity(Extractor):  # pylint:disable=abstract-method
@@ -112,7 +113,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
         logger.debug("Obtained detected face: (filename: %s, detected_face: %s)",
                      item.filename, item.detected_faces)
 
-    def get_batch(self, queue: Queue) -> T.Tuple[bool, RecogBatch]:
+    def get_batch(self, queue: Queue) -> tuple[bool, RecogBatch]:
         """ Get items for inputting into the recognition from the queue in batches
 
         Items are returned from the ``queue`` in batches of
@@ -219,7 +220,7 @@ class Identity(Extractor):  # pylint:disable=abstract-method
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
 
-    def finalize(self, batch: BatchType) -> T.Generator[ExtractMedia, None, None]:
+    def finalize(self, batch: BatchType) -> Generator[ExtractMedia, None, None]:
         """ Finalize the output from Masker
 
         This should be called as the final task of each `plugin`.
@@ -379,9 +380,9 @@ class IdentityFilter():
         return retval
 
     def _filter_faces(self,
-                      faces: T.List[DetectedFace],
-                      sub_folders: T.List[T.Optional[str]],
-                      should_filter: T.List[bool]) -> T.List[DetectedFace]:
+                      faces: list[DetectedFace],
+                      sub_folders: list[T.Optional[str]],
+                      should_filter: list[bool]) -> list[DetectedFace]:
         """ Filter the detected faces, either removing filtered faces from the list of detected
         faces or setting the output subfolder to `"_identity_filt"` for any filtered faces if
         saving output is enabled.
@@ -403,7 +404,7 @@ class IdentityFilter():
             The filtered list of detected face objects, if saving filtered faces has not been
             selected or the full list of detected faces
         """
-        retval: T.List[DetectedFace] = []
+        retval: list[DetectedFace] = []
         self._counts += sum(should_filter)
         for idx, face in enumerate(faces):
             fldr = sub_folders[idx]
@@ -422,8 +423,8 @@ class IdentityFilter():
         return retval
 
     def __call__(self,
-                 faces: T.List[DetectedFace],
-                 sub_folders: T.List[T.Optional[str]]) -> T.List[DetectedFace]:
+                 faces: list[DetectedFace],
+                 sub_folders: list[T.Optional[str]]) -> list[DetectedFace]:
         """ Call the identity filter function
 
         Parameters
@@ -452,14 +453,14 @@ class IdentityFilter():
             logger.trace("All faces already filtered: %s", sub_folders)  # type: ignore
             return faces
 
-        should_filter: T.List[np.ndarray] = []
+        should_filter: list[np.ndarray] = []
         for f_type in T.get_args(T.Literal["filter", "nfilter"]):
             if not getattr(self, f"_{f_type}_enabled"):
                 continue
             should_filter.append(self._get_matches(f_type, identities))
 
         # If any of the filter or nfilter evaluate to 'should filter' then filter out face
-        final_filter: T.List[bool] = np.array(should_filter).max(axis=0).tolist()
+        final_filter: list[bool] = np.array(should_filter).max(axis=0).tolist()
         logger.trace("should_filter: %s, final_filter: %s",  # type: ignore
                      should_filter, final_filter)
         return self._filter_faces(faces, sub_folders, final_filter)

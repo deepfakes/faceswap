@@ -10,7 +10,6 @@ It is a good starting point but may need to be refined over time
 import os
 import re
 from subprocess import run
-from typing import List
 
 from ._base import _GPUStats
 
@@ -221,7 +220,7 @@ class ROCm(_GPUStats):
     """
     def __init__(self, log: bool = True) -> None:
         self._vendor_id = "0x1002"  # AMD VendorID
-        self._sysfs_paths: List[str] = []
+        self._sysfs_paths: list[str] = []
         super().__init__(log=log)
 
     def _from_sysfs_file(self, path: str) -> str:
@@ -249,7 +248,7 @@ class ROCm(_GPUStats):
             val = ""
         return val
 
-    def _get_sysfs_paths(self) -> List[str]:
+    def _get_sysfs_paths(self) -> list[str]:
         """ Obtain a list of sysfs paths to AMD branded GPUs connected to the system
 
         Returns
@@ -259,7 +258,7 @@ class ROCm(_GPUStats):
         """
         base_dir = "/sys/class/drm/"
 
-        retval: List[str] = []
+        retval: list[str] = []
         if not os.path.exists(base_dir):
             self._log("warning", f"sysfs not found at '{base_dir}'")
             return retval
@@ -347,7 +346,7 @@ class ROCm(_GPUStats):
         self._log("debug", f"GPU Drivers: {retval}")
         return retval
 
-    def _get_device_names(self) -> List[str]:
+    def _get_device_names(self) -> list[str]:
         """ Obtain the list of names of connected GPUs as identified in :attr:`_handles`.
 
         Returns
@@ -383,7 +382,7 @@ class ROCm(_GPUStats):
         self._log("debug", f"Device names: {retval}")
         return retval
 
-    def _get_active_devices(self) -> List[int]:
+    def _get_active_devices(self) -> list[int]:
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
         HIP_VISIBLE_DEVICES environment variable or explicitly excluded in the command line
         arguments).
@@ -401,7 +400,7 @@ class ROCm(_GPUStats):
         self._log("debug", f"Active GPU Devices: {devices}")
         return devices
 
-    def _get_vram(self) -> List[int]:
+    def _get_vram(self) -> list[int]:
         """ Obtain the VRAM in Megabytes for each connected AMD GPU as identified in
         :attr:`_handles`.
 
@@ -423,7 +422,7 @@ class ROCm(_GPUStats):
         self._log("debug", f"GPU VRAM: {retval}")
         return retval
 
-    def _get_free_vram(self) -> List[int]:
+    def _get_free_vram(self) -> list[int]:
         """ Obtain the amount of VRAM that is available, in Megabytes, for each connected AMD
         GPU.
 

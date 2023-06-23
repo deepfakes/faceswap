@@ -2,8 +2,6 @@
 """ Image output writer for faceswap.py converter
     Uses cv2 for writing as in testing this was a lot faster than both Pillow and ImageIO
 """
-from typing import List, Tuple
-
 import cv2
 import numpy as np
 
@@ -37,7 +35,7 @@ class Writer(Output):
                        "transparency. Changing output format to 'png'")
         self.config["format"] = "png"
 
-    def _get_save_args(self) -> Tuple[int, ...]:
+    def _get_save_args(self) -> tuple[int, ...]:
         """ Obtain the save parameters for the file format.
 
         Returns
@@ -46,7 +44,7 @@ class Writer(Output):
             The OpenCV specific arguments for the selected file format
          """
         filetype = self.config["format"]
-        args: Tuple[int, ...] = tuple()
+        args: tuple[int, ...] = tuple()
         if filetype == "jpg" and self.config["jpg_quality"] > 0:
             args = (cv2.IMWRITE_JPEG_QUALITY,
                     self.config["jpg_quality"])
@@ -56,7 +54,7 @@ class Writer(Output):
         logger.debug(args)
         return args
 
-    def write(self, filename: str, image: List[bytes]) -> None:
+    def write(self, filename: str, image: list[bytes]) -> None:
         """ Write out the pre-encoded image to disk. If separate mask has been selected, write out
         the encoded mask to a sub-folder in the output directory.
 
@@ -77,7 +75,7 @@ class Writer(Output):
             except Exception as err:  # pylint: disable=broad-except
                 logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
-    def pre_encode(self, image: np.ndarray) -> List[bytes]:
+    def pre_encode(self, image: np.ndarray) -> list[bytes]:
         """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker.
 
         Parameters

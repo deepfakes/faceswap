@@ -1,13 +1,13 @@
 #!/usr/bin python3
 """ Pytest unit tests for :mod:`lib.gui.stats.event_reader` """
 # pylint:disable=protected-access
-
+from __future__ import annotations
 import json
 import os
+import typing as T
 
 from shutil import rmtree
 from time import time
-from typing import cast, Iterator
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -19,6 +19,9 @@ from tensorflow.core.util import event_pb2  # pylint:disable=no-name-in-module
 
 from lib.gui.analysis.event_reader import (_Cache, _CacheData, _EventParser,
                                            _LogFiles, EventData, TensorBoardLogs)
+
+if T.TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 def test__logfiles(tmp_path: str):
@@ -627,9 +630,9 @@ class Test_EventParser:  # pylint:disable=invalid-name
         monkeypatch.setattr("lib.utils._FS_BACKEND", "cpu")
 
         event_parse = event_parser_instance
-        event_parse._parse_outputs = cast(MagicMock, mocker.MagicMock())  # type:ignore
-        event_parse._process_event = cast(MagicMock, mocker.MagicMock())  # type:ignore
-        event_parse._cache.cache_data = cast(MagicMock, mocker.MagicMock())  # type:ignore
+        event_parse._parse_outputs = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
+        event_parse._process_event = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
+        event_parse._cache.cache_data = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
 
         # keras model
         monkeypatch.setattr(event_parse,

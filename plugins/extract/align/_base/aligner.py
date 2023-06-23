@@ -12,11 +12,12 @@ For each source item, the plugin must pass a dict to finalize containing:
 >>>  "landmarks": [list of 68 point face landmarks]
 >>>  "detected_faces": [<list of DetectedFace objects>]}
 """
+from __future__ import annotations
 import logging
+import typing as T
 
 from dataclasses import dataclass, field
 from time import sleep
-from typing import cast, Generator, List, Literal, Optional, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -27,7 +28,8 @@ from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractMedia, ExtractorBatch
 from .processing import AlignedFilter, ReAlign
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from queue import Queue
     from lib.align import DetectedFace
     from lib.align.aligned_face import CenteringType
@@ -71,9 +73,9 @@ class AlignerBatch(ExtractorBatch):
         The masks used to filter out re-feed values for passing to the re-aligner.
     """
     batch_id: int = 0
-    detected_faces: List["DetectedFace"] = field(default_factory=list)
+    detected_faces: list[DetectedFace] = field(default_factory=list)
     landmarks: np.ndarray = np.array([])
-    refeeds: List[np.ndarray] = field(default_factory=list)
+    refeeds: list[np.ndarray] = field(default_factory=list)
     second_pass: bool = False
     second_pass_masks: np.ndarray = np.array([])
 
@@ -136,11 +138,11 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self,
-                 git_model_id: Optional[int] = None,
-                 model_filename: Optional[str] = None,
-                 configfile: Optional[str] = None,
+                 git_model_id: T.Optional[int] = None,
+                 model_filename: T.Optional[str] = None,
+                 configfile: T.Optional[str] = None,
                  instance: int = 0,
-                 normalize_method: Optional[Literal["none", "clahe", "hist", "mean"]] = None,
+                 normalize_method: T.Optional[T.Literal["none", "clahe", "hist", "mean"]] = None,
                  re_feed: int = 0,
                  re_align: bool = False,
                  disable_filter: bool = False,
@@ -154,9 +156,9 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                          instance=instance,
                          **kwargs)
         self._plugin_type = "align"
-        self.realign_centering: "CenteringType" = "face"  # overide for plugin specific centering
+        self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
         self._eof_seen = False
-        self._normalize_method: Optional[Literal["clahe", "hist", "mean"]] = None
+        self._normalize_method: T.Optional[T.Literal["clahe", "hist", "mean"]] = None
         self._re_feed = re_feed
         self._filter = AlignedFilter(feature_filter=self.config["aligner_features"],
                                      min_scale=self.config["aligner_min_scale"],
@@ -175,8 +177,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_normalize_method(self,
-                             method: Optional[Literal["none", "clahe", "hist", "mean"]]) -> None:
+    def set_normalize_method(self, method: T.Optional[T.Literal["none", "clahe", "hist", "mean"]]
+                             ) -> None:
         """ Set the normalization method for feeding faces into the aligner.
 
         Parameters
@@ -185,14 +187,14 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             The normalization method to apply to faces prior to feeding into the model
         """
         method = None if method is None or method.lower() == "none" else method
-        self._normalize_method = cast(Optional[Literal["clahe", "hist", "mean"]], method)
+        self._normalize_method = T.cast(T.Optional[T.Literal["clahe", "hist", "mean"]], method)
 
     def initialize(self, *args, **kwargs) -> None:
         """ Add a call to add model input size to the re-aligner """
         self._re_align.set_input_size_and_centering(self.input_size, self.realign_centering)
         super().initialize(*args, **kwargs)
 
-    def _handle_realigns(self, queue: "Queue") -> Optional[Tuple[bool, AlignerBatch]]:
+    def _handle_realigns(self, queue: Queue) -> T.Optional[tuple[bool, AlignerBatch]]:
         """ Handle any items waiting for a second pass through the aligner.
 
         If EOF has been recieved and items are still being processed through the first pass
@@ -236,7 +238,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         return None
 
-    def get_batch(self, queue: "Queue") -> Tuple[bool, AlignerBatch]:
+    def get_batch(self, queue: Queue) -> tuple[bool, AlignerBatch]:
         """ Get items for inputting into the aligner from the queue in batches
 
         Items are returned from the ``queue`` in batches of
@@ -542,7 +544,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                    "\n3) Enable 'Single Process' mode.")
             raise FaceswapError(msg) from err
 
-    def _process_refeeds(self, batch: AlignerBatch) -> List[AlignerBatch]:
+    def _process_refeeds(self, batch: AlignerBatch) -> list[AlignerBatch]:
         """ Process the output for each selected re-feed
 
         Parameters
@@ -556,7 +558,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             List of :class:`AlignerBatch` objects. Each object in the list contains the
             results for each selected re-feed
         """
-        retval: List[AlignerBatch] = []
+        retval: list[AlignerBatch] = []
         if batch.second_pass:
             # Re-insert empty sub-patches for re-population in ReAlign for filtered out batches
             selected_idx = 0
@@ -599,8 +601,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         return retval
 
     def _get_refeed_filter_masks(self,
-                                 subbatches: List[AlignerBatch],
-                                 original_masks: Optional[np.ndarray] = None) -> np.ndarray:
+                                 subbatches: list[AlignerBatch],
+                                 original_masks: T.Optional[np.ndarray] = None) -> np.ndarray:
         """ Obtain the boolean mask array for masking out failed re-feed results if filter refeed
         has been selected
 
@@ -657,7 +659,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                                 landmarks.shape)
         return np.ma.array(landmarks, mask=masks).mean(axis=0).data.astype("float32")
 
-    def _process_output_first_pass(self, subbatches: List[AlignerBatch]) -> Tuple[np.ndarray,
+    def _process_output_first_pass(self, subbatches: list[AlignerBatch]) -> tuple[np.ndarray,
                                                                                   np.ndarray]:
         """ Process the output from the aligner if this is the first or only pass.
 
@@ -690,7 +692,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         return all_landmarks, masks
 
     def _process_output_second_pass(self,
-                                    subbatches: List[AlignerBatch],
+                                    subbatches: list[AlignerBatch],
                                     masks: np.ndarray) -> np.ndarray:
         """ Process the output from the aligner if this is the first or only pass.
 

@@ -28,11 +28,11 @@ _TENSORFLOW_REQUIREMENTS = {">=2.7.0,<2.11.0": ["11.2", "8.1"]}
 _TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
 # TODO tensorflow-metal versioning
 # Packages that are explicitly required for setup.py
-_INSTALLER_REQUIREMENTS: T.List[T.Tuple[str, str]] = [("pexpect>=4.8.0", "!Windows"),
-                                                      ("pywinpty==2.0.2", "Windows")]
+_INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows"),
+                                                  ("pywinpty==2.0.2", "Windows")]
 
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
-_CONDA_MAPPING: T.Dict[str, T.Tuple[str, str]] = {
+_CONDA_MAPPING: dict[str, tuple[str, str]] = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
     "fastcluster": ("fastcluster", "conda-forge"),
     "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
@@ -64,7 +64,7 @@ class Environment():
                                            "directml", "cpu", "rocm"]] = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
-        self.rocm_version: T.Tuple[int, ...] = (0, 0, 0)
+        self.rocm_version: tuple[int, ...] = (0, 0, 0)
 
         self._process_arguments()
         self._check_permission()
@@ -82,12 +82,12 @@ class Environment():
         return locale.getpreferredencoding()
 
     @property
-    def os_version(self) -> T.Tuple[str, str]:
+    def os_version(self) -> tuple[str, str]:
         """ Get OS Version """
         return platform.system(), platform.release()
 
     @property
-    def py_version(self) -> T.Tuple[str, str]:
+    def py_version(self) -> tuple[str, str]:
         """ Get Python Version """
         return platform.python_version(), platform.architecture()[0]
 
@@ -286,7 +286,7 @@ class Packages():
     """
     def __init__(self, environment: Environment) -> None:
         self._env = environment
-        self._conda_required_packages: T.List[T.Tuple[str, ...]] = [("tk", )]
+        self._conda_required_packages: list[tuple[str, ...]] = [("tk", )]
         if self._env.os_version[0] == "Linux":
             # TODO Put these kind of dependencies somewhere more visible or remove when not needed
             # conda-forge scipy requires GLIBCXX_3.4.30. Some Linux install do not have the
@@ -296,12 +296,12 @@ class Packages():
 
         self._installed_packages = self._get_installed_packages()
         self._conda_installed_packages = self._get_installed_conda_packages()
-        self._required_packages: T.List[T.Tuple[str, T.List[T.Tuple[str, str]]]] = []
-        self._missing_packages: T.List[T.Tuple[str, T.List[T.Tuple[str, str]]]] = []
-        self._conda_missing_packages: T.List[T.Tuple[str, ...]] = []
+        self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
+        self._missing_packages: list[tuple[str, list[tuple[str, str]]]] = []
+        self._conda_missing_packages: list[tuple[str, ...]] = []
 
     @property
-    def prerequisites(self) -> T.List[T.Tuple[str, T.List[T.Tuple[str, str]]]]:
+    def prerequisites(self) -> list[tuple[str, list[tuple[str, str]]]]:
         """ list: Any required packages that the installer needs prior to installing the faceswap
         environment on the specific platform that are not already installed """
         all_installed = self._all_installed_packages
@@ -322,24 +322,24 @@ class Packages():
         return bool(self._missing_packages or self._conda_missing_packages)
 
     @property
-    def to_install(self) -> T.List[T.Tuple[str, T.List[T.Tuple[str, str]]]]:
+    def to_install(self) -> list[tuple[str, list[tuple[str, str]]]]:
         """ list: The required packages that need to be installed """
         return self._missing_packages
 
     @property
-    def to_install_conda(self) -> T.List[T.Tuple[str, ...]]:
+    def to_install_conda(self) -> list[tuple[str, ...]]:
         """ list: The required conda packages that need to be installed """
         return self._conda_missing_packages
 
     @property
-    def _all_installed_packages(self) -> T.Dict[str, str]:
+    def _all_installed_packages(self) -> dict[str, str]:
         """ dict[str, str]: The package names and version string for all installed packages across
         pip and conda """
         return {**self._installed_packages, **self._conda_installed_packages}
 
     @classmethod
-    def _format_requirements(cls, packages: T.List[str]
-                             ) -> T.List[T.Tuple[str, T.List[T.Tuple[str, str]]]]:
+    def _format_requirements(cls, packages: list[str]
+                             ) -> list[tuple[str, list[tuple[str, str]]]]:
         """ Parse a list of requirements.txt formatted package strings to a list of pkgresource
         formatted requirements """
         return [(package.unsafe_name, package.specs)
@@ -348,7 +348,7 @@ class Packages():
 
     @classmethod
     def _validate_spec(cls,
-                       required: T.List[T.Tuple[str, str]],
+                       required: list[tuple[str, str]],
                        existing: str) -> bool:
         """ Validate whether the required specification for a package is met by the installed
         version.
@@ -372,7 +372,7 @@ class Packages():
                                 [int(s) for s in spec[1].split(".")])
                    for spec in required)
 
-    def _get_installed_packages(self) -> T.Dict[str, str]:
+    def _get_installed_packages(self) -> dict[str, str]:
         """ Get currently installed packages and add to :attr:`_installed_packages`
 
         Returns
@@ -393,7 +393,7 @@ class Packages():
         logger.debug(installed_packages)
         return installed_packages
 
-    def _get_installed_conda_packages(self) -> T.Dict[str, str]:
+    def _get_installed_conda_packages(self) -> dict[str, str]:
         """ Get currently installed conda packages
 
         Returns
@@ -727,7 +727,7 @@ class ROCmCheck():  # pylint:disable=too-few-public-methods
     def __init__(self) -> None:
         self.version_min = min(v[0] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
         self.version_max = max(v[1] for v in _TENSORFLOW_ROCM_REQUIREMENTS.values())
-        self.rocm_version: T.Tuple[int, ...] = (0, 0, 0)
+        self.rocm_version: tuple[int, ...] = (0, 0, 0)
         if platform.system() == "Linux":
             self._rocm_check()
 
@@ -771,10 +771,10 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         self.cudnn_version: T.Optional[str] = None
 
         self._os: str = platform.system().lower()
-        self._cuda_keys: T.List[str] = [key
-                                        for key in os.environ
-                                        if key.lower().startswith("cuda_path_v")]
-        self._cudnn_header_files: T.List[str] = ["cudnn_version.h", "cudnn.h"]
+        self._cuda_keys: list[str] = [key
+                                      for key in os.environ
+                                      if key.lower().startswith("cuda_path_v")]
+        self._cudnn_header_files: list[str] = ["cudnn_version.h", "cudnn.h"]
         logger.debug("cuda keys: %s, cudnn header files: %s",
                      self._cuda_keys, self._cudnn_header_files)
         if self._os in ("windows", "linux"):
@@ -860,7 +860,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         self.cudnn_version = ".".join([str(major), str(minor), str(patchlevel)])
         logger.debug("cudnn version: %s", self.cudnn_version)
 
-    def _get_checkfiles_linux(self) -> T.List[str]:
+    def _get_checkfiles_linux(self) -> list[str]:
         """ Return the the files to check for cuDNN locations for Linux by querying
         the dynamic link loader.
 
@@ -882,7 +882,7 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         cudnn_checkfiles = [os.path.join(cudnn_path, header) for header in header_files]
         return cudnn_checkfiles
 
-    def _get_checkfiles_windows(self) -> T.List[str]:
+    def _get_checkfiles_windows(self) -> list[str]:
         """ Return the check-file locations for Windows. Just looks inside the include folder of
         the discovered :attr:`cuda_path`
 
@@ -916,7 +916,7 @@ class Install():  # pylint:disable=too-few-public-methods
         self._is_gui = is_gui
 
         if self._env.os_version[0] == "Windows":
-            self._installer: T.Type[Installer] = WinPTYInstaller
+            self._installer: type[Installer] = WinPTYInstaller
         else:
             self._installer = PexpectInstaller
 
@@ -959,7 +959,7 @@ class Install():  # pylint:disable=too-few-public-methods
             sys.exit(1)
 
     @classmethod
-    def _format_package(cls, package: str, version: T.List[T.Tuple[str, str]]) -> str:
+    def _format_package(cls, package: str, version: list[tuple[str, str]]) -> str:
         """ Format a parsed requirement package and version string to a format that can be used by
         the installer.
 
@@ -1243,7 +1243,7 @@ class Installer():
     def __init__(self,
                  environment: Environment,
                  package: str,
-                 command: T.List[str],
+                 command: list[str],
                  is_gui: bool) -> None:
         logger.info("Installing %s", package)
         logger.debug("argv: %s", command)
@@ -1259,7 +1259,7 @@ class Installer():
         self._re_pip_pkg = re.compile(rb"^\s*Downloading\s(?P<lib>\w+-.+?)-")
         self._re_pip = re.compile(rb"(?P<done>\d+\.?\d*)/(?P<tot>\d+\.?\d*\s\w+)")
         self._pip_pkg = ""
-        self._seen_lines: T.Set[str] = set()
+        self._seen_lines: set[str] = set()
 
     def __call__(self) -> int:
         """ Call the subclassed call function
@@ -1415,7 +1415,7 @@ class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
     def __init__(self,
                  environment: Environment,
                  package: str,
-                 command: T.List[str],
+                 command: list[str],
                  is_gui: bool) -> None:
         super().__init__(environment, package, command, is_gui)
         self._cmd = which(command[0], path=os.environ.get('PATH', os.defpath))
@@ -1426,7 +1426,7 @@ class WinPTYInstaller(Installer):  # pylint: disable=too-few-public-methods
         self._eof = False
         self._read_bytes = 1024
 
-        self._lines: T.List[str] = []
+        self._lines: list[str] = []
         self._out = ""
 
     def _read_from_pty(self, proc: T.Any, winpty_error: T.Any) -> None:
@@ -1537,7 +1537,7 @@ class SubProcInstaller(Installer):
     def __init__(self,
                  environment: Environment,
                  package: str,
-                 command: T.List[str],
+                 command: list[str],
                  is_gui: bool) -> None:
         super().__init__(environment, package, command, is_gui)
         self._shell = self._env.os_version[0] == "Windows" and command[0] == "conda"

@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """ Alignments file functions for reading, writing and manipulating the data stored in a
 serialized alignments file. """
-
+from __future__ import annotations
 import logging
 import os
+import typing as T
 from datetime import datetime
-from typing import cast, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING, TypedDict, Union
 
 import numpy as np
 
 from lib.serializer import get_serializer, get_serializer_from_filename
 from lib.utils import FaceswapError
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from .aligned_face import CenteringType
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
@@ -29,49 +30,49 @@ _VERSION = 2.3
 
 
 # TODO Convert these to Dataclasses
-class MaskAlignmentsFileDict(TypedDict):
+class MaskAlignmentsFileDict(T.TypedDict):
     """ Typed Dictionary for storing Masks. """
     mask: bytes
-    affine_matrix: Union[List[float], np.ndarray]
+    affine_matrix: T.Union[list[float], np.ndarray]
     interpolator: int
     stored_size: int
-    stored_centering: "CenteringType"
+    stored_centering: CenteringType
 
 
-class PNGHeaderAlignmentsDict(TypedDict):
+class PNGHeaderAlignmentsDict(T.TypedDict):
     """ Base Dictionary for storing a single faces' Alignment Information in Alignments files and
     PNG Headers. """
     x: int
     y: int
     w: int
     h: int
-    landmarks_xy: Union[List[float], np.ndarray]
-    mask: Dict[str, MaskAlignmentsFileDict]
-    identity: Dict[str, List[float]]
+    landmarks_xy: T.Union[list[float], np.ndarray]
+    mask: dict[str, MaskAlignmentsFileDict]
+    identity: dict[str, list[float]]
 
 
 class AlignmentFileDict(PNGHeaderAlignmentsDict):
     """ Typed Dictionary for storing a single faces' Alignment Information in alignments files. """
-    thumb: Optional[np.ndarray]
+    thumb: T.Optional[np.ndarray]
 
 
-class PNGHeaderSourceDict(TypedDict):
+class PNGHeaderSourceDict(T.TypedDict):
     """ Dictionary for storing additional meta information in PNG headers """
     alignments_version: float
     original_filename: str
     face_index: int
     source_filename: str
     source_is_video: bool
-    source_frame_dims: Optional[Tuple[int, int]]
+    source_frame_dims: T.Optional[tuple[int, int]]
 
 
-class AlignmentDict(TypedDict):
+class AlignmentDict(T.TypedDict):
     """ Dictionary for holding all of the alignment information within a single alignment file """
-    faces: List[AlignmentFileDict]
-    video_meta: Dict[str, Union[float, int]]
+    faces: list[AlignmentFileDict]
+    video_meta: dict[str, T.Union[float, int]]
 
 
-class PNGHeaderDict(TypedDict):
+class PNGHeaderDict(T.TypedDict):
     """ Dictionary for storing all alignment and meta information in PNG Headers """
     alignments: PNGHeaderAlignmentsDict
     source: PNGHeaderSourceDict
@@ -129,7 +130,7 @@ class Alignments():
         return self._io.file
 
     @property
-    def data(self) -> Dict[str, AlignmentDict]:
+    def data(self) -> dict[str, AlignmentDict]:
         """ dict: The loaded alignments :attr:`file` in dictionary form. """
         return self._data
 
@@ -140,7 +141,7 @@ class Alignments():
         return self._io.have_alignments_file
 
     @property
-    def hashes_to_frame(self) -> Dict[str, Dict[str, int]]:
+    def hashes_to_frame(self) -> dict[str, dict[str, int]]:
         """ dict: The SHA1 hash of the face mapped to the frame(s) and face index within the frame
         that the hash corresponds to.
 
@@ -152,7 +153,7 @@ class Alignments():
         return self._legacy.hashes_to_frame
 
     @property
-    def hashes_to_alignment(self) -> Dict[str, AlignmentFileDict]:
+    def hashes_to_alignment(self) -> dict[str, AlignmentFileDict]:
         """ dict: The SHA1 hash of the face mapped to the alignment for the face that the hash
         corresponds to. The structure of the dictionary is:
 
@@ -164,10 +165,10 @@ class Alignments():
         return self._legacy.hashes_to_alignment
 
     @property
-    def mask_summary(self) -> Dict[str, int]:
+    def mask_summary(self) -> dict[str, int]:
         """ dict: The mask type names stored in the alignments :attr:`data` as key with the number
         of faces which possess the mask type as value. """
-        masks: Dict[str, int] = {}
+        masks: dict[str, int] = {}
         for val in self._data.values():
             for face in val["faces"]:
                 if face.get("mask", None) is None:
@@ -177,18 +178,18 @@ class Alignments():
         return masks
 
     @property
-    def video_meta_data(self) -> Dict[str, Optional[Union[List[int], List[float]]]]:
+    def video_meta_data(self) -> dict[str, T.Optional[T.Union[list[int], list[float]]]]:
         """ dict: The frame meta data stored in the alignments file. If data does not exist in the
         alignments file then ``None`` is returned for each Key """
-        retval: Dict[str, Optional[Union[List[int],
-                                         List[float]]]] = {"pts_time": None, "keyframes": None}
-        pts_time: List[float] = []
-        keyframes: List[int] = []
+        retval: dict[str, T.Optional[T.Union[list[int], list[float]]]] = {"pts_time": None,
+                                                                          "keyframes": None}
+        pts_time: list[float] = []
+        keyframes: list[int] = []
         for idx, key in enumerate(sorted(self.data)):
             if not self.data[key].get("video_meta", {}):
                 return retval
             meta = self.data[key]["video_meta"]
-            pts_time.append(cast(float, meta["pts_time"]))
+            pts_time.append(T.cast(float, meta["pts_time"]))
             if meta["keyframe"]:
                 keyframes.append(idx)
         retval = {"pts_time": pts_time, "keyframes": keyframes}
@@ -205,7 +206,7 @@ class Alignments():
         """ float: The alignments file version number. """
         return self._io.version
 
-    def _load(self) -> Dict[str, AlignmentDict]:
+    def _load(self) -> dict[str, AlignmentDict]:
         """ Load the alignments data from the serialized alignments :attr:`file`.
 
         Populates :attr:`_version` with the alignment file's loaded version as well as returning
@@ -232,7 +233,7 @@ class Alignments():
         """
         return self._io.backup()
 
-    def save_video_meta_data(self, pts_time: List[float], keyframes: List[int]) -> None:
+    def save_video_meta_data(self, pts_time: list[float], keyframes: list[int]) -> None:
         """ Save video meta data to the alignments file.
 
         If the alignments file does not have an entry for every frame (e.g. if Extract Every N
@@ -256,7 +257,7 @@ class Alignments():
         logger.info("Saving video meta information to Alignments file")
 
         for idx, pts in enumerate(pts_time):
-            meta: Dict[str, Union[float, int]] = {"pts_time": pts, "keyframe": idx in keyframes}
+            meta: dict[str, T.Union[float, int]] = {"pts_time": pts, "keyframe": idx in keyframes}
             key = f"{basename}_{idx + 1:06d}.png"
             if key not in self.data:
                 self.data[key] = {"video_meta": meta, "faces": []}
@@ -279,8 +280,8 @@ class Alignments():
         self._io.save()
 
     @classmethod
-    def _pad_leading_frames(cls, pts_time: List[float], keyframes: List[int]) -> Tuple[List[float],
-                                                                                       List[int]]:
+    def _pad_leading_frames(cls, pts_time: list[float], keyframes: list[int]) -> tuple[list[float],
+                                                                                       list[int]]:
         """ Calculate the number of frames to pad the video by when the first frame is not
         a key frame.
 
@@ -304,7 +305,7 @@ class Alignments():
         """
         start_pts = pts_time[0]
         logger.debug("Video not cut on keyframe. Start pts: %s", start_pts)
-        gaps: List[float] = []
+        gaps: list[float] = []
         prev_time = None
         for item in pts_time:
             if prev_time is not None:
@@ -354,7 +355,7 @@ class Alignments():
             ``True`` if the given frame_name exists within the alignments :attr:`data` and has at
             least 1 face associated with it, otherwise ``False``
         """
-        frame_data = self._data.get(frame_name, cast(AlignmentDict, {}))
+        frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         retval = bool(frame_data.get("faces", []))
         logger.trace("'%s': %s", frame_name, retval)  # type:ignore
         return retval
@@ -378,7 +379,7 @@ class Alignments():
         if not frame_name:
             retval = False
         else:
-            frame_data = self._data.get(frame_name, cast(AlignmentDict, {}))
+            frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
             retval = bool(len(frame_data.get("faces", [])) > 1)
         logger.trace("'%s': %s", frame_name, retval)  # type:ignore
         return retval
@@ -408,7 +409,7 @@ class Alignments():
         return retval
 
     # << DATA >> #
-    def get_faces_in_frame(self, frame_name: str) -> List[AlignmentFileDict]:
+    def get_faces_in_frame(self, frame_name: str) -> list[AlignmentFileDict]:
         """ Obtain the faces from :attr:`data` associated with a given frame_name.
 
         Parameters
@@ -423,8 +424,8 @@ class Alignments():
             The list of face dictionaries that appear within the requested frame_name
         """
         logger.trace("Getting faces for frame_name: '%s'", frame_name)  # type:ignore
-        frame_data = self._data.get(frame_name, cast(AlignmentDict, {}))
-        return frame_data.get("faces", cast(List[AlignmentFileDict], []))
+        frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
+        return frame_data.get("faces", T.cast(list[AlignmentFileDict], []))
 
     def _count_faces_in_frame(self, frame_name: str) -> int:
         """ Return number of faces that appear within :attr:`data` for the given frame_name.
@@ -440,7 +441,7 @@ class Alignments():
         int
             The number of faces that appear in the given frame_name
         """
-        frame_data = self._data.get(frame_name, cast(AlignmentDict, {}))
+        frame_data = self._data.get(frame_name, T.cast(AlignmentDict, {}))
         retval = len(frame_data.get("faces", []))
         logger.trace(retval)  # type:ignore
         return retval
@@ -514,7 +515,7 @@ class Alignments():
         logger.debug("Updating face %s for frame_name '%s'", face_index, frame_name)
         self._data[frame_name]["faces"][face_index] = face
 
-    def filter_faces(self, filter_dict: Dict[str, List[int]], filter_out: bool = False) -> None:
+    def filter_faces(self, filter_dict: dict[str, list[int]], filter_out: bool = False) -> None:
         """ Remove faces from :attr:`data` based on a given filter list.
 
         Parameters
@@ -543,7 +544,7 @@ class Alignments():
                 del frame_data["faces"][face_idx]
 
     # << GENERATORS >> #
-    def yield_faces(self) -> Generator[Tuple[str, List[AlignmentFileDict], int, str], None, None]:
+    def yield_faces(self) -> Generator[tuple[str, list[AlignmentFileDict], int, str], None, None]:
         """ Generator to obtain all faces with meta information from :attr:`data`. The results
         are yielded by frame.
 
@@ -709,7 +710,7 @@ class _IO():
             logger.info("Updating alignments file to version %s", self._version)
             self.save()
 
-    def load(self) -> Dict[str, AlignmentDict]:
+    def load(self) -> dict[str, AlignmentDict]:
         """ Load the alignments data from the serialized alignments :attr:`file`.
 
         Populates :attr:`_version` with the alignment file's loaded version as well as returning
@@ -1072,11 +1073,11 @@ class _Legacy():
     """
     def __init__(self, alignments: Alignments) -> None:
         self._alignments = alignments
-        self._hashes_to_frame: Dict[str, Dict[str, int]] = {}
-        self._hashes_to_alignment: Dict[str, AlignmentFileDict] = {}
+        self._hashes_to_frame: dict[str, dict[str, int]] = {}
+        self._hashes_to_alignment: dict[str, AlignmentFileDict] = {}
 
     @property
-    def hashes_to_frame(self) -> Dict[str, Dict[str, int]]:
+    def hashes_to_frame(self) -> dict[str, dict[str, int]]:
         """ dict: The SHA1 hash of the face mapped to the frame(s) and face index within the frame
         that the hash corresponds to. The structure of the dictionary is:
 
@@ -1099,7 +1100,7 @@ class _Legacy():
         return self._hashes_to_frame
 
     @property
-    def hashes_to_alignment(self) -> Dict[str, AlignmentFileDict]:
+    def hashes_to_alignment(self) -> dict[str, AlignmentFileDict]:
         """ dict: The SHA1 hash of the face mapped to the alignment for the face that the hash
         corresponds to. The structure of the dictionary is:
 

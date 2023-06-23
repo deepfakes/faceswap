@@ -9,9 +9,9 @@ import re
 import sys
 import time
 import traceback
+import typing as T
 
 from datetime import datetime
-from typing import Union
 
 
 class FaceswapLogger(logging.Logger):
@@ -76,11 +76,11 @@ class ColoredFormatter(logging.Formatter):
     def __init__(self, fmt: str, pad_newlines: bool = False, **kwargs) -> None:
         super().__init__(fmt, **kwargs)
         self._use_color = self._get_color_compatibility()
-        self._level_colors = dict(CRITICAL="\033[31m",  # red
-                                  ERROR="\033[31m",  # red
-                                  WARNING="\033[33m",  # yellow
-                                  INFO="\033[32m",  # green
-                                  VERBOSE="\033[34m")  # blue
+        self._level_colors = {"CRITICAL": "\033[31m",  # red
+                              "ERROR": "\033[31m",  # red
+                              "WARNING": "\033[33m",  # yellow
+                              "INFO": "\033[32m",  # green
+                              "VERBOSE": "\033[34m"}  # blue
         self._default_color = "\033[0m"
         self._newline_padding = self._get_newline_padding(pad_newlines, fmt)
 
@@ -412,7 +412,7 @@ def _file_handler(loglevel,
     return handler
 
 
-def _stream_handler(loglevel: int, is_gui: bool) -> Union[logging.StreamHandler, TqdmHandler]:
+def _stream_handler(loglevel: int, is_gui: bool) -> T.Union[logging.StreamHandler, TqdmHandler]:
     """ Add a stream handler for the current Faceswap session. The stream handler will only ever
     output at a maximum of VERBOSE level to avoid spamming the console.
 

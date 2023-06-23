@@ -28,6 +28,7 @@ from plugins.plugin_loader import PluginLoader
 
 if T.TYPE_CHECKING:
     from argparse import Namespace
+    from collections.abc import Callable
     from plugins.convert.writer._base import Output
     from plugins.train.model._base import ModelBase
     from lib.align.aligned_face import CenteringType
@@ -56,8 +57,8 @@ class ConvertItem:
         The swapped faces returned from the model's predict function
     """
     inbound: ExtractMedia
-    feed_faces: T.List[AlignedFace] = field(default_factory=list)
-    reference_faces: T.List[AlignedFace] = field(default_factory=list)
+    feed_faces: list[AlignedFace] = field(default_factory=list)
+    reference_faces: list[AlignedFace] = field(default_factory=list)
     swapped_faces: np.ndarray = np.array([])
 
 
@@ -302,8 +303,8 @@ class DiskIO():
         # Extractor for on the fly detection
         self._extractor = self._load_extractor()
 
-        self._queues: T.Dict[T.Literal["load", "save"], EventQueue] = {}
-        self._threads: T.Dict[T.Literal["load", "save"], MultiThread] = {}
+        self._queues: dict[T.Literal["load", "save"], EventQueue] = {}
+        self._threads: dict[T.Literal["load", "save"], MultiThread] = {}
         self._init_threads()
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -319,13 +320,13 @@ class DiskIO():
         return self._writer.config.get("draw_transparent", False)
 
     @property
-    def pre_encode(self) -> T.Optional[T.Callable[[np.ndarray], T.List[bytes]]]:
+    def pre_encode(self) -> T.Optional[Callable[[np.ndarray], list[bytes]]]:
         """ python function: Selected writer's pre-encode function, if it has one,
         otherwise ``None`` """
         dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self._writer.pre_encode(dummy)
-        retval: T.Optional[T.Callable[[np.ndarray],
-                           T.List[bytes]]] = None if test is None else self._writer.pre_encode
+        retval: T.Optional[Callable[[np.ndarray],
+                           list[bytes]]] = None if test is None else self._writer.pre_encode
         logger.debug("Writer pre_encode function: %s", retval)
         return retval
 
@@ -379,7 +380,7 @@ class DiskIO():
         return PluginLoader.get_converter("writer", self._args.writer)(*args,
                                                                        configfile=configfile)
 
-    def _get_frame_ranges(self) -> T.Optional[T.List[T.Tuple[int, int]]]:
+    def _get_frame_ranges(self) -> T.Optional[list[tuple[int, int]]]:
         """ Obtain the frame ranges that are to be converted.
 
         If frame ranges have been specified, then split the command line formatted arguments into
@@ -566,7 +567,7 @@ class DiskIO():
         logger.trace("idx: %s, skipframe: %s", idx, skipframe)  # type: ignore
         return skipframe
 
-    def _get_detected_faces(self, filename: str, image: np.ndarray) -> T.List[DetectedFace]:
+    def _get_detected_faces(self, filename: str, image: np.ndarray) -> list[DetectedFace]:
         """ Return the detected faces for the given image.
 
         If we have an alignments file, then the detected faces are created from that file. If
@@ -592,7 +593,7 @@ class DiskIO():
         logger.trace("Got %s faces for: '%s'", len(detected_faces), filename)  # type:ignore
         return detected_faces
 
-    def _alignments_faces(self, frame_name: str, image: np.ndarray) -> T.List[DetectedFace]:
+    def _alignments_faces(self, frame_name: str, image: np.ndarray) -> list[DetectedFace]:
         """ Return detected faces from an alignments file.
 
         Parameters
@@ -639,7 +640,7 @@ class DiskIO():
             tqdm.write(f"No alignment found for {frame_name}, skipping")
         return have_alignments
 
-    def _detect_faces(self, filename: str, image: np.ndarray) -> T.List[DetectedFace]:
+    def _detect_faces(self, filename: str, image: np.ndarray) -> list[DetectedFace]:
         """ Extract the face from a frame for On-The-Fly conversion.
 
         Pulls detected faces out of the Extraction pipeline.
@@ -774,7 +775,7 @@ class Predict():
         """ int: The size in pixels of the Faceswap model output. """
         return self._sizes["output"]
 
-    def _get_io_sizes(self) -> T.Dict[str, int]:
+    def _get_io_sizes(self) -> dict[str, int]:
         """ Obtain the input size and output size of the model.
 
         Returns
@@ -891,7 +892,7 @@ class Predict():
         """
         faces_seen = 0
         consecutive_no_faces = 0
-        batch: T.List[ConvertItem] = []
+        batch: list[ConvertItem] = []
         while True:
             item: T.Union[T.Literal["EOF"], ConvertItem] = self._in_queue.get()
             if item == "EOF":
@@ -933,7 +934,7 @@ class Predict():
         self._out_queue.put("EOF")
         logger.debug("Load queue complete")
 
-    def _process_batch(self, batch: T.List[ConvertItem], faces_seen: int):
+    def _process_batch(self, batch: list[ConvertItem], faces_seen: int):
         """ Predict faces on the given batch of images and queue out to patch thread
 
         Parameters
@@ -996,7 +997,7 @@ class Predict():
         logger.trace("Loaded aligned faces: '%s'", item.inbound.filename)  # type:ignore
 
     @staticmethod
-    def _compile_feed_faces(feed_faces: T.List[AlignedFace]) -> np.ndarray:
+    def _compile_feed_faces(feed_faces: list[AlignedFace]) -> np.ndarray:
         """ Compile a batch of faces for feeding into the Predictor.
 
         Parameters
@@ -1040,7 +1041,7 @@ class Predict():
         logger.trace("Input shape(s): %s", [item.shape for item in feed])  # type:ignore
 
         inbound = self._model.model.predict(feed, verbose=0, batch_size=batch_size)
-        predicted: T.List[np.ndarray] = inbound if isinstance(inbound, list) else [inbound]
+        predicted: list[np.ndarray] = inbound if isinstance(inbound, list) else [inbound]
 
         if self._model.color_order.lower() == "rgb":
             predicted[0] = predicted[0][..., ::-1]
@@ -1057,7 +1058,7 @@ class Predict():
         logger.trace("Final shape: %s", retval.shape)  # type:ignore
         return retval
 
-    def _queue_out_frames(self, batch: T.List[ConvertItem], swapped_faces: np.ndarray) -> None:
+    def _queue_out_frames(self, batch: list[ConvertItem], swapped_faces: np.ndarray) -> None:
         """ Compile the batch back to original frames and put to the Out Queue.
 
         For batching, faces are split away from their frames. This compiles all detected faces
@@ -1103,7 +1104,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  arguments: Namespace,
-                 input_images: T.List[np.ndarray],
+                 input_images: list[np.ndarray],
                  alignments: Alignments) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
@@ -1126,7 +1127,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         self._alignments.filter_faces(accept_dict, filter_out=False)
         logger.info("Faces filtered out: %s", pre_face_count - self._alignments.faces_count)
 
-    def _get_face_metadata(self) -> T.Dict[str, T.List[int]]:
+    def _get_face_metadata(self) -> dict[str, list[int]]:
         """ Check for the existence of an aligned directory for identifying which faces in the
         target frames should be swapped. If it exists, scan the folder for face's metadata
 
@@ -1135,7 +1136,7 @@ class OptionalActions():  # pylint:disable=too-few-public-methods
         dict
             Dictionary of source frame names with a list of associated face indices to be skipped
         """
-        retval: T.Dict[str, T.List[int]] = {}
+        retval: dict[str, list[int]] = {}
         input_aligned_dir = self._args.input_aligned_dir
 
         if input_aligned_dir is None:

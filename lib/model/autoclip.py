@@ -1,6 +1,4 @@
 """ Auto clipper for clipping gradients. """
-import typing as T
-
 import numpy as np
 import tensorflow as tf
 
@@ -71,7 +69,7 @@ class AutoClipper():  # pylint:disable=too-few-public-methods
 
             return gathered_hist
 
-    def __call__(self, grads_and_vars: T.List[tf.Tensor]) -> T.List[tf.Tensor]:
+    def __call__(self, grads_and_vars: list[tf.Tensor]) -> list[tf.Tensor]:
         """ Call the AutoClip function.
 
         Parameters

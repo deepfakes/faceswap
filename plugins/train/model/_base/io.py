@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_all_sub_models(
         model: keras.models.Model,
-        models: T.Optional[T.List[keras.models.Model]] = None) -> T.List[keras.models.Model]:
+        models: T.Optional[list[keras.models.Model]] = None) -> list[keras.models.Model]:
     """ For a given model, return all sub-models that occur (recursively) as children.
 
     Parameters
@@ -85,7 +85,7 @@ class IO():
         self._is_predict = is_predict
         self._model_dir = model_dir
         self._save_optimizer = save_optimizer
-        self._history: T.List[T.List[float]] = [[], []]  # Loss histories per save iteration
+        self._history: list[list[float]] = [[], []]  # Loss histories per save iteration
         self._backup = Backup(self._model_dir, self._plugin.name)
 
     @property
@@ -101,12 +101,12 @@ class IO():
         return os.path.isfile(self._filename)
 
     @property
-    def history(self) -> T.List[T.List[float]]:
+    def history(self) -> list[list[float]]:
         """ list: list of loss histories per side for the current save iteration. """
         return self._history
 
     @property
-    def multiple_models_in_folder(self) -> T.Optional[T.List[str]]:
+    def multiple_models_in_folder(self) -> T.Optional[list[str]]:
         """ :list: or ``None`` If there are multiple model types in the requested folder, or model
         types that don't correspond to the requested plugin type, then returns the list of plugin
         names that exist in the folder, otherwise returns ``None`` """
@@ -205,7 +205,7 @@ class IO():
             msg += f" - Average loss since last save: {', '.join(lossmsg)}"
         logger.info(msg)
 
-    def _get_save_averages(self) -> T.List[float]:
+    def _get_save_averages(self) -> list[float]:
         """ Return the average loss since the last save iteration and reset historical loss """
         logger.debug("Getting save averages")
         if not all(loss for loss in self._history):
@@ -217,7 +217,7 @@ class IO():
         logger.debug("Average losses since last save: %s", retval)
         return retval
 
-    def _should_backup(self, save_averages: T.List[float]) -> bool:
+    def _should_backup(self, save_averages: list[float]) -> bool:
         """ Check whether the loss averages for this save iteration is the lowest that has been
         seen.
 
@@ -398,7 +398,7 @@ class Weights():
                            "different settings than you have set for your current model.",
                            skipped_ops)
 
-    def _get_weights_model(self) -> T.List[keras.models.Model]:
+    def _get_weights_model(self) -> list[keras.models.Model]:
         """ Obtain a list of all sub-models contained within the weights model.
 
         Returns

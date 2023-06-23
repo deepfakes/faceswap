@@ -2,13 +2,13 @@
 """ Pytest unit tests for :mod:`lib.utils` """
 import os
 import time
+import typing as T
 import warnings
 import zipfile
 
 from io import StringIO
 from socket import timeout as socket_timeout, error as socket_error
 from shutil import rmtree
-from typing import Any, cast, List, Tuple, Union
 from unittest.mock import MagicMock
 from urllib import error as urlliberror
 
@@ -160,7 +160,7 @@ _PARAMS = [("/path/to/file.txt", ["/", "path", "to", "file.txt"]),  # Absolute
 
 
 @pytest.mark.parametrize("path,result", _PARAMS, ids=[f'"{p[0]}"' for p in _PARAMS])
-def test_full_path_split(path: str, result: List[str]) -> None:
+def test_full_path_split(path: str, result: list[str]) -> None:
     """ Test the :func:`~lib.utils.full_path_split` function works correctly
 
     Parameters
@@ -188,7 +188,7 @@ _PARAMS = [("camelCase", ["camel", "Case"]),
 
 
 @pytest.mark.parametrize("text, result", _PARAMS, ids=[f'"{p[0]}"' for p in _PARAMS])
-def test_camel_case_split(text: str, result: List[str]) -> None:
+def test_camel_case_split(text: str, result: list[str]) -> None:
     """ Test the :func:`~lib.utils.camel_case_spli` function works correctly
 
     Parameters
@@ -235,7 +235,7 @@ _SECPARAMS = [((1, ), 1),  # 1 argument
 
 
 @pytest.mark.parametrize("args,result", _SECPARAMS, ids=[str(p[0]) for p in _SECPARAMS])
-def test_convert_to_secs(args: Tuple[int, ...], result: int) -> None:
+def test_convert_to_secs(args: tuple[int, ...], result: int) -> None:
     """ Test the :func:`~lib.utils.convert_to_secs` function works correctly
 
     Parameters
@@ -360,8 +360,8 @@ _EXPECTED = ((["test_model_file_v3.h5"], "test_model_file_v3", "test_model_file"
 @pytest.mark.parametrize("filename,results", zip(_INPUT, _EXPECTED), ids=[str(i) for i in _INPUT])
 def test_get_model_model_filename_input(
         get_model_instance: GetModel,  # pylint:disable=unused-argument
-        filename: Union[str, List[str]],
-        results: Union[str, List[str]]) -> None:
+        filename: T.Union[str, list[str]],
+        results: T.Union[str, list[str]]) -> None:
     """ Test :class:`~lib.utils.GetModel` filename parsing works
 
     Parameters
@@ -430,8 +430,8 @@ def test_get_model__get(mocker: pytest_mock.MockerFixture,
         For testing the function when a model exists and when it does not
     """
     model = get_model_instance
-    model._download_model = cast(MagicMock, mocker.MagicMock())  # type:ignore
-    model._unzip_model = cast(MagicMock, mocker.MagicMock())  # type:ignore
+    model._download_model = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
+    model._unzip_model = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
     os_remove = mocker.patch("os.remove")
 
     if model_exists:  # Dummy in a model file
@@ -459,8 +459,8 @@ _DLPARAMS = [(None, None),
 @pytest.mark.parametrize("error_type,error_args", _DLPARAMS, ids=[str(p[0]) for p in _DLPARAMS])
 def test_get_model__download_model(mocker: pytest_mock.MockerFixture,
                                    get_model_instance: GetModel,
-                                   error_type: Any,
-                                   error_args: Tuple[Union[str, int], ...]) -> None:
+                                   error_type: T.Any,
+                                   error_args: tuple[T.Union[str, int], ...]) -> None:
     """ Test :func:`~lib.utils.GetModel._download_model` executes its logic correctly
 
     Parameters
@@ -476,7 +476,7 @@ def test_get_model__download_model(mocker: pytest_mock.MockerFixture,
     """
     mock_urlopen = mocker.patch("urllib.request.urlopen")
     if not error_type:  # Model download is successful
-        get_model_instance._write_zipfile = cast(MagicMock, mocker.MagicMock())  # type:ignore
+        get_model_instance._write_zipfile = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
         get_model_instance._download_model()
         assert mock_urlopen.called
         assert get_model_instance._write_zipfile.called

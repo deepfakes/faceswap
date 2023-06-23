@@ -5,10 +5,10 @@ import locale
 import os
 import platform
 import sys
+import typing as T
 
 from collections import namedtuple
 from io import StringIO
-from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -258,8 +258,8 @@ def test__configs__parse_configs(configs_instance: _Configs,
     """
     assert hasattr(configs_instance, "_parse_configs")
     assert isinstance(configs_instance._parse_configs([]), str)
-    configs_instance._parse_ini = cast(MagicMock, mocker.MagicMock())  # type:ignore
-    configs_instance._parse_json = cast(MagicMock,  mocker.MagicMock())  # type:ignore
+    configs_instance._parse_ini = T.cast(MagicMock, mocker.MagicMock())  # type:ignore
+    configs_instance._parse_json = T.cast(MagicMock,  mocker.MagicMock())  # type:ignore
     configs_instance._parse_configs(config_files=["test.ini", ".faceswap"])
     assert configs_instance._parse_ini.called
     assert configs_instance._parse_json.called

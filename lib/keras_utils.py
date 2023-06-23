@@ -117,7 +117,7 @@ class ColorSpaceConvert():  # pylint:disable=too-few-public-methods
         self._xyz_multipliers = K.constant([116, 500, 200], dtype="float32")
 
     @classmethod
-    def _get_rgb_xyz_map(cls) -> T.Tuple[Tensor, Tensor]:
+    def _get_rgb_xyz_map(cls) -> tuple[Tensor, Tensor]:
         """ Obtain the mapping and inverse mapping for rgb to xyz color space conversion.
 
         Returns
