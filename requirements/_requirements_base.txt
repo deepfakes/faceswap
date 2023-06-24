@@ -8,7 +8,7 @@ pillow>=9.4.0
 scikit-learn>=1.2.2
 fastcluster>=1.2.6
 matplotlib>=3.7.1
-imageio>=2.31.1  # TODO Windows check. Looks like latest is 2.26.0
+imageio>=2.26.0
 imageio-ffmpeg>=0.4.8
 ffmpy>=0.3.0
 pywin32>=228 ; sys_platform == "win32"
