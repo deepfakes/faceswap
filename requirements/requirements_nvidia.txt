@@ -1,3 +1,5 @@
 -r _requirements_base.txt
-tensorflow-gpu>=2.7.0,<2.11.0
+# Exclude badly numbered Python2 version of nvidia-ml-py
+nvidia-ml-py>=11.525,<300
 pynvx==1.0.0 ; sys_platform == "darwin"
+tensorflow>=2.10.0,<2.11.0

@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 _INSTALL_FAILED = False
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
 # Tensorflow builds available from pypi
-_TENSORFLOW_REQUIREMENTS = {">=2.7.0,<2.11.0": ["11.2", "8.1"]}
+# _TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": ["11.2", "8.1"]}
+_TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": ["11.3", "8.2"]}
 # ROCm min/max version requirements for Tensorflow
 _TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
 # TODO tensorflow-metal versioning
@@ -35,8 +36,9 @@ _INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows")
 _CONDA_MAPPING: dict[str, tuple[str, str]] = {
     # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
     "fastcluster": ("fastcluster", "conda-forge"),
+    "ffmpy": ("ffmpy", "conda-forge"),
     "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
-    "scikit-learn": ("scikit-learn", "conda-forge"),  # Exists in Default but is dependency hell
+    "nvidia-ml-py": ("nvidia-ml-py", "conda-forge"),
     "tensorflow-deps": ("tensorflow-deps", "apple"),
     "libblas": ("libblas", "conda-forge")}
 
@@ -286,14 +288,7 @@ class Packages():
     """
     def __init__(self, environment: Environment) -> None:
         self._env = environment
-        self._conda_required_packages: list[tuple[str, ...]] = [("tk", )]
-        if self._env.os_version[0] == "Linux":
-            # TODO Put these kind of dependencies somewhere more visible or remove when not needed
-            # conda-forge scipy requires GLIBCXX_3.4.30. Some Linux install do not have the
-            # specific version, so we install it just in case.
-            # Ref: https://forum.faceswap.dev/viewtopic.php?f=7&t=2247
-            self._conda_required_packages.append(("gcc=12.1.0", "conda-forge"))
-
+        self._conda_required_packages: list[tuple[str, ...]] = [("tk", ), ("git", )]
         self._installed_packages = self._get_installed_packages()
         self._conda_installed_packages = self._get_installed_conda_packages()
         self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
@@ -446,11 +441,11 @@ class Packages():
             # Remove the version of tensorflow in requirements file and add the correct version
             # that corresponds to the installed Cuda/cuDNN versions
             self._required_packages = [pkg for pkg in self._required_packages
-                                       if not pkg[0].startswith("tensorflow-gpu")]
-            tf_ver = f"tensorflow-gpu{tf_ver}"
+                                       if not pkg[0].startswith("tensorflow")]
+            tf_ver = f"tensorflow{tf_ver}"
 
-            tf_ver = f"tensorflow-gpu{tf_ver}"
-            self._required_packages.append(("tensorflow-gpu",
+            tf_ver = f"tensorflow{tf_ver}"
+            self._required_packages.append(("tensorflow",
                                            next(parse_requirements(tf_ver)).specs))
             return
 
@@ -458,7 +453,7 @@ class Packages():
             "The minimum Tensorflow requirement is 2.8 \n"
             "Tensorflow currently has no official prebuild for your CUDA, cuDNN combination.\n"
             "Either install a combination that Tensorflow supports or build and install your own "
-            "tensorflow-gpu.\r\n"
+            "tensorflow.\r\n"
             "CUDA Version: %s\r\n"
             "cuDNN Version: %s\r\n"
             "Help:\n"
@@ -467,8 +462,8 @@ class Packages():
             "https://www.tensorflow.org/install/source#tested_build_configurations",
             self._env.cuda_version, self._env.cudnn_version)
 
-        custom_tf = input("Location of custom tensorflow-gpu wheel (leave "
-                          "blank to manually install): ")
+        custom_tf = input("Location of custom tensorflow wheel (leave blank to manually "
+                          "install): ")
         if not custom_tf:
             return
 
@@ -1015,8 +1010,8 @@ class Install():  # pylint:disable=too-few-public-methods
                 channel = None if mapping[1] == "" else mapping[1]
                 pkg = mapping[0]
             pkg = self._format_package(pkg, version) if version else pkg
-            if self._env.is_conda:
-                if pkg.startswith("tensorflow-gpu"):
+            if self._env.is_conda and self._env.backend == "nvidia":
+                if pkg.startswith("tensorflow"):
                     # From TF 2.4 onwards, Anaconda Tensorflow becomes a mess. The version of 2.5
                     # installed by Anaconda is compiled against an incorrect numpy version which
                     # breaks Tensorflow. Coupled with this the versions of cudatoolkit and cudnn
@@ -1029,7 +1024,7 @@ class Install():  # pylint:disable=too-few-public-methods
                     highest_cuda = sorted(_TENSORFLOW_REQUIREMENTS.values())[-1]
                     compat_tf = next(k for k, v in _TENSORFLOW_REQUIREMENTS.items()
                                      if v == highest_cuda)
-                    pkg = f"tensorflow-gpu{compat_tf}"
+                    pkg = f"tensorflow{compat_tf}"
                     conda_only = True
 
                 if self._from_conda(pkg, channel=channel, conda_only=conda_only):
@@ -1070,7 +1065,7 @@ class Install():  # pylint:disable=too-few-public-methods
         if channel:
             condaexe.extend(["-c", channel])
 
-        if package.startswith("tensorflow-gpu"):
+        if package.startswith("tensorflow") and self._env.backend == "nvidia":
             # Here we will install the cuda/cudnn toolkits, currently only available from
             # conda-forge, but fail tensorflow itself so that it can be handled by pip.
             specs = Requirement.parse(package).specs
@@ -1079,7 +1074,8 @@ class Install():  # pylint:disable=too-few-public-methods
                 if all(item in req_specs for item in specs):
                     cuda, cudnn = val
                     break
-            condaexe.extend(["-c", "conda-forge", f"cudatoolkit={cuda}", f"cudnn={cudnn}"])
+            # condaexe.extend(["-c", "conda-forge", f"cudatoolkit={cuda}", f"cudnn={cudnn}"])
+            condaexe.extend([f"cudatoolkit={cuda}", f"cudnn={cudnn}"])
             package = "Cuda Toolkit"
             success = False
 

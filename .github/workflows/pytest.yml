@@ -9,7 +9,6 @@ on:
 
 jobs:
   build_linux:
-
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -17,8 +16,7 @@ jobs:
         python-version: ["3.9", "3.10"]
         backend: ["cpu"]
         include:
-          - kbackend: "tensorflow"
-            backend: "cpu"
+          - backend: "cpu"
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
@@ -45,10 +43,10 @@ jobs:
           mypy .
       - name: Simple Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" KERAS_BACKEND="${{ matrix.kbackend }}" py.test -v tests/;
+          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" KERAS_BACKEND="${{ matrix.kbackend }}" python tests/simple_tests.py;
+          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_windows:
     runs-on: windows-latest
