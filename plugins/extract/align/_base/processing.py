@@ -190,7 +190,7 @@ class AlignedFilter():
 
     def filtered_mask(self,
                       batch: AlignerBatch,
-                      skip: T.Optional[T.Union[np.ndarray, list[int]]] = None) -> np.ndarray:
+                      skip: T.Union[np.ndarray, list[int], None] = None) -> np.ndarray:
         """ Obtain a list of boolean values for the given batch indicating whether they pass the
         filter test.
 

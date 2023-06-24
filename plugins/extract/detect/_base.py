@@ -99,7 +99,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
 
     def __init__(self,
                  git_model_id: T.Optional[int] = None,
-                 model_filename: T.Optional[T.Union[str, list[str]]] = None,
+                 model_filename: T.Union[str, list[str], None] = None,
                  configfile: T.Optional[str] = None,
                  instance: int = 0,
                  rotation: T.Optional[str] = None,

@@ -178,11 +178,11 @@ class Alignments():
         return masks
 
     @property
-    def video_meta_data(self) -> dict[str, T.Optional[T.Union[list[int], list[float]]]]:
+    def video_meta_data(self) -> dict[str, T.Union[list[int], list[float], None]]:
         """ dict: The frame meta data stored in the alignments file. If data does not exist in the
         alignments file then ``None`` is returned for each Key """
-        retval: dict[str, T.Optional[T.Union[list[int], list[float]]]] = {"pts_time": None,
-                                                                          "keyframes": None}
+        retval: dict[str, T.Union[list[int], list[float], None]] = {"pts_time": None,
+                                                                    "keyframes": None}
         pts_time: list[float] = []
         keyframes: list[int] = []
         for idx, key in enumerate(sorted(self.data)):

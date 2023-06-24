@@ -382,7 +382,7 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
     """
     def __init__(self,
                  *args,
-                 min_max: T.Optional[T.Union[tuple[int, int], tuple[float, float]]] = None,
+                 min_max: T.Union[tuple[int, int], tuple[float, float], None] = None,
                  rounding: T.Optional[int] = None,
                  **kwargs) -> None:
         opt = kwargs["option_strings"]

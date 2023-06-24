@@ -108,7 +108,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
                               name=name)(var_x)
         return var_x
 
-    def __call__(self) -> Model:
+    def __call__(self) -> tf.keras.models.Model:
         """ Create the AlexNet Model
 
         Returns
@@ -189,7 +189,7 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
                                 name=f"{name}.expand3x3")(squeezed)
         return layers.Concatenate(axis=-1, name=name)([expand1, expand3])
 
-    def __call__(self) -> Model:
+    def __call__(self) -> tf.keras.models.Model:
         """ Create the SqueezeNet Model
 
         Returns

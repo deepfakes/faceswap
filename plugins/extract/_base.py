@@ -153,7 +153,7 @@ class Extractor():
     """
     def __init__(self,
                  git_model_id: T.Optional[int] = None,
-                 model_filename: T.Optional[T.Union[str, list[str]]] = None,
+                 model_filename: T.Union[str, list[str], None] = None,
                  exclude_gpus: T.Optional[list[int]] = None,
                  configfile: T.Optional[str] = None,
                  instance: int = 0) -> None:
@@ -182,7 +182,7 @@ class Extractor():
         self.queue_size = 1
         """ int: Queue size for all internal queues. Set in :func:`initialize()` """
 
-        self.model: T.Optional[T.Union[KSession, cv2.dnn.Net]] = None
+        self.model: T.Union[KSession, cv2.dnn.Net, None] = None
         """varies: The model for this plugin. Set in the plugin's :func:`init_model()` method """
 
         # For detectors that support batching, this should be set to  the calculated batch size
@@ -438,8 +438,8 @@ class Extractor():
     @classmethod
     def _get_model(cls,
                    git_model_id: T.Optional[int],
-                   model_filename: T.Optional[T.Union[str, list[str]]]
-                   ) -> T.Optional[T.Union[str, list[str]]]:
+                   model_filename: T.Union[str, list[str], None]
+                   ) -> T.Union[str, list[str], None]:
         """ Check if model is available, if not, download and unzip it """
         if model_filename is None:
             logger.debug("No model_filename specified. Returning None")

@@ -55,7 +55,7 @@ class ConfigItem:
     helptext: str
     datatype: type
     rounding: int
-    min_max: T.Optional[T.Union[tuple[int, int], tuple[float, float]]]
+    min_max: T.Union[tuple[int, int], tuple[float, float], None]
     choices: T.Union[str, list[str]]
     gui_radio: bool
     fixed: bool
@@ -310,8 +310,8 @@ class FaceswapConfig():
                  default: ConfigValueType = None,
                  info: T.Optional[str] = None,
                  rounding: T.Optional[int] = None,
-                 min_max: T.Optional[T.Union[tuple[int, int], tuple[float, float]]] = None,
-                 choices: T.Optional[T.Union[str, list[str]]] = None,
+                 min_max: T.Union[tuple[int, int], tuple[float, float], None] = None,
+                 choices: T.Union[str, list[str], None] = None,
                  gui_radio: bool = False,
                  fixed: bool = True,
                  group: T.Optional[str] = None) -> None:
@@ -380,7 +380,7 @@ class FaceswapConfig():
                          choices: T.Union[str, list[str]],
                          default: ConfigValueType,
                          datatype: type,
-                         min_max: T.Optional[T.Union[tuple[int, int], tuple[float, float]]],
+                         min_max: T.Union[tuple[int, int], tuple[float, float], None],
                          fixed: bool) -> str:
         """ Add extra helptext info from parameters """
         helptext += "\n"

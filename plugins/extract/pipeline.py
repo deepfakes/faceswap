@@ -99,7 +99,7 @@ class Extractor():
     def __init__(self,
                  detector: T.Optional[str],
                  aligner: T.Optional[str],
-                 masker: T.Optional[T.Union[str, list[str]]],
+                 masker: T.Union[str, list[str], None],
                  recognition: T.Optional[str] = None,
                  configfile: T.Optional[str] = None,
                  multiprocess: bool = False,
