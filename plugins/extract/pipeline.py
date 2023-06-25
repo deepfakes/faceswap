@@ -97,16 +97,16 @@ class Extractor():
         :attr:`final_pass` to indicate to the caller which phase is being processed
     """
     def __init__(self,
-                 detector: T.Optional[str],
-                 aligner: T.Optional[str],
-                 masker: T.Union[str, list[str], None],
-                 recognition: T.Optional[str] = None,
-                 configfile: T.Optional[str] = None,
+                 detector: str | None,
+                 aligner: str | None,
+                 masker: str | list[str] | None,
+                 recognition: str | None = None,
+                 configfile: str | None = None,
                  multiprocess: bool = False,
-                 exclude_gpus: T.Optional[list[int]] = None,
-                 rotate_images: T.Optional[str] = None,
+                 exclude_gpus: list[int] | None = None,
+                 rotate_images: str | None = None,
                  min_size: int = 0,
-                 normalize_method:  T.Optional[T.Literal["none", "clahe", "hist", "mean"]] = None,
+                 normalize_method:  T.Literal["none", "clahe", "hist", "mean"] | None = None,
                  re_feed: int = 0,
                  re_align: bool = False,
                  disable_filter: bool = False) -> None:
@@ -117,8 +117,8 @@ class Extractor():
                      recognition, configfile, multiprocess, exclude_gpus, rotate_images, min_size,
                      normalize_method, re_feed, re_align, disable_filter)
         self._instance = _get_instance()
-        maskers = [T.cast(T.Optional[str],
-                   masker)] if not isinstance(masker, list) else T.cast(list[T.Optional[str]],
+        maskers = [T.cast(str | None,
+                   masker)] if not isinstance(masker, list) else T.cast(list[str | None],
                                                                         masker)
         self._flow = self._set_flow(detector, aligner, maskers, recognition)
         self._exclude_gpus = exclude_gpus
@@ -403,10 +403,10 @@ class Extractor():
         return retval
 
     @staticmethod
-    def _set_flow(detector: T.Optional[str],
-                  aligner: T.Optional[str],
-                  masker: list[T.Optional[str]],
-                  recognition: T.Optional[str]) -> list[str]:
+    def _set_flow(detector: str | None,
+                  aligner: str | None,
+                  masker: list[str | None],
+                  recognition: str | None) -> list[str]:
         """ Set the flow list based on the input plugins
 
         Parameters
@@ -437,7 +437,7 @@ class Extractor():
         return retval
 
     @staticmethod
-    def _get_plugin_type_and_index(flow_phase: str) -> tuple[str, T.Optional[int]]:
+    def _get_plugin_type_and_index(flow_phase: str) -> tuple[str, int | None]:
         """ Obtain the plugin type and index for the plugin for the given flow phase.
 
         When multiple plugins for the same phase are allowed (e.g. Mask) this will return
@@ -459,7 +459,7 @@ class Extractor():
         """
         sidx = flow_phase.split("_")[-1]
         if sidx.isdigit():
-            idx: T.Optional[int] = int(sidx)
+            idx: int | None = int(sidx)
             plugin_type = "_".join(flow_phase.split("_")[:-1])
         else:
             plugin_type = flow_phase
@@ -479,7 +479,7 @@ class Extractor():
         return queues
 
     @staticmethod
-    def _get_vram_stats() -> dict[str, T.Union[int, str]]:
+    def _get_vram_stats() -> dict[str, int | str]:
         """ Obtain statistics on available VRAM and subtract a constant buffer from available vram.
 
         Returns
@@ -490,10 +490,10 @@ class Extractor():
         vram_buffer = 256  # Leave a buffer for VRAM allocation
         gpu_stats = GPUStats()
         stats = gpu_stats.get_card_most_free()
-        retval: dict[str, T.Union[int, str]] = {"count": gpu_stats.device_count,
-                                                "device": stats.device,
-                                                "vram_free": int(stats.free - vram_buffer),
-                                                "vram_total": int(stats.total)}
+        retval: dict[str, int | str] = {"count": gpu_stats.device_count,
+                                        "device": stats.device,
+                                        "vram_free": int(stats.free - vram_buffer),
+                                        "vram_total": int(stats.total)}
         logger.debug(retval)
         return retval
 
@@ -572,12 +572,12 @@ class Extractor():
 
     # << INTERNAL PLUGIN HANDLING >> #
     def _load_align(self,
-                    aligner: T.Optional[str],
-                    configfile: T.Optional[str],
-                    normalize_method: T.Optional[T.Literal["none", "clahe", "hist", "mean"]],
+                    aligner: str | None,
+                    configfile: str | None,
+                    normalize_method: T.Literal["none", "clahe", "hist", "mean"] | None,
                     re_feed: int,
                     re_align: bool,
-                    disable_filter: bool) -> T.Optional[Aligner]:
+                    disable_filter: bool) -> Aligner | None:
         """ Set global arguments and load aligner plugin
 
         Parameters
@@ -615,10 +615,10 @@ class Extractor():
         return plugin
 
     def _load_detect(self,
-                     detector: T.Optional[str],
-                     rotation: T.Optional[str],
+                     detector: str | None,
+                     rotation: str | None,
                      min_size: int,
-                     configfile: T.Optional[str]) -> T.Optional[Detector]:
+                     configfile: str | None) -> Detector | None:
         """ Set global arguments and load detector plugin """
         if detector is None or detector.lower() == "none":
             logger.debug("No detector selected. Returning None")
@@ -633,8 +633,8 @@ class Extractor():
         return plugin
 
     def _load_mask(self,
-                   masker: T.Optional[str],
-                   configfile: T.Optional[str]) -> T.Optional[Masker]:
+                   masker: str | None,
+                   configfile: str | None) -> Masker | None:
         """ Set global arguments and load masker plugin
 
         Parameters
@@ -660,8 +660,8 @@ class Extractor():
         return plugin
 
     def _load_recognition(self,
-                          recognition: T.Optional[str],
-                          configfile: T.Optional[str]) -> T.Optional[Identity]:
+                          recognition: str | None,
+                          configfile: str | None) -> Identity | None:
         """ Set global arguments and load recognition plugin """
         if recognition is None or recognition.lower() == "none":
             logger.debug("No recognition selected. Returning None")
@@ -799,19 +799,19 @@ class ExtractMedia():
     def __init__(self,
                  filename: str,
                  image: np.ndarray,
-                 detected_faces: T.Optional[list[DetectedFace]] = None,
+                 detected_faces: list[DetectedFace] | None = None,
                  is_aligned: bool = False) -> None:
         logger.trace("Initializing %s: (filename: '%s', image shape: %s, "  # type: ignore
                      "detected_faces: %s, is_aligned: %s)", self.__class__.__name__, filename,
                      image.shape, detected_faces, is_aligned)
         self._filename = filename
-        self._image: T.Optional[np.ndarray] = image
+        self._image: np.ndarray | None = image
         self._image_shape = T.cast(tuple[int, int, int], image.shape)
         self._detected_faces: list[DetectedFace] = ([] if detected_faces is None
                                                     else detected_faces)
         self._is_aligned = is_aligned
-        self._frame_metadata: T.Optional[PNGHeaderSourceDict] = None
-        self._sub_folders: list[T.Optional[str]] = []
+        self._frame_metadata: PNGHeaderSourceDict | None = None
+        self._sub_folders: list[str | None] = []
 
     @property
     def filename(self) -> str:
@@ -859,7 +859,7 @@ class ExtractMedia():
         return self._frame_metadata
 
     @property
-    def sub_folders(self) -> list[T.Optional[str]]:
+    def sub_folders(self) -> list[str | None]:
         """ list: The sub_folders that the faces should be output to. Used when binning filter
         output is enabled. The list corresponds to the list of detected faces
         """
@@ -896,7 +896,7 @@ class ExtractMedia():
                      [(face.left, face.right, face.top, face.bottom) for face in faces])
         self._detected_faces = faces
 
-    def add_sub_folders(self, folders: list[T.Optional[str]]) -> None:
+    def add_sub_folders(self, folders: list[str | None]) -> None:
         """ Add detected faces to the object. Called at the end of each extraction phase.
 
         Parameters

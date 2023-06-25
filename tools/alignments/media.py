@@ -86,7 +86,7 @@ class MediaLoader():
         analyzing a video file. If the count is not passed in, it will be calculated.
         Default: ``None``
     """
-    def __init__(self, folder: str, count: T.Optional[int] = None):
+    def __init__(self, folder: str, count: int | None = None):
         logger.debug("Initializing %s: (folder: '%s')", self.__class__.__name__, folder)
         logger.info("[%s DATA]", self.__class__.__name__.upper())
         self._count = count
@@ -113,7 +113,7 @@ class MediaLoader():
             self._count = len(self.file_list_sorted)
         return self._count
 
-    def check_input_folder(self) -> T.Optional[cv2.VideoCapture]:
+    def check_input_folder(self) -> cv2.VideoCapture | None:
         """ Ensure that the frames or faces folder exists and is valid.
             If frames folder contains a video file return imageio reader object
 
@@ -152,18 +152,16 @@ class MediaLoader():
         logger.trace("Filename has valid extension: '%s': %s", filename, retval)  # type: ignore
         return retval
 
-    def sorted_items(self) -> T.Union[list[dict[str, str]],
-                                      list[tuple[str, PNGHeaderDict]]]:
+    def sorted_items(self) -> list[dict[str, str]] | list[tuple[str, PNGHeaderDict]]:
         """ Override for specific folder processing """
         raise NotImplementedError()
 
-    def process_folder(self) -> T.Union[Generator[dict[str, str], None, None],
-                                        Generator[tuple[str, PNGHeaderDict], None, None]]:
+    def process_folder(self) -> (Generator[dict[str, str], None, None] |
+                                 Generator[tuple[str, PNGHeaderDict], None, None]):
         """ Override for specific folder processing """
         raise NotImplementedError()
 
-    def load_items(self) -> T.Union[dict[str, list[int]],
-                                    dict[str, tuple[str, str]]]:
+    def load_items(self) -> dict[str, list[int]] | dict[str, tuple[str, str]]:
         """ Override for specific item loading """
         raise NotImplementedError()
 
@@ -213,7 +211,7 @@ class MediaLoader():
         # image = self._vid_reader.get_next_data()[:, :, ::-1]
         return image
 
-    def stream(self, skip_list: T.Optional[list[int]] = None
+    def stream(self, skip_list: list[int] | None = None
                ) -> Generator[tuple[str, np.ndarray], None, None]:
         """ Load the images in :attr:`folder` in the order they are received from
         :class:`lib.image.ImagesLoader` in a background thread.
@@ -241,7 +239,7 @@ class MediaLoader():
     def save_image(output_folder: str,
                    filename: str,
                    image: np.ndarray,
-                   metadata: T.Optional[PNGHeaderDict] = None) -> None:
+                   metadata: PNGHeaderDict | None = None) -> None:
         """ Save an image """
         output_file = os.path.join(output_folder, filename)
         output_file = os.path.splitext(output_file)[0] + ".png"
@@ -268,7 +266,7 @@ class Faces(MediaLoader):
         - When the remove-faces job is being run, when the process will only load faces that exist
         in the alignments file. Default: ``None``
     """
-    def __init__(self, folder: str, alignments: T.Optional[Alignments] = None) -> None:
+    def __init__(self, folder: str, alignments: Alignments | None = None) -> None:
         self._alignments = alignments
         super().__init__(folder)
 
@@ -533,11 +531,11 @@ class ExtractedFaces():
         self.padding = int(size * 0.1875)
         self.alignments = alignments
         self.frames = frames
-        self.current_frame: T.Optional[str] = None
+        self.current_frame: str | None = None
         self.faces: list[DetectedFace] = []
         logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
 
-    def get_faces(self, frame: str, image: T.Optional[np.ndarray] = None) -> None:
+    def get_faces(self, frame: str, image: np.ndarray | None = None) -> None:
         """ Obtain faces and transformed landmarks for each face in a given frame with its
         alignments
 
@@ -589,7 +587,7 @@ class ExtractedFaces():
     def get_faces_in_frame(self,
                            frame: str,
                            update: bool = False,
-                           image: T.Optional[np.ndarray] = None) -> list[DetectedFace]:
+                           image: np.ndarray | None = None) -> list[DetectedFace]:
         """ Return the faces for the selected frame
 
         Parameters

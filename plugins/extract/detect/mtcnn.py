@@ -34,7 +34,7 @@ class Detect(Detector):
         self.kwargs = self._validate_kwargs()
         self.color_format = "RGB"
 
-    def _validate_kwargs(self) -> dict[str, T.Union[int, float, list[float]]]:
+    def _validate_kwargs(self) -> dict[str, int | float | list[float]]:
         """ Validate that config options are correct. If not reset to default """
         valid = True
         threshold = [self.config["threshold_1"],
@@ -164,7 +164,7 @@ class PNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[list[int]],
+                 exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int,
                  min_size: int,
@@ -185,7 +185,7 @@ class PNet(KSession):
         self._pnet_scales = self._calculate_scales(min_size, factor)
         self._pnet_sizes = [(int(input_size * scale), int(input_size * scale))
                             for scale in self._pnet_scales]
-        self._pnet_input: T.Optional[list[np.ndarray]] = None
+        self._pnet_input: list[np.ndarray] | None = None
 
     @staticmethod
     def model_definition() -> tuple[list[Tensor], list[Tensor]]:
@@ -245,7 +245,7 @@ class PNet(KSession):
             List of face candidates from P-Net
         """
         batch_size = images.shape[0]
-        rectangles: list[list[list[T.Union[int, float]]]] = [[] for _ in range(batch_size)]
+        rectangles: list[list[list[int | float]]] = [[] for _ in range(batch_size)]
         scores: list[list[np.ndarray]] = [[] for _ in range(batch_size)]
 
         if self._pnet_input is None:
@@ -344,7 +344,7 @@ class RNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[list[int]],
+                 exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
@@ -474,7 +474,7 @@ class ONet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[list[int]],
+                 exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int,
                  threshold: float) -> None:
@@ -625,11 +625,11 @@ class MTCNN():  # pylint: disable=too-few-public-methods
     def __init__(self,
                  model_path: list[str],
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[list[int]],
+                 exclude_gpus: list[int] | None,
                  cpu_mode: bool,
                  input_size: int = 640,
                  minsize: int = 20,
-                 threshold: T.Optional[list[float]] = None,
+                 threshold: list[float] | None = None,
                  factor: float = 0.709) -> None:
         logger.debug("Initializing: %s: (model_path: '%s', allow_growth: %s, exclude_gpus: %s, "
                      "input_size: %s, minsize: %s, threshold: %s, factor: %s)",

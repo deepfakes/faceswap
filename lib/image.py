@@ -558,7 +558,7 @@ def update_existing_metadata(filename, metadata):
 
 def encode_image(image: np.ndarray,
                  extension: str,
-                 metadata: T.Optional[PNGHeaderDict] = None) -> bytes:
+                 metadata: PNGHeaderDict | None = None) -> bytes:
     """ Encode an image.
 
     Parameters
@@ -1433,8 +1433,8 @@ class ImagesSaver(ImageIO):
 
     def _save(self,
               filename: str,
-              image: T.Union[bytes, np.ndarray],
-              sub_folder: T.Optional[str]) -> None:
+              image: bytes | np.ndarray,
+              sub_folder: str | None) -> None:
         """ Save a single image inside a ThreadPoolExecutor
 
         Parameters
@@ -1468,8 +1468,8 @@ class ImagesSaver(ImageIO):
 
     def save(self,
              filename: str,
-             image: T.Union[bytes, np.ndarray],
-             sub_folder: T.Optional[str] = None) -> None:
+             image: bytes | np.ndarray,
+             sub_folder: str | None = None) -> None:
         """ Save the given image in the background thread
 
         Ensure that :func:`close` is called once all save operations are complete.

@@ -76,9 +76,9 @@ class Identity(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self,
-                 git_model_id: T.Optional[int] = None,
-                 model_filename: T.Optional[str] = None,
-                 configfile: T.Optional[str] = None,
+                 git_model_id: int | None = None,
+                 model_filename: str | None = None,
+                 configfile: str | None = None,
                  instance: int = 0,
                  **kwargs):
         logger.debug("Initializing %s", self.__class__.__name__)
@@ -295,8 +295,8 @@ class IdentityFilter():
     def __init__(self, save_output: bool) -> None:
         logger.debug("Initializing %s: (save_output: %s)", self.__class__.__name__, save_output)
         self._save_output = save_output
-        self._filter: T.Optional[np.ndarray] = None
-        self._nfilter: T.Optional[np.ndarray] = None
+        self._filter: np.ndarray | None = None
+        self._nfilter: np.ndarray | None = None
         self._threshold = 0.0
         self._filter_enabled: bool = False
         self._nfilter_enabled: bool = False
@@ -381,7 +381,7 @@ class IdentityFilter():
 
     def _filter_faces(self,
                       faces: list[DetectedFace],
-                      sub_folders: list[T.Optional[str]],
+                      sub_folders: list[str | None],
                       should_filter: list[bool]) -> list[DetectedFace]:
         """ Filter the detected faces, either removing filtered faces from the list of detected
         faces or setting the output subfolder to `"_identity_filt"` for any filtered faces if
@@ -424,7 +424,7 @@ class IdentityFilter():
 
     def __call__(self,
                  faces: list[DetectedFace],
-                 sub_folders: list[T.Optional[str]]) -> list[DetectedFace]:
+                 sub_folders: list[str | None]) -> list[DetectedFace]:
         """ Call the identity filter function
 
         Parameters

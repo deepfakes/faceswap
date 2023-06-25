@@ -54,7 +54,7 @@ class LossClass:
     kwargs: dict
         Any keyword arguments to supply to the loss function at initialization.
     """
-    function: T.Union[Callable[[tf.Tensor, tf.Tensor], tf.Tensor], T.Any] = k_losses.mae
+    function: Callable[[tf.Tensor, tf.Tensor], tf.Tensor] | T.Any = k_losses.mae
     init: bool = True
     kwargs: dict[str, T.Any] = field(default_factory=dict)
 
@@ -110,14 +110,14 @@ class Loss():
         return self._funcs
 
     @property
-    def _mask_inputs(self) -> T.Optional[list]:
+    def _mask_inputs(self) -> list | None:
         """ list: The list of input tensors to the model that contain the mask. Returns ``None``
         if there is no mask input to the model. """
         mask_inputs = [inp for inp in self._inputs if inp.name.startswith("mask")]
         return None if not mask_inputs else mask_inputs
 
     @property
-    def _mask_shapes(self) -> T.Optional[list[tuple]]:
+    def _mask_shapes(self) -> list[tuple] | None:
         """ list: The list of shape tuples for the mask input tensors for the model. Returns
         ``None`` if there is no mask input. """
         if self._mask_inputs is None:
@@ -477,7 +477,7 @@ class Settings():
 
     def _get_strategy(self,
                       strategy: T.Literal["default", "central-storage", "mirrored"]
-                      ) -> T.Optional[tf.distribute.Strategy]:
+                      ) -> tf.distribute.Strategy | None:
         """ If we are running on Nvidia backend and the strategy is not ``None`` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.
 

@@ -194,8 +194,8 @@ class Filter():
     """
     def __init__(self,
                  threshold: float,
-                 filter_files: T.Optional[list[str]],
-                 nfilter_files: T.Optional[list[str]],
+                 filter_files: list[str] | None,
+                 nfilter_files: list[str] | None,
                  extractor: Extractor) -> None:
         logger.debug("Initializing %s: (threshold: %s, filter_files: %s, nfilter_files: %s "
                      "extractor: %s)", self.__class__.__name__, threshold, filter_files,
@@ -274,8 +274,8 @@ class Filter():
         return retval
 
     def _validate_inputs(self,
-                         filter_files: T.Optional[list[str]],
-                         nfilter_files: T.Optional[list[str]]) -> tuple[list[str], list[str]]:
+                         filter_files: list[str] | None,
+                         nfilter_files: list[str] | None) -> tuple[list[str], list[str]]:
         """ Validates that the given filter/nfilter files exist, are image files and are unique
 
         Parameters
@@ -494,9 +494,9 @@ class PipelineLoader():
         image files that exist in :attr:`path` that are aligned faceswap images
     """
     def __init__(self,
-                 path: T.Union[str, list[str]],
+                 path: str | list[str],
                  extractor: Extractor,
-                 aligned_filenames: T.Optional[list[str]] = None) -> None:
+                 aligned_filenames: list[str] | None = None) -> None:
         logger.debug("Initializing %s: (path: %s, extractor: %s, aligned_filenames: %s)",
                      self.__class__.__name__, path, extractor, aligned_filenames)
         self._images = ImagesLoader(path, fast_count=True)
@@ -552,7 +552,7 @@ class PipelineLoader():
         for thread in self._threads:
             thread.join()
 
-    def _threaded_redirector(self, task: str, io_args: T.Optional[tuple] = None) -> None:
+    def _threaded_redirector(self, task: str, io_args: tuple | None = None) -> None:
         """ Redirect image input/output tasks to relevant queues in background thread
 
         Parameters
@@ -652,7 +652,7 @@ class _Extract():  # pylint:disable=too-few-public-methods
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
-    def _save_interval(self) -> T.Optional[int]:
+    def _save_interval(self) -> int | None:
         """ int: The number of frames to be processed between each saving of the alignments file if
         it has been provided, otherwise ``None`` """
         if hasattr(self._args, "save_interval"):
@@ -774,7 +774,7 @@ class _Extract():  # pylint:disable=too-few-public-methods
         if not self._verify_output and faces_count > 1:
             self._verify_output = True
 
-    def _output_faces(self, saver: T.Optional[ImagesSaver], extract_media: ExtractMedia) -> None:
+    def _output_faces(self, saver: ImagesSaver | None, extract_media: ExtractMedia) -> None:
         """ Output faces to save thread
 
         Set the face filename based on the frame name and put the face to the

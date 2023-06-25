@@ -186,7 +186,7 @@ class Images():
         return self._is_video
 
     @property
-    def input_images(self) -> T.Union[str, list[str]]:
+    def input_images(self) -> str | list[str]:
         """str or list: Path to the video file if the input is a video otherwise list of
         image paths. """
         return self._input_images
@@ -230,7 +230,7 @@ class Images():
             retval = False
         return retval
 
-    def _get_input_images(self) -> T.Union[str, list[str]]:
+    def _get_input_images(self) -> str | list[str]:
         """ Return the list of images or path to video file that is to be processed.
 
         Returns
@@ -389,7 +389,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
 
         return actions
 
-    def _get_items(self) -> dict[str, T.Optional[dict[str, T.Union[tuple, dict]]]]:
+    def _get_items(self) -> dict[str, dict[str, tuple | dict] | None]:
         """ Check the passed in command line arguments for requested actions,
 
         For any requested actions, add the item to the actions list along with
@@ -401,7 +401,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             The name of the action to be performed as the key. Any action specific
             arguments and keyword arguments as the value.
         """
-        postprocess_items: dict[str, T.Optional[dict[str, T.Union[tuple, dict]]]] = {}
+        postprocess_items: dict[str, dict[str, tuple | dict] | None] = {}
         # Debug Landmarks
         if (hasattr(self._args, 'debug_landmarks') and self._args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None

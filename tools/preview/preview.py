@@ -67,9 +67,9 @@ class Preview(tk.Tk):  # pylint:disable=too-few-public-methods
         self._patch = Patch(self, arguments)
 
         self._initialize_tkinter()
-        self._image_canvas: T.Optional[ImagesCanvas] = None
-        self._opts_book: T.Optional[OptionsBook] = None
-        self._cli_frame: T.Optional[ActionFrame] = None  # cli frame holds cli options
+        self._image_canvas: ImagesCanvas | None = None
+        self._opts_book: OptionsBook | None = None
+        self._cli_frame: ActionFrame | None = None  # cli frame holds cli options
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -444,9 +444,8 @@ class Samples():
             idx = 0
             while idx < self._sample_size:
                 logger.debug("Predicting face %s of %s", idx + 1, self._sample_size)
-                items: T.Union[T.Literal["EOF"],
-                               list[tuple[ConvertItem,
-                                          np.ndarray]]] = self._predictor.out_queue.get()
+                items: (T.Literal["EOF"] |
+                        list[tuple[ConvertItem, np.ndarray]]) = self._predictor.out_queue.get()
                 if items == "EOF":
                     logger.debug("Received EOF")
                     break
@@ -480,7 +479,7 @@ class Patch():  # pylint:disable=too-few-public-methods
                      self.__class__.__name__, app, arguments)
         self._app = app
         self._queue_patch_in = queue_manager.get_queue("preview_patch_in")
-        self.converter_arguments: T.Optional[dict[str, T.Any]] = None  # Updated converter args
+        self.converter_arguments: dict[str, T.Any] | None = None  # Updated converter args
 
         configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._converter = Converter(output_size=app._samples.predictor.output_size,

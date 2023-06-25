@@ -78,7 +78,7 @@ class _LogFiles():
         return retval
 
     @classmethod
-    def _get_session_id(cls, folder: str) -> T.Optional[int]:
+    def _get_session_id(cls, folder: str) -> int | None:
         """ Obtain the session id for the given folder.
 
         Parameters
@@ -415,7 +415,7 @@ class _Cache():
         self._data[session_id].add_live_data(timestamps, loss)
 
     def get_data(self, session_id: int, metric: T.Literal["loss", "timestamps"]
-                 ) -> T.Optional[dict[int, dict[str, T.Union[np.ndarray, list[str]]]]]:
+                 ) -> dict[int, dict[str, np.ndarray | list[str]]] | None:
         """ Retrieve the decompressed cached data from the cache for the given session id.
 
         Parameters
@@ -441,10 +441,10 @@ class _Cache():
                 return None
             raw = {session_id: data}
 
-        retval: dict[int, dict[str, T.Union[np.ndarray, list[str]]]] = {}
+        retval: dict[int, dict[str, np.ndarray | list[str]]] = {}
         for idx, data in raw.items():
             array = data.loss if metric == "loss" else data.timestamps
-            val: dict[str, T.Union[np.ndarray, list[str]]] = {str(metric): array}
+            val: dict[str, np.ndarray | list[str]] = {str(metric): array}
             if metric == "loss":
                 val["labels"] = data.labels
             retval[idx] = val
@@ -535,7 +535,7 @@ class TensorBoardLogs():
         parser = _EventParser(iterator, self._cache, live_data)
         parser.cache_events(session_id)
 
-    def _check_cache(self, session_id: T.Optional[int] = None) -> None:
+    def _check_cache(self, session_id: int | None = None) -> None:
         """ Check if the given session_id has been cached and if not, cache it.
 
         Parameters
@@ -553,7 +553,7 @@ class TensorBoardLogs():
                 if not self._cache.is_cached(idx):
                     self._cache_data(idx)
 
-    def get_loss(self, session_id: T.Optional[int] = None) -> dict[int, dict[str, np.ndarray]]:
+    def get_loss(self, session_id: int | None = None) -> dict[int, dict[str, np.ndarray]]:
         """ Read the loss from the TensorBoard event logs
 
         Parameters
@@ -584,7 +584,7 @@ class TensorBoardLogs():
                       for key, val in retval.items()})
         return retval
 
-    def get_timestamps(self, session_id: T.Optional[int] = None) -> dict[int, np.ndarray]:
+    def get_timestamps(self, session_id: int | None = None) -> dict[int, np.ndarray]:
         """ Read the timestamps from the TensorBoard logs.
 
         As loss timestamps are slightly different for each loss, we collect the timestamp from the

@@ -320,13 +320,13 @@ class DiskIO():
         return self._writer.config.get("draw_transparent", False)
 
     @property
-    def pre_encode(self) -> T.Optional[Callable[[np.ndarray], list[bytes]]]:
+    def pre_encode(self) -> Callable[[np.ndarray], list[bytes]] | None:
         """ python function: Selected writer's pre-encode function, if it has one,
         otherwise ``None`` """
         dummy = np.zeros((20, 20, 3), dtype="uint8")
         test = self._writer.pre_encode(dummy)
-        retval: T.Optional[Callable[[np.ndarray],
-                           list[bytes]]] = None if test is None else self._writer.pre_encode
+        retval: Callable[[np.ndarray],
+                         list[bytes]] | None = None if test is None else self._writer.pre_encode
         logger.debug("Writer pre_encode function: %s", retval)
         return retval
 
@@ -380,7 +380,7 @@ class DiskIO():
         return PluginLoader.get_converter("writer", self._args.writer)(*args,
                                                                        configfile=configfile)
 
-    def _get_frame_ranges(self) -> T.Optional[list[tuple[int, int]]]:
+    def _get_frame_ranges(self) -> list[tuple[int, int]] | None:
         """ Obtain the frame ranges that are to be converted.
 
         If frame ranges have been specified, then split the command line formatted arguments into
@@ -418,7 +418,7 @@ class DiskIO():
         logger.debug("frame ranges: %s", retval)
         return retval
 
-    def _load_extractor(self) -> T.Optional[Extractor]:
+    def _load_extractor(self) -> Extractor | None:
         """ Load the CV2-DNN Face Extractor Chain.
 
         For On-The-Fly conversion we use a CPU based extractor to avoid stacking the GPU.
@@ -894,7 +894,7 @@ class Predict():
         consecutive_no_faces = 0
         batch: list[ConvertItem] = []
         while True:
-            item: T.Union[T.Literal["EOF"], ConvertItem] = self._in_queue.get()
+            item: T.Literal["EOF"] | ConvertItem = self._in_queue.get()
             if item == "EOF":
                 logger.debug("EOF Received")
                 if batch:  # Process out any remaining items
@@ -1016,7 +1016,7 @@ class Predict():
         logger.trace("Compiled Feed faces. Shape: %s", retval.shape)  # type:ignore
         return retval
 
-    def _predict(self, feed_faces: np.ndarray, batch_size: T.Optional[int] = None) -> np.ndarray:
+    def _predict(self, feed_faces: np.ndarray, batch_size: int | None = None) -> np.ndarray:
         """ Run the Faceswap models' prediction function.
 
         Parameters

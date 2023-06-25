@@ -8,12 +8,68 @@ on:
       - "**/README.md"
 
 jobs:
+  build_conda:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10"]
+        backend: ["nvidia", "cpu", "rocm"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set cache date
+        run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+      - name: Cache conda
+        uses: actions/cache@v3
+        env:
+          # Increase this value to manually reset cache
+          CACHE_NUMBER: 0
+          REQ_FILE: ./requirements/requirements_${{ matrix.backend }}.txt
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ matrix.python-version }}-${{ env.DATE }}-${{ hashFiles('./requirements/requirements.txt', env.REQ_FILE) }}
+      - name: Set up Conda ${{ matrix.python-version }}
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          auto-update-conda: true
+          activate-environment: faceswap
+      - name: Conda info
+        run: conda info
+      - name: Install
+        run: |
+          python setup.py --installer --${{ matrix.backend }}
+          pip install flake8 pylint mypy pytest pytest-mock wheel pytest-xvfb
+          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --select=E9,F63,F7,F82 --show-source
+          flake8 . --exit-zero
+      - name: MyPy Typing
+        continue-on-error: true
+        run: |
+          mypy .
+      - name: SysInfo
+        run: python -c "from lib.sysinfo import sysinfo ;  print(sysinfo)"
+      - name: Simple Tests
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia'
+        run: |
+          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+      - name: End to End Tests
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia'
+        run: |
+          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+
   build_linux:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10"]
+        python-version: ["3.10"]
         backend: ["cpu"]
         include:
           - backend: "cpu"
@@ -53,7 +109,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10"]
+        python-version: ["3.10"]
         backend: ["cpu", "directml"]
         include:
           - backend: "cpu"

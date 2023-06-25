@@ -65,10 +65,10 @@ class FacesDisplay():
         self._padding = padding
 
         self._faces = _Faces()
-        self._centering: T.Optional[CenteringType] = None
+        self._centering: CenteringType | None = None
         self._faces_source: np.ndarray = np.array([])
         self._faces_dest: np.ndarray = np.array([])
-        self._tk_image: T.Optional[ImageTk.PhotoImage] = None
+        self._tk_image: ImageTk.PhotoImage | None = None
 
         # Set from Samples
         self.update_source = False
@@ -79,7 +79,7 @@ class FacesDisplay():
         logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
 
     @property
-    def tk_image(self) -> T.Optional[ImageTk.PhotoImage]:
+    def tk_image(self) -> ImageTk.PhotoImage | None:
         """ :class:`PIL.ImageTk.PhotoImage`: The compiled preview display in tkinter display
         format """
         return self._tk_image

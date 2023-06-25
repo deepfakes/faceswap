@@ -38,10 +38,10 @@ class LongRunningTask(Thread):
     _name: str
 
     def __init__(self,
-                 target: T.Optional[Callable] = None,
-                 name: T.Optional[str] = None,
+                 target: Callable | None = None,
+                 name: str | None = None,
                  args: tuple = (),
-                 kwargs: T.Optional[dict[str, T.Any]] = None,
+                 kwargs: dict[str, T.Any] | None = None,
                  *,
                  daemon: bool = True,
                  widget=None):

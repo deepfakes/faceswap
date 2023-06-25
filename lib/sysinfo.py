@@ -6,7 +6,6 @@ import locale
 import os
 import platform
 import sys
-import typing as T
 
 from subprocess import PIPE, Popen
 
@@ -400,7 +399,7 @@ class _State():  # pylint:disable=too-few-public-methods
         return len(sys.argv) > 1 and sys.argv[1].lower() == "train"
 
     @staticmethod
-    def _get_arg(*args: str) -> T.Optional[str]:
+    def _get_arg(*args: str) -> str | None:
         """ Obtain the value for a given command line option from sys.argv.
 
         Returns

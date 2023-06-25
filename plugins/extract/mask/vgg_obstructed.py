@@ -90,7 +90,7 @@ class VGGObstructed(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[list[int]]) -> None:
+                 exclude_gpus: list[int] | None) -> None:
         super().__init__("VGG Obstructed",
                          model_path,
                          allow_growth=allow_growth,

@@ -80,9 +80,9 @@ class Masker(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self,
-                 git_model_id: T.Optional[int] = None,
-                 model_filename: T.Optional[str] = None,
-                 configfile: T.Optional[str] = None,
+                 git_model_id: int | None = None,
+                 model_filename: str | None = None,
+                 configfile: str | None = None,
                  instance: int = 0,
                  **kwargs) -> None:
         logger.debug("Initializing %s: (configfile: %s)", self.__class__.__name__, configfile)

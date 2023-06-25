@@ -29,7 +29,7 @@ _image_extensions = [  # pylint:disable=invalid-name
 _video_extensions = [  # pylint:disable=invalid-name
     ".avi", ".flv", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".webm", ".wmv",
     ".ts", ".vob"]
-_TF_VERS: T.Optional[tuple[int, int]] = None
+_TF_VERS: tuple[int, int] | None = None
 ValidBackends = T.Literal["nvidia", "cpu", "apple_silicon", "directml", "rocm"]
 
 
@@ -174,7 +174,7 @@ def get_tf_version() -> tuple[int, int]:
     -------
     >>> from lib.utils import get_tf_version
     >>> get_tf_version()
-    (2, 9)
+    (2, 10)
     """
     global _TF_VERS  # pylint:disable=global-statement
     if _TF_VERS is None:
@@ -220,7 +220,7 @@ def get_folder(path: str, make_folder: bool = True) -> str:
     return path
 
 
-def get_image_paths(directory: str, extension: T.Optional[str] = None) -> list[str]:
+def get_image_paths(directory: str, extension: str | None = None) -> list[str]:
     """ Gets the image paths from a given directory.
 
     The function searches for files with the specified extension(s) in the given directory, and
@@ -269,7 +269,7 @@ def get_image_paths(directory: str, extension: T.Optional[str] = None) -> list[s
     return dir_contents
 
 
-def get_dpi() -> T.Optional[float]:
+def get_dpi() -> float | None:
     """ Gets the DPI (dots per inch) of the display screen.
 
     Returns
@@ -405,7 +405,7 @@ def set_system_verbosity(log_level: str):
             warnings.simplefilter(action='ignore', category=warncat)
 
 
-def deprecation_warning(function: str, additional_info: T.Optional[str] = None) -> None:
+def deprecation_warning(function: str, additional_info: str | None = None) -> None:
     """ Log a deprecation warning message.
 
     This function logs a warning message to indicate that the specified function has been
@@ -536,7 +536,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
     >>> model_downloader = GetModel("s3fd_keras_v2.h5", 11)
     """
 
-    def __init__(self, model_filename: T.Union[str, list[str]], git_model_id: int) -> None:
+    def __init__(self, model_filename: str | list[str], git_model_id: int) -> None:
         self.logger = logging.getLogger(__name__)
         if not isinstance(model_filename, list):
             model_filename = [model_filename]
@@ -571,7 +571,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
         return retval
 
     @property
-    def model_path(self) -> T.Union[str, list[str]]:
+    def model_path(self) -> str | list[str]:
         """ str or list[str]: The model path(s) in the cache folder.
 
         Example
@@ -582,7 +582,7 @@ class GetModel():  # pylint:disable=too-few-public-methods
         '/path/to/s3fd_keras_v2.h5'
         """
         paths = [os.path.join(self._cache_dir, fname) for fname in self._model_filename]
-        retval: T.Union[str, list[str]] = paths[0] if len(paths) == 1 else paths
+        retval: str | list[str] = paths[0] if len(paths) == 1 else paths
         self.logger.trace(retval)  # type:ignore[attr-defined]
         return retval
 

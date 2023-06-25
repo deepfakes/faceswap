@@ -401,7 +401,7 @@ class Model(ModelBase):
     def _build_g_blocks(
                 self,
                 inputs: dict[str, list[keras.models.Model]]
-            ) -> dict[str, T.Union[list[keras.models.Model], keras.models.Model]]:
+            ) -> dict[str, list[keras.models.Model] | keras.models.Model]:
         """ Build the g-block layers for Phaze-A.
 
         If a g-block has not been selected for this model, then the original `inters` models are
@@ -433,10 +433,9 @@ class Model(ModelBase):
         logger.debug("G-Blocks: %s", retval)
         return retval
 
-    def _build_decoders(
-            self,
-            inputs: dict[str, T.Union[list[keras.models.Model], keras.models.Model]]
-            ) -> dict[str, keras.models.Model]:
+    def _build_decoders(self,
+                        inputs: dict[str, list[keras.models.Model] | keras.models.Model]
+                        ) -> dict[str, keras.models.Model]:
         """ Build the encoders for Phaze-A
 
         Parameters
@@ -515,9 +514,9 @@ def _bottleneck(inputs: Tensor, bottleneck: str, size: int, normalization: str) 
 def _get_upscale_layer(method: T.Literal["resize_images", "subpixel", "upscale_dny",
                                          "upscale_fast", "upscale_hybrid", "upsample2d"],
                        filters: int,
-                       activation: T.Optional[str] = None,
-                       upsamples: T.Optional[int] = None,
-                       interpolation: T.Optional[str] = None) -> keras.layers.Layer:
+                       activation: str | None = None,
+                       upsamples: int | None = None,
+                       interpolation: str | None = None) -> keras.layers.Layer:
     """ Obtain an instance of the requested upscale method.
 
     Parameters
@@ -543,7 +542,7 @@ def _get_upscale_layer(method: T.Literal["resize_images", "subpixel", "upscale_d
         The selected configured upscale layer
     """
     if method == "upsample2d":
-        kwargs: dict[str, T.Union[str, int]] = {}
+        kwargs: dict[str, str | int] = {}
         if upsamples:
             kwargs["size"] = upsamples
         if interpolation:
@@ -659,7 +658,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
         self._input_shape = input_shape
 
     @property
-    def _model_kwargs(self) -> dict[str, dict[str, T.Union[str, bool]]]:
+    def _model_kwargs(self) -> dict[str, dict[str, str | bool]]:
         """ dict: Configuration option for architecture mapped to optional kwargs. """
         return {"mobilenet": {"alpha": self._config["mobilenet_width"],
                               "depth_multiplier": self._config["mobilenet_depth"],
@@ -990,7 +989,7 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
     def __init__(self,
                  side: T.Literal["a", "b", "both", "shared"],
                  config: dict,
-                 layer_indicies: T.Optional[tuple[int, int]] = None) -> None:
+                 layer_indicies: tuple[int, int] | None = None) -> None:
         logger.debug("Initializing: %s (side: %s, layer_indicies: %s)",
                      self.__class__.__name__, side, layer_indicies)
         self._side = side
@@ -1119,7 +1118,7 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
                             relu_alpha=0.2)(var_x)
         return var_x
 
-    def __call__(self, inputs: T.Union[Tensor, list[Tensor]]) -> T.Union[Tensor, list[Tensor]]:
+    def __call__(self, inputs: Tensor | list[Tensor]) -> Tensor | list[Tensor]:
         """ Upscale Network.
 
         Parameters
@@ -1197,7 +1196,7 @@ class GBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  side: T.Literal["a", "b", "both"],
-                 input_shapes: T.Union[list, tuple],
+                 input_shapes: list | tuple,
                  config: dict) -> None:
         logger.debug("Initializing: %s (side: %s, input_shapes: %s)",
                      self.__class__.__name__, side, input_shapes)

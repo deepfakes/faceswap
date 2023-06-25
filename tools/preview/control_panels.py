@@ -37,10 +37,8 @@ class ConfigTools():
     """
     def __init__(self) -> None:
         self._config = Config(None)
-        self.tk_vars: dict[str, dict[str, T.Union[tk.BooleanVar,
-                                                  tk.StringVar,
-                                                  tk.IntVar,
-                                                  tk.DoubleVar]]] = {}
+        self.tk_vars: dict[str, dict[str, tk.BooleanVar | tk.StringVar | tk.IntVar | tk.DoubleVar]
+                           ] = {}
         self._config_dicts = self._get_config_dicts()  # Holds currently saved config
 
     @property
@@ -117,7 +115,7 @@ class ConfigTools():
         logger.debug("Formatted Config for GUI: %s", config_dicts)
         return config_dicts
 
-    def reset_config_to_saved(self, section: T.Optional[str] = None) -> None:
+    def reset_config_to_saved(self, section: str | None = None) -> None:
         """ Reset the GUI parameters to their saved values within the configuration file.
 
         Parameters
@@ -138,7 +136,7 @@ class ConfigTools():
                     logger.debug("Setting %s - %s to saved value %s", config_section, item, val)
         logger.debug("Reset to saved config: %s", section)
 
-    def reset_config_to_default(self, section: T.Optional[str] = None) -> None:
+    def reset_config_to_default(self, section: str | None = None) -> None:
         """ Reset the GUI parameters to their default configuration values.
 
         Parameters
@@ -160,7 +158,7 @@ class ConfigTools():
                                  config_section, item, default)
         logger.debug("Reset to default: %s", section)
 
-    def save_config(self, section: T.Optional[str] = None) -> None:
+    def save_config(self, section: str | None = None) -> None:
         """ Save the configuration ``.ini`` file with the currently stored values.
 
         Notes
@@ -540,7 +538,7 @@ class OptionsBook(ttk.Notebook):  # pylint:disable=too-many-ancestors
         self.pack(side=tk.RIGHT, anchor=tk.N, fill=tk.BOTH, expand=True)
         self.config_tools = config_tools
 
-        self._tabs: dict[str, dict[str, T.Union[ttk.Notebook, ConfigFrame]]] = {}
+        self._tabs: dict[str, dict[str, ttk.Notebook | ConfigFrame]] = {}
         self._build_tabs()
         self._build_sub_tabs()
         self._add_patch_callback(patch_callback)

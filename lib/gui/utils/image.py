@@ -17,8 +17,8 @@ if T.TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_IMAGES: T.Optional["Images"] = None
-_PREVIEW_TRIGGER: T.Optional["PreviewTrigger"] = None
+_IMAGES: "Images" | None = None
+_PREVIEW_TRIGGER: "PreviewTrigger" | None = None
 TRAININGPREVIEW = ".gui_training_preview.png"
 
 
@@ -161,11 +161,11 @@ class PreviewExtract():
 
         self._modified: float = 0.0
         self._filenames: list[str] = []
-        self._images: T.Optional[np.ndarray] = None
-        self._placeholder: T.Optional[np.ndarray] = None
+        self._images: np.ndarray | None = None
+        self._placeholder: np.ndarray | None = None
 
-        self._preview_image: T.Optional[Image.Image] = None
-        self._preview_image_tk: T.Optional[ImageTk.PhotoImage] = None
+        self._preview_image: Image.Image | None = None
+        self._preview_image_tk: ImageTk.PhotoImage | None = None
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -520,7 +520,7 @@ class Images():
     def __init__(self) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._pathpreview = os.path.join(PATHCACHE, "preview")
-        self._pathoutput: T.Optional[str] = None
+        self._pathoutput: str | None = None
         self._batch_mode = False
         self._preview_train = PreviewTrain(self._pathpreview)
         self._preview_extract = PreviewExtract(self._pathpreview)
@@ -625,7 +625,7 @@ class PreviewTrigger():
                 pass
             logger.debug("Set preview trigger: %s", trigger)
 
-    def clear(self, trigger_type: T.Optional[T.Literal["update", "mask_toggle"]] = None) -> None:
+    def clear(self, trigger_type: T.Literal["update", "mask_toggle"] | None = None) -> None:
         """ Remove the trigger file from the cache folder.
 
         Parameters

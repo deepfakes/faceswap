@@ -36,7 +36,7 @@ class SortAlignedMetric(SortMethod):  # pylint:disable=too-few-public-methods
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
-    def _get_metric(self, aligned_face: AlignedFace) -> T.Union[np.ndarray, float]:
+    def _get_metric(self, aligned_face: AlignedFace) -> np.ndarray | float:
         """ Obtain the correct metric for the given sort method"
 
         Parameters
@@ -58,8 +58,8 @@ class SortAlignedMetric(SortMethod):  # pylint:disable=too-few-public-methods
 
     def score_image(self,
                     filename: str,
-                    image: T.Optional[np.ndarray],
-                    alignments: T.Optional[PNGHeaderAlignmentsDict]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for sort method: "distance", "yaw", "pitch" or "size" and add the
         result to :attr:`_result`
 

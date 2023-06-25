@@ -118,7 +118,7 @@ class Cluster():  # pylint: disable=too-few-public-methods
     def __init__(self,
                  predictions: np.ndarray,
                  method: T.Literal["single", "centroid", "median", "ward"],
-                 threshold: T.Optional[float] = None) -> None:
+                 threshold: float | None = None) -> None:
         logger.debug("Initializing: %s (predictions: %s, method: %s, threshold: %s)",
                      self.__class__.__name__, predictions.shape, method, threshold)
         self._num_predictions = predictions.shape[0]

@@ -76,7 +76,7 @@ class AlignedFilter():
 
     def _scale_test(self,
                     face: AlignedFace,
-                    minimum_dimension: int) -> T.Optional[T.Literal["min", "max"]]:
+                    minimum_dimension: int) -> T.Literal["min", "max"] | None:
         """ Test if a face is below or above the min/max size thresholds. Returns as soon as a test
         fails.
 
@@ -113,7 +113,7 @@ class AlignedFilter():
                          key: str,
                          face: DetectedFace,
                          faces: list[DetectedFace],
-                         sub_folders: list[T.Optional[str]],
+                         sub_folders: list[str | None],
                          sub_folder_index: int) -> None:
         """ Add the filtered item to the filter counts.
 
@@ -141,7 +141,7 @@ class AlignedFilter():
         sub_folders[sub_folder_index] = f"_align_filt_{key}"
 
     def __call__(self, faces: list[DetectedFace], minimum_dimension: int
-                 ) -> tuple[list[DetectedFace], list[T.Optional[str]]]:
+                 ) -> tuple[list[DetectedFace], list[str | None]]:
         """ Apply the filter to the incoming batch
 
         Parameters
@@ -160,7 +160,7 @@ class AlignedFilter():
             List of ``Nones`` if saving filtered faces has not been selected or list of ``Nones``
             and sub folder names corresponding the filtered face location
         """
-        sub_folders: list[T.Optional[str]] = [None for _ in range(len(faces))]
+        sub_folders: list[str | None] = [None for _ in range(len(faces))]
         if not self._active:
             return faces, sub_folders
 
@@ -190,7 +190,7 @@ class AlignedFilter():
 
     def filtered_mask(self,
                       batch: AlignerBatch,
-                      skip: T.Union[np.ndarray, list[int], None] = None) -> np.ndarray:
+                      skip: np.ndarray | list[int] | None = None) -> np.ndarray:
         """ Obtain a list of boolean values for the given batch indicating whether they pass the
         filter test.
 

@@ -8,7 +8,6 @@ import tkinter as tk
 
 from dataclasses import dataclass, field
 from tkinter import ttk
-import typing as T
 
 from .control_helper import ControlBuilder, ControlPanelOption
 from .custom_widgets import Tooltip
@@ -82,13 +81,13 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Initializing: %s: (session_id: %s, data_points: %s)",
                      self.__class__.__name__, session_id, data_points)
         super().__init__()
-        self._thread: T.Optional[LongRunningTask] = None  # Thread for loading data in background
+        self._thread: LongRunningTask | None = None  # Thread for loading data in background
         self._default_view = "avg" if data_points > 1000 else "smoothed"
         self._session_id = None if session_id == "Total" else int(session_id)
 
         self._graph_frame = ttk.Frame(self)
-        self._graph: T.Optional[SessionGraph] = None
-        self._display_data: T.Optional[Calculations] = None
+        self._graph: SessionGraph | None = None
+        self._display_data: Calculations | None = None
 
         self._vars = self._set_vars()
 
@@ -273,11 +272,11 @@ class SessionPopUp(tk.Toplevel):
         logger.debug("Building Slider Controls")
         for item in ("avgiterations", "smoothamount"):
             if item == "avgiterations":
-                dtype: T.Union[type[int], type[float]] = int
+                dtype: type[int] | type[float] = int
                 text = "Iterations to Average:"
-                default: T.Union[int, float] = 500
+                default: int | float = 500
                 rounding = 25
-                min_max: tuple[int, T.Union[int, float]] = (25, 2500)
+                min_max: tuple[int, int | float] = (25, 2500)
             elif item == "smoothamount":
                 dtype = float
                 text = "Smoothing Amount:"

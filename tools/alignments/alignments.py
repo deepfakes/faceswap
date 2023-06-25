@@ -66,7 +66,7 @@ class Alignments():  # pylint:disable=too-few-public-methods
         logger.debug("Running in batch mode")
         return batch_mode
 
-    def _get_alignments_locations(self) -> dict[str, list[T.Optional[str]]]:
+    def _get_alignments_locations(self) -> dict[str, list[str | None]]:
         """ Obtain the full path to alignments files in a parent (batch) location
 
         These are jobs that only require an alignments file as input, so frames and face locations
@@ -97,7 +97,7 @@ class Alignments():  # pylint:disable=too-few-public-methods
                   "frames_dir": [None for _ in range(len(alignments))]}
         return retval
 
-    def _get_frames_locations(self) -> dict[str, list[T.Optional[str]]]:
+    def _get_frames_locations(self) -> dict[str, list[str | None]]:
         """ Obtain the full path to frame locations along with corresponding alignments file
         locations contained within the parent (batch) location
 
@@ -138,7 +138,7 @@ class Alignments():  # pylint:disable=too-few-public-methods
             sys.exit(1)
 
         if self._args.job not in self._requires_faces:  # faces not required for frames input
-            faces: list[T.Optional[str]] = [None for _ in range(len(frames))]
+            faces: list[str | None] = [None for _ in range(len(frames))]
         else:
             if not self._args.faces_dir:
                 logger.error("Please provide a 'faces_dir' location for '%s' job", self._args.job)
@@ -149,11 +149,11 @@ class Alignments():  # pylint:disable=too-few-public-methods
         logger.info("Batch mode selected. Processing frames: %s",
                     [os.path.basename(frame) for frame in frames])
 
-        return {"alignments_file": T.cast(list[T.Optional[str]], alignments),
-                "frames_dir": T.cast(list[T.Optional[str]], frames),
+        return {"alignments_file": T.cast(list[str | None], alignments),
+                "frames_dir": T.cast(list[str | None], frames),
                 "faces_dir": faces}
 
-    def _get_locations(self) -> dict[str, list[T.Optional[str]]]:
+    def _get_locations(self) -> dict[str, list[str | None]]:
         """ Obtain the full path to any frame, face and alignments input locations for the
         selected job when running in batch mode. If not running in batch mode, then the original
         passed in values are returned in lists

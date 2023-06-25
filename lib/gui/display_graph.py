@@ -51,7 +51,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._colourmaps = ["Reds", "Blues", "Greens", "Purples", "Oranges", "Greys", "copper",
                             "summer", "bone", "hot", "cool", "pink", "Wistia", "spring", "winter"]
         self._lines: list[Line2D] = []
-        self._toolbar: T.Optional["NavigationToolbar"] = None
+        self._toolbar: "NavigationToolbar" | None = None
         self._fig = Figure(figsize=(4, 4), dpi=75)
 
         self._ax1 = self._fig.add_subplot(1, 1, 1)
@@ -189,7 +189,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("yscale: '%s'", scale)
         self._ax1.set_yscale(scale)
 
-    def _lines_sort(self, keys: list[str]) -> list[list[T.Union[str, int, tuple[float]]]]:
+    def _lines_sort(self, keys: list[str]) -> list[list[str | int | tuple[float]]]:
         """ Sort the data keys into consistent order and set line color map and line width.
 
         Parameters
@@ -248,7 +248,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
 
     def _lines_style(self,
                      lines: list[list[str]],
-                     groupsize: int) -> list[list[T.Union[str, int, tuple[float]]]]:
+                     groupsize: int) -> list[list[str | int | tuple[float]]]:
         """ Obtain the color map and line width for each group.
 
         Parameters
@@ -267,7 +267,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         groups = int(len(lines) / groupsize)
         colours = self._lines_create_colors(groupsize, groups)
         widths = list(range(1, groups + 1))
-        retval = T.cast(list[list[T.Union[str, int, tuple[float]]]], lines)
+        retval = T.cast(list[list[str | int | tuple[float]]], lines)
         for idx, item in enumerate(retval):
             linewidth = widths[idx // groupsize]
             item.extend((linewidth, colours[idx]))
@@ -337,7 +337,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def __init__(self, parent: ttk.Frame, data, ylabel: str) -> None:
         super().__init__(parent, data, ylabel)
-        self._thread: T.Optional[LongRunningTask] = None  # Thread for LongRunningTask
+        self._thread: LongRunningTask | None = None  # Thread for LongRunningTask
         self._displayed_keys: list[str] = []
         self._add_callback()
 
@@ -534,7 +534,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
                 text: str,
                 image_file: str,
                 toggle: bool,
-                command) -> T.Union[ttk.Button, ttk.Checkbutton]:
+                command) -> ttk.Button | ttk.Checkbutton:
         """ Override the default button method to use our icons and ttk widgets for
         consistent GUI layout.
 
@@ -564,10 +564,10 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
         img = get_images().icons[icon]
 
         if not toggle:
-            btn: T.Union[ttk.Button, ttk.Checkbutton] = ttk.Button(frame,
-                                                                   text=text,
-                                                                   image=img,
-                                                                   command=command)
+            btn: ttk.Button | ttk.Checkbutton = ttk.Button(frame,
+                                                           text=text,
+                                                           image=img,
+                                                           command=command)
         else:
             var = tk.IntVar(master=frame)
             btn = ttk.Checkbutton(frame, text=text, image=img, command=command, variable=var)

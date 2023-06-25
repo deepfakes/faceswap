@@ -94,7 +94,7 @@ class VGGClear(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[list[int]]):
+                 exclude_gpus: list[int] | None):
         super().__init__("VGG Obstructed",
                          model_path,
                          allow_growth=allow_growth,

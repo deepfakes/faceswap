@@ -127,8 +127,8 @@ class SliceO2K(keras.layers.Layer):
     def __init__(self,
                  starts: list[int],
                  ends: list[int],
-                 axes: T.Optional[list[int]] = None,
-                 steps: T.Optional[list[int]] = None,
+                 axes: list[int] | None = None,
+                 steps: list[int] | None = None,
                  **kwargs) -> None:
         self._starts = starts
         self._ends = ends
@@ -230,7 +230,7 @@ class S3fd(KSession):
                  model_path: str,
                  model_kwargs: dict,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[list[int]],
+                 exclude_gpus: list[int] | None,
                  confidence: float) -> None:
         logger.debug("Initializing: %s: (model_path: '%s', model_kwargs: %s, allow_growth: %s, "
                      "exclude_gpus: %s, confidence: %s)", self.__class__.__name__, model_path,

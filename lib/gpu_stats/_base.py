@@ -3,7 +3,6 @@
 from the :class:`_GPUStats` class contained here. """
 
 import logging
-import typing as T
 
 from dataclasses import dataclass
 
@@ -89,7 +88,7 @@ class _GPUStats():
     def __init__(self, log: bool = True) -> None:
         # Logger is held internally, as we don't want to log when obtaining system stats on crash
         # or when querying the backend for command line options
-        self._logger: T.Optional[logging.Logger] = logging.getLogger(__name__) if log else None
+        self._logger: logging.Logger | None = logging.getLogger(__name__) if log else None
         self._log("debug", f"Initializing {self.__class__.__name__}")
 
         self._is_initialized = False

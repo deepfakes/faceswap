@@ -50,7 +50,7 @@ class SmartFormatter(argparse.HelpFormatter):
                  prog: str,
                  indent_increment: int = 2,
                  max_help_position: int = 24,
-                 width: T.Optional[int] = None) -> None:
+                 width: int | None = None) -> None:
         super().__init__(prog, indent_increment, max_help_position, width)
         self._whitespace_matcher_limited = re.compile(r'[ \r\f\v]+', re.ASCII)
 

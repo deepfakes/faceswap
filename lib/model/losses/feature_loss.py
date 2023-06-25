@@ -42,7 +42,7 @@ class NetInfo:
     """
     model_id: int = 0
     model_name: str = ""
-    net: T.Optional[Callable] = None
+    net: Callable | None = None
     init_kwargs: dict[str, T.Any] = field(default_factory=dict)
     needs_init: bool = True
     outputs: list[Layer] = field(default_factory=list)

@@ -37,8 +37,8 @@ class Mask():  # pylint:disable=too-few-public-methods
                  mask_type: str,
                  output_size: int,
                  coverage_ratio: float,
-                 configfile: T.Optional[str] = None,
-                 config: T.Optional[FaceswapConfig] = None) -> None:
+                 configfile: str | None = None,
+                 config: FaceswapConfig | None = None) -> None:
         logger.debug("Initializing %s: (mask_type: '%s', output_size: %s, coverage_ratio: %s, "
                      "configfile: %s, config: %s)", self.__class__.__name__, mask_type,
                      coverage_ratio, output_size, configfile, config)
@@ -54,8 +54,8 @@ class Mask():  # pylint:disable=too-few-public-methods
         self._do_erode = any(amount != 0 for amount in self._erodes)
 
     def _set_config(self,
-                    configfile: T.Optional[str],
-                    config: T.Optional[FaceswapConfig]) -> dict:
+                    configfile: str | None,
+                    config: FaceswapConfig | None) -> dict:
         """ Set the correct configuration for the plugin based on whether a config file
         or pre-loaded config has been passed in.
 
@@ -117,7 +117,7 @@ class Mask():  # pylint:disable=too-few-public-methods
             source_offset: np.ndarray,
             target_offset: np.ndarray,
             centering: T.Literal["legacy", "face", "head"],
-            predicted_mask: T.Optional[np.ndarray] = None) -> tuple[np.ndarray, np.ndarray]:
+            predicted_mask: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
         """ Obtain the requested mask type and perform any defined mask manipulations.
 
         Parameters
@@ -164,7 +164,7 @@ class Mask():  # pylint:disable=too-few-public-methods
 
     def _get_mask(self,
                   detected_face: DetectedFace,
-                  predicted_mask: T.Optional[np.ndarray],
+                  predicted_mask: np.ndarray | None,
                   centering: T.Literal["legacy", "face", "head"],
                   source_offset: np.ndarray,
                   target_offset: np.ndarray) -> np.ndarray:

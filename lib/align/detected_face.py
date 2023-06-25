@@ -80,14 +80,14 @@ class DetectedFace():
         dict of {**name** (`str`): :class:`Mask`}.
     """
     def __init__(self,
-                 image: T.Optional[np.ndarray] = None,
-                 left: T.Optional[int] = None,
-                 width: T.Optional[int] = None,
-                 top: T.Optional[int] = None,
-                 height: T.Optional[int] = None,
-                 landmarks_xy: T.Optional[np.ndarray] = None,
-                 mask: T.Optional[dict[str, "Mask"]] = None,
-                 filename: T.Optional[str] = None) -> None:
+                 image: np.ndarray | None = None,
+                 left: int | None = None,
+                 width: int | None = None,
+                 top: int | None = None,
+                 height: int | None = None,
+                 landmarks_xy: np.ndarray | None = None,
+                 mask: dict[str, "Mask"] | None = None,
+                 filename: str | None = None) -> None:
         logger.trace("Initializing %s: (image: %s, left: %s, width: %s, top: %s, "  # type: ignore
                      "height: %s, landmarks_xy: %s, mask: %s, filename: %s)",
                      self.__class__.__name__,
@@ -100,11 +100,11 @@ class DetectedFace():
         self.height = height
         self._landmarks_xy = landmarks_xy
         self._identity: dict[str, np.ndarray] = {}
-        self.thumbnail: T.Optional[np.ndarray] = None
+        self.thumbnail: np.ndarray | None = None
         self.mask = {} if mask is None else mask
-        self._training_masks: T.Optional[tuple[bytes, tuple[int, int, int]]] = None
+        self._training_masks: tuple[bytes, tuple[int, int, int]] | None = None
 
-        self._aligned: T.Optional[AlignedFace] = None
+        self._aligned: AlignedFace | None = None
         logger.trace("Initialized %s", self.__class__.__name__)  # type: ignore
 
     @property
@@ -245,7 +245,7 @@ class DetectedFace():
         return lmmask.mask
 
     def store_training_masks(self,
-                             masks: list[T.Optional[np.ndarray]],
+                             masks: list[np.ndarray | None],
                              delete_masks: bool = False) -> None:
         """ Concatenate and compress the given training masks and store for retrieval.
 
@@ -268,7 +268,7 @@ class DetectedFace():
         combined = np.concatenate(valid, axis=-1)
         self._training_masks = (compress(combined), combined.shape)
 
-    def get_training_masks(self) -> T.Optional[np.ndarray]:
+    def get_training_masks(self) -> np.ndarray | None:
         """ Obtain the decompressed combined training masks.
 
         Returns
@@ -307,7 +307,7 @@ class DetectedFace():
         return alignment
 
     def from_alignment(self, alignment: AlignmentFileDict,
-                       image: T.Optional[np.ndarray] = None, with_thumb: bool = False) -> None:
+                       image: np.ndarray | None = None, with_thumb: bool = False) -> None:
         """ Set the attributes of this class from an alignments file and optionally load the face
         into the ``image`` attribute.
 
@@ -412,9 +412,9 @@ class DetectedFace():
 
     # <<< Aligned Face methods and properties >>> #
     def load_aligned(self,
-                     image: T.Optional[np.ndarray],
+                     image: np.ndarray | None,
                      size: int = 256,
-                     dtype: T.Optional[str] = None,
+                     dtype: str | None = None,
                      centering: CenteringType = "head",
                      coverage_ratio: float = 1.0,
                      force: bool = False,
@@ -508,13 +508,13 @@ class Mask():
         self.stored_size = storage_size
         self.stored_centering = storage_centering
 
-        self._mask: T.Optional[bytes] = None
-        self._affine_matrix: T.Optional[np.ndarray] = None
-        self._interpolator: T.Optional[int] = None
+        self._mask: bytes | None = None
+        self._affine_matrix: np.ndarray | None = None
+        self._interpolator: int | None = None
 
-        self._blur_type: T.Optional[T.Literal["gaussian", "normalized"]] = None
+        self._blur_type: T.Literal["gaussian", "normalized"] | None = None
         self._blur_passes: int = 0
-        self._blur_kernel: T.Union[float, int] = 0
+        self._blur_kernel: float | int = 0
         self._threshold = 0.0
         self._sub_crop_size = 0
         self._sub_crop_slices: dict[T.Literal["in", "out"], list[slice]] = {}
@@ -643,8 +643,7 @@ class Mask():
 
     def set_blur_and_threshold(self,
                                blur_kernel: int = 0,
-                               blur_type: T.Optional[T.Literal["gaussian",
-                                                               "normalized"]] = "gaussian",
+                               blur_type: T.Literal["gaussian", "normalized"] | None = "gaussian",
                                blur_passes: int = 1,
                                threshold: int = 0) -> None:
         """ Set the internal blur kernel and threshold amount for returned masks
@@ -905,7 +904,7 @@ class BlurMask():  # pylint:disable=too-few-public-methods
     def __init__(self,
                  blur_type: T.Literal["gaussian", "normalized"],
                  mask: np.ndarray,
-                 kernel: T.Union[int, float],
+                 kernel: int | float,
                  is_ratio: bool = False,
                  passes: int = 1) -> None:
         logger.trace("Initializing %s: (blur_type: '%s', mask_shape: %s, "  # type: ignore
@@ -958,11 +957,11 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         return {"gaussian": ['ksize', 'sigmaX'], "normalized": ['ksize']}
 
     @property
-    def _kwarg_mapping(self) -> dict[str, T.Union[int, tuple[int, int]]]:
+    def _kwarg_mapping(self) -> dict[str, int | tuple[int, int]]:
         """ dict: cv2 function keyword arguments mapped to their parameters. """
         return {"ksize": self._kernel_size, "sigmaX": self._sigma}
 
-    def _get_kernel_size(self, kernel: T.Union[int, float], is_ratio: bool) -> int:
+    def _get_kernel_size(self, kernel: int | float, is_ratio: bool) -> int:
         """ Set the kernel size to absolute value.
 
         If :attr:`is_ratio` is ``True`` then the kernel size is calculated from the given ratio and
@@ -1010,7 +1009,7 @@ class BlurMask():  # pylint:disable=too-few-public-methods
         logger.trace(retval)  # type: ignore
         return retval
 
-    def _get_kwargs(self) -> dict[str, T.Union[int, tuple[int, int]]]:
+    def _get_kwargs(self) -> dict[str, int | tuple[int, int]]:
         """ dict: the valid keyword arguments for the requested :attr:`_blur_type` """
         retval = {kword: self._kwarg_mapping[kword]
                   for kword in self._kwarg_requirements[self._blur_type]}
@@ -1022,7 +1021,7 @@ _HASHES_SEEN: dict[str, dict[str, int]] = {}
 
 
 def update_legacy_png_header(filename: str, alignments: Alignments
-                             ) -> T.Optional[PNGHeaderDict]:
+                             ) -> PNGHeaderDict | None:
     """ Update a legacy extracted face from pre v2.1 alignments by placing the alignment data for
     the face in the png exif header for the given filename with the given alignment data.
 

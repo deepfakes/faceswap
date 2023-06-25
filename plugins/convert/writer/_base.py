@@ -13,7 +13,7 @@ from plugins.convert._config import Config
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def get_config(plugin_name: str, configfile: T.Optional[str] = None) -> dict:
+def get_config(plugin_name: str, configfile: str | None = None) -> dict:
     """ Obtain the configuration settings for the writer plugin.
 
     Parameters
@@ -43,7 +43,7 @@ class Output():
         The full path to a custom configuration ini file. If ``None`` is passed
         then the file is loaded from the default location. Default: ``None``.
     """
-    def __init__(self, output_folder: str, configfile: T.Optional[str] = None) -> None:
+    def __init__(self, output_folder: str, configfile: str | None = None) -> None:
         logger.debug("Initializing %s: (output_folder: '%s')",
                      self.__class__.__name__, output_folder)
         self.config: dict = get_config(".".join(self.__module__.split(".")[-2:]),

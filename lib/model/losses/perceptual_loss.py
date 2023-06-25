@@ -323,7 +323,7 @@ class LDRFLIPLoss():  # pylint:disable=too-few-public-methods
                  lower_threshold_exponent: float = 0.4,
                  upper_threshold_exponent: float = 0.95,
                  epsilon: float = 1e-15,
-                 pixels_per_degree: T.Optional[float] = None,
+                 pixels_per_degree: float | None = None,
                  color_order: T.Literal["bgr", "rgb"] = "bgr") -> None:
         logger.debug("Initializing: %s (computed_distance_exponent '%s', feature_exponent: %s, "
                      "lower_threshold_exponent: %s, upper_threshold_exponent: %s, epsilon: %s, "

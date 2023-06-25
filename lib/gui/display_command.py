@@ -86,7 +86,7 @@ class PreviewTrain(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
         logger.debug("Initializing %s (args: %s, kwargs: %s)",
                      self.__class__.__name__, args, kwargs)
         self._preview = get_images().preview_train
-        self._display: T.Optional[PreviewTk] = None
+        self._display: PreviewTk | None = None
         super().__init__(*args, **kwargs)
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -171,7 +171,7 @@ class GraphDisplay(DisplayOptionalPage):  # pylint: disable=too-many-ancestors
                  tab_name: str,
                  helptext: str,
                  wait_time: int,
-                 command: T.Optional[str] = None) -> None:
+                 command: str | None = None) -> None:
         self._trace_vars: dict[T.Literal["smoothgraph", "display_iterations"],
                                tuple[tk.BooleanVar, str]] = {}
         super().__init__(parent, tab_name, helptext, wait_time, command)

@@ -69,7 +69,7 @@ class FileFullPaths(_FullPaths):
     >>>        filetypes="video))"
     """
     # pylint: disable=too-few-public-methods
-    def __init__(self, *args, filetypes: T.Optional[str] = None, **kwargs) -> None:
+    def __init__(self, *args, filetypes: str | None = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.filetypes = filetypes
 
@@ -111,7 +111,7 @@ class FilesFullPaths(FileFullPaths):  # pylint: disable=too-few-public-methods
     >>>        filetypes="image",
     >>>        nargs="+"))
     """
-    def __init__(self, *args, filetypes: T.Optional[str] = None, **kwargs) -> None:
+    def __init__(self, *args, filetypes: str | None = None, **kwargs) -> None:
         if kwargs.get("nargs", None) is None:
             opt = kwargs["option_strings"]
             raise ValueError(f"nargs must be provided for FilesFullPaths: {opt}")
@@ -250,8 +250,8 @@ class ContextFullPaths(FileFullPaths):
     # pylint: disable=too-few-public-methods, too-many-arguments
     def __init__(self,
                  *args,
-                 filetypes: T.Optional[str] = None,
-                 action_option: T.Optional[str] = None,
+                 filetypes: str | None = None,
+                 action_option: str | None = None,
                  **kwargs) -> None:
         opt = kwargs["option_strings"]
         if kwargs.get("nargs", None) is not None:
@@ -382,8 +382,8 @@ class Slider(argparse.Action):  # pylint: disable=too-few-public-methods
     """
     def __init__(self,
                  *args,
-                 min_max: T.Union[tuple[int, int], tuple[float, float], None] = None,
-                 rounding: T.Optional[int] = None,
+                 min_max: tuple[int, int] | tuple[float, float] | None = None,
+                 rounding: int | None = None,
                  **kwargs) -> None:
         opt = kwargs["option_strings"]
         if kwargs.get("nargs", None) is not None:

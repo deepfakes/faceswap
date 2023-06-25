@@ -33,7 +33,7 @@ _VERSION = 2.3
 class MaskAlignmentsFileDict(T.TypedDict):
     """ Typed Dictionary for storing Masks. """
     mask: bytes
-    affine_matrix: T.Union[list[float], np.ndarray]
+    affine_matrix: list[float] | np.ndarray
     interpolator: int
     stored_size: int
     stored_centering: CenteringType
@@ -46,14 +46,14 @@ class PNGHeaderAlignmentsDict(T.TypedDict):
     y: int
     w: int
     h: int
-    landmarks_xy: T.Union[list[float], np.ndarray]
+    landmarks_xy: list[float] | np.ndarray
     mask: dict[str, MaskAlignmentsFileDict]
     identity: dict[str, list[float]]
 
 
 class AlignmentFileDict(PNGHeaderAlignmentsDict):
     """ Typed Dictionary for storing a single faces' Alignment Information in alignments files. """
-    thumb: T.Optional[np.ndarray]
+    thumb: np.ndarray | None
 
 
 class PNGHeaderSourceDict(T.TypedDict):
@@ -63,13 +63,13 @@ class PNGHeaderSourceDict(T.TypedDict):
     face_index: int
     source_filename: str
     source_is_video: bool
-    source_frame_dims: T.Optional[tuple[int, int]]
+    source_frame_dims: tuple[int, int] | None
 
 
 class AlignmentDict(T.TypedDict):
     """ Dictionary for holding all of the alignment information within a single alignment file """
     faces: list[AlignmentFileDict]
-    video_meta: dict[str, T.Union[float, int]]
+    video_meta: dict[str, float | int]
 
 
 class PNGHeaderDict(T.TypedDict):
@@ -178,11 +178,10 @@ class Alignments():
         return masks
 
     @property
-    def video_meta_data(self) -> dict[str, T.Union[list[int], list[float], None]]:
+    def video_meta_data(self) -> dict[str, list[int] | list[float] | None]:
         """ dict: The frame meta data stored in the alignments file. If data does not exist in the
         alignments file then ``None`` is returned for each Key """
-        retval: dict[str, T.Union[list[int], list[float], None]] = {"pts_time": None,
-                                                                    "keyframes": None}
+        retval: dict[str, list[int] | list[float] | None] = {"pts_time": None, "keyframes": None}
         pts_time: list[float] = []
         keyframes: list[int] = []
         for idx, key in enumerate(sorted(self.data)):
@@ -257,7 +256,7 @@ class Alignments():
         logger.info("Saving video meta information to Alignments file")
 
         for idx, pts in enumerate(pts_time):
-            meta: dict[str, T.Union[float, int]] = {"pts_time": pts, "keyframe": idx in keyframes}
+            meta: dict[str, float | int] = {"pts_time": pts, "keyframe": idx in keyframes}
             key = f"{basename}_{idx + 1:06d}.png"
             if key not in self.data:
                 self.data[key] = {"video_meta": meta, "faces": []}

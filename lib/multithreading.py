@@ -14,8 +14,8 @@ if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_ErrorType = T.Union[tuple[type[BaseException], BaseException, TracebackType],
-                     tuple[T.Any, T.Any, T.Any], None]
+_ErrorType: T.TypeAlias = (tuple[type[BaseException], BaseException, TracebackType] |
+                           tuple[T.Any, T.Any, T.Any] | None)
 _THREAD_NAMES: set[str] = set()
 
 
@@ -70,12 +70,12 @@ class FSThread(threading.Thread):
     _name: str
 
     def __init__(self,
-                 target: T.Optional[Callable] = None,
-                 name: T.Optional[str] = None,
+                 target: Callable | None = None,
+                 name: str | None = None,
                  args: tuple = (),
-                 kwargs: T.Optional[dict[str, T.Any]] = None,
+                 kwargs: dict[str, T.Any] | None = None,
                  *,
-                 daemon: T.Optional[bool] = None) -> None:
+                 daemon: bool | None = None) -> None:
         super().__init__(target=target, name=name, args=args, kwargs=kwargs, daemon=daemon)
         self.err: _ErrorType = None
 
@@ -127,7 +127,7 @@ class MultiThread():
                  target: Callable,
                  *args,
                  thread_count: int = 1,
-                 name: T.Optional[str] = None,
+                 name: str | None = None,
                  **kwargs) -> None:
         self._name = _get_name(name if name else target.__name__)
         logger.debug("Initializing %s: (target: '%s', thread_count: %s)",
@@ -256,9 +256,9 @@ class BackgroundGenerator(MultiThread):
     def __init__(self,
                  generator: Callable,
                  prefetch: int = 1,
-                 name: T.Optional[str] = None,
-                 args: T.Optional[tuple] = None,
-                 kwargs: T.Optional[dict[str, T.Any]] = None) -> None:
+                 name: str | None = None,
+                 args: tuple | None = None,
+                 kwargs: dict[str, T.Any] | None = None) -> None:
         super().__init__(name=name, target=self._run)
         self.queue: Queue.Queue = Queue.Queue(prefetch)
         self.generator = generator

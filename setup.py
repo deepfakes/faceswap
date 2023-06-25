@@ -62,8 +62,7 @@ class Environment():
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
-        self.backend: T.Optional[T.Literal["nvidia", "apple_silicon",
-                                           "directml", "cpu", "rocm"]] = None
+        self.backend: T.Literal["nvidia", "apple_silicon", "directml", "cpu", "rocm"] | None = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
         self.rocm_version: tuple[int, ...] = (0, 0, 0)
@@ -177,8 +176,8 @@ class Environment():
         if self.updater:
             return
 
-        if not ((3, 9) <= sys.version_info < (3, 11) and self.py_version[1] == "64bit"):
-            logger.error("Please run this script with Python version 3.9 to 3.10 64bit and try "
+        if not ((3, 10) <= sys.version_info < (3, 11) and self.py_version[1] == "64bit"):
+            logger.error("Please run this script with Python version 3.10 64bit and try "
                          "again.")
             sys.exit(1)
 
@@ -761,9 +760,9 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
     """ Find the location of system installed Cuda and cuDNN on Windows and Linux. """
 
     def __init__(self) -> None:
-        self.cuda_path: T.Optional[str] = None
-        self.cuda_version: T.Optional[str] = None
-        self.cudnn_version: T.Optional[str] = None
+        self.cuda_path: str | None = None
+        self.cuda_version: str | None = None
+        self.cudnn_version: str | None = None
 
         self._os: str = platform.system().lower()
         self._cuda_keys: list[str] = [key
@@ -1040,7 +1039,7 @@ class Install():  # pylint:disable=too-few-public-methods
 
     def _from_conda(self,
                     package: str,
-                    channel: T.Optional[str] = None,
+                    channel: str | None = None,
                     conda_only: bool = False) -> bool:
         """ Install a conda package
 

@@ -39,7 +39,7 @@ class Check():
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
         self._job = arguments.job
-        self._type: T.Optional[T.Literal["faces", "frames"]] = None
+        self._type: T.Literal["faces", "frames"] | None = None
         self._is_video = False  # Set when getting items
         self._output = arguments.output
         self._source_dir = self._get_source_dir(arguments)
@@ -78,7 +78,7 @@ class Check():
         logger.debug("type: '%s', source_dir: '%s'", self._type, source_dir)
         return source_dir
 
-    def _get_items(self) -> T.Union[list[dict[str, str]], list[tuple[str, PNGHeaderDict]]]:
+    def _get_items(self) -> list[dict[str, str]] | list[tuple[str, PNGHeaderDict]]:
         """ Set the correct items to process
 
         Returns
@@ -89,9 +89,9 @@ class Check():
             the dictionaries will contain the keys 'frame_fullname', 'frame_name', 'extension'.
         """
         assert self._type is not None
-        items: T.Union[Frames, Faces] = globals()[self._type.title()](self._source_dir)
+        items: Frames | Faces = globals()[self._type.title()](self._source_dir)
         self._is_video = items.is_video
-        return T.cast(T.Union[list[dict[str, str]], list[tuple[str, "PNGHeaderDict"]]],
+        return T.cast(list[dict[str, str]] | list[tuple[str, "PNGHeaderDict"]],
                       items.file_list_sorted)
 
     def process(self) -> None:
@@ -119,7 +119,7 @@ class Check():
                          "supported for 'multi-faces'")
             sys.exit(1)
 
-    def _compile_output(self) -> T.Union[list[str], list[tuple[str, int]]]:
+    def _compile_output(self) -> list[str] | list[tuple[str, int]]:
         """ Compile list of frames that meet criteria
 
         Returns
@@ -150,8 +150,8 @@ class Check():
                 logger.debug("Returning: '%s'", frame_name)
                 yield frame_name
 
-    def _get_multi_faces(self) -> T.Union[Generator[str, None, None],
-                                          Generator[tuple[str, int], None, None]]:
+    def _get_multi_faces(self) -> (Generator[str, None, None] |
+                                   Generator[tuple[str, int], None, None]):
         """ yield each frame or face that has multiple faces matched in alignments file
 
         Yields
@@ -234,7 +234,7 @@ class Check():
                 logger.debug("Returning: '%s'", frame)
                 yield frame
 
-    def _output_results(self, items_output: T.Union[list[str], list[tuple[str, int]]]) -> None:
+    def _output_results(self, items_output: list[str] | list[tuple[str, int]]) -> None:
         """ Output the results in the requested format
 
         Parameters
@@ -313,7 +313,7 @@ class Check():
         with open(output_file, "w", encoding="utf8") as f_output:
             f_output.write(output_message)
 
-    def _move_file(self, items_output: T.Union[list[str], list[tuple[str, int]]]) -> None:
+    def _move_file(self, items_output: list[str] | list[tuple[str, int]]) -> None:
         """ Move the identified frames to a new sub folder
 
         Parameters
@@ -438,7 +438,7 @@ class Spatial():  # pylint:disable=too-few-public-methods
         self._alignments = alignments
         self._mappings: dict[int, str] = {}
         self._normalized: dict[str, np.ndarray] = {}
-        self._shapes_model: T.Optional[decomposition.PCA] = None
+        self._shapes_model: decomposition.PCA | None = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self) -> None:

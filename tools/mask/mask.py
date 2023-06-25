@@ -154,7 +154,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
         self._saver = self._set_saver(arguments)
         loader = FacesLoader if self._input_is_faces else ImagesLoader
         self._loader = loader(arguments.input)
-        self._faces_saver: T.Optional[ImagesSaver] = None
+        self._faces_saver: ImagesSaver | None = None
 
         self._alignments = self._get_alignments(arguments)
         self._extractor = self._get_extractor(arguments.exclude_gpus)
@@ -180,7 +180,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
             sys.exit(0)
         logger.debug("input '%s' is valid", mask_input)
 
-    def _set_saver(self, arguments: Namespace) -> T.Optional[ImagesSaver]:
+    def _set_saver(self, arguments: Namespace) -> ImagesSaver | None:
         """ set the saver in a background thread
 
         Parameters
@@ -206,7 +206,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
         logger.debug(saver)
         return saver
 
-    def _get_alignments(self, arguments: Namespace) -> T.Optional[Alignments]:
+    def _get_alignments(self, arguments: Namespace) -> Alignments | None:
         """ Obtain the alignments from either the given alignments location or the default
         location.
 
@@ -244,7 +244,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
 
         return Alignments(folder, filename=filename)
 
-    def _get_extractor(self, exclude_gpus: list[int]) -> T.Optional[Extractor]:
+    def _get_extractor(self, exclude_gpus: list[int]) -> Extractor | None:
         """ Obtain a Mask extractor plugin and launch it
         Parameters
         ----------
@@ -305,7 +305,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
     def _process_face(self,
                       filename: str,
                       image: np.ndarray,
-                      metadata: PNGHeaderDict) -> T.Optional[ExtractMedia]:
+                      metadata: PNGHeaderDict) -> ExtractMedia | None:
         """ Process a single face when masking from face images
 
         filename: str
@@ -352,7 +352,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
         self._counts["update"] += 1
         return media
 
-    def _input_faces(self, *args: T.Union[tuple, tuple[EventQueue]]) -> None:
+    def _input_faces(self, *args: tuple | tuple[EventQueue]) -> None:
         """ Input pre-aligned faces to the Extractor plugin inside a thread
 
         Parameters
@@ -396,7 +396,7 @@ class _Mask():  # pylint:disable=too-few-public-methods
         if self._update_type != "output":
             queue.put("EOF")
 
-    def _input_frames(self, *args: T.Union[tuple, tuple[EventQueue]]) -> None:
+    def _input_frames(self, *args: tuple | tuple[EventQueue]) -> None:
         """ Input frames to the Extractor plugin inside a thread
 
         Parameters

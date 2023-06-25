@@ -25,10 +25,10 @@ _FACE_CACHES: dict[str, "_Cache"] = {}
 
 
 def get_cache(side: T.Literal["a", "b"],
-              filenames: T.Optional[list[str]] = None,
-              config: T.Optional[dict[str, ConfigValueType]] = None,
-              size: T.Optional[int] = None,
-              coverage_ratio: T.Optional[float] = None) -> "_Cache":
+              filenames: list[str] | None = None,
+              config: dict[str, ConfigValueType] | None = None,
+              size: int | None = None,
+              coverage_ratio: float | None = None) -> "_Cache":
     """ Obtain a :class:`_Cache` object for the given side. If the object does not pre-exist then
     create it.
 
@@ -387,7 +387,7 @@ class _Cache():
         detected_face.store_training_masks(masks, delete_masks=True)
         logger.trace("Stored masks for filename: %s)", filename)  # type: ignore
 
-    def _get_face_mask(self, filename: str, detected_face: DetectedFace) -> T.Optional[np.ndarray]:
+    def _get_face_mask(self, filename: str, detected_face: DetectedFace) -> np.ndarray | None:
         """ Obtain the training sized face mask from the :class:`DetectedFace` for the requested
         mask type.
 
@@ -442,7 +442,7 @@ class _Cache():
     def _get_localized_mask(self,
                             filename: str,
                             detected_face: DetectedFace,
-                            area: T.Literal["eye", "mouth"]) -> T.Optional[np.ndarray]:
+                            area: T.Literal["eye", "mouth"]) -> np.ndarray | None:
         """ Obtain a localized mask for the given area if it is required for training.
 
         Parameters

@@ -326,7 +326,7 @@ class Train():  # pylint:disable=too-few-public-methods
         logger.debug("Running Training Cycle")
         update_preview_images = False
         if self._args.write_image or self._args.redirect_gui or self._args.preview:
-            display_func: T.Optional[Callable] = self._show
+            display_func: Callable | None = self._show
         else:
             display_func = None
 
@@ -593,7 +593,7 @@ class PreviewInterface():
             logger.debug("Sending should stop")
         return retval
 
-    def _launch_thread(self) -> T.Optional[FSThread]:
+    def _launch_thread(self) -> FSThread | None:
         """ Launch the preview viewer in it's own thread if preview has been selected
 
         Returns

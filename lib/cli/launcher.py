@@ -101,8 +101,7 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         FaceswapError
             If Tensorflow is not found, or is not between versions 2.4 and 2.9
         """
-        directml_ver = rocm_ver = (2, 10)
-        min_ver = (2, 7)
+        min_ver = (2, 10)
         max_ver = (2, 10)
         try:
             import tensorflow as tf  # noqa pylint:disable=import-outside-toplevel,unused-import
@@ -122,7 +121,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
             self._handle_import_error(msg)
 
         tf_ver = get_tf_version()
-        backend = get_backend()
         if tf_ver < min_ver:
             msg = (f"The minimum supported Tensorflow is version {min_ver} but you have version "
                    f"{tf_ver} installed. Please upgrade Tensorflow.")
@@ -130,14 +128,6 @@ class ScriptExecutor():  # pylint:disable=too-few-public-methods
         if tf_ver > max_ver:
             msg = (f"The maximum supported Tensorflow is version {max_ver} but you have version "
                    f"{tf_ver} installed. Please downgrade Tensorflow.")
-            self._handle_import_error(msg)
-        if backend == "directml" and tf_ver != directml_ver:
-            msg = (f"The supported Tensorflow version for DirectML cards is {directml_ver} but "
-                   f"you have version {tf_ver} installed. Please install the correct version.")
-            self._handle_import_error(msg)
-        if backend == "rocm" and tf_ver != rocm_ver:
-            msg = (f"The supported Tensorflow version for ROCm cards is {rocm_ver} but "
-                   f"you have version {tf_ver} installed. Please install the correct version.")
             self._handle_import_error(msg)
         logger.debug("Installed Tensorflow Version: %s", tf_ver)
 

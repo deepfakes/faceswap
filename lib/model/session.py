@@ -55,9 +55,9 @@ class KSession():
     def __init__(self,
                  name: str,
                  model_path: str,
-                 model_kwargs: T.Optional[dict] = None,
+                 model_kwargs: dict | None = None,
                  allow_growth: bool = False,
-                 exclude_gpus: T.Optional[list[int]] = None,
+                 exclude_gpus: list[int] | None = None,
                  cpu_mode: bool = False) -> None:
         logger.trace("Initializing: %s (name: %s, model_path: %s, "  # type:ignore
                      "model_kwargs: %s,  allow_growth: %s, exclude_gpus: %s, cpu_mode: %s)",
@@ -70,12 +70,12 @@ class KSession():
                                           cpu_mode)
         self._model_path = model_path
         self._model_kwargs = {} if not model_kwargs else model_kwargs
-        self._model: T.Optional[Model] = None
+        self._model: Model | None = None
         logger.trace("Initialized: %s", self.__class__.__name__,)  # type:ignore
 
     def predict(self,
-                feed: T.Union[list[np.ndarray], np.ndarray],
-                batch_size: T.Optional[int] = None) -> T.Union[list[np.ndarray], np.ndarray]:
+                feed: list[np.ndarray] | np.ndarray,
+                batch_size: int | None = None) -> list[np.ndarray] | np.ndarray:
         """ Get predictions from the model.
 
         This method is a wrapper for :func:`keras.predict()` function. For Tensorflow backends

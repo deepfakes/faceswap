@@ -186,7 +186,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         self._arguments = arguments
         self._alignments = alignments
         self._is_legacy = self._alignments.version == 1.0  # pylint:disable=protected-access
-        self._mask_pipeline: T.Optional[Extractor] = None
+        self._mask_pipeline: Extractor | None = None
         self._faces_dir = arguments.faces_dir
         self._min_size = self._get_min_size(arguments.size, arguments.min_size)
 
@@ -194,7 +194,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         self._extracted_faces = ExtractedFaces(self._frames,
                                                self._alignments,
                                                size=arguments.size)
-        self._saver: T.Optional[ImagesSaver] = None
+        self._saver: ImagesSaver | None = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
@@ -220,7 +220,7 @@ class Extract():  # pylint:disable=too-few-public-methods
                      extract_size, min_size, retval)
         return retval
 
-    def _get_count(self) -> T.Optional[int]:
+    def _get_count(self) -> int | None:
         """ If the alignments file has been run through the manual tool, then it will hold video
         meta information, meaning that the count of frames in the alignment file can be relied
         on to be accurate.
@@ -234,8 +234,7 @@ class Extract():  # pylint:disable=too-few-public-methods
         meta = self._alignments.video_meta_data
         has_meta = all(val is not None for val in meta.values())
         if has_meta:
-            retval: T.Optional[int] = len(T.cast(dict[str, T.Union[list[int], list[float]]],
-                                                 meta["pts_time"]))
+            retval: int | None = len(T.cast(dict[str, list[int] | list[float]], meta["pts_time"]))
         else:
             retval = None
         logger.debug("Frame count from alignments file: (has_meta: %s, %s", has_meta, retval)
@@ -317,7 +316,7 @@ class Extract():  # pylint:disable=too-few-public-methods
             self._alignments.save()
         logger.info("%s face(s) extracted", extracted_faces)
 
-    def _set_skip_list(self) -> T.Optional[list[int]]:
+    def _set_skip_list(self) -> list[int] | None:
         """ Set the indices for frames that should be skipped based on the `extract_every_n`
         command line option.
 

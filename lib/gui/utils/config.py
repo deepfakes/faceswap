@@ -23,12 +23,12 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 PATHCACHE = os.path.join(os.path.realpath(os.path.dirname(sys.argv[0])), "lib", "gui", ".cache")
-_CONFIG: T.Optional[Config] = None
+_CONFIG: Config | None = None
 
 
 def initialize_config(root: tk.Tk,
-                      cli_opts: T.Optional[CliOptions],
-                      statusbar: T.Optional[StatusBar]) -> T.Optional[Config]:
+                      cli_opts: CliOptions | None,
+                      statusbar: StatusBar | None) -> Config | None:
     """ Initialize the GUI Master :class:`Config` and add to global constant.
 
     This should only be called once on first GUI startup. Future access to :class:`Config`
@@ -146,13 +146,13 @@ class GlobalVariables():
 @dataclass
 class _GuiObjects:
     """ Data class for commonly accessed GUI Objects """
-    cli_opts: T.Optional[CliOptions]
+    cli_opts: CliOptions | None
     tk_vars: GlobalVariables
     project: Project
     tasks: Tasks
-    status_bar: T.Optional[StatusBar]
+    status_bar: StatusBar | None
     default_options: dict[str, dict[str, T.Any]] = field(default_factory=dict)
-    command_notebook: T.Optional[CommandNotebook] = None
+    command_notebook: CommandNotebook | None = None
 
 
 class Config():
@@ -173,8 +173,8 @@ class Config():
     """
     def __init__(self,
                  root: tk.Tk,
-                 cli_opts: T.Optional[CliOptions],
-                 statusbar: T.Optional[StatusBar]) -> None:
+                 cli_opts: CliOptions | None,
+                 statusbar: StatusBar | None) -> None:
         logger.debug("Initializing %s: (root %s, cli_opts: %s, statusbar: %s)",
                      self.__class__.__name__, root, cli_opts, statusbar)
         self._default_font = T.cast(dict,
@@ -249,7 +249,7 @@ class Config():
         return self._gui_objects.status_bar
 
     @property
-    def command_notebook(self) -> T.Optional[CommandNotebook]:
+    def command_notebook(self) -> CommandNotebook | None:
         """ :class:`lib.gui.command.CommandNotebook`: The main Faceswap Command Notebook. """
         return self._gui_objects.command_notebook
 
@@ -386,7 +386,7 @@ class Config():
         """ Reload the user config from file. """
         self._user_config = UserConfig(None)
 
-    def set_cursor_busy(self, widget: T.Optional[tk.Widget] = None) -> None:
+    def set_cursor_busy(self, widget: tk.Widget | None = None) -> None:
         """ Set the root or widget cursor to busy.
 
         Parameters
@@ -400,7 +400,7 @@ class Config():
         component.config(cursor="watch")  # type: ignore
         component.update_idletasks()
 
-    def set_cursor_default(self, widget: T.Optional[tk.Widget] = None) -> None:
+    def set_cursor_default(self, widget: tk.Widget | None = None) -> None:
         """ Set the root or widget cursor to default.
 
         Parameters
@@ -414,7 +414,7 @@ class Config():
         component.config(cursor="")  # type: ignore
         component.update_idletasks()
 
-    def set_root_title(self, text: T.Optional[str] = None) -> None:
+    def set_root_title(self, text: str | None = None) -> None:
         """ Set the main title text for Faceswap.
 
         The title will always begin with 'Faceswap.py'. Additional text can be appended.

@@ -80,7 +80,7 @@ class PreviewBase():  # pylint:disable=too-few-public-methods
      """
     def __init__(self,
                  preview_buffer: PreviewBuffer,
-                 triggers: T.Optional[TriggerType] = None) -> None:
+                 triggers: TriggerType | None = None) -> None:
         logger.debug("Initializing %s parent (triggers: %s)",
                      self.__class__.__name__, triggers)
         self._triggers = triggers

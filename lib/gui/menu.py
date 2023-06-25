@@ -431,7 +431,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         return True
 
     @classmethod
-    def _get_branches(cls) -> T.Optional[str]:
+    def _get_branches(cls) -> str | None:
         """ Get the available github branches
 
         Returns

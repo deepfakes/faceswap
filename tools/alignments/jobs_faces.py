@@ -237,8 +237,8 @@ class Rename():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  alignments: AlignmentData,
-                 arguments: T.Optional[Namespace],
-                 faces: T.Optional[Faces] = None) -> None:
+                 arguments: Namespace | None,
+                 faces: Faces | None = None) -> None:
         logger.debug("Initializing %s: (arguments: %s, faces: %s)",
                      self.__class__.__name__, arguments, faces)
         self._alignments = alignments

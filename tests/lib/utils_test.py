@@ -207,7 +207,7 @@ def test_camel_case_split(text: str, result: list[str]) -> None:
 def test_get_tf_version() -> None:
     """ Test the :func:`~lib.utils.get_tf_version` function version returns correctly in range """
     tf_version = get_tf_version()
-    assert (2, 2) <= tf_version < (2, 11)
+    assert (2, 10) <= tf_version < (2, 11)
 
 
 def test_get_dpi() -> None:
@@ -360,8 +360,8 @@ _EXPECTED = ((["test_model_file_v3.h5"], "test_model_file_v3", "test_model_file"
 @pytest.mark.parametrize("filename,results", zip(_INPUT, _EXPECTED), ids=[str(i) for i in _INPUT])
 def test_get_model_model_filename_input(
         get_model_instance: GetModel,  # pylint:disable=unused-argument
-        filename: T.Union[str, list[str]],
-        results: T.Union[str, list[str]]) -> None:
+        filename: str | list[str],
+        results: str | list[str]) -> None:
     """ Test :class:`~lib.utils.GetModel` filename parsing works
 
     Parameters
@@ -460,7 +460,7 @@ _DLPARAMS = [(None, None),
 def test_get_model__download_model(mocker: pytest_mock.MockerFixture,
                                    get_model_instance: GetModel,
                                    error_type: T.Any,
-                                   error_args: tuple[T.Union[str, int], ...]) -> None:
+                                   error_args: tuple[str | int, ...]) -> None:
     """ Test :func:`~lib.utils.GetModel._download_model` executes its logic correctly
 
     Parameters

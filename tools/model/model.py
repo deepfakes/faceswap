@@ -183,7 +183,7 @@ class NaNScan():  # pylint:disable=too-few-public-methods
         return os.path.join(model_dir, model_file)
 
     def _parse_weights(self,
-                       layer: T.Union[keras.models.Model, keras.layers.Layer]) -> dict:
+                       layer: keras.models.Model | keras.layers.Layer) -> dict:
         """ Recursively pass through sub-models to scan layer weights"""
         weights = layer.get_weights()
         logger.debug("Processing weights for layer '%s', length: '%s'",

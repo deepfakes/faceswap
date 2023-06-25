@@ -63,14 +63,14 @@ class FileHandler():  # pylint:disable=too-few-public-methods
 
     def __init__(self,
                  handle_type: _HANDLETYPE,
-                 file_type: T.Optional[_FILETYPE],
-                 title: T.Optional[str] = None,
-                 initial_folder: T.Optional[str] = None,
-                 initial_file: T.Optional[str] = None,
-                 command: T.Optional[str] = None,
-                 action: T.Optional[str] = None,
-                 variable: T.Optional[str] = None,
-                 parent: T.Optional[tk.Frame] = None) -> None:
+                 file_type: _FILETYPE | None,
+                 title: str | None = None,
+                 initial_folder: str | None = None,
+                 initial_file: str | None = None,
+                 command: str | None = None,
+                 action: str | None = None,
+                 variable: str | None = None,
+                 parent: tk.Frame | None = None) -> None:
         logger.debug("Initializing %s: (handle_type: '%s', file_type: '%s', title: '%s', "
                      "initial_folder: '%s', initial_file: '%s', command: '%s', action: '%s', "
                      "variable: %s, parent: %s)", self.__class__.__name__, handle_type, file_type,
@@ -137,7 +137,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         return filetypes
 
     @property
-    def _contexts(self) -> dict[str, dict[str, T.Union[str, dict[str, str]]]]:
+    def _contexts(self) -> dict[str, dict[str, str | dict[str, str]]]:
         """dict: Mapping of commands, actions and their corresponding file dialog for context
         handle types. """
         return {"effmpeg": {"input": {"extract": "filename",
@@ -158,7 +158,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                                        "slice": "save_filename"}}}
 
     @classmethod
-    def _set_dummy_master(cls) -> T.Optional[tk.Frame]:
+    def _set_dummy_master(cls) -> tk.Frame | None:
         """ Add an option to force black font on Linux file dialogs KDE issue that displays light
         font on white background).
 
@@ -174,7 +174,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         if platform.system().lower() == "linux":
             frame = tk.Frame()
             frame.option_add("*foreground", "black")
-            retval: T.Optional[tk.Frame] = frame
+            retval: tk.Frame | None = frame
         else:
             retval = None
         return retval
@@ -187,7 +187,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         del self._dummy_master
         self._dummy_master = None
 
-    def _set_defaults(self) -> dict[str, T.Optional[str]]:
+    def _set_defaults(self) -> dict[str, str | None]:
         """ Set the default file type for the file dialog. Generally the first found file type
         will be used, but this is overridden if it is not appropriate.
 
@@ -196,7 +196,7 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         dict:
             The default file extension for each file type
         """
-        defaults: dict[str, T.Optional[str]] = {
+        defaults: dict[str, str | None] = {
             key: next(ext for ext in val[0][1].split(" ")).replace("*", "")
             for key, val in self._filetypes.items()}
         defaults["default"] = None
@@ -206,15 +206,15 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         return defaults
 
     def _set_kwargs(self,
-                    title: T.Optional[str],
-                    initial_folder: T.Optional[str],
-                    initial_file: T.Optional[str],
-                    file_type: T.Optional[_FILETYPE],
-                    command: T.Optional[str],
-                    action: T.Optional[str],
-                    variable: T.Optional[str],
-                    parent: T.Optional[tk.Frame]
-                    ) -> dict[str, T.Union[None, tk.Frame, str, list[tuple[str, str]]]]:
+                    title: str | None,
+                    initial_folder: str | None,
+                    initial_file: str | None,
+                    file_type: _FILETYPE | None,
+                    command: str | None,
+                    action: str | None,
+                    variable: str | None,
+                    parent: tk.Frame | None
+                    ) -> dict[str, None | tk.Frame | str | list[tuple[str, str]]]:
         """ Generate the required kwargs for the requested file dialog browser.
 
         Parameters
@@ -250,8 +250,8 @@ class FileHandler():  # pylint:disable=too-few-public-methods
                      title, initial_folder, initial_file, file_type, command, action, variable,
                      parent)
 
-        kwargs: dict[str, T.Union[None, tk.Frame, str,
-                                  list[tuple[str, str]]]] = {"master": self._dummy_master}
+        kwargs: dict[str, None | tk.Frame | str | list[tuple[str, str]]] = {
+            "master": self._dummy_master}
 
         if self._handletype.lower() == "context":
             assert command is not None and action is not None and variable is not None
@@ -303,12 +303,12 @@ class FileHandler():  # pylint:disable=too-few-public-methods
         logger.debug(handletype)
         self._handletype = T.cast(_HANDLETYPE, handletype)
 
-    def _open(self) -> T.Optional[T.IO]:
+    def _open(self) -> T.IO | None:
         """ Open a file. """
         logger.debug("Popping Open browser")
         return filedialog.askopenfile(**self._kwargs)  # type: ignore
 
-    def _save(self) -> T.Optional[T.IO]:
+    def _save(self) -> T.IO | None:
         """ Save a file. """
         logger.debug("Popping Save browser")
         return filedialog.asksaveasfile(**self._kwargs)  # type: ignore

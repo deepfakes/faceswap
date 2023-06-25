@@ -79,7 +79,7 @@ class ModelBase():
 
         self._args = arguments
         self._is_predict = predict
-        self._model: T.Optional[tf.keras.models.Model] = None
+        self._model: tf.keras.models.Model | None = None
 
         self._configfile = arguments.configfile if hasattr(arguments, "configfile") else None
         self._load_config()
@@ -421,7 +421,7 @@ class ModelBase():
         self._state.add_session_loss_names(self._loss.names)
         logger.debug("Compiled Model: %s", self.model)
 
-    def _legacy_mapping(self) -> T.Optional[dict]:
+    def _legacy_mapping(self) -> dict | None:
         """ The mapping of separate model files to single model layers for transferring of legacy
         weights.
 
@@ -649,11 +649,11 @@ class State():
         legacy_update = self._update_legacy_config()
         # Add any new items to state config for legacy purposes where the new default may be
         # detrimental to an existing model.
-        legacy_defaults: dict[str, T.Union[str, int, bool]] = {"centering": "legacy",
-                                                               "mask_loss_function": "mse",
-                                                               "l2_reg_term": 100,
-                                                               "optimizer": "adam",
-                                                               "mixed_precision": False}
+        legacy_defaults: dict[str, str | int | bool] = {"centering": "legacy",
+                                                        "mask_loss_function": "mse",
+                                                        "l2_reg_term": 100,
+                                                        "optimizer": "adam",
+                                                        "mixed_precision": False}
         for key, val in _CONFIG.items():
             if key not in self._config.keys():
                 setting: ConfigValueType = legacy_defaults.get(key, val)

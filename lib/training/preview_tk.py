@@ -39,7 +39,7 @@ class _Taskbar():
     taskbar: :class:`tkinter.ttk.Frame` or ``None``
         None if preview is a pop-up window otherwise ttk.Frame if taskbar is managed by the GUI
     """
-    def __init__(self, parent: tk.Frame, taskbar: T.Optional[ttk.Frame]) -> None:
+    def __init__(self, parent: tk.Frame, taskbar: ttk.Frame | None) -> None:
         logger.debug("Initializing %s (parent: '%s', taskbar: %s)",
                      self.__class__.__name__, parent, taskbar)
         self._is_standalone = taskbar is None
@@ -273,7 +273,7 @@ class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._screen_dimensions = screen_dimensions
         self._var_scale = scale_var
         self._configure_scrollbars(frame)
-        self._image: T.Optional[ImageTk.PhotoImage] = None
+        self._image: ImageTk.PhotoImage | None = None
         self._image_id = self.create_image(self.width / 2,
                                            self.height / 2,
                                            anchor=tk.CENTER,
@@ -401,8 +401,8 @@ class _Image():
         logger.debug("Initializing %s: (save_variable: %s, is_standalone: %s)",
                      self.__class__.__name__, save_variable, is_standalone)
         self._is_standalone = is_standalone
-        self._source: T.Optional[np.ndarray] = None
-        self._display: T.Optional[ImageTk.PhotoImage] = None
+        self._source: np.ndarray | None = None
+        self._display: ImageTk.PhotoImage | None = None
         self._scale = 1.0
         self._interpolation = cv2.INTER_NEAREST
 
@@ -673,9 +673,9 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  preview_buffer: PreviewBuffer,
-                 parent: T.Optional[tk.Widget] = None,
-                 taskbar: T.Optional[ttk.Frame] = None,
-                 triggers: T.Optional[TriggerType] = None) -> None:
+                 parent: tk.Widget | None = None,
+                 taskbar: ttk.Frame | None = None,
+                 triggers: TriggerType | None = None) -> None:
         logger.debug("Initializing %s (parent: '%s')", self.__class__.__name__, parent)
         super().__init__(preview_buffer, triggers=triggers)
         self._is_standalone = parent is None

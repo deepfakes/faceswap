@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """ Image output writer for faceswap.py converter """
-import typing as T
-
 from io import BytesIO
 from PIL import Image
 
@@ -38,7 +36,7 @@ class Writer(Output):
                        "transparency. Changing output format to 'png'")
         self.config["format"] = "png"
 
-    def _get_save_kwargs(self) -> dict[str, T.Union[bool, int, str]]:
+    def _get_save_kwargs(self) -> dict[str, bool | int | str]:
         """ Return the save parameters for the file format
 
         Returns

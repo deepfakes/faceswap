@@ -37,7 +37,7 @@ class Writer(Output):
     def __init__(self,
                  output_folder: str,
                  total_count: int,
-                 frame_ranges: T.Optional[list[tuple[int, int]]],
+                 frame_ranges: list[tuple[int, int]] | None,
                  source_video: str,
                  **kwargs) -> None:
         super().__init__(output_folder, **kwargs)
@@ -45,11 +45,11 @@ class Writer(Output):
                      total_count, frame_ranges, source_video)
         self._source_video: str = source_video
         self._output_filename: str = self._get_output_filename()
-        self._frame_ranges: T.Optional[list[tuple[int, int]]] = frame_ranges
+        self._frame_ranges: list[tuple[int, int]] | None = frame_ranges
         self.frame_order: list[int] = self._set_frame_order(total_count)
-        self._output_dimensions: T.Optional[str] = None  # Fix dims on 1st received frame
+        self._output_dimensions: str | None = None  # Fix dims on 1st received frame
         # Need to know dimensions of first frame, so set writer then
-        self._writer: T.Optional[Generator[None, np.ndarray, None]] = None
+        self._writer: Generator[None, np.ndarray, None] | None = None
 
     @property
     def _valid_tunes(self) -> dict:
@@ -91,11 +91,11 @@ class Writer(Output):
         return output_args
 
     @property
-    def _audio_codec(self) -> T.Optional[str]:
+    def _audio_codec(self) -> str | None:
         """ str or ``None``: The audio codec to use. This will either be ``"copy"`` (the default)
         or ``None`` if skip muxing has been selected in configuration options, or if frame ranges
         have been passed in the command line arguments. """
-        retval: T.Optional[str] = "copy"
+        retval: str | None = "copy"
         if self.config["skip_mux"]:
             logger.info("Skipping audio muxing due to configuration settings.")
             retval = None

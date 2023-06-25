@@ -138,11 +138,11 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self,
-                 git_model_id: T.Optional[int] = None,
-                 model_filename: T.Optional[str] = None,
-                 configfile: T.Optional[str] = None,
+                 git_model_id: int | None = None,
+                 model_filename: str | None = None,
+                 configfile: str | None = None,
                  instance: int = 0,
-                 normalize_method: T.Optional[T.Literal["none", "clahe", "hist", "mean"]] = None,
+                 normalize_method: T.Literal["none", "clahe", "hist", "mean"] | None = None,
                  re_feed: int = 0,
                  re_align: bool = False,
                  disable_filter: bool = False,
@@ -158,7 +158,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         self._plugin_type = "align"
         self.realign_centering: CenteringType = "face"  # overide for plugin specific centering
         self._eof_seen = False
-        self._normalize_method: T.Optional[T.Literal["clahe", "hist", "mean"]] = None
+        self._normalize_method: T.Literal["clahe", "hist", "mean"] | None = None
         self._re_feed = re_feed
         self._filter = AlignedFilter(feature_filter=self.config["aligner_features"],
                                      min_scale=self.config["aligner_min_scale"],
@@ -177,7 +177,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def set_normalize_method(self, method: T.Optional[T.Literal["none", "clahe", "hist", "mean"]]
+    def set_normalize_method(self, method: T.Literal["none", "clahe", "hist", "mean"] | None
                              ) -> None:
         """ Set the normalization method for feeding faces into the aligner.
 
@@ -187,14 +187,14 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
             The normalization method to apply to faces prior to feeding into the model
         """
         method = None if method is None or method.lower() == "none" else method
-        self._normalize_method = T.cast(T.Optional[T.Literal["clahe", "hist", "mean"]], method)
+        self._normalize_method = T.cast(T.Literal["clahe", "hist", "mean"] | None, method)
 
     def initialize(self, *args, **kwargs) -> None:
         """ Add a call to add model input size to the re-aligner """
         self._re_align.set_input_size_and_centering(self.input_size, self.realign_centering)
         super().initialize(*args, **kwargs)
 
-    def _handle_realigns(self, queue: Queue) -> T.Optional[tuple[bool, AlignerBatch]]:
+    def _handle_realigns(self, queue: Queue) -> tuple[bool, AlignerBatch] | None:
         """ Handle any items waiting for a second pass through the aligner.
 
         If EOF has been recieved and items are still being processed through the first pass
@@ -602,7 +602,7 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
 
     def _get_refeed_filter_masks(self,
                                  subbatches: list[AlignerBatch],
-                                 original_masks: T.Optional[np.ndarray] = None) -> np.ndarray:
+                                 original_masks: np.ndarray | None = None) -> np.ndarray:
         """ Obtain the boolean mask array for masking out failed re-feed results if filter refeed
         has been selected
 

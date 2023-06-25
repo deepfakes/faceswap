@@ -22,7 +22,7 @@ from tensorflow.python.framework import (  # pylint:disable=no-name-in-module
 from lib.image import hex_to_rgb
 from lib.training import PreviewDataGenerator, TrainingDataGenerator
 from lib.training.generator import BatchType, DataGenerator
-from lib.utils import FaceswapError, get_folder, get_image_paths, get_tf_version
+from lib.utils import FaceswapError, get_folder, get_image_paths
 from plugins.train._config import Config
 
 if T.TYPE_CHECKING:
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def _get_config(plugin_name: str,
-                configfile: T.Optional[str] = None) -> dict[str, ConfigValueType]:
+                configfile: str | None = None) -> dict[str, ConfigValueType]:
     """ Return the configuration for the requested trainer.
 
     Parameters
@@ -77,7 +77,7 @@ class TrainerBase():
                  model: ModelBase,
                  images: dict[T.Literal["a", "b"], list[str]],
                  batch_size: int,
-                 configfile: T.Optional[str]) -> None:
+                 configfile: str | None) -> None:
         logger.debug("Initializing %s: (model: '%s', batch_size: %s)",
                      self.__class__.__name__, model, batch_size)
         self._model = model
@@ -106,7 +106,7 @@ class TrainerBase():
                                      self._images)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_config(self, configfile: T.Optional[str]) -> dict[str, ConfigValueType]:
+    def _get_config(self, configfile: str | None) -> dict[str, ConfigValueType]:
         """ Get the saved training config options. Override any global settings with the setting
         provided from the model's saved config.
 
@@ -168,10 +168,9 @@ class TrainerBase():
         self._samples.toggle_mask_display()
 
     def train_one_step(self,
-                       viewer: T.Optional[Callable[[np.ndarray, str], None]],
-                       timelapse_kwargs: T.Optional[dict[T.Literal["input_a",
-                                                                   "input_b",
-                                                                   "output"], str]]) -> None:
+                       viewer: Callable[[np.ndarray, str], None] | None,
+                       timelapse_kwargs: dict[T.Literal["input_a", "input_b", "output"],
+                                              str] | None) -> None:
         """ Running training on a batch of images for each side.
 
         Triggered from the training cycle in :class:`scripts.train.Train`.
@@ -245,17 +244,16 @@ class TrainerBase():
         logs = {log[0]: log[1]
                 for log in zip(self._model.state.loss_names, loss)}
 
-        if get_tf_version() > (2, 7):
-            # Bug in TF 2.8/2.9/2.10 where batch recording got deleted.
-            # ref: https://github.com/keras-team/keras/issues/16173
-            with tf.summary.record_if(True), self._tensorboard._train_writer.as_default():  # noqa pylint:disable=protected-access,not-context-manager
-                for name, value in logs.items():
-                    tf.summary.scalar(
-                        "batch_" + name,
-                        value,
-                        step=self._tensorboard._train_step)  # pylint:disable=protected-access
-        else:
-            self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
+        # Bug in TF 2.8/2.9/2.10 where batch recording got deleted.
+        # ref: https://github.com/keras-team/keras/issues/16173
+        with tf.summary.record_if(True), self._tensorboard._train_writer.as_default():  # noqa:E501  pylint:disable=protected-access,not-context-manager
+            for name, value in logs.items():
+                tf.summary.scalar(
+                    "batch_" + name,
+                    value,
+                    step=self._tensorboard._train_step)  # pylint:disable=protected-access
+        # TODO revert this code if fixed in tensorflow
+        # self._tensorboard.on_train_batch_end(self._model.iterations, logs=logs)
 
     def _collate_and_store_loss(self, loss: list[float]) -> list[float]:
         """ Collate the loss into totals for each side.
@@ -313,10 +311,9 @@ class TrainerBase():
                            "line: %s, error: %s", output, str(err))
 
     def _update_viewers(self,
-                        viewer: T.Optional[Callable[[np.ndarray, str], None]],
-                        timelapse_kwargs: T.Optional[dict[T.Literal["input_a",
-                                                                    "input_b",
-                                                                    "output"], str]]) -> None:
+                        viewer: Callable[[np.ndarray, str], None] | None,
+                        timelapse_kwargs: dict[T.Literal["input_a", "input_b", "output"],
+                                               str] | None) -> None:
         """ Update the preview viewer and timelapse output
 
         Parameters
@@ -386,8 +383,8 @@ class _Feeder():
     def _load_generator(self,
                         side: T.Literal["a", "b"],
                         is_display: bool,
-                        batch_size: T.Optional[int] = None,
-                        images: T.Optional[list[str]] = None) -> DataGenerator:
+                        batch_size: int | None = None,
+                        images: list[str] | None = None) -> DataGenerator:
         """ Load the :class:`~lib.training_data.TrainingDataGenerator` for this feeder.
 
         Parameters
@@ -861,7 +858,7 @@ class _Samples():  # pylint:disable=too-few-public-methods
             List of :class:`numpy.ndarray` faces with the opaque mask layer applied
         """
         orig_masks = 1 - np.rint(masks)
-        masks3: T.Union[list[np.ndarray], np.ndarray] = []
+        masks3: list[np.ndarray] | np.ndarray = []
 
         if faces[-1].shape[-1] == 4:  # Mask contained in alpha channel of predictions
             pred_masks = [1 - np.rint(face[..., -1])[..., None] for face in faces[-2:]]

@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 def get_all_sub_models(
         model: keras.models.Model,
-        models: T.Optional[list[keras.models.Model]] = None) -> list[keras.models.Model]:
+        models: list[keras.models.Model] | None = None) -> list[keras.models.Model]:
     """ For a given model, return all sub-models that occur (recursively) as children.
 
     Parameters
@@ -106,7 +106,7 @@ class IO():
         return self._history
 
     @property
-    def multiple_models_in_folder(self) -> T.Optional[list[str]]:
+    def multiple_models_in_folder(self) -> list[str] | None:
         """ :list: or ``None`` If there are multiple model types in the requested folder, or model
         types that don't correspond to the requested plugin type, then returns the list of plugin
         names that exist in the folder, otherwise returns ``None`` """
@@ -296,7 +296,7 @@ class Weights():
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @classmethod
-    def _check_weights_file(cls, weights_file: str) -> T.Optional[str]:
+    def _check_weights_file(cls, weights_file: str) -> str | None:
         """ Validate that we have a valid path to a .h5 file.
 
         Parameters

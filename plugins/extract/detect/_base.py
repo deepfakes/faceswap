@@ -98,11 +98,11 @@ class Detector(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self,
-                 git_model_id: T.Optional[int] = None,
-                 model_filename: T.Union[str, list[str], None] = None,
-                 configfile: T.Optional[str] = None,
+                 git_model_id: int | None = None,
+                 model_filename: str | list[str] | None = None,
+                 configfile: str | None = None,
                  instance: int = 0,
-                 rotation: T.Optional[str] = None,
+                 rotation: str | None = None,
                  min_size: int = 0,
                  **kwargs) -> None:
         logger.debug("Initializing %s: (rotation: %s, min_size: %s)", self.__class__.__name__,
@@ -496,7 +496,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
 
     # <<< IMAGE ROTATION METHODS >>> #
     @staticmethod
-    def _get_rotation_angles(rotation: T.Optional[str]) -> list[int]:
+    def _get_rotation_angles(rotation: str | None) -> list[int]:
         """ Set the rotation angles.
 
         Parameters

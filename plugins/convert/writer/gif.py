@@ -32,16 +32,16 @@ class Writer(Output):
     def __init__(self,
                  output_folder: str,
                  total_count: int,
-                 frame_ranges: T.Optional[list[tuple[int, int]]],
+                 frame_ranges: list[tuple[int, int]] | None,
                  **kwargs) -> None:
         logger.debug("total_count: %s, frame_ranges: %s", total_count, frame_ranges)
         super().__init__(output_folder, **kwargs)
         self.frame_order: list[int] = self._set_frame_order(total_count, frame_ranges)
         # Fix dims on 1st received frame
-        self._output_dimensions: T.Optional[tuple[int, int]] = None
+        self._output_dimensions: tuple[int, int] | None = None
         # Need to know dimensions of first frame, so set writer then
-        self._writer: T.Optional[imageio.plugins.pillowmulti.GIFFormat.Writer] = None
-        self._gif_file: T.Optional[str] = None  # Set filename based on first file seen
+        self._writer: imageio.plugins.pillowmulti.GIFFormat.Writer | None = None
+        self._gif_file: str | None = None  # Set filename based on first file seen
 
     @property
     def _gif_params(self) -> dict:
@@ -52,7 +52,7 @@ class Writer(Output):
 
     @staticmethod
     def _set_frame_order(total_count: int,
-                         frame_ranges: T.Optional[list[tuple[int, int]]]) -> list[int]:
+                         frame_ranges: list[tuple[int, int]] | None) -> list[int]:
         """ Obtain the full list of frames to be converted in order.
 
         Parameters

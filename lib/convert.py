@@ -41,10 +41,10 @@ class Adjustments:
     sharpening: :class:`~plugins.scaling._base.Adjustment`, Optional
         The selected mask processing plugin. Default: `None`
     """
-    color: T.Optional[ColorAdjust] = None
-    mask: T.Optional[MaskAdjust] = None
-    seamless: T.Optional[SeamlessAdjust] = None
-    sharpening: T.Optional[ScalingAdjust] = None
+    color: ColorAdjust | None = None
+    mask: MaskAdjust | None = None
+    seamless: SeamlessAdjust | None = None
+    sharpening: ScalingAdjust | None = None
 
 
 class Converter():
@@ -78,9 +78,9 @@ class Converter():
                  coverage_ratio: float,
                  centering: CenteringType,
                  draw_transparent: bool,
-                 pre_encode: T.Optional[Callable[[np.ndarray], list[bytes]]],
+                 pre_encode: Callable[[np.ndarray], list[bytes]] | None,
                  arguments: Namespace,
-                 configfile: T.Optional[str] = None) -> None:
+                 configfile: str | None = None) -> None:
         logger.debug("Initializing %s: (output_size: %s,  coverage_ratio: %s, centering: %s, "
                      "draw_transparent: %s, pre_encode: %s, arguments: %s, configfile: %s)",
                      self.__class__.__name__, output_size, coverage_ratio, centering,
@@ -122,7 +122,7 @@ class Converter():
         logger.debug("Reinitialized converter")
 
     def _load_plugins(self,
-                      config: T.Optional[FaceswapConfig] = None,
+                      config: FaceswapConfig | None = None,
                       disable_logging: bool = False) -> None:
         """ Load the requested adjustment plugins.
 
@@ -183,7 +183,7 @@ class Converter():
                      in_queue, out_queue)
         log_once = False
         while True:
-            inbound: T.Union[T.Literal["EOF"], ConvertItem, list[ConvertItem]] = in_queue.get()
+            inbound: T.Literal["EOF"] | ConvertItem | list[ConvertItem] = in_queue.get()
             if inbound == "EOF":
                 logger.debug("EOF Received")
                 logger.debug("Patch queue finished")
@@ -213,7 +213,7 @@ class Converter():
                 out_queue.put((item.inbound.filename, image))
         logger.debug("Completed convert process")
 
-    def _patch_image(self, predicted: ConvertItem) -> T.Union[np.ndarray, list[bytes]]:
+    def _patch_image(self, predicted: ConvertItem) -> np.ndarray | list[bytes]:
         """ Patch a swapped face onto a frame.
 
         Run selected adjustments and swap the faces in a frame.
@@ -241,7 +241,7 @@ class Converter():
                                out=np.empty(patched_face.shape, dtype="uint8"),
                                casting='unsafe')
         if self._writer_pre_encode is None:
-            retval: T.Union[np.ndarray, list[bytes]] = patched_face
+            retval: np.ndarray | list[bytes] = patched_face
         else:
             retval = self._writer_pre_encode(patched_face)
         logger.trace("Patched image: '%s'", predicted.inbound.filename)  # type: ignore
@@ -305,7 +305,7 @@ class Converter():
                               new_face: np.ndarray,
                               detected_face: DetectedFace,
                               reference_face: AlignedFace,
-                              predicted_mask: T.Optional[np.ndarray]) -> np.ndarray:
+                              predicted_mask: np.ndarray | None) -> np.ndarray:
         """ Run any requested adjustments that can be performed on the raw output from the Faceswap
         model.
 
@@ -347,7 +347,7 @@ class Converter():
     def _get_image_mask(self,
                         new_face: np.ndarray,
                         detected_face: DetectedFace,
-                        predicted_mask: T.Optional[np.ndarray],
+                        predicted_mask: np.ndarray | None,
                         reference_face: AlignedFace) -> tuple[np.ndarray, np.ndarray]:
         """ Return any selected image mask
 

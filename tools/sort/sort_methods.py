@@ -28,9 +28,9 @@ if T.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-ImgMetaType = Generator[tuple[str,
-                              T.Optional[np.ndarray],
-                              T.Optional["PNGHeaderAlignmentsDict"]], None, None]
+ImgMetaType: T.TypeAlias = Generator[tuple[str,
+                                           np.ndarray | None,
+                                           T.Union["PNGHeaderAlignmentsDict", None]], None, None]
 
 
 class InfoLoader():
@@ -100,7 +100,7 @@ class InfoLoader():
 
     def _get_alignments(self,
                         filename: str,
-                        metadata: dict[str, T.Any]) -> T.Optional[PNGHeaderAlignmentsDict]:
+                        metadata: dict[str, T.Any]) -> PNGHeaderAlignmentsDict | None:
         """ Obtain the alignments from a PNG Header.
 
         The other image metadata is cached locally in case a sort method needs to write back to the
@@ -233,7 +233,7 @@ class SortMethod():
         self._loader_type = loader_type
         self._iterator = self._get_file_iterator(arguments.input_dir)
 
-        self._result: list[tuple[str, T.Union[float, np.ndarray]]] = []
+        self._result: list[tuple[str, float | np.ndarray]] = []
         self._binned: list[list[str]] = []
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -401,8 +401,8 @@ class SortMethod():
 
     def score_image(self,
                     filename: str,
-                    image: T.Optional[np.ndarray],
-                    alignments: T.Optional[PNGHeaderAlignmentsDict]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Override for sort method's specificic logic. This method should be executed to get a
         single score from a single image  and add the result to :attr:`_result`
 
@@ -512,8 +512,8 @@ class SortMultiMethod(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: T.Optional[np.ndarray],
-                    alignments: T.Optional[PNGHeaderAlignmentsDict]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for sort method: "distance", "yaw" "pitch" or "size" and add the
         result to :attr:`_result`
 
@@ -605,7 +605,7 @@ class SortBlur(SortMethod):
 
     def estimate_blur_fft(self,
                           image: np.ndarray,
-                          alignments: T.Optional[PNGHeaderAlignmentsDict] = None) -> float:
+                          alignments: PNGHeaderAlignmentsDict | None = None) -> float:
         """ Estimate the amount of blur a fft filtered image has.
 
         Parameters
@@ -646,8 +646,8 @@ class SortBlur(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: T.Optional[np.ndarray],
-                    alignments: T.Optional[PNGHeaderAlignmentsDict]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for blur or blur-fft and add the result to :attr:`_result`
 
         Parameters
@@ -769,8 +769,8 @@ class SortColor(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: T.Optional[np.ndarray],
-                    alignments: T.Optional[PNGHeaderAlignmentsDict]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for color
 
         Parameters
@@ -838,12 +838,12 @@ class SortFace(SortMethod):
         self._vgg_face.init_model()
         threshold = arguments.threshold
         self._output_update_info = True
-        self._threshold: T.Optional[float] = 0.25 if threshold < 0 else threshold
+        self._threshold: float | None = 0.25 if threshold < 0 else threshold
 
     def score_image(self,
                     filename: str,
-                    image: T.Optional[np.ndarray],
-                    alignments: T.Optional[PNGHeaderAlignmentsDict]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Processing logic for sort by face method.
 
         Reads header information from the PNG file to look for VGGFace2 embedding. If it does not
@@ -948,7 +948,7 @@ class SortHistogram(SortMethod):
 
     def _calc_histogram(self,
                         image: np.ndarray,
-                        alignments: T.Optional[PNGHeaderAlignmentsDict]) -> np.ndarray:
+                        alignments: PNGHeaderAlignmentsDict | None) -> np.ndarray:
         if alignments:
             image = self._mask_face(image, alignments)
         return cv2.calcHist([image], [0], None, [256], [0, 256])
@@ -1052,8 +1052,8 @@ class SortHistogram(SortMethod):
 
     def score_image(self,
                     filename: str,
-                    image: T.Optional[np.ndarray],
-                    alignments: T.Optional[PNGHeaderAlignmentsDict]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Collect the histogram for the given face
 
         Parameters

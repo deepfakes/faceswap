@@ -147,7 +147,7 @@ class _Sort():  # pylint:disable=too-few-public-methods
 
         self._args = self._parse_arguments(arguments)
         self._changes: dict[str, str] = {}
-        self.serializer: T.Optional[Serializer] = None
+        self.serializer: Serializer | None = None
 
         if arguments.log_changes:
             self.serializer = get_serializer_from_filename(arguments.log_file_path)
