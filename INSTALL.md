@@ -257,23 +257,27 @@ If setup fails for any reason you can still manually install the packages listed
 
 # Docker Install Guide
 
-This Faceswap repo contains Docker build scripts for the CPU and Nvidia variants. You must first ensure that Docker is installed and running on your system. Follow the guide for downloading and installing Docker from their website:
+This Faceswap repo contains Docker build scripts for CPU and Nvidia backends. The scripts will set up a Docker container for you and install the latest version of the Faceswap software.
+
+You must first ensure that Docker is installed and running on your system. Follow the guide for downloading and installing Docker from their website:
 
   - https://www.docker.com/get-started
 
-Once Docker is installed and running, clone/download the Faceswap repo and enter the Faceswap folder.
+Once Docker is installed and running, follow the relevant steps for your chosen backend
 ## Docker CPU
 To run the CPU version of Faceswap follow these steps:
 
-1. Build the Docker image:
+1. Build the Docker image For faceswap:
 ```
-docker build -t faceswap-cpu -f Dockerfile.cpu .
+docker build \
+-t faceswap-cpu \
+https://raw.githubusercontent.com/deepfakes/faceswap/master/Dockerfile.cpu
 ```
 2. Launch and enter the Faceswap container:
 
     a. For the **headless/command line** version of Faceswap run:
     ```
-    docker run --rm -it -v ./:/srv faceswap-cpu
+    docker run --rm -it faceswap-cpu
     ```
     You can then execute faceswap the standard way:
     ```
@@ -283,7 +287,6 @@ docker build -t faceswap-cpu -f Dockerfile.cpu .
     ```
     xhost +local: && \
     docker run --rm -it \
-    -v ./:/srv \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -e DISPLAY=${DISPLAY} \
     faceswap-cpu
@@ -304,13 +307,15 @@ To build the NVIDIA GPU version of Faceswap, follow these steps:
 
 2. Build the Docker image For faceswap
 ```
-docker build -t faceswap-gpu -f Dockerfile.gpu .
+docker build \
+-t faceswap-gpu \
+https://raw.githubusercontent.com/deepfakes/faceswap/master/Dockerfile.gpu
 ```
 1. Launch and enter the Faceswap container:
 
     a. For the **headless/command line** version of Faceswap run:
     ```
-    docker run --runtime=nvidia --rm -it -v ./:/srv faceswap-gpu
+    docker run --runtime=nvidia --rm -it faceswap-gpu
     ```
     You can then execute faceswap the standard way:
     ```
@@ -320,7 +325,6 @@ docker build -t faceswap-gpu -f Dockerfile.gpu .
     ```
     xhost +local: && \
     docker run --runtime=nvidia --rm -it \
-    -v ./:/srv \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -e DISPLAY=${DISPLAY} \
     faceswap-gpu
