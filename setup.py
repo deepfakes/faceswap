@@ -15,35 +15,37 @@ import typing as T
 from shutil import which
 from subprocess import list2cmdline, PIPE, Popen, run, STDOUT
 
-from pkg_resources import parse_requirements, Requirement
+from pkg_resources import parse_requirements
 
 from lib.logger import log_setup
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+backend_type: T.TypeAlias = T.Literal['nvidia', 'apple_silicon', 'directml', 'cpu', 'rocm']
+
 _INSTALL_FAILED = False
-# Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
-# Tensorflow builds available from pypi
-# _TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": ["11.2", "8.1"]}
-_TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": ["11.3", "8.2"]}
-# ROCm min/max version requirements for Tensorflow
-_TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
-# TODO tensorflow-metal versioning
 # Packages that are explicitly required for setup.py
 _INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows"),
                                                   ("pywinpty==2.0.2", "Windows")]
+# Conda packages that are required for a specific backend
+_BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {"nvidia": ["cudatoolkit", "cudnn"],
+                                                          "apple_silicon": ["libblas"]}
+# Packages that should only be installed through pip
+_FORCE_PIP: dict[backend_type, list[str]] = {"nvidia": ["tensorflow"]}
+# Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
+# Tensorflow builds available from pypi
+_TENSORFLOW_REQUIREMENTS = {">=2.10.0,<2.11.0": [">=11.0,<12.0", ">=8.0,<9.0"]}
+# ROCm min/max version requirements for Tensorflow
+_TENSORFLOW_ROCM_REQUIREMENTS = {">=2.10.0,<2.11.0": ((5, 2, 0), (5, 4, 0))}
+# TODO tensorflow-metal versioning
 
 # Mapping of Python packages to their conda names if different from pip or in non-default channel
 _CONDA_MAPPING: dict[str, tuple[str, str]] = {
-    # "opencv-python": ("opencv", "conda-forge"),  # Periodic issues with conda-forge opencv
     "fastcluster": ("fastcluster", "conda-forge"),
     "ffmpy": ("ffmpy", "conda-forge"),
     "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
     "nvidia-ml-py": ("nvidia-ml-py", "conda-forge"),
     "tensorflow-deps": ("tensorflow-deps", "apple"),
     "libblas": ("libblas", "conda-forge")}
-
-# Packages that should be installed first to prevent version conflicts
-_PRIORITY = ["numpy"]
 
 
 class Environment():
@@ -62,7 +64,7 @@ class Environment():
         self.updater = updater
         # Flag that setup is being run by installer so steps can be skipped
         self.is_installer: bool = False
-        self.backend: T.Literal["nvidia", "apple_silicon", "directml", "cpu", "rocm"] | None = None
+        self.backend: backend_type | None = None
         self.enable_docker: bool = False
         self.cuda_cudnn = ["", ""]
         self.rocm_version: tuple[int, ...] = (0, 0, 0)
@@ -288,6 +290,7 @@ class Packages():
     def __init__(self, environment: Environment) -> None:
         self._env = environment
         self._conda_required_packages: list[tuple[str, ...]] = [("tk", ), ("git", )]
+        self._update_backend_specific_conda()
         self._installed_packages = self._get_installed_packages()
         self._conda_installed_packages = self._get_installed_conda_packages()
         self._required_packages: list[tuple[str, list[tuple[str, str]]]] = []
@@ -330,6 +333,28 @@ class Packages():
         """ dict[str, str]: The package names and version string for all installed packages across
         pip and conda """
         return {**self._installed_packages, **self._conda_installed_packages}
+
+    def _update_backend_specific_conda(self) -> None:
+        """ Add backend specific packages to Conda required packages """
+        assert self._env.backend is not None
+        to_add = _BACKEND_SPECIFIC_CONDA.get(self._env.backend)
+        if not to_add:
+            logger.debug("No backend packages to add for '%s'. All optional packages: %s",
+                         self._env.backend, _BACKEND_SPECIFIC_CONDA)
+            return
+        for pkg in to_add:
+            pkg, channel = _CONDA_MAPPING.get(pkg, (pkg, ""))
+            if pkg in ("cudatoolkit", "cudnn"):  # TODO Handle multiple cuda/cudnn requirements
+                idx = 0 if pkg == "cudatoolkit" else 1
+                pkg = f"{pkg}{list(_TENSORFLOW_REQUIREMENTS.values())[0][idx]}"
+            if pkg.startswith("cudnn"):
+                # We add cudnn first so that dependency resolver does not need to re-download cuda
+                # if an incompatible version was installed
+                self._conda_required_packages.insert(0, (pkg, channel))
+            else:
+                self._conda_required_packages.append((pkg, channel))
+            logger.debug("Adding conda required package '%s' for backend '%s')",
+                         pkg, self._env.backend)
 
     @classmethod
     def _format_requirements(cls, packages: list[str]
@@ -428,28 +453,29 @@ class Packages():
         if self._env.is_conda:  # Conda handles Cuda and cuDNN so nothing to do here
             return
         tf_ver = None
-        cudnn_inst = self._env.cudnn_version.split(".")
+        cuda_inst = self._env.cuda_version
+        cudnn_inst = self._env.cudnn_version
+        if len(cudnn_inst) == 1:  # Sometimes only major version is reported
+            cudnn_inst = f"{cudnn_inst}.0"
         for key, val in _TENSORFLOW_REQUIREMENTS.items():
-            cuda_req = val[0]
-            cudnn_req = val[1].split(".")
-            if cuda_req == self._env.cuda_version and (cudnn_req[0] == cudnn_inst[0] and
-                                                       cudnn_req[1] <= cudnn_inst[1]):
+            cuda_req = next(parse_requirements(f"cuda{val[0]}")).specs
+            cudnn_req = next(parse_requirements(f"cudnn{val[1]}")).specs
+            if (self._validate_spec(cuda_req, cuda_inst)
+                    and self._validate_spec(cudnn_req, cudnn_inst)):
                 tf_ver = key
                 break
+
         if tf_ver:
             # Remove the version of tensorflow in requirements file and add the correct version
             # that corresponds to the installed Cuda/cuDNN versions
             self._required_packages = [pkg for pkg in self._required_packages
-                                       if not pkg[0].startswith("tensorflow")]
+                                       if pkg[0] != "tensorflow"]
             tf_ver = f"tensorflow{tf_ver}"
-
-            tf_ver = f"tensorflow{tf_ver}"
-            self._required_packages.append(("tensorflow",
-                                           next(parse_requirements(tf_ver)).specs))
+            self._required_packages.append(("tensorflow", next(parse_requirements(tf_ver)).specs))
             return
 
         logger.warning(
-            "The minimum Tensorflow requirement is 2.8 \n"
+            "The minimum Tensorflow requirement is 2.10 \n"
             "Tensorflow currently has no official prebuild for your CUDA, cuDNN combination.\n"
             "Either install a combination that Tensorflow supports or build and install your own "
             "tensorflow.\r\n"
@@ -518,14 +544,16 @@ class Packages():
         if not self._env.is_conda:
             return
         for pkg in self._conda_required_packages:
-            key = pkg[0].split("==", maxsplit=1)[0]
+            reqs = next(parse_requirements(pkg[0]))  # TODO Handle '=' vs '==' for conda
+            key = reqs.unsafe_name
+            specs = reqs.specs
+
             if key not in self._conda_installed_packages:
                 self._conda_missing_packages.append(pkg)
                 continue
-            if len(pkg[0].split("==")) > 1:
-                if pkg[0].split("==")[1] != self._conda_installed_packages.get(key):
-                    self._conda_missing_packages.append(pkg)
-                    continue
+
+            if not self._validate_spec(specs, self._conda_installed_packages[key]):
+                self._conda_missing_packages.append(pkg)
         logger.debug(self._conda_missing_packages)
 
     def check_missing_dependencies(self) -> None:
@@ -543,12 +571,6 @@ class Packages():
             if not self._validate_spec(specs, self._all_installed_packages.get(key, "")):
                 self._missing_packages.append((key, specs))
 
-        for priority in reversed(_PRIORITY):
-            # Put priority packages at beginning of list
-            package = next((pkg for pkg in self._missing_packages if pkg[0] == priority), None)
-            if package:
-                idx = self._missing_packages.index(package)
-                self._missing_packages.insert(0, self._missing_packages.pop(idx))
         logger.debug(self._missing_packages)
         self._check_conda_missing_dependencies()
 
@@ -828,13 +850,14 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
         self.cuda_version = self._cuda_keys[0].lower().replace("cuda_path_v", "").replace("_", ".")
         self.cuda_path = os.environ[self._cuda_keys[0][0]]
 
-    def _cudnn_check(self):
-        """ Check Linux or Windows cuDNN Version from cudnn.h and add to :attr:`cudnn_version`. """
+    def _cudnn_check_files(self) -> bool:
+        """ Check header files for cuDNN version """
         cudnn_checkfiles = getattr(self, f"_get_checkfiles_{self._os}")()
         cudnn_checkfile = next((hdr for hdr in cudnn_checkfiles if os.path.isfile(hdr)), None)
         logger.debug("cudnn checkfiles: %s", cudnn_checkfile)
         if not cudnn_checkfile:
-            return
+            return False
+
         found = 0
         with open(cudnn_checkfile, "r", encoding="utf8") as ofile:
             for line in ofile:
@@ -849,9 +872,28 @@ class CudaCheck():  # pylint:disable=too-few-public-methods
                     found += 1
                 if found == 3:
                     break
-        if found != 3:  # Full version could not be determined
-            return
+        if found != 3:  # Full version not determined
+            return False
+
         self.cudnn_version = ".".join([str(major), str(minor), str(patchlevel)])
+        logger.debug("cudnn version: %s", self.cudnn_version)
+        return True
+
+    def _cudnn_check(self) -> None:
+        """ Check Linux or Windows cuDNN Version from cudnn.h and add to :attr:`cudnn_version`. """
+        if self._cudnn_check_files():
+            return
+        if self._os == "windows":
+            return
+
+        chk = os.popen("ldconfig -p | grep -P \"libcudnn.so.\" | head -n 1").read()
+        if not chk:
+            return
+        cudnnvers = chk.strip().replace("libcudnn.so.", "").split()[0]
+        if not cudnnvers:
+            return
+
+        self.cudnn_version = cudnnvers
         logger.debug("cudnn version: %s", self.cudnn_version)
 
     def _get_checkfiles_linux(self) -> list[str]:
@@ -995,51 +1037,37 @@ class Install():  # pylint:disable=too-few-public-methods
                 logger.error("Unable to install package: %s. Process aborted", clean_pkg)
                 sys.exit(1)
 
+    def _install_conda_packages(self) -> None:
+        """ Install required conda packages """
+        logger.info("Installing Required Conda Packages. This may take some time...")
+        for pkg in self._packages.to_install_conda:
+            channel = "" if len(pkg) != 2 else pkg[1]
+            self._from_conda(pkg[0], channel=channel, conda_only=True)
+
+    def _install_python_packages(self) -> None:
+        """ Install required pip packages """
+        conda_only = False
+        assert self._env.backend is not None
+        for pkg, version in self._packages.to_install:
+            if self._env.is_conda:
+                mapping = _CONDA_MAPPING.get(pkg, (pkg, ""))
+                channel = "" if mapping[1] is None else mapping[1]
+                pkg = mapping[0]
+                pip_only = pkg in _FORCE_PIP.get(self._env.backend, [])
+            pkg = self._format_package(pkg, version) if version else pkg
+            if self._env.is_conda and not pip_only:
+                if self._from_conda(pkg, channel=channel, conda_only=conda_only):
+                    continue
+            self._from_pip(pkg)
+
     def _install_missing_dep(self) -> None:
         """ Install missing dependencies """
         self._install_conda_packages()  # Install conda packages first
         self._install_python_packages()
 
-    def _install_python_packages(self) -> None:
-        """ Install required pip packages """
-        conda_only = False
-        for pkg, version in self._packages.to_install:
-            if self._env.is_conda:
-                mapping = _CONDA_MAPPING.get(pkg, (pkg, ""))
-                channel = None if mapping[1] == "" else mapping[1]
-                pkg = mapping[0]
-            pkg = self._format_package(pkg, version) if version else pkg
-            if self._env.is_conda and self._env.backend == "nvidia":
-                if pkg.startswith("tensorflow"):
-                    # From TF 2.4 onwards, Anaconda Tensorflow becomes a mess. The version of 2.5
-                    # installed by Anaconda is compiled against an incorrect numpy version which
-                    # breaks Tensorflow. Coupled with this the versions of cudatoolkit and cudnn
-                    # available in the default Anaconda channel are not compatible with the
-                    # official PyPi versions of Tensorflow. With this in mind we will pull in the
-                    # required Cuda/cuDNN from conda-forge, and install Tensorflow with pip
-                    # TODO Revert to Conda if they get their act together
-
-                    # Rewrite tensorflow requirement to versions from highest available cuda/cudnn
-                    highest_cuda = sorted(_TENSORFLOW_REQUIREMENTS.values())[-1]
-                    compat_tf = next(k for k, v in _TENSORFLOW_REQUIREMENTS.items()
-                                     if v == highest_cuda)
-                    pkg = f"tensorflow{compat_tf}"
-                    conda_only = True
-
-                if self._from_conda(pkg, channel=channel, conda_only=conda_only):
-                    continue
-            self._from_pip(pkg)
-
-    def _install_conda_packages(self) -> None:
-        """ Install required conda packages """
-        logger.info("Installing Required Conda Packages. This may take some time...")
-        for pkg in self._packages.to_install_conda:
-            channel = None if len(pkg) != 2 else pkg[1]
-            self._from_conda(pkg[0], channel=channel, conda_only=True)
-
     def _from_conda(self,
                     package: str,
-                    channel: str | None = None,
+                    channel: str = "",
                     conda_only: bool = False) -> bool:
         """ Install a conda package
 
@@ -1048,8 +1076,8 @@ class Install():  # pylint:disable=too-few-public-methods
         package: str
             The full formatted package, with version, to be installed
         channel: str, optional
-            The Conda channel to install from. Select ``None`` for default channel.
-            Default: ``None``
+            The Conda channel to install from. Select empty string for default channel.
+            Default: ``""`` (empty string)
         conda_only: bool, optional
             ``True`` if the package is only available in Conda. Default: ``False``
 
@@ -1064,24 +1092,9 @@ class Install():  # pylint:disable=too-few-public-methods
         if channel:
             condaexe.extend(["-c", channel])
 
-        if package.startswith("tensorflow") and self._env.backend == "nvidia":
-            # Here we will install the cuda/cudnn toolkits, currently only available from
-            # conda-forge, but fail tensorflow itself so that it can be handled by pip.
-            specs = Requirement.parse(package).specs
-            for key, val in _TENSORFLOW_REQUIREMENTS.items():
-                req_specs = Requirement.parse("foobar" + key).specs
-                if all(item in req_specs for item in specs):
-                    cuda, cudnn = val
-                    break
-            # condaexe.extend(["-c", "conda-forge", f"cudatoolkit={cuda}", f"cudnn={cudnn}"])
-            condaexe.extend([f"cudatoolkit={cuda}", f"cudnn={cudnn}"])
-            package = "Cuda Toolkit"
-            success = False
-
-        if package != "Cuda Toolkit":
-            if any(char in package for char in (" ", "<", ">", "*", "|")):
-                package = f"\"{package}\""
-            condaexe.append(package)
+        if any(char in package for char in (" ", "<", ">", "*", "|")):
+            package = f"\"{package}\""
+        condaexe.append(package)
 
         clean_pkg = package.replace("\"", "")
         installer = self._installer(self._env, clean_pkg, condaexe, self._is_gui)
@@ -1572,74 +1585,45 @@ class Tips():
     @classmethod
     def docker_no_cuda(cls) -> None:
         """ Output Tips for Docker without Cuda """
-        path = os.path.dirname(os.path.realpath(__file__))
         logger.info(
-            "1. Install Docker\n"
-            "https://www.docker.com/community-edition\n\n"
-            "2. Build Docker Image For Faceswap\n"
-            "docker build -t deepfakes-cpu -f Dockerfile.cpu .\n\n"
-            "3. Mount faceswap volume and Run it\n"
-            "# without GUI\n"
-            "docker run -tid -p 8888:8888 \\ \n"
-            "\t--hostname deepfakes-cpu --name deepfakes-cpu \\ \n"
-            "\t-v %s:/srv \\ \n"
-            "\tdeepfakes-cpu\n\n"
-            "# with gui. tools.py gui working.\n"
-            "## enable local access to X11 server\n"
-            "xhost +local:\n"
-            "## create container\n"
-            "nvidia-docker run -tid -p 8888:8888 \\ \n"
-            "\t--hostname deepfakes-cpu --name deepfakes-cpu \\ \n"
-            "\t-v %s:/srv \\ \n"
-            "\t-v /tmp/.X11-unix:/tmp/.X11-unix \\ \n"
-            "\t-e DISPLAY=unix$DISPLAY \\ \n"
-            "\t-e AUDIO_GID=`getent group audio | cut -d: -f3` \\ \n"
-            "\t-e VIDEO_GID=`getent group video | cut -d: -f3` \\ \n"
-            "\t-e GID=`id -g` \\ \n"
-            "\t-e UID=`id -u` \\ \n"
-            "\tdeepfakes-cpu \n\n"
-            "4. Open a new terminal to run faceswap.py in /srv\n"
-            "docker exec -it deepfakes-cpu bash", path, path)
-        logger.info("That's all you need to do with a docker. Have fun.")
+            "1. Install Docker from: https://www.docker.com/get-started\n\n"
+            "2. Enter the Faceswap folder and build the Docker Image For Faceswap:\n"
+            "   docker build -t faceswap-cpu -f Dockerfile.cpu .\n\n"
+            "3. Launch and enter the Faceswap container:\n"
+            "  a. Headless:\n"
+            "     docker run --rm -it -v ./:/srv faceswap-cpu\n\n"
+            "  b. GUI:\n"
+            "     xhost +local: && \\ \n"
+            "     docker run --rm -it \\ \n"
+            "     -v ./:/srv \\ \n"
+            "     -v /tmp/.X11-unix:/tmp/.X11-unix \\ \n"
+            "     -e DISPLAY=${DISPLAY} \\ \n"
+            "     faceswap-cpu \n")
+        logger.info("That's all you need to do with docker. Have fun.")
 
     @classmethod
     def docker_cuda(cls) -> None:
         """ Output Tips for Docker with Cuda"""
-        path = os.path.dirname(os.path.realpath(__file__))
         logger.info(
-            "1. Install Docker\n"
-            "https://www.docker.com/community-edition\n\n"
-            "2. Install latest CUDA\n"
-            "CUDA: https://developer.nvidia.com/cuda-downloads\n\n"
-            "3. Install Nvidia-Docker & Restart Docker Service\n"
-            "https://github.com/NVIDIA/nvidia-docker\n\n"
-            "4. Build Docker Image For Faceswap\n"
-            "docker build -t deepfakes-gpu -f Dockerfile.gpu .\n\n"
-            "5. Mount faceswap volume and Run it\n"
-            "# without gui \n"
-            "docker run -tid -p 8888:8888 \\ \n"
-            "\t--hostname deepfakes-gpu --name deepfakes-gpu \\ \n"
-            "\t-v %s:/srv \\ \n"
-            "\tdeepfakes-gpu\n\n"
-            "# with gui.\n"
-            "## enable local access to X11 server\n"
-            "xhost +local:\n"
-            "## enable nvidia device if working under bumblebee\n"
-            "echo ON > /proc/acpi/bbswitch\n"
-            "## create container\n"
-            "nvidia-docker run -tid -p 8888:8888 \\ \n"
-            "\t--hostname deepfakes-gpu --name deepfakes-gpu \\ \n"
-            "\t-v %s:/srv \\ \n"
-            "\t-v /tmp/.X11-unix:/tmp/.X11-unix \\ \n"
-            "\t-e DISPLAY=unix$DISPLAY \\ \n"
-            "\t-e AUDIO_GID=`getent group audio | cut -d: -f3` \\ \n"
-            "\t-e VIDEO_GID=`getent group video | cut -d: -f3` \\ \n"
-            "\t-e GID=`id -g` \\ \n"
-            "\t-e UID=`id -u` \\ \n"
-            "\tdeepfakes-gpu\n\n"
-            "6. Open a new terminal to interact with the project\n"
-            "docker exec deepfakes-gpu python /srv/faceswap.py gui\n",
-            path, path)
+            "1. Install Docker from: https://www.docker.com/get-started\n\n"
+            "2. Install latest CUDA 11 and cuDNN 8 from: https://developer.nvidia.com/cuda-"
+            "downloads\n\n"
+            "3. Install the the Nvidia Container Toolkit from https://docs.nvidia.com/datacenter/"
+            "cloud-native/container-toolkit/latest/install-guide\n\n"
+            "4. Restart Docker Service\n\n"
+            "5. Enter the Faceswap folder and build the Docker Image For Faceswap:\n"
+            "   docker build -t faceswap-gpu -f Dockerfile.gpu .\n\n"
+            "6. Launch and enter the Faceswap container:\n"
+            "  a. Headless:\n"
+            "     docker run --runtime=nvidia --rm -it -v ./:/srv faceswap-gpu\n\n"
+            "  b. GUI:\n"
+            "     xhost +local: && \\ \n"
+            "     docker run --runtime=nvidia --rm -it \\ \n"
+            "     -v ./:/srv \\ \n"
+            "     -v /tmp/.X11-unix:/tmp/.X11-unix \\ \n"
+            "     -e DISPLAY=${DISPLAY} \\ \n"
+            "     faceswap-gpu \n")
+        logger.info("That's all you need to do with docker. Have fun.")
 
     @classmethod
     def macos(cls) -> None:

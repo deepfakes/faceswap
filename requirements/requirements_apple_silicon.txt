@@ -2,7 +2,6 @@
 tensorflow-macos>=2.10.0,<2.11.0
 tensorflow-deps>=2.10.0,<2.11.0
 tensorflow-metal>=0.6.0,<0.7.0
-libblas  # Conda only
 # These next 2 should have been installed, but some users complain of errors
 decorator
 cloudpickle
