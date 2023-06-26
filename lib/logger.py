@@ -13,6 +13,17 @@ import traceback
 from datetime import datetime
 
 
+# TODO - Remove this monkey patch when TF autograph fixed to handle newer logging lib
+def _patched_format(self, record):
+    """ Autograph tf-2.10 has a bug with the 3.10 version of logging.PercentStyle._format(). It is
+    non-critical but spits out warnings. This is the Python 3.9 version of the function and should
+    be removed once fixed """
+    return self._fmt % record.__dict__  # pylint:disable=protected-access
+
+
+setattr(logging.PercentStyle, "_format", _patched_format)
+
+
 class FaceswapLogger(logging.Logger):
     """ A standard :class:`logging.logger` with additional "verbose" and "trace" levels added. """
     def __init__(self, name: str) -> None:
