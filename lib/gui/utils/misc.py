@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """ Miscellaneous Utility functions for the GUI. Includes LongRunningTask object """
+from __future__ import annotations
 import logging
 import sys
+import typing as T
 
 from threading import Event, Thread
-from typing import (Any, Callable, cast, Dict, Optional, Tuple, Type, TYPE_CHECKING)
 from queue import Queue
 
 from .config import get_config
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Callable
     from types import TracebackType
     from lib.multithreading import _ErrorType
 
@@ -31,15 +33,15 @@ class LongRunningTask(Thread):
         cursor in the correct location. Default: ``None``.
     """
     _target: Callable
-    _args: Tuple
-    _kwargs: Dict[str, Any]
+    _args: tuple
+    _kwargs: dict[str, T.Any]
     _name: str
 
     def __init__(self,
-                 target: Optional[Callable] = None,
-                 name: Optional[str] = None,
-                 args: Tuple = (),
-                 kwargs: Optional[Dict[str, Any]] = None,
+                 target: Callable | None = None,
+                 name: str | None = None,
+                 args: tuple = (),
+                 kwargs: dict[str, T.Any] | None = None,
                  *,
                  daemon: bool = True,
                  widget=None):
@@ -48,7 +50,7 @@ class LongRunningTask(Thread):
                      daemon)
         super().__init__(target=target, name=name, args=args, kwargs=kwargs,
                          daemon=daemon)
-        self.err: "_ErrorType" = None
+        self.err: _ErrorType = None
         self._widget = widget
         self._config = get_config()
         self._config.set_cursor_busy(widget=self._widget)
@@ -70,8 +72,8 @@ class LongRunningTask(Thread):
                 retval = self._target(*self._args, **self._kwargs)
                 self._queue.put(retval)
         except Exception:  # pylint: disable=broad-except
-            self.err = cast(Tuple[Type[BaseException], BaseException, "TracebackType"],
-                            sys.exc_info())
+            self.err = T.cast(tuple[type[BaseException], BaseException, "TracebackType"],
+                              sys.exc_info())
             assert self.err is not None
             logger.debug("Error in thread (%s): %s", self._name,
                          self.err[1].with_traceback(self.err[2]))
@@ -81,7 +83,7 @@ class LongRunningTask(Thread):
             # an argument that has a member that points to the thread.
             del self._target, self._args, self._kwargs
 
-    def get_result(self) -> Any:
+    def get_result(self) -> T.Any:
         """ Return the result from the given task.
 
         Returns

@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 import platform
-import sys
 import typing as T
 
 from contextlib import nullcontext
@@ -28,12 +27,9 @@ from lib.model import losses, optimizers
 from lib.model.autoclip import AutoClipper
 from lib.utils import get_backend
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 if T.TYPE_CHECKING:
+    from collections.abc import Callable
+    from contextlib import AbstractContextManager as ContextManager
     from argparse import Namespace
     from .model import State
 
@@ -58,9 +54,9 @@ class LossClass:
     kwargs: dict
         Any keyword arguments to supply to the loss function at initialization.
     """
-    function: T.Union[T.Callable[[tf.Tensor, tf.Tensor], tf.Tensor], T.Any] = k_losses.mae
+    function: Callable[[tf.Tensor, tf.Tensor], tf.Tensor] | T.Any = k_losses.mae
     init: bool = True
-    kwargs: T.Dict[str, T.Any] = field(default_factory=dict)
+    kwargs: dict[str, T.Any] = field(default_factory=dict)
 
 
 class Loss():
@@ -73,13 +69,13 @@ class Loss():
     color_order: str
         Color order of the model. One of `"BGR"` or `"RGB"`
     """
-    def __init__(self, config: dict, color_order: Literal["bgr", "rgb"]) -> None:
+    def __init__(self, config: dict, color_order: T.Literal["bgr", "rgb"]) -> None:
         logger.debug("Initializing %s: (color_order: %s)", self.__class__.__name__, color_order)
         self._config = config
         self._mask_channels = self._get_mask_channels()
-        self._inputs: T.List[tf.keras.layers.Layer] = []
-        self._names: T.List[str] = []
-        self._funcs: T.Dict[str, T.Callable] = {}
+        self._inputs: list[tf.keras.layers.Layer] = []
+        self._names: list[str] = []
+        self._funcs: dict[str, Callable] = {}
 
         self._loss_dict = {"ffl": LossClass(function=losses.FocalFrequencyLoss),
                            "flip": LossClass(function=losses.LDRFLIPLoss,
@@ -104,7 +100,7 @@ class Loss():
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     @property
-    def names(self) -> T.List[str]:
+    def names(self) -> list[str]:
         """ list: The list of loss names for the model. """
         return self._names
 
@@ -114,14 +110,14 @@ class Loss():
         return self._funcs
 
     @property
-    def _mask_inputs(self) -> T.Optional[list]:
+    def _mask_inputs(self) -> list | None:
         """ list: The list of input tensors to the model that contain the mask. Returns ``None``
         if there is no mask input to the model. """
         mask_inputs = [inp for inp in self._inputs if inp.name.startswith("mask")]
         return None if not mask_inputs else mask_inputs
 
     @property
-    def _mask_shapes(self) -> T.Optional[T.List[tuple]]:
+    def _mask_shapes(self) -> list[tuple] | None:
         """ list: The list of shape tuples for the mask input tensors for the model. Returns
         ``None`` if there is no mask input. """
         if self._mask_inputs is None:
@@ -141,7 +137,7 @@ class Loss():
         self._set_loss_functions(model.output_names)
         self._names.insert(0, "total")
 
-    def _set_loss_names(self, outputs: T.List[tf.Tensor]) -> None:
+    def _set_loss_names(self, outputs: list[tf.Tensor]) -> None:
         """ Name the losses based on model output.
 
         This is used for correct naming in the state file, for display purposes only.
@@ -173,7 +169,7 @@ class Loss():
                 self._names.append(f"{name}_{side}{suffix}")
         logger.debug(self._names)
 
-    def _get_function(self, name: str) -> T.Callable[[tf.Tensor, tf.Tensor], tf.Tensor]:
+    def _get_function(self, name: str) -> Callable[[tf.Tensor, tf.Tensor], tf.Tensor]:
         """ Obtain the requested Loss function
 
         Parameters
@@ -191,7 +187,7 @@ class Loss():
         logger.debug("Obtained loss function `%s` (%s)", name, retval)
         return retval
 
-    def _set_loss_functions(self, output_names: T.List[str]):
+    def _set_loss_functions(self, output_names: list[str]):
         """ Set the loss functions and their associated weights.
 
         Adds the loss functions to the :attr:`functions` dictionary.
@@ -251,7 +247,7 @@ class Loss():
                                       mask_channel=mask_channel)
             channel_idx += 1
 
-    def _get_mask_channels(self) -> T.List[int]:
+    def _get_mask_channels(self) -> list[int]:
         """ Obtain the channels from the face targets that the masks reside in from the training
         data generator.
 
@@ -311,8 +307,8 @@ class Optimizer():  # pylint:disable=too-few-public-methods
                                       {"beta_1": 0.5, "beta_2": 0.99, "epsilon": epsilon}),
                             "rms-prop": (optimizers.RMSprop, {"epsilon": epsilon})}
         optimizer_info = valid_optimizers[optimizer]
-        self._optimizer: T.Callable = optimizer_info[0]
-        self._kwargs: T.Dict[str, T.Any] = optimizer_info[1]
+        self._optimizer: Callable = optimizer_info[0]
+        self._kwargs: dict[str, T.Any] = optimizer_info[1]
 
         self._configure(learning_rate, autoclip)
         logger.verbose("Using %s optimizer", optimizer.title())  # type:ignore[attr-defined]
@@ -411,7 +407,7 @@ class Settings():
         return mixedprecision.LossScaleOptimizer(optimizer)  # pylint:disable=no-member
 
     @classmethod
-    def _set_tf_settings(cls, allow_growth: bool, exclude_devices: T.List[int]) -> None:
+    def _set_tf_settings(cls, allow_growth: bool, exclude_devices: list[int]) -> None:
         """ Specify Devices to place operations on and Allow TensorFlow to manage VRAM growth.
 
         Enables the Tensorflow allow_growth option if requested in the command line arguments
@@ -480,8 +476,8 @@ class Settings():
         return True
 
     def _get_strategy(self,
-                      strategy: Literal["default", "central-storage", "mirrored"]
-                      ) -> T.Optional[tf.distribute.Strategy]:
+                      strategy: T.Literal["default", "central-storage", "mirrored"]
+                      ) -> tf.distribute.Strategy | None:
         """ If we are running on Nvidia backend and the strategy is not ``None`` then return
         the correct tensorflow distribution strategy, otherwise return ``None``.
 
@@ -565,7 +561,7 @@ class Settings():
 
         return tf.distribute.experimental.CentralStorageStrategy(parameter_device="/cpu:0")
 
-    def _get_mixed_precision_layers(self, layers: T.List[dict]) -> T.List[str]:
+    def _get_mixed_precision_layers(self, layers: list[dict]) -> list[str]:
         """ Obtain the names of the layers in a mixed precision model that have their dtype policy
         explicitly set to mixed-float16.
 
@@ -595,7 +591,7 @@ class Settings():
                 logger.debug("Skipping unsupported layer: %s %s", layer["name"], dtype)
         return retval
 
-    def _switch_precision(self, layers: T.List[dict], compatible: T.List[str]) -> None:
+    def _switch_precision(self, layers: list[dict], compatible: list[str]) -> None:
         """ Switch a model's datatype between mixed-float16 and float32.
 
         Parameters
@@ -624,9 +620,9 @@ class Settings():
             config["dtype"] = policy
 
     def get_mixed_precision_layers(self,
-                                   build_func: T.Callable[[T.List[tf.keras.layers.Layer]],
-                                                          tf.keras.models.Model],
-                                   inputs: T.List[tf.keras.layers.Layer]) -> T.List[str]:
+                                   build_func: Callable[[list[tf.keras.layers.Layer]],
+                                                        tf.keras.models.Model],
+                                   inputs: list[tf.keras.layers.Layer]) -> list[str]:
         """ Get and store the mixed precision layers from a full precision enabled model.
 
         Parameters
@@ -699,7 +695,7 @@ class Settings():
         del model
         return new_model
 
-    def strategy_scope(self) -> T.ContextManager:
+    def strategy_scope(self) -> ContextManager:
         """ Return the strategy scope if we have set a strategy, otherwise return a null
         context.
 

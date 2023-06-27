@@ -2,14 +2,14 @@
 """
 A tool that allows for sorting and grouping images in different ways.
 """
+from __future__ import annotations
 import logging
 import os
 import sys
-
+import typing as T
 
 from argparse import Namespace
 from shutil import copyfile, rmtree
-from typing import Dict, List, Optional, TYPE_CHECKING
 
 from tqdm import tqdm
 
@@ -20,7 +20,7 @@ from lib.utils import deprecation_warning
 from .sort_methods import SortBlur, SortColor, SortFace, SortHistogram, SortMultiMethod
 from .sort_methods_aligned import SortDistance, SortFaceCNN, SortPitch, SortSize, SortYaw, SortRoll
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from .sort_methods import SortMethod
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class Sort():  # pylint:disable=too-few-public-methods
             self._args.sort_method = "color-black" if sort_ == "black-pixels" else sort_
             self._args.group_method = "color-black" if group_ == "black-pixels" else group_
 
-    def _get_input_locations(self) -> List[str]:
+    def _get_input_locations(self) -> list[str]:
         """ Obtain the full path to input locations. Will be a list of locations if batch mode is
         selected, or a containing a single location if batch mode is not selected.
 
@@ -127,27 +127,27 @@ class _Sort():  # pylint:disable=too-few-public-methods
     """ Sorts folders of faces based on input criteria """
     def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s: arguments: %s", self.__class__.__name__, arguments)
-        self._processes = dict(blur=SortBlur,
-                               blur_fft=SortBlur,
-                               distance=SortDistance,
-                               yaw=SortYaw,
-                               pitch=SortPitch,
-                               roll=SortRoll,
-                               size=SortSize,
-                               face=SortFace,
-                               face_cnn=SortFaceCNN,
-                               face_cnn_dissim=SortFaceCNN,
-                               hist=SortHistogram,
-                               hist_dissim=SortHistogram,
-                               color_black=SortColor,
-                               color_gray=SortColor,
-                               color_luma=SortColor,
-                               color_green=SortColor,
-                               color_orange=SortColor)
+        self._processes = {"blur": SortBlur,
+                           "blur_fft": SortBlur,
+                           "distance": SortDistance,
+                           "yaw": SortYaw,
+                           "pitch": SortPitch,
+                           "roll": SortRoll,
+                           "size": SortSize,
+                           "face": SortFace,
+                           "face_cnn": SortFaceCNN,
+                           "face_cnn_dissim": SortFaceCNN,
+                           "hist": SortHistogram,
+                           "hist_dissim": SortHistogram,
+                           "color_black": SortColor,
+                           "color_gray": SortColor,
+                           "color_luma": SortColor,
+                           "color_green": SortColor,
+                           "color_orange": SortColor}
 
         self._args = self._parse_arguments(arguments)
-        self._changes: Dict[str, str] = {}
-        self.serializer: Optional[Serializer] = None
+        self._changes: dict[str, str] = {}
+        self.serializer: Serializer | None = None
 
         if arguments.log_changes:
             self.serializer = get_serializer_from_filename(arguments.log_file_path)
@@ -220,7 +220,7 @@ class _Sort():  # pylint:disable=too-few-public-methods
         logger.debug("Cleaned arguments: %s", arguments)
         return arguments
 
-    def _get_sorter(self) -> "SortMethod":
+    def _get_sorter(self) -> SortMethod:
         """ Obtain a sorter/grouper combo for the selected sort/group by options
 
         Returns

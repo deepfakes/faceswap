@@ -16,9 +16,8 @@ from lib.config import generate_configs  # pylint:disable=wrong-import-position
 _LANG = gettext.translation("faceswap", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-if sys.version_info < (3, 7):
-    raise ValueError("This program requires at least python3.7")
-
+if sys.version_info < (3, 10):
+    raise ValueError("This program requires at least python 3.10")
 
 _PARSER = cli_args.FullHelpArgumentParser()
 

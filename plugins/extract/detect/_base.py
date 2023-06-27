@@ -15,9 +15,11 @@ To get a :class:`~lib.align.DetectedFace` object use the function:
 
 >>> face = self._to_detected_face(<face left>, <face top>, <face right>, <face bottom>)
 """
+from __future__ import annotations
 import logging
+import typing as T
+
 from dataclasses import dataclass, field
-from typing import cast, Generator, List, Optional, Tuple, TYPE_CHECKING, Union
 
 import cv2
 import numpy as np
@@ -30,7 +32,8 @@ from lib.utils import FaceswapError
 from plugins.extract._base import BatchType, Extractor, ExtractorBatch
 from plugins.extract.pipeline import ExtractMedia
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from queue import Queue
 
 logger = logging.getLogger(__name__)
@@ -53,10 +56,10 @@ class DetectorBatch(ExtractorBatch):
     initial_feed: :class:`numpy.ndarray`
         Used to hold the initial :attr:`feed` when rotate images is enabled
     """
-    detected_faces: List[List["DetectedFace"]] = field(default_factory=list)
-    rotation_matrix: List[np.ndarray] = field(default_factory=list)
-    scale: List[float] = field(default_factory=list)
-    pad: List[Tuple[int, int]] = field(default_factory=list)
+    detected_faces: list[list["DetectedFace"]] = field(default_factory=list)
+    rotation_matrix: list[np.ndarray] = field(default_factory=list)
+    scale: list[float] = field(default_factory=list)
+    pad: list[tuple[int, int]] = field(default_factory=list)
     initial_feed: np.ndarray = np.array([])
 
 
@@ -95,11 +98,11 @@ class Detector(Extractor):  # pylint:disable=abstract-method
     """
 
     def __init__(self,
-                 git_model_id: Optional[int] = None,
-                 model_filename: Optional[Union[str, List[str]]] = None,
-                 configfile: Optional[str] = None,
+                 git_model_id: int | None = None,
+                 model_filename: str | list[str] | None = None,
+                 configfile: str | None = None,
                  instance: int = 0,
-                 rotation: Optional[str] = None,
+                 rotation: str | None = None,
                  min_size: int = 0,
                  **kwargs) -> None:
         logger.debug("Initializing %s: (rotation: %s, min_size: %s)", self.__class__.__name__,
@@ -117,7 +120,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         logger.debug("Initialized _base %s", self.__class__.__name__)
 
     # <<< QUEUE METHODS >>> #
-    def get_batch(self, queue: "Queue") -> Tuple[bool, DetectorBatch]:
+    def get_batch(self, queue: Queue) -> tuple[bool, DetectorBatch]:
         """ Get items for inputting to the detector plugin in batches
 
         Items are received as :class:`~plugins.extract.pipeline.ExtractMedia` objects and converted
@@ -271,7 +274,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         """ Wrap models predict function in rotations """
         assert isinstance(batch, DetectorBatch)
         batch.rotation_matrix = [np.array([]) for _ in range(len(batch.feed))]
-        found_faces: List[np.ndarray] = [np.array([]) for _ in range(len(batch.feed))]
+        found_faces: list[np.ndarray] = [np.array([]) for _ in range(len(batch.feed))]
         for angle in self.rotation:
             # Rotate the batch and insert placeholders for already found faces
             self._rotate_batch(batch, angle)
@@ -301,9 +304,9 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                                "degrees",
                                angle)
 
-            found_faces = cast(List[np.ndarray], ([face if not found.any() else found
-                                                   for face, found in zip(batch.prediction,
-                                                                          found_faces)]))
+            found_faces = T.cast(list[np.ndarray], ([face if not found.any() else found
+                                                     for face, found in zip(batch.prediction,
+                                                                            found_faces)]))
 
             if all(face.any() for face in found_faces):
                 logger.trace("Faces found for all images")  # type:ignore[attr-defined]
@@ -317,7 +320,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
 
     # <<< DETECTION IMAGE COMPILATION METHODS >>> #
     def _compile_detection_image(self, item: ExtractMedia
-                                 ) -> Tuple[np.ndarray, float, Tuple[int, int]]:
+                                 ) -> tuple[np.ndarray, float, tuple[int, int]]:
         """ Compile the detection image for feeding into the model
 
         Parameters
@@ -345,7 +348,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
                      image.shape, scale, pad)
         return image, scale, pad
 
-    def _set_scale(self, image_size: Tuple[int, int]) -> float:
+    def _set_scale(self, image_size: tuple[int, int]) -> float:
         """ Set the scale factor for incoming image
 
         Parameters
@@ -362,7 +365,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         logger.trace("Detector scale: %s", scale)  # type:ignore[attr-defined]
         return scale
 
-    def _set_padding(self, image_size: Tuple[int, int], scale: float) -> Tuple[int, int]:
+    def _set_padding(self, image_size: tuple[int, int], scale: float) -> tuple[int, int]:
         """ Set the image padding for non-square images
 
         Parameters
@@ -382,7 +385,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         return pad_left, pad_top
 
     @staticmethod
-    def _scale_image(image: np.ndarray, image_size: Tuple[int, int], scale: float) -> np.ndarray:
+    def _scale_image(image: np.ndarray, image_size: tuple[int, int], scale: float) -> np.ndarray:
         """ Scale the image and optional pad to given size
 
         Parameters
@@ -439,8 +442,8 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         return image
 
     # <<< FINALIZE METHODS >>> #
-    def _remove_zero_sized_faces(self, batch_faces: List[List[DetectedFace]]
-                                 ) -> List[List[DetectedFace]]:
+    def _remove_zero_sized_faces(self, batch_faces: list[list[DetectedFace]]
+                                 ) -> list[list[DetectedFace]]:
         """ Remove items from batch_faces where detected face is of zero size or face falls
         entirely outside of image
 
@@ -463,8 +466,8 @@ class Detector(Extractor):  # pylint:disable=abstract-method
         logger.trace("Output sizes: %s", [len(face) for face in retval])  # type: ignore
         return retval
 
-    def _filter_small_faces(self, detected_faces: List[List[DetectedFace]]
-                            ) -> List[List[DetectedFace]]:
+    def _filter_small_faces(self, detected_faces: list[list[DetectedFace]]
+                            ) -> list[list[DetectedFace]]:
         """ Filter out any faces smaller than the min size threshold
 
         Parameters
@@ -493,7 +496,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
 
     # <<< IMAGE ROTATION METHODS >>> #
     @staticmethod
-    def _get_rotation_angles(rotation: Optional[str]) -> List[int]:
+    def _get_rotation_angles(rotation: str | None) -> list[int]:
         """ Set the rotation angles.
 
         Parameters
@@ -544,8 +547,8 @@ class Detector(Extractor):  # pylint:disable=abstract-method
             batch.initial_feed = batch.feed.copy()
             return
 
-        feeds: List[np.ndarray] = []
-        rotmats: List[np.ndarray] = []
+        feeds: list[np.ndarray] = []
+        rotmats: list[np.ndarray] = []
         for img, faces, rotmat in zip(batch.initial_feed,
                                       batch.prediction,
                                       batch.rotation_matrix):
@@ -605,7 +608,7 @@ class Detector(Extractor):  # pylint:disable=abstract-method
 
     def _rotate_image_by_angle(self,
                                image: np.ndarray,
-                               angle: int) -> Tuple[np.ndarray, np.ndarray]:
+                               angle: int) -> tuple[np.ndarray, np.ndarray]:
         """ Rotate an image by a given angle.
 
         Parameters

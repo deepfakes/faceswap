@@ -4,7 +4,6 @@
 # pylint: disable=too-many-lines
 from __future__ import annotations
 import logging
-import sys
 import typing as T
 from dataclasses import dataclass
 
@@ -27,15 +26,9 @@ from lib.utils import get_tf_version, FaceswapError
 
 from ._base import ModelBase, get_all_sub_models
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
 if T.TYPE_CHECKING:
     from tensorflow import keras
     from tensorflow import Tensor
-
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -65,14 +58,14 @@ class _EncoderInfo:
     """
     keras_name: str
     default_size: int
-    tf_min: T.Tuple[int, int] = (2, 0)
-    scaling: T.Tuple[int, int] = (0, 1)
+    tf_min: tuple[int, int] = (2, 0)
+    scaling: tuple[int, int] = (0, 1)
     min_size: int = 32
     enforce_for_weights: bool = False
-    color_order: Literal["bgr", "rgb"] = "rgb"
+    color_order: T.Literal["bgr", "rgb"] = "rgb"
 
 
-_MODEL_MAPPING: T.Dict[str, _EncoderInfo] = {
+_MODEL_MAPPING: dict[str, _EncoderInfo] = {
     "densenet121": _EncoderInfo(
         keras_name="DenseNet121", default_size=224),
     "densenet169": _EncoderInfo(
@@ -238,7 +231,7 @@ class Model(ModelBase):
             model = new_model
         return model
 
-    def _select_freeze_layers(self) -> T.List[str]:
+    def _select_freeze_layers(self) -> list[str]:
         """ Process the selected frozen layers and replace the `keras_encoder` option with the
         actual keras model name
 
@@ -262,7 +255,7 @@ class Model(ModelBase):
             logger.debug("Removing 'keras_encoder' for '%s'", arch)
         return retval
 
-    def _get_input_shape(self) -> T.Tuple[int, int, int]:
+    def _get_input_shape(self) -> tuple[int, int, int]:
         """ Obtain the input shape for the model.
 
         Input shape is calculated from the selected Encoder's input size, scaled to the user
@@ -316,7 +309,7 @@ class Model(ModelBase):
                                 f"minimum version required is {tf_min} whilst you have version "
                                 f"{tf_ver} installed.")
 
-    def build_model(self, inputs: T.List[Tensor]) -> keras.models.Model:
+    def build_model(self, inputs: list[Tensor]) -> keras.models.Model:
         """ Create the model's structure.
 
         Parameters
@@ -341,7 +334,7 @@ class Model(ModelBase):
         autoencoder = KModel(inputs, outputs, name=self.model_name)
         return autoencoder
 
-    def _build_encoders(self, inputs: T.List[Tensor]) -> T.Dict[str, keras.models.Model]:
+    def _build_encoders(self, inputs: list[Tensor]) -> dict[str, keras.models.Model]:
         """ Build the encoders for Phaze-A
 
         Parameters
@@ -362,7 +355,7 @@ class Model(ModelBase):
 
     def _build_fully_connected(
             self,
-            inputs: T.Dict[str, keras.models.Model]) -> T.Dict[str, T.List[keras.models.Model]]:
+            inputs: dict[str, keras.models.Model]) -> dict[str, list[keras.models.Model]]:
         """ Build the fully connected layers for Phaze-A
 
         Parameters
@@ -407,8 +400,8 @@ class Model(ModelBase):
 
     def _build_g_blocks(
                 self,
-                inputs: T.Dict[str, T.List[keras.models.Model]]
-            ) -> T.Dict[str, T.Union[T.List[keras.models.Model], keras.models.Model]]:
+                inputs: dict[str, list[keras.models.Model]]
+            ) -> dict[str, list[keras.models.Model] | keras.models.Model]:
         """ Build the g-block layers for Phaze-A.
 
         If a g-block has not been selected for this model, then the original `inters` models are
@@ -440,10 +433,9 @@ class Model(ModelBase):
         logger.debug("G-Blocks: %s", retval)
         return retval
 
-    def _build_decoders(
-            self,
-            inputs: T.Dict[str, T.Union[T.List[keras.models.Model], keras.models.Model]]
-            ) -> T.Dict[str, keras.models.Model]:
+    def _build_decoders(self,
+                        inputs: dict[str, list[keras.models.Model] | keras.models.Model]
+                        ) -> dict[str, keras.models.Model]:
         """ Build the encoders for Phaze-A
 
         Parameters
@@ -519,12 +511,12 @@ def _bottleneck(inputs: Tensor, bottleneck: str, size: int, normalization: str) 
     return var_x
 
 
-def _get_upscale_layer(method: Literal["resize_images", "subpixel", "upscale_dny", "upscale_fast",
-                                       "upscale_hybrid", "upsample2d"],
+def _get_upscale_layer(method: T.Literal["resize_images", "subpixel", "upscale_dny",
+                                         "upscale_fast", "upscale_hybrid", "upsample2d"],
                        filters: int,
-                       activation: T.Optional[str] = None,
-                       upsamples: T.Optional[int] = None,
-                       interpolation: T.Optional[str] = None) -> keras.layers.Layer:
+                       activation: str | None = None,
+                       upsamples: int | None = None,
+                       interpolation: str | None = None) -> keras.layers.Layer:
     """ Obtain an instance of the requested upscale method.
 
     Parameters
@@ -550,7 +542,7 @@ def _get_upscale_layer(method: Literal["resize_images", "subpixel", "upscale_dny
         The selected configured upscale layer
     """
     if method == "upsample2d":
-        kwargs: T.Dict[str, T.Union[str, int]] = {}
+        kwargs: dict[str, str | int] = {}
         if upsamples:
             kwargs["size"] = upsamples
         if interpolation:
@@ -571,7 +563,7 @@ def _get_curve(start_y: int,
                end_y: int,
                num_points: int,
                scale: float,
-               mode: Literal["full", "cap_max", "cap_min"] = "full") -> T.List[int]:
+               mode: T.Literal["full", "cap_max", "cap_min"] = "full") -> list[int]:
     """ Obtain a curve.
 
     For the given start and end y values, return the y co-ordinates of a curve for the given
@@ -660,13 +652,13 @@ class Encoder():  # pylint:disable=too-few-public-methods
     config: dict
         The model configuration options
     """
-    def __init__(self, input_shape: T.Tuple[int, ...], config: dict) -> None:
+    def __init__(self, input_shape: tuple[int, ...], config: dict) -> None:
         self.input_shape = input_shape
         self._config = config
         self._input_shape = input_shape
 
     @property
-    def _model_kwargs(self) -> T.Dict[str, T.Dict[str, T.Union[str, bool]]]:
+    def _model_kwargs(self) -> dict[str, dict[str, str | bool]]:
         """ dict: Configuration option for architecture mapped to optional kwargs. """
         return {"mobilenet": {"alpha": self._config["mobilenet_width"],
                               "depth_multiplier": self._config["mobilenet_depth"],
@@ -677,7 +669,7 @@ class Encoder():  # pylint:disable=too-few-public-methods
                                  "include_preprocessing": False}}
 
     @property
-    def _selected_model(self) -> T.Tuple[_EncoderInfo, dict]:
+    def _selected_model(self) -> tuple[_EncoderInfo, dict]:
         """ tuple(dict, :class:`_EncoderInfo`): The selected encoder model and it's associated
         keyword arguments """
         arch = self._config["enc_architecture"]
@@ -832,7 +824,7 @@ class FullyConnected():  # pylint:disable=too-few-public-methods
         The user configuration dictionary
     """
     def __init__(self,
-                 side: Literal["a", "b", "both", "gblock", "shared"],
+                 side: T.Literal["a", "b", "both", "gblock", "shared"],
                  input_shape: tuple,
                  config: dict) -> None:
         logger.debug("Initializing: %s (side: %s, input_shape: %s)",
@@ -992,12 +984,12 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
         and the Decoder. ``None`` will generate the full Upscale chain. An end index of -1 will
         generate the layers from the starting index to the final upscale. Default: ``None``
     """
-    _filters: T.List[int] = []
+    _filters: list[int] = []
 
     def __init__(self,
-                 side: Literal["a", "b", "both", "shared"],
+                 side: T.Literal["a", "b", "both", "shared"],
                  config: dict,
-                 layer_indicies: T.Optional[T.Tuple[int, int]] = None) -> None:
+                 layer_indicies: tuple[int, int] | None = None) -> None:
         logger.debug("Initializing: %s (side: %s, layer_indicies: %s)",
                      self.__class__.__name__, side, layer_indicies)
         self._side = side
@@ -1126,7 +1118,7 @@ class UpscaleBlocks():  # pylint: disable=too-few-public-methods
                             relu_alpha=0.2)(var_x)
         return var_x
 
-    def __call__(self, inputs: T.Union[Tensor, T.List[Tensor]]) -> T.Union[Tensor, T.List[Tensor]]:
+    def __call__(self, inputs: Tensor | list[Tensor]) -> Tensor | list[Tensor]:
         """ Upscale Network.
 
         Parameters
@@ -1203,8 +1195,8 @@ class GBlock():  # pylint:disable=too-few-public-methods
         The user configuration dictionary
     """
     def __init__(self,
-                 side: Literal["a", "b", "both"],
-                 input_shapes: T.Union[list, tuple],
+                 side: T.Literal["a", "b", "both"],
+                 input_shapes: list | tuple,
                  config: dict) -> None:
         logger.debug("Initializing: %s (side: %s, input_shapes: %s)",
                      self.__class__.__name__, side, input_shapes)
@@ -1284,8 +1276,8 @@ class Decoder():  # pylint:disable=too-few-public-methods
         The user configuration dictionary
     """
     def __init__(self,
-                 side: Literal["a", "b", "both"],
-                 input_shape: T.Tuple[int, int, int],
+                 side: T.Literal["a", "b", "both"],
+                 input_shape: tuple[int, int, int],
                  config: dict) -> None:
         logger.debug("Initializing: %s (side: %s, input_shape: %s)",
                      self.__class__.__name__, side, input_shape)

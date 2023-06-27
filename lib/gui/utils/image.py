@@ -1,10 +1,9 @@
 #!/usr/bin python3
 """ Utilities for handling images in the Faceswap GUI """
-
+from __future__ import annotations
 import logging
 import os
-import sys
-from typing import cast, Dict, List, Optional, Sequence, Tuple
+import typing as T
 
 import cv2
 import numpy as np
@@ -14,15 +13,12 @@ from lib.training.preview_cv import PreviewBuffer
 
 from .config import get_config, PATHCACHE
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
+if T.TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-
-_IMAGES: Optional["Images"] = None
-_PREVIEW_TRIGGER: Optional["PreviewTrigger"] = None
+_IMAGES: "Images" | None = None
+_PREVIEW_TRIGGER: "PreviewTrigger" | None = None
 TRAININGPREVIEW = ".gui_training_preview.png"
 
 
@@ -51,7 +47,7 @@ def get_images() -> "Images":
     return _IMAGES
 
 
-def _get_previews(image_path: str) -> List[str]:
+def _get_previews(image_path: str) -> list[str]:
     """ Get the images stored within the given directory.
 
     Parameters
@@ -164,12 +160,12 @@ class PreviewExtract():
         self._output_path = ""
 
         self._modified: float = 0.0
-        self._filenames: List[str] = []
-        self._images: Optional[np.ndarray] = None
-        self._placeholder: Optional[np.ndarray] = None
+        self._filenames: list[str] = []
+        self._images: np.ndarray | None = None
+        self._placeholder: np.ndarray | None = None
 
-        self._preview_image: Optional[Image.Image] = None
-        self._preview_image_tk: Optional[ImageTk.PhotoImage] = None
+        self._preview_image: Image.Image | None = None
+        self._preview_image_tk: ImageTk.PhotoImage | None = None
 
         logger.debug("Initialized %s", self.__class__.__name__)
 
@@ -228,7 +224,7 @@ class PreviewExtract():
         logger.debug("sorted folders: %s, return value: %s", folders, retval)
         return retval
 
-    def _get_newest_filenames(self, image_files: List[str]) -> List[str]:
+    def _get_newest_filenames(self, image_files: list[str]) -> list[str]:
         """ Return image filenames that have been modified since the last check.
 
         Parameters
@@ -281,8 +277,8 @@ class PreviewExtract():
         return retval
 
     def _process_samples(self,
-                         samples: List[np.ndarray],
-                         filenames: List[str],
+                         samples: list[np.ndarray],
+                         filenames: list[str],
                          num_images: int) -> bool:
         """ Process the latest sample images into a displayable image.
 
@@ -321,8 +317,8 @@ class PreviewExtract():
         return True
 
     def _load_images_to_cache(self,
-                              image_files: List[str],
-                              frame_dims: Tuple[int, int],
+                              image_files: list[str],
+                              frame_dims: tuple[int, int],
                               thumbnail_size: int) -> bool:
         """ Load preview images to the image cache.
 
@@ -349,7 +345,7 @@ class PreviewExtract():
         logger.debug("num_images: %s", num_images)
         if num_images == 0:
             return False
-        samples: List[np.ndarray] = []
+        samples: list[np.ndarray] = []
         start_idx = len(image_files) - num_images if len(image_files) > num_images else 0
         show_files = sorted(image_files, key=os.path.getctime)[start_idx:]
         dropped_files = []
@@ -405,7 +401,7 @@ class PreviewExtract():
         self._placeholder = placeholder
         logger.debug("Created placeholder. shape: %s", placeholder.shape)
 
-    def _place_previews(self, frame_dims: Tuple[int, int]) -> Image.Image:
+    def _place_previews(self, frame_dims: tuple[int, int]) -> Image.Image:
         """ Format the preview thumbnails stored in the cache into a grid fitting the display
         panel.
 
@@ -441,12 +437,12 @@ class PreviewExtract():
             placeholder = np.concatenate([np.expand_dims(self._placeholder, 0)] * remainder)
             samples = np.concatenate((samples, placeholder))
 
-        display = np.vstack([np.hstack(cast(Sequence, samples[row * cols: (row + 1) * cols]))
+        display = np.vstack([np.hstack(T.cast("Sequence", samples[row * cols: (row + 1) * cols]))
                              for row in range(rows)])
         logger.debug("display shape: %s", display.shape)
         return Image.fromarray(display)
 
-    def load_latest_preview(self, thumbnail_size: int, frame_dims: Tuple[int, int]) -> bool:
+    def load_latest_preview(self, thumbnail_size: int, frame_dims: tuple[int, int]) -> bool:
         """ Load the latest preview image for extract and convert.
 
         Retrieves the latest preview images from the faceswap output folder, resizes to thumbnails
@@ -524,7 +520,7 @@ class Images():
     def __init__(self) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._pathpreview = os.path.join(PATHCACHE, "preview")
-        self._pathoutput: Optional[str] = None
+        self._pathoutput: str | None = None
         self._batch_mode = False
         self._preview_train = PreviewTrain(self._pathpreview)
         self._preview_extract = PreviewExtract(self._pathpreview)
@@ -542,7 +538,7 @@ class Images():
         return self._preview_extract
 
     @property
-    def icons(self) -> Dict[str, ImageTk.PhotoImage]:
+    def icons(self) -> dict[str, ImageTk.PhotoImage]:
         """ dict: The faceswap icons for all parts of the GUI. The dictionary key is the icon
         name (`str`) the value is the icon sized and formatted for display
         (:class:`PIL.ImageTK.PhotoImage`).
@@ -557,7 +553,7 @@ class Images():
         return self._icons
 
     @staticmethod
-    def _load_icons() -> Dict[str, ImageTk.PhotoImage]:
+    def _load_icons() -> dict[str, ImageTk.PhotoImage]:
         """ Scan the icons cache folder and load the icons into :attr:`icons` for retrieval
         throughout the GUI.
 
@@ -569,7 +565,7 @@ class Images():
         """
         size = get_config().user_config_dict.get("icon_size", 16)
         size = int(round(size * get_config().scaling_factor))
-        icons: Dict[str, ImageTk.PhotoImage] = {}
+        icons: dict[str, ImageTk.PhotoImage] = {}
         pathicons = os.path.join(PATHCACHE, "icons")
         for fname in os.listdir(pathicons):
             name, ext = os.path.splitext(fname)
@@ -609,12 +605,12 @@ class PreviewTrigger():
     """
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
-        self._trigger_files = dict(update=os.path.join(PATHCACHE, ".preview_trigger"),
-                                   mask_toggle=os.path.join(PATHCACHE, ".preview_mask_toggle"))
+        self._trigger_files = {"update": os.path.join(PATHCACHE, ".preview_trigger"),
+                               "mask_toggle": os.path.join(PATHCACHE, ".preview_mask_toggle")}
         logger.debug("Initialized: %s (trigger_files: %s)",
                      self.__class__.__name__, self._trigger_files)
 
-    def set(self, trigger_type: Literal["update", "mask_toggle"]):
+    def set(self, trigger_type: T.Literal["update", "mask_toggle"]):
         """ Place the trigger file into the cache folder
 
         Parameters
@@ -629,7 +625,7 @@ class PreviewTrigger():
                 pass
             logger.debug("Set preview trigger: %s", trigger)
 
-    def clear(self, trigger_type: Optional[Literal["update", "mask_toggle"]] = None) -> None:
+    def clear(self, trigger_type: T.Literal["update", "mask_toggle"] | None = None) -> None:
         """ Remove the trigger file from the cache folder.
 
         Parameters

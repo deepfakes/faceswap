@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """ Custom Loss Functions for faceswap.py """
 
-from __future__ import absolute_import
-
+from __future__ import annotations
 import logging
-from typing import Callable, List, Tuple
+import typing as T
 
 import numpy as np
 import tensorflow as tf
@@ -12,6 +11,9 @@ import tensorflow as tf
 # Ignore linting errors from Tensorflow's thoroughly broken import system
 from tensorflow.python.keras.engine import compile_utils  # pylint:disable=no-name-in-module
 from tensorflow.keras import backend as K  # pylint:disable=import-error
+
+if T.TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +63,7 @@ class FocalFrequencyLoss():  # pylint:disable=too-few-public-methods
         self._ave_spectrum = ave_spectrum
         self._log_matrix = log_matrix
         self._batch_matrix = batch_matrix
-        self._dims: Tuple[int, int] = (0, 0)
+        self._dims: tuple[int, int] = (0, 0)
 
     def _get_patches(self, inputs: tf.Tensor) -> tf.Tensor:
         """ Crop the incoming batch of images into patches as defined by :attr:`_patch_factor.
@@ -470,7 +472,7 @@ class LaplacianPyramidLoss():  # pylint:disable=too-few-public-methods
         retval = K.conv2d(padded_inputs, gauss, strides=1, padding="valid")
         return retval
 
-    def _get_laplacian_pyramid(self, inputs: tf.Tensor) -> List[tf.Tensor]:
+    def _get_laplacian_pyramid(self, inputs: tf.Tensor) -> list[tf.Tensor]:
         """ Obtain the Laplacian Pyramid.
 
         Parameters
@@ -564,9 +566,9 @@ class LossWrapper(tf.keras.losses.Loss):
     def __init__(self) -> None:
         logger.debug("Initializing: %s", self.__class__.__name__)
         super().__init__(name="LossWrapper")
-        self._loss_functions: List[compile_utils.LossesContainer] = []
-        self._loss_weights: List[float] = []
-        self._mask_channels: List[int] = []
+        self._loss_functions: list[compile_utils.LossesContainer] = []
+        self._loss_weights: list[float] = []
+        self._mask_channels: list[int] = []
         logger.debug("Initialized: %s", self.__class__.__name__)
 
     def add_loss(self,
@@ -628,7 +630,7 @@ class LossWrapper(tf.keras.losses.Loss):
                     y_true: tf.Tensor,
                     y_pred: tf.Tensor,
                     mask_channel: int,
-                    mask_prop: float = 1.0) -> Tuple[tf.Tensor, tf.Tensor]:
+                    mask_prop: float = 1.0) -> tuple[tf.Tensor, tf.Tensor]:
         """ Apply the mask to the input y_true and y_pred. If a mask is not required then
         return the unmasked inputs.
 

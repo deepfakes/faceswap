@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """ Package for handling alignments files, detected faces and aligned faces along with their
 associated objects. """
-
-from typing import Type, TYPE_CHECKING
+from __future__ import annotations
+import typing as T
 
 from .augmentation import ImageAugmentation
 from .generator import PreviewDataGenerator, TrainingDataGenerator
 from .preview_cv import PreviewBuffer, TriggerType
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from .preview_cv import PreviewBase
-    Preview: Type[PreviewBase]
+    Preview: type[PreviewBase]
 
 try:
     from .preview_tk import PreviewTk as Preview

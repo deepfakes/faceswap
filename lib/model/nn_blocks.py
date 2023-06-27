@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 _CONFIG: dict = {}
-_NAMES: T.Dict[str, int] = {}
+_NAMES: dict[str, int] = {}
 
 
 def set_config(configuration: dict) -> None:
@@ -189,7 +189,7 @@ class Conv2DOutput():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int]],
+                 kernel_size: int | tuple[int],
                  activation: str = "sigmoid",
                  padding: str = "same", **kwargs) -> None:
         self._name = kwargs.pop("name") if "name" in kwargs else _get_name(
@@ -265,11 +265,11 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int, int]] = 5,
-                 strides: T.Union[int, T.Tuple[int, int]] = 2,
+                 kernel_size: int | tuple[int, int] = 5,
+                 strides: int | tuple[int, int] = 2,
                  padding: str = "same",
-                 normalization: T.Optional[str] = None,
-                 activation: T.Optional[str] = "leakyrelu",
+                 normalization: str | None = None,
+                 activation: str | None = "leakyrelu",
                  use_depthwise: bool = False,
                  relu_alpha: float = 0.1,
                  **kwargs) -> None:
@@ -362,8 +362,8 @@ class SeparableConv2DBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int, int]] = 5,
-                 strides: T.Union[int, T.Tuple[int, int]] = 2, **kwargs) -> None:
+                 kernel_size: int | tuple[int, int] = 5,
+                 strides: int | tuple[int, int] = 2, **kwargs) -> None:
         self._name = _get_name(f"separableconv2d_{filters}")
         logger.debug("name: %s, filters: %s, kernel_size: %s, strides: %s, kwargs: %s)",
                      self._name, filters, kernel_size, strides, kwargs)
@@ -434,11 +434,11 @@ class UpscaleBlock():  # pylint:disable=too-few-public-methods
 
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
                  scale_factor: int = 2,
-                 normalization: T.Optional[str] = None,
-                 activation: T.Optional[str] = "leakyrelu",
+                 normalization: str | None = None,
+                 activation: str | None = "leakyrelu",
                  **kwargs) -> None:
         self._name = _get_name(f"upscale_{filters}")
         logger.debug("name: %s. filters: %s, kernel_size: %s, padding: %s, scale_factor: %s, "
@@ -521,9 +521,9 @@ class Upscale2xBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
-                 activation: T.Optional[str] = "leakyrelu",
+                 activation: str | None = "leakyrelu",
                  interpolation: str = "bilinear",
                  sr_ratio: float = 0.5,
                  scale_factor: int = 2,
@@ -615,9 +615,9 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
-                 activation: T.Optional[str] = "leakyrelu",
+                 activation: str | None = "leakyrelu",
                  scale_factor: int = 2,
                  interpolation: str = "bilinear") -> None:
         self._name = _get_name(f"upscale_ri_{filters}")
@@ -700,9 +700,9 @@ class UpscaleDNYBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
-                 activation: T.Optional[str] = "leakyrelu",
+                 activation: str | None = "leakyrelu",
                  size: int = 2,
                  interpolation: str = "bilinear",
                  **kwargs) -> None:
@@ -757,7 +757,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
     """
     def __init__(self,
                  filters: int,
-                 kernel_size: T.Union[int, T.Tuple[int, int]] = 3,
+                 kernel_size: int | tuple[int, int] = 3,
                  padding: str = "same",
                  **kwargs) -> None:
         self._name = _get_name(f"residual_{filters}")

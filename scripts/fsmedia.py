@@ -5,12 +5,13 @@ Holds the classes for the 2 main Faceswap 'media' objects: Images and Alignments
 
 Holds optional pre/post processing functions for convert and extract.
 """
-
+from __future__ import annotations
 import logging
 import os
 import sys
-from typing import (Any, cast, Dict, Generator, Iterator, List,
-                    Optional, Tuple, TYPE_CHECKING, Union)
+import typing as T
+
+from collections.abc import Iterator
 
 import cv2
 import numpy as np
@@ -20,7 +21,8 @@ from lib.align import Alignments as AlignmentsBase, get_centered_size
 from lib.image import count_frames, read_image
 from lib.utils import (camel_case_split, get_image_paths, _video_extensions)
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from argparse import Namespace
     from lib.align import AlignedFace
     from plugins.extract.pipeline import ExtractMedia
@@ -69,7 +71,7 @@ class Alignments(AlignmentsBase):
         Default: False
     """
     def __init__(self,
-                 arguments: "Namespace",
+                 arguments: Namespace,
                  is_extract: bool,
                  input_is_video: bool = False) -> None:
         logger.debug("Initializing %s: (is_extract: %s, input_is_video: %s)",
@@ -80,7 +82,7 @@ class Alignments(AlignmentsBase):
         super().__init__(folder, filename=filename)
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _set_folder_filename(self, input_is_video: bool) -> Tuple[str, str]:
+    def _set_folder_filename(self, input_is_video: bool) -> tuple[str, str]:
         """ Return the folder and the filename for the alignments file.
 
         If the input is a video, the alignments file will be stored in the same folder
@@ -115,7 +117,7 @@ class Alignments(AlignmentsBase):
         logger.debug("Setting Alignments: (folder: '%s' filename: '%s')", folder, filename)
         return folder, filename
 
-    def _load(self) -> Dict[str, Any]:
+    def _load(self) -> dict[str, T.Any]:
         """ Override the parent :func:`~lib.align.Alignments._load` to handle skip existing
         frames and faces on extract.
 
@@ -128,7 +130,7 @@ class Alignments(AlignmentsBase):
             Any alignments that have already been extracted if skip existing has been selected
             otherwise an empty dictionary
         """
-        data: Dict[str, Any] = {}
+        data: dict[str, T.Any] = {}
         if not self._is_extract and not self.have_alignments_file:
             return data
         if not self._is_extract:
@@ -170,7 +172,7 @@ class Images():
     arguments: :class:`argparse.Namespace`
         The command line arguments that were passed to Faceswap
     """
-    def __init__(self, arguments: "Namespace") -> None:
+    def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
         self._is_video = self._check_input_folder()
@@ -184,7 +186,7 @@ class Images():
         return self._is_video
 
     @property
-    def input_images(self) -> Union[str, List[str]]:
+    def input_images(self) -> str | list[str]:
         """str or list: Path to the video file if the input is a video otherwise list of
         image paths. """
         return self._input_images
@@ -228,7 +230,7 @@ class Images():
             retval = False
         return retval
 
-    def _get_input_images(self) -> Union[str, List[str]]:
+    def _get_input_images(self) -> str | list[str]:
         """ Return the list of images or path to video file that is to be processed.
 
         Returns
@@ -243,7 +245,7 @@ class Images():
 
         return input_images
 
-    def load(self) -> Generator[Tuple[str, np.ndarray], None, None]:
+    def load(self) -> Generator[tuple[str, np.ndarray], None, None]:
         """ Generator to load frames from a folder of images or from a video file.
 
         Yields
@@ -257,7 +259,7 @@ class Images():
         for filename, image in iterator():
             yield filename, image
 
-    def _load_disk_frames(self) -> Generator[Tuple[str, np.ndarray], None, None]:
+    def _load_disk_frames(self) -> Generator[tuple[str, np.ndarray], None, None]:
         """ Generator to load frames from a folder of images.
 
         Yields
@@ -274,7 +276,7 @@ class Images():
                 continue
             yield filename, image
 
-    def _load_video_frames(self) -> Generator[Tuple[str, np.ndarray], None, None]:
+    def _load_video_frames(self) -> Generator[tuple[str, np.ndarray], None, None]:
         """ Generator to load frames from a video file.
 
         Yields
@@ -287,7 +289,7 @@ class Images():
         logger.debug("Input is video. Capturing frames")
         vidname = os.path.splitext(os.path.basename(self._args.input_dir))[0]
         reader = imageio.get_reader(self._args.input_dir, "ffmpeg")  # type:ignore[arg-type]
-        for i, frame in enumerate(cast(Iterator[np.ndarray], reader)):
+        for i, frame in enumerate(T.cast(Iterator[np.ndarray], reader)):
             # Convert to BGR for cv2 compatibility
             frame = frame[:, :, ::-1]
             filename = f"{vidname}_{i + 1:06d}.png"
@@ -354,13 +356,13 @@ class PostProcess():  # pylint:disable=too-few-public-methods
     arguments: :class:`argparse.Namespace`
         The command line arguments that were passed to Faceswap
     """
-    def __init__(self, arguments: "Namespace") -> None:
+    def __init__(self, arguments: Namespace) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         self._args = arguments
         self._actions = self._set_actions()
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _set_actions(self) -> List["PostProcessAction"]:
+    def _set_actions(self) -> list[PostProcessAction]:
         """ Compile the requested actions to be performed into a list
 
         Returns
@@ -369,7 +371,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             The list of :class:`PostProcessAction` to be performed
         """
         postprocess_items = self._get_items()
-        actions: List["PostProcessAction"] = []
+        actions: list["PostProcessAction"] = []
         for action, options in postprocess_items.items():
             options = {} if options is None else options
             args = options.get("args", tuple())
@@ -387,7 +389,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
 
         return actions
 
-    def _get_items(self) -> Dict[str, Optional[Dict[str, Union[tuple, dict]]]]:
+    def _get_items(self) -> dict[str, dict[str, tuple | dict] | None]:
         """ Check the passed in command line arguments for requested actions,
 
         For any requested actions, add the item to the actions list along with
@@ -399,7 +401,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
             The name of the action to be performed as the key. Any action specific
             arguments and keyword arguments as the value.
         """
-        postprocess_items: Dict[str, Optional[Dict[str, Union[tuple, dict]]]] = {}
+        postprocess_items: dict[str, dict[str, tuple | dict] | None] = {}
         # Debug Landmarks
         if (hasattr(self._args, 'debug_landmarks') and self._args.debug_landmarks):
             postprocess_items["DebugLandmarks"] = None
@@ -407,7 +409,7 @@ class PostProcess():  # pylint:disable=too-few-public-methods
         logger.debug("Postprocess Items: %s", postprocess_items)
         return postprocess_items
 
-    def do_actions(self, extract_media: "ExtractMedia") -> None:
+    def do_actions(self, extract_media: ExtractMedia) -> None:
         """ Perform the requested optional post-processing actions on the given image.
 
         Parameters
@@ -451,7 +453,7 @@ class PostProcessAction():  # pylint: disable=too-few-public-methods
         otherwise ``False`` """
         return self._valid
 
-    def process(self, extract_media: "ExtractMedia") -> None:
+    def process(self, extract_media: ExtractMedia) -> None:
         """ Override for specific post processing action
 
         Parameters
@@ -487,8 +489,8 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
     def _border_text(self,
                      image: np.ndarray,
                      text: str,
-                     color: Tuple[int, int, int],
-                     position: Tuple[int, int]) -> None:
+                     color: tuple[int, int, int],
+                     position: tuple[int, int]) -> None:
         """ Create text on an image with a black border
 
         Parameters
@@ -515,7 +517,7 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
                         lineType=cv2.LINE_AA)
             thickness //= 2
 
-    def _annotate_face_box(self, face: "AlignedFace") -> None:
+    def _annotate_face_box(self, face: AlignedFace) -> None:
         """ Annotate the face extract box and print the original size in pixels
 
         face: :class:`~lib.align.AlignedFace`
@@ -543,7 +545,7 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         self._border_text(text_img, text, color, (pos_x, pos_y))
         cv2.addWeighted(text_img, 0.75, face.face, 0.25, 0, face.face)
 
-    def _print_stats(self, face: "AlignedFace") -> None:
+    def _print_stats(self, face: AlignedFace) -> None:
         """ Print various metrics on the output face images
 
         Parameters
@@ -571,7 +573,7 @@ class DebugLandmarks(PostProcessAction):  # pylint: disable=too-few-public-metho
         # Apply text to face
         cv2.addWeighted(text_image, 0.75, face.face, 0.25, 0, face.face)
 
-    def process(self, extract_media: "ExtractMedia") -> None:
+    def process(self, extract_media: ExtractMedia) -> None:
         """ Draw landmarks on a face.
 
         Parameters

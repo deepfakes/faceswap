@@ -2,9 +2,7 @@
 """ TF Keras implementation of Perceptual Loss Functions for faceswap.py """
 
 import logging
-import sys
-
-from typing import Dict, Optional, Tuple
+import typing as T
 
 import numpy as np
 import tensorflow as tf
@@ -13,11 +11,6 @@ import tensorflow as tf
 from tensorflow.keras import backend as K  # pylint:disable=import-error
 
 from lib.keras_utils import ColorSpaceConvert, frobenius_norm, replicate_pad
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +94,7 @@ class DSSIMObjective():  # pylint:disable=too-few-public-methods
         """
         return K.depthwise_conv2d(image, kernel, strides=(1, 1), padding="valid")
 
-    def _get_ssim(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+    def _get_ssim(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
         """ Obtain the structural similarity between a batch of true and predicted images.
 
         Parameters
@@ -330,8 +323,8 @@ class LDRFLIPLoss():  # pylint:disable=too-few-public-methods
                  lower_threshold_exponent: float = 0.4,
                  upper_threshold_exponent: float = 0.95,
                  epsilon: float = 1e-15,
-                 pixels_per_degree: Optional[float] = None,
-                 color_order: Literal["bgr", "rgb"] = "bgr") -> None:
+                 pixels_per_degree: float | None = None,
+                 color_order: T.Literal["bgr", "rgb"] = "bgr") -> None:
         logger.debug("Initializing: %s (computed_distance_exponent '%s', feature_exponent: %s, "
                      "lower_threshold_exponent: %s, upper_threshold_exponent: %s, epsilon: %s, "
                      "pixels_per_degree: %s, color_order: %s)", self.__class__.__name__,
@@ -525,7 +518,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         self._spatial_filters, self._radius = self._generate_spatial_filters()
         self._ycxcz2rgb = ColorSpaceConvert(from_space="ycxcz", to_space="rgb")
 
-    def _generate_spatial_filters(self) -> Tuple[tf.Tensor, int]:
+    def _generate_spatial_filters(self) -> tuple[tf.Tensor, int]:
         """ Generates spatial contrast sensitivity filters with width depending on the number of
         pixels per degree of visual angle of the observer for channels "A", "RG" and "BY"
 
@@ -559,7 +552,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
                                b1_rg: float,
                                b2_rg: float,
                                b1_by: float,
-                               b2_by: float) -> Tuple[np.ndarray, int]:
+                               b2_by: float) -> tuple[np.ndarray, int]:
         """ TODO docstring """
         max_scale_parameter = max([b1_a, b2_a, b1_rg, b2_rg, b1_by, b2_by])
         delta_x = 1.0 / self._pixels_per_degree
@@ -570,7 +563,7 @@ class _SpatialFilters():  # pylint:disable=too-few-public-methods
         return domain, radius
 
     @classmethod
-    def _generate_weights(cls, channel: Dict[str, float], domain: np.ndarray) -> tf.Tensor:
+    def _generate_weights(cls, channel: dict[str, float], domain: np.ndarray) -> tf.Tensor:
         """ TODO docstring """
         a_1, b_1, a_2, b_2 = channel["a1"], channel["b1"], channel["a2"], channel["b2"]
         grad = (a_1 * np.sqrt(np.pi / b_1) * np.exp(-np.pi ** 2 * domain / b_1) +
@@ -694,7 +687,7 @@ class MSSIMLoss():  # pylint:disable=too-few-public-methods
                  filter_size: int = 11,
                  filter_sigma: float = 1.5,
                  max_value: float = 1.0,
-                 power_factors: Tuple[float, ...] = (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
+                 power_factors: tuple[float, ...] = (0.0448, 0.2856, 0.3001, 0.2363, 0.1333)
                  ) -> None:
         self.filter_size = filter_size
         self.filter_sigma = filter_sigma

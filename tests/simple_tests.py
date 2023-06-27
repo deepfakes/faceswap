@@ -108,11 +108,10 @@ def convert_args(in_path, out_path, model_path, writer, args=None):
     return conv_args.split()  # Don't use pathes with spaces ;)
 
 
-def sort_args(in_path, out_path, sortby="face", groupby="hist", method="rename"):
+def sort_args(in_path, out_path, sortby="face", groupby="hist"):
     """ Sort command """
     py_exe = sys.executable
-    _sort_args = (f"{py_exe} tools.py sort -i {in_path} -o {out_path} -s {sortby} -fp {method} "
-                  f"-g {groupby} -k")
+    _sort_args = (f"{py_exe} tools.py sort -i {in_path} -o {out_path} -s {sortby} -g {groupby} -k")
     return _sort_args.split()
 
 
@@ -183,7 +182,7 @@ def main():
             "Sort faces.",
             sort_args(
                 pathjoin(vid_base, "faces"), pathjoin(vid_base, "faces_sorted"),
-                sortby="face", method="rename"
+                sortby="face"
             )
         )
 

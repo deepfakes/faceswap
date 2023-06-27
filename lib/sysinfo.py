@@ -6,8 +6,8 @@ import locale
 import os
 import platform
 import sys
+
 from subprocess import PIPE, Popen
-from typing import List, Optional
 
 import psutil
 
@@ -21,14 +21,14 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
     def __init__(self) -> None:
         self._state_file = _State().state_file
         self._configs = _Configs().configs
-        self._system = dict(platform=platform.platform(),
-                            system=platform.system().lower(),
-                            machine=platform.machine(),
-                            release=platform.release(),
-                            processor=platform.processor(),
-                            cpu_count=os.cpu_count())
-        self._python = dict(implementation=platform.python_implementation(),
-                            version=platform.python_version())
+        self._system = {"platform": platform.platform(),
+                        "system": platform.system().lower(),
+                        "machine": platform.machine(),
+                        "release": platform.release(),
+                        "processor": platform.processor(),
+                        "cpu_count": os.cpu_count()}
+        self._python = {"implementation": platform.python_implementation(),
+                        "version": platform.python_version()}
         self._gpu = self._get_gpu_info()
         self._cuda_check = CudaCheck()
 
@@ -66,7 +66,7 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
                       (hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix))
         else:
             prefix = os.path.dirname(sys.prefix)
-            retval = (os.path.basename(prefix) == "envs")
+            retval = os.path.basename(prefix) == "envs"
         return retval
 
     @property
@@ -295,7 +295,7 @@ class _Configs():  # pylint:disable=too-few-public-methods
         except FileNotFoundError:
             return ""
 
-    def _parse_configs(self, config_files: List[str]) -> str:
+    def _parse_configs(self, config_files: list[str]) -> str:
         """ Parse the given list of config files into a human readable format.
 
         Parameters
@@ -399,7 +399,7 @@ class _State():  # pylint:disable=too-few-public-methods
         return len(sys.argv) > 1 and sys.argv[1].lower() == "train"
 
     @staticmethod
-    def _get_arg(*args: str) -> Optional[str]:
+    def _get_arg(*args: str) -> str | None:
         """ Obtain the value for a given command line option from sys.argv.
 
         Returns

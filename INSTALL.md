@@ -39,12 +39,9 @@
   - [Setup](#setup-2)
     - [About some of the options](#about-some-of-the-options)
 - [Docker Install Guide](#docker-install-guide)
-  - [Docker General](#docker-general)
-    - [CUDA with Docker in 20 minutes.](#cuda-with-docker-in-20-minutes)
-  - [CUDA with Docker on Arch Linux](#cuda-with-docker-on-arch-linux)
-    - [Install docker](#install-docker)
-  - [A successful setup log, without docker.](#a-successful-setup-log-without-docker)
-  - [Run the project](#run-the-project)
+  - [Docker CPU](#docker-cpu)
+  - [Docker Nvidia](#docker-nvidia)
+- [Run the project](#run-the-project)
   - [Notes](#notes)
 
 # Prerequisites
@@ -115,7 +112,7 @@ Reboot your PC, so that everything you have just installed gets registered.
 - Select "Create" at the bottom
 - In the pop up:
     - Give it the name: faceswap
-    - **IMPORTANT**: Select python version 3.8
+    - **IMPORTANT**: Select python version 3.10
     - Hit "Create" (NB: This may take a while as it will need to download Python)
 ![Anaconda virtual env setup](https://i.imgur.com/CLIDDfa.png)
 
@@ -195,7 +192,7 @@ $ source ~/miniforge3/bin/activate
 ## Setup
 ### Create and Activate the Environment
 ```sh
-$ conda create --name faceswap python=3.9
+$ conda create --name faceswap python=3.10
 $ conda activate faceswap
 ```
 
@@ -225,7 +222,7 @@ Obtain git for your distribution from the [git website](https://git-scm.com/down
 The recommended install method is to use a Conda3 Environment as this will handle the installation of Nvidia's CUDA and cuDNN straight into your Conda Environment. This is by far the easiest and most reliable way to setup the project.
   - MiniConda3 is recommended: [MiniConda3](https://docs.conda.io/en/latest/miniconda.html)
 
-Alternatively you can install Python (>= 3.7-3.9 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Tensorflow (Current release: Tensorflow 2.9. Release v1.0: Tensorflow 1.15). You can check for the compatible versions here: (https://www.tensorflow.org/install/source#gpu).
+Alternatively you can install Python (3.10 64-bit) for your distribution (links below.) If you go down this route and are using an Nvidia GPU you should install CUDA (https://developer.nvidia.com/cuda-zone) and cuDNN (https://developer.nvidia.com/cudnn). for your system. If you do not plan to build Tensorflow yourself, make sure you install the correct Cuda and cuDNN package for the currently installed version of Tensorflow (Current release: Tensorflow 2.9. Release v1.0: Tensorflow 1.15). You can check for the compatible versions here: (https://www.tensorflow.org/install/source#gpu).
   - Python distributions:
     - apt/yum install python3 (Linux)
     - [Installer](https://www.python.org/downloads/release/python-368/) (Windows)
@@ -260,153 +257,83 @@ If setup fails for any reason you can still manually install the packages listed
 
 # Docker Install Guide
 
-## Docker General
-<details>
-  <summary>Click to expand!</summary>
+This Faceswap repo contains Docker build scripts for CPU and Nvidia backends. The scripts will set up a Docker container for you and install the latest version of the Faceswap software.
 
-  ### CUDA with Docker in 20 minutes.
-  
-  1. Install Docker
-     https://www.docker.com/community-edition
+You must first ensure that Docker is installed and running on your system. Follow the guide for downloading and installing Docker from their website:
 
-  2. Install Nvidia-Docker & Restart Docker Service
-     https://github.com/NVIDIA/nvidia-docker
+  - https://www.docker.com/get-started
 
-  3. Build Docker Image For faceswap
-  
-  ```bash
-  docker build -t deepfakes-gpu -f Dockerfile.gpu . 
-  ```
+Once Docker is installed and running, follow the relevant steps for your chosen backend
+## Docker CPU
+To run the CPU version of Faceswap follow these steps:
 
-  4. Mount faceswap volume and Run it
-    a). without `gui.tools.py` gui not working.
-
- ```bash
- nvidia-docker run --rm -it -p 8888:8888 \
-     --hostname faceswap-gpu --name faceswap-gpu \
-     -v /opt/faceswap:/srv \
-     deepfakes-gpu
- ```
-
-    b). with gui. tools.py gui working.
-
-Enable local access to X11 server
-
-```bash
-xhost +local:
+1. Build the Docker image For faceswap:
 ```
-
-Enable nvidia device if working under bumblebee
-
-```bash
-echo ON > /proc/acpi/bbswitch
+docker build \
+-t faceswap-cpu \
+https://raw.githubusercontent.com/deepfakes/faceswap/master/Dockerfile.cpu
 ```
+2. Launch and enter the Faceswap container:
 
-Create container
-```bash
-nvidia-docker run -p 8888:8888 \
-   --hostname faceswap-gpu --name faceswap-gpu \
-   -v /opt/faceswap:/srv \
-   -v /tmp/.X11-unix:/tmp/.X11-unix \
-   -e DISPLAY=unix$DISPLAY \
-   -e AUDIO_GID=`getent group audio | cut -d: -f3` \
-   -e VIDEO_GID=`getent group video | cut -d: -f3` \
-   -e GID=`id -g` \
-   -e UID=`id -u` \
-   deepfakes-gpu
+    a. For the **headless/command line** version of Faceswap run:
+    ```
+    docker run --rm -it faceswap-cpu
+    ```
+    You can then execute faceswap the standard way:
+    ```
+    python faceswap.py --help
+    ```
+    b. For the **GUI** version of Faceswap run:
+    ```
+    xhost +local: && \
+    docker run --rm -it \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -e DISPLAY=${DISPLAY} \
+    faceswap-cpu
+    ```
+    You can then launch the GUI with
+    ```
+    python faceswap.py gui
+    ```
+  ## Docker Nvidia
+To build the NVIDIA GPU version of Faceswap, follow these steps:
 
+1. Nvidia Docker builds need extra resources to provide the Docker container with access to your GPU.
+
+    a. Follow the instructions to install and apply the `Nvidia Container Toolkit` for your distribution from:
+    -  https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+
+    b. If Docker is already running, restart it to pick up the changes made by the Nvidia Container Toolkit.
+
+2. Build the Docker image For faceswap
 ```
-
-Open a new terminal to interact with the project
-
-```bash
-docker exec -it deepfakes-gpu /bin/bash
+docker build \
+-t faceswap-gpu \
+https://raw.githubusercontent.com/deepfakes/faceswap/master/Dockerfile.gpu
 ```
+1. Launch and enter the Faceswap container:
 
-Launch deepfakes gui (Answer 3 for NVIDIA at the prompt)
-
-```bash
-python3.8 /srv/faceswap.py gui
-```
-</details>
-
-## CUDA with Docker on Arch Linux
-
-<details>
-  <summary>Click to expand!</summary>
-
-### Install docker
-
-```bash
-sudo pacman -S docker
-```
-
-The steps are same but Arch linux doesn't use nvidia-docker
-
-create container
-
-```bash
-docker run -p 8888:8888 --gpus all --privileged -v /dev:/dev \  
-            --hostname faceswap-gpu --name faceswap-gpu \
-            -v /mnt/hdd2/faceswap:/srv \
-            -v /tmp/.X11-unix:/tmp/.X11-unix \
-            -e DISPLAY=unix$DISPLAY \
-            -e AUDIO_GID=`getent group audio | cut -d: -f3` \
-            -e VIDEO_GID=`getent group video | cut -d: -f3` \
-            -e GID=`id -g` \
-            -e UID=`id -u` \
-            deepfakes-gpu
-```
-
-Open a new terminal to interact with the project
-
-```bash
-docker exec -it deepfakes-gpu /bin/bash
-```
-
-Launch deepfakes gui (Answer 3 for NVIDIA at the prompt)
-
-**With `gui.tools.py` gui working.**
- Enable local access to X11 server
-
- ```bash
-xhost +local:
-```
- 
- ```bash
- python3.8 /srv/faceswap.py gui
- ```
-
-</details>
-
---- 
-## A successful setup log, without docker.
-```
-INFO    The tool provides tips for installation
-        and installs required python packages
-INFO    Setup in Linux 4.14.39-1-MANJARO
-INFO    Installed Python: 3.7.5 64bit
-INFO    Installed PIP: 10.0.1
-Enable  Docker? [Y/n] n
-INFO    Docker Disabled
-Enable  CUDA? [Y/n]
-INFO    CUDA Enabled
-INFO    CUDA version: 9.1
-INFO    cuDNN version: 7
-WARNING Tensorflow has no official prebuild for CUDA 9.1 currently.
-        To continue, You have to build your own tensorflow-gpu.
-        Help: https://www.tensorflow.org/install/install_sources
-Are System Dependencies met? [y/N] y
-INFO    Installing Missing Python Packages...
-INFO    Installing tensorflow-gpu
-......
-INFO    Installing tqdm
-INFO    Installing matplotlib
-INFO    All python3 dependencies are met.
-        You are good to go.
-```
-
-## Run the project
+    a. For the **headless/command line** version of Faceswap run:
+    ```
+    docker run --runtime=nvidia --rm -it faceswap-gpu
+    ```
+    You can then execute faceswap the standard way:
+    ```
+    python faceswap.py --help
+    ```
+    b. For the **GUI** version of Faceswap run:
+    ```
+    xhost +local: && \
+    docker run --runtime=nvidia --rm -it \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -e DISPLAY=${DISPLAY} \
+    faceswap-gpu
+    ```
+    You can then launch the GUI with
+    ```
+    python faceswap.py gui
+    ```
+# Run the project
 Once all these requirements are installed, you can attempt to run the faceswap tools. Use the `-h` or `--help` options for a list of options.
 
 ```bash

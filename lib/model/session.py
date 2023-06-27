@@ -1,9 +1,9 @@
 #!/usr/bin python3
 """ Settings manager for Keras Backend """
-
+from __future__ import annotations
 from contextlib import nullcontext
 import logging
-from typing import Callable, ContextManager, List, Optional, Union
+import typing as T
 
 import numpy as np
 import tensorflow as tf
@@ -13,6 +13,9 @@ from tensorflow.keras.layers import Activation  # pylint:disable=import-error
 from tensorflow.keras.models import load_model as k_load_model, Model  # noqa:E501  # pylint:disable=import-error
 
 from lib.utils import get_backend
+
+if T.TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)  # pylint:disable=invalid-name
 
@@ -52,9 +55,9 @@ class KSession():
     def __init__(self,
                  name: str,
                  model_path: str,
-                 model_kwargs: Optional[dict] = None,
+                 model_kwargs: dict | None = None,
                  allow_growth: bool = False,
-                 exclude_gpus: Optional[List[int]] = None,
+                 exclude_gpus: list[int] | None = None,
                  cpu_mode: bool = False) -> None:
         logger.trace("Initializing: %s (name: %s, model_path: %s, "  # type:ignore
                      "model_kwargs: %s,  allow_growth: %s, exclude_gpus: %s, cpu_mode: %s)",
@@ -67,12 +70,12 @@ class KSession():
                                           cpu_mode)
         self._model_path = model_path
         self._model_kwargs = {} if not model_kwargs else model_kwargs
-        self._model: Optional[Model] = None
+        self._model: Model | None = None
         logger.trace("Initialized: %s", self.__class__.__name__,)  # type:ignore
 
     def predict(self,
-                feed: Union[List[np.ndarray], np.ndarray],
-                batch_size: Optional[int] = None) -> Union[List[np.ndarray], np.ndarray]:
+                feed: list[np.ndarray] | np.ndarray,
+                batch_size: int | None = None) -> list[np.ndarray] | np.ndarray:
         """ Get predictions from the model.
 
         This method is a wrapper for :func:`keras.predict()` function. For Tensorflow backends
@@ -98,7 +101,7 @@ class KSession():
     def _set_session(self,
                      allow_growth: bool,
                      exclude_gpus: list,
-                     cpu_mode: bool) -> ContextManager:
+                     cpu_mode: bool) -> T.ContextManager:
         """ Sets the backend session options.
 
         For CPU backends, this hides any GPUs from Tensorflow.

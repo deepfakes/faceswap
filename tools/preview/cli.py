@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ Command Line Arguments for tools """
 import gettext
-from typing import Any, List, Dict
+import typing as T
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths
@@ -29,7 +29,7 @@ class PreviewArgs(FaceSwapArgs):
         return _("Preview tool\nAllows you to configure your convert settings with a live preview")
 
     @staticmethod
-    def get_argument_list() -> List[Dict[str, Any]]:
+    def get_argument_list() -> list[dict[str, T.Any]]:
         """ Put the arguments in a list so that they are accessible from both argparse and gui
 
         Returns

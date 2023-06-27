@@ -4,24 +4,25 @@
 If Tkinter is installed, then this will be used to manage the preview image, otherwise we
 fallback to opencv's imshow
 """
+from __future__ import annotations
 import logging
 import os
 import sys
 import tkinter as tk
+import typing as T
 
 from datetime import datetime
 from platform import system
 from tkinter import ttk
 from math import ceil, floor
 
-from typing import cast, List, Optional, Tuple, TYPE_CHECKING
 from PIL import Image, ImageTk
 
 import cv2
 
 from .preview_cv import PreviewBase, TriggerKeysType
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     import numpy as np
     from .preview_cv import PreviewBuffer, TriggerType
 
@@ -38,18 +39,18 @@ class _Taskbar():
     taskbar: :class:`tkinter.ttk.Frame` or ``None``
         None if preview is a pop-up window otherwise ttk.Frame if taskbar is managed by the GUI
     """
-    def __init__(self, parent: tk.Frame, taskbar: Optional[ttk.Frame]) -> None:
+    def __init__(self, parent: tk.Frame, taskbar: ttk.Frame | None) -> None:
         logger.debug("Initializing %s (parent: '%s', taskbar: %s)",
                      self.__class__.__name__, parent, taskbar)
         self._is_standalone = taskbar is None
-        self._gui_mapped: List[tk.Widget] = []
+        self._gui_mapped: list[tk.Widget] = []
         self._frame = tk.Frame(parent) if taskbar is None else taskbar
 
         self._min_max_scales = (20, 400)
-        self._vars = dict(save=tk.BooleanVar(),
-                          scale=tk.StringVar(),
-                          slider=tk.IntVar(),
-                          interpolator=tk.IntVar())
+        self._vars = {"save": tk.BooleanVar(),
+                      "scale": tk.StringVar(),
+                      "slider": tk.IntVar(),
+                      "interpolator": tk.IntVar()}
         self._interpolators = [("nearest_neighbour", cv2.INTER_NEAREST),
                                ("bicubic", cv2.INTER_CUBIC)]
         self._scale = self._add_scale_combo()
@@ -261,7 +262,7 @@ class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
     def __init__(self,
                  parent: tk.Frame,
                  scale_var: tk.StringVar,
-                 screen_dimensions: Tuple[int, int],
+                 screen_dimensions: tuple[int, int],
                  is_standalone: bool) -> None:
         logger.debug("Initializing %s (parent: '%s', scale_var: %s, screen_dimensions: %s)",
                      self.__class__.__name__, parent, scale_var, screen_dimensions)
@@ -272,7 +273,7 @@ class _PreviewCanvas(tk.Canvas):  # pylint:disable=too-many-ancestors
         self._screen_dimensions = screen_dimensions
         self._var_scale = scale_var
         self._configure_scrollbars(frame)
-        self._image: Optional[ImageTk.PhotoImage] = None
+        self._image: ImageTk.PhotoImage | None = None
         self._image_id = self.create_image(self.width / 2,
                                            self.height / 2,
                                            anchor=tk.CENTER,
@@ -400,8 +401,8 @@ class _Image():
         logger.debug("Initializing %s: (save_variable: %s, is_standalone: %s)",
                      self.__class__.__name__, save_variable, is_standalone)
         self._is_standalone = is_standalone
-        self._source: Optional["np.ndarray"] = None
-        self._display: Optional[ImageTk.PhotoImage] = None
+        self._source: np.ndarray | None = None
+        self._display: ImageTk.PhotoImage | None = None
         self._scale = 1.0
         self._interpolation = cv2.INTER_NEAREST
 
@@ -416,7 +417,7 @@ class _Image():
         return self._display
 
     @property
-    def source(self) -> "np.ndarray":
+    def source(self) -> np.ndarray:
         """ :class:`PIL.Image.Image`: The current source preview image """
         assert self._source is not None
         return self._source
@@ -426,7 +427,7 @@ class _Image():
         """int: The current display scale as a percentage of original image size """
         return int(self._scale * 100)
 
-    def set_source_image(self, name: str, image: "np.ndarray") -> None:
+    def set_source_image(self, name: str, image: np.ndarray) -> None:
         """ Set the source image to :attr:`source`
 
         Parameters
@@ -542,7 +543,7 @@ class _Bindings():  # pylint: disable=too-few-public-methods
         self._taskbar = taskbar
         self._image = image
 
-        self._drag_data: List[float] = [0., 0.]
+        self._drag_data: list[float] = [0., 0.]
         self._set_mouse_bindings()
         self._set_key_bindings(is_standalone)
         logger.debug("Initialized %s", self.__class__.__name__,)
@@ -604,7 +605,7 @@ class _Bindings():  # pylint: disable=too-few-public-methods
             The key press event
         """
         move_axis = self._canvas.xview if event.keysym in ("Left", "Right") else self._canvas.yview
-        visible = (move_axis()[1] - move_axis()[0])
+        visible = move_axis()[1] - move_axis()[0]
         amount = -visible / 25 if event.keysym in ("Up", "Left") else visible / 25
         logger.trace("Key move event: (event: %s, move_axis: %s, visible: %s, "  # type: ignore
                      "amount: %s)", move_axis, visible, amount)
@@ -671,10 +672,10 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
         Default: `None`
     """
     def __init__(self,
-                 preview_buffer: "PreviewBuffer",
-                 parent: Optional[tk.Widget] = None,
-                 taskbar: Optional[ttk.Frame] = None,
-                 triggers: Optional["TriggerType"] = None) -> None:
+                 preview_buffer: PreviewBuffer,
+                 parent: tk.Widget | None = None,
+                 taskbar: ttk.Frame | None = None,
+                 triggers: TriggerType | None = None) -> None:
         logger.debug("Initializing %s (parent: '%s')", self.__class__.__name__, parent)
         super().__init__(preview_buffer, triggers=triggers)
         self._is_standalone = parent is None
@@ -745,7 +746,7 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
         logger.info("    Save Preview:      Ctrl+s")
         logger.info("---------------------------------------------------")
 
-    def _get_geometry(self) -> Tuple[int, int]:
+    def _get_geometry(self) -> tuple[int, int]:
         """ Obtain the geometry of the current screen (standalone) or the dimensions of the widget
         holding the preview window (GUI).
 
@@ -780,7 +781,7 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
         half_screen = tuple(x // 2 for x in self._screen_dimensions)
         min_scales = (half_screen[0] / self._image.source.shape[1],
                       half_screen[1] / self._image.source.shape[0])
-        min_scale = min(1.0, min(min_scales))
+        min_scale = min(1.0, *min_scales)
         min_scale = (ceil(min_scale * 10)) * 10
 
         eight_screen = tuple(x * 8 for x in self._screen_dimensions)
@@ -884,7 +885,7 @@ class PreviewTk(PreviewBase):  # pylint:disable=too-few-public-methods
         if self._triggers is None:  # Don't need triggers for GUI
             return
         keypress = "enter" if event.keysym == "Return" else event.keysym
-        key = cast(TriggerKeysType, keypress)
+        key = T.cast(TriggerKeysType, keypress)
         logger.debug("Processing keypress '%s'", key)
         if key == "r":
             print("")  # Let log print on different line from loss output

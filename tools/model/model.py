@@ -118,7 +118,7 @@ class Inference():  # pylint:disable=too-few-public-methods
         self._format = arguments.format
         self._input_file, self._output_file = self._get_output_file(arguments.model_dir)
 
-    def _get_output_file(self, model_dir: str) -> T.Tuple[str, str]:
+    def _get_output_file(self, model_dir: str) -> tuple[str, str]:
         """ Obtain the full path for the output model file/folder
 
         Parameters
@@ -183,7 +183,7 @@ class NaNScan():  # pylint:disable=too-few-public-methods
         return os.path.join(model_dir, model_file)
 
     def _parse_weights(self,
-                       layer: T.Union[keras.models.Model, keras.layers.Layer]) -> dict:
+                       layer: keras.models.Model | keras.layers.Layer) -> dict:
         """ Recursively pass through sub-models to scan layer weights"""
         weights = layer.get_weights()
         logger.debug("Processing weights for layer '%s', length: '%s'",

@@ -8,17 +8,85 @@ on:
       - "**/README.md"
 
 jobs:
-  build_linux:
+  build_conda:
+    name: conda (${{ matrix.os }}, ${{ matrix.backend }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        backend: ["nvidia", "cpu"]
+        include:
+          - os: "ubuntu-latest"
+            backend: "rocm"
+          - os: "windows-latest"
+            backend: "directml"
+        exclude:
+          # pynvx does not currently build for Python3.10 and without CUDA it may not build at all
+          - os: "macos-latest"
+            backend: "nvidia"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set cache date
+        run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+      - name: Cache conda
+        uses: actions/cache@v3
+        env:
+          # Increase this value to manually reset cache
+          CACHE_NUMBER: 1
+          REQ_FILE: ./requirements/requirements_${{ matrix.backend }}.txt
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-${{ matrix.backend }}-conda-${{ env.CACHE_NUMBER }}-${{ env.DATE }}-${{ hashFiles('./requirements/requirements.txt', env.REQ_FILE) }}
+      - name: Set up Conda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: "3.10"
+          auto-update-conda: true
+          activate-environment: faceswap
+      - name: Conda info
+        run: conda info && conda list
+      - name: Install
+        run: |
+          python setup.py --installer --${{ matrix.backend }}
+          pip install flake8 pylint mypy pytest pytest-mock wheel pytest-xvfb
+          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
+      - name: Lint with flake8
+        run: |
+          # stop the build if there are Python syntax errors or undefined names
+          flake8 . --select=E9,F63,F7,F82 --show-source
+          flake8 . --exit-zero
+      - name: MyPy Typing
+        continue-on-error: true
+        run: |
+          mypy .
+      - name: SysInfo
+        run: python -c "from lib.sysinfo import sysinfo ;  print(sysinfo)"
+      - name: Simple Tests
+        # These backends will fail as GPU drivers not available
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml'
+        run: |
+          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+      - name: End to End Tests
+        # These backends will fail as GPU drivers not available
+        # macOS fails on first extract test with 'died with <Signals.SIGSEGV: 11>'
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml' && matrix.os != 'macos-latest'
+        run: |
+          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
+  build_linux:
+    name: "pip (ubuntu-latest, ${{ matrix.backend }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9"]
+        python-version: ["3.10"]
         backend: ["cpu"]
         include:
-          - kbackend: "tensorflow"
-            backend: "cpu"
+          - backend: "cpu"
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python ${{ matrix.python-version }}
@@ -33,6 +101,8 @@ jobs:
           pip install flake8 pylint mypy pytest pytest-mock pytest-xvfb wheel
           pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
+      - name: List installed packages
+        run: pip freeze
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -45,17 +115,18 @@ jobs:
           mypy .
       - name: Simple Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" KERAS_BACKEND="${{ matrix.kbackend }}" py.test -v tests/;
+          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" KERAS_BACKEND="${{ matrix.kbackend }}" python tests/simple_tests.py;
+          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
   build_windows:
+    name: "pip (windows-latest, ${{ matrix.backend }})"
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9"]
+        python-version: ["3.10"]
         backend: ["cpu", "directml"]
         include:
           - backend: "cpu"
@@ -74,6 +145,8 @@ jobs:
           pip install flake8 pylint mypy pytest pytest-mock wheel
           pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
+      - name: List installed packages
+        run: pip freeze
       - name: Set Backend EnvVar
         run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Lint with flake8

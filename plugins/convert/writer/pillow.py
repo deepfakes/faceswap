@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """ Image output writer for faceswap.py converter """
-
-from typing import Dict, List, Union
 from io import BytesIO
 from PIL import Image
 
@@ -25,7 +23,7 @@ class Writer(Output):
         super().__init__(output_folder, **kwargs)
         self._check_transparency_format()
         # Correct format namings for writing to byte stream
-        self._format_dict = dict(jpg="JPEG", jp2="JPEG 2000", tif="TIFF")
+        self._format_dict = {"jpg": "JPEG", "jp2": "JPEG 2000", "tif": "TIFF"}
         self._separate_mask = self.config["draw_transparent"] and self.config["separate_mask"]
         self._kwargs = self._get_save_kwargs()
 
@@ -38,7 +36,7 @@ class Writer(Output):
                        "transparency. Changing output format to 'png'")
         self.config["format"] = "png"
 
-    def _get_save_kwargs(self) -> Dict[str, Union[bool, int, str]]:
+    def _get_save_kwargs(self) -> dict[str, bool | int | str]:
         """ Return the save parameters for the file format
 
         Returns
@@ -59,7 +57,7 @@ class Writer(Output):
         logger.debug(kwargs)
         return kwargs
 
-    def write(self, filename: str, image: List[BytesIO]) -> None:
+    def write(self, filename: str, image: list[BytesIO]) -> None:
         """ Write out the pre-encoded image to disk. If separate mask has been selected, write out
         the encoded mask to a sub-folder in the output directory.
 
@@ -80,7 +78,7 @@ class Writer(Output):
         except Exception as err:  # pylint: disable=broad-except
             logger.error("Failed to save image '%s'. Original Error: %s", filename, err)
 
-    def pre_encode(self, image: np.ndarray) -> List[BytesIO]:
+    def pre_encode(self, image: np.ndarray) -> list[BytesIO]:
         """ Pre_encode the image in lib/convert.py threads as it is a LOT quicker
 
         Parameters

@@ -31,7 +31,7 @@ class _net():  # pylint:disable=too-few-public-methods
         The input shape for the model. Default: ``None``
     """
     def __init__(self,
-                 input_shape: T.Optional[T.Tuple[int, int, int]] = None) -> None:
+                 input_shape: tuple[int, int, int] | None = None) -> None:
         logger.debug("Initializing: %s (input_shape: %s)", self.__class__.__name__, input_shape)
         self._input_shape = (None, None, 3) if input_shape is None else input_shape
         assert len(self._input_shape) == 3 and self._input_shape[-1] == 3, (
@@ -56,7 +56,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
     input_shape, Tuple, optional
         The input shape for the model. Default: ``None``
     """
-    def __init__(self, input_shape: T.Optional[T.Tuple[int, int, int]] = None) -> None:
+    def __init__(self, input_shape: tuple[int, int, int] | None = None) -> None:
         super().__init__(input_shape)
         self._feature_indices = [0, 3, 6, 8, 10]  # For naming equivalent to PyTorch
         self._filters = [64, 192, 384, 256, 256]  # Filters at each block
@@ -108,7 +108,7 @@ class AlexNet(_net):  # pylint:disable=too-few-public-methods
                               name=name)(var_x)
         return var_x
 
-    def __call__(self) -> Model:
+    def __call__(self) -> tf.keras.models.Model:
         """ Create the AlexNet Model
 
         Returns
@@ -189,7 +189,7 @@ class SqueezeNet(_net):  # pylint:disable=too-few-public-methods
                                 name=f"{name}.expand3x3")(squeezed)
         return layers.Concatenate(axis=-1, name=name)([expand1, expand3])
 
-    def __call__(self) -> Model:
+    def __call__(self) -> tf.keras.models.Model:
         """ Create the SqueezeNet Model
 
         Returns

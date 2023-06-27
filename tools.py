@@ -9,17 +9,13 @@ from importlib import import_module
 # Importing the various tools
 from lib.cli.args import FullHelpArgumentParser
 
-
 # LOCALES
 _LANG = gettext.translation("tools", localedir="locales", fallback=True)
 _ = _LANG.gettext
 
-
 # Python version check
-if sys.version_info[0] < 3:
-    raise Exception("This program requires at least python3.7")
-if sys.version_info[0] == 3 and sys.version_info[1] < 7:
-    raise Exception("This program requires at least python3.7")
+if sys.version_info < (3, 10):
+    raise ValueError("This program requires at least python 3.10")
 
 
 def bad_args(*args):  # pylint:disable=unused-argument

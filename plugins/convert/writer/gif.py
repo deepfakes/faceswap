@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """ Animated GIF writer for faceswap.py converter """
+from __future__ import annotations
 import os
-from typing import Optional, List, Tuple, TYPE_CHECKING
+import typing as T
 
 import cv2
 import imageio
 
 from ._base import Output, logger
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from imageio.core import format as im_format  # noqa:F401
 
 
@@ -31,15 +32,16 @@ class Writer(Output):
     def __init__(self,
                  output_folder: str,
                  total_count: int,
-                 frame_ranges: Optional[List[Tuple[int, int]]],
+                 frame_ranges: list[tuple[int, int]] | None,
                  **kwargs) -> None:
         logger.debug("total_count: %s, frame_ranges: %s", total_count, frame_ranges)
         super().__init__(output_folder, **kwargs)
-        self.frame_order: List[int] = self._set_frame_order(total_count, frame_ranges)
-        self._output_dimensions: Optional[Tuple[int, int]] = None  # Fix dims on 1st received frame
+        self.frame_order: list[int] = self._set_frame_order(total_count, frame_ranges)
+        # Fix dims on 1st received frame
+        self._output_dimensions: tuple[int, int] | None = None
         # Need to know dimensions of first frame, so set writer then
-        self._writer: Optional[imageio.plugins.pillowmulti.GIFFormat.Writer] = None
-        self._gif_file: Optional[str] = None  # Set filename based on first file seen
+        self._writer: imageio.plugins.pillowmulti.GIFFormat.Writer | None = None
+        self._gif_file: str | None = None  # Set filename based on first file seen
 
     @property
     def _gif_params(self) -> dict:
@@ -50,7 +52,7 @@ class Writer(Output):
 
     @staticmethod
     def _set_frame_order(total_count: int,
-                         frame_ranges: Optional[List[Tuple[int, int]]]) -> List[int]:
+                         frame_ranges: list[tuple[int, int]] | None) -> list[int]:
         """ Obtain the full list of frames to be converted in order.
 
         Parameters
@@ -75,7 +77,7 @@ class Writer(Output):
         logger.debug("frame_order: %s", retval)
         return retval
 
-    def _get_writer(self) -> "im_format.Format.Writer":
+    def _get_writer(self) -> im_format.Format.Writer:
         """ Obtain the GIF writer with the requested GIF encoding options.
 
         Returns
@@ -145,7 +147,7 @@ class Writer(Output):
         self._gif_file = retval
         logger.info("Outputting to: '%s'", self._gif_file)
 
-    def _set_dimensions(self, frame_dims: Tuple[int, int]) -> None:
+    def _set_dimensions(self, frame_dims: tuple[int, int]) -> None:
         """ Set the attribute :attr:`_output_dimensions` based on the first frame received. This
         protects against different sized images coming in and ensure all images get written to the
         Gif at the sema dimensions. """

@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 """ Collects and returns Information on DirectX 12 hardware devices for DirectML. """
+from __future__ import annotations
 import os
 import sys
+import typing as T
 assert sys.platform == "win32"
 
 import ctypes
 from ctypes import POINTER, Structure, windll
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, cast, List
 
 from comtypes import COMError, IUnknown, GUID, STDMETHOD, HRESULT  # pylint:disable=import-error
 
 from ._base import _GPUStats
+
+if T.TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Monkey patch default ctypes.c_uint32 value to Enum ctypes property for easier tracking of types
 # We can't just subclass as the attribute will be assumed to be part of the Enumeration, so we
@@ -314,7 +318,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
         self._adapters = self._get_adapters()
         self._devices = self._process_adapters()
 
-        self._valid_adaptors: List[Device] = []
+        self._valid_adaptors: list[Device] = []
         self._log("debug", f"Initialized {self.__class__.__name__}")
 
     def _get_factory(self) -> ctypes._Pointer:
@@ -334,12 +338,12 @@ class Adapters():  # pylint:disable=too-few-public-methods
         factory_func.restype = HRESULT
         handle = ctypes.c_void_p(0)
         factory_func(IDXGIFactory6._iid_,  ctypes.byref(handle))  # pylint:disable=protected-access
-        retval = ctypes.POINTER(IDXGIFactory6)(cast(IDXGIFactory6, handle.value))
+        retval = ctypes.POINTER(IDXGIFactory6)(T.cast(IDXGIFactory6, handle.value))
         self._log("debug", f"factory: {retval}")
         return retval
 
     @property
-    def valid_adapters(self) -> List[Device]:
+    def valid_adapters(self) -> list[Device]:
         """ list[:class:`Device`]: DirectX 12 compatible hardware :class:`Device` objects """
         if self._valid_adaptors:
             return self._valid_adaptors
@@ -354,7 +358,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
         self._log("debug", f"valid_adaptors: {self._valid_adaptors}")
         return self._valid_adaptors
 
-    def _get_adapters(self) -> List[ctypes._Pointer]:
+    def _get_adapters(self) -> list[ctypes._Pointer]:
         """ Obtain DirectX 12 supporting hardware adapter objects and add a Device class for
         obtaining details
 
@@ -376,7 +380,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
                 if success != 0:
                     raise AttributeError("Error calling EnumAdapterByGpuPreference. Result: "
                                          f"{hex(ctypes.c_ulong(success).value)}")
-                adapter = POINTER(IDXGIAdapter3)(cast(IDXGIAdapter3, handle.value))
+                adapter = POINTER(IDXGIAdapter3)(T.cast(IDXGIAdapter3, handle.value))
                 self._log("debug", f"found adapter: {adapter}")
                 retval.append(adapter)
             except COMError as err:
@@ -392,7 +396,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
         self._log("debug", f"adapters: {retval}")
         return retval
 
-    def _query_adapter(self, func: Callable[[Any], Any], *args: Any) -> None:
+    def _query_adapter(self, func: Callable[[T.Any], T.Any], *args: T.Any) -> None:
         """ Query an adapter function, logging if the HRESULT is not a success
 
         Parameters
@@ -430,7 +434,7 @@ class Adapters():  # pylint:disable=too-few-public-methods
                                LookupGUID.ID3D12Device)
         return success in (0, 1)
 
-    def _process_adapters(self) -> List[Device]:
+    def _process_adapters(self) -> list[Device]:
         """ Process the adapters to add discovered information.
 
         Returns
@@ -485,21 +489,21 @@ class DirectML(_GPUStats):
         Default: ``True``
     """
     def __init__(self, log: bool = True) -> None:
-        self._devices: List[Device] = []
+        self._devices: list[Device] = []
         super().__init__(log=log)
 
     @property
-    def _all_vram(self) -> List[int]:
+    def _all_vram(self) -> list[int]:
         """ list: The VRAM of each GPU device that the DX API has discovered. """
         return [int(device.description.DedicatedVideoMemory / (1024 * 1024))
                 for device in self._devices]
 
     @property
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         """ list: The name of each GPU device that the DX API has discovered. """
         return [device.description.Description for device in self._devices]
 
-    def _get_active_devices(self) -> List[int]:
+    def _get_active_devices(self) -> list[int]:
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded by
         DML_VISIBLE_DEVICES environment variable or explicitly excluded in the command line
         arguments).
@@ -517,7 +521,7 @@ class DirectML(_GPUStats):
         self._log("debug", f"Active GPU Devices: {devices}")
         return devices
 
-    def _get_devices(self) -> List[Device]:
+    def _get_devices(self) -> list[Device]:
         """ Obtain all detected DX API devices.
 
         Returns
@@ -582,7 +586,7 @@ class DirectML(_GPUStats):
         self._log("debug", f"GPU Drivers: {drivers}")
         return drivers
 
-    def _get_device_names(self) -> List[str]:
+    def _get_device_names(self) -> list[str]:
         """ Obtain the list of names of connected GPUs as identified in :attr:`_handles`.
 
         Returns
@@ -594,7 +598,7 @@ class DirectML(_GPUStats):
         self._log("debug", f"GPU Devices: {names}")
         return names
 
-    def _get_vram(self) -> List[int]:
+    def _get_vram(self) -> list[int]:
         """ Obtain the VRAM in Megabytes for each connected DirectML GPU as identified in
         :attr:`_handles`.
 
@@ -607,7 +611,7 @@ class DirectML(_GPUStats):
         self._log("debug", f"GPU VRAM: {vram}")
         return vram
 
-    def _get_free_vram(self) -> List[int]:
+    def _get_free_vram(self) -> list[int]:
         """ Obtain the amount of VRAM that is available, in Megabytes, for each connected DirectX
         12 supporting GPU.
 

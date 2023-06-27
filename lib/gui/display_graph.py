@@ -1,12 +1,13 @@
 #!/usr/bin python3
 """ Graph functions for Display Frame area of the Faceswap GUI """
+from __future__ import annotations
 import datetime
 import logging
 import os
 import tkinter as tk
+import typing as T
 
 from tkinter import ttk
-from typing import cast, Union, List, Optional, Tuple, TYPE_CHECKING
 from math import ceil, floor
 
 import numpy as np
@@ -20,7 +21,7 @@ from matplotlib.backend_bases import NavigationToolbar2
 from .custom_widgets import Tooltip
 from .utils import get_config, get_images, LongRunningTask
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from matplotlib.lines import Line2D
 
 matplotlib.use("TkAgg")
@@ -49,8 +50,8 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._ylabel = ylabel
         self._colourmaps = ["Reds", "Blues", "Greens", "Purples", "Oranges", "Greys", "copper",
                             "summer", "bone", "hot", "cool", "pink", "Wistia", "spring", "winter"]
-        self._lines: List["Line2D"] = []
-        self._toolbar: Optional["NavigationToolbar"] = None
+        self._lines: list[Line2D] = []
+        self._toolbar: "NavigationToolbar" | None = None
         self._fig = Figure(figsize=(4, 4), dpi=75)
 
         self._ax1 = self._fig.add_subplot(1, 1, 1)
@@ -129,7 +130,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._ax1.set_ylim(0.00, 100.0)
         self._ax1.set_xlim(0, 1)
 
-    def _axes_limits_set(self, data: List[float]) -> None:
+    def _axes_limits_set(self, data: list[float]) -> None:
         """ Set the axes limits.
 
         Parameters
@@ -154,7 +155,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             self._axes_limits_set_default()
 
     @staticmethod
-    def _axes_data_get_min_max(data: List[float]) -> Tuple[float, float]:
+    def _axes_data_get_min_max(data: list[float]) -> tuple[float, float]:
         """ Obtain the minimum and maximum values for the y-axis from the given data points.
 
         Parameters
@@ -188,7 +189,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         logger.debug("yscale: '%s'", scale)
         self._ax1.set_yscale(scale)
 
-    def _lines_sort(self, keys: List[str]) -> List[List[Union[str, int, Tuple[float]]]]:
+    def _lines_sort(self, keys: list[str]) -> list[list[str | int | tuple[float]]]:
         """ Sort the data keys into consistent order and set line color map and line width.
 
         Parameters
@@ -202,8 +203,8 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
             A list of loss keys with their corresponding line formatting and color information
         """
         logger.trace("Sorting lines")  # type:ignore[attr-defined]
-        raw_lines: List[List[str]] = []
-        sorted_lines: List[List[str]] = []
+        raw_lines: list[list[str]] = []
+        sorted_lines: list[list[str]] = []
         for key in sorted(keys):
             title = key.replace("_", " ").title()
             if key.startswith("raw"):
@@ -217,7 +218,7 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         return lines
 
     @staticmethod
-    def _lines_groupsize(raw_lines: List[List[str]], sorted_lines: List[List[str]]) -> int:
+    def _lines_groupsize(raw_lines: list[list[str]], sorted_lines: list[list[str]]) -> int:
         """ Get the number of items in each group.
 
         If raw data isn't selected, then check the length of remaining groups until something is
@@ -246,8 +247,8 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         return groupsize
 
     def _lines_style(self,
-                     lines: List[List[str]],
-                     groupsize: int) -> List[List[Union[str, int, Tuple[float]]]]:
+                     lines: list[list[str]],
+                     groupsize: int) -> list[list[str | int | tuple[float]]]:
         """ Obtain the color map and line width for each group.
 
         Parameters
@@ -266,13 +267,13 @@ class GraphBase(ttk.Frame):  # pylint: disable=too-many-ancestors
         groups = int(len(lines) / groupsize)
         colours = self._lines_create_colors(groupsize, groups)
         widths = list(range(1, groups + 1))
-        retval = cast(List[List[Union[str, int, Tuple[float]]]], lines)
+        retval = T.cast(list[list[str | int | tuple[float]]], lines)
         for idx, item in enumerate(retval):
             linewidth = widths[idx // groupsize]
             item.extend((linewidth, colours[idx]))
         return retval
 
-    def _lines_create_colors(self, groupsize: int, groups: int) -> List[Tuple[float]]:
+    def _lines_create_colors(self, groupsize: int, groups: int) -> list[tuple[float]]:
         """ Create the color maps.
 
         Parameters
@@ -336,8 +337,8 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def __init__(self, parent: ttk.Frame, data, ylabel: str) -> None:
         super().__init__(parent, data, ylabel)
-        self._thread: Optional[LongRunningTask] = None  # Thread for LongRunningTask
-        self._displayed_keys: List[str] = []
+        self._thread: LongRunningTask | None = None  # Thread for LongRunningTask
+        self._displayed_keys: list[str] = []
         self._add_callback()
 
     def _add_callback(self) -> None:
@@ -352,7 +353,7 @@ class TrainingGraph(GraphBase):  # pylint: disable=too-many-ancestors
 
     def refresh(self, *args) -> None:  # pylint: disable=unused-argument
         """ Read the latest loss data and apply to current graph """
-        refresh_var = cast(tk.BooleanVar, get_config().tk_vars.refresh_graph)
+        refresh_var = T.cast(tk.BooleanVar, get_config().tk_vars.refresh_graph)
         if not refresh_var.get() and self._thread is None:
             return
 
@@ -533,7 +534,7 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
                 text: str,
                 image_file: str,
                 toggle: bool,
-                command) -> Union[ttk.Button, ttk.Checkbutton]:
+                command) -> ttk.Button | ttk.Checkbutton:
         """ Override the default button method to use our icons and ttk widgets for
         consistent GUI layout.
 
@@ -563,10 +564,10 @@ class NavigationToolbar(NavigationToolbar2Tk):  # pylint: disable=too-many-ances
         img = get_images().icons[icon]
 
         if not toggle:
-            btn: Union[ttk.Button, ttk.Checkbutton] = ttk.Button(frame,
-                                                                 text=text,
-                                                                 image=img,
-                                                                 command=command)
+            btn: ttk.Button | ttk.Checkbutton = ttk.Button(frame,
+                                                           text=text,
+                                                           image=img,
+                                                           command=command)
         else:
             var = tk.IntVar(master=frame)
             btn = ttk.Checkbutton(frame, text=text, image=img, command=command, variable=var)

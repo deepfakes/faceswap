@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """ Handles Data Augmentation for feeding Faceswap Models """
-
+from __future__ import annotations
 import logging
 import os
-import sys
-from concurrent import futures
+import typing as T
 
+from concurrent import futures
 from random import shuffle, choice
-from typing import cast, Dict, Generator, List, Tuple, TYPE_CHECKING
 
 import cv2
 import numpy as np
@@ -21,18 +20,14 @@ from lib.utils import FaceswapError
 from . import ImageAugmentation
 from .cache import get_cache, RingBuffer
 
-if sys.version_info < (3, 8):
-    from typing_extensions import get_args, Literal
-else:
-    from typing import get_args, Literal
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from lib.config import ConfigValueType
     from plugins.train.model._base import ModelBase
     from .cache import _Cache
 
 logger = logging.getLogger(__name__)
-BatchType = Tuple[np.ndarray, List[np.ndarray]]
+BatchType = tuple[np.ndarray, list[np.ndarray]]
 
 
 class DataGenerator():
@@ -57,10 +52,10 @@ class DataGenerator():
         objects of this size from the iterator.
     """
     def __init__(self,
-                 config: Dict[str, "ConfigValueType"],
-                 model: "ModelBase",
-                 side: Literal["a", "b"],
-                 images: List[str],
+                 config: dict[str, ConfigValueType],
+                 model: ModelBase,
+                 side: T.Literal["a", "b"],
+                 images: list[str],
                  batch_size: int) -> None:
         logger.debug("Initializing %s: (model: %s, side: %s, images: %s , "  # type: ignore
                      "batch_size: %s, config: %s)", self.__class__.__name__, model.name, side,
@@ -83,11 +78,11 @@ class DataGenerator():
         self._buffer = RingBuffer(batch_size,
                                   (self._process_size, self._process_size, self._total_channels),
                                   dtype="uint8")
-        self._face_cache: "_Cache" = get_cache(side,
-                                               filenames=images,
-                                               config=self._config,
-                                               size=self._process_size,
-                                               coverage_ratio=self._coverage_ratio)
+        self._face_cache: _Cache = get_cache(side,
+                                             filenames=images,
+                                             config=self._config,
+                                             size=self._process_size,
+                                             coverage_ratio=self._coverage_ratio)
         logger.debug("Initialized %s", self.__class__.__name__)
 
     @property
@@ -100,12 +95,12 @@ class DataGenerator():
             channels += 1
 
         mults = [area for area in ["eye", "mouth"]
-                 if cast(int, self._config[f"{area}_multiplier"]) > 1]
+                 if T.cast(int, self._config[f"{area}_multiplier"]) > 1]
         if self._config["penalized_mask_loss"] and mults:
             channels += len(mults)
         return channels
 
-    def _get_output_sizes(self, model: "ModelBase") -> List[int]:
+    def _get_output_sizes(self, model: ModelBase) -> list[int]:
         """ Obtain the size of each output tensor for the model.
 
         Parameters
@@ -222,7 +217,7 @@ class DataGenerator():
             retval = self._process_batch(img_paths)
             yield retval
 
-    def _get_images_with_meta(self, filenames: List[str]) -> Tuple[np.ndarray, List[DetectedFace]]:
+    def _get_images_with_meta(self, filenames: list[str]) -> tuple[np.ndarray, list[DetectedFace]]:
         """ Obtain the raw face images with associated :class:`DetectedFace` objects for this
         batch.
 
@@ -253,9 +248,9 @@ class DataGenerator():
         return raw_faces, detected_faces
 
     def _crop_to_coverage(self,
-                          filenames: List[str],
+                          filenames: list[str],
                           images: np.ndarray,
-                          detected_faces: List[DetectedFace],
+                          detected_faces: list[DetectedFace],
                           batch: np.ndarray) -> None:
         """ Crops the training image out of the full extract image based on the centering and
         coveage used in the user's configuration settings.
@@ -286,7 +281,7 @@ class DataGenerator():
             for future in futures.as_completed(proc):
                 batch[proc[future], ..., :3] = future.result()
 
-    def _apply_mask(self, detected_faces: List[DetectedFace], batch: np.ndarray) -> None:
+    def _apply_mask(self, detected_faces: list[DetectedFace], batch: np.ndarray) -> None:
         """ Applies the masks to the 4th channel of the batch.
 
         If the configuration options `eye_multiplier` and/or `mouth_multiplier` are greater than 1
@@ -312,7 +307,7 @@ class DataGenerator():
         logger.trace("side: %s, masks: %s, batch: %s",  # type: ignore
                      self._side, masks.shape, batch.shape)
 
-    def _process_batch(self, filenames: List[str]) -> BatchType:
+    def _process_batch(self, filenames: list[str]) -> BatchType:
         """ Prepares data for feeding through subclassed methods.
 
         If this is the first time a face has been loaded, then it's meta data is extracted from the
@@ -345,9 +340,9 @@ class DataGenerator():
         return feed, targets
 
     def process_batch(self,
-                      filenames: List[str],
+                      filenames: list[str],
                       images: np.ndarray,
-                      detected_faces: List[DetectedFace],
+                      detected_faces: list[DetectedFace],
                       batch: np.ndarray) -> BatchType:
         """ Override for processing the batch for the current generator.
 
@@ -391,7 +386,7 @@ class DataGenerator():
             The input uint8 array
         """
         return ne.evaluate("x / c",
-                           local_dict=dict(x=in_array, c=np.float32(255)),
+                           local_dict={"x": in_array, "c": np.float32(255)},
                            casting="unsafe")
 
 
@@ -417,10 +412,10 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         objects of this size from the iterator.
     """
     def __init__(self,
-                 config: Dict[str, "ConfigValueType"],
-                 model: "ModelBase",
-                 side: Literal["a", "b"],
-                 images: List[str],
+                 config: dict[str, ConfigValueType],
+                 model: ModelBase,
+                 side: T.Literal["a", "b"],
+                 images: list[str],
                  batch_size: int) -> None:
         super().__init__(config, model, side, images, batch_size)
         self._augment_color = not model.command_line_arguments.no_augment_color
@@ -434,10 +429,10 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         self._processing = ImageAugmentation(batch_size,
                                              self._process_size,
                                              self._config)
-        self._nearest_landmarks: Dict[str, Tuple[str, ...]] = {}
+        self._nearest_landmarks: dict[str, tuple[str, ...]] = {}
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _create_targets(self, batch: np.ndarray) -> List[np.ndarray]:
+    def _create_targets(self, batch: np.ndarray) -> list[np.ndarray]:
         """ Compile target images, with masks, for the model output sizes.
 
         Parameters
@@ -467,9 +462,9 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         return retval
 
     def process_batch(self,
-                      filenames: List[str],
+                      filenames: list[str],
                       images: np.ndarray,
-                      detected_faces: List[DetectedFace],
+                      detected_faces: list[DetectedFace],
                       batch: np.ndarray) -> BatchType:
         """ Performs the augmentation and compiles target images and samples.
 
@@ -525,7 +520,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         if self._warp_to_landmarks:
             landmarks = np.array([face.aligned.landmarks for face in detected_faces])
             batch_dst_pts = self._get_closest_match(filenames, landmarks)
-            warp_kwargs = dict(batch_src_points=landmarks, batch_dst_points=batch_dst_pts)
+            warp_kwargs = {"batch_src_points": landmarks, "batch_dst_points": batch_dst_pts}
         else:
             warp_kwargs = {}
 
@@ -545,7 +540,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
 
         return feed, targets
 
-    def _get_closest_match(self, filenames: List[str], batch_src_points: np.ndarray) -> np.ndarray:
+    def _get_closest_match(self, filenames: list[str], batch_src_points: np.ndarray) -> np.ndarray:
         """ Only called if the :attr:`_warp_to_landmarks` is ``True``. Gets the closest
         matched 68 point landmarks from the opposite training set.
 
@@ -563,7 +558,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         """
         logger.trace("Retrieving closest matched landmarks: (filenames: '%s', "  # type: ignore
                      "src_points: '%s')", filenames, batch_src_points)
-        lm_side: Literal["a", "b"] = "a" if self._side == "b" else "b"
+        lm_side: T.Literal["a", "b"] = "a" if self._side == "b" else "b"
         other_cache = get_cache(lm_side)
         landmarks = other_cache.aligned_landmarks
 
@@ -584,9 +579,9 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         return batch_dst_points
 
     def _cache_closest_matches(self,
-                               filenames: List[str],
+                               filenames: list[str],
                                batch_src_points: np.ndarray,
-                               landmarks: Dict[str, np.ndarray]) -> List[Tuple[str, ...]]:
+                               landmarks: dict[str, np.ndarray]) -> list[tuple[str, ...]]:
         """ Cache the nearest landmarks for this batch
 
         Parameters
@@ -602,7 +597,7 @@ class TrainingDataGenerator(DataGenerator):  # pylint:disable=too-few-public-met
         logger.trace("Caching closest matches")  # type:ignore
         dst_landmarks = list(landmarks.items())
         dst_points = np.array([lm[1] for lm in dst_landmarks])
-        batch_closest_matches: List[Tuple[str, ...]] = []
+        batch_closest_matches: list[tuple[str, ...]] = []
 
         for filename, src_points in zip(filenames, batch_src_points):
             closest = (np.mean(np.square(src_points - dst_points), axis=(1, 2))).argsort()[:10]
@@ -637,7 +632,7 @@ class PreviewDataGenerator(DataGenerator):
     """
     def _create_samples(self,
                         images: np.ndarray,
-                        detected_faces: List[DetectedFace]) -> List[np.ndarray]:
+                        detected_faces: list[DetectedFace]) -> list[np.ndarray]:
         """ Compile the 'sample' images. These are the 100% coverage images which hold the model
         output in the preview window.
 
@@ -658,24 +653,25 @@ class PreviewDataGenerator(DataGenerator):
         output_size = self._output_sizes[-1]
         full_size = 2 * int(np.rint((output_size / self._coverage_ratio) / 2))
 
-        assert self._config["centering"] in get_args(CenteringType)
+        assert self._config["centering"] in T.get_args(CenteringType)
         retval = np.empty((full_size, full_size, 3), dtype="float32")
-        retval = self._to_float32(np.array([AlignedFace(face.landmarks_xy,
-                                                        image=images[idx],
-                                                        centering=cast(CenteringType,
-                                                                       self._config["centering"]),
-                                                        size=full_size,
-                                                        dtype="uint8",
-                                                        is_aligned=True).face
-                                            for idx, face in enumerate(detected_faces)]))
+        retval = self._to_float32(np.array([
+            AlignedFace(face.landmarks_xy,
+                        image=images[idx],
+                        centering=T.cast(CenteringType,
+                                         self._config["centering"]),
+                        size=full_size,
+                        dtype="uint8",
+                        is_aligned=True).face
+            for idx, face in enumerate(detected_faces)]))
 
         logger.trace("Processed samples: %s", retval.shape)  # type: ignore
         return [retval]
 
     def process_batch(self,
-                      filenames: List[str],
+                      filenames: list[str],
                       images: np.ndarray,
-                      detected_faces: List[DetectedFace],
+                      detected_faces: list[DetectedFace],
                       batch: np.ndarray) -> BatchType:
         """ Creates the full size preview images and the sub-cropped images for feeding the model's
         predict function.

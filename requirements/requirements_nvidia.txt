@@ -1,6 +1,5 @@
 -r _requirements_base.txt
-# Pinned TF probability doesn't work with numpy >= 1.24
-numpy>=1.21.0,<1.24.0; python_version < '3.8'
-numpy>=1.22.0,<1.24.0; python_version >= '3.8'
-tensorflow-gpu>=2.7.0,<2.11.0
+# Exclude badly numbered Python2 version of nvidia-ml-py
+nvidia-ml-py>=11.525,<300
 pynvx==1.0.0 ; sys_platform == "darwin"
+tensorflow>=2.10.0,<2.11.0

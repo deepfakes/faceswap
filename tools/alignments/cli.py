@@ -2,8 +2,7 @@
 """ Command Line Arguments for tools """
 import sys
 import gettext
-
-from typing import Any, List, Dict
+import typing as T
 
 from lib.cli.args import FaceSwapArgs
 from lib.cli.actions import DirOrFileFullPaths, DirFullPaths, FileFullPaths, Radio, Slider
@@ -33,7 +32,7 @@ class AlignmentsArgs(FaceSwapArgs):
                  "an alignments file against its corresponding faceset/frame source.")
 
     @staticmethod
-    def get_argument_list() -> List[Dict[str, Any]]:
+    def get_argument_list() -> list[dict[str, T.Any]]:
         """ Collect the argparse argument options.
 
         Returns

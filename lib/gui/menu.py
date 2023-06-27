@@ -1,6 +1,6 @@
 #!/usr/bin python3
 """ The Menu Bars for faceswap GUI """
-
+from __future__ import annotations
 import gettext
 import locale
 import logging
@@ -33,7 +33,7 @@ _ = _LANG.gettext
 
 _WORKING_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
 
-_RESOURCES: T.List[T.Tuple[str, str]] = [
+_RESOURCES: list[tuple[str, str]] = [
     (_("faceswap.dev - Guides and Forum"), "https://www.faceswap.dev"),
     (_("Patreon - Support this project"), "https://www.patreon.com/faceswap"),
     (_("Discord - The FaceSwap Discord server"), "https://discord.gg/VasFUAy"),
@@ -48,7 +48,7 @@ class MainMenuBar(tk.Menu):  # pylint:disable=too-many-ancestors
     master: :class:`tkinter.Tk`
         The root tkinter object
     """
-    def __init__(self, master: "FaceswapGui") -> None:
+    def __init__(self, master: FaceswapGui) -> None:
         logger.debug("Initializing %s", self.__class__.__name__)
         super().__init__(master)
         self.root = master
@@ -431,7 +431,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         return True
 
     @classmethod
-    def _get_branches(cls) -> T.Optional[str]:
+    def _get_branches(cls) -> str | None:
         """ Get the available github branches
 
         Returns
@@ -453,7 +453,7 @@ class HelpMenu(tk.Menu):  # pylint:disable=too-many-ancestors
         return stdout.decode(locale.getpreferredencoding(), errors="replace")
 
     @classmethod
-    def _filter_branches(cls, stdout: str) -> T.List[str]:
+    def _filter_branches(cls, stdout: str) -> list[str]:
         """ Filter the branches, remove duplicates and the current branch and return a sorted
         list.
 
@@ -548,7 +548,7 @@ class TaskBar(ttk.Frame):  # pylint: disable=too-many-ancestors
         self._section_separator()
 
     @classmethod
-    def _loader_and_kwargs(cls, btntype: str) -> T.Tuple[str, T.Dict[str, bool]]:
+    def _loader_and_kwargs(cls, btntype: str) -> tuple[str, dict[str, bool]]:
         """ Get the loader name and key word arguments for the given button type
 
         Parameters

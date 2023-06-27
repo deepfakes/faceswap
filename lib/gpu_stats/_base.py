@@ -5,11 +5,10 @@ from the :class:`_GPUStats` class contained here. """
 import logging
 
 from dataclasses import dataclass
-from typing import List, Optional
 
 from lib.utils import get_backend
 
-_EXCLUDE_DEVICES: List[int] = []
+_EXCLUDE_DEVICES: list[int] = []
 
 
 @dataclass
@@ -29,11 +28,11 @@ class GPUInfo():
     devices_active: list[int]
         List of integers representing the indices of the active GPU devices.
     """
-    vram: List[int]
-    vram_free: List[int]
+    vram: list[int]
+    vram_free: list[int]
     driver: str
-    devices: List[str]
-    devices_active: List[int]
+    devices: list[str]
+    devices_active: list[int]
 
 
 @dataclass
@@ -57,7 +56,7 @@ class BiggestGPUInfo():
     total: float
 
 
-def set_exclude_devices(devices: List[int]) -> None:
+def set_exclude_devices(devices: list[int]) -> None:
     """ Add any explicitly selected GPU devices to the global list of devices to be excluded
     from use by Faceswap.
 
@@ -89,19 +88,19 @@ class _GPUStats():
     def __init__(self, log: bool = True) -> None:
         # Logger is held internally, as we don't want to log when obtaining system stats on crash
         # or when querying the backend for command line options
-        self._logger: Optional[logging.Logger] = logging.getLogger(__name__) if log else None
+        self._logger: logging.Logger | None = logging.getLogger(__name__) if log else None
         self._log("debug", f"Initializing {self.__class__.__name__}")
 
         self._is_initialized = False
         self._initialize()
 
         self._device_count: int = self._get_device_count()
-        self._active_devices: List[int] = self._get_active_devices()
+        self._active_devices: list[int] = self._get_active_devices()
         self._handles: list = self._get_handles()
         self._driver: str = self._get_driver()
-        self._device_names: List[str] = self._get_device_names()
-        self._vram: List[int] = self._get_vram()
-        self._vram_free: List[int] = self._get_free_vram()
+        self._device_names: list[str] = self._get_device_names()
+        self._vram: list[int] = self._get_vram()
+        self._vram_free: list[int] = self._get_free_vram()
 
         if get_backend() != "cpu" and not self._active_devices:
             self._log("warning", "No GPU detected")
@@ -115,7 +114,7 @@ class _GPUStats():
         return self._device_count
 
     @property
-    def cli_devices(self) -> List[str]:
+    def cli_devices(self) -> list[str]:
         """ list[str]: Formatted index: name text string for each GPU """
         return [f"{idx}: {device}" for idx, device in enumerate(self._device_names)]
 
@@ -167,7 +166,7 @@ class _GPUStats():
         """
         raise NotImplementedError()
 
-    def _get_active_devices(self) -> List[int]:
+    def _get_active_devices(self) -> list[int]:
         """ Obtain the indices of active GPUs (those that have not been explicitly excluded in
         the command line arguments).
 
@@ -204,7 +203,7 @@ class _GPUStats():
         """
         raise NotImplementedError()
 
-    def _get_device_names(self) -> List[str]:
+    def _get_device_names(self) -> list[str]:
         """ Override to obtain the names of all connected GPUs. The quality of this information
         depends on the backend and OS being used, but it should be sufficient for identifying
         cards.
@@ -217,7 +216,7 @@ class _GPUStats():
         """
         raise NotImplementedError()
 
-    def _get_vram(self) -> List[int]:
+    def _get_vram(self) -> list[int]:
         """ Override to obtain the total VRAM in Megabytes for each connected GPU.
 
         Returns
@@ -228,7 +227,7 @@ class _GPUStats():
         """
         raise NotImplementedError()
 
-    def _get_free_vram(self) -> List[int]:
+    def _get_free_vram(self) -> list[int]:
         """ Override to obtain the amount of VRAM that is available, in Megabytes, for each
         connected GPU.
 

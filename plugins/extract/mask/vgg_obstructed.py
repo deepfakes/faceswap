@@ -90,7 +90,7 @@ class VGGObstructed(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[T.List[int]]) -> None:
+                 exclude_gpus: list[int] | None) -> None:
         super().__init__("VGG Obstructed",
                          model_path,
                          allow_growth=allow_growth,
@@ -99,7 +99,7 @@ class VGGObstructed(KSession):
         self.load_model_weights()
 
     @classmethod
-    def _model_definition(cls) -> T.Tuple[Tensor, Tensor]:
+    def _model_definition(cls) -> tuple[Tensor, Tensor]:
         """ Definition of the VGG Obstructed Model.
 
         Returns

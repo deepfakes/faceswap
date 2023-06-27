@@ -1,19 +1,19 @@
-FROM tensorflow/tensorflow:2.8.2
+FROM ubuntu:22.04
 
 # To disable tzdata and others from asking for input
 ENV DEBIAN_FRONTEND noninteractive
+ENV FACESWAP_BACKEND cpu
 
-RUN apt-get update -qq -y \
- && apt-get install -y software-properties-common \
- && add-apt-repository -y ppa:jonathonf/ffmpeg-4 \
- && apt-get update -qq -y \
- && apt-get install -y libsm6 libxrender1 libxext-dev python3-tk ffmpeg git \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq -y
+RUN apt-get upgrade -y
+RUN apt-get install -y libgl1 libglib2.0-0 python3 python3-pip python3-tk git
 
-COPY ./requirements/_requirements_base.txt /opt/
-RUN pip3 install --upgrade pip
-RUN pip3 --no-cache-dir install -r /opt/_requirements_base.txt && rm /opt/_requirements_base.txt
+RUN ln -s $(which python3) /usr/local/bin/python
 
-WORKDIR "/srv"
+RUN git clone --depth 1 --no-single-branch https://github.com/deepfakes/faceswap.git
+WORKDIR "/faceswap"
+
+RUN python -m pip install --upgrade pip
+RUN python -m pip --no-cache-dir install -r ./requirements/requirements_cpu.txt
+
 CMD ["/bin/bash"]

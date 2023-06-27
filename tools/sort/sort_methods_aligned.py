@@ -2,11 +2,11 @@
 """ Sorting methods that use the properties of a :class:`lib.align.AlignedFace` object to obtain
 their sorting metrics.
 """
+from __future__ import annotations
 import logging
 import operator
 import sys
-
-from typing import Dict, List, Optional, TYPE_CHECKING, Union
+import typing as T
 
 import numpy as np
 from tqdm import tqdm
@@ -15,7 +15,7 @@ from lib.align import AlignedFace
 from lib.utils import FaceswapError
 from .sort_methods import SortMethod
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from argparse import Namespace
     from lib.align.alignments import PNGHeaderAlignmentsDict
 
@@ -36,7 +36,7 @@ class SortAlignedMetric(SortMethod):  # pylint:disable=too-few-public-methods
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
-    def _get_metric(self, aligned_face: AlignedFace) -> Union[np.ndarray, float]:
+    def _get_metric(self, aligned_face: AlignedFace) -> np.ndarray | float:
         """ Obtain the correct metric for the given sort method"
 
         Parameters
@@ -58,8 +58,8 @@ class SortAlignedMetric(SortMethod):  # pylint:disable=too-few-public-methods
 
     def score_image(self,
                     filename: str,
-                    image: Optional[np.ndarray],
-                    alignments: Optional["PNGHeaderAlignmentsDict"]) -> None:
+                    image: np.ndarray | None,
+                    alignments: PNGHeaderAlignmentsDict | None) -> None:
         """ Score a single image for sort method: "distance", "yaw", "pitch" or "size" and add the
         result to :attr:`_result`
 
@@ -110,7 +110,7 @@ class SortDistance(SortAlignedMetric):
         logger.info("Sorting...")
         self._result = sorted(self._result, key=operator.itemgetter(1), reverse=False)
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Create bins to split linearly from the lowest to the highest sample value
 
         Returns
@@ -138,7 +138,7 @@ class SortPitch(SortAlignedMetric):
         """
         return aligned_face.pose.pitch
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Create bins from 0 degrees to 180 degrees based on number of bins
 
         Allocate item to bin when it is in range of one of the pre-allocated bins
@@ -148,7 +148,7 @@ class SortPitch(SortAlignedMetric):
         list
             List of bins of filenames
         """
-        thresholds = (np.linspace(90, -90, self._num_bins + 1))
+        thresholds = np.linspace(90, -90, self._num_bins + 1)
 
         # Start bin names from 0 for more intuitive experience
         names = np.flip(thresholds.astype("int")) + 90
@@ -157,7 +157,7 @@ class SortPitch(SortAlignedMetric):
                            f"degs_to_{int(names[idx + 1])}degs"
                            for idx in range(self._num_bins)]
 
-        bins: List[List[str]] = [[] for _ in range(self._num_bins)]
+        bins: list[list[str]] = [[] for _ in range(self._num_bins)]
         for filename, result in self._result:
             result = np.clip(result, -90.0, 90.0)
             bin_idx = next(bin_id for bin_id, thresh in enumerate(thresholds)
@@ -223,7 +223,7 @@ class SortSize(SortAlignedMetric):
         size = ((roi[1][0] - roi[0][0]) ** 2 + (roi[1][1] - roi[0][1]) ** 2) ** 0.5
         return size
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Create bins to split linearly from the lowest to the highest sample value
 
         Allocate item to bin when it is in range of one of the pre-allocated bins
@@ -247,7 +247,7 @@ class SortFaceCNN(SortAlignedMetric):
         Set to ``True`` if this class is going to be called exclusively for binning.
         Default: ``False``
     """
-    def __init__(self, arguments: "Namespace", is_group: bool = False) -> None:
+    def __init__(self, arguments: Namespace, is_group: bool = False) -> None:
         super().__init__(arguments, is_group=is_group)
         self._is_dissim = self._method == "face-cnn-dissim"
         self._threshold: float = 7.2 if arguments.threshold < 1.0 else arguments.threshold
@@ -308,7 +308,7 @@ class SortFaceCNN(SortAlignedMetric):
         logger.info("Sorting...")
         self._result = sorted(self._result, key=operator.itemgetter(2), reverse=True)
 
-    def binning(self) -> List[List[str]]:
+    def binning(self) -> list[list[str]]:
         """ Group into bins by CNN face similarity
 
         Returns
@@ -320,11 +320,11 @@ class SortFaceCNN(SortAlignedMetric):
         logger.info("Grouping by face-cnn %s...", msg)
 
         # Groups are of the form: group_num -> reference faces
-        reference_groups: Dict[int, List[np.ndarray]] = {}
+        reference_groups: dict[int, list[np.ndarray]] = {}
 
         # Bins array, where index is the group number and value is
         # an array containing the file paths to the images in that group.
-        bins: List[List[str]] = []
+        bins: list[list[str]] = []
 
         # Comparison threshold used to decide how similar
         # faces have to be to be grouped together.
@@ -362,7 +362,7 @@ class SortFaceCNN(SortAlignedMetric):
         return bins
 
     @classmethod
-    def _get_avg_score(cls, face: np.ndarray, references: List[np.ndarray]) -> float:
+    def _get_avg_score(cls, face: np.ndarray, references: list[np.ndarray]) -> float:
         """ Return the average CNN similarity score between a face and reference images
 
         Parameters

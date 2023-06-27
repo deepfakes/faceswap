@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """ Video output writer for faceswap.py converter """
+from __future__ import annotations
 import os
+import typing as T
+
 from math import ceil
 from subprocess import CalledProcessError, check_output, STDOUT
-from typing import cast, Generator, List, Optional, Tuple
 
 import imageio
 import imageio_ffmpeg as im_ffm
 import numpy as np
 
 from ._base import Output, logger
+
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class Writer(Output):
@@ -32,7 +37,7 @@ class Writer(Output):
     def __init__(self,
                  output_folder: str,
                  total_count: int,
-                 frame_ranges: Optional[List[Tuple[int, int]]],
+                 frame_ranges: list[tuple[int, int]] | None,
                  source_video: str,
                  **kwargs) -> None:
         super().__init__(output_folder, **kwargs)
@@ -40,11 +45,11 @@ class Writer(Output):
                      total_count, frame_ranges, source_video)
         self._source_video: str = source_video
         self._output_filename: str = self._get_output_filename()
-        self._frame_ranges: Optional[List[Tuple[int, int]]] = frame_ranges
-        self.frame_order: List[int] = self._set_frame_order(total_count)
-        self._output_dimensions: Optional[str] = None  # Fix dims on 1st received frame
+        self._frame_ranges: list[tuple[int, int]] | None = frame_ranges
+        self.frame_order: list[int] = self._set_frame_order(total_count)
+        self._output_dimensions: str | None = None  # Fix dims on 1st received frame
         # Need to know dimensions of first frame, so set writer then
-        self._writer: Optional[Generator[None, np.ndarray, None]] = None
+        self._writer: Generator[None, np.ndarray, None] | None = None
 
     @property
     def _valid_tunes(self) -> dict:
@@ -63,7 +68,7 @@ class Writer(Output):
         return retval
 
     @property
-    def _output_params(self) -> List[str]:
+    def _output_params(self) -> list[str]:
         """ list: The FFMPEG Output parameters """
         codec = self.config["codec"]
         tune = self.config["tune"]
@@ -86,11 +91,11 @@ class Writer(Output):
         return output_args
 
     @property
-    def _audio_codec(self) -> Optional[str]:
+    def _audio_codec(self) -> str | None:
         """ str or ``None``: The audio codec to use. This will either be ``"copy"`` (the default)
         or ``None`` if skip muxing has been selected in configuration options, or if frame ranges
         have been passed in the command line arguments. """
-        retval: Optional[str] = "copy"
+        retval: str | None = "copy"
         if self.config["skip_mux"]:
             logger.info("Skipping audio muxing due to configuration settings.")
             retval = None
@@ -169,7 +174,7 @@ class Writer(Output):
         logger.info("Outputting to: '%s'", retval)
         return retval
 
-    def _set_frame_order(self, total_count: int) -> List[int]:
+    def _set_frame_order(self, total_count: int) -> list[int]:
         """ Obtain the full list of frames to be converted in order.
 
         Parameters
@@ -191,7 +196,7 @@ class Writer(Output):
         logger.debug("frame_order: %s", retval)
         return retval
 
-    def _get_writer(self, frame_dims: Tuple[int, int]) -> Generator[None, np.ndarray, None]:
+    def _get_writer(self, frame_dims: tuple[int, int]) -> Generator[None, np.ndarray, None]:
         """ Add the requested encoding options and return the writer.
 
         Parameters
@@ -238,13 +243,13 @@ class Writer(Output):
         logger.trace("Received frame: (filename: '%s', shape: %s",  # type:ignore[attr-defined]
                      filename, image.shape)
         if not self._output_dimensions:
-            input_dims = cast(Tuple[int, int], image.shape[:2])
+            input_dims = T.cast(tuple[int, int], image.shape[:2])
             self._set_dimensions(input_dims)
             self._writer = self._get_writer(input_dims)
         self.cache_frame(filename, image)
         self._save_from_cache()
 
-    def _set_dimensions(self, frame_dims: Tuple[int, int]) -> None:
+    def _set_dimensions(self, frame_dims: tuple[int, int]) -> None:
         """ Set the attribute :attr:`_output_dimensions` based on the first frame received.
         This protects against different sized images coming in and ensures all images are written
         to ffmpeg at the same size. Dimensions are mapped to a macro block size 8.

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """ Extended Mask for faceswap.py """
+from __future__ import annotations
 import logging
-from typing import List, Tuple, TYPE_CHECKING
+import typing as T
 
 import cv2
 import numpy as np
@@ -9,7 +10,7 @@ from ._base import BatchType, Masker
 
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.align.aligned_face import AlignedFace
 
 
@@ -35,7 +36,7 @@ class Mask(Masker):
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        faces: List["AlignedFace"] = feed[1]
+        faces: list[AlignedFace] = feed[1]
         feed = feed[0]
         for mask, face in zip(feed, faces):
             parts = self.parse_parts(np.array(face.landmarks))
@@ -78,7 +79,7 @@ class Mask(Masker):
         landmarks[17:22] = top_l + ((top_l - bot_l) // 2)
         landmarks[22:27] = top_r + ((top_r - bot_r) // 2)
 
-    def parse_parts(self, landmarks: np.ndarray) -> List[Tuple[np.ndarray, ...]]:
+    def parse_parts(self, landmarks: np.ndarray) -> list[tuple[np.ndarray, ...]]:
         """ Extended face hull mask """
         self._adjust_mask_top(landmarks)
 

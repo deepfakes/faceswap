@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """ Components Mask for faceswap.py """
+from __future__ import annotations
 import logging
-from typing import List, Tuple, TYPE_CHECKING
+import typing as T
 
 import cv2
 import numpy as np
 
 from ._base import BatchType, Masker
 
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
     from lib.align.aligned_face import AlignedFace
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class Mask(Masker):
 
     def predict(self, feed: np.ndarray) -> np.ndarray:
         """ Run model to get predictions """
-        faces: List["AlignedFace"] = feed[1]
+        faces: list[AlignedFace] = feed[1]
         feed = feed[0]
         for mask, face in zip(feed, faces):
             parts = self.parse_parts(np.array(face.landmarks))
@@ -51,7 +52,7 @@ class Mask(Masker):
         return
 
     @staticmethod
-    def parse_parts(landmarks: np.ndarray) -> List[Tuple[np.ndarray, ...]]:
+    def parse_parts(landmarks: np.ndarray) -> list[tuple[np.ndarray, ...]]:
         """ Component face hull mask """
         r_jaw = (landmarks[0:9], landmarks[17:18])
         l_jaw = (landmarks[8:17], landmarks[26:27])

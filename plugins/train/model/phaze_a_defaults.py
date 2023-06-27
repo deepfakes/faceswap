@@ -39,8 +39,6 @@
                "   the value saved in the state file with the updated value in config. If not
                "   provided this will default to True.
 """
-from typing import List
-
 
 _HELPTEXT: str = (
     "Phaze-A Model by TorzDF, with thanks to BirbFakes.\n"
@@ -48,7 +46,7 @@ _HELPTEXT: str = (
     "inspiration from Nvidia's StyleGAN for the Decoder. It is highly recommended to research to "
     "understand the parameters better.")
 
-_ENCODERS: List[str] = sorted([
+_ENCODERS: list[str] = sorted([
     "densenet121", "densenet169", "densenet201", "efficientnet_b0", "efficientnet_b1",
     "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6",
     "efficientnet_b7", "efficientnet_v2_b0", "efficientnet_v2_b1", "efficientnet_v2_b2",

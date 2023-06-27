@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """ Tools for manipulating the alignments serialized file """
-
+from __future__ import annotations
 import logging
 import os
 import sys
+import typing as T
+
 from datetime import datetime
-from typing import cast, Dict, Generator, List, Tuple, TYPE_CHECKING, Optional, Union
 
 import numpy as np
 from scipy import signal
@@ -15,12 +16,8 @@ from tqdm import tqdm
 from .media import Faces, Frames
 from .jobs_faces import FaceToFile
 
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
-
-if TYPE_CHECKING:
+if T.TYPE_CHECKING:
+    from collections.abc import Generator
     from argparse import Namespace
     from lib.align.alignments import PNGHeaderDict
     from .media import AlignmentData
@@ -38,11 +35,11 @@ class Check():
     arguments: :class:`argparse.Namespace`
         The command line arguments that have called this job
     """
-    def __init__(self, alignments: "AlignmentData", arguments: "Namespace") -> None:
+    def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
         self._job = arguments.job
-        self._type: Optional[Literal["faces", "frames"]] = None
+        self._type: T.Literal["faces", "frames"] | None = None
         self._is_video = False  # Set when getting items
         self._output = arguments.output
         self._source_dir = self._get_source_dir(arguments)
@@ -52,7 +49,7 @@ class Check():
         self.output_message = ""
         logger.debug("Initialized %s", self.__class__.__name__)
 
-    def _get_source_dir(self, arguments: "Namespace") -> str:
+    def _get_source_dir(self, arguments: Namespace) -> str:
         """ Set the correct source folder
 
         Parameters
@@ -81,7 +78,7 @@ class Check():
         logger.debug("type: '%s', source_dir: '%s'", self._type, source_dir)
         return source_dir
 
-    def _get_items(self) -> Union[List[Dict[str, str]], List[Tuple[str, "PNGHeaderDict"]]]:
+    def _get_items(self) -> list[dict[str, str]] | list[tuple[str, PNGHeaderDict]]:
         """ Set the correct items to process
 
         Returns
@@ -92,10 +89,10 @@ class Check():
             the dictionaries will contain the keys 'frame_fullname', 'frame_name', 'extension'.
         """
         assert self._type is not None
-        items: Union[Frames, Faces] = globals()[self._type.title()](self._source_dir)
+        items: Frames | Faces = globals()[self._type.title()](self._source_dir)
         self._is_video = items.is_video
-        return cast(Union[List[Dict[str, str]], List[Tuple[str, "PNGHeaderDict"]]],
-                    items.file_list_sorted)
+        return T.cast(list[dict[str, str]] | list[tuple[str, "PNGHeaderDict"]],
+                      items.file_list_sorted)
 
     def process(self) -> None:
         """ Process the frames check against the alignments file """
@@ -104,7 +101,7 @@ class Check():
         items_output = self._compile_output()
 
         if self._type == "faces":
-            filelist = cast(List[Tuple[str, "PNGHeaderDict"]], self._items)
+            filelist = T.cast(list[tuple[str, "PNGHeaderDict"]], self._items)
             check_update = FaceToFile(self._alignments, [val[1] for val in filelist])
             if check_update():
                 self._alignments.save()
@@ -122,7 +119,7 @@ class Check():
                          "supported for 'multi-faces'")
             sys.exit(1)
 
-    def _compile_output(self) -> Union[List[str], List[Tuple[str, int]]]:
+    def _compile_output(self) -> list[str] | list[tuple[str, int]]:
         """ Compile list of frames that meet criteria
 
         Returns
@@ -144,7 +141,7 @@ class Check():
             The frame name of any frames which have no faces
         """
         self.output_message = "Frames with no faces"
-        for frame in tqdm(cast(List[Dict[str, str]], self._items),
+        for frame in tqdm(T.cast(list[dict[str, str]], self._items),
                           desc=self.output_message,
                           leave=False):
             logger.trace(frame)  # type:ignore
@@ -153,8 +150,8 @@ class Check():
                 logger.debug("Returning: '%s'", frame_name)
                 yield frame_name
 
-    def _get_multi_faces(self) -> Union[Generator[str, None, None],
-                                        Generator[Tuple[str, int], None, None]]:
+    def _get_multi_faces(self) -> (Generator[str, None, None] |
+                                   Generator[tuple[str, int], None, None]):
         """ yield each frame or face that has multiple faces matched in alignments file
 
         Yields
@@ -175,7 +172,7 @@ class Check():
             The frame name of any frames which have multiple faces
         """
         self.output_message = "Frames with multiple faces"
-        for item in tqdm(cast(List[Dict[str, str]], self._items),
+        for item in tqdm(T.cast(list[dict[str, str]], self._items),
                          desc=self.output_message,
                          leave=False):
             filename = item["frame_fullname"]
@@ -184,7 +181,7 @@ class Check():
             logger.trace("Returning: '%s'", filename)  # type:ignore
             yield filename
 
-    def _get_multi_faces_faces(self) -> Generator[Tuple[str, int], None, None]:
+    def _get_multi_faces_faces(self) -> Generator[tuple[str, int], None, None]:
         """ Return Faces when there are multiple faces in a frame
 
         Yields
@@ -193,7 +190,7 @@ class Check():
             The frame name and the face id of any frames which have multiple faces
         """
         self.output_message = "Multiple faces in frame"
-        for item in tqdm(cast(List[Tuple[str, "PNGHeaderDict"]], self._items),
+        for item in tqdm(T.cast(list[tuple[str, "PNGHeaderDict"]], self._items),
                          desc=self.output_message,
                          leave=False):
             src = item[1]["source"]
@@ -213,7 +210,7 @@ class Check():
         """
         self.output_message = "Frames missing from alignments file"
         exclude_filetypes = set(["yaml", "yml", "p", "json", "txt"])
-        for frame in tqdm(cast(Dict[str, str], self._items),
+        for frame in tqdm(T.cast(dict[str, str], self._items),
                           desc=self.output_message,
                           leave=False):
             frame_name = frame["frame_fullname"]
@@ -231,13 +228,13 @@ class Check():
             The frame name of any frames in alignments with no matching file
         """
         self.output_message = "Missing frames that are in alignments file"
-        frames = set(item["frame_fullname"] for item in cast(List[Dict[str, str]], self._items))
+        frames = set(item["frame_fullname"] for item in T.cast(list[dict[str, str]], self._items))
         for frame in tqdm(self._alignments.data.keys(), desc=self.output_message, leave=False):
             if frame not in frames:
                 logger.debug("Returning: '%s'", frame)
                 yield frame
 
-    def _output_results(self, items_output: Union[List[str], List[Tuple[str, int]]]) -> None:
+    def _output_results(self, items_output: list[str] | list[tuple[str, int]]) -> None:
         """ Output the results in the requested format
 
         Parameters
@@ -261,7 +258,7 @@ class Check():
             # Strip the index for printed/file output
             final_output = [item[0] for item in items_output]
         else:
-            final_output = cast(List[str], items_output)
+            final_output = T.cast(list[str], items_output)
         output_message = "-----------------------------------------------\r\n"
         output_message += f" {self.output_message} ({len(final_output)})\r\n"
         output_message += "-----------------------------------------------\r\n"
@@ -316,7 +313,7 @@ class Check():
         with open(output_file, "w", encoding="utf8") as f_output:
             f_output.write(output_message)
 
-    def _move_file(self, items_output: Union[List[str], List[Tuple[str, int]]]) -> None:
+    def _move_file(self, items_output: list[str] | list[tuple[str, int]]) -> None:
         """ Move the identified frames to a new sub folder
 
         Parameters
@@ -335,7 +332,7 @@ class Check():
         logger.debug("Move function: %s", move)
         move(output_folder, items_output)
 
-    def _move_frames(self, output_folder: str, items_output: List[str]) -> None:
+    def _move_frames(self, output_folder: str, items_output: list[str]) -> None:
         """ Move frames into single sub folder
 
         Parameters
@@ -352,7 +349,7 @@ class Check():
             logger.debug("Moving: '%s' to '%s'", src, dst)
             os.rename(src, dst)
 
-    def _move_faces(self, output_folder: str, items_output: List[Tuple[str, int]]) -> None:
+    def _move_faces(self, output_folder: str, items_output: list[tuple[str, int]]) -> None:
         """ Make additional sub folders for each face that appears Enables easier manual sorting
 
         Parameters
@@ -384,7 +381,7 @@ class Sort():
     arguments: :class:`argparse.Namespace`
         The :mod:`argparse` arguments as passed in from :mod:`tools.py`
     """
-    def __init__(self, alignments: "AlignmentData", arguments: "Namespace") -> None:
+    def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self._alignments = alignments
         logger.debug("Initialized %s", self.__class__.__name__)
@@ -435,13 +432,13 @@ class Spatial():  # pylint:disable=too-few-public-methods
     ---------
     https://www.kaggle.com/selfishgene/animating-and-smoothing-3d-facial-keypoints/notebook
     """
-    def __init__(self, alignments: "AlignmentData", arguments: "Namespace") -> None:
+    def __init__(self, alignments: AlignmentData, arguments: Namespace) -> None:
         logger.debug("Initializing %s: (arguments: %s)", self.__class__.__name__, arguments)
         self.arguments = arguments
         self._alignments = alignments
-        self._mappings: Dict[int, str] = {}
-        self._normalized: Dict[str, np.ndarray] = {}
-        self._shapes_model: Optional[decomposition.PCA] = None
+        self._mappings: dict[int, str] = {}
+        self._normalized: dict[str, np.ndarray] = {}
+        self._shapes_model: decomposition.PCA | None = None
         logger.debug("Initialized %s", self.__class__.__name__)
 
     def process(self) -> None:
@@ -464,7 +461,7 @@ class Spatial():  # pylint:disable=too-few-public-methods
     # Define shape normalization utility functions
     @staticmethod
     def _normalize_shapes(shapes_im_coords: np.ndarray
-                          ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                          ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """ Normalize a 2D or 3D shape
 
         Parameters

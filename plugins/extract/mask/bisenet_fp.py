@@ -49,7 +49,7 @@ class Mask(Masker):
         # Separate storage for face and head masks
         self._storage_name = f"{self._storage_name}_{self._storage_centering}"
 
-    def _check_weights_selection(self, configfile: T.Optional[str]) -> T.Tuple[bool, int]:
+    def _check_weights_selection(self, configfile: str | None) -> tuple[bool, int]:
         """ Check which weights have been selected.
 
         This is required for passing along the correct file name for the corresponding weights
@@ -73,7 +73,7 @@ class Mask(Masker):
         version = 1 if not is_faceswap else 2 if config.get("include_hair") else 3
         return is_faceswap, version
 
-    def _get_segment_indices(self) -> T.List[int]:
+    def _get_segment_indices(self) -> list[int]:
         """ Obtain the segment indices to include within the face mask area based on user
         configuration settings.
 
@@ -163,7 +163,7 @@ class Mask(Masker):
 # SOFTWARE.
 
 
-_NAME_TRACKER: T.Set[str] = set()
+_NAME_TRACKER: set[str] = set()
 
 
 def _get_name(name: str, start_idx: int = 1) -> str:
@@ -554,7 +554,7 @@ class BiSeNet(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[T.List[int]],
+                 exclude_gpus: list[int] | None,
                  input_size: int,
                  num_classes: int,
                  cpu_mode: bool) -> None:
@@ -569,7 +569,7 @@ class BiSeNet(KSession):
         self.define_model(self._model_definition)
         self.load_model_weights()
 
-    def _model_definition(self) -> T.Tuple[Tensor, T.List[Tensor]]:
+    def _model_definition(self) -> tuple[Tensor, list[Tensor]]:
         """ Definition of the VGG Obstructed Model.
 
         Returns

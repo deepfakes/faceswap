@@ -94,7 +94,7 @@ class VGGClear(KSession):
     def __init__(self,
                  model_path: str,
                  allow_growth: bool,
-                 exclude_gpus: T.Optional[T.List[int]]):
+                 exclude_gpus: list[int] | None):
         super().__init__("VGG Obstructed",
                          model_path,
                          allow_growth=allow_growth,
@@ -103,7 +103,7 @@ class VGGClear(KSession):
         self.load_model_weights()
 
     @classmethod
-    def _model_definition(cls) -> T.Tuple[Tensor, Tensor]:
+    def _model_definition(cls) -> tuple[Tensor, Tensor]:
         """ Definition of the VGG Obstructed Model.
 
         Returns
@@ -210,7 +210,7 @@ class _ScorePool():  # pylint:disable=too-few-public-methods
     crop: tuple
         The amount of 2D cropping to apply. Tuple of `ints`
     """
-    def __init__(self, level: int, scale: float, crop: T.Tuple[int, int]):
+    def __init__(self, level: int, scale: float, crop: tuple[int, int]):
         self._name = f"_pool{level}"
         self._cropping = (crop, crop)
         self._scale = scale
