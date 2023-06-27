@@ -15,7 +15,7 @@ matplotlib==3.7.1
 imageio==2.31.1
 imageio-ffmpeg==0.4.8
 ffmpy==0.3.0
-nvidia-ml-py=>11.525,<11.526
+nvidia-ml-py>=11.525,<11.526
 pytest==7.2.0
 pytest-mock==3.10.0
 tensorflow>=2.10.0,<2.11.0
