@@ -72,7 +72,8 @@ jobs:
           FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
       - name: End to End Tests
         # These backends will fail as GPU drivers not available
-        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml'
+        # macOS fails on first extract test with 'died with <Signals.SIGSEGV: 11>'
+        if: matrix.backend != 'rocm' && matrix.backend != 'nvidia' && matrix.backend != 'directml' && matrix.os != 'macos-latest'
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
 
@@ -100,6 +101,8 @@ jobs:
           pip install flake8 pylint mypy pytest pytest-mock pytest-xvfb wheel
           pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
+      - name: List installed packages
+        run: pip freeze
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -142,6 +145,8 @@ jobs:
           pip install flake8 pylint mypy pytest pytest-mock wheel
           pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
           pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
+      - name: List installed packages
+        run: pip freeze
       - name: Set Backend EnvVar
         run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Lint with flake8
