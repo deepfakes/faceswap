@@ -47,6 +47,9 @@ _CONDA_MAPPING: dict[str, tuple[str, str]] = {
     "tensorflow-deps": ("tensorflow-deps", "apple"),
     "libblas": ("libblas", "conda-forge")}
 
+# Force output to utf-8
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
+
 
 class Environment():
     """ The current install environment

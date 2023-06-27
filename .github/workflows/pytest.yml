@@ -9,15 +9,21 @@ on:
 
 jobs:
   build_conda:
-    runs-on: ubuntu-latest
+    name: conda (${{ matrix.os }}, ${{ matrix.backend }})
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash -el {0}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10"]
-        backend: ["nvidia", "cpu", "rocm"]
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        backend: ["nvidia", "cpu"]
+        include:
+          - os: "ubuntu-latest"
+            backend: "rocm"
+          - os: "windows-latest"
+            backend: "directml"
     steps:
       - uses: actions/checkout@v3
       - name: Set cache date
@@ -26,19 +32,20 @@ jobs:
         uses: actions/cache@v3
         env:
           # Increase this value to manually reset cache
-          CACHE_NUMBER: 0
+          CACHE_NUMBER: 1
           REQ_FILE: ./requirements/requirements_${{ matrix.backend }}.txt
         with:
           path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ matrix.python-version }}-${{ env.DATE }}-${{ hashFiles('./requirements/requirements.txt', env.REQ_FILE) }}
-      - name: Set up Conda ${{ matrix.python-version }}
+          key: ${{ runner.os }}-${{ matrix.backend }}-conda-${{ env.CACHE_NUMBER }}-${{ env.DATE }}-
+            ${{ hashFiles('./requirements/requirements.txt', env.REQ_FILE) }}
+      - name: Set up Conda
         uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.10"
           auto-update-conda: true
           activate-environment: faceswap
       - name: Conda info
-        run: conda info
+        run: conda info && conda list
       - name: Install
         run: |
           python setup.py --installer --${{ matrix.backend }}
@@ -63,84 +70,85 @@ jobs:
         if: matrix.backend != 'rocm' && matrix.backend != 'nvidia'
         run: |
           FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
-
-  build_linux:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10"]
-        backend: ["cpu"]
-        include:
-          - backend: "cpu"
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-          cache-dependency-path: './requirements/requirements_${{ matrix.backend }}.txt'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8 pylint mypy pytest pytest-mock pytest-xvfb wheel
-          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
-          pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
-      - name: Lint with flake8
-        run: |
-          # stop the build if there are Python syntax errors or undefined names
-          flake8 . --select=E9,F63,F7,F82 --show-source
-          # exit-zero treats all errors as warnings.
-          flake8 . --exit-zero
-      - name: MyPy Typing
-        continue-on-error: true
-        run: |
-          mypy .
-      - name: Simple Tests
-        run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
-      - name: End to End Tests
-        run: |
-          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
-
-  build_windows:
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10"]
-        backend: ["cpu", "directml"]
-        include:
-          - backend: "cpu"
-          - backend: "directml"
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-          cache-dependency-path: './requirements/requirements_${{ matrix.backend }}.txt'
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8 pylint mypy pytest pytest-mock wheel
-          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
-          pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
-      - name: Set Backend EnvVar
-        run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Lint with flake8
-        run: |
-          # stop the build if there are Python syntax errors or undefined names
-          flake8 . --select=E9,F63,F7,F82 --show-source
-          # exit-zero treats all errors as warnings.
-          flake8 . --exit-zero
-      - name: MyPy Typing
-        continue-on-error: true
-        run: |
-          mypy .
-      - name: Simple Tests
-        run: py.test -v tests
-      - name: End to End Tests
-        run: python tests/simple_tests.py
+#
+#  build_linux:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        python-version: ["3.10"]
+#        backend: ["cpu"]
+#        include:
+#          - backend: "cpu"
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Set up Python ${{ matrix.python-version }}
+#        uses: actions/setup-python@v3
+#        with:
+#          python-version: ${{ matrix.python-version }}
+#          cache: 'pip'
+#          cache-dependency-path: './requirements/requirements_${{ matrix.backend }}.txt'
+#      - name: Install dependencies
+#        run: |
+#          python -m pip install --upgrade pip
+#          pip install flake8 pylint mypy pytest pytest-mock pytest-xvfb wheel
+#          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
+#          pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
+#      - name: Lint with flake8
+#        run: |
+#          # stop the build if there are Python syntax errors or undefined names
+#          flake8 . --select=E9,F63,F7,F82 --show-source
+#          # exit-zero treats all errors as warnings.
+#          flake8 . --exit-zero
+#      - name: MyPy Typing
+#        continue-on-error: true
+#        run: |
+#          mypy .
+#      - name: Simple Tests
+#        run: |
+#          FACESWAP_BACKEND="${{ matrix.backend }}" py.test -v tests/;
+#      - name: End to End Tests
+#        run: |
+#          FACESWAP_BACKEND="${{ matrix.backend }}" python tests/simple_tests.py;
+#
+#  build_windows:
+#    runs-on: windows-latest
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        python-version: ["3.10"]
+#        backend: ["cpu", "directml"]
+#        include:
+#          - backend: "cpu"
+#          - backend: "directml"
+#    steps:
+#      - uses: actions/checkout@v3
+#      - name: Set up Python ${{ matrix.python-version }}
+#        uses: actions/setup-python@v3
+#        with:
+#          python-version: ${{ matrix.python-version }}
+#          cache: 'pip'
+#          cache-dependency-path: './requirements/requirements_${{ matrix.backend }}.txt'
+#      - name: Install dependencies
+#        run: |
+#          python -m pip install --upgrade pip
+#          pip install flake8 pylint mypy pytest pytest-mock wheel
+#          pip install types-attrs types-cryptography types-pyOpenSSL types-PyYAML types-setuptools
+#          pip install -r ./requirements/requirements_${{ matrix.backend }}.txt
+#      - name: Set Backend EnvVar
+#        run: echo "FACESWAP_BACKEND=${{ matrix.backend }}" | Out-File -FilePath $env:GITHUB_ENV -Append
+#      - name: Lint with flake8
+#        run: |
+#          # stop the build if there are Python syntax errors or undefined names
+#          flake8 . --select=E9,F63,F7,F82 --show-source
+#          # exit-zero treats all errors as warnings.
+#          flake8 . --exit-zero
+#      - name: MyPy Typing
+#        continue-on-error: true
+#        run: |
+#          mypy .
+#      - name: Simple Tests
+#        run: py.test -v tests
+#      - name: End to End Tests
+#        run: python tests/simple_tests.py
+#
