@@ -101,8 +101,7 @@ class Environment():
     def is_conda(self) -> bool:
         """ Check whether using Conda """
         return ("conda" in sys.version.lower() or
-                os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
-                or os.environ.get("CONDA_DEFAULT_ENV"))
+                os.path.exists(os.path.join(sys.prefix, 'conda-meta')))
 
     @property
     def is_admin(self) -> bool:
