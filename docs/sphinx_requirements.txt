@@ -1,7 +1,7 @@
 # NB Do not install from this requirements file
 # It is for documentation purposes only
 
-sphinx==7.0.1
+sphinx>=6.0.0,<7.0.0
 sphinx_rtd_theme==1.2.2
 tqdm==4.65
 psutil==5.9.0
