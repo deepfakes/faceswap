@@ -13,7 +13,6 @@ RUN git clone --depth 1 --no-single-branch https://github.com/deepfakes/faceswap
 WORKDIR "/faceswap"
 
 RUN python -m pip install --upgrade pip
-RUN python -m pip install --upgrade pip
 RUN python -m pip --no-cache-dir install -r ./requirements/requirements_nvidia.txt
 
 CMD ["/bin/bash"]
