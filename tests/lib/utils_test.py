@@ -1,6 +1,7 @@
 #!/usr/bin python3
 """ Pytest unit tests for :mod:`lib.utils` """
 import os
+import platform
 import time
 import typing as T
 import warnings
@@ -609,11 +610,13 @@ def test_debug_times():
     assert len(debug_times._times["Test2"]) == 1
 
     # Ensure that the summary method includes the correct min, mean, and max times for each step
-    assert min(debug_times._times["Test1"]) == pytest.approx(0.1, abs=1e-1)
-    assert min(debug_times._times["Test2"]) == pytest.approx(0.2, abs=1e-1)
-    assert max(debug_times._times["Test1"]) == pytest.approx(0.1, abs=1e-1)
-    assert max(debug_times._times["Test2"]) == pytest.approx(0.2, abs=1e-1)
+    # Github workflow for macos-latest can swing out a fair way
+    threshold = 2e-1 if platform.system() == "Darwin" else 1e-1
+    assert min(debug_times._times["Test1"]) == pytest.approx(0.1, abs=threshold)
+    assert min(debug_times._times["Test2"]) == pytest.approx(0.2, abs=threshold)
+    assert max(debug_times._times["Test1"]) == pytest.approx(0.1, abs=threshold)
+    assert max(debug_times._times["Test2"]) == pytest.approx(0.2, abs=threshold)
     assert (sum(debug_times._times["Test1"]) /
-            len(debug_times._times["Test1"])) == pytest.approx(0.1, abs=1e-1)
+            len(debug_times._times["Test1"])) == pytest.approx(0.1, abs=threshold)
     assert (sum(debug_times._times["Test2"]) /
-            len(debug_times._times["Test2"]) == pytest.approx(0.2, abs=1e-1))
+            len(debug_times._times["Test2"]) == pytest.approx(0.2, abs=threshold))
