@@ -531,8 +531,22 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         """
         assert isinstance(batch, AlignerBatch)
         try:
-            batch.prediction = np.array([self.predict(feed)
-                                         for feed in batch.refeeds], dtype="object")
+            preds = [self.predict(feed) for feed in batch.refeeds]
+            try:
+                batch.prediction = np.array(preds)
+            except ValueError as err:
+                # If refeed batches are different sizes, Numpy will error, so we need to explicitly
+                # set the dtype to 'object' rather than let it infer
+                # numpy error:
+                # ValueError: setting an array element with a sequence. The requested array has an
+                # inhomogeneous shape after 1 dimensions. The detected shape was (9,) +
+                # inhomogeneous part
+                if "inhomogeneous" in str(err):
+                    logger.trace(  # type:ignore[attr-defined]
+                        "Mismatched array sizes, setting dtype to object: %s",
+                        [p.shape for p in preds])
+                    batch.prediction = np.array(preds, dtype="object")
+
             return batch
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
