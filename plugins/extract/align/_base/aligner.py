@@ -531,7 +531,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
         """
         assert isinstance(batch, AlignerBatch)
         try:
-            batch.prediction = np.array([self.predict(feed) for feed in batch.refeeds])
+            batch.prediction = np.array([self.predict(feed)
+                                         for feed in batch.refeeds], dtype="object")
             return batch
         except tf_errors.ResourceExhaustedError as err:
             msg = ("You do not have enough GPU memory available to run detection at the "
