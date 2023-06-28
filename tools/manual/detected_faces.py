@@ -300,7 +300,8 @@ class _DiskIO():  # pylint:disable=too-few-public-methods
         logger.verbose("Saving alignments for %s updated frames",  # type:ignore[attr-defined]
                        len(frames))
 
-        for idx, faces in zip(frames, np.array(self._frame_faces)[np.array(frames)]):
+        for idx, faces in zip(frames,
+                              np.array(self._frame_faces, dtype="object")[np.array(frames)]):
             frame = self._sorted_frame_names[idx]
             self._alignments.data[frame]["faces"] = [face.to_alignment() for face in faces]
 
