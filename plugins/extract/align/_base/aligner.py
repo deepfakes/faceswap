@@ -546,6 +546,8 @@ class Aligner(Extractor):  # pylint:disable=abstract-method
                         "Mismatched array sizes, setting dtype to object: %s",
                         [p.shape for p in preds])
                     batch.prediction = np.array(preds, dtype="object")
+                else:
+                    raise
 
             return batch
         except tf_errors.ResourceExhaustedError as err:
