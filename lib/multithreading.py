@@ -14,8 +14,9 @@ if T.TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
-_ErrorType: T.TypeAlias = (tuple[type[BaseException], BaseException, TracebackType] |
-                           tuple[T.Any, T.Any, T.Any] | None)
+_ErrorType: T.TypeAlias = tuple[type[BaseException],
+                                BaseException,
+                                TracebackType] | tuple[T.Any, T.Any, T.Any] | None
 _THREAD_NAMES: set[str] = set()
 
 

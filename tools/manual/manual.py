@@ -18,9 +18,10 @@ from lib.multithreading import MultiThread
 from lib.utils import _video_extensions
 from plugins.extract.pipeline import Extractor, ExtractMedia
 
-from .detected_faces import DetectedFaces, ThumbsCreator
+from .detected_faces import DetectedFaces
 from .faceviewer.frame import FacesFrame
 from .frameviewer.frame import DisplayFrame
+from .thumbnails import ThumbsCreator
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 

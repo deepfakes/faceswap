@@ -47,7 +47,6 @@ detected_faces module
    ~tools.manual.detected_faces.DetectedFaces
    ~tools.manual.detected_faces.FaceUpdate
    ~tools.manual.detected_faces.Filter
-   ~tools.manual.detected_faces.ThumbsCreator
 
 .. rubric:: Module
 
@@ -55,3 +54,12 @@ detected_faces module
    :members:
    :undoc-members:
    :show-inheritance:
+
+thumbnails module
+==================
+
+.. automodule:: tools.manual.thumbnails
+   :members:
+   :undoc-members:
+   :show-inheritance:
+

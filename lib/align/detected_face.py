@@ -203,6 +203,10 @@ class DetectedFace():
         assert embedding.shape[0] == 512
         self._identity[name] = embedding
 
+    def clear_all_identities(self) -> None:
+        """ Remove all stored identity embeddings """
+        self._identity = {}
+
     def get_landmark_mask(self,
                           area: T.Literal["eye", "face", "mouth"],
                           blur_kernel: int,
