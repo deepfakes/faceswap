@@ -464,6 +464,7 @@ class SessionGraph(GraphBase):  # pylint: disable=too-many-ancestors
         scale: str
             Should be one of ``"log"`` or ``"linear"``
         """
+        scale = scale.lower()
         logger.debug("Updating scale type: '%s'", scale)
         self._scale = scale
         self._update_plot(initiate=True)
