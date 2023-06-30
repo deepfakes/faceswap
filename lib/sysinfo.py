@@ -11,6 +11,7 @@ from subprocess import PIPE, Popen
 
 import psutil
 
+from lib.git import git
 from lib.gpu_stats import GPUStats, GPUInfo
 from lib.utils import get_backend
 from setup import CudaCheck
@@ -126,26 +127,12 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
         return "\n".join(version)
 
     @property
-    def _git_branch(self) -> str:
-        """ str: The git branch that is currently being used to execute Faceswap. """
-        with Popen("git status", shell=True, stdout=PIPE, stderr=PIPE) as git:
-            stdout, stderr = git.communicate()
-        if stderr:
-            return "Not Found"
-        branch = stdout.decode(self._encoding,
-                               errors="replace").splitlines()[0].replace("On branch ", "")
-        return branch
-
-    @property
     def _git_commits(self) -> str:
         """ str: The last 5 git commits for the currently running Faceswap. """
-        with Popen("git log --pretty=oneline --abbrev-commit -n 5",
-                   shell=True, stdout=PIPE, stderr=PIPE) as git:
-            stdout, stderr = git.communicate()
-        if stderr:
+        commits = git.get_commits(3)
+        if not commits:
             return "Not Found"
-        commits = stdout.decode(self._encoding, errors="replace").splitlines()
-        return ". ".join(commits)
+        return " | ".join(commits)
 
     @property
     def _cuda_version(self) -> str:
@@ -210,7 +197,7 @@ class _SysInfo():  # pylint:disable=too-few-public-methods
                     "sys_processor": self._system["processor"],
                     "sys_ram": self._format_ram(),
                     "encoding": self._encoding,
-                    "git_branch": self._git_branch,
+                    "git_branch": git.branch,
                     "git_commits": self._git_commits,
                     "gpu_cuda": self._cuda_version,
                     "gpu_cudnn": self._cudnn_version,
