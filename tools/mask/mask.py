@@ -59,6 +59,10 @@ class Mask():  # pylint:disable=too-few-public-methods
         if not self._args.batch_mode:
             return [self._args.input]
 
+        if not os.path.isdir(self._args.input):
+            logger.error("Batch mode is selected but input '%s' is not a folder", self._args.input)
+            sys.exit(1)
+
         retval = [os.path.join(self._args.input, fname)
                   for fname in os.listdir(self._args.input)
                   if os.path.isdir(os.path.join(self._args.input, fname))
