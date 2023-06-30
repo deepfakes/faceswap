@@ -80,7 +80,6 @@ class Environment():
         self._check_pip()
         self._upgrade_pip()
         self._set_env_vars()
-        self._packages = Packages(self)
 
     @property
     def encoding(self) -> str:
@@ -951,7 +950,7 @@ class Install():  # pylint:disable=too-few-public-methods
      """
     def __init__(self, environment: Environment, is_gui: bool = False) -> None:
         self._env = environment
-        self._packages = environment._packages
+        self._packages = Packages(environment)
         self._is_gui = is_gui
 
         if self._env.os_version[0] == "Windows":
