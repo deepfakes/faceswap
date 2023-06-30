@@ -195,7 +195,16 @@ class IO():
                              self._save_optimizer == "always" or
                              (self._save_optimizer == "exit" and is_exit))
 
-        self._plugin.model.save(self._filename, include_optimizer=include_optimizer)
+        try:
+            self._plugin.model.save(self._filename, include_optimizer=include_optimizer)
+        except ValueError as err:
+            if include_optimizer and "name already exists" in str(err):
+                logger.warning("Due to a bug in older versions of Tensorflow, optimizer state "
+                               "cannot be saved for this model.")
+                self._plugin.model.save(self._filename, include_optimizer=False)
+            else:
+                raise
+
         self._plugin.state.save()
 
         msg = "[Saved optimizer state for Snapshot]" if force_save_optimizer else "[Saved models]"
@@ -263,13 +272,6 @@ class IO():
         the latest save, hence iteration being reduced by 1.
         """
         logger.debug("Performing snapshot. Iterations: %s", self._plugin.iterations)
-        # self.save(force_save_optimizer=True)
-        # TODO Re-enable saving optimizer state when h5 bug fixed:
-        # File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
-        # File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
-        # File "h5py/h5d.pyx", line 87, in h5py.h5d.create
-        # ValueError: Unable to create dataset (name already exists)
-
         self._backup.snapshot_models(self._plugin.iterations - 1)
         logger.debug("Performed snapshot")
 
