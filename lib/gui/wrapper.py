@@ -261,9 +261,9 @@ class FaceswapControl():
                      stdout=PIPE,
                      stderr=PIPE,
                      bufsize=1,
-                     universal_newlines=True,
+                     text=True,
                      stdin=PIPE,
-                     encoding="utf-8")
+                     errors="backslashreplace")
         self._process = proc
         self._thread_stdout()
         self._thread_stderr()
