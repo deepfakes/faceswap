@@ -427,11 +427,15 @@ class Adapters():  # pylint:disable=too-few-public-methods
         factory_func = windll.d3d12.D3D12CreateDevice
         factory_func.argtypes = (
             POINTER(IUnknown),
-            D3DFeatureLevel.ctype, GUID)  # type:ignore[attr-defined] # pylint:disable=no-member
+            D3DFeatureLevel.ctype,  # type:ignore[attr-defined] # pylint:disable=no-member
+            GUID,
+            POINTER(ctypes.c_void_p))
+        handle = ctypes.c_void_p(0)
         factory_func.restype = HRESULT
         success = factory_func(adapter,
                                D3DFeatureLevel.D3D_FEATURE_LEVEL_11_0.value,
-                               LookupGUID.ID3D12Device)
+                               LookupGUID.ID3D12Device,
+                               ctypes.byref(handle))
         return success in (0, 1)
 
     def _process_adapters(self) -> list[Device]:
