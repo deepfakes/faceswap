@@ -27,8 +27,12 @@ _INSTALL_FAILED = False
 _INSTALLER_REQUIREMENTS: list[tuple[str, str]] = [("pexpect>=4.8.0", "!Windows"),
                                                   ("pywinpty==2.0.2", "Windows")]
 # Conda packages that are required for a specific backend
-_BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {"nvidia": ["cudatoolkit", "cudnn"],
-                                                          "apple_silicon": ["libblas"]}
+# TODO zlib-wapi is required on some Windows installs where cuDNN complains:
+# Could not locate zlibwapi.dll. Please make sure it is in your library path!
+# This only seems to occur on Anaconda cuDNN not conda-forge
+_BACKEND_SPECIFIC_CONDA: dict[backend_type, list[str]] = {
+    "nvidia": ["cudatoolkit", "cudnn", "zlib-wapi"],
+    "apple_silicon": ["libblas"]}
 # Packages that should only be installed through pip
 _FORCE_PIP: dict[backend_type, list[str]] = {"nvidia": ["tensorflow"]}
 # Revisions of tensorflow GPU and cuda/cudnn requirements. These relate specifically to the
@@ -45,7 +49,8 @@ _CONDA_MAPPING: dict[str, tuple[str, str]] = {
     "imageio-ffmpeg": ("imageio-ffmpeg", "conda-forge"),
     "nvidia-ml-py": ("nvidia-ml-py", "conda-forge"),
     "tensorflow-deps": ("tensorflow-deps", "apple"),
-    "libblas": ("libblas", "conda-forge")}
+    "libblas": ("libblas", "conda-forge"),
+    "zlib-wapi": ("zlib-wapi", "conda-forge")}
 
 # Force output to utf-8
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type:ignore[attr-defined]
@@ -346,6 +351,9 @@ class Packages():
             return
         for pkg in to_add:
             pkg, channel = _CONDA_MAPPING.get(pkg, (pkg, ""))
+            if pkg == "zlib-wapi" and self._env.os_version[0].lower() != "windows":
+                # TODO move this front and center
+                continue
             if pkg in ("cudatoolkit", "cudnn"):  # TODO Handle multiple cuda/cudnn requirements
                 idx = 0 if pkg == "cudatoolkit" else 1
                 pkg = f"{pkg}{list(_TENSORFLOW_REQUIREMENTS.values())[0][idx]}"
