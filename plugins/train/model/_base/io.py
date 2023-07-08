@@ -15,27 +15,26 @@ import os
 import sys
 import typing as T
 
-# Ignore linting errors from Tensorflow's thoroughly broken import system
-from tensorflow.keras.models import load_model, Model as KModel  # noqa:E501  # pylint:disable=import-error
+import tensorflow as tf
 
 from lib.model.backup_restore import Backup
 from lib.utils import FaceswapError
 
 if T.TYPE_CHECKING:
-    from tensorflow import keras
     from .model import ModelBase
 
+kmodels = tf.keras.models
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
 def get_all_sub_models(
-        model: keras.models.Model,
-        models: list[keras.models.Model] | None = None) -> list[keras.models.Model]:
+        model: tf.keras.models.Model,
+        models: list[tf.keras.models.Model] | None = None) -> list[tf.keras.models.Model]:
     """ For a given model, return all sub-models that occur (recursively) as children.
 
     Parameters
     ----------
-    model: :class:`keras.models.Model`
+    model: :class:`tensorflow.keras.models.Model`
         A Keras model to scan for sub models
     models: `None`
         Do not provide this parameter. It is used for recursion
@@ -43,15 +42,15 @@ def get_all_sub_models(
     Returns
     -------
     list
-        A list of all :class:`keras.models.Model` objects found within the given model. The
-        provided model will always be returned in the first position
+        A list of all :class:`tensorflow.keras.models.Model` objects found within the given model.
+        The provided model will always be returned in the first position
     """
     if models is None:
         models = [model]
     else:
         models.append(model)
     for layer in model.layers:
-        if isinstance(layer, KModel):
+        if isinstance(layer, kmodels.Model):
             get_all_sub_models(layer, models=models)
     return models
 
@@ -120,7 +119,7 @@ class IO():
                      self._plugin.name, plugins, test, retval)
         return retval
 
-    def _load(self) -> keras.models.Model:
+    def _load(self) -> tf.keras.models.Model:
         """ Loads the model from disk
 
         If the predict function is to be called and the model cannot be found in the model folder
@@ -131,7 +130,7 @@ class IO():
 
         Returns
         -------
-        :class:`keras.models.Model`
+        :class:`tensorflow.keras.models.Model`
             The saved model loaded from disk
         """
         logger.debug("Loading model: %s", self._filename)
@@ -140,7 +139,7 @@ class IO():
             sys.exit(1)
 
         try:
-            model = load_model(self._filename, compile=False)
+            model = kmodels.load_model(self._filename, compile=False)
         except RuntimeError as err:
             if "unable to get link info" in str(err).lower():
                 msg = (f"Unable to load the model from '{self._filename}'. This may be a "
@@ -400,7 +399,7 @@ class Weights():
                            "different settings than you have set for your current model.",
                            skipped_ops)
 
-    def _get_weights_model(self) -> list[keras.models.Model]:
+    def _get_weights_model(self) -> list[tf.keras.models.Model]:
         """ Obtain a list of all sub-models contained within the weights model.
 
         Returns
@@ -414,7 +413,7 @@ class Weights():
             In the event of a failure to load the weights, or the weights belonging to a different
             model
         """
-        retval = get_all_sub_models(load_model(self._weights_file, compile=False))
+        retval = get_all_sub_models(kmodels.load_model(self._weights_file, compile=False))
         if not retval:
             raise FaceswapError(f"Error loading weights file {self._weights_file}.")
 
@@ -424,14 +423,14 @@ class Weights():
         return retval
 
     def _load_layer_weights(self,
-                            layer: keras.layers.Layer,
-                            sub_weights: keras.layers.Layer,
+                            layer: tf.keras.layers.Layer,
+                            sub_weights: tf.keras.layers.Layer,
                             model_name: str) -> T.Literal[-1, 0, 1]:
         """ Load the weights for a single layer.
 
         Parameters
         ----------
-        layer: :class:`keras.layers.Layer`
+        layer: :class:`tensorflow.keras.layers.Layer`
             The layer to set the weights for
         sub_weights: list
             The list of layers in the weights model to load weights from

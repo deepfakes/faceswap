@@ -579,7 +579,7 @@ class Settings():
         for layer in layers:
             config = layer["config"]
 
-            if layer["class_name"] == "Functional":  # Recurse into sub-models
+            if layer["class_name"] in ("Functional", "Sequential"):  # Recurse into sub-models
                 retval.extend(self._get_mixed_precision_layers(config["layers"]))
                 continue
 
@@ -588,7 +588,8 @@ class Settings():
                 logger.debug("Adding supported mixed precision layer: %s %s", layer["name"], dtype)
                 retval.append(layer["name"])
             else:
-                logger.debug("Skipping unsupported layer: %s %s", layer["name"], dtype)
+                logger.debug("Skipping unsupported layer: %s %s",
+                             layer.get("name", f"class_name: {layer['class_name']}"), dtype)
         return retval
 
     def _switch_precision(self, layers: list[dict], compatible: list[str]) -> None:
@@ -607,7 +608,7 @@ class Settings():
         for layer in layers:
             config = layer["config"]
 
-            if layer["class_name"] == "Functional":  # Recurse into sub-models
+            if layer["class_name"] in ["Functional", "Sequential"]:  # Recurse into sub-models
                 self._switch_precision(config["layers"], compatible)
                 continue
 
@@ -622,7 +623,8 @@ class Settings():
     def get_mixed_precision_layers(self,
                                    build_func: Callable[[list[tf.keras.layers.Layer]],
                                                         tf.keras.models.Model],
-                                   inputs: list[tf.keras.layers.Layer]) -> list[str]:
+                                   inputs: list[tf.keras.layers.Layer]
+                                   ) -> tuple[tf.keras.models.Model, list[str]]:
         """ Get and store the mixed precision layers from a full precision enabled model.
 
         Parameters
@@ -634,6 +636,8 @@ class Settings():
 
         Returns
         -------
+        model: :class:`tensorflow.keras.model`
+            The built model in fp32
         list
             The list of layer names within the full precision model that can be switched
             to mixed precision
@@ -641,11 +645,18 @@ class Settings():
         logger.info("Storing Mixed Precision compatible layers. Please ignore any following "
                     "warnings about using mixed precision.")
         self._set_keras_mixed_precision(True)
-        model = build_func(inputs)
-        layers = self._get_mixed_precision_layers(model.get_config()["layers"])
+        with tf.device("CPU"):
+            model = build_func(inputs)
+            layers = self._get_mixed_precision_layers(model.get_config()["layers"])
+
+        tf.keras.backend.clear_session()
         self._set_keras_mixed_precision(False)
+
+        config = model.get_config()
+        self._switch_precision(config["layers"], layers)
+        new_model = model.from_config(config)
         del model
-        return layers
+        return new_model, layers
 
     def check_model_precision(self,
                               model: tf.keras.models.Model,

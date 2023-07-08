@@ -102,24 +102,6 @@ def layer_test(layer_cls, kwargs={}, input_shape=None, input_dtype=None,  # noqa
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
-def test_pixel_shuffler(dummy):  # pylint:disable=unused-argument
-    """ Pixel Shuffler layer test """
-    layer_test(layers.PixelShuffler, input_shape=(2, 4, 4, 1024))
-
-
-@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
-def test_subpixel_upscaling(dummy):  # pylint:disable=unused-argument
-    """ Sub Pixel up-scaling layer test """
-    layer_test(layers.SubPixelUpscaling, input_shape=(2, 4, 4, 1024))
-
-
-@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
-def test_reflection_padding_2d(dummy):  # pylint:disable=unused-argument
-    """ Reflection Padding 2D layer test """
-    layer_test(layers.ReflectionPadding2D, input_shape=(2, 4, 4, 512))
-
-
-@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_global_min_pooling_2d(dummy):  # pylint:disable=unused-argument
     """ Global Min Pooling 2D layer test """
     layer_test(layers.GlobalMinPooling2D, input_shape=(2, 4, 4, 1024))
@@ -132,6 +114,36 @@ def test_global_std_pooling_2d(dummy):  # pylint:disable=unused-argument
 
 
 @pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
+def test_k_resize_images(dummy):  # pylint:disable=unused-argument
+    """ Global Standard Deviation Pooling 2D layer test """
+    layer_test(layers.KResizeImages, input_shape=(2, 4, 4, 1024))
+
+
+@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
 def test_l2_normalize(dummy):  # pylint:disable=unused-argument
     """ L2 Normalize layer test """
     layer_test(layers.L2_normalize, kwargs={"axis": 1}, input_shape=(2, 4, 4, 1024))
+
+
+@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
+def test_pixel_shuffler(dummy):  # pylint:disable=unused-argument
+    """ Pixel Shuffler layer test """
+    layer_test(layers.PixelShuffler, input_shape=(2, 4, 4, 1024))
+
+
+@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
+def test_reflection_padding_2d(dummy):  # pylint:disable=unused-argument
+    """ Reflection Padding 2D layer test """
+    layer_test(layers.ReflectionPadding2D, input_shape=(2, 4, 4, 512))
+
+
+@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
+def test_subpixel_upscaling(dummy):  # pylint:disable=unused-argument
+    """ Sub Pixel up-scaling layer test """
+    layer_test(layers.SubPixelUpscaling, input_shape=(2, 4, 4, 1024))
+
+
+@pytest.mark.parametrize('dummy', [None], ids=[get_backend().upper()])
+def test_swish(dummy):  # pylint:disable=unused-argument
+    """ Sub Pixel up-scaling layer test """
+    layer_test(layers.Swish, input_shape=(2, 4, 4, 1024))

@@ -264,9 +264,12 @@ class ModelBase():
                 inputs = self._get_inputs()
                 if not self._settings.use_mixed_precision and not is_summary:
                     # Store layer names which can be switched to mixed precision
-                    self._state.add_mixed_precision_layers(
-                        self._settings.get_mixed_precision_layers(self.build_model, inputs))
-                self._model = self.build_model(inputs)
+                    model, mp_layers = self._settings.get_mixed_precision_layers(self.build_model,
+                                                                                 inputs)
+                    self._state.add_mixed_precision_layers(mp_layers)
+                    self._model = model
+                else:
+                    self._model = self.build_model(inputs)
             if not is_summary and not self._is_predict:
                 self._compile_model()
             self._output_summary()
@@ -763,7 +766,7 @@ class State():
                 continue
             self._config[key] = val
             logger.info("Config item: '%s' has been updated from '%s' to '%s'", key, old_val, val)
-            self._rebuild_model = not self._rebuild_model and key in rebuild_tasks
+            self._rebuild_model = self._rebuild_model or key in rebuild_tasks
 
 
 class _Inference():  # pylint:disable=too-few-public-methods

@@ -1,4 +1,3 @@
-# TESTED WITH PY3.10
 tqdm>=4.65
 psutil>=5.9.0
 numexpr>=2.8.4

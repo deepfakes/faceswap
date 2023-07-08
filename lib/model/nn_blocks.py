@@ -282,8 +282,9 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
 
         self._use_reflect_padding = _CONFIG["reflect_padding"]
 
+        kernel_size = (kernel_size, kernel_size) if isinstance(kernel_size, int) else kernel_size
         self._args = (kernel_size, ) if use_depthwise else (filters, kernel_size)
-        self._strides = strides
+        self._strides = (strides, strides) if isinstance(strides, int) else strides
         self._padding = "valid" if self._use_reflect_padding else padding
         self._kwargs = kwargs
         self._normalization = None if not normalization else normalization.lower()
@@ -314,8 +315,8 @@ class Conv2DBlock():  # pylint:disable=too-few-public-methods
             The output tensor from the Convolution 2D Layer
         """
         if self._use_reflect_padding:
-            inputs = ReflectionPadding2D(stride=self._strides,
-                                         kernel_size=self._args[-1],
+            inputs = ReflectionPadding2D(stride=self._strides[0],
+                                         kernel_size=self._args[-1][0],  # type:ignore[index]
                                          name=f"{self._name}_reflectionpadding2d")(inputs)
         conv: keras.layers.Layer = DepthwiseConv2D if self._use_depthwise else Conv2D
         var_x = conv(*self._args,
@@ -619,7 +620,7 @@ class UpscaleResizeImagesBlock():  # pylint:disable=too-few-public-methods
                  padding: str = "same",
                  activation: str | None = "leakyrelu",
                  scale_factor: int = 2,
-                 interpolation: str = "bilinear") -> None:
+                 interpolation: T.Literal["nearest", "bilinear"] = "bilinear") -> None:
         self._name = _get_name(f"upscale_ri_{filters}")
         self._interpolation = interpolation
         self._size = scale_factor
@@ -766,7 +767,8 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         self._use_reflect_padding = _CONFIG["reflect_padding"]
 
         self._filters = filters
-        self._kernel_size = kernel_size
+        self._kernel_size = (kernel_size,
+                             kernel_size) if isinstance(kernel_size, int) else kernel_size
         self._padding = "valid" if self._use_reflect_padding else padding
         self._kwargs = kwargs
 
@@ -786,7 +788,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         var_x = inputs
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
-                                        kernel_size=self._kernel_size,
+                                        kernel_size=self._kernel_size[0],
                                         name=f"{self._name}_reflectionpadding2d_0")(var_x)
         var_x = Conv2D(self._filters,
                        kernel_size=self._kernel_size,
@@ -796,7 +798,7 @@ class ResidualBlock():  # pylint:disable=too-few-public-methods
         var_x = LeakyReLU(alpha=0.2, name=f"{self._name}_leakyrelu_1")(var_x)
         if self._use_reflect_padding:
             var_x = ReflectionPadding2D(stride=1,
-                                        kernel_size=self._kernel_size,
+                                        kernel_size=self._kernel_size[0],
                                         name=f"{self._name}_reflectionpadding2d_1")(var_x)
 
         kwargs = {key: val for key, val in self._kwargs.items() if key != "kernel_initializer"}
